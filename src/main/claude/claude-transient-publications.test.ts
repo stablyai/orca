@@ -40,7 +40,7 @@ const suggestion = (text: string) =>
   frame({ type: 'prompt_suggestion', suggestion: text, uuid: `s-${text}` })
 
 describe('Claude prompt suggestions', () => {
-  it('publishes a suggestion off the journal between turns and clears it when one opens', () => {
+  it('publishes a suggestion off the journal and clears it whenever a turn opens', () => {
     const rows: AgentJournalItemBody[] = []
     const suggestions: (string | null)[] = []
     const sink: StructuredAgentSessionEventSink = {
@@ -54,9 +54,11 @@ describe('Claude prompt suggestions', () => {
     translator.handle(chat('user', 'user-1', 'parse ints'))
     translator.handle(chat('assistant', 'assistant-1', 'done'))
     translator.handle(done('result-1'))
+    // The first turn clears too: a relaunch may inherit one the host still retains.
+    expect(suggestions).toEqual([null])
     const journaled = rows.length
     translator.handle(suggestion('add a test'))
-    expect(suggestions).toEqual(['add a test'])
+    expect(suggestions).toEqual([null, 'add a test'])
     expect(rows).toHaveLength(journaled)
 
     translator.handle(chat('user', 'user-2', 'also floats'))
@@ -64,6 +66,6 @@ describe('Claude prompt suggestions', () => {
     // A suggestion for the turn before this one is stale once it runs.
     translator.handle(suggestion('stale'))
     translator.handle(done('result-2'))
-    expect(suggestions).toEqual(['add a test', null])
+    expect(suggestions).toEqual([null, 'add a test', null])
   })
 })

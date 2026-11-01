@@ -48,11 +48,14 @@ function cursorAfter(event: HistoryFrame): AgentJournalCursor {
 
 /** Remove side lists and oversized metadata before attaching separately budgeted fields. */
 function boundedHistoryFrame(event: HistoryFrame): HistoryFrame {
-  const { backgroundTasks: _backgroundTasks, activity, ...rest } = event
+  const { backgroundTasks: _backgroundTasks, activity, promptSuggestion, ...rest } = event
   const frame = {
     ...rest,
     ...(activity !== undefined && within(activity, BOUNDED_FRAME_ACTIVITY_BYTES)
       ? { activity }
+      : {}),
+    ...(promptSuggestion !== undefined && within(promptSuggestion, BOUNDED_FRAME_ACTIVITY_BYTES)
+      ? { promptSuggestion }
       : {})
   }
   if (frame.type === 'batch') {

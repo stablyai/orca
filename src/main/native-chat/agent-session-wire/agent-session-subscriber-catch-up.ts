@@ -62,17 +62,26 @@ export function deliverToSubscriber(
   const { subscriber, journal, hostNow, emitCheckpoint, activity, promptSuggestion } = input
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
   const publishedActivity = activity !== undefined ? activity : checkpointActivity
+  const retainedSuggestion = port.promptSuggestion(subscriber.sessionId)
   // A resuming subscriber may hold a suggestion the host cleared while it was away.
   const publishedSuggestion =
     promptSuggestion !== undefined
       ? promptSuggestion
       : emitCheckpoint
-        ? port.promptSuggestion(subscriber.sessionId)
+        ? retainedSuggestion
         : undefined
-  const shared = {
+  const unsuggested = {
     hostNow,
-    ...(publishedActivity !== undefined ? { activity: publishedActivity } : {}),
+    ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
+  }
+  const shared = {
+    ...unsuggested,
     ...(publishedSuggestion !== undefined ? { promptSuggestion: publishedSuggestion } : {})
+  }
+  // Snapshots replace the client's state, so they carry the retained suggestion and omit a null.
+  const snapshotFields = {
+    ...unsuggested,
+    ...(retainedSuggestion ? { promptSuggestion: retainedSuggestion } : {})
   }
   const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
@@ -102,7 +111,7 @@ export function deliverToSubscriber(
         sessionId: subscriber.sessionId,
         page,
         fence: subscriber.fence,
-        ...shared
+        ...snapshotFields
       },
       { historyView: view.normalizationKey }
     )
@@ -142,7 +151,7 @@ export function deliverToSubscriber(
           reset: result.reset,
           page,
           fence: subscriber.fence,
-          ...shared
+          ...snapshotFields
         },
         { historyView: view.normalizationKey }
       )
@@ -165,7 +174,6 @@ export function deliverToSubscriber(
         readAgentSessionHydrationPage(journal, subscriber.fence, reader),
         work
       )
-      const tailSuggestion = port.promptSuggestion(subscriber.sessionId)
       emit(
         subscriber,
         {
@@ -175,7 +183,7 @@ export function deliverToSubscriber(
           fence: subscriber.fence,
           hostNow,
           activity: port.activity(subscriber.sessionId),
-          ...(tailSuggestion ? { promptSuggestion: tailSuggestion } : {})
+          ...(retainedSuggestion ? { promptSuggestion: retainedSuggestion } : {})
         },
         { historyView: view.normalizationKey }
       )
