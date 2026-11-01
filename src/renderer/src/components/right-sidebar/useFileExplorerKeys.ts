@@ -227,7 +227,8 @@ export function useFileExplorerKeys(opts: {
           selectedNodeRef.current
         const canMutateNode =
           node && (canMutateRef.current || (canMutateNodeRef.current?.(node) ?? false))
-        if (node && canMutateNode) {
+        // Rows listed through an outside folder link are browse-only; main refuses their writes.
+        if (node && canMutateNode && !node.outsideProject) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
@@ -241,7 +242,9 @@ export function useFileExplorerKeys(opts: {
           )
           if (wantsDelete) {
             e.preventDefault()
-            const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
+            const selectedNodes = rowProjectionRef.current
+              .getRowsByPaths(selectedPathsRef.current)
+              .filter((selected) => !selected.outsideProject)
             const targets = selectedNodes.length > 1 ? selectedNodes : [node]
             if (
               canMutateRef.current ||

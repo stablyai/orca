@@ -1,12 +1,12 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import * as journalFactory from '../agent-session-journal/journal-store-factory'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   savedStructuredAgentSessionStatus,
   StructuredAgentSessionSavedStatus
@@ -31,8 +31,8 @@ import {
   QUEUED_BEFORE_QUIT
 } from './structured-agent-session-restart-interruption-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { savedStatusContracts } from '../../../shared/agent-session-saved-status.test-fixture'
 
@@ -123,7 +123,10 @@ it('seeds first desktop and phone snapshots without opening, writing or reacting
 
 it('writes turn and attention edges, ignores streamed previews, and clears an empty context', async () => {
   await attach()
-  const { store, log } = hostTestState()
+  const { host, store, log } = hostTestState()
+  // Only this writer publishes the chat; a live host would write its own journal's edges.
+  await host.close(SESSION, 'evict')
+  await host.drainStatusWrites()
   const writer = new StructuredAgentSessionSavedStatus(() => ({ store, logger: log.logger }))
   const transition = vi.spyOn(store, 'transitionHandoff')
   const summary: AgentSessionStatusSummary = {
@@ -144,6 +147,9 @@ it('writes turn and attention edges, ignores streamed previews, and clears an em
     at: 10,
     prompt: 'p'.repeat(280)
   })
+  // A new writer dedupes against the saved row.
+  new StructuredAgentSessionSavedStatus(() => ({ store, logger: log.logger })).observe(summary)
+  expect(transition).toHaveBeenCalledTimes(1)
   writer.observe({ ...summary, status: 'attention', statusStartedAt: 11 })
   writer.observe({
     ...summary,
@@ -346,7 +352,10 @@ it('lists only indexed unopened chats, keeps legacy targets, and opens history o
 it('keeps queued leftovers closed at startup and shows their paused cards on demand', async () => {
   const { host, store } = await interruptedRestart('queued-cards')
   await host.setSessionTabVisibility(SESSION, true)
-  await store.transitionHandoff(SESSION, ({ lastTurn: _lastTurn, ...record }) => record)
+  await store.transitionHandoff(SESSION, (record) => ({
+    ...record,
+    lastTurn: { state: 'open', at: 40, prompt: 'saved prompt from the closed chat' }
+  }))
   const openJournal = vi.spyOn(journalFactory, 'openAgentSessionJournal')
   openJournal.mockClear()
   await host.seedSessionTabs([SESSION])
@@ -355,7 +364,9 @@ it('keeps queued leftovers closed at startup and shows their paused cards on dem
     status: 'idle',
     turnOutcome: 'cancellation'
   })
-  await host.restartResume.list()
+  expect(await host.restartResume.list()).toMatchObject([
+    { sessionId: SESSION, latestPrompt: 'saved prompt from the closed chat' }
+  ])
   await host.restartResume.listFailures()
   expect(openJournal).not.toHaveBeenCalled()
   const history = await host.history({ sessionId: SESSION, direction: 'tail' })

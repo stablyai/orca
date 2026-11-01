@@ -16,7 +16,7 @@ import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import type { SearchResult } from '../../shared/code-search-types'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
 import type {
@@ -48,8 +48,8 @@ export const fsApi = {
     dirPath: string
     connectionId?: string
     followSymlinks?: boolean
-    access?: LocalFileAccess
     wakeWslDistro?: boolean
+    access?: LocalFileAccess
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
   readFile: (args: {

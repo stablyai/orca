@@ -7,15 +7,24 @@ export function pluginTrustLabel(trust: PluginTrust): string {
     return translate('auto.components.settings.pluginConsentCopy.fullAccess', 'Full access')
   }
   if (trust.declarative) {
-    return translate('auto.components.settings.pluginConsentCopy.addsCommands', 'Adds commands')
+    return trust.recipesOnly
+      ? translate('auto.components.settings.pluginConsentCopy.addsVmRecipes', 'Adds VM recipes')
+      : translate('auto.components.settings.pluginConsentCopy.addsCommands', 'Adds commands')
   }
   if (trust.panel) {
-    return translate('auto.components.settings.pluginConsentCopy.addsPanel', 'Adds a panel')
+    return trust.editor
+      ? translate(
+          'auto.components.settings.pluginConsentCopy.opensAndEditsFiles',
+          'Opens and edits files'
+        )
+      : trust.sidebarPanel
+        ? translate('auto.components.settings.pluginConsentCopy.addsPanel', 'Adds a panel')
+        : translate('auto.components.settings.pluginConsentCopy.runsPluginCode', 'Runs plugin code')
   }
   return translate('auto.components.settings.pluginConsentCopy.contentOnly', 'Content only')
 }
 
-/** Every warning that applies. A sandboxed panel has none: its capabilities say what it can do. */
+/** Every warning that applies. Panels and editors are the publisher's code, not a sandbox. */
 export function pluginTrustWarnings(trust: PluginTrust): string[] {
   const warnings: string[] = []
   if (trust.worker) {
@@ -34,7 +43,15 @@ export function pluginTrustWarnings(trust: PluginTrust): string[] {
       )
     )
   }
-  if (warnings.length === 0 && !trust.panel) {
+  if (trust.panel && !trust.worker) {
+    warnings.push(
+      translate(
+        'auto.components.settings.PluginConsentDialog.uiWarning',
+        "Runs the publisher's code inside Orca to draw its view. Orca shows what it can access and asks before enabling it."
+      )
+    )
+  }
+  if (warnings.length === 0) {
     warnings.push(
       translate(
         'auto.components.settings.PluginConsentDialog.declarativeWarning',

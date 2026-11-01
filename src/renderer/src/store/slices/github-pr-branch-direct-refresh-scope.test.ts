@@ -7,28 +7,29 @@ import {
   createTestStore,
   makePR,
   mockApi,
-  resetRemoteRuntimeMocks
+  resetRemoteRuntimeMocks,
+  runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 
+beforeEach(() => {
+  vi.clearAllMocks()
+  resetRemoteRuntimeMocks()
+  mockApi.gh.prForBranch.mockResolvedValue(null)
+  mockApi.gh.refreshPRNow.mockReset()
+  mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
+  mockApi.hostedReview.forBranch.mockResolvedValue(null)
+  _clearGitHubPRRefreshStartedEntriesForTest()
+})
+
+afterEach(() => {
+  _clearGitHubPRRefreshStartedEntriesForTest()
+  vi.useRealTimers()
+})
+
 describe('createGitHubSlice.fetchPRForBranch', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetRemoteRuntimeMocks()
-    mockApi.gh.prForBranch.mockResolvedValue(null)
-    mockApi.gh.refreshPRNow.mockReset()
-    mockApi.gh.refreshPRNow.mockResolvedValue({ kind: 'no-pr', fetchedAt: Date.now() })
-    mockApi.hostedReview.forBranch.mockResolvedValue(null)
-    _clearGitHubPRRefreshStartedEntriesForTest()
-  })
-
-  afterEach(() => {
-    _clearGitHubPRRefreshStartedEntriesForTest()
-    vi.useRealTimers()
-  })
-
   it('lets a forced refresh bypass a non-forced inflight request and keeps the newer result', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
@@ -479,4 +480,113 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       vi.useRealTimers()
     }
   })
+})
+
+// Explicit actions have a newer boundary than cache-strength upgrades.
+it.each([true, false])(
+  'a click supersedes an already forced poll (old first: %s)',
+  async (oldFirst) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const store = createTestStore()
+    const old = Promise.withResolvers<{
+      kind: 'found'
+      pr: ReturnType<typeof makePR>
+      fetchedAt: number
+    }>()
+    const fresh = Promise.withResolvers<typeof old.promise extends Promise<infer T> ? T : never>()
+    const open = makePR({ headSha: 'head-a' })
+    const merged = makePR({ state: 'merged', headSha: 'head-b' })
+    mockApi.gh.refreshPRNow.mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
+    const before = store
+      .getState()
+      .fetchPRForBranch('/repo', 'topic', { force: true, reason: 'visible' })
+    const intent = { force: true, reason: 'manual' as const, userRefresh: true }
+    const click = store.getState().fetchPRForBranch('/repo', 'topic', intent)
+    try {
+      expect(mockApi.gh.refreshPRNow).toHaveBeenCalledTimes(2)
+      const ordinary = store.getState().fetchPRForBranch('/repo', 'topic', { force: true })
+      if (oldFirst) {
+        old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+        await before
+      }
+      fresh.resolve({ kind: 'found', pr: merged, fetchedAt: 2 })
+      expect(await click).toEqual(merged)
+      expect(await ordinary).toEqual(merged)
+      old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+      await before
+      expect(store.getState().prCache['/repo::topic']?.data?.state).toBe('merged')
+      expect(_getGitHubPRRequestGenerationCountForTest()).toBe(0)
+    } finally {
+      old.resolve({ kind: 'found', pr: open, fetchedAt: 1 })
+      fresh.resolve({ kind: 'found', pr: merged, fetchedAt: 2 })
+      await Promise.all([before, click])
+      vi.useRealTimers()
+    }
+  }
+)
+
+it('retains last good and records a failed click when IPC throws instead of reporting no PR', async () => {
+  const store = createTestStore()
+  const pr = makePR()
+  store.setState({ prCache: { '/repo::topic': { data: pr, fetchedAt: 1 } } })
+  mockApi.gh.refreshPRNow.mockRejectedValueOnce(new Error('transport disconnected'))
+  const intent = { force: true, userRefresh: true }
+  expect(await store.getState().fetchPRForBranch('/repo', 'topic', intent)).toEqual(pr)
+  expect(store.getState().prCache['/repo::topic']).toEqual({ data: pr, fetchedAt: 1 })
+  expect(store.getState().prRefreshStates['/repo::topic']).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+})
+
+it('a runtime click keeps last good on a lost reply that polls ignore, until an answer settles it', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const store = createTestStore()
+  const key = 'runtime:env-1::repo-1::topic'
+  const pr = makePR()
+  store.setState({
+    repos: [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: '',
+        addedAt: 1,
+        executionHostId: 'runtime:env-1'
+      }
+    ],
+    prCache: { [key]: { data: pr, fetchedAt: 1 } }
+  })
+  const read = (userRefresh: boolean) =>
+    store.getState().fetchPRForBranch('/repo', 'topic', {
+      force: true,
+      repoId: 'repo-1',
+      ...(userRefresh ? { userRefresh: true } : { reason: 'visible' as const })
+    })
+  runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
+  expect(await read(false)).toEqual(pr)
+  expect(store.getState().prRefreshStates[key]).toBeUndefined()
+  runtimeEnvironmentCall.mockRejectedValueOnce(new Error('transport disconnected'))
+  expect(await read(true)).toEqual(pr)
+  expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      method: 'github.prForBranch',
+      params: expect.objectContaining({ userRefresh: true })
+    })
+  )
+  expect(store.getState().prCache[key]).toEqual({ data: pr, fetchedAt: 1 })
+  expect(store.getState().prRefreshStates[key]).toMatchObject({
+    status: 'error',
+    errorType: 'unknown'
+  })
+  vi.setSystemTime(Date.now() + 1)
+  runtimeEnvironmentCall.mockResolvedValueOnce({
+    id: 'rpc',
+    ok: true,
+    result: { kind: 'found', pr: makePR({ state: 'merged' }), fetchedAt: 3 },
+    _meta: { runtimeId: 'remote-runtime' }
+  })
+  await read(false)
+  expect(store.getState().prCache[key]?.data?.state).toBe('merged')
+  expect(store.getState().prRefreshStates[key]).toBeUndefined()
 })

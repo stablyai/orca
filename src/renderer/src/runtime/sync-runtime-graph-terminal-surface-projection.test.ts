@@ -536,7 +536,7 @@ describe('buildMobileSessionTabSnapshots', () => {
         ...getDefaultSettings('/tmp'),
         theme: 'light',
         terminalUseSeparateLightTheme: true,
-        terminalColorOverrides: {
+        terminalColorOverridesLight: {
           background: '#f8f8f8',
           foreground: '#101010',
           cursor: '#202020'

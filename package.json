@@ -77,7 +77,10 @@
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
     "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
+    "generate:plugin-declarative-runtime": "node config/scripts/build-plugin-declarative-runtime.mjs",
+    "generate:plugin-declarative-typings": "node config/scripts/generate-plugin-declarative-typings.mjs",
     "generate:plugin-schemas": "node config/scripts/generate-plugin-schemas.mjs",
+    "generate:plugin-author-typings": "node config/scripts/generate-plugin-author-typings.mjs",
     "validate:plugin": "node config/scripts/validate-plugin-files.mjs",
     "generate:rpc-params-catalog": "node config/scripts/generate-rpc-params-catalog.mjs",
     "verify:rpc-params-catalog": "node config/scripts/generate-rpc-params-catalog.mjs --check",
@@ -85,6 +88,8 @@
     "verify:acp-protocol": "node config/scripts/acp/generate-protocol.mjs --check",
     "generate:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --write",
     "verify:bundled-skill-guides": "node config/scripts/generate-bundled-skill-guides.mjs --check",
+    "generate:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --write && node config/scripts/generate-bundled-skill-guides.mjs --write",
+    "verify:plugin-authoring-skill-references": "node config/scripts/generate-plugin-authoring-skill-references.mjs --check",
     "generate:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs --write",
     "verify:skill-bundle-manifest": "node config/scripts/generate-skill-bundle-manifest.mjs",
     "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
@@ -129,6 +134,8 @@
     "sync:localization-catalog": "node config/scripts/verify-localization-catalog.mjs --fix",
     "verify:localization-runtime-catalog": "node config/scripts/generate-runtime-required-english-catalog.mjs",
     "sync:localization-runtime-catalog": "node config/scripts/generate-runtime-required-english-catalog.mjs --fix",
+    "verify:localization-protected-copy": "node config/scripts/protected-copy-keys.mjs",
+    "sync:localization-protected-copy": "node config/scripts/protected-copy-keys.mjs --fix",
     "verify:localization-extraction": "node config/scripts/verify-localization-extraction.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "verify:mobile-localization": "node config/scripts/verify-mobile-localization.mjs",
@@ -310,12 +317,14 @@
     "devalue": "6.0.3",
     "diff": "8.0.4",
     "dompurify": "3.4.17",
-    "electron": "43.8.1",
+    "electron": "43.8.4",
     "electron-builder": "26.15.3",
     "electron-vite": "^6.0.0",
     "emoji-picker-react": "^4.22.3",
     "emojibase-data": "17.0.0",
+    "es-module-lexer": "1.7.0",
     "esbuild": "^0.28.2",
+    "github-slugger": "2.0.0",
     "happy-dom": "^21.0.4",
     "hast-util-from-html-isomorphic": "2.0.0",
     "hast-util-to-jsx-runtime": "2.3.6",
@@ -360,6 +369,7 @@
     "remend": "1.4.0",
     "shiki": "4.5.0",
     "sonner": "2.0.7",
+    "sucrase": "3.35.1",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
     "tar": "7.5.22",
@@ -403,6 +413,14 @@
   "reactDoctor": {
     "ignore": {
       "overrides": [
+        {
+          "files": [
+            "resources/plugins/declarative/*.mjs"
+          ],
+          "rules": [
+            "eslint/max-lines"
+          ]
+        },
         {
           "files": [
             "src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts"

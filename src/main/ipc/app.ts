@@ -9,9 +9,11 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
+import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
+import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/process-quit-request'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
@@ -184,6 +186,15 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
+
+  ipcMain.handle('app:setWindowMaterialSuppressed', (event, suppressed: unknown) => {
+    const window = isTrustedUIRenderer(event.sender)
+      ? BrowserWindow.fromWebContents(event.sender)
+      : null
+    if (window && typeof suppressed === 'boolean') {
+      setWindowMaterialSuppressed(window, suppressed)
+    }
+  })
 
   ipcMain.handle('app:relaunch', async () => {
     // Delay teardown so the renderer can paint Restarting after cleanup.

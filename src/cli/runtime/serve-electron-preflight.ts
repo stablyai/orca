@@ -11,7 +11,7 @@ import {
 } from '../../shared/serve-abort-park'
 import { tryReadMetadata } from './metadata'
 import { probeRuntimeListener, type RuntimeListenerProbe } from './runtime-listener-probe'
-import { getCliStatus } from './status'
+import { getOfflineRuntimeAdmission, type OfflineRuntimeAdmission } from './status'
 import { RuntimeClientError } from './types'
 
 /** Only an absent owner permits a new serve process. */
@@ -20,19 +20,15 @@ export type ServeProfileVerdict =
   | { verdict: 'unverifiable'; reason: 'endpoint-held' | 'access-denied'; pid: number | null }
   | { verdict: 'absent' }
 
-type ServeProfileStatus = {
-  result: { app: { pid?: number | null }; runtime: { reachable: boolean } }
-}
-
 type PreflightDeps = {
   readMetadata: (userDataPath: string) => RuntimeMetadata | null
-  readStatus: (userDataPath: string) => Promise<ServeProfileStatus>
+  readAdmission: (userDataPath: string) => Promise<OfflineRuntimeAdmission>
   probeListener: (metadata: RuntimeMetadata) => Promise<RuntimeListenerProbe>
 }
 
 const DEFAULT_DEPS: PreflightDeps = {
   readMetadata: tryReadMetadata,
-  readStatus: getCliStatus,
+  readAdmission: getOfflineRuntimeAdmission,
   probeListener: probeRuntimeListener
 }
 
@@ -42,17 +38,17 @@ export async function decideServeProfileVerdict(
   metadata: RuntimeMetadata,
   deps: PreflightDeps = DEFAULT_DEPS
 ): Promise<ServeProfileVerdict> {
-  let status: ServeProfileStatus
+  let status: OfflineRuntimeAdmission
   try {
-    status = await deps.readStatus(userDataPath)
+    status = await deps.readAdmission(userDataPath)
   } catch (error) {
     if (error instanceof RuntimeClientError && error.code === 'runtime_access_denied') {
       return { verdict: 'unverifiable', reason: 'access-denied', pid: metadata.pid ?? null }
     }
     throw error
   }
-  const pid = status.result.app.pid ?? metadata.pid ?? null
-  if (status.result.runtime.reachable) {
+  const pid = status.pid ?? metadata.pid ?? null
+  if (status.reachable) {
     return { verdict: 'live', evidence: 'rpc', pid }
   }
   const probe = await deps.probeListener(metadata)

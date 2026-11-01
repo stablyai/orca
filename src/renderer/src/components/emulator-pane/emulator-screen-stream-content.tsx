@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
 
@@ -22,9 +23,6 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
-// Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
-const SCRCPY_PREFIX = 'scrcpy://'
-
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -36,10 +34,7 @@ export function EmulatorScreenStreamContent({
   streamKey,
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
-  const androidDeviceId =
-    previewUrl && previewUrl.startsWith(SCRCPY_PREFIX)
-      ? previewUrl.slice(SCRCPY_PREFIX.length)
-      : null
+  const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,
@@ -144,10 +139,12 @@ function resolveStreamMediaStyle(
   if (streamRotation === 0 || screenAspectRatio <= 0) {
     return undefined
   }
+  // A half turn keeps the frame's own proportions; only quarter turns swap them.
+  const halfTurn = streamRotation === 180
   return {
-    height: `${100 * screenAspectRatio}%`,
+    height: `${halfTurn ? 100 : 100 * screenAspectRatio}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,
     transformOrigin: 'center',
-    width: `${100 / screenAspectRatio}%`
+    width: `${halfTurn ? 100 : 100 / screenAspectRatio}%`
   }
 }

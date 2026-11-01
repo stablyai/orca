@@ -3,7 +3,7 @@ import type {
   StructuredAgentSessionProviderOpenResult
 } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { readClaudeStructuredSessionSettings } from '../claude-structured-session-acquisition-options'
+import { readClaudeStructuredSessionSettings } from './launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../claude-transcript-catch-up'
 import type {
@@ -30,16 +30,18 @@ export async function openClaudeStructuredSession(input: {
   const { proof, account, resumesTranscript, onLateRefusal } = session.initialization
   const opened = openClaudeSession({
     session,
-    facts: readClaudeStartupFacts({
-      connection: session.connection,
-      initProof: proof,
-      sessionId: request.sessionId,
-      providerSessionId: session.providerSessionId,
-      resumesTranscript,
-      account,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      emit: (event) => emit(session, event)
-    }),
+    facts:
+      session.initialization.facts ??
+      readClaudeStartupFacts({
+        connection: session.connection,
+        initProof: proof,
+        sessionId: request.sessionId,
+        providerSessionId: session.providerSessionId,
+        resumesTranscript,
+        account,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        emit: (event) => emit(session, event)
+      }),
     readSettings: () =>
       readClaudeStructuredSessionSettings(session.connection, deps.requestTimeoutMs),
     isCurrent: () => sessions.get(request.sessionId) === session,
@@ -89,5 +91,5 @@ export async function openClaudeStructuredSession(input: {
     )
     current()
   }
-  return { link: session.link, ...result }
+  return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

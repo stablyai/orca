@@ -11,22 +11,22 @@ import { actionModelSelectionChoices } from './source-control-action-model-selec
 import { normalizeAgentModelOptionChoices } from './agent-launch-choices'
 import type { ExecutionHostId } from './execution-host'
 import {
-  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchRawArgs,
   type AgentLaunchProfileSettings
 } from './tui-agent-launch-defaults'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog,
-  getAgentSessionOptionCatalog,
-  type CatalogOption
-} from './agent-session-option-catalog'
+  getAgentSessionOptionCatalog
+} from './agent-session/options/agent-session-option-catalog'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe
 } from './source-control-ai-actions'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
-import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from './agent-session/lifecycle/agent-session-provider-handle'
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
 import {
@@ -71,14 +71,15 @@ export function sourceControlActionOptions(
   modelId: string
 ): SourceControlActionOption[] {
   const catalog = getAgentSessionOptionCatalog(agent)
-  const options =
-    findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)?.options ??
-    catalog?.unknownModelOptions ??
-    []
+  const model = findCatalogModel(catalog ?? { models: [], modelApply: {} }, modelId)
+  const options = model?.options ?? catalog?.unknownModelOptions ?? []
   return options.flatMap((option): SourceControlActionOption[] => {
     const chats = optionReachesChats(agent, option)
     const terminals = Boolean(option.apply.launchArgs || option.apply.composedIntoModel)
-    if (!chats && !terminals) {
+    if (
+      (!chats && !terminals) ||
+      (option.kind.type === 'select' && option.kind.choices.length === 0)
+    ) {
       return []
     }
     return [{ option, route: !terminals ? 'chats' : !chats ? 'terminals' : null }]
@@ -211,7 +212,7 @@ function selectedActionAgentArgs(
   if (agentArgs === undefined || (permission?.agentId === agent && permission.permissionMode)) {
     return agentArgs
   }
-  return resolveTuiAgentLaunchArgs(agent, {
+  return resolveTuiAgentLaunchRawArgs(agent, {
     ...settings,
     agentDefaultArgs: { ...settings?.agentDefaultArgs, [agent]: agentArgs }
   })

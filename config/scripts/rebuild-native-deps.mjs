@@ -578,7 +578,7 @@ function loadNativeModule(moduleName) {
   }
   if (moduleName === '@orca/windows-security') {
     const security = projectRequire(moduleName)
-    if (!security.currentUserSid() || !security.hasNativeExport('spawnDetachedIsolated')) throw new Error('stale build without the newest export; rebuild it')
+    if (!security.currentUserSid() || !security.hasNativeExport('isolatedSpawnBreaksAwayFromJob')) throw new Error('stale build without the newest export; rebuild it')
     return
   }
   if (moduleName === 'node-pty') {

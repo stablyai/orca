@@ -56,6 +56,7 @@ function discovered(m: PluginManifest, contentHash: string, isDev = false): Vali
 
 function setup(
   options: {
+    previous?: PluginManifest
     next?: PluginManifest
     officialCatalog?: boolean
     repository?: string
@@ -73,7 +74,7 @@ function setup(
   let now = 1_000_000
   // Why first pass only: later refreshes hit warm caches and finish sooner.
   let refreshMs = options.refreshMs ?? 0
-  const previous = discovered(manifest('1.0.0'), 'sha-old', options.dev)
+  const previous = discovered(options.previous ?? manifest('1.0.0'), 'sha-old', options.dev)
   const nextManifest = options.next ?? manifest('1.1.0')
   const next = discovered(nextManifest, 'sha-new')
   let current = previous
@@ -238,6 +239,8 @@ describe('plugin auto-update', () => {
     await updater.run()
     expect(install).toHaveBeenCalledTimes(1)
     expect(info).toHaveBeenCalledWith(`[plugins] auto-updated ${KEY} to 1.1.0`)
+    // Why: an update that installs on its own is never held, so it gets no review notice.
+    expect(updater.getHeldForReview()).toEqual({})
     info.mockRestore()
   })
 
@@ -253,6 +256,43 @@ describe('plugin auto-update', () => {
     expect(install).not.toHaveBeenCalled()
     expect(consents[KEY]).toBe(before)
     expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
+    expect(updater.getHeldForReview()).toEqual({ [KEY]: { version: '1.1.0', reason: 'access' } })
+  })
+
+  // Why every kind: each is a security boundary that must reach the user's own approval.
+  it.each([
+    [
+      'a content-only plugin that becomes a worker',
+      {
+        previous: manifest('1.0.0', { main: undefined, capabilities: [] }),
+        next: manifest('1.1.0', { capabilities: [] })
+      }
+    ],
+    [
+      'a content-only plugin that adds commands',
+      {
+        previous: manifest('1.0.0', { main: undefined, capabilities: [] }),
+        next: manifest('1.1.0', {
+          main: undefined,
+          capabilities: [],
+          contributes: pluginManifestSchema.parse({
+            ...manifest('1.1.0'),
+            contributes: { commands: [{ id: 'go', title: 'Go', action: 'sidebar.left.toggle' }] }
+          }).contributes
+        })
+      }
+    ],
+    [
+      'a worker that widens a capability',
+      { next: manifest('1.1.0', { capabilities: [{ kind: 'secrets:own' }] }) }
+    ]
+  ])('never auto-installs %s, even from the official catalog', async (_label, change) => {
+    const { updater, install, consents } = setup({ officialCatalog: true, ...change })
+    const before = consents[KEY]
+    await updater.run()
+    expect(install).not.toHaveBeenCalled()
+    expect(consents[KEY]).toBe(before)
+    expect(updater.getState()).toEqual({ updated: {}, needsReview: { [KEY]: '1.1.0' } })
   })
 
   it('marks an update from a moved repository for review', async () => {
@@ -263,6 +303,9 @@ describe('plugin auto-update', () => {
     await updater.run()
     expect(install).not.toHaveBeenCalled()
     expect(updater.getState().needsReview).toEqual({ [KEY]: '1.1.0' })
+    expect(updater.getHeldForReview()).toEqual({
+      [KEY]: { version: '1.1.0', reason: 'repository' }
+    })
   })
 
   it('skips disabled, unapproved, development, blocked plugins and the manual policy', async () => {
@@ -276,6 +319,7 @@ describe('plugin auto-update', () => {
       const { updater, install } = setup({ officialCatalog: true, ...options })
       await updater.run()
       expect(install, JSON.stringify(options)).not.toHaveBeenCalled()
+      expect(updater.getHeldForReview(), JSON.stringify(options)).toEqual({})
     }
   })
 

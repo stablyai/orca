@@ -16,6 +16,8 @@ export function ResourcePtyList({
   unverifiable,
   ending,
   errors,
+  selected,
+  onSelect,
   onEnd,
   onNavigate
 }: {
@@ -25,6 +27,8 @@ export function ResourcePtyList({
   unverifiable: boolean
   ending: ReadonlySet<string>
   errors: ReadonlyMap<string, string>
+  selected: ReadonlySet<string>
+  onSelect: (row: PtyRow) => void
   onEnd: (row: PtyRow) => void
   onNavigate: (tabId: string, paneKey: string | null) => void
 }) {
@@ -78,7 +82,7 @@ export function ResourcePtyList({
             return (
               <div
                 key={item.key}
-                className="flex justify-between px-4 py-1 text-xs text-muted-foreground"
+                className="flex justify-between py-1 pr-4 pl-3 text-xs text-muted-foreground"
               >
                 <span className="truncate">{item.name}</span>
                 <span>{item.count}</span>
@@ -93,6 +97,8 @@ export function ResourcePtyList({
                 unverifiable={unverifiable}
                 ending={!!item.row.session.exiting || ending.has(item.row.identity)}
                 error={errors.get(item.row.identity)}
+                selected={selected.has(item.row.identity)}
+                onSelect={onSelect}
                 onEnd={onEnd}
                 onNavigate={onNavigate}
               />

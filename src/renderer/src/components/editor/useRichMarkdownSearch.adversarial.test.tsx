@@ -112,7 +112,7 @@ describe('rich Markdown search adversarial interactions', () => {
     }
   )
 
-  it('still closes Find and returns to the editor on plain Escape', () => {
+  it('still closes Find and returns to the editor on plain Escape before the next frame', () => {
     const { hook, editor, input } = mountSearch()
     const event = new KeyboardEvent('keydown', {
       key: 'Escape',
@@ -121,7 +121,6 @@ describe('rich Markdown search adversarial interactions', () => {
     })
 
     act(() => input.dispatchEvent(event))
-    act(() => vi.runOnlyPendingTimers())
 
     expect(hook.result.current.searchState.isSearchOpen).toBe(false)
     expect(document.activeElement).toBe(editor.view.dom)

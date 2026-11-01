@@ -67,7 +67,24 @@ vi.mock('../ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-vi.mock('../plugins/dialogs/PluginInstallDialog', () => ({ PluginInstallDialog: () => null }))
+vi.mock('../plugins/dialogs/PluginInstallDialog', () => ({
+  PluginInstallDialog: ({
+    open,
+    onInstall
+  }: {
+    open: boolean
+    onInstall: (source: { kind: 'git'; url: string; ref: string }) => Promise<void>
+  }) =>
+    open ? (
+      <button
+        onClick={() =>
+          void onInstall({ kind: 'git', url: 'https://github.com/Acme/notes.git', ref: 'v1' })
+        }
+      >
+        Submit Git install
+      </button>
+    ) : null
+}))
 // Why mock the consent: review now happens on the plugin's page, where this section sits.
 vi.mock('../plugins/review/PluginInstallConsent', () => ({
   PluginInstallConsent: ({ onConfirm }: { onConfirm: () => void }) => {
@@ -154,6 +171,34 @@ async function openDevelopmentFolders(container: HTMLElement): Promise<void> {
   await act(async () => click(open))
 }
 
+/** Answers the open "Make sure you trust …" dialog, which must name this kind of warning; returns what it said. */
+async function answerTrust(kind: string, label: string): Promise<string> {
+  const dialog = document.querySelector<HTMLElement>('[data-plugin-install-trust]')
+  if (!dialog) {
+    throw new Error('missing install trust dialog')
+  }
+  expect(dialog.dataset.pluginInstallTrust).toBe(kind)
+  const answer = Array.from(dialog.querySelectorAll('button')).find(
+    (button) => button.textContent === label
+  )
+  if (!answer) {
+    throw new Error(`missing ${label} in the trust dialog`)
+  }
+  const text = dialog.textContent ?? ''
+  await act(async () => click(answer))
+  return text
+}
+
+function buttonByText(label: string): HTMLButtonElement {
+  const match = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === label
+  )
+  if (!match) {
+    throw new Error(`missing ${label} button`)
+  }
+  return match
+}
+
 async function renderSection(
   settings: GlobalSettings = { ...getDefaultSettings('/tmp'), pluginSystemEnabled: true },
   updateSettings = vi.fn().mockResolvedValue(undefined),
@@ -211,15 +256,20 @@ function installApi(overrides: Record<string, unknown> = {}): {
   return { unsubscribe }
 }
 
-/** A card's Enable or Disable menu item; cards carry no switch. */
+/** A card's enable switch. */
 function toggleItem(container: HTMLElement, pluginKey: string): HTMLButtonElement {
-  const item = Array.from(
-    container.querySelectorAll<HTMLButtonElement>(`[data-plugin-key="${pluginKey}"] button`)
-  ).find((button) => ['Disable', 'Enable'].includes(button.textContent?.trim() ?? ''))
+  const item = container.querySelector<HTMLButtonElement>(
+    `[data-plugin-key="${pluginKey}"] [role="switch"]`
+  )
   if (!item) {
     throw new Error('missing plugin toggle')
   }
   return item
+}
+
+/** What the switch does next: "Enable" or "Disable". */
+function toggleAction(item: HTMLButtonElement): string | undefined {
+  return item.getAttribute('aria-label')?.split(' ')[0]
 }
 
 beforeEach(() => installApi())
@@ -284,7 +334,7 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('routes enablement and confirmed removal through plugin IPC', async () => {
     const { container } = await renderSection()
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Disable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
 
     vi.mocked(applyPluginThemesNow).mockClear()
     await act(async () => click(toggleItem(container, plugin.pluginKey)))
@@ -326,7 +376,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     })
     const { container } = await renderSection()
     const pluginSwitch = toggleItem(container, plugin.pluginKey)
-    expect(pluginSwitch.textContent).toBe('Enable')
+    expect(toggleAction(pluginSwitch)).toBe('Enable')
 
     await act(async () => click(pluginSwitch))
 
@@ -363,7 +413,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     await act(async () => click(restart))
 
     expect(list).toHaveBeenCalledTimes(2)
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Enable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Enable')
   })
 
   it('confirms marketplace rollback before invoking plugin IPC', async () => {
@@ -440,8 +490,8 @@ describe('PluginsSettingsSection lifecycle', () => {
       ])
     )
     expect(notes().disabled).toBe(false)
-    expect(notes().textContent).toBe('Enable')
-    expect(tasks().textContent).toBe('Enable')
+    expect(toggleAction(notes())).toBe('Enable')
+    expect(toggleAction(tasks())).toBe('Enable')
   })
 
   it('fetches bounded logs only when their disclosure opens', async () => {
@@ -469,7 +519,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     const { container } = await renderSection()
 
     expect(container.textContent).toContain('Restarting')
-    expect(toggleItem(container, plugin.pluginKey).textContent).toBe('Disable')
+    expect(toggleAction(toggleItem(container, plugin.pluginKey))).toBe('Disable')
   })
 
   it('prunes dialogs and stale logs after external removal and same-key reinstall', async () => {
@@ -547,6 +597,8 @@ describe('PluginsSettingsSection lifecycle', () => {
     }
 
     await act(async () => click(add))
+    expect(updateSettings).not.toHaveBeenCalled()
+    await answerTrust('dev-folder', 'Add folder')
 
     expect(updateSettings).toHaveBeenCalledWith({ devPluginPaths: ['C:\\plugins\\demo'] })
     expect(window.api.plugins.refresh).toHaveBeenCalled()
@@ -575,11 +627,69 @@ describe('PluginsSettingsSection lifecycle', () => {
     }
 
     await act(async () => click(add))
+    await answerTrust('dev-folder', 'Add folder')
 
     expect(input.value).toBe('/plugins/demo')
     expect(add.disabled).toBe(false)
     expect(window.api.plugins.refresh).not.toHaveBeenCalled()
     expect(document.body.textContent).toContain('Could not save plugin settings.')
+  })
+
+  it('adds no development folder when its trust dialog is cancelled', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const { container } = await renderSection(undefined, updateSettings)
+    await openDevelopmentFolders(container)
+    const input = document.querySelector<HTMLInputElement>('#plugin-development-path')
+    if (!input) {
+      throw new Error('missing development path input')
+    }
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        input,
+        '/plugins/demo'
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => click(buttonByText('Add path')))
+    const shown = await answerTrust('dev-folder', 'Cancel')
+    expect(shown).toContain('This is an unverified local folder.')
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(input.value).toBe('/plugins/demo')
+  })
+
+  it('asks to trust the owner of a Git URL before installing from it', async () => {
+    installApi({
+      install: vi.fn().mockResolvedValue({
+        ok: true,
+        pluginKey: 'acme.notes',
+        version: '1.0.0',
+        contentHash: 'd'.repeat(64),
+        consentFingerprint: 'sha256-acme-notes',
+        resolvedCommit: 'c'.repeat(40)
+      })
+    })
+    await renderSection()
+    await act(async () => click(buttonByText('From a Git URL…')))
+    await act(async () => click(buttonByText('Submit Git install')))
+    expect(window.api.plugins.install).not.toHaveBeenCalled()
+    const shown = await answerTrust('git', 'Install')
+    expect(shown).toContain('Make sure you trust Acme')
+    expect(shown).toContain('github.com/acme/notes')
+    expect(window.api.plugins.install).toHaveBeenCalledWith({
+      kind: 'git',
+      url: 'https://github.com/Acme/notes.git',
+      ref: 'v1'
+    })
+  })
+
+  it('installs nothing from a Git URL when its trust dialog is cancelled', async () => {
+    await renderSection()
+    await act(async () => click(buttonByText('From a Git URL…')))
+    await act(async () => click(buttonByText('Submit Git install')))
+    await answerTrust('git', 'Cancel')
+    expect(window.api.plugins.install).not.toHaveBeenCalled()
+    // Why: cancelling the warning keeps the install form open, input intact.
+    expect(buttonByText('Submit Git install')).toBeTruthy()
   })
 
   it('keeps a development path and handles a failed removal without rejection', async () => {

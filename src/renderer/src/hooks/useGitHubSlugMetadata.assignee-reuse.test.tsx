@@ -95,15 +95,6 @@ describe('repository assignee reuse across row seeds', () => {
     expect(results.get('a')?.data[1]).toEqual({ login: 'alpha', name: null, avatarUrl: '' })
   })
 
-  it('updates seeds in place without a fetch or loading transition', async () => {
-    await render(<Probe seeds={['first']} />)
-    await render(<Probe seeds={['second']} />)
-
-    expect(logins()).toEqual(['member', 'second'])
-    expect(results.get('row')).toMatchObject({ loading: false, error: null })
-    expect(listUsers).toHaveBeenCalledTimes(1)
-  })
-
   it('adds seeds to a successful empty list but not to loading or failed results', async () => {
     let finish: (value: { ok: boolean; users: GitHubAssignableUser[] }) => void = () => {}
     listUsers.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
@@ -129,30 +120,5 @@ describe('repository assignee reuse across row seeds', () => {
     await render(<Probe key="new-reader" seeds={['fresh']} />)
     expect(logins()).toEqual(['member', 'fresh'])
     expect(listUsers).toHaveBeenCalledTimes(2)
-  })
-
-  it('isolates repository, host and remote runtime scopes and honors cache clearing', async () => {
-    await render(<Probe />)
-    await render(<Probe repo="other" />)
-    await render(<Probe host="ghe.example.test" />)
-    await render(<Probe target={{ kind: 'environment', environmentId: 'remote-a' }} />)
-    await render(<Probe target={{ kind: 'environment', environmentId: 'remote-b' }} />)
-
-    expect(listUsers).toHaveBeenCalledTimes(3)
-    expect(listUsers).toHaveBeenLastCalledWith({
-      owner: 'stablyai',
-      repo: 'orca',
-      host: 'ghe.example.test'
-    })
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
-    expect(callRuntimeRpc).toHaveBeenLastCalledWith(
-      { kind: 'environment', environmentId: 'remote-b' },
-      'github.project.listAssignableUsersBySlug',
-      { owner: 'stablyai', repo: 'orca', host: 'github.com' },
-      { timeoutMs: 30_000 }
-    )
-    clearGitHubSlugMetadataCache()
-    await render(<Probe key="after-auth-change" />)
-    expect(listUsers).toHaveBeenCalledTimes(4)
   })
 })

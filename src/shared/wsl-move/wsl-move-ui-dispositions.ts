@@ -110,6 +110,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'editorFontZoomLevel',
   'worktreeCardProperties',
   '_worktreeCardModeDefaulted',
+  'showAgentModels',
   'agentActivityDisplayMode',
   'workspaceStatuses',
   'workspaceBoardOpacity',

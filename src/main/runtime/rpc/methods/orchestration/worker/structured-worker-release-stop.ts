@@ -17,8 +17,25 @@ export async function stopStructuredWorkerForRelease(args: {
   archiveStatus: string | null
 }): Promise<WorkerReleaseReceipt> {
   const { structured, dispatchId, resource, runtime, db } = args
-  const stop = await stopStructuredWorker(structured, dispatchId, runtime)
+  // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
+  const stop = await stopStructuredWorker(
+    structured,
+    runtime,
+    resource.auto_release_at
+      ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))
+      : undefined
+  )
   if (!stop.stopped) {
+    const current = db.getWorkerTerminalResource(resource.id)
+    if (current && current.release_state !== 'releasing') {
+      // Refused in the session lane: Keep open, a new turn, or a fall back to manual release.
+      return {
+        dispatchId,
+        state: 'retained',
+        processAction: 'none',
+        archive: archiveSummary(current)
+      }
+    }
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       stop.reason ?? 'The structured session close was not proven.'

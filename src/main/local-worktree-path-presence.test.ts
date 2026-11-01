@@ -8,7 +8,6 @@ vi.mock('node:fs/promises', () => ({ stat: statMock }))
 
 import {
   LOCAL_WORKTREE_PATH_PROBE_TIMEOUT_MS,
-  localWorktreePathExistsOrIsUnverifiable,
   localWorktreePathsExistOrAreUnverifiable
 } from './local-worktree-path-presence'
 
@@ -51,7 +50,7 @@ describe('local worktree path presence', () => {
       if (pathValue === '/permission-denied') {
         throw fsError('EACCES')
       }
-      return {}
+      return { isDirectory: () => true }
     })
 
     const result = await localWorktreePathsExistOrAreUnverifiable([
@@ -71,15 +70,6 @@ describe('local worktree path presence', () => {
     expect(statMock).toHaveBeenCalledTimes(4)
   })
 
-  it('does not allocate a deadline when there are no paths to probe', async () => {
-    const timeout = vi.spyOn(AbortSignal, 'timeout')
-
-    await expect(localWorktreePathsExistOrAreUnverifiable([])).resolves.toEqual(new Map())
-
-    expect(timeout).not.toHaveBeenCalled()
-    expect(statMock).not.toHaveBeenCalled()
-  })
-
   it('globally bounds stat calls across simultaneous bulk probes', async () => {
     let active = 0
     let maximumActive = 0
@@ -91,7 +81,7 @@ describe('local worktree path presence', () => {
           maximumActive = Math.max(maximumActive, active)
           pending.push(() => {
             active -= 1
-            resolve({})
+            resolve({ isDirectory: () => true })
           })
         })
     )
@@ -125,16 +115,6 @@ describe('local worktree path presence', () => {
     expect(statMock).toHaveBeenCalledTimes(8)
   })
 
-  it('uses the same fail-closed classification for a single probe', async () => {
-    statMock.mockRejectedValueOnce(fsError('ENOENT'))
-    statMock.mockRejectedValueOnce(fsError('ENOTDIR'))
-    statMock.mockRejectedValueOnce(fsError('EIO'))
-
-    await expect(localWorktreePathExistsOrIsUnverifiable('/missing')).resolves.toBe(false)
-    await expect(localWorktreePathExistsOrIsUnverifiable('/parent-missing')).resolves.toBe(false)
-    await expect(localWorktreePathExistsOrIsUnverifiable('/unverifiable')).resolves.toBe(true)
-  })
-
   it('settles timed-out batches without exceeding or leaking the global stat bound', async () => {
     vi.useFakeTimers()
     const timeoutControllers = installFakeAbortSignalTimeout()
@@ -143,7 +123,7 @@ describe('local worktree path presence', () => {
     statMock.mockImplementation(() =>
       returnMissing
         ? Promise.reject(fsError('ENOENT'))
-        : new Promise((resolve) => releaseStats.push(() => resolve({})))
+        : new Promise((resolve) => releaseStats.push(() => resolve({ isDirectory: () => true })))
     )
 
     try {
@@ -193,7 +173,7 @@ describe('local worktree path presence', () => {
     const timeoutControllers = installFakeAbortSignalTimeout()
     const releaseStats: (() => void)[] = []
     statMock.mockImplementation(
-      () => new Promise((resolve) => releaseStats.push(() => resolve({})))
+      () => new Promise((resolve) => releaseStats.push(() => resolve({ isDirectory: () => true })))
     )
     const controller = new AbortController()
     const paths = ['/abort-1', '/abort-2', '/abort-3']

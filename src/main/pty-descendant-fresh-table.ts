@@ -38,7 +38,8 @@ async function readFreshProcessTableOnce(
   // Registered now, so no native read submitted before this request serves it; a stalled one leaves ps its full timeout.
   const inProcess = await runPsInProcess(DESCENDANT_PS_ARGS, {
     env,
-    timeoutMs: inProcessSliceMs(timeoutMs)
+    timeoutMs: inProcessSliceMs(timeoutMs),
+    callerRunsPs: true
   })
   if (inProcess && !inProcess.timedOut) {
     return { rows: parseProcessTable(inProcess.stdout), capturedAtMs }

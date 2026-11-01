@@ -17,11 +17,11 @@ import {
 } from './automatic-load-path-text'
 import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read'
 import { realpathAcrossWslDriveMount, windowsFsPath } from '../wsl/wsl-unc-drive-fs-path'
+import { resolveProjectFolderLinkPath } from './project-folder-link-path'
+import { resolveUserNamedDirectoryPath } from './user-named-directory-path'
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
-const USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE =
-  'Access denied: a directory opened by name needs an absolute path.'
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 
 const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image files.'
@@ -44,21 +44,6 @@ function resolveUserNamedLocalPath(targetPath: string): string {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
   return resolve(targetPath)
-}
-
-async function resolveUserNamedDirectoryPath(targetPath: string): Promise<string> {
-  if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
-    throw new Error(USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE)
-  }
-  const resolvedTarget = resolve(targetPath)
-  if (isNetworkSharePath(resolvedTarget) || isRefusedAutomaticLoadPath(resolvedTarget)) {
-    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-  }
-  const directoryPath = resolve(await realpathAcrossWslDriveMount(resolvedTarget))
-  if (isNetworkSharePath(directoryPath) || isRefusedAutomaticLoadPath(directoryPath)) {
-    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
-  }
-  return directoryPath
 }
 
 /** Require an existing regular user-named file; project paths retain normal canonicalization. */
@@ -202,6 +187,9 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   ) {
     return { kind: 'document-folder', documentPath: access.documentPath }
   }
+  if (access.kind === 'project-folder-link') {
+    return { kind: 'project-folder-link' }
+  }
   if (
     access.kind === 'document-resource' &&
     'documentPath' in access &&
@@ -214,7 +202,7 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
 
 export type LocalRequestOperation =
   | 'read'
-  | 'read-directory'
+  | 'list'
   | 'write'
   | 'rename-from'
   | 'rename-to'
@@ -229,12 +217,12 @@ function declaredKindRule(
 ): KindRule | undefined {
   switch (fileAccess.kind) {
     case 'user-file':
-      // Only the opened document itself receives this rename access.
-      return operation !== 'import-into' && operation !== 'read-directory'
+      // Only the opened document itself receives rename access; listings need a folder access kind.
+      return operation !== 'import-into' && operation !== 'list'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
     case 'user-directory':
-      return operation === 'read-directory' ? resolveUserNamedDirectoryPath : undefined
+      return operation === 'list' ? resolveUserNamedDirectoryPath : undefined
     case 'document-resource':
       return operation === 'read'
         ? (targetPath) => resolveDocumentResourcePath(targetPath, fileAccess.documentPath)
@@ -246,6 +234,12 @@ function declaredKindRule(
     case 'document-folder':
       return operation === 'import-into'
         ? (targetPath) => resolveDocumentFolderPath(targetPath, fileAccess.documentPath)
+        : undefined
+    case 'project-folder-link':
+      return operation === 'list'
+        ? (targetPath) =>
+            // Why project roots only: Orca's floating folder is not a project a link can lead out of.
+            resolveProjectFolderLinkPath(targetPath, (path) => resolveAuthorizedPath(path, store))
         : undefined
   }
 }
@@ -314,13 +308,13 @@ export function resolveLocalFileRequestPath(
   return resolveLocalRequestPath(targetPath, access, store, 'read')
 }
 
-/** A desktop directory listing; user-directory access adds an absolute local directory. */
-export async function resolveLocalDirectoryListingPath(
+/** Folder listings beyond project roots need project-folder-link or user-directory access. */
+export async function resolveLocalListRequestPath(
   targetPath: string,
   access: unknown,
   store: RuntimeStore
 ): Promise<string> {
-  const directoryPath = await resolveLocalRequestPath(targetPath, access, store, 'read-directory')
+  const directoryPath = await resolveLocalRequestPath(targetPath, access, store, 'list')
   const userDirectory = parseLocalFileAccess(access)?.kind === 'user-directory'
   if (userDirectory && !(await stat(windowsFsPath(directoryPath))).isDirectory()) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)

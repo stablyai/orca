@@ -27,8 +27,8 @@ import {
   outdentRichMarkdownListItem
 } from './rich-markdown-list-indent'
 import {
-  outdentRichMarkdownCodeBlock,
-  RICH_MARKDOWN_CODE_BLOCK_INDENT
+  indentRichMarkdownCodeBlock,
+  outdentRichMarkdownCodeBlock
 } from './rich-markdown-code-block-indent'
 import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
@@ -215,7 +215,7 @@ export function createRichMarkdownKeyHandler(
       }
 
       if (ed.isActive('codeBlock')) {
-        ed.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
+        indentRichMarkdownCodeBlock(ed)
         return true
       }
 

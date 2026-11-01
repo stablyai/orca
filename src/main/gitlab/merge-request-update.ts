@@ -13,7 +13,9 @@ import {
 import { encodedProject } from './project-path-encoding'
 import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
+import { tryMarkMRReady } from './merge-request-ready'
 import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
+import { invalidateReviewLookupsAfterPRMutation } from '../github/pr-mutation-review-invalidation'
 
 export async function updateMR(
   repoPath: string,
@@ -40,6 +42,7 @@ export async function updateMR(
         return { ok: true }
       }
       await acquire()
+      let readinessApplied = false
       try {
         if (updates.readyForReview && updates.title !== undefined) {
           return codeHostFailure('gitlab.readyTitleConflict')
@@ -47,7 +50,22 @@ export async function updateMR(
 
         const endpoint = `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
         let title = updates.title?.trim()
+        const query = `mutation { mergeRequestSetDraft(input: { projectPath: ${JSON.stringify(projectRef.path)}, iid: ${JSON.stringify(String(iid))}, draft: false }) { mergeRequest { iid } errors } }`
         if (updates.readyForReview) {
+          readinessApplied = await tryMarkMRReady(
+            [
+              'api',
+              ...glabHostnameArgs(projectRef, connectionId),
+              'graphql',
+              '-i',
+              '-f',
+              `query=${query}`
+            ],
+            glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+            iid
+          )
+        }
+        if (updates.readyForReview && !readinessApplied) {
           const response = await glabExecFileAsync(
             ['api', ...glabHostnameArgs(projectRef, connectionId), endpoint],
             glabRepoExecOptions(repoPath, connectionId, localGitOptions)
@@ -96,10 +114,28 @@ export async function updateMR(
         )
         return { ok: true }
       } catch (err) {
+        if (readinessApplied) {
+          const metadata = [
+            updates.body !== undefined ? 'description' : null,
+            [...(updates.addLabels ?? []), ...(updates.removeLabels ?? [])].some((label) =>
+              label.trim()
+            )
+              ? 'labels'
+              : null
+          ]
+            .filter((field) => field !== null)
+            .join(' and ')
+          return {
+            ok: false,
+            error: `GitLab marked the merge request ready, but could not confirm the ${metadata} update. Retry only those edits.`
+          }
+        }
         const msg = err instanceof Error ? err.message : String(err)
         return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
+        // Even a failed write may have landed; later reads must not reuse an answer from before it.
+        invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
       }
     },
     codeHostFailure('gitlab.projectUnresolved'),

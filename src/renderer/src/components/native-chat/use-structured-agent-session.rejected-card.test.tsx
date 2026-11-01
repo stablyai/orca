@@ -4,14 +4,14 @@
 
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 
 let queuedMessages: AgentSessionQueuedMessage[] = []
 let submissions: AgentJournalSubmission[] = []

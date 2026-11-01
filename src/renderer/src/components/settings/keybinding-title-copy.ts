@@ -35,6 +35,7 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.workspaceSelectByIndex', 'Select Workspace 1–9'),
   'voice.dictation': () => translate('keybindings.title.voiceDictation', 'Dictation'),
   'view.tasks': () => translate('keybindings.title.viewTasks', 'Open Tasks'),
+  'view.plugins': () => translate('keybindings.title.viewPlugins', 'Open Plugins'),
   'sidebar.left.toggle': () => translate('keybindings.title.sidebarLeftToggle', 'Toggle Sidebar'),
   'sidebar.right.toggle': () =>
     translate('keybindings.title.sidebarRightToggle', 'Toggle Right Sidebar'),

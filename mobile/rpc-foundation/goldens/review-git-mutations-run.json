@@ -44,15 +44,11 @@
       "ordinal": 3,
       "value": {}
     },
-    "5f6bfd36288e": {
-      "name": "load-review-data",
-      "ordinal": 9,
-      "value": {}
-    },
-    "92e9d747a5d2": {
-      "name": "git.stage#2",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
     },
     "a0c4d58800db": {
       "name": "load-review-data",
@@ -63,74 +59,6 @@
       "name": "git.discard#1",
       "ordinal": 5,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
-    "b9a737200881": {
-      "name": "git.stage#2",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.stage"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "src/app.ts",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "staged": true
-          }
-        }
-      }
-    },
-    "c5425fe73868": {
-      "actionError": "1 reviewed file staged",
-      "busyAction": {
-        "$rpc": "null"
-      },
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
     },
     "d1de63d44a74": {
       "name": "git.discard#1",
@@ -165,14 +93,6 @@
             "discarded": true
           }
         }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
       }
     },
     "f39122ee30fc": {
@@ -225,7 +145,7 @@
           "sender": ["fd1322e39fc5"],
           "payloads": ["f39122ee30fc"],
           "settlements": {
-            "stage": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec"]
@@ -237,25 +157,11 @@
           "sender": ["fd1322e39fc5", "d1de63d44a74"],
           "payloads": ["f39122ee30fc", "aa50219ebe9a"],
           "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a"
+            "stage": "84e5ca07cb7a",
+            "discard": "84e5ca07cb7a"
           },
           "state": "2fc890e4b748",
           "effects": ["53b792409cec", "a0c4d58800db"]
-        }
-      },
-      {
-        "id": "swept",
-        "observation": {
-          "sender": ["fd1322e39fc5", "d1de63d44a74", "b9a737200881"],
-          "payloads": ["f39122ee30fc", "aa50219ebe9a", "92e9d747a5d2"],
-          "settlements": {
-            "stage": "eb79a9b3682a",
-            "discard": "eb79a9b3682a",
-            "stage-reviewed": "eb79a9b3682a"
-          },
-          "state": "c5425fe73868",
-          "effects": ["53b792409cec", "a0c4d58800db", "5f6bfd36288e"]
         }
       }
     ]

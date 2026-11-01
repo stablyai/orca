@@ -1,3 +1,6 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
@@ -7,11 +10,10 @@ import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-work
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useAllWorktrees } from '@/store/selectors'
-import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import { linearGetIssue, linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
+import type { LinearComment } from '../../../shared/linear/issue-types'
+import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
 import {
   initLinearIssueEditState,
-  type LinearEditState,
   type LinearItemDrawerProps,
   type LinearLocalComment
 } from '@/components/linear-item-drawer-types'
@@ -31,15 +33,17 @@ export default function LinearItemDrawer({
   onClose,
   sourceContext
 }: LinearItemDrawerProps): React.JSX.Element {
-  const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
-  const [comments, setComments] = useState<LinearComment[]>([])
-  const [commentsLoading, setCommentsLoading] = useState(false)
-  const [editState, setEditState] = useState<LinearEditState | null>(null)
-  const requestIdRef = useRef(0)
-  const hasEditedRef = useRef(false)
-  const optimisticCommentsRef = useRef<LinearComment[]>([])
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
+  const scope = getLinearSourceScope(providerSettings)
+  const publication = useLinearIssuePublication(issue, providerSettings)
+  const { isCurrent } = publication
+  const fullIssue = publication.issue
+  const [comments, setComments] = useState<LinearComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const editState = fullIssue ? initLinearIssueEditState(fullIssue) : null
+  const requestIdRef = useRef(0)
+  const optimisticCommentsRef = useRef<LinearComment[]>([])
   const allWorktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const attachmentWorkspaces = useMemo(
@@ -47,55 +51,35 @@ export default function LinearItemDrawer({
     [allWorktrees, folderWorkspaces]
   )
 
-  const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
-    hasEditedRef.current = true
-    setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    setEditState((prev) => (prev ? { ...prev, ...patch } : prev))
-  }, [])
-
-  const handleIssueTextChange = useCallback(
-    (patch: Partial<Pick<LinearIssue, 'title' | 'description'>>) => {
-      hasEditedRef.current = true
-      setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    },
-    []
-  )
-
   // List rows may omit descriptions; fetch full issue and comments for the drawer.
   // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: resets drafts as it starts the fenced IPC fetch for a new issue id.
   useEffect(() => {
     if (!issue) {
-      setFullIssue(null)
       setComments([])
-      setEditState(null)
-      hasEditedRef.current = false
       return
     }
-    hasEditedRef.current = false
     optimisticCommentsRef.current = []
     setComments([])
     setCommentsLoading(true)
-    setEditState(initLinearIssueEditState(issue))
+
     requestIdRef.current += 1
     const requestId = requestIdRef.current
-    setFullIssue(issue)
 
     // Fetch independently so comments failure cannot discard the issue.
-    linearGetIssue(providerSettings, issue.id, issue.workspaceId)
-      .then((issueResult) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        if (issueResult) {
-          const fetched = issueResult as LinearIssue
-          setFullIssue(fetched)
-          // Preserve optimistic edits made after the fetch began.
-          if (!hasEditedRef.current) {
-            setEditState(initLinearIssueEditState(fetched))
-          }
-        }
-      })
-      .catch(() => {})
+    let initial = true
+    const release = observeLinearIssueRead(
+      useAppStore.getState().fetchLinearIssue(issue.id, issue.workspaceId, {
+        scope,
+        force: true,
+        seed: issue
+      }),
+      () => requestId === requestIdRef.current && isCurrent(),
+      (lease, view) => {
+        const seed = initial && view.kind === 'loading'
+        initial = false
+        publication.read(lease, view, seed)
+      }
+    )
 
     linearIssueComments(providerSettings, issue.id, issue.workspaceId)
       .then((commentsResult) => {
@@ -112,16 +96,26 @@ export default function LinearItemDrawer({
             fetched = [...fetched, ...missing]
           }
         }
-        setComments(fetched)
+        setComments((previous) =>
+          // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Read-only lifetime predicate must run at consumption; it mutates no state or token.
+          requestId === requestIdRef.current && isCurrent() ? fetched : previous
+        )
       })
       .catch(() => {})
       .finally(() => {
         if (requestId === requestIdRef.current) {
-          setCommentsLoading(false)
+          setCommentsLoading((previous) =>
+            // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Read-only lifetime predicate must run at consumption; it mutates no state or token.
+            requestId === requestIdRef.current && isCurrent() ? false : previous
+          )
         }
       })
+    return () => {
+      requestIdRef.current += 1
+      release()
+    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [issue?.id, issue?.workspaceId, providerSettings])
+  }, [issue?.id, issue?.workspaceId, scope.contextKey, publication.read])
 
   // Clear Radix’s stale body pointer-events after overlay transitions, as GitHubItemDialog does.
   useEffect(() => {
@@ -183,10 +177,8 @@ export default function LinearItemDrawer({
     issue,
     onClose,
     displayed,
-    handleIssueTextChange,
     sourceContext,
     editState,
-    handleEditStateChange,
     commentsLoading,
     comments,
     handleCommentAdded,

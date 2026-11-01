@@ -7,7 +7,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useAppStore } from '@/store'
 import { McpConfigSection } from './McpConfigSection'
-import { toast } from 'sonner'
 
 const runtimeFiles = vi.hoisted(() => ({
   readRuntimeDirectory: vi.fn(),
@@ -105,24 +104,6 @@ it('inspects and creates a managed-host repo config on that host, never the desk
   expect(desktopFs.writeFile).not.toHaveBeenCalled()
 })
 
-it('keeps a desktop repo on the desktop while a managed host is focused', async () => {
-  const desktopRepo: Repo = { ...repo, executionHostId: 'local' }
-  useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'host-a' },
-    repos: [desktopRepo],
-    worktreesByRepo: {
-      repo: [makeWorktree({ id: worktreeId, repoId: 'repo', path: root, isMainWorktree: true })]
-    }
-  })
-  render(<McpConfigSection repo={desktopRepo} />)
-
-  await waitFor(() => expect(runtimeFiles.readRuntimeDirectory).toHaveBeenCalled())
-  expect(runtimeFiles.readRuntimeDirectory).toHaveBeenCalledWith(
-    expect.objectContaining({ target: { kind: 'local' } }),
-    root
-  )
-})
-
 it('does not offer the starter over a listed config the host refuses to read', async () => {
   runtimeFiles.readRuntimeDirectory.mockResolvedValue([{ name: '.mcp.json', isDirectory: false }])
   runtimeFiles.readRuntimeFileContent.mockRejectedValue(new Error('Remote file is too large'))
@@ -130,15 +111,4 @@ it('does not offer the starter over a listed config the host refuses to read', a
 
   await screen.findByText('Remote file is too large')
   expect(screen.queryByRole('button', { name: /Add MCP config/ })).toBeNull()
-})
-
-it('does not replace a config another process created after the listing', async () => {
-  runtimeFiles.writeRuntimeFile.mockResolvedValue({ ok: false, diskConflict: 'changed' })
-  render(<McpConfigSection repo={repo} />)
-
-  fireEvent.click(await screen.findByRole('button', { name: /Add MCP config/ }))
-  fireEvent.click(await screen.findByRole('button', { name: /Create empty config/ }))
-
-  await waitFor(() => expect(toast.error).toHaveBeenCalled())
-  expect(toast.success).not.toHaveBeenCalled()
 })

@@ -1,31 +1,34 @@
+import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
 } from '../../../../shared/protocol-version'
 import type { AppState } from '@/store'
-import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationListViewItem } from './automation-list-view'
+import { AutomationDestinationField } from './AutomationDestinationField'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
-  RUNTIME_REPO_ID as RUNTIME_REPO_ID_FIXTURE,
-  RUNTIME_WORKSPACE_ID as RUNTIME_WORKSPACE_ID_FIXTURE,
   selfScopedList
 } from './automations-page-runtime-fixtures'
 
-export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
-export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
+export type { DetailPaneProps } from './automations-page-fixtures'
+
+export { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 
 export type ListPanelProps = {
   sortedListItems: readonly AutomationListViewItem[]
@@ -59,27 +62,20 @@ export type ListPanelProps = {
   canCreateAutomation: boolean
 }
 
-export type DetailPaneProps = {
-  selected: Automation | null
-  selectedHostEntry: AutomationHostCatalogEntry | null
-  selectedRuns: AutomationRun[]
-  selectedRunsNotice: { message: string } | null
-  runNow: (automation: Automation) => void
-  toggleAutomation: (automation: Automation) => void
-  requestDeleteAutomation: (automation: Automation) => void
-  openEditDialog: (automation: Automation) => void
-}
-
 export type EditorDialogProps = {
   open: boolean
   isEditing: boolean
+  isSaving: boolean
   createDestination?: AutomationCreateDestinationControl
   editDestination?: AutomationCreateDestinationControl
   notice?: { message: string; recovery: string | null } | null
   onNoticeRecover?: (action: string) => void
   repos?: { id: string }[]
+  worktrees: Worktree[]
   draft?: { projectId: string; workspaceId: string }
+  canSave?: boolean
   onSave: () => void
+  onProjectChange: (projectId: string) => void
   onDraftChange: (updater: (current: unknown) => unknown) => void
 }
 
@@ -157,6 +153,7 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: () => null
@@ -231,7 +228,19 @@ vi.mock('./AutomationsDetailPane', () => ({
 vi.mock('./AutomationEditorDialog', () => ({
   AutomationEditorDialog: (props: EditorDialogProps) => {
     mocks.editorDialog = props
-    return <div data-testid="editor-dialog">{props.open ? 'open' : 'closed'}</div>
+    return (
+      <div data-testid="editor-dialog">
+        {props.open ? 'open' : 'closed'}
+        {props.open && props.editDestination ? (
+          <TooltipProvider>
+            <AutomationDestinationField control={props.editDestination} />
+            <button data-testid="editor-save" disabled={!props.canSave} onClick={props.onSave}>
+              Save changes
+            </button>
+          </TooltipProvider>
+        ) : null}
+      </div>
+    )
   }
 }))
 
@@ -248,7 +257,8 @@ import {
   makeAutomation,
   makeRun,
   makeStoreState,
-  type AutomationsPageFixtureState
+  type AutomationsPageFixtureState,
+  type DetailPaneProps
 } from './automations-page-fixtures'
 
 function mockGroup<K extends string>(...names: K[]): Record<K, Mock> {
@@ -393,8 +403,10 @@ export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    setLocalRuntimeCapabilitiesForTests([])
     // Confirmed capabilities are module-level and must not leak between tests.
     resetAutomationCapabilityProbes()
+    resetHostStructuredAgentsForTests()
     // A prior test's wholesale mockImplementation must not leak forward.
     mocks.callRuntimeRpc.mockReset()
     mocks.callRuntimeRpc.mockImplementation(answerAutomationRpc)
@@ -404,6 +416,7 @@ export function installAutomationsPageHarness(): void {
     mocks.deleteDialog = null
     const fixtures = makeStoreState()
     mocks.state = fixtures.state
+    mocks.state.folderWorkspaces = []
     mocks.state.setAutomationHostFilter = mocks.setAutomationHostFilter
     mocks.repoMap = fixtures.repoMap
     mocks.worktreeMap = fixtures.worktreeMap
@@ -430,5 +443,6 @@ export function installAutomationsPageHarness(): void {
       roots.splice(0).forEach((root) => root.unmount())
     })
     document.body.innerHTML = ''
+    setLocalRuntimeCapabilitiesForTests(null)
   })
 }

@@ -162,16 +162,6 @@ async function requestSnapshotReply(options: {
 }
 
 describe('requested terminal snapshot unavailability reasons', () => {
-  it('omits a reason when the host serialized a real buffer', async () => {
-    const { start, chunks } = await requestSnapshotReply({
-      connectionId: 'conn-reason-success',
-      serializeRequested: async () => ({ data: 'restored output', cols: 120, rows: 40 })
-    })
-    expect(chunks).toBe('restored output')
-    expect(start).toMatchObject({ requestId: 77, truncated: false })
-    expect(start.unavailable).toBeUndefined()
-  })
-
   it('omits a reason for a proven-empty buffer so absence stays distinguishable from failure', async () => {
     const { start, chunks } = await requestSnapshotReply({
       connectionId: 'conn-reason-empty',

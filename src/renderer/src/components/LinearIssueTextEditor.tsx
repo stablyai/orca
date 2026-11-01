@@ -1,3 +1,4 @@
+import { writeLinearIssue } from '@/lib/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
@@ -25,7 +26,6 @@ import { defaultScopeSource } from '@/lib/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
-  onIssueChange: (patch: Pick<LinearIssue, 'title'> | Pick<LinearIssue, 'description'>) => void
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
   sourceContext?: TaskSourceContext | null
@@ -33,14 +33,12 @@ type LinearIssueTextEditorProps = {
 
 export function LinearIssueTextEditor({
   issue,
-  onIssueChange,
   density = 'page',
   fields = 'all',
   sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
-  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
   const lastIssueIdRef = useRef(issue.id)
@@ -98,30 +96,14 @@ export function LinearIssueTextEditor({
 
       const { patch } = savePlan
       setSavingField(field)
-      onIssueChange(patch)
-      patchLinearIssue(issue.id, patch)
       try {
-        const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
+        const result = await writeLinearIssue(issue, patch, providerSettings, () =>
+          linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
+        )
         if (!result.ok) {
           throw new Error(taskProviderErrorMessage(result))
         }
       } catch (error) {
-        const revert =
-          field === 'title'
-            ? ({ title: issue.title } as const)
-            : ({ description: issue.description ?? '' } as const)
-        const stillEditingIssue = mountedRef.current && lastIssueIdRef.current === issue.id
-        if (stillEditingIssue) {
-          onIssueChange(revert)
-        }
-        patchLinearIssue(issue.id, revert)
-        if (stillEditingIssue) {
-          if (field === 'title') {
-            updateTitleDraft(issue.title)
-          } else {
-            updateDescriptionDraft(issue.description ?? '')
-          }
-        }
         toast.error(
           error instanceof Error
             ? error.message
@@ -138,20 +120,7 @@ export function LinearIssueTextEditor({
         }
       }
     },
-    [
-      descriptionDraft,
-      issue.description,
-      issue.id,
-      issue.title,
-      issue.workspaceId,
-      mountedRef,
-      onIssueChange,
-      patchLinearIssue,
-      providerSettings,
-      titleDraft,
-      updateDescriptionDraft,
-      updateTitleDraft
-    ]
+    [descriptionDraft, issue, mountedRef, providerSettings, titleDraft, updateTitleDraft]
   )
 
   const handleDescriptionKeyDown = useCallback(

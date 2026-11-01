@@ -3,6 +3,11 @@ import {
   translatablePluginChrome,
   translatablePluginChromeContainer
 } from '../languages/plugin-translatable-chrome'
+import { isProtectedCopyPath } from '../languages/plugin-protected-copy'
+import {
+  pluginTranslationStringProblem,
+  type EnglishSourceLookup
+} from '../languages/plugin-translation-string-policy'
 
 // Why headroom: a complete pack already carries ~18k entries and the English catalog keeps growing.
 export const PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 50_000
@@ -13,19 +18,6 @@ const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor']
 // Exact nonsecurity chrome exemptions live in plugin-translatable-chrome.ts.
 const PROTECTED_TRANSLATION_ROOT = 'auto.components.settings.'
 const PROTECTED_TRANSLATION_MODULE = /^plugin/i
-// Trust copy outside that root, protected by whole component: a pack must not relabel the
-// Official badge, the catalog suggestion banner, agent Allow/Deny, a run-code trust prompt,
-// the certificate warning, or a site's Allow/Block permission prompt.
-const PROTECTED_TRANSLATION_COMPONENTS = [
-  'auto.components.pluginCatalog.PluginListRow.official',
-  'auto.components.editor.PluginFileTypeSuggestion',
-  'components.native-chat.approval',
-  'auto.components.sidebar.OrcaYamlTrustDialog',
-  'auto.components.editor.IpynbViewer',
-  'browser.loadFailure',
-  'auto.components.browserPane.sitePermission',
-  'settings.browser.sitePermissions'
-]
 
 export type PluginLanguagePackRegistration = {
   id: `plugin:${string}`
@@ -111,11 +103,7 @@ export function isCatalogObject(value: unknown): value is Record<string, unknown
 
 /** Security copy that no language pack may replace. */
 export function isProtectedPluginTranslationPath(path: string): boolean {
-  if (
-    PROTECTED_TRANSLATION_COMPONENTS.some(
-      (component) => path === component || path.startsWith(`${component}.`)
-    )
-  ) {
+  if (isProtectedCopyPath(path)) {
     return true
   }
   if (!path.startsWith(PROTECTED_TRANSLATION_ROOT)) {
@@ -139,11 +127,12 @@ function hasUnsafeCatalogKeyCharacter(key: string): boolean {
   return false
 }
 
-// Why tolerant at load: Orca protects more copy over time, so a pack published before a path
-// was protected must still load, with that path left in English; validate:plugin is strict.
+// Why tolerant at load: Orca protects more copy and tightens string rules over time, so a pack
+// published earlier must still load, with offending entries left in English; validate:plugin is strict.
 export function parsePluginLanguagePackArtifact(
   raw: string,
-  strictness: PluginArtifactStrictness = 'strict'
+  strictness: PluginArtifactStrictness = 'strict',
+  english?: EnglishSourceLookup
 ): PluginLanguagePackParseResult {
   let json: unknown
   try {
@@ -151,14 +140,15 @@ export function parsePluginLanguagePackArtifact(
   } catch {
     return { ok: false, error: 'language pack must contain one JSON object' }
   }
-  return validatePluginLanguagePackCatalog(json, strictness)
+  return validatePluginLanguagePackCatalog(json, strictness, english)
 }
 
 export function validatePluginLanguagePackCatalog(
   source: unknown,
-  strictness: PluginArtifactStrictness = 'strict'
+  strictness: PluginArtifactStrictness = 'strict',
+  english?: EnglishSourceLookup
 ): PluginLanguagePackParseResult {
-  const result = walkPluginLanguagePackCatalog(source, true, strictness)
+  const result = walkPluginLanguagePackCatalog(source, true, strictness, english)
   if (!result.ok) {
     return result
   }
@@ -175,7 +165,8 @@ export function checkPluginLanguagePackCatalog(
 function walkPluginLanguagePackCatalog(
   source: unknown,
   copyCatalog: boolean,
-  strictness: PluginArtifactStrictness
+  strictness: PluginArtifactStrictness,
+  english?: EnglishSourceLookup
 ): PluginLanguagePackWalkResult {
   if (!isCatalogObject(source)) {
     return { ok: false, error: 'language pack root must be an object' }
@@ -219,8 +210,12 @@ function walkPluginLanguagePackCatalog(
         return { ok: false, error: `catalog cannot replace protected security copy at ${path}` }
       }
       if (typeof value === 'string') {
-        if (value.length > 8192) {
-          return { ok: false, error: `translation at ${path} exceeds 8192 characters` }
+        const problem = pluginTranslationStringProblem(path, value, english)
+        if (problem) {
+          if (strictness === 'tolerant') {
+            continue
+          }
+          return { ok: false, error: problem }
         }
         if (frame.target) {
           frame.target[key] = value

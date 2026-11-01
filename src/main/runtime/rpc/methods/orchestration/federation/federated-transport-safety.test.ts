@@ -310,6 +310,8 @@ function federatedDispatch(): FederatedDispatchRow {
     remote_terminal_handle: null,
     to_home_imported_sequence: 0,
     to_home_acknowledged_sequence: 0,
+    home_auto_release_at: null,
+    home_auto_release_state: null,
     created_at: '2026-08-27 00:00:00',
     updated_at: '2026-08-27 00:00:00'
   }

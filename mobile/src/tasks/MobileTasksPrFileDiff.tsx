@@ -8,9 +8,7 @@ import {
   Text,
   View,
   MobileSyntaxSegments,
-  TextInput,
-  colors,
-  Pressable,
+  MessageBox,
   useMobileColorScheme
 } from './mobile-tasks-dependencies'
 import { MAX_RENDERED_PR_DIFF_LINES } from './mobile-tasks-options'
@@ -123,28 +121,21 @@ export function GitHubPrFileDiff({
               </Text>
             </View>
             {commentLine !== undefined ? (
-              <>
-                <TextInput
-                  style={[styles.input, styles.replyInput]}
-                  value={commentDrafts[draftKey] ?? ''}
-                  onChangeText={(next) => onCommentDraftChange(draftKey, next)}
-                  placeholder={t('tasks.prFileDiff.commentPlaceholder', 'Add review comment')}
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  textAlignVertical="top"
-                />
-                <Pressable
-                  style={styles.inlineSaveButtonCompact}
-                  disabled={disabled || !(commentDrafts[draftKey] ?? '').trim()}
-                  onPress={() => onSubmitComment(commentLine)}
-                >
-                  <Text style={styles.inlineSaveText}>
-                    {t('tasks.prFileDiff.commentOnLine', 'Comment on line {{line}}', {
-                      line: commentLine
-                    })}
-                  </Text>
-                </Pressable>
-              </>
+              <MessageBox
+                style={styles.stackedInput}
+                value={commentDrafts[draftKey] ?? ''}
+                onChangeText={(next) => onCommentDraftChange(draftKey, next)}
+                placeholder={t('tasks.prFileDiff.commentPlaceholder', 'Add review comment')}
+                onSend={() => onSubmitComment(commentLine)}
+                canSend={!disabled && !!(commentDrafts[draftKey] ?? '').trim()}
+                sendAccessibilityLabel={t(
+                  'tasks.prFileDiff.commentOnLine',
+                  'Comment on line {{line}}',
+                  {
+                    line: commentLine
+                  }
+                )}
+              />
             ) : null}
           </View>
         )

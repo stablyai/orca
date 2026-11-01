@@ -3,13 +3,13 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
-  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath,
+  resolveLocalListRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath,
   resolveLocalWriteRequestPath,
@@ -53,6 +53,7 @@ function makeStore({ repoPaths = [], folderPath }: Registration): Store {
 
 const USER_FILE = { kind: 'user-file' } as const
 const USER_DIRECTORY = { kind: 'user-directory' } as const
+const PROJECT_FOLDER_LINK = { kind: 'project-folder-link' } as const
 const documentResource = (documentPath: string) =>
   ({ kind: 'document-resource', documentPath }) as const
 const documentFolder = (documentPath: string) =>
@@ -137,26 +138,24 @@ describe('user-directory requests', () => {
   it('only lists an outside directory with user-directory access', async () => {
     const store = makeStore({})
 
-    await expect(resolveLocalDirectoryListingPath(outside, USER_FILE, store)).rejects.toThrow(
+    await expect(resolveLocalListRequestPath(outside, USER_FILE, store)).rejects.toThrow(
       'Access denied'
     )
-    await expect(resolveLocalDirectoryListingPath(outside, undefined, store)).rejects.toThrow(
+    await expect(resolveLocalListRequestPath(outside, undefined, store)).rejects.toThrow(
       'Access denied'
     )
-    await expect(resolveLocalDirectoryListingPath(outside, USER_DIRECTORY, store)).resolves.toBe(
-      outside
-    )
+    await expect(resolveLocalListRequestPath(outside, USER_DIRECTORY, store)).resolves.toBe(outside)
   })
 
   it.each(['outside', 'C:outside'])('refuses the non-absolute path %s', async (relative) => {
     await expect(
-      resolveLocalDirectoryListingPath(relative, USER_DIRECTORY, makeStore({}))
+      resolveLocalListRequestPath(relative, USER_DIRECTORY, makeStore({}))
     ).rejects.toThrow('absolute path')
   })
 
   it('refuses a file outside every project', async () => {
     await expect(
-      resolveLocalDirectoryListingPath(join(outside, 'notes.txt'), USER_DIRECTORY, makeStore({}))
+      resolveLocalListRequestPath(join(outside, 'notes.txt'), USER_DIRECTORY, makeStore({}))
     ).rejects.toThrow()
   })
 
@@ -513,4 +512,64 @@ describe('chat-image requests', () => {
       ).toBe('denied')
     }
   )
+})
+
+describe('project-folder-link listings', () => {
+  beforeEach(async () => {
+    await mkdir(join(outside, 'guides'))
+    await symlink(outside, join(project, 'linked'), 'dir')
+  })
+
+  it('list a project folder link that leads out, and folders under it', async () => {
+    const store = makeStore({ repoPaths: [project] })
+    const linked = join(project, 'linked')
+
+    await expect(resolveLocalListRequestPath(linked, undefined, store)).rejects.toThrow(
+      'outside allowed directories'
+    )
+    await expect(resolveLocalListRequestPath(linked, PROJECT_FOLDER_LINK, store)).resolves.toBe(
+      outside
+    )
+    await expect(
+      resolveLocalListRequestPath(join(linked, 'guides'), PROJECT_FOLDER_LINK, store)
+    ).resolves.toBe(join(outside, 'guides'))
+  })
+
+  it('refuse folders not reached through a project link', async () => {
+    const store = makeStore({ repoPaths: [project] })
+    await mkdir(join(base, 'unregistered', 'src'), { recursive: true })
+
+    for (const dirPath of [outside, join(base, 'unregistered', 'src')]) {
+      expect(await settles(resolveLocalListRequestPath(dirPath, PROJECT_FOLDER_LINK, store))).toBe(
+        'denied'
+      )
+    }
+    // Other access kinds never list outside folders.
+    expect(
+      await settles(resolveLocalListRequestPath(join(project, 'linked'), USER_FILE, store))
+    ).toBe('denied')
+  })
+
+  it('refuse links in Orca floating folder, which is not a project', async () => {
+    const floatingLink = join(userData.path, 'floating-workspace', 'linked')
+    await symlink(outside, floatingLink, 'dir')
+
+    expect(
+      await settles(resolveLocalListRequestPath(floatingLink, PROJECT_FOLDER_LINK, makeStore({})))
+    ).toBe('denied')
+  })
+
+  it('grant listing only, never file reads', async () => {
+    const store = makeStore({ repoPaths: [project] })
+
+    expect(
+      await settles(
+        resolveLocalFileRequestPath(
+          join(project, 'linked', 'notes.txt'),
+          PROJECT_FOLDER_LINK,
+          store
+        )
+      )
+    ).toBe('denied')
+  })
 })

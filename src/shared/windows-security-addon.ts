@@ -118,6 +118,7 @@ function prepare(raw: WindowsSecurityAddon): WindowsSecurity {
       clearStdHandleInheritance: () => raw.clearStdHandleInheritance(),
       spawnDetachedIsolated: (file, commandLine, cwd, environmentBlock, onExit) =>
         raw.spawnDetachedIsolated(file, commandLine, cwd, environmentBlock, onExit),
+      isolatedSpawnBreaksAwayFromJob: () => raw.isolatedSpawnBreaksAwayFromJob(),
       hasNativeExport: (name) => raw.hasNativeExport(name)
     }
   }

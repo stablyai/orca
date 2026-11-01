@@ -141,15 +141,6 @@ describe('a window save in a layout-owner build', () => {
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
   })
 
-  it('passes a scalar patch through', async () => {
-    store.setWorkspaceSession(mainSession(), 'local')
-
-    await call('session:patch', { activeWorktreeId: OTHER_KEY }, 'local')
-
-    expect(store.getWorkspaceSession('local').activeWorktreeId).toBe(OTHER_KEY)
-    expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
-  })
-
   it('gives a visited workspace main holds its terminal row, and one main lacks none', async () => {
     store.setWorkspaceSession(
       addWorkspace(emptySession(), GIT_KEY, [

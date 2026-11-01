@@ -65,11 +65,7 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
-    return this.terminalViewSubscribers.isKnownUnattachedLocal(ptyId)
-  }
-
-  protected reconcileSubscriberDrivenProviderAttach(ptyId: string): void {
-    this.terminalViewSubscribers.reconcileProviderAttach(ptyId)
+    return this.mainDaemonAttachments.isKnownUnattachedLocal(ptyId)
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */

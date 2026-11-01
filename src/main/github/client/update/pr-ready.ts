@@ -9,9 +9,31 @@ import {
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
 
-export async function markPRReadyForReview(
+export function markPRReadyForReview(
   repoPath: string,
   prNumber: number,
+  connectionId?: string | null,
+  prRepo?: GitHubApiRepository | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return setPRReadyState(repoPath, prNumber, true, connectionId, prRepo, localGitOptions)
+}
+
+// `gh pr ready --undo` turns an open pull request back into a draft.
+export function markPRDraft(
+  repoPath: string,
+  prNumber: number,
+  connectionId?: string | null,
+  prRepo?: GitHubApiRepository | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return setPRReadyState(repoPath, prNumber, false, connectionId, prRepo, localGitOptions)
+}
+
+async function setPRReadyState(
+  repoPath: string,
+  prNumber: number,
+  ready: boolean,
   connectionId?: string | null,
   prRepo?: GitHubApiRepository | null,
   localGitOptions: LocalGitExecOptions = {}
@@ -29,7 +51,14 @@ export async function markPRReadyForReview(
   await acquire()
   try {
     await ghExecFileAsync(
-      ['pr', 'ready', String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
+      [
+        'pr',
+        'ready',
+        String(prNumber),
+        '--repo',
+        `${ownerRepo.owner}/${ownerRepo.repo}`,
+        ...(ready ? [] : ['--undo'])
+      ],
       ghOptions
     )
     invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)

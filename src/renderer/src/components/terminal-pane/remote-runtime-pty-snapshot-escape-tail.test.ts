@@ -21,7 +21,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
-// Drive real wire frames through multiplexer and transport so SnapshotStart’s pending escape reaches replay; server counterpart: terminal-multiplex-escape-tail.test.ts (#7329).
+// Drive real wire frames through multiplexer and transport so SnapshotStart’s pending escape reaches replay.
 
 describe('remote transport snapshot escape-tail threading (#7329)', () => {
   const runtimeCall = vi.fn()

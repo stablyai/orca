@@ -3,9 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
-} from '../../../src/shared/agent-session-wire'
+  AgentSessionOptionResult
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
@@ -109,14 +109,17 @@ type MutateCall = { method: string; fields: Record<string, unknown> }
 
 // Use an untyped mock: a concrete fixture cannot satisfy arbitrary TValue from the generic mutation caller.
 function recordingMutate(
-  next: (call: number) => Promise<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>
+  next: (
+    call: number,
+    fields: Record<string, unknown>
+  ) => Promise<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>
 ) {
   const calls: MutateCall[] = []
   const mock = vi.fn()
   mock.mockImplementation(
     (method: string, _fingerprintMethod: string, fields: Record<string, unknown>) => {
       calls.push({ method, fields })
-      return next(calls.length - 1)
+      return next(calls.length - 1, fields)
     }
   )
   const mutate: StructuredAgentSessionMutate = mock

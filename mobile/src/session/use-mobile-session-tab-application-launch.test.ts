@@ -1,8 +1,12 @@
-import { createElement } from 'react'
+import { createElement, type Dispatch, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
+import type {
+  FileDocState,
+  MobileSessionTab,
+  SessionTabsResult
+} from './mobile-session-route-types'
 import { launchedSelection, type PendingSessionSelection } from './pending-session-selection'
 import { useMobileSessionTabApplication } from './use-mobile-session-tab-application'
 import {
@@ -78,6 +82,7 @@ function scope(pending: PendingSessionSelection | null) {
       setTerminals: vi.fn(),
       terminalsRef: { current: [] },
       setSessionTabs: vi.fn(),
+      setFileDocs: vi.fn<Dispatch<SetStateAction<Map<string, FileDocState>>>>(),
       sessionTabsRef: mutableRef<MobileSessionTab[]>([]),
       appliedSnapshotMarkerRef: { current: { epoch: null, version: -1 } },
       appliedSessionTabsRevisionRef: { current: 0 },
@@ -281,6 +286,39 @@ it('keeps a phone-created tab draft through host snapshots that have not listed 
 })
 
 describe('landing on a launched tab', () => {
+  it('drops a cached preview when its staged rename source changes', () => {
+    const { state } = scope(null)
+    const apply = mount(state)
+    const tab: MobileSessionTab = {
+      type: 'file',
+      id: 'rename',
+      title: 'new.ts',
+      filePath: '/repo/new.ts',
+      relativePath: 'new.ts',
+      diffSource: 'staged',
+      oldPath: 'old.ts',
+      isDirty: false,
+      isActive: true
+    }
+    apply(snapshot([tab]))
+    apply(snapshot([{ ...tab }]))
+    expect(state.setFileDocs).not.toHaveBeenCalled()
+    apply(snapshot([{ ...tab, oldPath: 'other.ts' }]))
+    const update = state.setFileDocs.mock.calls[0]?.[0]
+    if (typeof update !== 'function') {
+      throw new Error('Expected preview invalidation')
+    }
+    const kept: FileDocState = { status: 'ready', kind: 'html', content: 'keep' }
+    const docs = update(
+      new Map<string, FileDocState>([
+        ['rename', { status: 'ready', kind: 'diff', lines: [], truncated: false }],
+        ['other', kept]
+      ])
+    )
+    expect(docs.has('rename')).toBe(false)
+    expect(docs.get('other')).toBe(kept)
+  })
+
   it('records a launched terminal as this device’s pick on the host once its tab arrives', () => {
     const { state, sendRequest } = scope(launchedSelection('l1', { handle: 'term_new' }))
     const apply = mount(state)

@@ -45,7 +45,7 @@ describe('explicit local branch reuse on the execution host', () => {
       ],
       [
         ['for-each-ref', '--format=%(refname)', 'refs/heads/feature/test'],
-        { cwd: '/repo', wslDistro: 'Ubuntu', captureWslLoginShellOutput: true }
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
       ]
     ])
     expect(worktrees).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
@@ -82,7 +82,7 @@ describe('explicit local branch reuse on the execution host', () => {
     ).rejects.toThrow('already checked out at "/busy"')
     expect(git).toHaveBeenLastCalledWith(
       ['for-each-ref', '--format=%(refname)', 'refs/heads/feature/TEST'],
-      { cwd: '/repo', wslDistro: 'Ubuntu', captureWslLoginShellOutput: true }
+      { cwd: '/repo', wslDistro: 'Ubuntu' }
     )
   })
 

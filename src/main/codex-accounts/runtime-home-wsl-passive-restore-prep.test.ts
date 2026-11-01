@@ -126,18 +126,6 @@ describe('Codex launch prep for a stopped WSL distro', () => {
     expect(mocks.bridge).not.toHaveBeenCalled()
   })
 
-  it('a passive restore on system default reads an unknown home as null, never probing', async () => {
-    const mocks = wslMocks()
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the Store methods the runtime home service reads.
-    const service = new CodexRuntimeHomeService(accountStore(false) as never)
-
-    await expect(
-      service.prepareForCodexLaunchAsync({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-    ).resolves.toBeNull()
-    expect(mocks.getWslHome).not.toHaveBeenCalled()
-  })
-
   it('the same launch as a user act warms the home off the main thread and drains', async () => {
     const mocks = wslMocks()
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')

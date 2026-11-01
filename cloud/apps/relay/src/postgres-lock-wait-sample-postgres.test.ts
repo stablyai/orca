@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { readPostgresLockWaitSample } from './postgres-lock-wait-sample.js'
 

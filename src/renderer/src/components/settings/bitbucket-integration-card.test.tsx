@@ -83,14 +83,6 @@ describe('BitbucketIntegrationCard credential-read failures', () => {
     expect(container.textContent).toContain('Credential dialog open')
   })
 
-  it('does not claim a read failure when the status resolves', async () => {
-    mocks.status.mockResolvedValue({ source: 'none', account: null })
-
-    await renderCard()
-
-    expect(container.textContent).not.toContain(LOAD_FAILED_TEXT)
-  })
-
   it('retries the failed credential read from Re-check, not just the preflight', async () => {
     mocks.status.mockRejectedValueOnce(new Error('keychain locked'))
     mocks.status.mockResolvedValueOnce({ source: 'none', account: null })

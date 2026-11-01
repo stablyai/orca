@@ -1,13 +1,13 @@
-import { isNativeChatDefaultFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../shared/managed-runtime-install'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentSessionChatProgram } from '../../../shared/agent-session-agent-availability'
+import type { AgentSessionChatProgram } from '../../../shared/agent-session/agent-session-agent-availability'
 import { chatProviderAgents } from './chat-provider-agents'
 import { resolveAgentLaunchRoute, structuredAgentLaunchSupport } from './agent-launch-routing'
 import {
@@ -142,7 +142,7 @@ export function readAgentLaunchChoice(
     (support.blocker === 'runtime-capability-unknown' ||
       (support.blocker === 'agent-without-structured-session' && !catalogReady))
   const chatEligibility =
-    !isNativeChatDefaultFor(store.settings, agent) ||
+    !nativeChatPreferenceFor(store.settings, agent) ||
     (!support.supported && !routePending) ||
     program === 'missing'
       ? 'no'

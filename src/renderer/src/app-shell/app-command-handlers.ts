@@ -1,4 +1,3 @@
-import { useShallow } from 'zustand/react/shallow'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
@@ -19,12 +18,17 @@ import {
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
+import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+export { useAppShortcutActions } from './use-app-shortcut-actions'
+import type { useAppShortcutActions } from './use-app-shortcut-actions'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -62,41 +66,12 @@ export type AppShortcutState = {
   workspaceChromeActive: boolean
 }
 
-export function useAppShortcutActions() {
-  // One shallow action subscription avoids an equality check per action on every store mutation.
-  return useAppStore(
-    useShallow((s) => ({
-      toggleSidebar: s.toggleSidebar,
-      toggleRightSidebar: s.toggleRightSidebar,
-      setRightSidebarOpen: s.setRightSidebarOpen,
-      setRightSidebarTab: s.setRightSidebarTab,
-      showRightSidebarFiles: s.showRightSidebarFiles,
-      showRightSidebarSearch: s.showRightSidebarSearch,
-      openDiffNotesSendMenuForActiveWorktree: s.openDiffNotesSendMenuForActiveWorktree
-    }))
-  )
-}
-
 export function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
 }
 
-/** Terminal rename uses its backing entity ID; structured chat uses its unified tab ID. activeTabId stays on the last terminal, matching TabGroupPanel resolution. */
-function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
-  const store = useAppStore.getState()
-  if (store.activeTabType === 'terminal') {
-    return store.activeTabId
-  }
-  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
-    return null
-  }
-  const activeTab = store.getActiveTab(activeWorktreeId)
-  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
-}
-
-/** Return whether each action claimed the chord so unavailable surfaces fall through. Palette/menu invocations omit input. */
 export function createAppCommandHandlers(
   state: AppShortcutState,
   input?: ShortcutDispatchInput,
@@ -221,7 +196,7 @@ export function createAppCommandHandlers(
           return false
         }
         // Resolve both terminal and structured-chat rename targets; a terminal-only gate silently ignores chat.
-        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        const tabId = resolveActiveTabRenameTarget(activeWorktreeId, useAppStore.getState())
         if (!tabId) {
           return false
         }
@@ -277,6 +252,12 @@ export function createAppCommandHandlers(
         }
         return claim('view.tasks', () => store.openTaskPage())
       }
+    ],
+    [
+      'view.plugins',
+      createPluginsSettingsShortcutHandler(input?.target, () =>
+        claim('view.plugins', openPluginsSettings)
+      )
     ],
     [
       'sidebar.right.toggle',

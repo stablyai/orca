@@ -27,6 +27,7 @@ import { WslDriveUncKeyCollisionError } from './wsl-drive-unc-identity-rewrite'
 import {
   collectWslDriveUncScope,
   withNestedWslDriveUncProjects,
+  wslDriveUncDuplicatesSplitBy,
   wslUncDrivePathToWindows
 } from './wsl-drive-unc-project-scope'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
@@ -142,15 +143,30 @@ function checkScope(
   if (repoIds.length + folderWorkspaceIds.length === 0 && blockers.length === 0) {
     blockers.push({ kind: 'not-convertible', id: '', reason: 'not-in-scope' })
   }
+  if (blockers.length > 0) {
+    return { blockers }
+  }
+  const rewriteRoots = (project: { repoIds: string[]; folderWorkspaceIds: string[] }): string[] =>
+    wslDriveUncRewriteRoots(state, { distro: request.distro, ...project })
   // Bare paths are re-keyed by folder, so a nested project's rows would move without its ids.
-  return blockers.length > 0
-    ? { blockers }
-    : withNestedWslDriveUncProjects(
-        scope,
-        request.distro,
-        { repoIds, folderWorkspaceIds },
-        (project) => wslDriveUncRewriteRoots(state, { distro: request.distro, ...project })
-      )
+  const converting = withNestedWslDriveUncProjects(
+    scope,
+    request.distro,
+    { repoIds, folderWorkspaceIds },
+    rewriteRoots
+  )
+  const split = wslDriveUncDuplicatesSplitBy(state, scope, request.distro, converting, () =>
+    rewriteRoots(converting)
+  )
+  return split.length > 0
+    ? {
+        blockers: split.map((id) => ({
+          kind: 'not-convertible',
+          id,
+          reason: 'overlaps-refused-project'
+        }))
+      }
+    : converting
 }
 
 /** Windows Git runs in the drive path, which is the same folder the distro shows. */

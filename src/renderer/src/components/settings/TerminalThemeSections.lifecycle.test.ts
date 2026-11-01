@@ -234,12 +234,13 @@ describe('TerminalThemeCatalogSection', () => {
     })
   })
 
-  it('clears imported color overrides when selecting a light theme', () => {
+  it('clears only the light slot overrides when selecting a light theme', () => {
     const updateSettings = vi.fn()
     const element = renderCatalog(
       makeSettings({
         terminalUseSeparateLightTheme: true,
-        terminalColorOverrides: { background: '#111111' }
+        terminalColorOverrides: { background: '#111111' },
+        terminalColorOverridesLight: { background: '#eeeeee' }
       }),
       updateSettings,
       'light'
@@ -251,7 +252,7 @@ describe('TerminalThemeCatalogSection', () => {
 
     expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
       terminalThemeLight: 'GitHub Light',
-      terminalColorOverrides: undefined
+      terminalColorOverridesLight: undefined
     })
   })
 

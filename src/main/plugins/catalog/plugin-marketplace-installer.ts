@@ -114,7 +114,7 @@ export class PluginMarketplaceInstaller {
       const inspection = await inspectPluginInstallTree({
         rootDir: stagingDirectory,
         hostVersion: this.hostVersion,
-        expectedPluginKey: pluginKey,
+        identity: { pluginKey },
         ...(listing.release ? { release: { record: listing.release, resolvedCommit } } : {})
       })
       if (!inspection.ok) {

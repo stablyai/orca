@@ -13,7 +13,8 @@ import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugi
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  pluginSourceLabel
+  pluginSourceLabel,
+  splitQualifiedPluginKey
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
@@ -57,6 +58,9 @@ function lockEntrySource(
   }
 }
 
+const devChangeCountOf = (plugin: DiscoveredPlugin) =>
+  plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
+
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
 export async function buildPluginList(
@@ -88,6 +92,7 @@ export async function buildPluginList(
           needsReconsent: false,
           error: plugin.error,
           isDev: plugin.isDev,
+          ...devChangeCountOf(plugin),
           official: false,
           bundled: false,
           capabilities: [],
@@ -142,7 +147,7 @@ export async function buildPluginList(
         consentFingerprint: plugin.consentFingerprint,
         name: plugin.manifest.name,
         version: plugin.manifest.version,
-        publisher: plugin.manifest.publisher,
+        publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),
@@ -158,6 +163,7 @@ export async function buildPluginList(
           ? { error: activationError ?? 'plugin worker crashed repeatedly' }
           : {}),
         isDev: plugin.isDev,
+        ...devChangeCountOf(plugin),
         official,
         bundled,
         capabilities: plugin.manifest.capabilities.map((capability) => ({

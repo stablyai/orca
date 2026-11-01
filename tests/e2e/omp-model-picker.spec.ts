@@ -43,7 +43,7 @@ test('OMP model picker dispatches its advertised command and adopts the host rep
     }))
   })
   await orcaPage.evaluate(async ({ paneKey, worktreeId }) => {
-    const settings = await window.api.settings.set({ experimentalNativeChat: true })
+    const settings = await window.api.settings.set({ nativeChatProviders: { omp: true } })
     const store = window.__store
     if (!store) {
       throw new Error('Store unavailable')

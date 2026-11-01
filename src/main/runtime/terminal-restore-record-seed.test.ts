@@ -243,8 +243,12 @@ describe('terminal query dispatch characterization', () => {
       if (!pty) {
         throw new Error('missing_test_pty')
       }
-      pty.tabId = 'tab'
-      pty.paneKey = makePaneKey('tab', '00000000-0000-4000-8000-000000000001')
+      this.terminalIdentity.setRecordedSurface(
+        pty,
+        'tab',
+        makePaneKey('tab', '00000000-0000-4000-8000-000000000001'),
+        undefined
+      )
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         // Main's layout is the only answer to which pane holds the terminal; it needs a session.
         Reflect.set(this, 'store', {})

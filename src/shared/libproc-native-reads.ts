@@ -26,6 +26,22 @@ const STALLED_POOL_COOL_DOWN_MS = 30_000
 let unhealthyUntil = Number.NEGATIVE_INFINITY
 // Set when the cap outlived a caller's deadline; cleared once any read settles.
 let poolStalled = false
+// A rejecting addon (failed sysctl) backs off 1s, 2s, 4s… up to the stalled cool-down instead of retrying every poll.
+const REJECTION_BACKOFF_MS = 1_000
+let consecutiveRejections = 0
+
+function noteSettled(ok: boolean): void {
+  if (ok) {
+    consecutiveRejections = 0
+    return
+  }
+  const backoff = Math.min(
+    STALLED_POOL_COOL_DOWN_MS,
+    REJECTION_BACKOFF_MS * 2 ** Math.min(consecutiveRejections, 15)
+  )
+  consecutiveRejections += 1
+  unhealthyUntil = Math.max(unhealthyUntil, monotonicNow() + backoff)
+}
 
 export function isNativeReaderHealthy(): boolean {
   return monotonicNow() >= unhealthyUntil
@@ -69,7 +85,16 @@ function submitRead(addon: LibprocAddon, query: LibprocQuery, key: string): Nati
     }
     slotWaiters.clear()
   }
-  pending.then(release, release)
+  pending.then(
+    () => {
+      noteSettled(true)
+      release()
+    },
+    () => {
+      noteSettled(false)
+      release()
+    }
+  )
   return read
 }
 
@@ -90,7 +115,8 @@ function waitForSlot(deadline: number): Promise<boolean> {
   })
 }
 
-/** Rows from a read submitted after `registeredSequence` (null: -t named no terminal); 'stalled' sends the caller to ps. */
+/** Rows from a read submitted after `registeredSequence` (null: -t named no terminal); 'stalled' sends the caller to ps.
+ * Rejects when the addon does, which also backs the reader off. */
 export async function readFreshNativeTable(
   addon: LibprocAddon,
   query: LibprocQuery,
@@ -142,5 +168,6 @@ export function resetNativeReadsForTests(): void {
   slotWaiters.clear()
   outstandingReads = 0
   poolStalled = false
+  consecutiveRejections = 0
   unhealthyUntil = Number.NEGATIVE_INFINITY
 }

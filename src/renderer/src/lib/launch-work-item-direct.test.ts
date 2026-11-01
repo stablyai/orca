@@ -205,6 +205,7 @@ describe('launchWorkItemDirect', () => {
     ].join('\n')
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'claude',
+      sessionOptionsOverrideAgentArgs: false,
       draft: `${expectedDraft}\n`,
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
@@ -462,6 +463,8 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'cursor',
+      sessionOptionsOverrideAgentArgs: false,
+      shell: undefined,
       draft: 'https://github.com/acme/repo/issues/77',
       cmdOverrides: {},
       agentArgs: '--yolo',
@@ -472,6 +475,8 @@ describe('launchWorkItemDirect', () => {
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
       prompt: '',
+      shell: undefined,
+      sessionOptionsOverrideAgentArgs: false,
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},

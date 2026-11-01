@@ -137,6 +137,42 @@ describe('startWslDriveUncConversion', () => {
     }
   )
 
+  /** A Windows project and the UNC spelling of its folder, which the scope refuses as a duplicate. */
+  const withDuplicate = (windowsPath: string, duplicate: string): PersistedState => {
+    const value = state()
+    value.repos.push(
+      { id: 'windows', path: windowsPath, displayName: 'win', badgeColor: '', addedAt: 0 },
+      { id: 'repo-dup', path: duplicate, displayName: 'dup', badgeColor: '', addedAt: 0 }
+    )
+    return value
+  }
+
+  it('refuses when a duplicate inside the folder would move without its ids', async () => {
+    const value = withDuplicate(String.raw`C:\src\app\sub`, `${UNC}\\sub`)
+    const run = deps({ readProfileState: async () => value })
+    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({
+      blockers: [{ kind: 'not-convertible', id: 'repo-dup', reason: 'overlaps-refused-project' }]
+    })
+    expect(run.pause).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      shape: 'another spelling of the folder',
+      windowsPath: String.raw`C:\src\app\sub`,
+      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src\app`
+    },
+    {
+      shape: 'a folder around it',
+      windowsPath: String.raw`C:\src`,
+      duplicate: String.raw`\\wsl$\Ubuntu\mnt\c\src`
+    }
+  ])('converts beside a duplicate of $shape', async ({ windowsPath, duplicate }) => {
+    const value = withDuplicate(windowsPath, duplicate)
+    const run = deps({ readProfileState: async () => value })
+    expect(await startWslDriveUncConversion(run, REQUEST)).toMatchObject({ outcome: 'restarting' })
+  })
+
   it('refuses, pausing nothing, when the distro does not show /mnt/c as drive C:', async () => {
     for (const mounts of [null, [{ mountPoint: '/mnt/c', windowsRoot: null }]]) {
       const run = deps({ readDriveMounts: async () => mounts })

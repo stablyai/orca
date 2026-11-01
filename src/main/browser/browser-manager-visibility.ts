@@ -7,6 +7,10 @@ import {
   type AgentCommandLease,
   type AgentPointerInput
 } from './browser-agent-activity'
+import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
+import { BrowserPageInputCredit } from './browser-page-input-credit'
+import { browserPopupPageId } from './browser-popup-page-id'
+import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -17,9 +21,51 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
   })
 
+  protected readonly pageEvents = new BrowserPageEvents()
+  protected readonly pageInputCredit = new BrowserPageInputCredit()
+
+  /** Tabs requested, popup outcomes and downloads attributed to the page, as they happen. */
+  observePageEvents(
+    browserPageId: string,
+    listener: (event: BrowserPageEvent) => void
+  ): () => void {
+    return this.pageEvents.observe(browserPageId, listener)
+  }
+
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     return this.agentActivity.beginCommand(browserPageId)
+  }
+
+  /** Runs one queued page command so input it delivers is credited to its caller. */
+  runPageCommand<T>(
+    browserPageId: string,
+    caller: RpcCallerIdentity | undefined,
+    execute: () => Promise<T>
+  ): Promise<T> {
+    return this.pageInputCredit.during(browserPageId, caller, execute)
+  }
+
+  /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */
+  creditPageInput(guestWebContentsId: number): void {
+    if (this.pageInputCredit.idle) {
+      return
+    }
+    const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
+    if (ownerTabId) {
+      const pageId =
+        this.tabIdByWebContentsId.get(guestWebContentsId) ?? browserPopupPageId(guestWebContentsId)
+      this.pageInputCredit.creditInput(ownerTabId, pageId)
+    }
+  }
+
+  handOverAgentActivity(fromPageId: string, toPageId: string): void {
+    this.agentActivity.handOver(fromPageId, toPageId)
+  }
+
+  /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
+  isAgentUsingPage(browserPageId: string): boolean {
+    return this.agentActivity.isActive(browserPageId)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.

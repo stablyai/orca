@@ -14,7 +14,7 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
-vi.mock('../../claude/agent-view-service', () => ({
+vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
     ready: async () => {},
@@ -324,6 +324,7 @@ vi.mock('../../terminal-history-deletion', () => ({
 }))
 
 vi.mock('../../ssh/targets/ssh-target-registry', () => ({
+  getSshConnectionManager: () => null,
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
@@ -419,7 +420,12 @@ vi.mock('../../source-control/stacked-hosted-review-creation', () => ({
 }))
 
 vi.mock('../../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  // Handlers read through this; keep asserting on the one mock.
+  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
+    review: await getHostedReviewForBranchMock(input),
+    readOutcome: 'cached'
+  }))
 }))
 
 vi.mock('../../github/client', async (importOriginal) => {

@@ -1,7 +1,7 @@
 // OpenCode 1.x models --verbose emits each provider/model ID followed by indented JSON.
 
 import { z } from 'zod'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { assertJsonTextStructureWithinLimits } from '../../shared/json-text-structure-limit'
 
 export const OPENCODE_MODEL_LISTING_ARGS = ['models', '--verbose'] as const
@@ -32,13 +32,13 @@ function modelOption(id: string, metadata: unknown): AgentSessionModelOption {
     label: name ? `${providerId}/${name}` : id,
     // Listing proves availability, not the configured default.
     isDefault: false,
+    declaredDefaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : null,
     ...(variants.length > 0
       ? {
           efforts: [...new Set([...variants, DEFAULT_VARIANT])].map((value) => ({
             value,
             label: variantLabel(value)
           })),
-          // New OpenCode sessions use default when offered, otherwise the first variant.
           defaultEffort: variants.includes(DEFAULT_VARIANT) ? DEFAULT_VARIANT : variants[0]
         }
       : { efforts: [] })

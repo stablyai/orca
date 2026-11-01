@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { dirname, getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { FILE_EXPLORER_FULL_ROOT } from '../../../../shared/file-explorer-display-root'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 
 export { FILE_EXPLORER_FULL_ROOT }
 export type ExplorerRootOption = { value: string; label: string }

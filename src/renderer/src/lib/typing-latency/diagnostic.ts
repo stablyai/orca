@@ -38,7 +38,18 @@ function recordObservation(state: ProbeState, observation: EchoObservation): voi
   if (observation.attribution === 'single-input') {
     state.exactInputs += 1
     appendExactLatencySample(state.exact, observation)
-    state.exactSamples.push(observation)
+    state.exactSamples.push({
+      startedAt: observation.startedAt,
+      paintedAt: observation.paintedAt,
+      inputToPaintMs: observation.inputToPaintMs,
+      eventToPaintMs: observation.eventToPaintMs,
+      eventToHandlerMs: observation.eventToHandlerMs,
+      inputToDispatchMs: observation.inputToDispatchMs,
+      dispatchToArrivalMs: observation.dispatchToArrivalMs,
+      arrivalToWriteMs: observation.arrivalToWriteMs,
+      writeToParseMs: observation.writeToParseMs,
+      parseToPaintMs: observation.parseToPaintMs
+    })
     if (state.exactSamples.length > TYPING_LATENCY_SAMPLE_LIMIT) {
       state.exactSamples.shift()
     }
@@ -138,7 +149,6 @@ function startProbe(): string {
       target,
       recordedAt,
       signal.source,
-      signal.text,
       readTrustedEventTime(signal.event, recordedAt)
     )
     state.unmatchedKeystrokes += recorded.unmatched

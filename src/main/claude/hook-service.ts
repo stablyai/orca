@@ -24,7 +24,7 @@ import {
   removeClaudeAgentViewRemote,
   refreshClaudeAgentView,
   removeClaudeAgentView
-} from './agent-view-install'
+} from './agent-view/agent-view-install'
 import {
   getWindowsClaudeHookExecutablePath,
   getWindowsClaudeHookFileStatus,

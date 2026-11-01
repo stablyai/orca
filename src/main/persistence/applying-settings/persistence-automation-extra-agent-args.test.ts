@@ -126,4 +126,60 @@ describe('automation extra agent args persistence', () => {
       store.updateAutomation(id, { extraAgentArgs: '', reuseSession: true }).reuseSession
     ).toBe(true)
   })
+  it('atomically saves Chat with retained Terminal extras and keeps legacy records Terminal after reload', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const legacy = store.createAutomation(BASE)
+    const chat = store.createAutomation({
+      ...BASE,
+      reuseSession: true,
+      launchSetupPatch: {
+        surface: 'chat',
+        arguments: { kind: 'legacy-extras', value: '--model opus' }
+      }
+    })
+    expect(chat).toMatchObject({
+      surface: 'chat',
+      extraAgentArgs: '--model opus',
+      launchSetup: { surface: 'chat', extraAgentArgs: '--model opus' }
+    })
+    expect(() =>
+      store.updateAutomation(chat.id, { launchSetupPatch: { surface: 'terminal' } })
+    ).toThrow('fresh session')
+    expect(store.listAutomations().find((row) => row.id === chat.id)?.surface).toBe('chat')
+    expect(() =>
+      store.updateAutomation(chat.id, {
+        extraAgentArgs: '',
+        launchSetupPatch: { surface: 'terminal' }
+      })
+    ).toThrow('one launch setup')
+    store.updateAutomation(chat.id, {
+      reuseSession: false,
+      launchSetupPatch: { surface: 'terminal', arguments: { kind: 'legacy-extras', value: '' } }
+    })
+    expect(store.listAutomations().find((row) => row.id === chat.id)).toMatchObject({
+      surface: 'terminal'
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations().find((row) => row.id === legacy.id)?.surface).toBeUndefined()
+    expect(
+      reloaded.listAutomations().find((row) => row.id === chat.id)?.extraAgentArgs
+    ).toBeUndefined()
+  })
+  it('records the old-desktop reconstructed move limitation and preserves surface with the new patch', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const source = store.createAutomation({ ...BASE, launchSetupPatch: { surface: 'chat' } })
+    const oldClientCopy = store.createAutomation({ ...BASE, creationKey: 'old-move' })
+    const currentCopy = store.createAutomation({
+      ...BASE,
+      creationKey: 'new-move',
+      launchSetupPatch: { surface: source.surface }
+    })
+    store.deleteAutomation(source.id)
+    expect(oldClientCopy.surface).toBeUndefined()
+    expect(currentCopy.surface).toBe('chat')
+  })
 })

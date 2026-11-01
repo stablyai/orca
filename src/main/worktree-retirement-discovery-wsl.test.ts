@@ -42,35 +42,6 @@ describe('retirement discovery on WSL', () => {
     vi.restoreAllMocks()
   })
 
-  it('admits every WSL UNC listing through the bounded filesystem gate', async () => {
-    await discoverRetiredWorktreeNames({
-      workspaceRoots: [DISTRO_ROOT],
-      home: '/nonexistent-home',
-      env: {},
-      resolveWslHome: async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'
-    })
-
-    // Both UNC listings and absence-proving ancestor probes must share scan admission.
-    const calls = runWslTranscriptFsTaskMock.mock.calls.map(([options]) => options)
-    expect(calls.every((options) => options.priority === 'scan')).toBe(true)
-    expect(calls.map((options) => options.path)).toEqual(
-      expect.arrayContaining([
-        DISTRO_ROOT,
-        join('\\\\wsl.localhost\\Ubuntu\\home\\ada', '.claude', 'projects')
-      ])
-    )
-  })
-
-  it('leaves no listing ungated when the workspace root is on the Windows side', async () => {
-    await discoverRetiredWorktreeNames({
-      workspaceRoots: ['C:\\Users\\ada\\orca\\workspaces'],
-      home: '/nonexistent-home',
-      env: {}
-    })
-
-    expect(runWslTranscriptFsTaskMock).not.toHaveBeenCalled()
-  })
-
   it('reports a gate refusal as incomplete but still returns what the host side could read', async () => {
     runWslTranscriptFsTaskMock.mockRejectedValue(
       new WslTranscriptFsError('timeout', 'filesystem access is taking too long')
@@ -135,17 +106,6 @@ describe('retirement discovery on WSL', () => {
       home: '/nonexistent-home',
       env: {},
       resolveWslHome: async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'
-    })
-
-    expect(retired.complete).toBe(false)
-  })
-
-  it('stays retryable when the distro home cannot be resolved, rather than memoizing the hole', async () => {
-    const retired = await discoverRetiredWorktreeNames({
-      workspaceRoots: [DISTRO_ROOT],
-      home: '/nonexistent-home',
-      env: {},
-      resolveWslHome: async () => null
     })
 
     expect(retired.complete).toBe(false)

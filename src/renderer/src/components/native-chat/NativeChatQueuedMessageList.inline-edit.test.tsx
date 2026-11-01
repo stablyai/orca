@@ -106,7 +106,8 @@ function controller(
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
-    steerNewest: vi.fn(() => false)
+    steerHead: vi.fn(() => false),
+    isWorking: true
   }
 }
 

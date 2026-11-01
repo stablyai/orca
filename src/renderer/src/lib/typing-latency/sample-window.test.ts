@@ -7,7 +7,6 @@ function exactSample(value: number): ExactEchoSample {
   return {
     attribution: 'single-input',
     source: 'direct',
-    text: 'a',
     inputToDispatchMs: value,
     dispatchToParseMs: value + 10000,
     parseToPaintMs: value + 20000,

@@ -3,12 +3,12 @@ import {
   type SavedStructuredStatusGroup
 } from './structured-agent-session-saved-status'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Retire durable tabs/restart offers together; advisory recovery bookkeeping must never block chat close. */
-export function setStructuredAgentSessionTabVisibility(
+export async function setStructuredAgentSessionTabVisibility(
   host: {
     deps: {
       logger: StructuredAgentSessionLogger
@@ -16,17 +16,24 @@ export function setStructuredAgentSessionTabVisibility(
         setSessionTabVisibility: (
           sessionId: string,
           visible: boolean,
-          tabId?: string
+          tabId?: string,
+          check?: () => void,
+          capture?: (tabId: string | null) => void
         ) => Promise<void>
       }
-      onSessionTabHidden?: (sessionId: string) => void
+      onSessionTabHidden?: (sessionId: string, tabId?: string) => void
     }
     restartResume: { dismiss: (sessionIds: readonly string[]) => Promise<number> }
   },
   sessionId: string,
   visible: boolean,
-  tabId?: string
+  tabId?: string,
+  check?: () => void,
+  capture?: (tabId: string | null) => void
 ): Promise<void> {
+  await (check || capture
+    ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, check, capture)
+    : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
   if (!visible) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
       host.deps.logger.warn('forgetting recovery records on chat close failed', {
@@ -35,7 +42,6 @@ export function setStructuredAgentSessionTabVisibility(
       })
     })
   }
-  return host.deps.store.setSessionTabVisibility(sessionId, visible, tabId)
 }
 
 export type StructuredAgentSessionTab = {
@@ -97,18 +103,34 @@ export function createStructuredAgentSessionTabSurface(
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
     showSessionTabs: (sessionIds: readonly string[]) => host.deps.store.showSessionTabs(sessionIds),
-    notifySessionTabHidden: (sessionId: string): void => notifyTabHidden(host, sessionId),
+    notifySessionTabHidden: (sessionId: string, tabId?: string): void =>
+      notifyTabHidden(host, sessionId, tabId),
     setSessionTabVisibility: async (
       sessionId: string,
       visible: boolean,
       tabId?: string,
       /** Defer hidden notices while a failed close could restore visibility. */
-      options?: { deferHiddenNotice?: boolean }
+      options?: {
+        deferHiddenNotice?: boolean
+        check?: () => void
+        capture?: (tabId: string | null) => void
+      }
     ): Promise<void> => {
-      await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
+      let actualId: string | null = null
+      await setStructuredAgentSessionTabVisibility(
+        host,
+        sessionId,
+        visible,
+        tabId,
+        options?.check,
+        (id) => {
+          actualId = id
+          options?.capture?.(id)
+        }
+      )
       if (!visible) {
         if (!options?.deferHiddenNotice) {
-          notifyTabHidden(host, sessionId)
+          notifyTabHidden(host, sessionId, actualId ?? undefined)
         }
       }
       // Tab visibility and handle closure jointly determine status-row lifetime.
@@ -121,10 +143,11 @@ export function createStructuredAgentSessionTabSurface(
 
 function notifyTabHidden(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0],
-  sessionId: string
+  sessionId: string,
+  tabId?: string
 ): void {
   try {
-    host.deps.onSessionTabHidden?.(sessionId)
+    host.deps.onSessionTabHidden?.(sessionId, tabId)
   } catch (error) {
     host.deps.logger.warn('a chat tab close listener failed', {
       scope: 'tab-hidden-listener',

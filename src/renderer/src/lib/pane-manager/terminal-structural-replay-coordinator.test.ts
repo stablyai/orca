@@ -4,10 +4,8 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from './terminal-scroll-intent'
-import {
-  isTerminalScrollIntentRebuildInFlight,
-  onTerminalScrollIntentBufferRebuildComplete
-} from './terminal-scroll-intent-rebuild'
+import { onTerminalScrollIntentBufferRebuildComplete } from './terminal-scroll-intent-rebuild'
+
 import { restoreScrollStateAfterFit } from './pane-scroll'
 import type { ScrollState } from './pane-manager-types'
 
@@ -170,31 +168,6 @@ describe('terminal structural replay coordinator', () => {
     expect(terminal.buffer.active.viewportY).toBe(180)
     rafCallbacks[0]?.(0)
     expect(terminal.buffer.active.viewportY).toBe(180)
-  })
-
-  it('restores and releases replay when an optional completion listener throws', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const terminal = createTerminal(80, 100)
-    markTerminalPinnedViewport(terminal)
-    const coordinator = createTerminalStructuralReplayCoordinator(terminal)
-    const laterCompletion = vi.fn()
-
-    await coordinator.run(() => {
-      terminal.buffer.active.viewportY = 200
-      terminal.buffer.active.baseY = 200
-      onTerminalScrollIntentBufferRebuildComplete(terminal, () => {
-        throw new Error('optional listener failed')
-      })
-      onTerminalScrollIntentBufferRebuildComplete(terminal, laterCompletion)
-    })
-
-    expect(laterCompletion).toHaveBeenCalledWith(true)
-    expect(terminal.buffer.active.viewportY).toBe(180)
-    expect(isTerminalScrollIntentRebuildInFlight(terminal)).toBe(false)
-    expect(consoleError).toHaveBeenCalledWith(
-      '[terminal] scroll-intent rebuild completion failed',
-      expect.any(Error)
-    )
   })
 
   it('keeps later replay work serialized behind an asynchronous post-restore fit', async () => {

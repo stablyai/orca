@@ -71,8 +71,16 @@ describe('sidebar reveal actions', () => {
     store.getState().revealSidebarRow('repo:r1')
 
     expect(store.getState().sidebarBody).toBe('workspaces')
-    expect(store.getState().pendingRevealWorktree?.worktreeId).toBe('wt-1')
+    expect(store.getState().pendingRevealWorktree).toBeNull()
     expect(store.getState().pendingRevealSidebarRow?.rowKey).toBe('repo:r1')
+    const oldRow = store.getState().pendingRevealSidebarRow
+    store.getState().revealWorktreeInSidebar('wt-2', { rowKey: 'pinned:wt-2' })
+    const newer = store.getState().pendingRevealWorktree
+    store.getState().clearPendingRevealSidebarRow(oldRow)
+    store.getState().revealWorktreeInSidebar('wt-2', { rowKey: 'pinned:wt-2' })
+    store.getState().clearPendingRevealWorktreeId(newer)
+    expect(store.getState().pendingRevealSidebarRow).toBeNull()
+    expect(store.getState().pendingRevealWorktree?.rowKey).toBe('pinned:wt-2')
   })
 })
 

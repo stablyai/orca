@@ -9,7 +9,12 @@ import { samePiDirectory } from '../../pi/rpc-launch-resolution'
 import { admitTranscriptPath } from '../transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
 
-export type AdoptedTranscriptSource = { providerSessionId: string; workspaceCwd: string }
+export type AdoptedTranscriptSource = {
+  providerSessionId: string
+  workspaceCwd: string
+  /** Host-selected account store, never supplied by a wire caller or persisted. */
+  conversationStore?: string
+}
 
 export async function assertAdoptedSourceIdentity(
   source: AdoptedTranscriptSource,

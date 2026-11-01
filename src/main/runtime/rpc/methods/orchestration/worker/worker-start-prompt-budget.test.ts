@@ -17,8 +17,7 @@ describe('worker-start prompt budget', () => {
       dispatchId: 'ctx_test',
       taskSpec: spec,
       coordinatorHandle: 'term_coordinator',
-      workerHandle: 'term_worker',
-      heartbeatIntervalMinutes: 5
+      workerHandle: 'term_worker'
     })
 
     expect(getTerminalPasteIngestMs('win32', getTerminalInputByteLength(prompt))).toBeGreaterThan(
@@ -34,8 +33,7 @@ describe('worker-start prompt budget', () => {
       taskSpec: 'x'.repeat(ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES),
       coordinatorHandle: `term_${'d'.repeat(256)}`,
       workerHandle: `term_${'e'.repeat(256)}`,
-      canDispatchSubWorkers: true,
-      heartbeatIntervalMinutes: 5
+      canDispatchSubWorkers: true
     })
 
     expect(getTerminalInputByteLength(prompt)).toBeLessThanOrEqual(

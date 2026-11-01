@@ -23,22 +23,6 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
-describe('chat worker error preference upgrade', () => {
-  it('defaults a truly missing saved key to on and preserves a saved opt-out', () => {
-    const parsed = getDefaultPersistedState(homedir())
-    delete parsed.settings.orchestrationChatErrorEscalationEnabled
-    const normalize = () =>
-      normalizeLoadedGlobalSettings(
-        parsed,
-        prepareLoadedTerminalSettings(parsed, () => {}),
-        prepareLoadedProfileSettings(parsed, getDefaultPersistedState(homedir()), () => {})
-      )
-    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(true)
-    parsed.settings.orchestrationChatErrorEscalationEnabled = false
-    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(false)
-  })
-})
-
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
     'drops saved setup location %s without changing terminal preferences',
@@ -78,27 +62,19 @@ describe('retired managed servers experiment', () => {
 })
 
 describe('retired chat default selectors', () => {
-  it('keeps Chat UI on while dropping both older keys from a saved profile', () => {
-    const normalized = normalizeLegacyProfile({
-      experimentalNativeChat: true,
-      experimentalStructuredNativeChat: false,
-      openAgentTabsInChatByDefault: true
-    })
-    expect(normalized.experimentalNativeChat).toBe(true)
-    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
-    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
-  })
-
-  it('turns Chat UI off when new tabs opened in the terminal, dropping both older keys', () => {
-    const normalized = normalizeLegacyProfile({
-      experimentalNativeChat: true,
-      experimentalStructuredNativeChat: false,
-      openAgentTabsInChatByDefault: false
-    })
-    expect(normalized.experimentalNativeChat).toBe(false)
-    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
-    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
-  })
+  it.each([true, false])(
+    'drops the Chat UI switch and both older keys from a saved profile (default view chat %s)',
+    (chatDefaultView) => {
+      const normalized = normalizeLegacyProfile({
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: false,
+        openAgentTabsInChatByDefault: chatDefaultView
+      })
+      expect(normalized).not.toHaveProperty('experimentalNativeChat')
+      expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
+      expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
+    }
+  )
 })
 
 describe('structured chat shell environment settings', () => {
@@ -299,6 +275,40 @@ it('migrates a shipped split chat/terminal profile using terminal choices while 
   expect(normalized.nativeChatSessionOptions?.claude).toEqual({
     model: 'opus',
     valuesByModel: { opus: { effort: 'high' } }
+  })
+})
+
+describe('pre-#10561 shared terminal color overrides', () => {
+  const overrides = { background: '#101010' }
+  const legacy = { terminalColorOverridesSplit: undefined, terminalColorOverrides: overrides }
+
+  it.each([
+    { theme: 'system', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: true },
+    { theme: 'system', terminalUseSeparateLightTheme: undefined }
+  ])('keep painting both modes when the light slot could show them (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toEqual(overrides)
+    expect(normalized.terminalColorOverridesSplit).toBe(true)
+  })
+
+  it.each([
+    { theme: 'dark', terminalUseSeparateLightTheme: true },
+    { theme: 'light', terminalUseSeparateLightTheme: false }
+  ])('stay on the dark slot otherwise (%o)', (appearance) => {
+    const normalized = normalizeLegacyProfile({ ...legacy, ...appearance })
+    expect(normalized.terminalColorOverrides).toEqual(overrides)
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
+  })
+
+  it('never re-split once migrated, so a cleared light slot stays clear', () => {
+    const normalized = normalizeLegacyProfile({
+      terminalColorOverrides: overrides,
+      theme: 'light',
+      terminalUseSeparateLightTheme: true
+    })
+    expect(normalized.terminalColorOverridesLight).toBeUndefined()
   })
 })
 

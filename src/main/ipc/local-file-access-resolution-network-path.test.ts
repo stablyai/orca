@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodePath from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // Use Windows paths on every host to prove UNC credential-leak rejection happens before filesystem access.
 vi.mock('node:path', async () => {
@@ -50,8 +50,8 @@ vi.mock('electron', () => ({ app: { getPath: () => 'C:\\Users\\me\\AppData\\Roam
 vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: vi.fn(async () => []) }))
 
 import {
-  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath,
+  resolveLocalListRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath
 } from './local-file-access-resolution'
@@ -123,7 +123,7 @@ describe('user directories on a network share', () => {
 
   it.each(networkTargets.slice(0, 2))('refuses %s without touching it', async (target) => {
     await expect(
-      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+      resolveLocalListRequestPath(target, { kind: 'user-directory' }, store)
     ).rejects.toThrow('Access denied')
     expect(fsCalls.filter((call) => call.includes('attacker'))).toEqual([])
   })
@@ -134,7 +134,7 @@ describe('user directories on a network share', () => {
     'C:\\Users\\me\\NUL'
   ])('refuses the Windows device path %s before any filesystem call', async (target) => {
     await expect(
-      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+      resolveLocalListRequestPath(target, { kind: 'user-directory' }, store)
     ).rejects.toThrow('Access denied')
     expect(fsCalls).toEqual([])
   })
@@ -144,7 +144,7 @@ describe('user directories on a network share', () => {
     async (linkName) => {
       const linkPath = `C:\\Users\\me\\${linkName}`
       await expect(
-        resolveLocalDirectoryListingPath(linkPath, { kind: 'user-directory' }, store)
+        resolveLocalListRequestPath(linkPath, { kind: 'user-directory' }, store)
       ).rejects.toThrow('Access denied')
       expect(fsCalls).toEqual([`realpath ${linkPath}`])
     }
@@ -164,7 +164,7 @@ describe('user directories on a WSL drive mount', () => {
   it('checks the folder through its drive path because WSL refuses the UNC spelling', async () => {
     const target = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\me\\reference'
     await expect(
-      resolveLocalDirectoryListingPath(target, { kind: 'user-directory' }, store)
+      resolveLocalListRequestPath(target, { kind: 'user-directory' }, store)
     ).resolves.toBe(target)
     expect(fsCalls).toContain('stat C:\\Users\\me\\reference')
     expect(fsCalls).not.toContain(`stat ${target}`)

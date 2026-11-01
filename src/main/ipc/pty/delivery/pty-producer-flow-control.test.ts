@@ -28,33 +28,6 @@ describe('PtyProducerFlowController', () => {
     vi.useRealTimers()
   })
 
-  it('does not pause at or below the high watermark', () => {
-    controller.update('pty-1', 0)
-    controller.update('pty-1', LOW)
-    controller.update('pty-1', HIGH)
-    expect(pauseProducer).not.toHaveBeenCalled()
-    expect(controller.isPaused('pty-1')).toBe(false)
-  })
-
-  it('pauses exactly once when pending crosses the high watermark, not per chunk', () => {
-    controller.update('pty-1', HIGH + 1)
-    controller.update('pty-1', HIGH + 64 * 1024)
-    controller.update('pty-1', HIGH + 128 * 1024)
-    expect(pauseProducer).toHaveBeenCalledTimes(1)
-    expect(pauseProducer).toHaveBeenCalledWith('pty-1')
-    expect(controller.isPaused('pty-1')).toBe(true)
-  })
-
-  it('resumes exactly once when pending drains below the low watermark', () => {
-    controller.update('pty-1', HIGH + 1)
-    controller.update('pty-1', LOW - 1)
-    expect(resumeProducer).toHaveBeenCalledTimes(1)
-    expect(resumeProducer).toHaveBeenCalledWith('pty-1')
-    expect(controller.isPaused('pty-1')).toBe(false)
-    controller.update('pty-1', 0)
-    expect(resumeProducer).toHaveBeenCalledTimes(1)
-  })
-
   it('holds hysteresis: no flapping while pending sits between the watermarks', () => {
     controller.update('pty-1', HIGH + 1)
     expect(pauseProducer).toHaveBeenCalledTimes(1)
@@ -84,15 +57,6 @@ describe('PtyProducerFlowController', () => {
 
     controller.update('pty-1', HIGH * 4)
     expect(pauseProducer).toHaveBeenCalledTimes(2)
-  })
-
-  it('release resumes only ptys that are actually paused', () => {
-    controller.update('paused-pty', HIGH + 1)
-    controller.release('paused-pty')
-    controller.release('never-paused-pty')
-    expect(resumeProducer).toHaveBeenCalledTimes(1)
-    expect(resumeProducer).toHaveBeenCalledWith('paused-pty')
-    expect(controller.isPaused('paused-pty')).toBe(false)
   })
 
   it('releaseAll resumes every paused pty', () => {

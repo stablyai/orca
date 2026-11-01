@@ -8,6 +8,7 @@ import {
   type PluginRunState
 } from './plugin-supervisor'
 import type { PluginWorkerHandle, PluginWorkerHostCallExecutor } from './plugin-host-process'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import { PluginWorkerSlotPool } from './plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
@@ -36,6 +37,7 @@ export type PluginWorkerManagerOptions = {
     method: string,
     params: unknown
   ) => ReturnType<PluginWorkerHostCallExecutor>
+  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onWorkerStateChange: (pluginKey: string) => void
 }
@@ -61,6 +63,11 @@ export class PluginWorkerManager {
   constructor(private readonly options: PluginWorkerManagerOptions) {
     this.slots = new PluginWorkerSlotPool(options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT)
     this.idleReapMs = options.idleReapMs ?? PLUGIN_WORKER_IDLE_REAP_MS
+  }
+
+  /** The live worker, without starting one. */
+  runningHandle(pluginKey: string): PluginWorkerHandle | null {
+    return this.workers.get(pluginKey)?.handle ?? null
   }
 
   runState(pluginKey: string): PluginRunState {
@@ -151,6 +158,7 @@ export class PluginWorkerManager {
           factory: this.options.workerFactory,
           executeHostCall: (method, params) =>
             this.options.executeHostCall(spec.pluginKey, method, params),
+          onPanelPost: (post) => this.options.onPanelPost?.(spec.pluginKey, post),
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
           verifyBeforeSpawn: this.known.get(spec.pluginKey)?.verifyBeforeSpawn,

@@ -10,6 +10,7 @@ import {
 import {
   keepOpenedDirectoryLinks,
   clearFailedOpenedDirectoryLink,
+  canFollowFolderLink,
   readFileExplorerDirectory
 } from './file-explorer-directory-listing'
 import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
@@ -54,6 +55,8 @@ type UseFileExplorerTreeResult = {
 }
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
+const FOLLOW_LINK = { followProjectFolderLink: true } as const
+
 export function useFileExplorerTree(
   treeRootPath: string | null,
   expanded: Set<string>,
@@ -124,7 +127,8 @@ export function useFileExplorerTree(
         const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
           wakeWslDistro: options?.wakeWslDistro,
           paged,
-          minEntries
+          minEntries,
+          ...(canFollowFolderLink(cache, dirPath, options?.wakeWslDistro) ? FOLLOW_LINK : {})
         })
         // Only the current read may clear loading; superseded reads must preserve their replacement’s spinner.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
@@ -254,7 +258,8 @@ export function useFileExplorerTree(
       readDirectory: (dirPath) =>
         readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath, {
           paged: dirCacheRef.current[dirPath]?.paged,
-          minEntries: dirCacheRef.current[dirPath]?.children.length
+          minEntries: dirCacheRef.current[dirPath]?.children.length,
+          ...(canFollowFolderLink(dirCacheRef.current, dirPath, false) ? FOLLOW_LINK : {})
         }),
       maxConcurrentReads: fileExplorerRefreshConcurrency(
         getFileExplorerOperationOwner(activeWorktreeId)

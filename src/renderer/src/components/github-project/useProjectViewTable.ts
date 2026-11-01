@@ -132,6 +132,7 @@ export function useProjectViewTable(
       return
     }
     let cancelled = false
+    // No wake: this also runs on a restored page with no click, so a stopped distro stays stopped.
     void listProjectViewsForRuntime(sourceTarget, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,

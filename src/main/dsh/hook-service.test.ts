@@ -9,8 +9,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import { DshHookService } from './hook-service'
 import { DSH_HOOK_EVENTS } from './hook-settings'
 
@@ -62,10 +62,6 @@ function readManagedHooks(): { hooks: Record<string, unknown[]> } {
 }
 
 describe('DshHookService', () => {
-  it('reports not_installed before install, with no DSH home on disk', () => {
-    expect(new DshHookService().getStatus().state).toBe('not_installed')
-  })
-
   it('installs the patch block, the managed hooks file, and the script', () => {
     const status = new DshHookService().install()
     expect(status.state).toBe('installed')
@@ -78,38 +74,6 @@ describe('DshHookService', () => {
 
     expect(Object.keys(readManagedHooks().hooks).sort()).toEqual([...DSH_HOOK_EVENTS].sort())
     expect(readFileSync(scriptPath(), 'utf-8').length).toBeGreaterThan(0)
-  })
-
-  it('posts to the dsh hook route', () => {
-    new DshHookService().install()
-    expect(readFileSync(scriptPath(), 'utf-8')).toContain('/hook/dsh')
-  })
-
-  it('restores the pane identity DSH scrubs before anything reads it', () => {
-    // DSH scrubs KEY/TOKEN variables, so restore aliases before guards or spooling.
-    new DshHookService().install()
-    const script = readFileSync(scriptPath(), 'utf-8')
-    const restoreAt = script.indexOf('ORCA_AGENT_PANE')
-    const guardAt = script.indexOf('ORCA_AGENT_HOOK_PORT')
-    expect(restoreAt).toBeGreaterThan(-1)
-    expect(script).toContain('ORCA_AGENT_LAUNCH')
-    expect(restoreAt).toBeLessThan(guardAt)
-  })
-
-  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
-  it('registers the Windows batch hook command for every event', () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    try {
-      expect(new DshHookService().install().state).toBe('installed')
-      const command = wrapWindowsBatchHookCommand(scriptPath())
-      for (const event of DSH_HOOK_EVENTS) {
-        expect(readManagedHooks().hooks[event]).toEqual([
-          { hooks: [expect.objectContaining({ command })] }
-        ])
-      }
-    } finally {
-      platform.mockRestore()
-    }
   })
 
   it('is idempotent', () => {

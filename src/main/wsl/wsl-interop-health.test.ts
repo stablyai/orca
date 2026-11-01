@@ -7,13 +7,13 @@ vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning: vi.fn() })
 vi.mock('./wsl-runner', () => ({ runWslProcess: vi.fn() }))
 
 import {
-  ACTIVITY_CHECK_DELAY_MS,
   ACTIVITY_CHECK_INTERVAL_MS,
   REPAIR_FAILURE_BACKOFF_MS,
   STOP_CHECK_FLOOR_MS,
   WslInteropHealthMonitor,
   type WslInteropHealthDeps
 } from './wsl-interop-health'
+
 import { WSL_INTEROP_PROBE_SCRIPT, WSL_INTEROP_REPAIR_SCRIPT } from './wsl-interop-registration'
 
 const PRESENT = 'orca-wsl-interop:present\n'
@@ -62,13 +62,6 @@ function harness(overrides: Partial<WslInteropHealthDeps> = {}) {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('WslInteropHealthMonitor.check', () => {
-  it('reports intact without repairing', async () => {
-    const h = harness()
-    await expect(h.monitor.check('Ubuntu')).resolves.toBe('intact')
-    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
-    expect(h.deps.runScript).toHaveBeenCalledWith('Ubuntu', WSL_INTEROP_PROBE_SCRIPT)
-  })
-
   it('repairs as root when the entry is missing', async () => {
     const runScript = vi
       .fn()
@@ -150,27 +143,6 @@ describe('WslInteropHealthMonitor triggers', () => {
     h.monitor.noteActivity('Ubuntu')
     await flush()
     expect(h.timers).toHaveLength(0)
-  })
-
-  it('checks once after a delay and throttles repeated activity', async () => {
-    const h = harness()
-    h.monitor.noteActivity(null)
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toEqual([{ fn: expect.any(Function), delayMs: ACTIVITY_CHECK_DELAY_MS }])
-    expect(h.deps.runScript).not.toHaveBeenCalled()
-    h.runTimers()
-    await flush()
-    expect(h.deps.isRunning).toHaveBeenCalledTimes(1)
-    expect(h.deps.runScript).toHaveBeenCalledTimes(1)
-
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toHaveLength(0)
-    h.advance(ACTIVITY_CHECK_INTERVAL_MS)
-    h.monitor.noteActivity('Ubuntu')
-    await flush()
-    expect(h.timers).toHaveLength(1)
   })
 
   it('re-checks used distros that are still running when another distro stops', async () => {

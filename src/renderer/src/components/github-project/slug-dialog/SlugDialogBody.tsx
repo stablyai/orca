@@ -65,7 +65,15 @@ export function SlugDialogBody({
             { owner, repo, host, number, type },
             { timeoutMs: 30_000 }
           )
-        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, host, number, type })
+        : window.api.gh.projectWorkItemDetailsBySlug({
+            owner,
+            repo,
+            host,
+            number,
+            type,
+            // Opening an item is a click (E9).
+            wakeWslDistro: true
+          })
     request
       .then((res) => {
         if (rid !== requestIdRef.current) {

@@ -4,7 +4,11 @@ import {
   resolveFullLaneDropIndex
 } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatus } from './workspace-status'
-import { collectDropWrites, type DropWriteRows } from './worktree-list/drag/dragged-worktree-copies'
+import {
+  collectDropWrites,
+  uniqueDraggedKeys,
+  type DropWriteRows
+} from './worktree-list/drag/dragged-worktree-copies'
 import {
   buildManualOrderUpdatesForGroupDrop,
   shouldWriteManualOrderForGroupDrop,
@@ -52,8 +56,9 @@ function getLaneCardIds(lane: HTMLElement): HTMLElement[] {
   return Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
 }
 
-function getCardWorktreeId(card: HTMLElement): string | undefined {
-  return card.dataset.workspaceBoardWorktreeId ?? card.dataset.workspaceBoardCardId
+/** Lanes key cards by host identity, so same-id copies on two hosts keep separate slots. */
+function getCardWorktreeKey(card: HTMLElement): string | undefined {
+  return card.dataset.workspaceBoardCardId
 }
 
 /** Prefer the virtualizer’s complete view over mounted cards; fullLaneIds also retains search-hidden members. */
@@ -67,10 +72,10 @@ function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: str
   }
   const cards = getLaneCardIds(lane)
   return {
-    fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeId(card) ?? []),
+    fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeKey(card) ?? []),
     viewIds: cards
       .filter((card) => card.offsetParent !== null)
-      .flatMap((card) => getCardWorktreeId(card) ?? [])
+      .flatMap((card) => getCardWorktreeKey(card) ?? [])
   }
 }
 
@@ -197,8 +202,9 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   groups: readonly WorktreeDragGroup[]
   /** The rows each id may write; a twin's id names another host's copy too. */
   rowsFor: DropWriteRows
-  allWorktreeIds: readonly string[]
-  rankByWorktreeId: ReadonlyMap<string, number>
+  /** Manual ranks by host identity, as board lanes key their cards. */
+  allWorktreeKeys: readonly string[]
+  rankByKey: ReadonlyMap<string, number>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sortBy: string
   now: number
@@ -218,11 +224,12 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
     ? buildManualOrderUpdatesForGroupDrop({
         groups: args.groups,
         targetGroupKey: args.status,
-        draggedIds: args.worktreeIds,
+        // Rank only the copies this drop writes, not a same-id twin on another host.
+        draggedIds: uniqueDraggedKeys(args.worktreeIds.flatMap(args.rowsFor.status)),
         dropIndex: args.dropIndex,
         now: args.now,
-        rankByWorktreeId: args.rankByWorktreeId,
-        allWorktreeIds: args.allWorktreeIds
+        rankByWorktreeId: args.rankByKey,
+        allWorktreeIds: args.allWorktreeKeys
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 
@@ -232,7 +239,7 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
       statusIds: args.worktreeIds,
       status: args.status,
       workspaceStatuses: args.workspaceStatuses,
-      orderUpdates: order.updates
+      orderUpdatesByKey: order.updates
     }),
     shouldSwitchToManual: writeManualOrder && order.changed
   }

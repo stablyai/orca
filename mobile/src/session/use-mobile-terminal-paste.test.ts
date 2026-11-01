@@ -15,9 +15,6 @@ vi.mock('expo-clipboard', () => ({
   getImageAsync: async () => ({ data: 'png' })
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
-vi.mock('../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./mobile-clipboard-image')>()),
   prepareMobileClipboardImageBase64: async () => 'png',
