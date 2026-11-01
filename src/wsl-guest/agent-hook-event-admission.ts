@@ -65,7 +65,10 @@ export function applyRelayHookEvent(
     previous,
     true,
     false,
-    readHookProcessVerdict(host.state, previous, incoming.agentPresence?.process)
+    readHookProcessVerdict(host.state, previous, {
+      paneKey: incoming.paneKey,
+      process: incoming.agentPresence?.process
+    })
   )
   const transitioned = preview.transitioned && {
     ...preview.transitioned,

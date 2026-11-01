@@ -20,6 +20,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     this.readHookRootEvidence = reader
   }
 
+  /** A hook's own preflight probing the pane's recorded owner on behalf of a live sender. */
+  protected challengeHookOwner(paneKey: string): Promise<unknown> {
+    return this.checkAgentPresence(paneKey)
+  }
+
   /** HTTP and spool hooks share one ownership preflight before provider folds. */
   protected checkHookOwner(source: AgentHookSource, body: unknown): Promise<unknown> | undefined {
     return checkHookOwnerPresence(
@@ -27,7 +32,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       source,
       body,
       this.env,
-      (paneKey) => this.checkAgentPresence(paneKey),
+      (paneKey) => this.challengeHookOwner(paneKey),
       this.readHookRootEvidence
     )
   }

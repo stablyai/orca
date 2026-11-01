@@ -1,122 +1,310 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  classifyHookProcessRoot,
-  createHookRootEvidenceReader,
-  type HookProcessVerdict
+  readHookRootEvidence,
+  type HookPaneProcessIo,
+  type HookProcessVerdict,
+  type TmuxPaneBridge
 } from './hook-process-root-evidence'
 import type { ProcessTableRow } from './process-table-snapshot'
 
-const TTY = 'ttys004'
+// Shapes recorded on macOS: Orca's pane root is setuid login(1), the shell runs under it, and
+// Claude's Bash tool runs each command in a new session with no terminal (`Ss`, `??`).
+const LOGIN =
+  '/usr/bin/login -flpq u /bin/bash --noprofile --norc -p -c export SHELL="$1"; shift; exec -l -- "$@" orca-tcc-login /bin/zsh /bin/zsh -l'
+const TOOL_SHELL = (command: string) =>
+  `/bin/zsh -c source '/Users/u/.claude/shell-snapshots/snapshot-zsh-1.sh' && eval '${command}' < /dev/null`
 
-function row(
-  pid: number,
-  ppid: number,
-  pgid: number,
-  command: string,
-  stat = 'S+',
-  tpgid = 49969,
-  tty = TTY
-): ProcessTableRow {
-  return { pid, ppid, pgid, tpgid, tty, stat, command }
+type Proc = [pid: number, ppid: number, pgid: number, command: string, stat: string, tty?: string]
+
+function table(foreground: Record<string, number>, procs: Proc[]): ProcessTableRow[] {
+  return procs.map(([pid, ppid, pgid, command, stat, tty = 'ttys004']) => ({
+    pid,
+    ppid,
+    pgid,
+    tpgid: foreground[tty] ?? 0,
+    stat,
+    tty,
+    command
+  }))
 }
 
-// Orca's PTY host has no terminal; the pane shell leads the terminal session.
-const host = row(90, 1, 90, '/Applications/Orca.app/Contents/MacOS/Orca', 'S', 0, '??')
-const shell = row(100, 90, 100, '-zsh', 'Ss')
-const claude = row(49969, 100, 49969, 'claude')
-const toolShell = row(49975, 49969, 49969, '/bin/zsh -c claude -p "summarize"')
-const nested = row(49980, 49975, 49969, 'claude -p summarize')
-const background = row(49990, 100, 49990, 'claude -p "nightly report"', 'S')
+const ROOT: Proc = [100, 90, 100, LOGIN, 'Ss']
+const SHELL: Proc = [101, 100, 101, '-zsh', 'S']
+const CLAUDE: Proc = [4001, 101, 4001, 'claude', 'S+']
 
-describe('classifyHookProcessRoot', () => {
-  it.each<[string, readonly ProcessTableRow[], number, HookProcessVerdict]>([
-    ['the foreground agent under the pane shell', [host, shell, claude], 49969, 'root'],
+function io(
+  rows: ProcessTableRow[],
+  options: { root?: number; bridges?: (TmuxPaneBridge | null)[] } = {}
+) {
+  const bridges = options.bridges ?? []
+  return {
+    resolveRoot: vi.fn(async () => ({ pid: options.root ?? 100, incarnation: 'inc-1' })),
+    probe: vi.fn(async () => 'live' as const),
+    readProcesses: vi.fn(async (pids: readonly number[]) =>
+      rows.filter((row) => pids.includes(row.pid))
+    ),
+    readTerminal: vi.fn(async (tty: string) => rows.filter((row) => row.tty === tty)),
+    readTmux: vi.fn(async () => bridges.shift() ?? null)
+  } satisfies HookPaneProcessIo
+}
+
+function read(deps: HookPaneProcessIo, pid: number, tmux?: { socket: string; pane: string }) {
+  return readHookRootEvidence(
+    {
+      paneKey: 'pane',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      process: { pid, platform: 'darwin', startTime: 'start' },
+      ...(tmux ? { tmux } : {})
+    },
+    deps
+  )
+}
+
+describe('a hook process read against its pane root', () => {
+  it.each<[string, Record<string, number>, Proc[], number, HookProcessVerdict]>([
+    ['the foreground agent', { ttys004: 4001 }, [ROOT, SHELL, CLAUDE], 4001, 'root'],
     [
-      'an agent behind a non-exec wrapper',
-      [host, shell, row(49960, 100, 49960, 'npm exec claude'), row(49969, 49960, 49960, 'claude')],
-      49969,
-      'root'
-    ],
-    [
-      'an agent exec-ed in place of the shell',
-      [host, row(100, 90, 100, 'claude', 'Ss+', 100)],
+      'an agent exec’d as the pane root',
+      { ttys004: 100 },
+      [[100, 90, 100, 'claude', 'Ss+']],
       100,
       'root'
     ],
     [
-      'a headless agent run by the pane agent',
-      [host, shell, claude, toolShell, nested],
-      49980,
+      'an agent under login(1) whose argv this user cannot read',
+      { ttys004: 4001 },
+      [[100, 90, 100, '(login)', 'Ss'], SHELL, CLAUDE],
+      4001,
+      'root'
+    ],
+    [
+      'a shell script named after the agent that runs it',
+      { ttys004: 4000 },
+      [
+        ROOT,
+        SHELL,
+        [4000, 101, 4000, 'bash /Users/u/bin/claude', 'S+'],
+        [4001, 4000, 4000, 'node /opt/homebrew/bin/claude', 'S+']
+      ],
+      4001,
+      'root'
+    ],
+    [
+      'an npx launch',
+      { ttys004: 4000 },
+      [
+        ROOT,
+        SHELL,
+        [
+          4000,
+          101,
+          4000,
+          'node /opt/homebrew/lib/node_modules/npm/bin/npm-cli.js exec claude',
+          'S+'
+        ],
+        [4002, 4000, 4000, 'sh -c claude', 'S+'],
+        [4001, 4002, 4000, 'node /Users/u/.npm/_npx/1/node_modules/.bin/claude', 'S+']
+      ],
+      4001,
+      'root'
+    ],
+    [
+      'a binary shim that spawns the agent in its own job',
+      { ttys004: 4000 },
+      [
+        ROOT,
+        SHELL,
+        [4000, 101, 4000, 'claude', 'S+'],
+        [4001, 4000, 4000, 'node /Users/u/.volta/tools/image/claude-code/cli.js', 'S+']
+      ],
+      4001,
+      'unknown'
+    ],
+    [
+      'a nested run from the agent’s detached Bash tool',
+      { ttys004: 4001 },
+      [
+        ROOT,
+        SHELL,
+        CLAUDE,
+        [4005, 4001, 4005, TOOL_SHELL('claude -p summarize'), 'Ss', '??'],
+        [4006, 4005, 4005, 'claude -p summarize', 'S', '??']
+      ],
+      4006,
       'nested'
     ],
     [
-      'a background agent while the pane agent holds the foreground',
-      [host, shell, claude, background],
-      49990,
+      'a nested run under a versioned native agent',
+      { ttys004: 4001 },
+      [
+        ROOT,
+        SHELL,
+        [4001, 101, 4001, '/Users/u/.local/share/claude/versions/2.1.0', 'S+'],
+        [4005, 4001, 4005, TOOL_SHELL('bash /Users/u/bin/claude -p x'), 'Ss', '??'],
+        [4006, 4005, 4005, 'bash /Users/u/bin/claude -p x', 'S', '??'],
+        [4007, 4006, 4005, 'node /opt/homebrew/bin/claude -p x', 'S', '??']
+      ],
+      4007,
+      'nested'
+    ],
+    [
+      'a run under another agent',
+      { ttys004: 4001 },
+      [
+        ROOT,
+        SHELL,
+        [4001, 101, 4001, 'codex', 'S+'],
+        [4005, 4001, 4005, '/bin/bash -c claude -p x', 'Ss', '??'],
+        [4006, 4005, 4005, 'claude -p x', 'S', '??']
+      ],
+      4006,
+      'nested'
+    ],
+    [
+      'a background agent while another holds the foreground',
+      { ttys004: 4001 },
+      [ROOT, SHELL, CLAUDE, [4010, 101, 4010, 'claude -p "nightly report"', 'S']],
+      4010,
       'competing'
     ],
     [
-      'a background agent while only the shell holds the foreground',
-      [host, row(100, 90, 100, '-zsh', 'Ss+', 100), { ...background, tpgid: 100 }],
-      49990,
+      'a background agent beside the shell prompt',
+      { ttys004: 101 },
+      [ROOT, SHELL, [4010, 101, 4010, 'claude -p "nightly report"', 'S']],
+      4010,
       'root'
     ],
-    ['a process missing from the table', [host, shell], 49969, 'unknown'],
-    ['a process without a terminal', [host, shell, { ...claude, tty: '??' }], 49969, 'unknown'],
     [
-      'a process whose lineage leaves its terminal session',
-      [host, { ...claude, ppid: 90 }],
-      49969,
+      'an agent in another app’s terminal that inherited the pane key',
+      { ttys004: 4001, ttys009: 5001 },
+      [
+        ROOT,
+        SHELL,
+        [4001, 101, 4001, 'codex', 'S+'],
+        [5000, 1, 5000, '/Applications/Code.app/Contents/MacOS/Code Helper', 'S', '??'],
+        [5001, 5000, 5001, 'claude', 'S+', 'ttys009']
+      ],
+      5001,
+      'competing'
+    ],
+    [
+      'an agent in another terminal opened from the pane',
+      { ttys004: 101, ttys009: 5001 },
+      [
+        ROOT,
+        SHELL,
+        [5000, 101, 5000, '/usr/local/bin/code-insiders --wait', 'S', '??'],
+        [5001, 5000, 5001, 'claude', 'S+', 'ttys009']
+      ],
+      5001,
+      'competing'
+    ],
+    [
+      'an agent behind a bridge nobody can observe (screen)',
+      { ttys004: 4020, ttys010: 4023 },
+      [
+        ROOT,
+        SHELL,
+        [4020, 101, 4020, 'screen -S work', 'S+'],
+        [4021, 1, 4021, 'SCREEN -S work', 'Ss', '??'],
+        [4022, 4021, 4022, '-zsh', 'Ss', 'ttys010'],
+        [4023, 4022, 4023, 'claude', 'S+', 'ttys010']
+      ],
+      4023,
       'unknown'
     ],
     [
-      'an ancestor whose argv was unreadable',
-      [host, shell, row(49960, 100, 49969, '(node)'), { ...claude, ppid: 49960 }],
-      49969,
+      'a detached agent with no terminal',
+      { ttys004: 101 },
+      [ROOT, SHELL, [4030, 101, 4030, 'claude', 'Ss', '??']],
+      4030,
+      'unknown'
+    ],
+    [
+      'an agent under an ancestor whose argv is unreadable',
+      { ttys004: 4000 },
+      [ROOT, SHELL, [4000, 101, 4000, '(node)', 'S+'], [4001, 4000, 4000, 'claude', 'S+']],
+      4001,
       'unknown'
     ]
-  ])('reads %s', (_name, rows, pid, verdict) => {
-    expect(classifyHookProcessRoot(rows, pid)).toBe(verdict)
+  ])('%s', async (_name, foreground, procs, sender, verdict) => {
+    const rows = table(foreground, procs)
+    const deps = io(rows, { root: procs[0][0] })
+    expect(await read(deps, sender)).toBe(verdict)
+    // Targeted reads only: the root and the sender's own off-terminal ancestry, plus one terminal.
+    expect(deps.readTerminal).toHaveBeenCalledTimes(1)
+    expect(deps.readProcesses.mock.calls.every(([pids]) => pids.length === 1)).toBe(true)
+  })
+
+  it('reads a Linux nested run through its detached tool session', async () => {
+    const rows = table({ 'pts/3': 4001 }, [
+      [100, 90, 100, '/bin/bash --rcfile /orca/bash/rcfile', 'Ss', 'pts/3'],
+      [
+        4001,
+        100,
+        4001,
+        'node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js',
+        'Sl+',
+        'pts/3'
+      ],
+      [4005, 4001, 4005, '/bin/bash -c claude -p x', 'Ss', '?'],
+      [4006, 4005, 4005, 'claude -p x', 'Sl', '?']
+    ])
+    expect(await read(io(rows), 4006)).toBe('nested')
+    expect(await read(io(rows), 4001)).toBe('root')
   })
 })
 
-describe('createHookRootEvidenceReader', () => {
-  const identity = {
-    pid: 49969,
-    platform: 'darwin' as const,
-    startTime: 'Sun Nov  1 00:01:23 2026'
-  }
+describe('a hook process behind tmux in its pane', () => {
+  const tmux = { socket: '/private/tmp/tmux-501/default', pane: '%1' }
+  const rows = table({ ttys004: 4040, ttys011: 4043 }, [
+    ROOT,
+    SHELL,
+    [4040, 101, 4040, 'tmux attach', 'S+'],
+    // The server started elsewhere and outlives any one client.
+    [4041, 1, 4041, 'tmux', 'Ss', '??'],
+    [4042, 4041, 4042, '-zsh', 'Ss', 'ttys011'],
+    [4043, 4042, 4043, 'claude', 'S+', 'ttys011']
+  ])
 
-  it('reads the table only for a live, start-matched process and shares concurrent reads', async () => {
-    const readTable = vi.fn(async () => [host, shell, claude])
-    const probe = vi.fn(async () => 'live' as const)
-    const read = createHookRootEvidenceReader({ probe, readTable })
-    const verdicts = await Promise.all([read(identity), read(identity), read(identity)])
-    expect(verdicts).toEqual(['root', 'root', 'root'])
-    expect(probe).toHaveBeenCalledOnce()
-    expect(readTable).toHaveBeenCalledOnce()
-    probe.mockResolvedValueOnce('exited')
-    expect(await read(identity)).toBe('unknown')
-    expect(readTable).toHaveBeenCalledOnce()
-    readTable.mockRejectedValueOnce(new Error('capture_over_budget'))
-    expect(await read(identity)).toBe('unknown')
+  it.each<[string, (TmuxPaneBridge | null)[], HookProcessVerdict]>([
+    [
+      'acquires through the pane the outer client selects',
+      [
+        { selected: '%1', innerPid: 4042 },
+        { selected: '%1', innerPid: 4042 }
+      ],
+      'root'
+    ],
+    ['refuses an inner pane the outer client does not show', [{ selected: '%2' }], 'competing'],
+    [
+      'proves nothing when the selection changes during the read',
+      [{ selected: '%1', innerPid: 4042 }, { selected: '%2' }],
+      'unknown'
+    ],
+    ['proves nothing when no single outer client is attached', [null], 'unknown']
+  ])('%s', async (_name, bridges, verdict) => {
+    expect(await read(io(rows, { bridges }), 4043, tmux)).toBe(verdict)
   })
 
-  it('answers unknown within the hook budget and lets the next hook join the slow read', async () => {
-    vi.useFakeTimers()
-    try {
-      let finish: (rows: ProcessTableRow[]) => void = () => {}
-      const readTable = vi.fn(() => new Promise<ProcessTableRow[]>((resolve) => (finish = resolve)))
-      const read = createHookRootEvidenceReader({ probe: async () => 'live', readTable })
-      const first = read(identity)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(await first).toBe('unknown')
-      const next = read(identity)
-      finish([host, shell, claude])
-      expect(await next).toBe('root')
-      expect(readTable).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
+  it('proves nothing without the hook’s tmux hint', async () => {
+    expect(await read(io(rows), 4043)).toBe('unknown')
+  })
+})
+
+describe('the pane root binding', () => {
+  it('keeps the legacy path for a PTY whose owner names no root, and probes nothing', async () => {
+    const deps = { ...io([]), resolveRoot: vi.fn(async () => 'legacy' as const) }
+    expect(await read(deps, 4001)).toBeUndefined()
+    expect(deps.probe).not.toHaveBeenCalled()
+  })
+
+  it('proves nothing for a missing binding or a sender that is not the hook’s process', async () => {
+    expect(await read({ ...io([]), resolveRoot: vi.fn(async () => null) }, 4001)).toBe('unknown')
+    const rows = table({ ttys004: 4001 }, [ROOT, SHELL, CLAUDE])
+    expect(await read({ ...io(rows), probe: vi.fn(async () => 'exited' as const) }, 4001)).toBe(
+      'unknown'
+    )
   })
 })

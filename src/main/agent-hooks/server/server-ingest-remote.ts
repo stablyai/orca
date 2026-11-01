@@ -20,7 +20,6 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
-import { RelaySessionGenerations } from './server-relay-sessions'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,
   canAdmitLegacyAgentStatus,
@@ -34,8 +33,6 @@ import {
 import { AgentHookServerIngestStructuredChildren } from './server-ingest-structured-children'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructuredChildren {
-  private readonly relaySessions = new RelaySessionGenerations()
-
   /** Call as each relay link starts, before its first envelope. */
   beginRemoteRelaySession(connectionId: string): void {
     this.relaySessions.begin(connectionId)

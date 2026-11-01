@@ -1,3 +1,4 @@
+import { RelaySessionGenerations } from './server-relay-sessions'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
@@ -32,6 +33,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
     this.state
   )
+  protected readonly relaySessions = new RelaySessionGenerations()
 
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
@@ -67,12 +69,17 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       recordedRow,
       (origin === 'hook' || origin === 'launch') && !restated,
       retireBinding,
-      // A relayed process presence is the relay's own owner verdict; its PID is never probed here.
+      // A proving relay forwards a process only after its own pane-root proof; its PID is never
+      // probed here. An older relay's first prover keeps the baseline: it never displaces a record.
       incoming.connectionId
-        ? needsHookRootEvidence(recordedRow, sender) && !incoming.agentPresence?.ended
+        ? this.relaySessions.provesPaneRoots(incoming.connectionId) &&
+          needsHookRootEvidence(recordedRow, sender)
           ? 'root'
           : undefined
-        : readHookProcessVerdict(this.state, recordedRow, sender)
+        : readHookProcessVerdict(this.state, recordedRow, {
+            paneKey: incoming.paneKey,
+            process: sender
+          })
     )
     const { event: rootIdentityIncoming, statusAdmissionSession } = rootContext
     const transitioned = rootContext.transitioned

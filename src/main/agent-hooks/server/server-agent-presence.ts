@@ -26,23 +26,33 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
   >()
   private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
 
+  /** The relay on this link asked for a pane root, so it proves roots before naming owners. */
+  noteRelayProvesPaneRoots(connectionId: string): void {
+    this.relaySessions.noteProvesPaneRoots(connectionId)
+  }
+
   /** A hook proves its sender alive; only another process can challenge the owner. */
   checkAgentPresenceAfterHook(event: AgentHookEventPayload, row: AgentHookEventPayload): void {
     const sender = event.agentPresence?.process
     const owner = row.agentPresence
     if (sender && owner?.process && !owner.ended && !isSameAgentProcess(sender, owner.process)) {
-      const paneKey = this.resolvePaneKeyAlias(row.paneKey)
-      const challenges = this.ownerChallengesByLiveSender
-      challenges.set(paneKey, (challenges.get(paneKey) ?? 0) + 1)
-      void this.checkAgentPresence(paneKey).finally(() => {
-        const remaining = (challenges.get(paneKey) ?? 1) - 1
-        if (remaining > 0) {
-          challenges.set(paneKey, remaining)
-        } else {
-          challenges.delete(paneKey)
-        }
-      })
+      void this.challengeHookOwner(this.resolvePaneKeyAlias(row.paneKey))
     }
+  }
+
+  /** The challenging hook's sender is alive in the pane, which outlives the owner it probes,
+   *  even while that hook still awaits its own acquisition evidence. */
+  protected override challengeHookOwner(paneKey: string): Promise<unknown> {
+    const challenges = this.ownerChallengesByLiveSender
+    challenges.set(paneKey, (challenges.get(paneKey) ?? 0) + 1)
+    return this.checkAgentPresence(paneKey).finally(() => {
+      const remaining = (challenges.get(paneKey) ?? 1) - 1
+      if (remaining > 0) {
+        challenges.set(paneKey, remaining)
+      } else {
+        challenges.delete(paneKey)
+      }
+    })
   }
 
   // A live sender means the owner's exit cannot establish pane exit.

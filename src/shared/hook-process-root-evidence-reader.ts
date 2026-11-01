@@ -1,14 +1,25 @@
 import { probeAgentProcessPresence } from './agent-process-presence-probe'
 import {
-  createHookRootEvidenceReader,
+  readHookRootEvidence,
+  type HookPaneProcessIo,
   type HookRootEvidenceReader
 } from './hook-process-root-evidence'
-import { getStrictProcessTableSnapshotWithAge } from './process-table-snapshot-reader'
+import {
+  readSelectedRows,
+  readTerminalRows,
+  readTmuxPaneBridge
+} from './tmux-host-attachment-probe'
 
-/** Root evidence from this host's own process table, shared with the other evidence readers. */
-export function createLocalHookRootEvidenceReader(): HookRootEvidenceReader {
-  return createHookRootEvidenceReader({
+/** Root evidence from this host's own processes, for panes whose PTY root `resolveRoot` names. */
+export function createLocalHookRootEvidenceReader(
+  resolveRoot: HookPaneProcessIo['resolveRoot']
+): HookRootEvidenceReader {
+  const io: HookPaneProcessIo = {
+    resolveRoot,
     probe: (process) => probeAgentProcessPresence(process),
-    readTable: async () => (await getStrictProcessTableSnapshotWithAge()).rows
-  })
+    readProcesses: (pids) => readSelectedRows(pids).catch(() => []),
+    readTerminal: (tty) => readTerminalRows(tty).catch(() => []),
+    readTmux: readTmuxPaneBridge
+  }
+  return (request) => readHookRootEvidence(request, io)
 }

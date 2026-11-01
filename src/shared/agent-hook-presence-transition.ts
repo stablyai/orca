@@ -87,9 +87,33 @@ export function previewHookPresence<T extends AgentHookEventPayload>(
     fromHook && rootVerdict === 'unknown' && !exit
       ? { ...context.event, agentPresence: undefined }
       : context.event
-  const transitioned = refused
-    ? undefined
-    : transitionHookPresence(event, previousBinding, fromHook)
+  // Why: the pane's proven root exiting ends the same agent's unproven record it could never
+  // prove; only its own exit retires it, once, without first naming it a live owner.
+  const retiring =
+    fromHook &&
+    exit &&
+    rootVerdict === 'root' &&
+    !previous?.providerSessionOnly &&
+    !recorded?.ended &&
+    !recorded?.process &&
+    recorded?.agent === incoming.agentPresence?.agent
+      ? recorded
+      : undefined
+  const session = context.event.providerSession?.id ?? retiring?.session
+  const transitioned = retiring
+    ? {
+        ...context.event,
+        payload: previous?.payload ?? incoming.payload,
+        agentPresence: {
+          ...incoming.agentPresence,
+          agent: retiring.agent,
+          ...(session ? { session } : {}),
+          ended: true as const
+        }
+      }
+    : refused
+      ? undefined
+      : transitionHookPresence(event, previousBinding, fromHook)
   const matched = Boolean(
     fromHook &&
     scopedSource &&
