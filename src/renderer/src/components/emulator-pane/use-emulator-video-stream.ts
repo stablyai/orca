@@ -225,7 +225,10 @@ export function useEmulatorVideoStream(
   }, [deviceId, streamKey, enabled])
 
   if (enabled && deviceId && !hasWebCodecs()) {
-    return { canvasRef, error: 'This build does not support WebCodecs H.264 decoding.' }
+    return {
+      canvasRef,
+      error: 'This build does not support WebCodecs H.264 decoding.'
+    }
   }
   return { canvasRef, error: failure?.identity === streamIdentity ? failure.message : null }
 }

@@ -14,11 +14,11 @@ describe('attachWithAvdFallback', () => {
       if (device === 'emulator-5554') {
         throw hostError('emulator_device_not_found')
       }
-      return device
+      return { attached: device === 'Pixel_9' }
     })
-    await expect(attachWithAvdFallback(rows, 'emulator-5554', onRetarget, attachTo)).resolves.toBe(
-      'Pixel_9'
-    )
+    await expect(
+      attachWithAvdFallback(rows, 'emulator-5554', onRetarget, attachTo)
+    ).resolves.toEqual({ attached: true })
     expect(onRetarget).toHaveBeenCalledWith('Pixel_9')
 
     const failing = vi.fn(async () => {
