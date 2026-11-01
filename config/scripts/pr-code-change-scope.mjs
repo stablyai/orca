@@ -194,6 +194,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session-wire',
+  'src/shared/agent-session/failures/agent-session-wire-refusals.test.ts',
+  'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
   'src/shared/agent-session-mutation-envelope',
   // Cover client sends to release hosts and fingerprints re-derived by host ledger/journal.
   'src/shared/structured-agent-session-mutation.ts',

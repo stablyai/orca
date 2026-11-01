@@ -5,6 +5,8 @@ export const PLUGIN_SCHEMA_SINCE_V1 = '1.4.160'
 export const PLUGIN_MANIFEST_V2_SINCE = '1.4.245'
 /** First release that derives the publisher, so a format 2 manifest may leave `publisher` out. */
 export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
+/** First release that reads panel `ui` (`components` panels) and the extended icon set. */
+export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
 
 type PluginFieldDoc = {
   description: string

@@ -6,7 +6,7 @@ import {
   refuse,
   type AgentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type AgentSessionReplayOutcomeDecision<TValue> =
   | { decision: 'replay'; value: TValue }

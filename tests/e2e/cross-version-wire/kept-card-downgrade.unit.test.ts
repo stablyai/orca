@@ -9,8 +9,8 @@ import type {
 } from '../../../src/shared/agent-session-journal-identity'
 import { claudeProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session/agent-session-message-source'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 

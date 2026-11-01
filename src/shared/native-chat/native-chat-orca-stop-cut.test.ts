@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../agent-session-failure'
-import { agentSessionFailureWords } from '../agent-session-failure-words'
+import { agentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../agent-session/failures/agent-session-failure-words'
 import { readAgentSessionOrcaStop } from '../agent-session-orca-stop'
 import { agentJournalItemKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'

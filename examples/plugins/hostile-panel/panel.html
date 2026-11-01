@@ -153,16 +153,22 @@
           'too_large'
         )
 
-        // Invalid, pong and binary floods must spend rate budget before parsing; the final valid call proves it.
+        // Floods must spend rate budget before parsing; the final valid call proves it. A srcdoc
+        // iframe can post raw invalid, pong and binary messages; an isolated guest (its own top
+        // window, no raw channel) can only flood through orca.host.call.
         setTimeout(function () {
           for (var i = 0; i < 40; i++) {
-            var payload =
-              i % 3 === 0
-                ? { orca: 1, kind: 'evt', event: 'pong', payload: i }
-                : i % 3 === 1
-                  ? { type: 'invalid-hostile-message', sequence: i }
-                  : new Uint8Array(2048)
-            window.parent.postMessage(payload, '*')
+            if (window.parent !== window) {
+              var payload =
+                i % 3 === 0
+                  ? { orca: 1, kind: 'evt', event: 'pong', payload: i }
+                  : i % 3 === 1
+                    ? { type: 'invalid-hostile-message', sequence: i }
+                    : new Uint8Array(2048)
+              window.parent.postMessage(payload, '*')
+            } else {
+              window.orca.host.call('invalid.hostileFlood', { sequence: i }).catch(function () {})
+            }
           }
           expectRefusal(
             'message-flood',

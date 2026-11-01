@@ -11,8 +11,8 @@ import {
 import {
   agentSessionFailureFact,
   readProviderRetry
-} from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
+} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {

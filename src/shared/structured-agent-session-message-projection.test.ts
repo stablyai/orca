@@ -19,8 +19,8 @@ import {
   DISPATCH_REJECTED_WRITE_FAILED
 } from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { withNativeChatCutTurnNotices } from './native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionFailureFact } from './agent-session-failure'
-import { agentSessionFailureWords } from './agent-session-failure-words'
+import { agentSessionFailureFact } from './agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from './agent-session/failures/agent-session-failure-words'
 
 const KEPT_ID = 'client-kept'
 

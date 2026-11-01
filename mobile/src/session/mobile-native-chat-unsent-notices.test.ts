@@ -3,13 +3,13 @@ import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../src/shared/structured-agent-session-start-failure-row-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../src/shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 

@@ -5,8 +5,10 @@ import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
-import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
+import {
+  type AgentLaunchResult,
+  withoutReservedAgentCreateFields
+} from '../../shared/agent-launch-intent'
 import {
   combineLaunchWarnings,
   ignoredStructuredLaunchInputsWarning
@@ -20,7 +22,7 @@ import {
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,

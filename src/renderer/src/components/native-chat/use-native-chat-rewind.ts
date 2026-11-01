@@ -10,7 +10,7 @@ import {
   type AgentSessionRewindSupport
 } from '../../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import {
   nativeChatRewindPendingCopy,

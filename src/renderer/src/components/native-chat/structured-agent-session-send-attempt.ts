@@ -11,8 +11,8 @@ import {
   AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS,
   agentSessionWriteNoticeParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 import {
@@ -28,7 +28,7 @@ import {
   agentSessionThrownFailure,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 

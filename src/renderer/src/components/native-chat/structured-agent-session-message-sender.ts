@@ -6,8 +6,8 @@ import type { StructuredAgentSessionFirstMessage } from '../../../../shared/stru
 import {
   agentSessionUnconfirmedSendParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   structuredAgentSessionReadCoversSend,
   structuredAgentSessionSettledSends

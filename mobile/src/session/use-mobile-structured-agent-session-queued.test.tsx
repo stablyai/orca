@@ -11,16 +11,19 @@ import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
-import type * as AgentSessionVisibleFailures from '../../../src/shared/agent-session-visible-failures'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 
-vi.mock('../../../src/shared/agent-session-visible-failures', async (importOriginal) => {
-  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
-  return {
-    ...original,
-    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+vi.mock(
+  '../../../src/shared/agent-session/failures/agent-session-visible-failures',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+    return {
+      ...original,
+      agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+    }
   }
-})
+)
 import {
   CAPABLE,
   LEGACY,

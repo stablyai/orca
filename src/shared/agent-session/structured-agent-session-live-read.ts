@@ -5,9 +5,9 @@ import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
-} from '../structured-agent-session-read-refusal'
-import type { AgentSessionRefusalReference } from '../agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../agent-session-write-failure'
+} from './failures/structured-agent-session-read-refusal'
+import type { AgentSessionRefusalReference } from './failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from './failures/agent-session-write-failure'
 import { createAgentSessionCurrentRequestsReader } from './requests/agent-session-current-requests-reader'
 import type {
   AgentSessionCurrentRequestsPiece,

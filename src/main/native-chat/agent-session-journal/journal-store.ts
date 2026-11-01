@@ -2,7 +2,7 @@ import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import { JournalWriteProjection } from './journal-write-projection'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
 import { createJournalPublicReader } from './journal-public-read'

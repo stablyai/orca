@@ -5,7 +5,10 @@ import { seededPermissionMode } from '../../../../shared/native-chat/input/nativ
 
 import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
-import { refuse, AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import {
+  refuse,
+  AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,

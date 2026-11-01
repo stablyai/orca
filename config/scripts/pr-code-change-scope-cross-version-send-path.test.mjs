@@ -4,7 +4,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 // Route code the suite executes; dispatcher registration alone is not coverage (#24901 missed send-path changes).
 describe('cross-version wire routing for the send path', () => {
   it.each([
-    'src/shared/agent-session-wire-refusals.ts',
+    'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
     'src/shared/structured-agent-session-mutation.ts',
     'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
     'src/main/runtime/rpc/core.ts',

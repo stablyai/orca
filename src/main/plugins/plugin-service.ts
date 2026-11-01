@@ -21,10 +21,11 @@ import {
 import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
+import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import {
-  bindPluginHostServices,
-  type PluginRuntimeDelegate
-} from './workers/plugin-host-service-bindings'
+  resolvePluginServiceHostCallPolicy,
+  type PluginHostCaller
+} from './plugin-service-host-call'
 import { PluginPanelController } from './panels/plugin-panel-controller'
 import { PluginWorkerController } from './workers/plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
@@ -78,8 +79,8 @@ export class PluginService {
     this.panels = new PluginPanelController({
       resolveApprovedPlugin: resolveApproved,
       contentVerifier: this.contentVerifier,
-      executeHostCall: (pluginKey, method, params, surface) =>
-        this.executeHostCall(pluginKey, method, params, surface),
+      executeHostCall: (pluginKey, method, params, surface, caller) =>
+        this.executeHostCall(pluginKey, method, params, surface, caller),
       log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
     })
     this.workerController = new PluginWorkerController({
@@ -236,34 +237,34 @@ export class PluginService {
     )
   }
 
-  /** Null uniformly denies unapproved plugins without exposing why. */
+  /** Null uniformly denies unapproved or departing plugins without exposing why. */
   getGrantedCapabilities(pluginKey: string): PluginCapabilityKind[] | null {
-    const plugin = this.findValidPlugin(pluginKey)
-    return plugin && this.isRuntimeApproved(plugin)
-      ? capabilityKinds(plugin.manifest.capabilities)
-      : null
+    const plugin = this.findApprovedPlugin(pluginKey)
+    return plugin ? capabilityKinds(plugin.manifest.capabilities) : null
   }
 
   async executeHostCall(
     pluginKey: string,
     method: string,
     params: unknown,
-    surface: PluginSurface
+    surface: PluginSurface,
+    caller?: PluginHostCaller
   ): Promise<PluginHostCallOutcome> {
     return executePluginHostCallRequest({
       pluginKey,
       request: { method, params },
       surface,
-      resolvePolicy: (boundPluginKey) => ({
-        grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
-        services: this.runtimeDelegate
-          ? bindPluginHostServices({
-              delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath)
-            })
-          : null,
-        audit: this.audit
-      })
+      resolvePolicy: (boundPluginKey) =>
+        resolvePluginServiceHostCallPolicy({
+          pluginKey: boundPluginKey,
+          caller,
+          findApprovedPlugin: (key, allowRefreshPause) =>
+            this.findApprovedPlugin(key, allowRefreshPause),
+          runtimeDelegate: this.runtimeDelegate,
+          pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
+          desktop: this.options.getDesktopFrameServices?.(),
+          audit: this.audit
+        })
     })
   }
 

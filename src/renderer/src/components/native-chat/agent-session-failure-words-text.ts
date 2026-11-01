@@ -6,7 +6,7 @@ import {
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
 import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'

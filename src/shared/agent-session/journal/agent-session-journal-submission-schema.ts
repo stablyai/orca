@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import { AgentJournalAnsweredTurnSchema } from '../../agent-session-answered-turn-schema'
-import { AgentSessionFailureFactSchema } from '../../agent-session-failure-fact-schema'
+import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { AgentSessionExecutionOptionsSchema } from '../options/agent-session-execution-options'
 

@@ -10,7 +10,7 @@ import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE
 } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { ClaudeControlRequestError } from './claude-agent-sdk-control-requests'
 import { claudeDispatchRejection } from './claude-structured-dispatch-content'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
