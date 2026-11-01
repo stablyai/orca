@@ -34,22 +34,6 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function textNode(text: string): JiraAdfRecord {
-  return text ? { type: 'text', text } : { type: 'hardBreak' }
-}
-
-export function textToAdf(text: string): JiraAdfRecord {
-  const lines = text.split(/\r?\n/)
-  return {
-    type: 'doc',
-    version: 1,
-    content: lines.map((line) => ({
-      type: 'paragraph',
-      content: line ? [textNode(line)] : []
-    }))
-  }
-}
-
 function positiveInteger(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
@@ -216,7 +200,13 @@ function renderList(
 
 function renderCodeBlock(record: JiraAdfRecord, options?: AdfToMarkdownOptions): MarkdownBlock {
   const text = renderInline(record.content, options).replace(/\n$/, '')
-  return { kind: 'block', text: ['```', text, '```'].join('\n') }
+  const language = asString(asRecord(record.attrs).language)
+  // Keep the language so Markdown edits can write the same code block back.
+  const info = /^[\w#+.-]+$/.test(language) ? language : ''
+  // A fence longer than any backtick run in the code keeps a ``` line from closing it.
+  const longestRun = (text.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0)
+  const fence = '`'.repeat(Math.max(3, longestRun + 1))
+  return { kind: 'block', text: [`${fence}${info}`, text, fence].join('\n') }
 }
 
 function renderBlockquote(record: JiraAdfRecord, options?: AdfToMarkdownOptions): MarkdownBlock {

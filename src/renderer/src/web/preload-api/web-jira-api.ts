@@ -71,6 +71,7 @@ export function createWebJiraApi(): PreloadApi['jira'] {
       jiraCall('searchUsers', { query, siteId }),
     searchUsers: (args) => jiraCall('searchUsers', args),
     listTransitions: (args) => jiraCall('listTransitions', args),
+    getIssueEditFields: (args) => jiraCall('getIssueEditFields', args),
     getProjectStatusOrder: (args) => jiraCall('getProjectStatusOrder', args)
   }
 }

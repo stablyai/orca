@@ -2,6 +2,7 @@ import type {
   JiraComment,
   JiraConnectionStatus,
   JiraCreateField,
+  JiraEditField,
   JiraIssue,
   JiraIssueFilter,
   JiraIssueType,
@@ -10,6 +11,7 @@ import type {
   JiraTransition,
   JiraUser
 } from '../../shared/jira/jira-types'
+import { JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY } from '../../shared/jira/jira-detail-capabilities'
 import { isResolvedJiraIssueMatch, parseJiraIssueUrl } from '../../shared/jira/jira-issue-url'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
@@ -20,6 +22,7 @@ import {
 import { printResult } from '../format'
 import {
   formatJiraCommentList,
+  formatJiraEditFieldList,
   formatJiraIssue,
   formatJiraIssueList,
   formatJiraIssueTypeList,
@@ -155,6 +158,18 @@ export const JIRA_HANDLERS: Record<string, CommandHandler> = {
           )
           .join('\n') || 'No create fields.'
     )
+  },
+  'jira field list': async (context) => {
+    const target = await resolveJiraTarget(context, getRequiredStringFlag(context.flags, 'key'), {
+      capability: JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY
+    })
+    const response = await context.client.call<JiraEditField[]>('jira.getIssueEditFields', {
+      key: target.key,
+      siteId: target.siteId,
+      strict: true,
+      includeRaw: true
+    })
+    printResult(response, context.json, formatJiraEditFieldList)
   },
   'jira comment list': async (context) => {
     const target = await issueTarget(context)
