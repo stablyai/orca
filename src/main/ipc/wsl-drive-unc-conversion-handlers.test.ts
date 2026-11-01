@@ -24,9 +24,12 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
 }))
 
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
+import { noteWslHostsLivePolicyBlock, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
 
 const invoke = (channel: string, request?: unknown) => handlers.get(channel)?.({}, request)
 const originalPlatform = process.platform
+
+const settings: { experimentalWslHosts?: boolean } = {}
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
@@ -37,10 +40,12 @@ beforeEach(() => {
   setPlatform('win32')
   conversion.startWslDriveUncConversion.mockClear()
   startup.lastWslDriveUncConversionOutcomes.mockClear()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The run is mocked; the handler only builds deps from these.
-  registerWslDriveUncConversionHandlers({} as never, {} as never)
+  settings.experimentalWslHosts = true
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The run is mocked; the handler only builds deps from these and reads the setting.
+  registerWslDriveUncConversionHandlers({ getSettings: () => settings } as never, {} as never)
 })
 afterEach(() => {
+  resetWslHostsGateForTests()
   vi.unstubAllEnvs()
   setPlatform(originalPlatform)
 })
@@ -54,6 +59,21 @@ describe('WSL drive UNC conversion IPC', () => {
     expect(await invoke('wslDriveUnc:lastOutcomes')).toEqual([])
     expect(conversion.startWslDriveUncConversion).not.toHaveBeenCalled()
     expect(startup.lastWslDriveUncConversionOutcomes).not.toHaveBeenCalled()
+  })
+
+  // Opt-in: the setting off, or a block learned this run, stops a conversion before it starts.
+  it.each([
+    ['the WSL hosts setting is off', () => (settings.experimentalWslHosts = false)],
+    ['a live policy block landed', () => noteWslHostsLivePolicyBlock()]
+  ])("refuses a conversion when %s, but still reports startup's outcomes", async (_case, stop) => {
+    stop()
+    await expect(
+      invoke('wslDriveUnc:convert', { distro: 'Ubuntu', repoIds: ['repo-a'] })
+    ).rejects.toThrow('wsl_drive_unc_unavailable')
+    expect(conversion.startWslDriveUncConversion).not.toHaveBeenCalled()
+    expect(await invoke('wslDriveUnc:lastOutcomes')).toEqual([
+      { migrationId: 'conv-1', outcome: 'converted' }
+    ])
   })
 
   it("refuses a conversion off Windows, but still reports startup's outcomes", async () => {

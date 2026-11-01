@@ -5,8 +5,8 @@ import {
   isSubagentGroupBlock,
   type NativeChatMessage,
   type NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
-import type { NativeChatSubagentRow } from '../../../../shared/native-chat-transcript-projection'
+} from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import { compareMessages } from './native-chat-session-assembler'
 

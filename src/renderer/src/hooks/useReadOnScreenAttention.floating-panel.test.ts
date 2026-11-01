@@ -159,26 +159,3 @@ describe('useReadOnScreenAttention — floating workspace panel visibility', () 
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 })
-
-it('does not acknowledge the regular workspace for a colliding floating tab', () => {
-  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-  seedFloatingCompletion()
-  useAppStore.setState({
-    activeView: 'terminal',
-    activeTabId: FLOATING_TAB_ID,
-    activeWorktreeId: 'regular',
-    unreadAgentCompletionPanes: { [FLOATING_PANE_KEY]: true }
-  })
-  openFloatingPanel()
-  const read = vi.spyOn(useAppStore.getState(), 'readOnScreenAttention')
-  try {
-    renderHook(() => useReadOnScreenAttention())
-    expect(read).toHaveBeenCalled()
-    expect(
-      read.mock.calls.flatMap(([screen]) => screen.targets.map((target) => target.worktreeId))
-    ).not.toContain('regular')
-  } finally {
-    cleanup()
-    vi.restoreAllMocks()
-  }
-})

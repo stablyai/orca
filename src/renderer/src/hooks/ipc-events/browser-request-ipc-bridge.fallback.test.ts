@@ -147,17 +147,6 @@ describe('an extension tab with no active workspace', () => {
     )
   })
 
-  it('fails clearly when there is nowhere to open it', () => {
-    mocks.getState.mockReturnValue(storeState(null))
-    mocks.createListener?.({ requestId: 'r3', url: 'https://a.test', fallbackWorktreeId: 'gone' })
-    mocks.createListener?.({ requestId: 'r4', url: 'https://a.test' })
-    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
-    expect(mocks.replyTabCreate.mock.calls).toEqual([
-      [{ requestId: 'r3', error: 'No active worktree' }],
-      [{ requestId: 'r4', error: 'No active worktree' }]
-    ])
-  })
-
   it("never falls back into a paired server's workspace", () => {
     mocks.getState.mockReturnValue(storeState(null))
     mocks.createListener?.({

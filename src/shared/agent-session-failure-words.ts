@@ -26,7 +26,7 @@ import { commandRefusedByReason } from './agent-session-command-refusal-words'
 import { agent, attachmentProblemSentence } from './agent-session-attachment-failure-words'
 import { joinSentences } from './sentence-joining'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
-import { requestTimeoutSeconds } from './agent-session-request-timeout'
+import { requestTimeoutSeconds } from './agent-session/agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,

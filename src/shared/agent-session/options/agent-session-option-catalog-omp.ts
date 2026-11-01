@@ -1,0 +1,32 @@
+import { agentChoiceCliApply } from '../../agent-choice-cli-apply'
+import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
+import { parseOmpModelList } from '../../omp-model-list-probe'
+
+/** Private enrichment-gate parser with option-free rows; actual probes parse through agent-model-probe-spec.ts. */
+function parseOmpCatalogModels(stdout: string): CatalogModel[] {
+  return parseOmpModelList(stdout).map((model) => ({ ...model, options: [] }))
+}
+
+export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
+  // OMP models depend on configured provider keys; unknown /model IDs fail. Seed none, discover picker rows, and retain the hook-reported current model.
+  models: [],
+  modelApply: {
+    ...agentChoiceCliApply(
+      'omp',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
+    // OMP only opens its TUI picker for /model; our extension applies the exact selector.
+    midSession: { kind: 'command', build: (value) => `/orca-model ${String(value)}` }
+  },
+  // Saved model IDs remain launch selections even when discovery no longer lists them.
+  discoveredModelsAreAuthoritative: true,
+  listModels: { command: 'omp models --json', parse: parseOmpCatalogModels }
+}

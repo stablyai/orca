@@ -1,4 +1,4 @@
-import { agentArgOptionTokens } from './agent-session-option-agent-args'
+import { agentArgOptionTokens } from './agent-session/options/agent-session-option-agent-args'
 
 /** Matches an exact token, the `flag=value` form, and clustered single-dash flags (`-mopus`). */
 export function hasFlag(tokens: readonly string[], flags: readonly string[]): boolean {

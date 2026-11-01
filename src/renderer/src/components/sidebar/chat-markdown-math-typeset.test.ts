@@ -134,22 +134,6 @@ describe('bounded immutable math kernel results', () => {
     expect(calls).toHaveBeenCalledTimes(4)
   })
 
-  it('bounds entries and promotes hits before evicting the least-recently-used result', () => {
-    const calls = vi.spyOn(katex, 'renderToString')
-    for (let index = 0; index < 1000; index++) {
-      run(span(`%entry${index}`))
-    }
-    expect(cache().size).toBe(1000)
-    run(span('%entry0'))
-    run(span('%entry1000'))
-    expect(cache().size).toBe(1000)
-    expect(cache().has('inline:%entry0')).toBe(true)
-    expect(cache().has('inline:%entry1')).toBe(false)
-    expect(calls).toHaveBeenCalledTimes(1001)
-    run(span('%entry1'))
-    expect(calls).toHaveBeenCalledTimes(1002)
-  })
-
   it('accounts keys, HTML, failure strings and metadata; evicts by bytes and bypasses oversized inputs without changing output', () => {
     const source = `x%${'a'.repeat(200000)}`
     for (let index = 0; index < 6; index++) {

@@ -1,17 +1,10 @@
 import { protocol } from 'electron'
 import {
-  PLUGIN_IMAGE_MIME,
-  readPluginImageHeader
-} from '../../shared/plugins/images/plugin-image-format'
-import {
-  PLUGIN_IMAGE_RULES,
-  pluginImageRuleError
-} from '../../shared/plugins/images/plugin-image-fields'
-import {
   PLUGIN_IMAGE_SCHEME,
   parsePluginImageUrl
 } from '../../shared/plugins/images/plugin-image-url'
-import { readContainedPluginArtifactBytes } from './plugin-artifact-validation'
+import { pluginThemeBackgroundPath } from './contributions/plugin-theme-background-image'
+import { readCheckedPluginImage, type CheckedPluginImage } from './plugin-image-read'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
@@ -21,31 +14,25 @@ export type PluginImageProtocolDependencies = {
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
 }
 
-type ServedImage = { bytes: Buffer; mimeType: string }
-
-/** An installed plugin's declared image, re-checked on every read like at install. */
+/** An installed plugin's declared image or theme background, re-checked on every read like at install. */
 async function readInstalledImage(
   plugin: ValidDiscoveredPlugin,
   contentHash: string,
   slot: string
-): Promise<ServedImage | null> {
+): Promise<CheckedPluginImage | null> {
   if (contentHash !== (plugin.isDev ? 'dev' : plugin.contentHash)) {
     return null
   }
-  const image = declaredPluginImages(plugin.manifest).find((candidate) => candidate.slot === slot)
-  if (!image) {
-    return null
-  }
-  const bytes = await readContainedPluginArtifactBytes(
-    plugin.rootDir,
-    image.path,
-    PLUGIN_IMAGE_RULES[image.kind].maxBytes
+  const declared = declaredPluginImages(plugin.manifest).find(
+    (candidate) => candidate.slot === slot
   )
-  const info = readPluginImageHeader(bytes)
-  if (typeof info === 'string' || pluginImageRuleError(image.kind, info, bytes.byteLength)) {
-    return null
+  if (declared) {
+    return readCheckedPluginImage(plugin.rootDir, declared.kind, declared.path)
   }
-  return { bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] }
+  const themeBackground = await pluginThemeBackgroundPath(plugin, slot)
+  return themeBackground
+    ? readCheckedPluginImage(plugin.rootDir, 'theme-background', themeBackground)
+    : null
 }
 
 export function createPluginImageRequestHandler(
@@ -57,7 +44,7 @@ export function createPluginImageRequestHandler(
     }
     const reference = parsePluginImageUrl(request.url)
     try {
-      let image: ServedImage | null = null
+      let image: CheckedPluginImage | null = null
       if (reference?.kind === 'sha') {
         image = await dependencies.cache.get(reference.sha256)
       } else if (reference?.kind === 'installed') {
@@ -73,8 +60,11 @@ export function createPluginImageRequestHandler(
         headers: {
           'Content-Type': image.mimeType,
           'Content-Length': String(image.bytes.byteLength),
-          // Why immutable is safe: every URL names exact bytes (a hash or an install hash).
-          'Cache-Control': 'private, max-age=31536000, immutable',
+          // Why immutable is safe: a hash or install hash names exact bytes; dev trees change in place.
+          'Cache-Control':
+            reference?.kind === 'installed' && reference.contentHash === 'dev'
+              ? 'no-store'
+              : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff'
         }
       })

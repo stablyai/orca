@@ -13,7 +13,7 @@ import {
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from './agent-session-argument-problem'
+} from './agent-session/agent-session-argument-problem'
 import { isAgentJournalResolution } from './agent-session-journal-schemas'
 import { AGENT_SESSION_REWIND_REASONS, type AgentSessionRewindReason } from './agent-session-rewind'
 import type { TuiAgent } from './tui-agent'

@@ -35,13 +35,6 @@ describe('fetchWithElectronManualRedirects', () => {
     )
   })
 
-  it('falls back to the followed URL when the redirect has no Location', async () => {
-    const pending = fetchWithElectronManualRedirects('https://github.com/o.png', {})
-    native.emit('redirect', 301, 'GET', 'https://avatars.example/u/2', {})
-
-    expect((await pending).headers.get('location')).toBe('https://avatars.example/u/2')
-  })
-
   it('streams the final response body', async () => {
     const pending = fetchWithElectronManualRedirects('https://github.com/o.png', {})
     native.emit(

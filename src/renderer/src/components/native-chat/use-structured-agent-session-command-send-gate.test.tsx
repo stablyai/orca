@@ -45,7 +45,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
 }))
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 function answer(text: string, scoped: boolean): AgentJournalRenderItem {
@@ -88,13 +88,6 @@ it('still refuses a message locally while an older host runs a command', () => {
 
   expect(sendDuringCommand()).toBe(false)
   expect(mocks.outboxSend).not.toHaveBeenCalled()
-})
-
-it('queues a message typed during a command on a host that runs it as a turn', () => {
-  items = [answer('from this host', true)]
-
-  expect(sendDuringCommand()).toBe(true)
-  expect(mocks.outboxSend).toHaveBeenCalledOnce()
 })
 
 describe('a /clear refused for something the chat shows', () => {

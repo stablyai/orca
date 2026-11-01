@@ -59,8 +59,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
-  const terminalBackground =
-    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+  const terminalBackground = effectiveAppearance?.theme?.background
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity

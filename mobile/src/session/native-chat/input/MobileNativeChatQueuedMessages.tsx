@@ -33,6 +33,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   pause?: AgentSessionQueuePause | null
   onResume?: () => Promise<boolean>
   steerHeld?: boolean
+  /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
+  agentWorking?: boolean
 }
 
 export function MobileNativeChatQueuedMessages({
@@ -45,7 +47,8 @@ export function MobileNativeChatQueuedMessages({
   onMove,
   pause,
   onResume,
-  steerHeld = false
+  steerHeld = false,
+  agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -199,6 +202,7 @@ export function MobileNativeChatQueuedMessages({
                   busy={busyIds.has(card.messageId)}
                   editBlocked={busyIds.has(card.messageId) || editor !== undefined || !onEdit}
                   steerHeld={steerHeld}
+                  agentWorking={agentWorking}
                   onSend={() => void run(card.messageId, onSend)}
                   onDelete={() => void run(card.messageId, onDelete)}
                   onMore={() => setMenuFor(card.messageId)}

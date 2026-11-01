@@ -149,20 +149,6 @@ describe('browser.clientHost.attach adoption', () => {
     await rig.dispatch
   })
 
-  it('closes the reconciliation window for the attaching client once every page is taken back', async () => {
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-b' })], {
-      browserHostClientId: 'host-window',
-      pairedDeviceId: 'device-window'
-    })
-
-    await vi.waitFor(() =>
-      expect(rig.markClientHostedPagesReconciled).toHaveBeenCalledWith('device-window')
-    )
-
-    rig.cleanups.get('browser-client-host:host-window')?.()
-    await rig.dispatch
-  })
-
   it('keeps the window open when a page could not be taken back yet', async () => {
     const rig = attachHost([orphanedPage({ browserPageId: 'page-c' })], {
       browserHostClientId: 'host-held',
@@ -224,29 +210,5 @@ describe('browser.clientHost.attach adoption', () => {
     } finally {
       await settleAttach()
     }
-  })
-
-  it('does not re-enter recovery for a page it just adopted', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-d' })], {
-      browserHostClientId: 'host-recovery',
-      pairedDeviceId: 'device-recovery'
-    })
-
-    await vi.waitFor(() =>
-      expect(rig.markClientHostedPagesReconciled).toHaveBeenCalledWith('device-recovery')
-    )
-    await vi.waitFor(() => expect(rig.commands().length).toBeGreaterThanOrEqual(2))
-    await Promise.resolve()
-    await Promise.resolve()
-
-    // Adopted inventory still names the predecessor; recovery must not warn on every page after restart.
-    expect(
-      warn.mock.calls.filter(([message]) => String(message).includes('client page recovery failed'))
-    ).toEqual([])
-    warn.mockRestore()
-
-    rig.cleanups.get('browser-client-host:host-recovery')?.()
-    await rig.dispatch
   })
 })

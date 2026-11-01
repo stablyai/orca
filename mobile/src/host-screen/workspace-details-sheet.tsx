@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import {
   CalendarClock,
   CircleDot,
@@ -15,7 +15,13 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
-import { ListGroup } from '../components/list/ListGroup'
+import {
+  LIST_LEADING_INSET,
+  LIST_LEADING_SLOT,
+  LIST_ROW_PADDING,
+  ListGroup,
+  ListRow
+} from '../components/list/ListGroup'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
 import { getWorktreeGitIdentityDisplay } from '../../../src/shared/worktree/git-identity-display'
 import {
@@ -69,11 +75,15 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
   ))
   if (notes) {
     rows.push(
-      <DetailRow key="notes" icon={<StickyNote size={ICON_SIZE} color={colors.textSecondary} />}>
+      // Notes wrap and stay selectable, which a ListRow title cannot; laid out on the same grid.
+      <View key="notes" style={styles.notesRow}>
+        <View style={styles.notesIcon}>
+          <StickyNote size={ICON_SIZE} color={colors.textSecondary} />
+        </View>
         <Text style={styles.notes} selectable>
           {notes}
         </Text>
-      </DetailRow>
+      </View>
     )
   }
   return (
@@ -98,7 +108,9 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
       </View>
       {rows.length > 0 && (
         <View testID="workspace-details">
-          <ListGroup style={styles.group}>{rows}</ListGroup>
+          <ListGroup style={styles.group} separatorInset={LIST_LEADING_INSET}>
+            {rows}
+          </ListGroup>
         </View>
       )}
     </>
@@ -118,36 +130,6 @@ function originLabel(origin: WorkspaceOrigin, t: Translate): string {
         }
       )
     : t('hostScreen.workspaceDetailsSheet.createdByAutomation', 'Created by automation')
-}
-
-function DetailRow(props: {
-  icon: ReactNode
-  children: ReactNode
-  trailing?: ReactNode
-  onPress?: () => void
-  accessibilityLabel?: string
-}) {
-  useMobileColorScheme()
-  const body = (
-    <>
-      <View style={styles.icon}>{props.icon}</View>
-      <View style={styles.text}>{props.children}</View>
-      {props.trailing}
-    </>
-  )
-  if (!props.onPress) {
-    return <View style={styles.row}>{body}</View>
-  }
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={props.onPress}
-      accessibilityRole="link"
-      accessibilityLabel={props.accessibilityLabel}
-    >
-      {body}
-    </Pressable>
-  )
 }
 
 function ReviewIcon({ item }: { item: WorkspaceDetailLink }) {
@@ -199,35 +181,33 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   const url = item.url
   const meta = linkMeta(item, t)
   return (
-    <DetailRow
-      icon={<LinkIcon item={item} />}
+    <ListRow
+      title={item.title ?? item.label}
+      subtitle={meta || undefined}
+      leading={<LinkIcon item={item} />}
+      accessory={url ? <ExternalLink size={14} color={colors.textMuted} /> : undefined}
       onPress={url ? () => onOpen(url) : undefined}
+      accessibilityRole={url ? 'link' : undefined}
       accessibilityLabel={
-        item.title
-          ? t('hostScreen.workspaceDetailsSheet.openLinkWithTitle', 'Open {{label}}, {{title}}', {
-              label: item.label,
-              title: item.title
-            })
-          : t('hostScreen.workspaceDetailsSheet.openLink', 'Open {{label}}', { label: item.label })
+        !url
+          ? undefined
+          : item.title
+            ? t('hostScreen.workspaceDetailsSheet.openLinkWithTitle', 'Open {{label}}, {{title}}', {
+                label: item.label,
+                title: item.title
+              })
+            : t('hostScreen.workspaceDetailsSheet.openLink', 'Open {{label}}', {
+                label: item.label
+              })
       }
-      trailing={url ? <ExternalLink size={14} color={colors.textMuted} /> : undefined}
-    >
-      <Text style={styles.title} numberOfLines={1}>
-        {item.title ?? item.label}
-      </Text>
-      {meta ? (
-        <Text style={styles.meta} numberOfLines={1}>
-          {meta}
-        </Text>
-      ) : null}
-    </DetailRow>
+    />
   )
 }
 
 const styles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.md - 2
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingBottom: spacing.sm
   },
   heading: {
     fontSize: 16,
@@ -236,15 +216,15 @@ const styles = themedStyleSheet(() => ({
   },
   branch: {
     marginTop: 1,
-    fontSize: 11.5,
+    fontSize: typography.metaSize,
     fontFamily: typography.monoFamily,
     color: colors.textMuted
   },
   origin: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
-    marginTop: 3
+    gap: spacing.xs,
+    marginTop: spacing.xs
   },
   originIcon: {
     marginTop: 2
@@ -258,37 +238,20 @@ const styles = themedStyleSheet(() => ({
   group: {
     marginBottom: spacing.md
   },
-  row: {
+  notesRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md
+  },
+  notesIcon: {
+    width: LIST_LEADING_SLOT,
     alignItems: 'center',
-    gap: spacing.sm + 2,
-    minHeight: 46,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  icon: {
-    width: ICON_SIZE,
-    alignItems: 'center'
-  },
-  text: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    fontSize: typography.bodySize,
-    lineHeight: 19,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  meta: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
+    paddingTop: 1
   },
   notes: {
+    flex: 1,
     fontSize: 13,
     lineHeight: 18,
     color: colors.textSecondary

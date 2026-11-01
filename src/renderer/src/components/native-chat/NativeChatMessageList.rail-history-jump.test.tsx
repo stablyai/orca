@@ -30,7 +30,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { transcriptRowOffset, transcriptWindowTop } from './native-chat-window-test-layout'
