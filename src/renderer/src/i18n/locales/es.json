@@ -21143,8 +21143,7 @@
       "quitDuringMoveConfirm": "Salir de todos modos"
     },
     "startupWorktreeRefresh": {
-      "loading": "Buscando espacios de trabajo…",
-      "description": "Pueden aparecer más espacios de trabajo mientras se cargan los proyectos locales y remotos."
+      "loading": "Buscando espacios de trabajo…"
     },
     "createProject": {
       "errors": {

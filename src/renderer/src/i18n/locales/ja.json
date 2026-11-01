@@ -20216,8 +20216,7 @@
       "quitDuringMoveConfirm": "終了する"
     },
     "startupWorktreeRefresh": {
-      "loading": "ワークスペースを検出中…",
-      "description": "ローカルおよびリモートのプロジェクトを読み込む間に、さらにワークスペースが表示されることがあります。"
+      "loading": "ワークスペースを検出中…"
     },
     "createProject": {
       "errors": {
