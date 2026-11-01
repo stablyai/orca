@@ -165,10 +165,11 @@ export function notifyScope(scopeKey: string): void {
 }
 
 /** Setup options are authored input: the first change retains the setup, notifying its draft listeners. */
-export function writeLaunchSetupOptions(scope: string, draft: AgentPickerDraft): void {
+export function writeLaunchSetupOptions(scope: string, draft: AgentPickerDraft, slot = ''): void {
   const setup = retainLaunchDraftSource(scope)
   if (setup) {
-    setup.options = draft
+    setup.options ??= new Map()
+    setup.options.set(slot, draft)
     notifyScope(scope)
   }
 }

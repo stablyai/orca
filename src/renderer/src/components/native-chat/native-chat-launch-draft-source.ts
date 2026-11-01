@@ -13,7 +13,8 @@ export type LaunchDraftSource = NativeChatComposerDraftOwner & {
   scopeKey: string
   agent: string
   origin: string
-  options?: AgentPickerDraft
+  /** Authored options per slot: the plain row's empty slot, or a search preset's own. */
+  options?: Map<string, AgentPickerDraft>
   references: Map<string, string>
   handles: Map<string, SetupHandle>
 }
@@ -190,7 +191,12 @@ export function relocateLaunchDraftSource(
   const key = scopeOf(owner, source.agent)
   const target = setups.get(key) ?? source
   if (target !== source) {
-    target.options ??= source.options
+    for (const [slot, draft] of source.options ?? []) {
+      target.options ??= new Map()
+      if (!target.options.has(slot)) {
+        target.options.set(slot, draft)
+      }
+    }
     for (const [scope, reference] of source.references) {
       if (!target.references.has(scope)) {
         target.references.set(scope, reference)
@@ -224,8 +230,8 @@ export function captureLaunchDraftDestination(
     active: true
   }
 }
-export function readLaunchSetupOptions(scope: string): AgentPickerDraft | undefined {
-  return launchDraftSource(scope)?.options
+export function readLaunchSetupOptions(scope: string, slot = ''): AgentPickerDraft | undefined {
+  return launchDraftSource(scope)?.options?.get(slot)
 }
 export function clearLaunchDraftSourcesForTests(): void {
   handles.clear()

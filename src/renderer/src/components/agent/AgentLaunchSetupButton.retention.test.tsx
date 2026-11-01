@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, getByRole } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -220,5 +221,80 @@ describe('setup records exist only for authored setups', () => {
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
     expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+  })
+
+  it('keeps a search preset in its own options slot, saving only real changes, with one shared prompt', async () => {
+    const entry: AgentPickerEntry = {
+      ...row(0, 'claude'),
+      worktreeId: 'repo::/w',
+      arguments: '--add-dir docs',
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: ['opus', 'sonnet'].map((id) => ({
+          id,
+          label: id,
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }))
+      }
+    }
+    const preset = {
+      agent: 'claude' as const,
+      surface: 'terminal' as const,
+      choices: { model: 'opus', options: { effort: 'high' } }
+    }
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} />
+          <AgentLaunchSetupButton entry={entry} initial={preset} onUse={vi.fn()} />
+        </TooltipProvider>
+      )
+    )
+    const user = userEvent.setup()
+    const [plain, searched] = document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Configure claude"]'
+    )
+    const prompt = () =>
+      document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
+    const effort = (label: string) =>
+      getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+    const model = () => document.querySelector('[cmdk-item][data-current="true"]')?.textContent
+    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+
+    // Opening a preset saves nothing, and the plain row still shows defaults.
+    fireEvent.click(searched)
+    expect(model()).toBe('opus')
+    expect(effort('High')).toBe('on')
+    close()
+    expect(sourceCount()).toBe(0)
+    fireEvent.click(plain)
+    // Defaults: nothing chosen, so the agent keeps its own model.
+    expect(model()).toBeUndefined()
+    close()
+    expect(sourceCount()).toBe(0)
+
+    // A real change saves into that preset's slot only and survives close and reopen.
+    fireEvent.click(searched)
+    await user.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
+    expect(sourceCount()).toBe(1)
+    changePrompt(prompt(), 'review the diff')
+    close()
+    fireEvent.click(searched)
+    expect(model()).toBe('opus')
+    expect(effort('Low')).toBe('on')
+    close()
+
+    // The plain row keeps its own options but shares the workspace's typed prompt.
+    fireEvent.click(plain)
+    expect(model()).toBeUndefined()
+    expect(prompt().textContent).toBe('review the diff')
+    close()
+    expect(sourceCount()).toBe(1)
   })
 })

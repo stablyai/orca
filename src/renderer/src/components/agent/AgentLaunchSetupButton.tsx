@@ -73,7 +73,10 @@ export function AgentLaunchSetupButton({
       open ? subscribeToNativeChatComposerDraft(draftKey, listener) : () => {},
     [draftKey, open]
   )
-  const retained = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(draftKey))
+  // Each search preset keeps its own options slot, keyed by what the search parsed (never by
+  // defaults, which can change between renders); the plain row is the empty slot.
+  const slot = initial ? JSON.stringify(initial.choices) : ''
+  const retained = useSyncExternalStore(subscribe, () => readLaunchSetupOptions(draftKey, slot))
   const authored = retained ?? initial ?? agentPickerDraft(entry)
   const draft =
     authored.arguments === undefined ? authored : { ...authored, argumentsOwner: entry.ownerKey }
@@ -126,21 +129,6 @@ export function AgentLaunchSetupButton({
   }, [open])
   const changeOpen = (next: boolean) => {
     if (next) {
-      if (initial) {
-        const held = readLaunchSetupOptions(draftKey) ?? agentPickerDraft(entry)
-        writeLaunchSetupOptions(draftKey, {
-          ...held,
-          surface: initial.surface,
-          choices: {
-            ...held.choices,
-            ...initial.choices,
-            options: { ...held.choices.options, ...initial.choices.options }
-          },
-          ...(initial.arguments === undefined
-            ? {}
-            : { arguments: initial.arguments, argumentsOwner: entry.ownerKey })
-        })
-      }
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -204,11 +192,11 @@ export function AgentLaunchSetupButton({
       >
         <div className="min-h-0 overflow-y-auto scrollbar-sleek">
           <AgentLaunchSetupPanel
-            key={draftKey}
+            key={`${draftKey}${slot}`}
             entry={entry}
             value={draft}
             disabled={disabled}
-            onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft)}
+            onDraftChange={(draft) => writeLaunchSetupOptions(draftKey, draft, slot)}
             onUse={(draft) => {
               const accepted = onUse(draft)
               if (accepted !== false) {
