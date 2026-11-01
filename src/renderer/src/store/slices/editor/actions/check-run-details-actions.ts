@@ -16,7 +16,7 @@ import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details-reading-cache'
 import {
-  findCheckRunDetailsRequestTabId,
+  findCheckRequestTabId,
   findCheckRunDetailsOwner,
   getCheckRunDetailsOwnerScope,
   isSameCheckRunDetailsOwner,
@@ -30,6 +30,8 @@ export function createCheckRunDetailsActions(
   EditorSlice,
   'openCheckRunDetails' | 'patchOpenCheckRunDetails' | 'reloadOpenCheckRunDetailsTab'
 > {
+  // Restored numeric request IDs belong to a previous renderer lifetime.
+  const requests = new WeakSet<OpenCheckRunDetailsState>()
   const patchCheckRunDetailsTab = (
     id: string,
     contextKey: string,
@@ -88,6 +90,7 @@ export function createCheckRunDetailsActions(
     })
     if (accepted) {
       const { previous, next } = accepted
+      requests.add(next)
       reconcileCheckDetailsReadingCache(id, previous, next, () => {
         const live = get().openFiles.find((file) => file.id === id)
         return live?.mode === 'check-details' && live.checkRunDetails === next
@@ -198,6 +201,7 @@ export function createCheckRunDetailsActions(
       })
       if (accepted) {
         const { previous, next } = accepted
+        requests.add(next)
         reconcileCheckDetailsReadingCache(id, previous, next, () => {
           const live = get().openFiles.find((file) => file.id === id)
           return live?.mode === 'check-details' && live.checkRunDetails === next
@@ -211,7 +215,7 @@ export function createCheckRunDetailsActions(
       const live = get()
       // Why: a request's completion belongs to the tab it started on, even after the user selects a twin host.
       const id =
-        findCheckRunDetailsRequestTabId(live.openFiles, worktreeId, check, state.requestId) ??
+        findCheckRequestTabId(live.openFiles, worktreeId, check, state.requestId, requests) ??
         buildCheckRunDetailsTabId(
           worktreeId,
           check,

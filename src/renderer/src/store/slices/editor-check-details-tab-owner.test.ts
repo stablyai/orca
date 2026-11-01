@@ -266,6 +266,57 @@ describe('check-details tab owner', () => {
     })
   })
 
+  it.each(['repo:99', 'repo:100'])(
+    'ignores a restored twin request ID when the new request context is %s',
+    (contextKey) => {
+      const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
+      const localWorktree = makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })
+      const catalog = {
+        repos: [localRepo, pairedRepo],
+        worktreesByRepo: { 'repo-1': [localWorktree, pairedWorktree] }
+      }
+      const source = createOwnerStore({ ...catalog, activeWorkspaceExecutionHostId: 'local' })
+      const requestId = createCheckRunDetailsRequestId()
+      source.store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+        requestId,
+        details: null,
+        loading: false,
+        error: null
+      })
+      const restoredFiles = source.store.getState().openFiles.map((file) => ({
+        ...file,
+        checkRunDetails: file.checkRunDetails && { ...file.checkRunDetails }
+      }))
+      const { store } = createOwnerStore({
+        ...catalog,
+        openFiles: restoredFiles,
+        activeWorkspaceExecutionHostId: 'runtime:server'
+      })
+      store.getState().openCheckRunDetails('wt-1', contextKey, check, {
+        requestId,
+        details: null,
+        loading: true,
+        error: null
+      })
+      const targetId = store.getState().activeFileId
+      store.setState({ activeWorkspaceExecutionHostId: 'local' })
+      store.getState().patchOpenCheckRunDetails('wt-1', contextKey, check, {
+        requestId,
+        details,
+        loading: false,
+        error: null
+      })
+
+      expect(
+        store.getState().openFiles.find((file) => file.id === targetId)?.checkRunDetails
+      ).toMatchObject({ details, loading: false })
+      expect(
+        store.getState().openFiles.find((file) => file.id === restoredFiles[0].id)?.checkRunDetails
+          ?.details
+      ).toBeNull()
+    }
+  )
+
   it('delivers a sidebar request to its tab after the user selects the local twin', async () => {
     const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
     const localWorktree = makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })

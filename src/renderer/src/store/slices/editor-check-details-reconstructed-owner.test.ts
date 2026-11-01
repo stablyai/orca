@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
 import { createEditorTabsStore } from './editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
@@ -22,7 +23,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN).each(['local', 'ssh:builder'] as const)(
-  'refreshes a reconstructed %s check tab while its runtime twin is selected',
+  'refreshes reconstructed %s checks and isolates colliding requests from its runtime twin',
   async (hostId) => {
     const repo = {
       ...TEST_REPO,
@@ -65,7 +66,7 @@ it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN).each(['local', 'ssh:builder'] as const)(
         url: null,
         checkRunId: 42
       },
-      { details: null, loading: false, error: null }
+      { requestId: createCheckRunDetailsRequestId(), details: null, loading: false, error: null }
     )
     await sourceFrames.settle()
     const fileId = source.getState().openFiles[0]!.id
@@ -90,6 +91,32 @@ it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN).each(['local', 'ssh:builder'] as const)(
         fetchPRCheckDetails
       })
       expect(restored.getState().openFiles).toHaveLength(1)
+      const previous = restored.getState().openFiles[0]!.checkRunDetails!
+      restored.getState().openCheckRunDetails(workspace.id, previous.contextKey, previous.check, {
+        requestId: previous.requestId,
+        details: null,
+        loading: true,
+        error: null
+      })
+      expect(previous.requestId).toEqual(expect.any(Number))
+      const runtimeTabId = restored.getState().activeFileId
+      expect(runtimeTabId).not.toBe(fileId)
+      restored.setState({ activeWorkspaceExecutionHostId: hostId })
+      restored
+        .getState()
+        .patchOpenCheckRunDetails(workspace.id, previous.contextKey, previous.check, {
+          requestId: previous.requestId,
+          details: null,
+          loading: false,
+          error: 'Runtime request completed'
+        })
+      expect(
+        restored.getState().openFiles.find((file) => file.id === runtimeTabId)?.checkRunDetails
+      ).toMatchObject({ loading: false, error: 'Runtime request completed' })
+      expect(
+        restored.getState().openFiles.find((file) => file.id === fileId)?.checkRunDetails
+      ).toEqual(previous)
+
       fetchPRCheckDetails.mockClear()
       await restored.getState().reloadOpenCheckRunDetailsTab(fileId)
       expect(fetchPRCheckDetails).toHaveBeenCalledWith('/owner', expect.anything(), {

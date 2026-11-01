@@ -7,6 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
@@ -71,18 +72,20 @@ export function findWorktreeReviewOwner(
     executionHostId ??
       (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
   )
-  const selectedRepo = requestedHost
+  const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+  const repositoryHost = runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : requestedHost
+  const selectedRepo = repositoryHost
     ? findIndexedReviewRepository(
         state.repos,
         worktree.repoId,
-        requestedHost,
-        parseExecutionHostId(requestedHost)?.kind === 'runtime' &&
+        repositoryHost,
+        parseExecutionHostId(repositoryHost)?.kind === 'runtime' &&
           parseExecutionHostId(worktree.hostId)?.kind === 'ssh'
           ? worktree.hostId
           : undefined
       )
     : undefined
-  if (requestedHost && !selectedRepo) {
+  if (repositoryHost && !selectedRepo) {
     return null
   }
   const repo = resolveReviewRepository(state.repos, worktree, selectedRepo ?? undefined)

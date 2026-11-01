@@ -92,11 +92,12 @@ export function isSameCheckRunDetailsOwner(
 }
 
 /** The tab a sidebar request stamped when it started; the host selected at completion can differ. */
-export function findCheckRunDetailsRequestTabId(
+export function findCheckRequestTabId(
   openFiles: readonly OpenFile[],
   worktreeId: string,
   check: OpenCheckRunDetailsState['check'],
-  requestId: number | undefined
+  requestId: number | undefined,
+  liveRequests: WeakSet<OpenCheckRunDetailsState>
 ): string | null {
   if (requestId === undefined) {
     return null
@@ -107,6 +108,7 @@ export function findCheckRunDetailsRequestTabId(
       file.mode === 'check-details' &&
       file.worktreeId === worktreeId &&
       file.checkRunDetails?.requestId === requestId &&
+      liveRequests.has(file.checkRunDetails) &&
       getCheckRunTabIdentity(file.checkRunDetails.check) === identity
   )
   return tab?.id ?? null
