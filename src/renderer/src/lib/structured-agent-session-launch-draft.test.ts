@@ -6,8 +6,8 @@ import {
   composerDraft
 } from './structured-agent-session-launch.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
+import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 import {
   clearNativeChatComposerDraftsForTests,
   hydrateNativeChatComposerDrafts,
