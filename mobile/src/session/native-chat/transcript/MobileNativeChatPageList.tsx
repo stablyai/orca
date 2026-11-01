@@ -29,6 +29,7 @@ import {
   type MobileNativeChatScrollNode
 } from '../../mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
+import { useMobileNativeChatPreviousAlign } from './use-mobile-native-chat-previous-align'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
 import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
 import {
@@ -237,7 +238,12 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  useEffect(() => () => clearTimeout(settleTimer.current), [])
+  useEffect(
+    () => () => {
+      clearTimeout(settleTimer.current)
+    },
+    []
+  )
 
   const drawAndFetch = useCallback(
     (s: Scroller) => {
@@ -262,6 +268,20 @@ export function MobileNativeChatPageList({
     [isFollowing]
   )
 
+  const align = useMobileNativeChatPreviousAlign({
+    scroller,
+    write,
+    notePlace,
+    latest,
+    revealUndrawn: (index) => {
+      const { keys: drawnKeys, n, rowKeys: keysNow } = latest.current
+      const firstKey = drawnKeys[index]
+      if (firstKey !== undefined) {
+        setDrawn({ scope: keysNow.scope, firstKey, count: n - index })
+      }
+    }
+  })
+
   useImperativeHandle(
     ref,
     () => ({
@@ -276,9 +296,11 @@ export function MobileNativeChatPageList({
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
-      }
+      },
+      hasPreviousMessage: align.hasPreviousMessage,
+      revealPreviousMessage: align.revealPreviousMessage
     }),
-    [scroller, write]
+    [align.hasPreviousMessage, align.revealPreviousMessage, scroller, write]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)
@@ -288,7 +310,8 @@ export function MobileNativeChatPageList({
       return
     }
     // Chromium keeps a touch scroll's offset from the top, so rows drawn or cut above would carry the reader with them; a write hands the scroll the end-anchored offset.
-    if (keys[first] !== drawnHead.current) {
+    // Skip place restoration while a previous-message jump is easing, or it pulls back to the old line.
+    if (!align.aligning.current && keys[first] !== drawnHead.current) {
       drawnHead.current = keys[first]
       if (!resting() && !scrollWritesStopMomentum()) {
         const top = s.scrollTop
@@ -296,8 +319,11 @@ export function MobileNativeChatPageList({
         write(s, top)
       }
     }
-    keepPlace(s)
+    if (!align.aligning.current) {
+      keepPlace(s)
+    }
     drawAndFetch(s)
+    align.finishPendingAlign(s)
   })
 
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
@@ -310,7 +336,9 @@ export function MobileNativeChatPageList({
     }
     const observer = new ResizeObserver(() => {
       roots?.restoreAll()
-      keepPlace(s)
+      if (!align.aligning.current) {
+        keepPlace(s)
+      }
       drawAndFetch(s)
     })
     observer.observe(viewport)

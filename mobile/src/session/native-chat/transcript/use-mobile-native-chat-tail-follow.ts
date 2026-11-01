@@ -28,6 +28,8 @@ function isAtTail(event: NativeScrollEvent): boolean {
 export type MobileNativeChatListHandle = {
   scrollToOffset: (params: { animated: boolean; offset: number }) => void
   scrollToEnd: (params: { animated: boolean }) => void
+  hasPreviousMessage?: (keys: readonly string[]) => boolean
+  revealPreviousMessage?: (keys: readonly string[], animated: boolean) => void
 }
 
 export type MobileNativeChatTailFollow = {
@@ -38,6 +40,11 @@ export type MobileNativeChatTailFollow = {
     onEndDistance: (fromEnd: number, byReader: boolean) => void
   }
   showJumpToTail: boolean
+  showPreviousMessage: boolean
+  /** Latest user and assistant row keys, in document order. The view writes this during render. */
+  previousStopsRef: { current: readonly string[] }
+  jumpToPreviousMessage: (animated: boolean) => void
+  refreshPreviousMessage: () => void
   pinToTail: () => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
@@ -65,6 +72,10 @@ export function useMobileNativeChatTailFollow(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
+  // A previous-message jump must not re-arm tail follow when its scroll events look like a reader.
+  const programmaticRef = useRef(false)
+  const previousStopsRef = useRef<readonly string[]>([])
+  const [showPreviousMessage, setShowPreviousMessage] = useState(false)
   const scopeKeyRef = useRef(scopeKey)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
@@ -110,36 +121,61 @@ export function useMobileNativeChatTailFollow(args: {
     }
   }, [])
 
+  const refreshPreviousMessage = useCallback(() => {
+    const next = listRef.current?.hasPreviousMessage?.(previousStopsRef.current) ?? false
+    setShowPreviousMessage((current) => (current === next ? current : next))
+  }, [])
+
   const recordScrollMetrics = useCallback(
     (event: NativeScrollEvent) => {
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
       }
+      refreshPreviousMessage()
     },
-    [setAtTail]
+    [refreshPreviousMessage, setAtTail]
   )
 
   // Detach even on one-point reader moves; programmatic corrections must not alter intent.
   const onEndDistance = useCallback(
     (fromEnd: number, byReader: boolean) => {
       setAtTail(fromEnd <= AT_TAIL_SLOP)
-      if (byReader) {
+      if (byReader && !programmaticRef.current) {
         setFollowing(fromEnd <= 1)
       }
+      if (programmaticRef.current && fromEnd > 1) {
+        programmaticRef.current = false
+      }
+      refreshPreviousMessage()
     },
-    [setAtTail, setFollowing]
+    [refreshPreviousMessage, setAtTail, setFollowing]
   )
 
   const jumpToTail = useCallback(() => {
     clearUserScrollSettle()
+    programmaticRef.current = false
     userScrollActiveRef.current = false
     setAtTail(true)
     setFollowing(true)
     pinToTail()
   }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
 
+  const jumpToPreviousMessage = useCallback(
+    (animated: boolean) => {
+      clearUserScrollSettle()
+      userScrollActiveRef.current = false
+      programmaticRef.current = true
+      setAtTail(false)
+      setFollowing(false)
+      listRef.current?.revealPreviousMessage?.(previousStopsRef.current, animated)
+      requestAnimationFrame(refreshPreviousMessage)
+    },
+    [clearUserScrollSettle, refreshPreviousMessage, setAtTail, setFollowing]
+  )
+
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
+    programmaticRef.current = false
     userScrollActiveRef.current = true
     setFollowing(false)
   }, [clearUserScrollSettle, setFollowing])
@@ -209,6 +245,10 @@ export function useMobileNativeChatTailFollow(args: {
     listProps: { ref: attachList },
     pageListProps: { ref: attachList, isFollowing, onEndDistance },
     showJumpToTail: !following && !atTail,
+    showPreviousMessage,
+    previousStopsRef,
+    jumpToPreviousMessage,
+    refreshPreviousMessage,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
