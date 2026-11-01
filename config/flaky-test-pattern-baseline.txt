@@ -1259,7 +1259,7 @@
 1 test-timeout-needs-reason:src/main/ipc/runtime-environments/runtime-environment-session-tabs-delta.integration.test.ts
 1 test-timeout-needs-reason:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
 1 test-timeout-needs-reason:src/main/jcode/hook-gate-script.test.ts
-3 test-timeout-needs-reason:src/main/local-worktree-filesystem-wsl-banner.wsl.test.ts
+2 test-timeout-needs-reason:src/main/local-worktree-filesystem-wsl-banner.wsl.test.ts
 4 test-timeout-needs-reason:src/main/managed-server/host-state/orcad-state-mutation-fence-heartbeat.test.ts
 1 test-timeout-needs-reason:src/main/managed-server/host-state/orcad-state-snapshot-shell.test.ts
 1 test-timeout-needs-reason:src/main/managed-server/host-state/orcad-windows-host-lane.test.ts
