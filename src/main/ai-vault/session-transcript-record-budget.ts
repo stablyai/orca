@@ -32,22 +32,29 @@ export function mergeSkippedTranscriptRecords(
     .slice(0, MAX_TRACKED_SKIPPED_RECORDS)
 }
 
+export function describeSkippedTranscriptRecordPositions(
+  records: readonly SkippedTranscriptRecord[]
+): string {
+  return records
+    .slice(0, DESCRIBED_SKIPPED_RECORDS)
+    .map((record) => `${formatMebibytes(record.approximateBytes)} at byte ${record.byteOffset}`)
+    .join(', ')
+}
+
 export function describeSkippedTranscriptRecords(
   records: readonly SkippedTranscriptRecord[]
 ): string | null {
   if (records.length === 0) {
     return null
   }
-  const sizes = records
-    .slice(0, DESCRIBED_SKIPPED_RECORDS)
-    .map((record) => `${formatMebibytes(record.approximateBytes)} at byte ${record.byteOffset}`)
-  if (records.length > DESCRIBED_SKIPPED_RECORDS) {
-    sizes.push(`${records.length - DESCRIBED_SKIPPED_RECORDS} more`)
-  }
+  const more =
+    records.length > DESCRIBED_SKIPPED_RECORDS
+      ? `, ${records.length - DESCRIBED_SKIPPED_RECORDS} more`
+      : ''
   const plural = records.length === 1 ? 'record' : 'records'
   return `Skipped ${records.length} oversized transcript ${plural} over the ${formatMebibytes(
     MAX_SESSION_TRANSCRIPT_RECORD_BYTES
-  )} limit (${sizes.join(', ')}). The rest of the session was read.`
+  )} limit (${describeSkippedTranscriptRecordPositions(records)}${more}). The rest of the session was read.`
 }
 
 function formatMebibytes(bytes: number): string {

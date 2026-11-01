@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
+  describeSkippedTranscriptRecordPositions,
   describeSkippedTranscriptRecords,
   mergeSkippedTranscriptRecords
 } from './session-transcript-record-budget'
@@ -32,6 +33,7 @@ it('caps the tracked list so a pathological transcript cannot grow it', () => {
 
 it('describes nothing when nothing was skipped', () => {
   expect(describeSkippedTranscriptRecords([])).toBeNull()
+  expect(describeSkippedTranscriptRecordPositions([])).toBe('')
 })
 
 it('names the limit, the count and the first few sizes', () => {
@@ -48,5 +50,8 @@ it('names the limit, the count and the first few sizes', () => {
   }))
   expect(describeSkippedTranscriptRecords(four)).toBe(
     'Skipped 4 oversized transcript records over the 10.0 MiB limit (12.0 MiB at byte 0, 12.0 MiB at byte 100, 12.0 MiB at byte 200, 1 more). The rest of the session was read.'
+  )
+  expect(describeSkippedTranscriptRecordPositions(four)).toBe(
+    '12.0 MiB at byte 0, 12.0 MiB at byte 100, 12.0 MiB at byte 200'
   )
 })

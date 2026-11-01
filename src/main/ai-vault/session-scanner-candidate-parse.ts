@@ -19,7 +19,8 @@ import {
 } from './session-parse-cache-store'
 import {
   MAX_SESSION_TRANSCRIPT_RECORD_BYTES,
-  describeSkippedTranscriptRecords
+  describeSkippedTranscriptRecords,
+  describeSkippedTranscriptRecordPositions
 } from './session-transcript-record-budget'
 import { canStopParsingSessions } from './session-scan-cutoff'
 import type { SessionFileCandidate, SessionParseResult } from './session-scanner-types'
@@ -185,7 +186,7 @@ function skippedRecordIssue(
     path: candidate.file.path,
     ...aiVaultScanIssueText('oversizedTranscriptRecords', {
       params: { count: skipped.length, limit: MAX_SESSION_TRANSCRIPT_RECORD_BYTES / (1024 * 1024) },
-      detail: message
+      detail: describeSkippedTranscriptRecordPositions(skipped)
     }),
     message
   }
