@@ -20,7 +20,7 @@ vi.mock('../terminal-pane/remote-server-outage', () => ({
     worktreeId === 'wt-wsl' ? 'wsl:ubuntu' : null
 }))
 vi.mock('../terminal-pane/use-wsl-host-unavailable-reason', () => ({
-  selectWslHostUnavailableReason: () => null
+  selectWslHostEnvironmentUnavailableReason: () => null
 }))
 
 describe('WslHostStoppedWorkspaceNotice', () => {

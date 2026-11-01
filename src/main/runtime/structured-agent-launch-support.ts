@@ -1,5 +1,5 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import {
@@ -27,7 +27,7 @@ import {
   resolveHostAgentBaseEnvironment,
   createStructuredAgentEnvironmentResolvers
 } from './structured-agent-shell-environment'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 

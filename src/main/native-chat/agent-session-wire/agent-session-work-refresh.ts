@@ -2,7 +2,7 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session/journ
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionTurnActivity
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { subscriberHistoryReader } from './agent-session-bounded-frames'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'

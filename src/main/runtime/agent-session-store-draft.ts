@@ -1,6 +1,6 @@
 // Publish drafts only after row commit so readers never see changes that can roll back.
 
-import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type {
   AgentSessionStoreState,
   RetiredAgentSessionClaimKey

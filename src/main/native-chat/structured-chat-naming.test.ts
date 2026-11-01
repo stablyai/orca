@@ -10,14 +10,14 @@ import {
   structuredWorkerProcessIncarnation
 } from '../runtime/structured-worker-identity'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { StructuredAgentSessionStatusFeed } from './agent-session-wire/structured-agent-session-status-feed'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+} from '../../shared/agent-session/agent-session-wire'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import {
   firstStructuredAgentSessionPrompt,
   STRUCTURED_CHAT_NAME_PROMPT_LIMIT

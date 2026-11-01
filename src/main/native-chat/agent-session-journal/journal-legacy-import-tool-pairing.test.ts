@@ -7,7 +7,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { foldToolMessages } from '../../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../shared/native-chat/tools/native-chat-tool-pairs'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { prepareLegacyTranscriptImport } from './journal-legacy-import'
 
 const roots: string[] = []

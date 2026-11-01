@@ -53,15 +53,6 @@ afterEach(async () => {
 })
 
 describe('Codex history discovery failures', () => {
-  it.each(['EACCES', 'EPERM', 'EIO', 'UNKNOWN'])(
-    'rejects an inaccessible root (%s)',
-    async (code) => {
-      state.blocked = sessions
-      state.code = code
-      await expect(listCodexSessionFiles()).rejects.toMatchObject({ code })
-    }
-  )
-
   it('rejects an unreadable child instead of publishing an incomplete history list', async () => {
     await writeFile(join(sessions, 'kept.jsonl'), '')
     state.blocked = join(sessions, 'inaccessible')

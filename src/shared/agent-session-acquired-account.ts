@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import type { AgentSessionLease, AgentSessionRecord } from './agent-session-record'
-import { agentSessionScopeKey } from './agent-session-record'
+import type { AgentSessionLease, AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
+import { agentSessionScopeKey } from './agent-session/lifecycle/agent-session-record'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from './agent-session-account-home'
+} from './agent-session/lifecycle/agent-session-account-home'
 
 const path = z
   .string()

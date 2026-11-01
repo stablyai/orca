@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey
-} from '../../shared/agent-session-provider-handle'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'

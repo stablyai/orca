@@ -10,8 +10,8 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,

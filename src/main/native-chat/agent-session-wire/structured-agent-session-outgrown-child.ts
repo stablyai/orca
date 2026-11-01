@@ -1,6 +1,6 @@
 // Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
@@ -16,7 +16,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<

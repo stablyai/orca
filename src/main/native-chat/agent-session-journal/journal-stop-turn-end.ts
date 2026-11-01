@@ -9,7 +9,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
 import type { JournalQueuePauseMarks, JournalStopSettle } from './queued-message-pause'

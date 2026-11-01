@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 import {
   createStructuredAttentionMobileDelivery,
@@ -75,6 +79,7 @@ function harness(overrides: Partial<StructuredAttentionMobileDeliveryDeps> = {})
     readNotificationSettings: () => settings(),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => sent.push(event),
     reconcile: (state) => reconciled.push(state),
     now: () => 42,
@@ -91,6 +96,26 @@ describe('structured attention mobile delivery', () => {
     quiet.delivery.deliver(completion('success'), SUMMARY)
     expect(quiet.sent).toEqual([])
     expect(isWorkspaceMuted).toHaveBeenCalledWith(SCOPE)
+  })
+
+  it('leaves a dispatched chat worker’s finished turn to its coordinator, and still sends its prompts', () => {
+    const readOrchestration = vi.fn(() => ({
+      taskId: 'task_1',
+      dispatchId: 'ctx_1',
+      parentPaneKey: 'tab-c:leaf-c'
+    }))
+    const h = harness({ readOrchestration })
+    h.delivery.deliver(completion('success'), SUMMARY)
+    h.delivery.deliver(completion('failure'), SUMMARY)
+    h.delivery.deliver(completion('success', true), SUMMARY)
+    // A failed turn that leaves a prompt waiting is still the person's to answer.
+    h.delivery.deliver(completion('failure', true), SUMMARY)
+    h.delivery.deliver(PROMPT, SUMMARY)
+    expect(h.sent.map((event) => event.agentState)).toEqual(['blocked', 'done', 'blocked'])
+    // The key the session's chat row carries in the host's orchestration projection.
+    expect(readOrchestration).toHaveBeenCalledWith(
+      structuredAgentSessionPaneKey(structuredAgentSessionTabId('session-1'), 'session-1')
+    )
   })
 
   it('still sends when labels cannot be read, worded generically', () => {

@@ -7,7 +7,7 @@ import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
 } from '../../../../shared/native-chat/native-chat-work-run'
-import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 

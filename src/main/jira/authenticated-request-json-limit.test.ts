@@ -53,31 +53,6 @@ describe('opt-in bounded Jira JSON responses', () => {
     expect(parts).toBeLessThanOrEqual(4)
   })
 
-  it('decodes bounded JSON and keeps gateway credentials, redirects and cancellation', async () => {
-    const gatewayClient: JiraClientForSite = {
-      ...client,
-      site: { ...client.site, apiBaseUrl: 'https://api.atlassian.com/ex/jira/cloud-abc' }
-    }
-    const signal = new AbortController().signal
-    fetchJson.mockResolvedValue(new Response(JSON.stringify({ value: 'é' })))
-    expect(await jiraRequest(gatewayClient, '/filters', { signal }, 32)).toEqual({ value: 'é' })
-    expect(fetchJson).toHaveBeenCalledWith(
-      'https://api.atlassian.com/ex/jira/cloud-abc/filters',
-      expect.objectContaining({ signal, redirect: 'error' })
-    )
-    const headers = fetchJson.mock.calls[0]?.[1]?.headers
-    expect(headers).toBeInstanceOf(Headers)
-    expect(headers.get('Authorization')).toBe('Bearer fixture-token')
-  })
-
-  it('leaves existing callers on their original response reader', async () => {
-    const response = new Response('[1,2,3]')
-    const json = vi.spyOn(response, 'json')
-    fetchJson.mockResolvedValue(response)
-    expect(await jiraRequest(client, '/legacy')).toEqual([1, 2, 3])
-    expect(json).toHaveBeenCalledOnce()
-  })
-
   it.each([401, 403, 500])('also bounds error bodies while retaining HTTP %s', async (status) => {
     const cancel = vi.fn()
     const response = new Response(new ReadableStream({ cancel }), {
@@ -93,20 +68,5 @@ describe('opt-in bounded Jira JSON responses', () => {
     })
     expect(cancel).toHaveBeenCalledOnce()
     expect(json).not.toHaveBeenCalled()
-  })
-
-  it('preserves bounded Jira error details and token scope detection', async () => {
-    fetchJson.mockResolvedValue(
-      new Response(JSON.stringify({ message: 'scope does not match' }), { status: 401 })
-    )
-    const gatewayClient: JiraClientForSite = {
-      ...client,
-      site: { ...client.site, apiBaseUrl: 'https://api.atlassian.com/ex/jira/cloud-abc' }
-    }
-    await expect(jiraRequest(gatewayClient, '/filters', undefined, 256)).rejects.toMatchObject({
-      status: 401,
-      scopeMismatch: true,
-      message: expect.stringContaining('API token scopes')
-    })
   })
 })

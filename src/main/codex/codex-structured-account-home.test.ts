@@ -7,7 +7,7 @@ import {
   acquiredCodexSessionAccount,
   withAcquiredAgentSessionAccount
 } from '../../shared/agent-session-acquired-account'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'

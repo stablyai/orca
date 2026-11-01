@@ -15,7 +15,7 @@ import type {
   AgentWorkingMode,
   ParsedAgentStatusPayload
 } from './agent-status-types'
-import { structuredAgentSessionAgentStatus } from './structured-agent-session-agent-status'
+import { structuredAgentSessionAgentStatus } from './agent-session/view/structured-agent-session-agent-status'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 
 type Published = {

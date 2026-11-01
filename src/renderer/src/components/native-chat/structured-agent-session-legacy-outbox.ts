@@ -6,8 +6,8 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session-write-notice-copy'
-import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
+import { agentSessionWriteNotDoneParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'

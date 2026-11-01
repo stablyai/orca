@@ -5,8 +5,8 @@ import {
   foldAgentSessionStatusEvent,
   revokeAgentSessionStatusLive,
   type AgentSessionStatusSnapshot
-} from '../../../src/shared/agent-session-status-snapshot-fold'
-import type { AgentSessionStatusEvent } from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/view/agent-session-status-snapshot-fold'
+import type { AgentSessionStatusEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames

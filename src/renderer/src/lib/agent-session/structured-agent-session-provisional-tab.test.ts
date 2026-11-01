@@ -2,8 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type * as launchModule from '../structured-agent-session-launch-create-call'
-import type { AgentSessionLaunchPlan } from '../agent-session-launch-plan'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import {
+  type AgentSessionLaunchPlan,
+  adoptAgentSessionLaunchVerdict
+} from '../agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { StructuredAgentSessionCreateRefusalError } from '../structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
@@ -28,7 +30,7 @@ import { buildFullWorktreePurgeState } from '@/store/slices/worktrees/teardown/w
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
