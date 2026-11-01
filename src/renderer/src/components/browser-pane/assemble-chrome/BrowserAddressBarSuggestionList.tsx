@@ -102,7 +102,7 @@ export default function BrowserAddressBarSuggestionList({
             <CommandSeparator />
             <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground">
               <span>
-                {translate(
+                {t(
                   'auto.components.browser.pane.browser.address.bar.suggestions.history',
                   'History'
                 )}
