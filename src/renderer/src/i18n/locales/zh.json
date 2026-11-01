@@ -20305,7 +20305,8 @@
     "wslHostOffer": {
       "title": "将 {{distro}} 作为主机运行（推荐）",
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
-      "accept": "作为主机运行"
+      "accept": "作为主机运行",
+      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。"
     }
   },
   "editor": {

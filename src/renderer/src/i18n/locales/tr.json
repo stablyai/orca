@@ -214,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
-      "accept": "Ana makine olarak çalıştır"
+      "accept": "Ana makine olarak çalıştır",
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
     }
   },
   "app": {

@@ -214,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} als Host ausführen (empfohlen)",
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
-      "accept": "Als Host ausführen"
+      "accept": "Als Host ausführen",
+      "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste."
     }
   },
   "app": {

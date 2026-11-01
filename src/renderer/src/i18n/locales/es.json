@@ -21279,7 +21279,8 @@
     "wslHostOffer": {
       "title": "Ejecutar {{distro}} como host (recomendado)",
       "why": "Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
-      "accept": "Ejecutar como host"
+      "accept": "Ejecutar como host",
+      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral."
     }
   },
   "rendererRecovery": {

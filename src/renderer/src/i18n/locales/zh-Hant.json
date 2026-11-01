@@ -190,7 +190,8 @@
     "wslHostOffer": {
       "title": "將 {{distro}} 作為主機執行（建議）",
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
-      "accept": "作為主機執行"
+      "accept": "作為主機執行",
+      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。"
     }
   },
   "app": {

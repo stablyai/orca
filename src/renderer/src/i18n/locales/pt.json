@@ -593,7 +593,8 @@
     "wslHostOffer": {
       "title": "Executar {{distro}} como host (recomendado)",
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
-      "accept": "Executar como host"
+      "accept": "Executar como host",
+      "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral."
     }
   },
   "tray": {

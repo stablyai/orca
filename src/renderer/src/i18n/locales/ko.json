@@ -20304,7 +20304,8 @@
     "wslHostOffer": {
       "title": "{{distro}}을(를) 호스트로 실행(권장)",
       "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
-      "accept": "호스트로 실행"
+      "accept": "호스트로 실행",
+      "projectNotFound": "이동할 추가된 프로젝트를 찾을 수 없습니다. 사이드바의 프로젝트에서 \"{{distro}} 호스트로 이동…\"을 사용하세요."
     }
   },
   "editor": {
