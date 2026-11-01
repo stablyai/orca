@@ -51,9 +51,11 @@ export function useEmulatorControlStream(
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
   const [connected, setConnected] = useState(false)
-  const [reportedOrientation, setReportedOrientation] = useState<EmulatorStreamOrientation | null>(
-    null
-  )
+  // Keyed by socket URL so a paused socket keeps the last orientation instead of dropping the picture's turn.
+  const [reportedConfig, setReportedConfig] = useState<{
+    wsUrl: string
+    orientation: EmulatorStreamOrientation
+  } | null>(null)
 
   const clearKeyboardTimers = useCallback((): void => {
     for (const timerId of keyboardTimerIdsRef.current) {
@@ -106,10 +108,10 @@ export function useEmulatorControlStream(
     releasePressedKeyboardUsages(true)
   }, [clearKeyboardTimers, releasePressedKeyboardUsages])
 
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- cleanup closes the socket held in wsRef and stops reconnects.
   useEffect(() => {
     if (!enabled || !wsUrl) {
       setConnected(false)
-      setReportedOrientation(null)
       return
     }
 
@@ -139,7 +141,7 @@ export function useEmulatorControlStream(
       ws.onmessage = (event) => {
         const orientation = decodeServeSimOrientation(event.data)
         if (orientation && !disposed && wsRef.current === ws) {
-          setReportedOrientation(orientation)
+          setReportedConfig({ wsUrl, orientation })
         }
       }
 
@@ -175,7 +177,6 @@ export function useEmulatorControlStream(
         ws.close()
       }
       setConnected(false)
-      setReportedOrientation(null)
     }
   }, [cancelKeyboardFrames, clearKeyboardTimers, enabled, releasePressedKeyboardUsages, wsUrl])
 
@@ -220,5 +221,7 @@ export function useEmulatorControlStream(
     [getOpenSocket, sendKeyboardFrameNow]
   )
 
+  const reportedOrientation =
+    reportedConfig && reportedConfig.wsUrl === wsUrl ? reportedConfig.orientation : null
   return { cancelKeyboardFrames, connected, reportedOrientation, sendKeyboardFrames, sendTouch }
 }
