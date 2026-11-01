@@ -64,7 +64,13 @@ function dotStatus(dot: NonNullable<AgentMessageSenderView['dot']>): WorktreeSta
       return 'inactive'
     case 'unverifiable':
       return 'unconfirmed'
-    default:
+    case 'working':
+    case 'monitoring':
+    case 'interrupted':
+    case 'failed':
+    case 'done':
+    case 'unconfirmed':
+    case 'permission':
       return dot
   }
 }
@@ -97,7 +103,11 @@ export function crewStatusGroup(status: WorktreeStatus): CrewStatusGroup {
       return 'working'
     case 'failed':
       return 'failed'
-    default:
+    case 'active':
+    case 'done':
+    case 'inactive':
+    case 'interrupted':
+    case 'unconfirmed':
       return 'idle'
   }
 }
