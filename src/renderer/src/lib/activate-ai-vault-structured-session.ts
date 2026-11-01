@@ -7,14 +7,21 @@ import type {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   openDesktopStructuredSessionInteraction,
+  desktopStructuredSessionOpenDeps,
   type StructuredSessionOpenAdapterDeps
 } from './open-existing-structured-session'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
+import {
+  structuredAgentSessionTargetForHost,
+  executionHostIdForStructuredTarget
+} from '@/runtime/structured-agent-session-owner'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 export {
   revealStructuredSession,
   type StructuredSessionRevealOutcome
@@ -55,19 +62,29 @@ export const structuredSessionOpenFeedback: Pick<
 
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
-  session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
+  session: Pick<AiVaultSession, 'structuredSession'> &
+    Partial<Pick<AiVaultSession, 'executionHostId' | 'agent'>>,
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
     return false
   }
-  await openDesktopStructuredSession(
+  const owner =
+    target ??
+    (session.executionHostId
+      ? structuredAgentSessionTargetForHost(session.executionHostId)
+      : undefined)
+  if (owner === null) {
+    ;(deps ?? structuredSessionOpenFeedback).unavailable(session.agent)
+    return false
+  }
+  const result = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    target,
+    owner,
     deps
   )
-  return true
+  return result.kind === 'opened'
 }
 
 export function openDesktopStructuredSession(
@@ -76,12 +93,39 @@ export function openDesktopStructuredSession(
   deps?: StructuredSessionActivationDeps,
   locate?: StructuredSessionOpenDeps['locate']
 ): Promise<StructuredSessionOpenResult> {
+  const navigated = new Map<string, boolean>()
+  let navigationReported = false
+  const activate: StructuredSessionOpenAdapterDeps['activate'] = (args) => {
+    let opened = navigated.get(args.worktreeId)
+    if (opened === undefined) {
+      const scope = parseWorkspaceKey(args.worktreeId)
+      const registeredFolder =
+        scope?.type === 'folder' &&
+        selectFolderWorkspaces(useAppStore.getState()).some(
+          (row) => row.id === scope.folderWorkspaceId
+        )
+      opened =
+        activateWslMovedWorkspace(args.worktreeId) ||
+        activateAndRevealWorkspace(args.worktreeId, {
+          providesInitialSurface: true,
+          ...(args.target
+            ? { executionHostId: executionHostIdForStructuredTarget(args.target) }
+            : {})
+        }) !== false
+      navigated.set(args.worktreeId, opened)
+      navigationReported ||= !opened && !!registeredFolder
+    }
+    return opened && desktopStructuredSessionOpenDeps.activate(args)
+  }
   return openDesktopStructuredSessionInteraction(source, {
     target: host,
-    deps,
+    deps: deps ?? { ...desktopStructuredSessionOpenDeps, activate },
     locate,
-    present: (result) =>
-      presentDesktopStructuredSession(result, source, deps ?? structuredSessionOpenFeedback)
+    present: (result) => {
+      if (!navigationReported) {
+        presentDesktopStructuredSession(result, source, deps ?? structuredSessionOpenFeedback)
+      }
+    }
   })
 }
 
@@ -90,15 +134,7 @@ function presentDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   deps: Pick<StructuredSessionActivationDeps, 'unavailable' | 'gone' | 'hostCannotOpen'>
 ): void {
-  if (result.kind === 'opened') {
-    const workspace = result.target.worktreeId
-    if (
-      useAppStore.getState().activeWorktreeId !== workspace &&
-      !activateWslMovedWorkspace(workspace)
-    ) {
-      activateAndRevealWorktree(workspace)
-    }
-  } else if (result.kind === 'failed') {
+  if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
     if (result.failure.reason === 'workspace-missing') {
       toast.error(

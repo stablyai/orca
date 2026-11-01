@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
-import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
+import { OrcaRuntimeWithStructuredSessionWorkspacePresentation } from './structured-session-workspace-presentation'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionAgentTab,
@@ -37,7 +37,7 @@ import {
   type StructuredSessionSurface
 } from '../agent-session/structured-agent-session-close'
 
-export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
+export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionWorkspacePresentation {
   protected abstract isHeadlessOwnedMobileBrowserTab(
     ...args: Parameters<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
   ): ReturnType<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>

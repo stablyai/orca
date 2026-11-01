@@ -71,35 +71,32 @@ export function useAiVaultOriginalPaneActions(): {
     [getOriginalPaneIndex]
   )
 
-  const jumpToOriginalPane = useCallback(
-    async (session: AiVaultSession): Promise<boolean> => {
-      if (session.structuredSession && isStructuredSessionOpen(session)) {
-        return activateAiVaultStructuredSession(session)
-      }
-      const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
-      if (!target) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
-            'Original pane is no longer available.'
-          )
+  const jumpToOriginalPane = useCallback(async (session: AiVaultSession): Promise<boolean> => {
+    if (session.structuredSession) {
+      return activateAiVaultStructuredSession(session)
+    }
+    const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
+    if (!target) {
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
+          'Original pane is no longer available.'
         )
-        return false
-      }
+      )
+      return false
+    }
 
-      if (!revealSessionWorkspace(target.worktreeId)) {
-        return false
-      }
-      const state = useAppStore.getState()
-      state.setActiveTabType('terminal', target.worktreeId)
-      activateTabAndFocusPane(target.tabId, target.leafId, {
-        flashFocusedPane: true,
-        scrollToBottomIfOutputSinceLastView: true
-      })
-      return true
-    },
-    [isStructuredSessionOpen]
-  )
+    if (!revealSessionWorkspace(target.worktreeId)) {
+      return false
+    }
+    const state = useAppStore.getState()
+    state.setActiveTabType('terminal', target.worktreeId)
+    activateTabAndFocusPane(target.tabId, target.leafId, {
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+    return true
+  }, [])
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
     revealSessionWorkspace(worktreeId)

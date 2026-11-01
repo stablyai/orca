@@ -201,13 +201,13 @@ it('bounds a cached stalled probe, releases the shared click and permits a subse
   try {
     const click = activateAiVaultStructuredSession(session, parts, host)
     await vi.advanceTimersByTimeAsync(5_001)
-    expect(await click).toBe(true)
+    expect(await click).toBe(false)
     expect(parts.unavailable).toHaveBeenCalledOnce()
     expect(mocks.call.mock.calls.map(([, method]) => method)).toEqual([
       'orchestration.partyLocation'
     ])
     mocks.supports.mockResolvedValue(false)
-    expect(await activateAiVaultStructuredSession(session, parts, host)).toBe(true)
+    expect(await activateAiVaultStructuredSession(session, parts, host)).toBe(false)
     expect(parts.hostCannotOpen).toHaveBeenCalledOnce()
   } finally {
     vi.useRealTimers()

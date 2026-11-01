@@ -13,9 +13,6 @@ import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
-import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
@@ -27,7 +24,9 @@ import {
   authorityProfile,
   openAuthorityRuntime,
   savedIds,
-  AuthorityRuntime
+  AuthorityRuntime,
+  reveal,
+  inWorkspace
 } from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
 import { removalPtyProvider } from '../../src/main/runtime/rpc/worktree-rm-pty.test-fixture'
 import type { DurableProfileStateMutation } from '../../src/main/persistence/loading-store/store-runtime-state'
@@ -104,25 +103,6 @@ function historySession(): AiVaultSession {
     resumeCommand: 'codex',
     subagent: null
   }
-}
-
-async function reveal(rig: Awaited<ReturnType<typeof openAuthorityRuntime>>, caller = true) {
-  return new RpcDispatcher({
-    runtime: rig.runtime,
-    methods: STRUCTURED_AGENT_SESSION_REVEAL_METHODS
-  }).dispatch(
-    {
-      id: 'retained-history',
-      authToken: 'token',
-      method: 'agentSession.reveal',
-      params: { sessionId: B, ...(caller ? { navigation: 'caller' } : {}) }
-    },
-    {
-      clientKind: 'mobile',
-      pairedDeviceId: 'phone',
-      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-    }
-  )
 }
 
 it.each([true, false])(
@@ -424,23 +404,6 @@ it.each([10, 100])(
     expect(savedIds(rig)).toEqual([B])
   }
 )
-
-async function inWorkspace(
-  workspace: string,
-  kind: 'folder' | 'git-worktree' = 'git-worktree',
-  executionHostId: 'local' | 'ssh:offline' = 'local'
-) {
-  const input = await authorityProfile([], { records: [B], visible: [] })
-  const prior = await readPersistedTestAgentSessionStore(root)
-  await seedTestAgentSessionRecordStore(root, {
-    records: Object.values(prior.records).map((record) => ({
-      ...record,
-      location: { ...record.location, workspaceId: workspace, workspaceKind: kind, executionHostId }
-    })),
-    sessionTabs: []
-  })
-  return { ...input, workspace }
-}
 
 it.each([false, true])(
   'keeps failed-scan affirmative metadata behind actual Git finalization, accepted aliases=%s',

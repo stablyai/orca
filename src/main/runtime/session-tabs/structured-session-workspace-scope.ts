@@ -15,7 +15,13 @@ import {
 } from '../../../shared/floating-workspace-worktree'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { getRepoMainWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import { isFolderRepo } from '../../../shared/repo-kind'
+import { listWslMovedProjects } from '../../persistence/moving-wsl-projects/wsl-moved-projects'
+import { StructuredWorkspaceUnavailable } from './structured-workspace-authority'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import type { OrcaRuntimeWithPersistHeadlessTerminalTitle } from '../workspaces/workspace-file-session-targets'
@@ -44,10 +50,122 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     ...args: Parameters<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
   ): ReturnType<RuntimeWorkspaceCatalog['listRepoWorktreesForResolution']>
 
-  prepareStructuredAgentSessionRevealWorkspace(location: AgentSessionExecutionLocation) {
-    return prepareStructuredWorkspaceAuthority(this.requireStore(), location, (repo) =>
-      this.listRepoWorktreesForResolution(repo)
+  async prepareStructuredAgentSessionRevealWorkspace(location: AgentSessionExecutionLocation) {
+    const destination = this.currentStructuredSessionLocation(location)
+    const authority = await prepareStructuredWorkspaceAuthority(
+      this.requireStore(),
+      destination,
+      (repo) => this.listRepoWorktreesForResolution(repo)
     )
+    if (destination.workspaceId !== location.workspaceId) {
+      const parsed = splitWorktreeIdForFilesystem(destination.workspaceId)
+      const repo = this.requireStore()
+        .getRepos()
+        .find(
+          (row) =>
+            row.id === parsed?.repoId && getRepoExecutionHostId(row) === destination.executionHostId
+        )
+      if (
+        repo &&
+        !isFolderRepo(repo) &&
+        !areWorktreePathsEqual(repo.path, parsed!.worktreePath) &&
+        authority.listed !== true
+      ) {
+        authority.release()
+        throw new StructuredWorkspaceUnavailable('unknown')
+      }
+    }
+    return { ...authority, location: destination }
+  }
+
+  private currentStructuredSessionLocation(location: AgentSessionExecutionLocation) {
+    const store = this.requireStore()
+    const source = splitWorktreeIdForFilesystem(location.workspaceId)
+    const repos = store.getRepos()
+    if (
+      !source ||
+      repos.some(
+        (repo) =>
+          repo.id === source.repoId && getRepoExecutionHostId(repo) === location.executionHostId
+      )
+    ) {
+      return location
+    }
+    const folders = store.getFolderWorkspaces?.() ?? []
+    const moved = listWslMovedProjects(repos, folders)
+    const candidates = new Map<string, AgentSessionExecutionLocation>()
+    const add = (
+      target: Parameters<
+        StructuredSessionWorkspaceScope['structuredAgentSessionLocationForTarget']
+      >[0]
+    ) => {
+      if (
+        target.executionHostId !== location.executionHostId ||
+        !areWorktreePathsEqual(target.worktree.path, source.worktreePath)
+      ) {
+        return
+      }
+      const candidate = this.structuredAgentSessionLocationForTarget(target)
+      if (candidate.wslDistro === location.wslDistro) {
+        candidates.set(candidate.workspaceId, candidate)
+        if (candidates.size > 1) {
+          throw new StructuredWorkspaceUnavailable('unknown')
+        }
+      }
+    }
+    const movedRepos = new Set(moved.filter((row) => row.kind === 'repo').map((row) => row.id))
+    const movedFolders = new Set(moved.filter((row) => row.kind === 'folder').map((row) => row.id))
+    const available = repos.filter(
+      (repo) => getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID || !movedRepos.has(repo.id)
+    )
+    const gitOwners = new Set(
+      available
+        .filter((repo) => !isFolderRepo(repo))
+        .map((repo) => `${getRepoExecutionHostId(repo)}\0${repo.id}`)
+    )
+    for (const repo of available) {
+      add({
+        worktree: {
+          id: getRepoMainWorktreeId(repo),
+          path: repo.path,
+          repoId: repo.id,
+          hostId: getRepoExecutionHostId(repo)
+        },
+        executionHostId: getRepoExecutionHostId(repo)
+      })
+    }
+    // Cached linked checkouts nominate a target; the existing authority proves its current presence.
+    for (const worktree of this.projectCachedWorktrees().worktrees) {
+      if (gitOwners.has(`${worktree.hostId ?? LOCAL_EXECUTION_HOST_ID}\0${worktree.repoId}`)) {
+        add({ worktree, executionHostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID })
+      }
+    }
+    for (const folder of folders) {
+      if (
+        (location.executionHostId === LOCAL_EXECUTION_HOST_ID && movedFolders.has(folder.id)) ||
+        !areWorktreePathsEqual(folder.folderPath, source.worktreePath)
+      ) {
+        continue
+      }
+      const selected = resolveQualifiedFolderWorkspaceResult(
+        { repos, folderWorkspaces: folders, projectGroups: store.getProjectGroups?.() ?? [] },
+        folder.id,
+        location.executionHostId
+      )
+      if (selected.kind === 'selected') {
+        add({
+          worktree: {
+            ...this.folderWorkspaceToResolvedWorktree(selected.value.workspace),
+            id: folderWorkspaceKey(folder.id)
+          },
+          executionHostId: location.executionHostId
+        })
+      }
+    }
+    if (candidates.size !== 1) {
+      throw new StructuredWorkspaceUnavailable('unknown')
+    }
+    return [...candidates.values()][0]
   }
 
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
@@ -55,11 +173,15 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return this.structuredAgentSessionLocationForTarget(target)
   }
 
-  protected structuredAgentSessionLocationForTarget(
-    target: Awaited<
-      ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
+  protected structuredAgentSessionLocationForTarget(target: {
+    worktree: Pick<
+      Awaited<
+        ReturnType<OrcaRuntimeWithPersistHeadlessTerminalTitle['resolveRuntimeFileTarget']>
+      >['worktree'],
+      'id' | 'path' | 'repoId' | 'hostId'
     >
-  ) {
+    executionHostId: AgentSessionExecutionLocation['executionHostId']
+  }) {
     const routing = resolveWorktreeHostRouting(this.store?.getRepos() ?? [], target.worktree)
     if (routing.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
