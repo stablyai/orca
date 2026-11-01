@@ -201,6 +201,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' }
   },
   {
+    path: ['orchestration', 'dispatch-rebind'],
+    summary: 'Move an active Dispatch to another live terminal',
+    usage:
+      'orca orchestration dispatch-rebind --dispatch <dispatch_id> --to <handle> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'to', 'retry-request'],
+    notes: [
+      'A worker that hands off to a fresh agent session in a new terminal of the same worktree moves its Dispatch authority with this command; afterwards the new session reports, heartbeats, completes, and appears in worker-list as itself.',
+      'Run it from the current worker terminal while handing off, or from the Run coordinator terminal. Another terminal is refused.',
+      'The target terminal must be live with a stable pane and process incarnation, and must not already own an active Dispatch.',
+      'Mail queued for the Dispatch is re-delivered to the new terminal; the old terminal can be closed once the rebind is recorded.'
+    ]
+  },
+  {
     path: ['orchestration', 'request-show'],
     summary: 'Ask whether one orchestration mutation request already took effect',
     usage: 'orca orchestration request-show --request <request_id> [--json]',

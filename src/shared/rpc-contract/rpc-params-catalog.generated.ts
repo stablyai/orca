@@ -445,6 +445,7 @@ import {
   OrcadMigrationCatalogReferenceParams,
   OrcadMigrationCommitCatalogParams
 } from './orcad-migration-params'
+import { DispatchRebindParams } from './orchestration-dispatch-rebind-params'
 import {
   FederationDispatchParams,
   FederationFleetSnapshotParams,
@@ -1267,6 +1268,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
   'orchestration.dispatch': DispatchParams,
+  'orchestration.dispatchRebind': DispatchRebindParams,
   'orchestration.dispatchShow': DispatchShowParams,
   'orchestration.federationAck': FederationAckParams,
   'orchestration.federationAttachStart': FederationAttachStartParams,

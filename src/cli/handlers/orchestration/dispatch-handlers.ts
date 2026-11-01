@@ -36,6 +36,20 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
       return value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base
     })
+  },
+
+  'orchestration dispatch-rebind': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<{
+      dispatch: { id: string; task_id: string; status: string; assignee_handle: string | null }
+      reboundBy?: string
+    }>(client, flags, 'orchestration.dispatchRebind', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      to: getRequiredStringFlag(flags, 'to')
+    })
+    printOrchestrationReceipt(result, { flags, json }, (value) => {
+      const base = `Rebound ${value.dispatch?.id} to ${value.dispatch?.assignee_handle ?? 'unknown'} [${value.dispatch?.status}]`
+      return value.reboundBy ? `${base} (by ${value.reboundBy})` : base
+    })
   }
 }
 
