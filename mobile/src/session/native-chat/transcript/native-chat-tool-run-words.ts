@@ -5,7 +5,7 @@ import { getUiIntlLocale } from '../../../i18n/ui-intl-locale'
 export function nativeChatToolRunWords(t: Translate): NativeChatToolRunSentenceWords {
   return {
     continuation: (clause) =>
-      ['en', 'es', 'fr', 'pt', 'ru', 'tr'].includes(getMobileUiLocale())
+      ['en', 'es', 'fr', 'pl', 'pt', 'ru', 'tr'].includes(getMobileUiLocale())
         ? `${clause.charAt(0).toLocaleLowerCase(getUiIntlLocale())}${clause.slice(1)}`
         : clause,
     clause: (category, count, live) => {
