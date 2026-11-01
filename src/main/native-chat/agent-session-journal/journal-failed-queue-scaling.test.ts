@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readQueuePublication } from '../agent-session-wire/structured-agent-session-queued-publication'
 import { StructuredAgentSessionCurrentWork } from '../agent-session-wire/structured-agent-session-current-work'
 import { journalInputOrder } from './journal-input-order'
@@ -73,11 +76,18 @@ it.each([100, 1_000])(
   async (size) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-failed-queue-scaling-'))
     const journals = createTrackedJournalOpener()
-    const providerHandle = codexProviderHandle('thread')
+    const identity = {
+      sessionId: 's',
+      workspaceId: 'w',
+      hostId: 'h',
+      agent: 'codex' as const,
+      providerHandle: codexProviderHandle('thread')
+    }
+    const providerHandle = agentSessionJournalProviderHandle(identity)
     const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
     try {
       const journal = await journals.open({
-        identity: { sessionId: 's', workspaceId: 'w', hostId: 'h', agent: 'codex', providerHandle },
+        identity,
         stateDirectory: root
       })
       await journal.queuedMessages.insert({ messageId: 'waiting', body })
