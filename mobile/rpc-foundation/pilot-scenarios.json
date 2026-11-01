@@ -7665,8 +7665,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "acceptRowDelta": true,
-            "exactActivity": true
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true,

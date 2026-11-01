@@ -17,6 +17,7 @@ export type PendingWorktreeCatalog = {
   admission: WorktreeCatalogAdmission<Worktree>
   client: RpcClient
   hostId: string
+  requestedSnapshotId: string | null
 }
 
 // Keep fetch failure distinct from an empty host catalog (STA-3123).
@@ -69,7 +70,6 @@ export function admitWorktreeCatalogResponse(
 export type WorktreeCatalogSnapshotParams = {
   afterSnapshotId?: string | null
   acceptRowDelta: true
-  exactActivity?: true
 }
 
 /** Sends one catalog read with the snapshot fields; the refusal code is the host's, or request_failed. */
@@ -95,23 +95,18 @@ const desktopCatalogRequest: WorktreeCatalogRequest = async (client, snapshot) =
   }
 }
 
-export type WorktreeCatalogSnapshotOptions = {
-  /** The catalog this client snapshots; the desktop's own worktree.ps when absent. */
-  request?: WorktreeCatalogRequest
-  /**
-   * Read uncoarsened activity, as a reader that ranks or shows it did before snapshots. With no token
-   * the read sends no snapshot id at all, so a host without row deltas answers its exact legacy catalog.
-   */
-  exactActivity?: boolean
-}
+type CatalogRead = { client: RpcClient; hostId: string; rows: Promise<Worktree[] | null> }
 
 export class WorktreeCatalogSnapshotClient {
   private client: RpcClient | null = null
   private hostId: string | null = null
   private snapshotId: string | null = null
   private confirmedWorktrees: Worktree[] | null = null
+  private inFlight: CatalogRead | null = null
+  private trailing: CatalogRead | null = null
 
-  constructor(private readonly options: WorktreeCatalogSnapshotOptions = {}) {}
+  /** @param request The catalog this client snapshots; the desktop's own worktree.ps when absent. */
+  constructor(private readonly request: WorktreeCatalogRequest = desktopCatalogRequest) {}
 
   async fetch(client: RpcClient, hostId: string): Promise<WorktreeCatalogFetchResult> {
     if (this.client !== client || this.hostId !== hostId) {
@@ -121,11 +116,9 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
-    const exact = this.options.exactActivity === true
-    const catalog = await (this.options.request ?? desktopCatalogRequest)(client, {
-      ...(exact && requestedSnapshotId === null ? {} : { afterSnapshotId: requestedSnapshotId }),
-      acceptRowDelta: true,
-      ...(exact ? { exactActivity: true as const } : {})
+    const catalog = await this.request(client, {
+      afterSnapshotId: requestedSnapshotId,
+      acceptRowDelta: true
     })
     if (!catalog.accepted) {
       return { kind: 'request_failed', code: catalog.code }
@@ -135,23 +128,70 @@ export class WorktreeCatalogSnapshotClient {
       pending: {
         admission: admitWorktreeCatalogResponse(catalog.value, requestedSnapshotId),
         client,
-        hostId
+        hostId,
+        requestedSnapshotId
       }
     }
   }
 
-  /** Whether a catalog this client confirmed is held for this client and host. */
-  holdsRows(client: RpcClient, hostId: string): boolean {
-    return this.client === client && this.hostId === hostId && this.confirmedWorktrees !== null
+  /**
+   * Fetches and admits one catalog, null when refused or not rebuildable after one full re-read.
+   * One read per client and host at a time: concurrent reads from one base would discard each other's
+   * delta. A read asked mid-flight joins one trailing read, so it never settles with rows older than its ask.
+   */
+  read(client: RpcClient, hostId: string): Promise<Worktree[] | null> {
+    const matches = (read: CatalogRead | null): read is CatalogRead =>
+      read !== null && read.client === client && read.hostId === hostId
+    if (!matches(this.inFlight)) {
+      return this.startRead(client, hostId)
+    }
+    if (!matches(this.trailing)) {
+      const start = () => this.startRead(client, hostId)
+      this.trailing = { client, hostId, rows: this.inFlight.rows.then(start, start) }
+    }
+    return this.trailing.rows
+  }
+
+  private startRead(client: RpcClient, hostId: string): Promise<Worktree[] | null> {
+    if (this.trailing?.client === client && this.trailing.hostId === hostId) {
+      this.trailing = null
+    }
+    const read: CatalogRead = {
+      client,
+      hostId,
+      rows: this.readOnce(client, hostId).finally(() => {
+        if (this.inFlight === read) {
+          this.inFlight = null
+        }
+      })
+    }
+    this.inFlight = read
+    return read.rows
+  }
+
+  private async readOnce(client: RpcClient, hostId: string): Promise<Worktree[] | null> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const fetched = await this.fetch(client, hostId)
+      if (fetched.kind === 'request_failed') {
+        return null
+      }
+      const rows = this.admit(fetched.pending)
+      // Only a delta that failed to rebuild is worth one full re-read.
+      if (rows || fetched.pending.admission.kind !== 'delta') {
+        return rows
+      }
+    }
+    return null
   }
 
   /** The confirmed host catalog to apply, or null when there is nothing to apply. */
-  admit(pending: PendingWorktreeCatalog | null): Worktree[] | null {
-    if (!pending) {
-      return null
-    }
+  admit(pending: PendingWorktreeCatalog): Worktree[] | null {
     // Discard stale client/host replies without invalidating the current session’s token.
     if (pending.client !== this.client || pending.hostId !== this.hostId) {
+      return null
+    }
+    // A late unchanged or delta reply answers a token this client no longer holds; its base is gone.
+    if (pending.admission.kind !== 'full' && pending.requestedSnapshotId !== this.snapshotId) {
       return null
     }
     if (pending.admission.kind === 'invalid') {
@@ -161,10 +201,9 @@ export class WorktreeCatalogSnapshotClient {
 
     const { admission } = pending
     if (admission.kind === 'delta') {
-      const rebuilt =
-        admission.baseSnapshotId === this.snapshotId && this.confirmedWorktrees
-          ? rebuildFromBase(admission.rowsFromBase, this.confirmedWorktrees)
-          : null
+      const rebuilt = this.confirmedWorktrees
+        ? rebuildFromBase(admission.rowsFromBase, this.confirmedWorktrees)
+        : null
       if (!rebuilt) {
         this.snapshotId = null
         return null

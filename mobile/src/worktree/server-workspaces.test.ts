@@ -214,7 +214,7 @@ describe('server rows as snapshots', () => {
   it('reads an older desktop with only the host id, as before', async () => {
     const { client, sent } = serverClient({ worktrees: [row('a')] })
 
-    const fetched = await fetchServerWorkspaces(client)
+    const fetched = await fetchServerWorkspaces(client, new ServerRowSnapshots(false))
 
     expect(sent).toEqual([{ hostId: host.hostId }])
     expect(fetched?.rows).toEqual([[row('a')]])
@@ -228,7 +228,7 @@ describe('server rows as snapshots', () => {
       { unchanged: true, snapshotId: 's2' },
       { worktrees: null }
     )
-    const snapshots = new ServerRowSnapshots()
+    const snapshots = new ServerRowSnapshots(true)
     const reads = []
     for (let read = 0; read < 4; read += 1) {
       reads.push((await fetchServerWorkspaces(client, snapshots))?.rows[0])
