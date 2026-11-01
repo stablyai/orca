@@ -324,6 +324,7 @@ vi.mock('../../terminal-history-deletion', () => ({
 }))
 
 vi.mock('../../ssh/targets/ssh-target-registry', () => ({
+  getSshConnectionManager: () => null,
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
