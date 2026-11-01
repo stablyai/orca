@@ -58,6 +58,37 @@ export function findWorktreeById(
   return matches.length === 1 ? matches[0] : null
 }
 
+export function findWorktreeReviewOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: string
+): { worktree: Worktree; repo: Repo } | null {
+  const worktree = findWorktreeById(state, worktreeId, executionHostId)
+  if (!worktree) {
+    return null
+  }
+  const requestedHost = normalizeExecutionHostId(
+    executionHostId ??
+      (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
+  )
+  const selectedRepo = requestedHost
+    ? findIndexedReviewRepository(
+        state.repos,
+        worktree.repoId,
+        requestedHost,
+        parseExecutionHostId(requestedHost)?.kind === 'runtime' &&
+          parseExecutionHostId(worktree.hostId)?.kind === 'ssh'
+          ? worktree.hostId
+          : undefined
+      )
+    : undefined
+  if (requestedHost && !selectedRepo) {
+    return null
+  }
+  const repo = resolveReviewRepository(state.repos, worktree, selectedRepo ?? undefined)
+  return repo ? { worktree, repo } : null
+}
+
 function matchesLegacyReviewRepository(
   state: AppState,
   worktree: Worktree,

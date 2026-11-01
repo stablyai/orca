@@ -195,7 +195,7 @@ describe('check-details tab owner', () => {
   ] as const)(
     'reloads a legacy paired SSH workspace opened through $openedThrough',
     async ({ activeHost }) => {
-      const { store, fetchPRCheckDetails } = createOwnerStore({
+      const { store, fetchPRCheckDetails, setCatalog } = createOwnerStore({
         activeWorkspaceExecutionHostId: activeHost,
         repos: [pairedRepo],
         // Older paired listings stamp only the SSH machine; the server owner comes from the repo.
@@ -204,6 +204,10 @@ describe('check-details tab owner', () => {
         }
       })
       const tabId = open(store)
+      setCatalog({
+        repos: [pairedRepo, { ...pairedRepo, path: '/direct', executionHostId: 'ssh:builder' }],
+        activeWorkspaceExecutionHostId: 'ssh:builder'
+      })
 
       await store.getState().reloadOpenCheckRunDetailsTab(tabId)
 
@@ -212,6 +216,13 @@ describe('check-details tab owner', () => {
         expect.objectContaining({ checkRunId: 42 }),
         { repoId: 'repo-1', repoOwnerExecutionHostId: 'runtime:server' }
       )
+      fetchPRCheckDetails.mockClear()
+      setCatalog({ repos: [{ ...pairedRepo, path: '/direct', executionHostId: 'ssh:builder' }] })
+      await store.getState().reloadOpenCheckRunDetailsTab(tabId)
+      expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+      expect(
+        store.getState().openFiles.find((file) => file.id === tabId)?.checkRunDetails?.error
+      ).toBe('Repository details are unavailable for this check.')
     }
   )
 

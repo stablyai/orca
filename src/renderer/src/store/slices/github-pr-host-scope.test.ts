@@ -185,6 +185,61 @@ describe('PR panel with local and remote copies of one project', () => {
     }
   )
 
+  it.each(['enqueue', 'refresh'] as const)(
+    '%s preserves a server-qualified legacy SSH owner when direct SSH overlaps',
+    async (action) => {
+      const serverRepo: Repo = {
+        ...localRepo,
+        path: '/server/project',
+        executionHostId: 'runtime:server',
+        connectionId: 'builder'
+      }
+      const directRepo: Repo = {
+        ...serverRepo,
+        path: '/direct/project',
+        executionHostId: 'ssh:builder'
+      }
+      const { store, worktree } = setup(serverRepo)
+      const directKey = `ssh:builder::project::${branch}`
+      const directEntry = { data: localPR, fetchedAt: Date.now() }
+      store.setState({
+        repos: [directRepo, serverRepo],
+        worktreesByRepo: { project: [{ ...worktree, hostId: 'ssh:builder' }] },
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        prCache: { [directKey]: directEntry }
+      })
+
+      const refresh = () => {
+        if (action === 'enqueue') {
+          store.getState().enqueueGitHubPRRefresh(worktree.id, 'active', 80, 'runtime:server')
+        } else {
+          store.getState().refreshGitHubForWorktree(worktree.id, 'runtime:server')
+        }
+      }
+      refresh()
+
+      await vi.waitFor(() => {
+        expect(store.getState().prCache[`runtime:server::project::${branch}`]?.data?.number).toBe(
+          22
+        )
+      })
+      expect(store.getState().prCache[directKey]).toBe(directEntry)
+      expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ selector: 'server', method: 'github.prForBranch' })
+      )
+
+      vi.clearAllMocks()
+      store.setState({ repos: [directRepo] })
+      refresh()
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+      expect(mockApi.gh.refreshPRNow).not.toHaveBeenCalled()
+      expect(store.getState().prCache[directKey]).toBe(directEntry)
+    }
+  )
+
   it.each(['ssh', 'runtime'] as const)(
     'clears only the %s copy of a linked merged PR on a fresh cache hit',
     async (host) => {

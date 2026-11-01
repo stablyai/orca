@@ -9,7 +9,11 @@ import {
   getPRRefreshRuntimeRepoTarget,
   shouldEnqueueLocalPRRefresh
 } from './repository-routing'
-import { buildPRRefreshCandidate, findWorktreeById } from './worktree-refresh'
+import {
+  buildPRRefreshCandidate,
+  findWorktreeReviewOwner,
+  findWorktreeById
+} from './worktree-refresh'
 import { getVisibleHostedReviewWorkspaces } from './visible-hosted-review-refresh-targets'
 import {
   hasNonGitHubReview,
@@ -36,12 +40,16 @@ export const createRefreshRoutingActions = (
   },
   enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
     const state = get()
-    const worktree = findWorktreeById(state, worktreeId, executionHostId)
-    const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
+    const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
+    if (!owner) {
+      return
+    }
+    const { worktree, repo } = owner
+    const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
     if (!candidate) {
       return
     }
-    if (worktree && hasNonGitHubReview(state, worktree, candidate)) {
+    if (hasNonGitHubReview(state, worktree, candidate)) {
       return
     }
     if (getPRRefreshRuntimeRepoTarget(state, candidate)) {

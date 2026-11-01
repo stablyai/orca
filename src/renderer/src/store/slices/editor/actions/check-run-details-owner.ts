@@ -1,3 +1,5 @@
+import type { Repo } from '../../../../../../shared/repo-types'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
@@ -11,7 +13,10 @@ import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
-import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
+import {
+  findIndexedReviewRepository,
+  findIndexedDetectedWorktrees
+} from '@/lib/worktree-runtime-owner-index'
 import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,
@@ -138,14 +143,17 @@ function getFramedTabRoute(file: CheckRunDetailsOwnerFile): WorktreeOperationRou
 }
 
 /** The route a listing row is reached through, with a legacy SSH row's server recovered from its repo. */
-function getRowRoute(state: AppState, row: WorktreeOperationOwnerRecord) {
+function getRowRoute(state: AppState, row: WorktreeOperationOwnerRecord, repository?: Repo) {
   if (!row.hostId && !row.runtimeOwnerEnvironmentId?.trim()) {
     return onPairedWebClientHost(state, {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       runtimeEnvironmentId: null
     })
   }
-  const resolution = resolveExactWorktreeRoute(state, row)
+  const resolution = resolveExactWorktreeRoute(
+    repository ? { ...state, repos: [repository] } : state,
+    row
+  )
   if (resolution.kind === 'resolved') {
     return onPairedWebClientHost(state, resolution.route)
   }
@@ -182,10 +190,10 @@ function isTabOwnerRoute(tab: WorktreeOperationRoute, row: WorktreeOperationRout
 }
 
 /** Tracked and detected rows; rival owners, or none on a pinned tab's route, fail closed. */
-export function findCheckRunDetailsWorktree(
+export function findCheckRunDetailsOwner(
   state: AppState,
   file: CheckRunDetailsOwnerFile
-): WorktreeOperationOwnerRecord | null {
+): { worktree: WorktreeOperationOwnerRecord; repo: Repo } | null {
   // Rebuilt local/direct-SSH views lack provenance; main's published tab still qualifies their owner.
   const tabRoute = hasOpenFileExecutionHostEvidence(file)
     ? getTabRoute(file)
@@ -196,15 +204,36 @@ export function findCheckRunDetailsWorktree(
     ),
     ...findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), file.worktreeId)
   ]
-  const matches = new Map<string, WorktreeOperationOwnerRecord>()
+  const matches = new Map<string, { worktree: WorktreeOperationOwnerRecord; repo: Repo | null }>()
+  const runtime = tabRoute && runtimeOf(tabRoute)
   for (const row of rows) {
-    const rowRoute = tabRoute ? getRowRoute(state, row) : null
+    const selectedRepo = runtime
+      ? findIndexedReviewRepository(
+          state.repos,
+          row.repoId,
+          toRuntimeExecutionHostId(runtime),
+          parseExecutionHostId(row.hostId)?.kind === 'ssh' ? row.hostId : undefined
+        )
+      : undefined
+    if (runtime && !selectedRepo) {
+      continue
+    }
+    const repo = resolveReviewRepository(state.repos, row, selectedRepo ?? undefined)
+    if (tabRoute && !repo) {
+      continue
+    }
+    const rowRoute = tabRoute ? getRowRoute(state, row, selectedRepo ?? undefined) : null
     if (!tabRoute || (rowRoute && isTabOwnerRoute(tabRoute, rowRoute))) {
       matches.set(
-        JSON.stringify([row.repoId, row.hostId ?? null, row.runtimeOwnerEnvironmentId ?? null]),
-        row
+        JSON.stringify([
+          row.repoId,
+          row.hostId ?? null,
+          rowRoute?.runtimeEnvironmentId ?? row.runtimeOwnerEnvironmentId ?? null
+        ]),
+        { worktree: row, repo }
       )
     }
   }
-  return matches.size === 1 ? (matches.values().next().value ?? null) : null
+  const match = matches.size === 1 ? matches.values().next().value : null
+  return match?.repo ? { worktree: match.worktree, repo: match.repo } : null
 }

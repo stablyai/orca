@@ -12,13 +12,12 @@ import {
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
-import { resolveReviewRepository } from '@/lib/review-owner'
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
 import { reconcileCheckDetailsReadingCache } from '@/components/editor/check-details-reading-cache'
 import {
   findCheckRunDetailsRequestTabId,
-  findCheckRunDetailsWorktree,
+  findCheckRunDetailsOwner,
   getCheckRunDetailsOwnerScope,
   isSameCheckRunDetailsOwner,
   resolveCheckRunDetailsOwnership
@@ -243,8 +242,9 @@ export function createCheckRunDetailsActions(
           requestId
         })
       }
-      const worktree = findCheckRunDetailsWorktree(state, file)
-      const repo = worktree ? resolveReviewRepository(state.repos, worktree) : null
+      const owner = findCheckRunDetailsOwner(state, file)
+      const worktree = owner?.worktree
+      const repo = owner?.repo
       if (!repo?.path) {
         patch({
           details: checkRunDetails.details,

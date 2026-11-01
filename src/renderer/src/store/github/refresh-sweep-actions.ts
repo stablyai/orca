@@ -2,8 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { buildPRRefreshCandidate, findWorktreeById } from './worktree-refresh'
-import { findRepoForGitHubOwner } from './repository-routing'
+import { buildPRRefreshCandidate, findWorktreeReviewOwner } from './worktree-refresh'
 import { getGitHubRepoLookupIndex } from '../slices/github-repo-lookup-index'
 import { issueCacheKey } from './cache-identity'
 import { CACHE_TTL, evictStaleEntries } from './cache-policy'
@@ -80,16 +79,16 @@ export const createRefreshSweepActions = (
 
   refreshGitHubForWorktree: (worktreeId, executionHostId) => {
     const state = get()
-    const worktree = findWorktreeById(state, worktreeId, executionHostId)
-    const candidate = worktree ? buildPRRefreshCandidate(state, worktree) : null
-    if (!worktree || !candidate) {
+    const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
+    if (!owner) {
+      return
+    }
+    const { worktree, repo } = owner
+    const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
+    if (!candidate) {
       return
     }
     const ownerHostId = getRepoExecutionHostId(candidate)
-    const repo = findRepoForGitHubOwner(state, candidate.repoId, candidate.repoPath, ownerHostId)
-    if (!repo) {
-      return
-    }
 
     const branch = candidate.branch
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
