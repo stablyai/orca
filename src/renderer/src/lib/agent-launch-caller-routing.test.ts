@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   callerProfileCases,
   type AgentLaunchCallerProfile

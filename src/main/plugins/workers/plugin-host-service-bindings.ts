@@ -1,6 +1,7 @@
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
-import { PluginSecretsStore } from '../plugin-secrets-store'
+import type { PluginDesktopFrameServices } from './plugin-host-method-bindings'
+import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-store'
 import { PluginKvStore } from '../plugin-storage-store'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 
@@ -31,9 +32,11 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
+  desktop?: PluginDesktopFrameServices | null
 }): PluginHostServices {
   const { delegate, pluginsDataDir } = input
   return {
+    desktop: input.desktop ?? null,
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {
@@ -72,7 +75,8 @@ export function bindPluginHostServices(input: {
     secrets: {
       get: (key, itemKey) => new PluginSecretsStore(pluginsDataDir, key).get(itemKey),
       set: (key, itemKey, value) => new PluginSecretsStore(pluginsDataDir, key).set(itemKey, value),
-      delete: (key, itemKey) => new PluginSecretsStore(pluginsDataDir, key).delete(itemKey)
+      delete: (key, itemKey) => new PluginSecretsStore(pluginsDataDir, key).delete(itemKey),
+      protection: () => (pluginSecretsProtection().level === 'os' ? 'os-keyring' : 'unavailable')
     },
     settings: {
       getAll: (key) => new PluginKvStore(pluginsDataDir, key, 'settings.json').getAll(),

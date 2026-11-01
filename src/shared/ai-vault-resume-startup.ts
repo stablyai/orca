@@ -11,7 +11,7 @@ import {
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
-} from './agent-session-resume'
+} from './agent-session/lifecycle/agent-session-resume'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
 import {
   resolveTuiAgentLaunchRawArgs,

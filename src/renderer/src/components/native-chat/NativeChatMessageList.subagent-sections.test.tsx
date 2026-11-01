@@ -38,12 +38,12 @@ import type {
   NativeChatMessage
 } from '../../../../shared/native-chat/native-chat-types'
 
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 import {
   foldStructuredAgentSubagentRoster,
   NO_STRUCTURED_AGENT_SUBAGENT_ROSTER
-} from '../../../../shared/structured-agent-session-subagent-roster'
+} from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   hostTestAttachParams,
   hostTestMessage,
@@ -13,7 +13,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import { structuredAgentSessionResumeParams } from '../native-chat/agent-session-wire/structured-agent-session-resume-eligibility'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { prepareStructuredAgentSessionCreateForWorktree } from './rpc/methods/structured-agent-session-create'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,

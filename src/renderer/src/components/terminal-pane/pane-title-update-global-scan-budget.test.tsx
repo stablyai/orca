@@ -16,16 +16,16 @@ import { WorktreeCardStatusSlot } from '@/components/sidebar/WorktreeCardStatusS
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 // Hoisted mock factories need erased namespace types because typeof import() annotations are banned.
 import type * as SleepingRecordParkExemptionModule from './sleeping-record-park-exemption'
 import type * as WorktreeAgentActivitySummaryModule from '@/components/sidebar/worktree-agent-activity-summary'
 import type * as WorktreeCardStatusInputsModule from '@/components/sidebar/worktree-card-status-inputs'
-import type * as StructuredAgentSessionProjectionModule from '../../../../shared/structured-agent-session-projection'
+import type * as StructuredAgentSessionProjectionModule from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -45,18 +45,21 @@ const reads = {
 }
 const chatWork = vi.hoisted(() => ({ hashes: 0 }))
 
-vi.mock('../../../../shared/structured-agent-session-projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof StructuredAgentSessionProjectionModule>()
-  return {
-    ...actual,
-    structuredAgentSessionPaneKey: (
-      ...args: Parameters<typeof actual.structuredAgentSessionPaneKey>
-    ) => {
-      chatWork.hashes += 1
-      return actual.structuredAgentSessionPaneKey(...args)
+vi.mock(
+  '../../../../shared/agent-session/view/structured-agent-session-projection',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof StructuredAgentSessionProjectionModule>()
+    return {
+      ...actual,
+      structuredAgentSessionPaneKey: (
+        ...args: Parameters<typeof actual.structuredAgentSessionPaneKey>
+      ) => {
+        chatWork.hashes += 1
+        return actual.structuredAgentSessionPaneKey(...args)
+      }
     }
   }
-})
+)
 
 // Count selector executions separately from record reads so cache hits remain visible.
 const selectorRuns = vi.hoisted(() => ({

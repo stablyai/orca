@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
-import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+} from '../../../shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
 
 const mocks = vi.hoisted(() => ({
   subscribeStatus: vi.fn(),

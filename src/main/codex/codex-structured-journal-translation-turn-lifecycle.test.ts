@@ -8,7 +8,7 @@ import {
   CodexPromptRegistry
 } from './codex-structured-prompt-replies'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 import {
   fixture,

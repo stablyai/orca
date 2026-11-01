@@ -3,7 +3,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'

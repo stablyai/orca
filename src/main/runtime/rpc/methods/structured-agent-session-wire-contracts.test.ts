@@ -1,4 +1,4 @@
-import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,9 +7,9 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'

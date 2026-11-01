@@ -16,9 +16,12 @@ import {
 } from '../../../../shared/agent-launch-picker-rows'
 import * as picker from '../../../../shared/agent-launch-picker'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
-import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -132,7 +135,9 @@ it('publishes only committed selection to physical catalog admission after a sus
   const committed = vi.fn()
   type Selection = { selected: picker.AgentPickerEntry['agent']; suspend: boolean }
   function Inventory({ selected, suspend }: Selection) {
-    const entries = useAgentLaunchPickerInventory('wt', menu, true, selected)
+    const entries = useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('wt', menu, true, selected)
+    )
     rendered(selected, suspend)
     useLayoutEffect(() => {
       committed(selected)
@@ -226,7 +231,9 @@ it('reads host Arguments and remembered chat choices without leaking desktop def
   const menu = model()
   const hook = renderHook(
     ({ selected }: { selected?: 'codex' }) =>
-      useAgentLaunchPickerInventory('wt', menu, true, selected),
+      useAgentPickerInventoryEntries(
+        useAgentLaunchPickerInventorySource('wt', menu, true, selected)
+      ),
     { initialProps: {} }
   )
   expect(hook.result.current[0]).toMatchObject({
@@ -265,7 +272,9 @@ it('uses existing legacy settings and a missing optional seed on an older paired
   mocks.session.mockImplementation(async (_target, method) =>
     method === 'agentSession.modelCatalog' ? catalog : { supported: true }
   )
-  const hook = renderHook(() => useAgentLaunchPickerInventory('wt', model(), true))
+  const hook = renderHook(() =>
+    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+  )
   await act(async () => {})
   expect(hook.result.current[0]).toMatchObject({
     defaultsPending: false,
@@ -288,9 +297,13 @@ it('bounds open-time catalog hydration to two agents and discards responses from
   mocks.session.mockImplementation((_target, method) =>
     method === 'agentSession.modelCatalog' ? old.promise : Promise.resolve({ supported: true })
   )
-  const hook = renderHook(({ menu }) => useAgentLaunchPickerInventory('wt', menu, true), {
-    initialProps: { menu: model('alpha', ['codex', 'claude', 'gemini']) }
-  })
+  const hook = renderHook(
+    ({ menu }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true)),
+    {
+      initialProps: { menu: model('alpha', ['codex', 'claude', 'gemini']) }
+    }
+  )
   await act(async () => {})
   const catalogs = () =>
     mocks.session.mock.calls.filter((call) => call[1] === 'agentSession.modelCatalog')
@@ -308,6 +321,40 @@ it('bounds open-time catalog hydration to two agents and discards responses from
   expect(hook.result.current[0].rows[0].executionHostId).toBe('runtime:beta')
 })
 
+it('lands catalog reads in subscribers only, replacing just the entry whose catalog changed', async () => {
+  const reads = new Map<string, PromiseWithResolvers<AgentSessionModelCatalogResult>>()
+  mocks.session.mockImplementation((_target, method, params: { agent: string }) => {
+    if (method !== 'agentSession.modelCatalog') {
+      return Promise.resolve({ supported: true })
+    }
+    const read = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    reads.set(params.agent, read)
+    return read.promise
+  })
+  const menu = model('alpha', ['codex', 'claude'])
+  let ownerRenders = 0
+  const owner = renderHook(() => {
+    ownerRenders += 1
+    return useAgentLaunchPickerInventorySource('wt', menu, true)
+  })
+  const subscriber = renderHook(() => useAgentPickerInventoryEntries(owner.result.current))
+  await act(async () => {})
+  const ownerRendersBeforeReads = ownerRenders
+  const before = subscriber.result.current
+
+  await act(async () => reads.get('codex')!.resolve(catalog))
+  const afterCodex = subscriber.result.current
+  expect(afterCodex.find((entry) => entry.agent === 'codex')?.catalog).toEqual(catalog)
+  const beforeClaude = before.find((entry) => entry.agent === 'claude')
+  expect(beforeClaude).toBeDefined()
+  expect(afterCodex.find((entry) => entry.agent === 'claude')).toBe(beforeClaude)
+
+  // A failed read changes nothing, so it must not publish a new snapshot.
+  await act(async () => reads.get('claude')!.reject(new Error('listing unavailable')))
+  expect(subscriber.result.current).toBe(afterCodex)
+  expect(ownerRenders).toBe(ownerRendersBeforeReads)
+})
+
 it.each(['slow', 'failed'] as const)(
   'publishes known terminal defaults independently of %s optional catalog/support reads',
   async (kind) => {
@@ -319,7 +366,9 @@ it.each(['slow', 'failed'] as const)(
           ? Promise.reject(new Error('unavailable'))
           : Promise.resolve({ seedOptions: { model: 'host-model', permissionMode: 'ask' } })
     )
-    const hook = renderHook(() => useAgentLaunchPickerInventory('wt', model(), true))
+    const hook = renderHook(() =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+    )
     await act(async () => {})
     expect(hook.result.current[0]).toMatchObject({
       defaultsPending: false,
@@ -350,7 +399,9 @@ it('retains legacy remembered values when createSupport does not supply optional
   mocks.session.mockImplementation(async (_target, method) =>
     method === 'agentSession.modelCatalog' ? catalog : { supported: true }
   )
-  const hook = renderHook(() => useAgentLaunchPickerInventory('wt', model(), true))
+  const hook = renderHook(() =>
+    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+  )
   await act(async () => {})
   expect(hook.result.current[0]).toMatchObject({
     defaultsPending: false,
@@ -363,7 +414,9 @@ it('keeps Chat default controls pending until their independent seed read settle
   mocks.session.mockImplementation((_target, method) =>
     method === 'agentSession.modelCatalog' ? Promise.resolve(catalog) : support.promise
   )
-  const hook = renderHook(() => useAgentLaunchPickerInventory('wt', model(), true))
+  const hook = renderHook(() =>
+    useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', model(), true))
+  )
   await act(async () => {})
   expect(hook.result.current[0]).toMatchObject({
     defaultsPending: false,
@@ -400,7 +453,10 @@ it('acquires each host agent once per open batch at N and 10N, independently of 
       .map((agent) => ({ agent, kind: 'chat', executionHostId: 'runtime:alpha' }))
     menu.detection.detectedIds = agents.slice(0, count)
     const hook = renderHook(
-      ({ open, selected }) => useAgentLaunchPickerInventory('wt', menu, open, selected),
+      ({ open, selected }) =>
+        useAgentPickerInventoryEntries(
+          useAgentLaunchPickerInventorySource('wt', menu, open, selected)
+        ),
       { initialProps: { open: true, selected: agents[0] } }
     )
     await act(async () => {})
@@ -433,7 +489,7 @@ it('updates terminal availability when detection changes while the Chat rows sta
   }
   const hook = renderHook(
     ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
-      useAgentLaunchPickerInventory('wt', value, true),
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', value, true)),
     { initialProps }
   )
   await act(async () => {})
@@ -447,7 +503,7 @@ it('reorders entries when the default agent changes while the rows stay the same
   const menu = model('default-order', ['codex', 'claude'])
   const hook = renderHook(
     ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
-      useAgentLaunchPickerInventory('wt', value, true),
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', value, true)),
     { initialProps: { value: { ...menu, defaultTuiAgent: 'claude' } } }
   )
   await act(async () => {})
@@ -475,9 +531,13 @@ it.each([3, 30])(
     })
     const menu = model(`shared-${count}`, ['claude', 'codex', 'gemini'])
     const mount = (open = true) =>
-      renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
-        initialProps: { open }
-      })
+      renderHook(
+        ({ open }) =>
+          useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+        {
+          initialProps: { open }
+        }
+      )
     const one = mount(),
       two = mount()
     for (let i = 0; i < count; i++) {
@@ -548,9 +608,13 @@ it.each([
     mocks.settings.mockResolvedValue(null)
     mocks.rpc.mockResolvedValue({ settings: payload })
     const menu = model(`invalid-${JSON.stringify(payload)}`)
-    const hook = renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
-      initialProps: { open: true }
-    })
+    const hook = renderHook(
+      ({ open }) =>
+        useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+      {
+        initialProps: { open: true }
+      }
+    )
     await act(async () => {})
     expect(hook.result.current[0].defaultsPending).toBe(true)
     expect(mocks.rpc).toHaveBeenCalledTimes(1)
@@ -568,9 +632,13 @@ it.each([
 
 it('revokes same-key read authority synchronously, retains failure as unknown, then accepts a late valid current answer', async () => {
   const menu = model('authority')
-  const hook = renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
-    initialProps: { open: true }
-  })
+  const hook = renderHook(
+    ({ open }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, open)),
+    {
+      initialProps: { open: true }
+    }
+  )
   await act(async () => {})
   expect(hook.result.current[0].defaultsPending).toBe(false)
   hook.rerender({ open: false })
@@ -603,9 +671,13 @@ it('lets a re-paired owner progress independently of held local-style calls and 
   mocks.settings.mockReturnValueOnce(oldSettings.promise)
   mocks.session.mockReturnValueOnce(oldOptional.promise).mockReturnValueOnce(oldOptional.promise)
   const menu = model('re-pair')
-  const hook = renderHook(({ menu }) => useAgentLaunchPickerInventory('wt', menu, true), {
-    initialProps: { menu }
-  })
+  const hook = renderHook(
+    ({ menu }) =>
+      useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true)),
+    {
+      initialProps: { menu }
+    }
+  )
   if (menu.state !== 'settled' || !menu.pickerContext) {
     throw new Error('fixture')
   }
@@ -636,7 +708,10 @@ it.each([3, 30])(
       throw new Error('fixture')
     }
     menu.pickerContext.executionHostId = 'local'
-    const mount = () => renderHook(() => useAgentLaunchPickerInventory('wt', menu, true))
+    const mount = () =>
+      renderHook(() =>
+        useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
+      )
     const surviving = mount()
     for (let i = 0; i < count; i++) {
       const transient = mount()
@@ -684,7 +759,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
       hostChatAnswer: () => answer,
       chatProgram: () => 'available'
     }).map((row) => ({ ...row, executionHostId: 'runtime:late-offer' as const }))
-    current = useAgentLaunchPickerInventory('wt', menu, true)
+    current = useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
     return createElement(
       TooltipProvider,
       null,

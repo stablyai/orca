@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
-import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/agent-session/structured-agent-session-create'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),

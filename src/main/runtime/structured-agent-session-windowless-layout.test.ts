@@ -9,7 +9,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { chatTabCommandsSettled, layoutApplyOn } from './session-layout-apply.test-fixture'
 import {

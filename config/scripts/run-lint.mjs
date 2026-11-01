@@ -46,6 +46,7 @@ export const LINT_STEPS = [
   'verify:skill-bundle-manifest',
   'check:reliability-gates',
   'verify:bundled-skill-guides',
+  'verify:plugin-authoring-skill-references',
   'check:readme-local-links',
   'check:id-only-store-write-ratchet',
   'verify:acp-protocol'

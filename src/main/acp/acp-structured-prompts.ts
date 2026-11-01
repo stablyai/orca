@@ -1,6 +1,6 @@
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError

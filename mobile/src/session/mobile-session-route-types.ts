@@ -1,5 +1,5 @@
 import type { MobileFileMedia } from '../files/mobile-file-media'
-import type { StructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'

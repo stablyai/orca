@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-option-models'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { CodexSession } from './codex-structured-session-state'
-import { isCodexTurnOptionKey } from './codex-structured-turn-start'
+import { isCodexTurnOptionKey } from './codex-turn-option-keys'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/agent-session/options/structured-agent-session-option-codec'
 import { CODEX_DEFAULT_SERVICE_TIER, codexFastServiceTier } from './codex-structured-service-tier'

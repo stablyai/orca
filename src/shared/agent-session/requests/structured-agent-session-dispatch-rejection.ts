@@ -5,7 +5,7 @@ import {
   isSubmissionRejectionKind,
   readAgentSessionFailureFact,
   type SubmissionRejectionKind
-} from '../../agent-session-failure'
+} from '../failures/agent-session-failure'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 
 /** Bare marker is hidden by released clients; log the error separately. Older hosts append : <error>. */

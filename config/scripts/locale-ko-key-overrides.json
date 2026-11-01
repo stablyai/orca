@@ -4313,9 +4313,6 @@
   "auto.components.settings.TerminalWindowSection.25e2f8e8e1": {
     "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
   },
-  "auto.components.settings.TerminalWindowSection.97950bb087": {
-    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
-  },
   "auto.components.settings.TerminalWindowSection.809f37738d": {
     "ko": "터미널 배경의 투명도를 제어합니다. 1은 완전히 불투명하고, 0은 완전히 투명합니다."
   },
@@ -4348,9 +4345,6 @@
   },
   "auto.components.settings.terminal.search.75691e4911": {
     "ko": "터미널 그리드 주변의 수평 패딩(픽셀)입니다."
-  },
-  "auto.components.settings.terminal.search.bc2054657a": {
-    "ko": "터미널 창에 배경 흐림을 적용합니다. 다시 시작해야 합니다."
   },
   "auto.components.settings.terminal.search.4c643695aa": {
     "ko": "터미널 배경의 투명도를 제어합니다."

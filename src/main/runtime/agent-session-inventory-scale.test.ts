@@ -44,7 +44,7 @@ import {
   releaseAgentSessionRecordStore
 } from './agent-session-record-store-slot'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from './orchestration/structured-session-lineage'
 import { requireUnownedStructuredAgentSessionAdoption } from './structured-agent-session-create-adoption'
 import { listStructuredSessionsForWorktree } from './structured-session-worktree-teardown'

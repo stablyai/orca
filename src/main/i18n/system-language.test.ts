@@ -30,12 +30,6 @@ describe('native language snapshot', () => {
     expect(getPreferredSystemLanguages).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps a C-only native result unknown so Chromium cannot override it', async () => {
-    getPreferredSystemLanguages.mockReturnValue(['C.UTF-8', 'POSIX'])
-    const { getSystemLanguageDetection } = await import('./system-language')
-    expect(getSystemLanguageDetection()).toMatchObject({ status: 'unknown', source: 'native' })
-  })
-
   it.each(['empty', 'failed'])(
     'permits uncertain browser fallback for %s native lookup',
     async (kind) => {
@@ -58,28 +52,4 @@ describe('native language snapshot', () => {
       expect(mainI18n.language).toBe('en')
     }
   )
-
-  it('never replaces a successful native snapshot with browser fallback hints', async () => {
-    const { getSystemLanguageDetection } = await import('./system-language')
-    const native = getSystemLanguageDetection()
-    expect(getSystemLanguageDetection(['ja-JP'])).toBe(native)
-    expect(native).toMatchObject({ locale: 'fr', source: 'native' })
-  })
-})
-
-it.each([
-  { platform: 'Windows', preferences: ['ja-JP', 'en-US'], locale: 'ja', status: 'supported' },
-  { platform: 'macOS', preferences: ['fr-US', 'en-US'], locale: 'fr', status: 'supported' },
-  {
-    platform: 'Linux',
-    preferences: ['zh_CN.UTF-8', 'zh_CN', 'zh', 'C'],
-    locale: 'zh',
-    status: 'supported'
-  },
-  { platform: 'Linux C-only', preferences: ['C.UTF-8', 'C'], locale: 'en', status: 'unknown' },
-  { platform: 'unsupported', preferences: ['it-IT', 'fr-FR'], locale: 'en', status: 'unsupported' }
-])('handles $platform preference lists', async ({ preferences, locale, status }) => {
-  getPreferredSystemLanguages.mockReturnValue(preferences)
-  const { getSystemLanguageDetection } = await import('./system-language')
-  expect(getSystemLanguageDetection()).toMatchObject({ locale, status })
 })

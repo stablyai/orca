@@ -30,7 +30,7 @@ import {
   claudeOpened,
   claudeStartupSettled
 } from './claude-structured-startup-settled-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const command = realClaudeCommand
 const suiteTitle = `Claude structured real CLI handshake${realClaudeCliGate.skipReason ? ` (skipped: ${realClaudeCliGate.skipReason})` : ''}`

@@ -7,11 +7,11 @@ import {
   agentSessionFailureFact,
   type AgentSessionAttachmentProblem,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import { claudeRecord } from './claude-structured-item-translation'
 
