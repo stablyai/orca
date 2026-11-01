@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { HostFrameNavigationRegistry } from './host-frame-navigation-guard'
 import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
 
-function frame(name: string, parent: object | null = null) {
+type TestFrame = {
+  name: string
+  parent: TestFrame | null
+  frameTreeNodeId: number
+  isDestroyed: () => boolean
+}
+
+function frame(name: string, parent: TestFrame | null = null): TestFrame {
   return { name, parent, frameTreeNodeId: Math.random(), isDestroyed: () => false }
 }
 

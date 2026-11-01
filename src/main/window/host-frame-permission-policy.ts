@@ -1,6 +1,10 @@
-import { hostFrameKindOf, type HostFrameKind } from './host-frame-navigation-guard'
+import {
+  hostFrameKindOf,
+  type HostFrameIdentity,
+  type HostFrameKind
+} from './host-frame-navigation-guard'
 
-type PermissionFrame = { parent?: PermissionFrame | null }
+type PermissionFrame = HostFrameIdentity & { parent?: PermissionFrame | null }
 
 type MainWindowPermissionRequest = {
   isMainFrame?: boolean
@@ -15,7 +19,7 @@ type MainWindowPermissionRequest = {
  */
 export function isPluginFramePermissionRequest(
   details: MainWindowPermissionRequest | undefined,
-  kindOf: (frame: object) => HostFrameKind | null = hostFrameKindOf
+  kindOf: (frame: HostFrameIdentity) => HostFrameKind | null = hostFrameKindOf
 ): boolean {
   if (!details || details.isMainFrame === true) {
     return false
