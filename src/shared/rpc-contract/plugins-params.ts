@@ -56,7 +56,9 @@ export const PluginDevUnloadParams = z
   })
 
 export const PluginGetLogsParams = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+  /** `cursor` from an earlier reply; only later lines come back. Older hosts ignore it. */
+  after: z.string().max(64).optional()
 })
 
 export const PluginDevInspectParams = z.object({

@@ -141,6 +141,15 @@ capability kinds the user approved (such as `['storage:own']`), fixed when the w
 host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
 
+A worker's `main` is an ES module: `.js`/`.mjs`, or `.ts`/`.mts` with no build step (needs
+`engines.orca` `>=1.4.246`). Orca transpiles TypeScript files in your plugin folder as Node loads
+them, keeping line numbers, so stack traces point at your `.ts` lines; enums and parameter
+properties work too. JSX does not (no `.tsx` worker files). Relative imports resolve as in frames:
+`./util`, `./util.js` and `./util.ts` all find `util.ts`, and `./store` finds `store/index.ts`.
+Everything else, such as `node:` builtins, resolves exactly as Node resolves it for a JavaScript
+worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
+the worker starts.
+
 ### Custom editors
 
 A custom editor opens files that end in one of its `extensions` (with the dot, such as
@@ -188,6 +197,26 @@ listen with `orca.on('theme', …)`, to follow it.
 
 ## 2. Load it while you work
 
+From the plugin folder, run:
+
+```sh
+orca plugin dev watch .
+```
+
+It writes the TypeScript typings (`.orca/types`), loads the folder into Orca as a development
+plugin, and stays running: it prints every line your panels, editors and worker log (console
+errors arrive as `[frame] <file>:<line> <message>`, at the line in your source file), a
+`↻ reloaded` line each time a save reloads the plugin, and status changes such as `errored` or
+`invalid` with the error. If an edit asks for new access, it prints the
+`orca plugin dev reload <dir> --approve <fingerprint>` command to run from another terminal.
+Ctrl-C unloads the folder (unless it was loaded before you started) and exits; press it again
+to exit at once. With `--json` it prints one JSON object per line, with a `type` of `loaded`,
+`log`, `reloaded`, `status`, `approval`, `warning`, `disconnected` or `unloaded`, for coding
+agents. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
+prints the command to re-run with `--approve`).
+
+To keep a folder loaded without a terminal, use Settings instead:
+
 1. Settings → Plugins: click **Turn on plugins**.
 2. **Development folders…** → add the plugin folder. It loads as `local.<id>` (or under its
    deprecated `publisher` while it still declares one), and overrides an installed copy with
@@ -203,10 +232,15 @@ Orca watches development folders and reloads the plugin when its manifest or fil
 Theme, syntax and translation edits show up as you save. Panels and workers are not bound to
 their files in development, so saving does not ask for approval again; adding a capability or
 moving to a higher execution profile does. Shortcuts and recipes are tied to their files, so
-each change to them is reviewed again. Use **Restart** on the plugin row after changing a
-worker, and the plugin's logs to see what it printed. `orca plugin dev reload [<dir>]` reloads
+each change to them is reviewed again. **Restart** on the plugin row restarts a worker by hand,
+and the plugin's logs show what it printed. `orca plugin dev reload [<dir>]` reloads
 now, for a change the watcher missed (network or WSL folders) or after changing commands or
 shortcuts, which need a new approval (`--approve <fingerprint>`).
+
+A components panel hot reloads on save, keeping its keyed atoms and, when a save does not load,
+its last good version with the error inline ([hot reload](plugin-declarative-ui.md#hot-reload)).
+A running worker restarts on the new code; what it keeps in `storage` is on disk, so it survives
+the restart, while its in-memory state does not.
 
 For TypeScript, run `orca plugin types <dir>` once (or let `orca plugin dev load` do it): it
 writes Orca's typings and a tsconfig to extend into `.orca/types/`, which ignores itself in Git.

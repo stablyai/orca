@@ -7,14 +7,19 @@ import { quoteCliCommandArgument } from '../shell-command-quote'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 
-type DevLoadResult = {
+export type DevLoadResult = {
   path: string
   pluginKey: string
   added: boolean
   approval: 'content-only' | 'approve-flag' | 'already-approved'
   plugin: PluginHostListEntry | null
 }
-type LogsResult = { pluginKey: string; lines: { ts: number; level: string; line: string }[] }
+export type LogsResult = {
+  pluginKey: string
+  lines: { ts: number; level: string; line: string }[]
+  /** Absent on hosts older than the `after` cursor. */
+  cursor?: string
+}
 
 const APPROVAL_CODES = new Set(['approval_required', 'approval_stale'])
 
@@ -58,7 +63,11 @@ function nextStepsOf(data: unknown): string[] {
     : []
 }
 
-function translatePluginRpcError(ctx: HandlerContext, method: string, error: unknown): unknown {
+export function translatePluginRpcError(
+  ctx: HandlerContext,
+  method: string,
+  error: unknown
+): unknown {
   if (!(error instanceof RuntimeRpcFailureError)) {
     return error
   }
@@ -81,7 +90,11 @@ function translatePluginRpcError(ctx: HandlerContext, method: string, error: unk
   return new RuntimeClientError(code, message, { ...data, command, nextSteps })
 }
 
-async function callPlugins<T>(ctx: HandlerContext, method: string, params?: unknown): Promise<T> {
+export async function callPlugins<T>(
+  ctx: HandlerContext,
+  method: string,
+  params?: unknown
+): Promise<T> {
   try {
     return (await ctx.client.call<T>(method, params)).result
   } catch (error) {
@@ -90,7 +103,7 @@ async function callPlugins<T>(ctx: HandlerContext, method: string, params?: unkn
 }
 
 /** Development folders are paths on the Orca host, which may not be this machine. */
-function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
+export function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   if (process.env.ORCA_CLI_CWD) {
     throw new RuntimeClientError(
       'invalid_environment',
@@ -144,7 +157,7 @@ async function devLoad(ctx: HandlerContext, path: string): Promise<void> {
 }
 
 /** Why best effort and local only: typings help the editor; a remote host's folder is not here. */
-async function refreshDevTypes(ctx: HandlerContext, path: string): Promise<string[]> {
+export async function refreshDevTypes(ctx: HandlerContext, path: string): Promise<string[]> {
   if (ctx.client.isRemote) {
     return []
   }

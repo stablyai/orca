@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../core'
 import type { PluginService } from '../../../plugins/plugin-service'
 import { PLUGIN_METHODS, setPluginServiceForRpc } from './plugins'
+import { PluginLogBuffer } from '../../../plugins/plugin-log-buffer'
+import { PluginGetLogsParams } from '../../../../shared/rpc-contract/plugins-params'
 
 vi.mock('../../../plugins/plugin-client-list', () => ({
   listPluginsForClients: vi.fn().mockResolvedValue([])
@@ -218,5 +220,47 @@ describe('plugins.restart', () => {
       method('plugins.restart').handler({ pluginKey: 'acme.other' }, context)
     ).rejects.toThrow(/not installed/)
     expect(deactivatePlugin).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugins.getLogs', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  it('passes the cursor through and returns the next one', async () => {
+    const logs = new PluginLogBuffer()
+    logs.append('acme.notes', 'info', 'one')
+    const stub = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      getLogsSince: (key: string, cursor?: string) => logs.since(key, cursor)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: getLogs reads only the members stubbed above.
+    setPluginServiceForRpc(stub as unknown as PluginService, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn()
+    })
+    const first = await method('plugins.getLogs').handler({ pluginKey: 'acme.notes' }, context)
+    expect(first).toMatchObject({ lines: [{ line: 'one' }], cursor: expect.any(String) })
+    logs.append('acme.notes', 'error', 'two')
+    const after =
+      typeof first === 'object' && first && 'cursor' in first && typeof first.cursor === 'string'
+        ? first.cursor
+        : ''
+    await expect(
+      method('plugins.getLogs').handler({ pluginKey: 'acme.notes', after }, context)
+    ).resolves.toMatchObject({ lines: [{ line: 'two', level: 'error' }] })
+  })
+
+  it('accepts the optional cursor param, so older clients still parse', () => {
+    expect(PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes' }).success).toBe(true)
+    expect(PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes', after: 'x:1' }).success).toBe(
+      true
+    )
+    expect(
+      PluginGetLogsParams.safeParse({ pluginKey: 'acme.notes', after: 'x'.repeat(65) }).success
+    ).toBe(false)
   })
 })
