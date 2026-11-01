@@ -5,6 +5,7 @@ import { provenHostStatus } from '../transport/proven-host-status'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
+import { isEarlyConnectRetry } from '../transport/connection-health'
 import type { MobileWebShellGates } from './mobile-web-shell-session-contract'
 
 /** Feeds the host route's gates to the shell session, and returns the status they proved for the page's init. */
@@ -19,11 +20,14 @@ export function useMobileWebShellGates(args: {
   const { gates, connState, client, rearmKey, onGates } = args
   const { statusPending, statusReadable, hostCapabilities, hostProtocolWindow } = gates
   const reachability = readMobileWebShellReachability(connState, client)
+  const retrying =
+    client !== null && isEarlyConnectRetry(connState, () => client.getReconnectAttempt())
   useEffect(() => {
     onGates({
       statusPending,
       statusReadable,
       reachability,
+      retrying,
       hostCapabilities,
       hostStatus: hostProtocolWindow
     })
@@ -34,6 +38,7 @@ export function useMobileWebShellGates(args: {
     rearmKey,
     hostProtocolWindow,
     reachability,
+    retrying,
     statusPending,
     statusReadable
   ])
