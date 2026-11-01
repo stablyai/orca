@@ -46,6 +46,8 @@ export type PluginPanelRequest = {
   name: string
   input: unknown
   timeoutMs?: number
+  /** Replaces the panel session's lifetime for callers that are not an open panel. */
+  signal?: AbortSignal
 }
 
 /**
@@ -117,7 +119,7 @@ export class PluginPanelBridge {
         input: request.input,
         panel: request.caller,
         timeoutMs: request.timeoutMs ?? PLUGIN_PANEL_REQUEST_DEFAULT_TIMEOUT_MS,
-        signal: this.lifetime(request.caller.id).signal
+        signal: request.signal ?? this.lifetime(request.caller.id).signal
       })
     } catch (error) {
       const code =

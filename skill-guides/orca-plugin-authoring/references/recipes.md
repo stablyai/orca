@@ -6,7 +6,8 @@ Hand-written companion to the `orca-plugin-authoring` guide.
 
 A plugin's panels and its worker are one program. Use this when a panel needs Node, long work,
 secrets or state the worker also uses; a panel alone needs none of it. It needs `main`, so the
-plugin is `trusted-worker` (example `hello-worker-panel`).
+plugin is `trusted-worker`. `ORCA plugin create <dir> --template worker-panel` scaffolds one
+(protocol, worker, panel and tests for both); example `hello-worker-panel` adds settings and events.
 
 - Declare the contract once in a file both include (`src/protocol.ts`):
   `declare module 'orca' { interface PluginRequests { 'todos.list': { input: { done?: boolean }; output: Todo[] } } interface PluginPanelEvents { 'todos.changed': { count: number } } }`.
@@ -22,6 +23,8 @@ plugin is `trusted-worker` (example `hello-worker-panel`).
   `export function activate` is never called. It runs once when the worker starts; an optional
   `export function deactivate()` is awaited before it stops. An idle worker stops and restarts on
   its next command, event or panel request.
+- `ORCA plugin dev request <dir|plugin-key> <name> --data '<json>'` calls a handler the way
+  `plugin.request` does and prints its answer, with no panel open.
 
 ## Storage, settings and secrets
 
