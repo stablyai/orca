@@ -288,7 +288,8 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
           launchConfig: {
             agentCommand: 'codex',
             agentArgs: '',
-            agentEnv: {}
+            agentEnv: {},
+            unrecorded: true
           },
           launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
           env: expect.objectContaining({

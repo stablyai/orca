@@ -57,7 +57,9 @@ export function createAgentStatusLaunchActions(
                 entry: existingEntry,
                 worktreeId,
                 capturedAt: existingSleepingRecord.capturedAt,
-                launchConfig: copiedLaunchConfig,
+                launchConfig: copiedLaunchConfig.unrecorded
+                  ? existingSleepingRecord.launchConfig
+                  : copiedLaunchConfig,
                 origin: existingSleepingRecord.origin
               })
             : null

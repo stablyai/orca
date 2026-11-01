@@ -26,6 +26,8 @@ export function buildAgentResumeStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
   ompResumeFilePath?: string | null
+  /** The saved recipe was missing, so the plan's launch config must not read as a recorded one. */
+  unrecorded?: boolean
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
@@ -86,7 +88,8 @@ export function buildAgentResumeStartupPlan(args: {
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     agentArgs: recorded.agentArgs,
-    ...baseCommand.resumeLaunch
+    ...baseCommand.resumeLaunch,
+    unrecorded: args.unrecorded
   })
   const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const agentCwd = args.providerSession.cwd

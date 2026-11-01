@@ -65,6 +65,8 @@ export type AgentLaunchConfigRegistryEntry = {
   launchConfig: SleepingAgentLaunchConfig
   registeredAt: number
   identity: AgentLaunchConfigRegistrationMetadata
+  /** Set once a hook row carried `identity.launchToken`, so token-less captures may reuse the recipe. Renderer-only. */
+  launchTokenProven?: true
 }
 
 export type AgentStatusPayload = ParsedAgentStatusPayload & {
