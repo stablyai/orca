@@ -15,7 +15,7 @@ export type PromptProjection = {
 }
 
 export function reusePromptProjection(
-  journal: Partial<Pick<AgentSessionJournal, 'readSince'>>,
+  journal: Partial<Pick<AgentSessionJournal, 'readSince' | 'item'>>,
   prior: PromptProjection | undefined,
   cursor: Pick<PromptProjection, 'epoch' | 'sequence'>,
   liveFence: number | null
@@ -35,16 +35,24 @@ export function reusePromptProjection(
       prior.dependencies.has(change.itemId) ||
       (change.kind === 'item' &&
         (change.body.kind === 'approval' || change.body.kind === 'question'))
+    const outcomeTouches = (itemId: string): boolean => {
+      if (!journal.item || prior.dependencies.has(itemId)) {
+        return true
+      }
+      const body = journal.item(itemId)?.body
+      return body?.kind === 'approval' || body?.kind === 'question'
+    }
     if (
       delta.ok &&
       delta.cursor.sequence === cursor.sequence &&
       delta.rows.at(-1)?.seq === cursor.sequence &&
-      delta.rows.every(
-        (row, index) =>
-          row.seq === prior.sequence + index + 1 &&
-          (row.kind === 'lifecycle-batch'
-            ? !row.mutations.some(touches)
-            : (row.kind === 'item' || row.kind === 'tombstone') && !touches(row))
+      delta.rows.every((row, index) =>
+        row.kind === 'outcome'
+          ? row.submissionIds.length === 0 && !row.itemIds.some(outcomeTouches)
+          : row.seq === prior.sequence + index + 1 &&
+            (row.kind === 'lifecycle-batch'
+              ? !row.mutations.some(touches)
+              : (row.kind === 'item' || row.kind === 'tombstone') && !touches(row))
       )
     ) {
       prior.sequence = cursor.sequence

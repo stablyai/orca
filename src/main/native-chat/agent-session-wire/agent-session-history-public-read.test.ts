@@ -26,7 +26,7 @@ const IDENTITY = {
   agent: 'codex' as const,
   providerHandle: codexProviderHandle('thread-1')
 }
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 let root: string
 let journal: AgentSessionJournal
 const item = (ordinal: number) => ({

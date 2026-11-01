@@ -1,9 +1,8 @@
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ChevronLeft, CircleAlert, History, RefreshCw, SearchX } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
@@ -33,6 +32,8 @@ import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import { AgentHistoryStateView } from './AgentHistoryStateView'
+import { AgentHistoryResumeNotice, AgentHistorySkippedNotice } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'
@@ -136,7 +137,6 @@ function MobileAgentSessionHistoryPanelContent({
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
-  const count = issues.length
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -323,64 +323,58 @@ function MobileAgentSessionHistoryPanelContent({
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
-        <View style={styles.state}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+        <AgentHistoryStateView
+          loading
+          title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
+        />
       ) : screenState.kind === 'unsupported' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>
-            {t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
-          </Text>
-          <Text style={styles.stateText}>
-            {t(
-              'agentHistory.panel.updateHost',
-              'Update Orca on this host to browse agent session history.'
-            )}
-          </Text>
-        </View>
+        <AgentHistoryStateView
+          icon={History}
+          title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
+          message={t(
+            'agentHistory.panel.updateHost',
+            'Update Orca on this host to browse agent session history.'
+          )}
+        />
       ) : screenState.kind === 'error' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>
-            {t('agentHistory.panel.loadFailed', 'Unable to Load')}
-          </Text>
-          <Text style={styles.stateText}>{screenState.message}</Text>
-          {retry ? (
-            <Pressable style={styles.retryButton} onPress={retry}>
-              <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <AgentHistoryStateView
+          icon={CircleAlert}
+          title={t('agentHistory.panel.loadFailed', 'Unable to Load')}
+          message={screenState.message}
+          action={retry ? { label: t('common.retry', 'Retry'), onPress: retry } : undefined}
+        />
       ) : (
         <>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {count === 1
-                  ? t('agentHistory.panel.skipped_one', '{{count}} transcript skipped', {
-                      count
-                    })
-                  : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', {
-                      count
-                    })}
-              </Text>
-            </View>
-          ) : null}
+          {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
           {resumeMessage ? (
-            <View style={styles.resumeBanner}>
-              <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
-            </View>
+            <AgentHistoryResumeNotice
+              message={resumeMessage}
+              onDismiss={() => setResumeMessage(null)}
+            />
           ) : null}
           {sections.length === 0 ? (
-            <View style={[styles.state, { paddingBottom: searchBarHeight }]}>
-              <Text style={styles.stateTitle}>
-                {t('agentHistory.panel.noSessions', 'No agent sessions')}
-              </Text>
-              <Text style={styles.stateText}>
-                {query
-                  ? t('agentHistory.panel.noSearchResults', 'No sessions match your search.')
-                  : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')}
-              </Text>
-            </View>
+            query ? (
+              <AgentHistoryStateView
+                icon={SearchX}
+                title={t('agentHistory.panel.noMatches', 'No matches')}
+                message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
+                action={{
+                  label: t('agentHistory.panel.clearSearch', 'Clear search'),
+                  onPress: () => setQuery('')
+                }}
+                bottomInset={searchBarHeight}
+              />
+            ) : (
+              <AgentHistoryStateView
+                icon={History}
+                title={t('agentHistory.panel.noSessions', 'No agent sessions')}
+                message={t(
+                  'agentHistory.panel.emptyScope',
+                  'No past agent sessions in this scope.'
+                )}
+                bottomInset={searchBarHeight}
+              />
+            )
           ) : (
             <MobileAgentSessionHistoryList
               sections={sections}

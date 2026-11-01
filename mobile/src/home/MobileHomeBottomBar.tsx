@@ -1,4 +1,4 @@
-import { ListTodo, Plus, QrCode, type LucideIcon } from 'lucide-react-native'
+import { CalendarClock, ListTodo, Plus, QrCode, type LucideIcon } from 'lucide-react-native'
 import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -16,11 +16,13 @@ export function MobileHomeBottomBar(props: {
   isWideLayout: boolean
   connectedHosts: HostProfile[]
   onOpenTasks: (hostId: string) => void
+  onOpenAutomations: (hostId: string) => void
   onCreateWorkspace: () => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const tasksHostPicker = useConnectedHostPicker(props.connectedHosts)
+  const automationsHostPicker = useConnectedHostPicker(props.connectedHosts)
   const enabled = props.connectedHosts.length > 0
   return (
     <MobileHomeBottomBarFrame {...props}>
@@ -38,6 +40,13 @@ export function MobileHomeBottomBar(props: {
           onPress={() => tasksHostPicker.pickHost(props.onOpenTasks)}
         />
         <BarButton
+          icon={CalendarClock}
+          label={t('home.listFooter.automationsHeading', 'Automations')}
+          variant="secondary"
+          disabled={!enabled}
+          onPress={() => automationsHostPicker.pickHost(props.onOpenAutomations)}
+        />
+        <BarButton
           icon={Plus}
           label={t('home.bottomBar.newWorkspace', 'New workspace')}
           variant="primary"
@@ -48,6 +57,10 @@ export function MobileHomeBottomBar(props: {
       <PickerModal
         title={t('home.listFooter.hostPickerTitle', 'Open Tasks On')}
         {...tasksHostPicker.pickerProps}
+      />
+      <PickerModal
+        title={t('home.listFooter.automationsHostPickerTitle', 'Open Automations On')}
+        {...automationsHostPicker.pickerProps}
       />
     </MobileHomeBottomBarFrame>
   )

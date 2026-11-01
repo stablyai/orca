@@ -96,7 +96,7 @@ export function NewWorktreeModalDrawers(props: {
         selectedId={props.selectedRepo ? getRepoExecutionHostId(props.selectedRepo) : ''}
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
-        renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={16} />}
+        renderIcon={(item) => <HostKindIcon hostId={item.hostId} size={18} />}
       />
 
       <PickerListDrawer
@@ -106,7 +106,7 @@ export function NewWorktreeModalDrawers(props: {
         selectedId={props.selectedAgent.id}
         onSelect={props.onAgentChange}
         onClose={props.onTransitionToForm}
-        renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
+        renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={20} />}
       />
 
       <SetupHookTrustDrawer

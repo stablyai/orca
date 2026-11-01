@@ -13,11 +13,12 @@ import {
 } from '../../../src/shared/agent-session-provider-handle-encoding'
 import {
   createTestStore,
-  makeUnifiedTab
+  makeUnifiedTab,
+  makeWorktree
 } from '../../../src/renderer/src/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '../../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
-import type { AutomationsPageActionContext } from '../../../src/renderer/src/components/automations/automations-page-action-context'
+import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
 import { structuredAgentSessionTabId } from '../../../src/shared/structured-agent-session-projection'
@@ -115,11 +116,21 @@ export async function createReopenRig(
   const beforeRecord = rig.store.getConversation(CHAT)
   const send = vi.spyOn(rig.host, 'send'),
     create = vi.spyOn(rig.host, 'create')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only these row resolvers are read by the real Details action; all Chat/open/close/store owners execute.
   const context = {
-    store: { repoForRow: () => undefined, worktreeForRow: () => ({ id: rig.workspace, hostId }) },
-    list: { selectedRow: { key: 'saved' } }
-  } as unknown as AutomationsPageActionContext
+    list: {
+      runTargetFor: (recorded) => ({
+        worktree: makeWorktree({ id: rig.workspace, repoId: repo.id, hostId }),
+        ownerEnvironmentId: paired ? 'reopen-host' : null,
+        expectedPairingRevision: undefined,
+        terminalTarget: null,
+        viewState: getAutomationRunViewState({
+          run: recorded,
+          workspaceExists: true,
+          terminalTargetExists: false
+        })
+      })
+    }
+  } satisfies Parameters<typeof createAutomationRunWorkspaceAction>[0]
   const action = createAutomationRunWorkspaceAction(context)
   const close = async () => {
     store.getState().closeUnifiedTab(structuredAgentSessionTabId(CHAT))

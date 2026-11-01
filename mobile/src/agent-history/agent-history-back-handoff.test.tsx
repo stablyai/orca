@@ -36,11 +36,19 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
   ChevronLeft: 'Icon',
-  Play: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
   RefreshCw: 'Icon',
   Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
   X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 // Mock Metro PNG requires; no client means session list never renders here.

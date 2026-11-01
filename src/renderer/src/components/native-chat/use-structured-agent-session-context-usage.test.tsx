@@ -188,10 +188,15 @@ describe('useStructuredAgentSession context usage', () => {
         : Promise.resolve(null)
     )
     const { result, rerender } = render()
+    // Reads start one microtask after they are scheduled, so let each start before its revisions.
+    await waitFor(() => expect(replies).toHaveLength(1))
     await act(async () => replies[0](150_000))
     await waitFor(() => expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 }))
 
-    for (let revision = 1; revision <= 5; revision += 1) {
+    unloadedTurnRevisions = 1
+    rerender()
+    await waitFor(() => expect(optionReads()).toBe(2))
+    for (let revision = 2; revision <= 5; revision += 1) {
       unloadedTurnRevisions = revision
       rerender()
     }

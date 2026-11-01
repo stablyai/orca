@@ -43,6 +43,7 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
+vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 vi.mock('react-native-reanimated', () => {
   function makeShared(key: string, initial: number) {
     let value = initial
@@ -58,6 +59,7 @@ vi.mock('react-native-reanimated', () => {
   }
   let sharedIndex = 0
   return {
+    Easing: { bezier: () => (t: number) => t },
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => makeShared(`shared-${sharedIndex++}`, initial),
     useAnimatedStyle: () => ({}),

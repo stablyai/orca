@@ -35,7 +35,7 @@ export function registerJournalStoreSchemaTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   function tick(): number {
     clock += 1

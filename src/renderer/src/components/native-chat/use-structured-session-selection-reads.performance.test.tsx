@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+import { useSyncExternalStore } from 'react'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../shared/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
+import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createStructuredSessionSelectionController } from '../../../../shared/structured-agent-session-selection-operations'
@@ -8,7 +12,10 @@ import { useStructuredAgentSessionOptionStamp } from './structured-agent-session
 import { useAppStore } from '@/store'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionOptionsResult,
+  AgentSessionStatusEvent
+} from '../../../../shared/agent-session-wire'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
@@ -25,6 +32,32 @@ vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => (
   subscribeStructuredAgentSessionStatus: handOffTransport.subscribe,
   supportsStructuredAgentSessionContinuationContext: vi.fn(async () => false)
 }))
+
+const options: AgentSessionOptionsResult = { models: [], current: {} }
+function readOwner(
+  controller: ReturnType<typeof createStructuredSessionSelectionController>,
+  request: () => Promise<AgentSessionOptionsResult>
+) {
+  const optionCatalog = getAgentSessionOptionCatalog('codex')
+  const seed = () => createStructuredAgentSessionOptionState('codex', optionCatalog)
+  const reader = createStructuredAgentSessionOptionsReadOwner(seed())
+  const close = reader.attach({
+    owner: [controller],
+    reset: [],
+    sessionId: 'selected',
+    fence: 1,
+    seed,
+    controller,
+    eligible: true,
+    optionCatalog,
+    newLaunch: false,
+    coherentCatalog: true,
+    authority: () => 'local',
+    isCurrent: () => true,
+    request
+  })
+  return { reader, close }
+}
 
 const initialState = useAppStore.getState()
 afterEach(() => {
@@ -52,7 +85,13 @@ it('bounds the actual pick/read/overlay path at 10 and 100 delayed writes withou
         options: Record<string, string>
       }>()
     )
-    const reread = vi.fn()
+    const reads: ReturnType<typeof Promise.withResolvers<AgentSessionOptionsResult>>[] = []
+    const { reader, close } = readOwner(controller, () => {
+      const reply = Promise.withResolvers<AgentSessionOptionsResult>()
+      reads.push(reply)
+      return reply.promise
+    })
+    const reread = vi.fn(reader.invalidate)
     const capture = vi.spyOn(controller, 'captureRead')
     let renders = 0
     let visits = 0
@@ -65,6 +104,7 @@ it('bounds the actual pick/read/overlay path at 10 and 100 delayed writes withou
       return all(entries)
     })
     function Probe() {
+      useSyncExternalStore(reader.subscribe, reader.getSnapshot)
       useStructuredSessionSelectionReads({
         controller,
         target,
@@ -80,6 +120,9 @@ it('bounds the actual pick/read/overlay path at 10 and 100 delayed writes withou
       return null
     }
     const view = render(<Probe />)
+    await act(async () => {
+      await Promise.resolve()
+    })
     const baseline = renders
     for (let index = 0; index < count; index++) {
       act(() => {
@@ -108,7 +151,7 @@ it('bounds the actual pick/read/overlay path at 10 and 100 delayed writes withou
     expect(renders - baseline).toBe(count)
     expect(memberships).toBe(0)
     expect(visits).toBeLessThanOrEqual(40 * count)
-    expect(capture).not.toHaveBeenCalled()
+    expect(capture).toHaveBeenCalledTimes(1)
     expect(reread).not.toHaveBeenCalled()
     measurements.push({ count, sends, renders: renders - baseline, visits, memberships })
     await act(async () =>
@@ -121,6 +164,17 @@ it('bounds the actual pick/read/overlay path at 10 and 100 delayed writes withou
     act(() => controller.retire(captured))
     expect(controller.captureRead()).toEqual([2])
     expect(controller.overlay()).toEqual({})
+    for (let index = 0; index < count; index++) {
+      reader.invalidate()
+    }
+    expect(reads).toHaveLength(1)
+    await act(async () => reads[0].resolve(options))
+    expect(reads).toHaveLength(2)
+    expect(reader.getSnapshot().support).toBeNull()
+    await act(async () => reads[1].resolve(options))
+    expect(reads).toHaveLength(2)
+    expect(controller.captureRead()).toEqual([])
+    close()
     const draining = controller.drain()
     act(() => controller.abandon())
     await draining
@@ -155,8 +209,13 @@ it('keeps unrelated store, same-host status and other-host consumers quiet at N 
       createStructuredSessionSelectionController(vi.fn())
     )
     const renders = Array.from({ length: count }, () => 0)
-    const rereads = controllers.map(() => vi.fn())
+    const transport = vi.fn(async (_index: number) => options)
+    const owners = controllers.map((controller, index) =>
+      readOwner(controller, () => transport(index))
+    )
+    const rereads = owners.map(({ reader }) => vi.fn(reader.invalidate))
     function Probe({ index }: { index: number }) {
+      useSyncExternalStore(owners[index].reader.subscribe, owners[index].reader.getSnapshot)
       const stamp = useStructuredAgentSessionOptionStamp(`session-${index}`, target)
       useStructuredSessionSelectionReads({
         controller: controllers[index],
@@ -174,13 +233,14 @@ it('keeps unrelated store, same-host status and other-host consumers quiet at N 
     await act(async () => {
       stop = other.activate()
     })
+    transport.mockClear()
     const baseline = [...renders]
-    const publish = (host: string, sessionId: string, model: string) => {
+    const publish = async (host: string, sessionId: string, model: string) => {
       const emit = emits.get(host)
       if (!emit) {
         throw new Error('Missing test status transport')
       }
-      act(() =>
+      await act(async () =>
         emit({
           type: 'snapshot',
           sessions: [
@@ -200,15 +260,18 @@ it('keeps unrelated store, same-host status and other-host consumers quiet at N 
     snapshot.mockClear()
     act(() => useAppStore.setState({ lastTerminalInputAtByPaneKey: { other: 1 } }))
     expect(snapshot).not.toHaveBeenCalled()
-    publish('other', 'session-0', 'other-model')
+    await publish('other', 'session-0', 'other-model')
     expect(snapshot).not.toHaveBeenCalled()
-    publish('local', 'unmounted', 'unrelated-model')
+    await publish('local', 'unmounted', 'unrelated-model')
     const upstreamReads = snapshot.mock.calls.length
     expect(upstreamReads).toBeGreaterThanOrEqual(count)
     expect(upstreamReads).toBeLessThanOrEqual(count * 3)
     expect(renders).toEqual(baseline)
-    publish('local', 'session-0', 'sonnet')
-    expect(renders).toEqual(baseline.map((value, index) => value + (index === 0 ? 1 : 0)))
+    expect(transport).not.toHaveBeenCalled()
+    await publish('local', 'session-0', 'sonnet')
+    expect(renders.slice(1)).toEqual(baseline.slice(1))
+    expect(renders[0]).toBeGreaterThan(baseline[0])
+    expect(transport).toHaveBeenCalledExactlyOnceWith(0)
     expect(rereads[0]).toHaveBeenCalledTimes(1)
     const beforePick = [...renders]
     act(() => controllers[1].issue('model', 'opus', null))
@@ -218,6 +281,7 @@ it('keeps unrelated store, same-host status and other-host consumers quiet at N 
       JSON.stringify({ count, upstreamReads, unrelatedRenders: 0 })
     )
     view.unmount()
+    owners.forEach(({ close }) => close())
     stop()
     snapshot.mockRestore()
     resetStructuredAgentSessionStatusFeedsForTests()

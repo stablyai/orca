@@ -1,12 +1,12 @@
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { exposeDispatchContext } from '../worker/dispatch-context-exposure'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
 import type { DispatchContextRow, FederatedDispatchRow } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   callFederatedWorkerShow,
-  exposeDispatchContext,
   exposeFederatedWorkerObservation,
   exposeWorker,
   projectFleetWorkerPage,

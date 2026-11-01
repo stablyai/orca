@@ -4,78 +4,156 @@ import { isStructuredAgentSessionIdFor } from '../../../../shared/structured-age
 import type { AutomationRun } from '../../../../shared/automations-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealWorktree,
+  activateAndRevealFolderWorkspace
+} from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  buildAutomationRunOpenLayout,
-  getAutomationRunOwnerEnvironmentId,
-  resolveAutomationRunTerminalTarget
-} from './automation-run-open-target'
-import { getAutomationRunViewState } from './automation-run-view-state'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { buildAutomationRunOpenLayout } from './automation-run-open-target'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
 
-/** Opens the recorded run session on its owning host. */
-export function createAutomationRunWorkspaceAction({ store, list }: AutomationsPageActionContext) {
-  const { repoForRow, worktreeForRow } = store
-  const { selectedRow } = list
-  return function openRunWorkspace(run: AutomationRun): void {
-    const runWorktree =
-      run.workspaceId && selectedRow
-        ? (worktreeForRow(selectedRow, repoForRow(selectedRow), run.workspaceId) ?? null)
-        : null
+let cancelPendingReveal: (() => void) | undefined
+
+/** Opens the recorded run session when its host-qualified workspace is alive. */
+export function createAutomationRunWorkspaceAction({
+  list
+}: {
+  list: Pick<AutomationsPageActionContext['list'], 'runTargetFor'>
+}) {
+  function revealRunWorkspace(run: AutomationRun, ownerOpened = false): void {
     const appStore = useAppStore.getState()
-    const ownerEnvironmentId = runWorktree
-      ? getAutomationRunOwnerEnvironmentId(appStore, run.workspaceId, runWorktree.hostId)
-      : null
-    const terminalTarget = resolveAutomationRunTerminalTarget(
-      run,
-      {
-        hasTerminalTab: (tabId) => Boolean(appStore.getTab(tabId)),
-        terminalLayoutsByTabId: appStore.terminalLayoutsByTabId,
-        ptyIdsByTabId: appStore.ptyIdsByTabId
-      },
-      ownerEnvironmentId
-    )
+    const {
+      worktree: runWorktree,
+      ownerEnvironmentId,
+      expectedPairingRevision,
+      terminalTarget,
+      viewState: runViewState
+    } = list.runTargetFor(run)
     const currentLayout = terminalTarget
       ? appStore.terminalLayoutsByTabId[terminalTarget.tabId]
       : null
-    const runViewState = getAutomationRunViewState({
-      run,
-      workspaceExists: Boolean(runWorktree),
-      terminalTargetExists: terminalTarget !== null,
-      terminalOnPairedServer: ownerEnvironmentId !== null
-    })
-    if (!run.workspaceId || !runWorktree || !runViewState.canOpen) {
+    if (!run.workspaceId || !runViewState.canOpen) {
       toast.error(runViewState.statusLabel)
       return
+    }
+    const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
+    if (!runWorktree) {
+      if (ownerEnvironmentId && paneRef) {
+        const workspaceId = run.workspaceId
+        const navigation = () => {
+          const state = useAppStore.getState()
+          return [
+            state.activeWorktreeId,
+            state.activeWorkspaceExecutionHostId,
+            state.activeModal,
+            state.activeWorktreeId
+              ? resolveWebSessionVisibleTabId(state, state.activeWorktreeId)
+              : null
+          ]
+        }
+        const origin = navigation()
+        let cancelled = false
+        const cancel = () => {
+          cancelled = true
+        }
+        cancelPendingReveal = cancel
+        const current = () =>
+          !cancelled &&
+          navigation().every((value, index) => value === origin[index]) &&
+          list.runTargetFor(run).viewState.canOpen
+        const unsubscribe = useAppStore.subscribe(() => {
+          if (!current()) {
+            cancel()
+          }
+        })
+        void (async () => {
+          try {
+            if (
+              !(await openRunTerminalOnOwner(
+                workspaceId,
+                ownerEnvironmentId,
+                paneRef,
+                expectedPairingRevision
+              )) ||
+              !current()
+            ) {
+              return
+            }
+            await appStore.fetchRuntimeEnvironmentRepos(ownerEnvironmentId)
+            if (!current()) {
+              return
+            }
+            await appStore.fetchAllWorktrees({
+              visibilityOwnerHostId: `runtime:${encodeURIComponent(ownerEnvironmentId)}`
+            })
+            if (!current()) {
+              return
+            }
+            if (list.runTargetFor(run).worktree) {
+              revealRunWorkspace(run, true)
+            } else {
+              toast.error(workspaceUnavailableMessage())
+            }
+          } catch {
+            if (current()) {
+              toast.error(workspaceUnavailableMessage())
+            }
+          } finally {
+            unsubscribe()
+            if (cancelPendingReveal === cancel) {
+              cancelPendingReveal = undefined
+            }
+          }
+        })()
+      }
+      return
+    }
+    const reveal = () => {
+      const options = {
+        executionHostId: runWorktree.hostId,
+        runtimeEnvironmentId: ownerEnvironmentId,
+        providesInitialSurface:
+          runViewState.availability === 'terminal' || runViewState.availability === 'chat'
+      }
+      const scope = parseWorkspaceKey(run.workspaceId!)
+      return scope?.type === 'folder' && runViewState.availability !== 'terminal'
+        ? activateAndRevealFolderWorkspace(scope.folderWorkspaceId, options)
+        : activateAndRevealWorktree(run.workspaceId!, options)
     }
     if (runViewState.availability === 'chat' && run.chatSessionId) {
       const agent = ALL_TUI_AGENTS.find((entry) =>
         isStructuredAgentSessionIdFor(entry, run.chatSessionId!)
       )
-      if (!agent || !activateAndRevealWorktree(run.workspaceId)) {
+      if (!agent || !reveal()) {
         toast.error(workspaceUnavailableMessage())
         return
       }
       void openRunChat(run.workspaceId, run.chatSessionId, ownerEnvironmentId)
       return
     }
-    const paneRef = parsePaneKey(run.terminalPaneKey ?? '')
     if (runViewState.availability === 'terminal' && !terminalTarget) {
       if (!ownerEnvironmentId || !paneRef) {
         toast.error(runViewState.statusLabel)
         return
       }
-      if (!activateAndRevealWorktree(run.workspaceId)) {
+      if (!reveal()) {
         toast.error(workspaceUnavailableMessage())
         return
       }
       // Why: the mirror may not hold the pane yet; the server focuses it when it arrives.
-      void openRunTerminalOnOwner(run.workspaceId, ownerEnvironmentId, paneRef)
+      if (!ownerOpened) {
+        void openRunTerminalOnOwner(
+          run.workspaceId,
+          ownerEnvironmentId,
+          paneRef,
+          expectedPairingRevision
+        )
+      }
       return
     }
     if (terminalTarget && currentLayout) {
@@ -83,18 +161,30 @@ export function createAutomationRunWorkspaceAction({ store, list }: AutomationsP
         terminalTarget.tabId,
         buildAutomationRunOpenLayout({ target: terminalTarget, currentLayout })
       )
-      if (activateAndRevealWorktree(run.workspaceId)) {
+      if (reveal()) {
         appStore.setActiveTab(terminalTarget.tabId)
         appStore.setActiveTabType('terminal', run.workspaceId)
-        activateTerminalTabOnOwner(run.workspaceId, terminalTarget.tabId, terminalTarget.leafId)
+        if (!ownerOpened) {
+          activateTerminalTabOnOwner(
+            run.workspaceId,
+            terminalTarget.tabId,
+            terminalTarget.leafId,
+            ownerEnvironmentId,
+            expectedPairingRevision
+          )
+        }
         return
       }
     }
-    if (!activateAndRevealWorktree(run.workspaceId)) {
+    if (!reveal()) {
       toast.error(workspaceUnavailableMessage())
       return
     }
     toast.message(runViewState.statusLabel)
+  }
+  return (run: AutomationRun): void => {
+    cancelPendingReveal?.()
+    revealRunWorkspace(run)
   }
 }
 
@@ -140,13 +230,15 @@ function workspaceUnavailableMessage(): string {
 async function openRunTerminalOnOwner(
   worktreeId: string,
   environmentId: string,
-  paneRef: { tabId: string; leafId: string }
-): Promise<void> {
+  paneRef: { tabId: string; leafId: string },
+  expectedPairingRevision?: number
+): Promise<boolean> {
   const opened = await activateWebRuntimeSessionTab({
     worktreeId,
     tabId: paneRef.tabId,
     environmentId,
     leafId: paneRef.leafId,
+    expectedPairingRevision,
     expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
   })
   if (!opened) {
@@ -154,6 +246,7 @@ async function openRunTerminalOnOwner(
       translate('components.automations.runTerminalUnavailable', 'Run terminal is unavailable.')
     )
   }
+  return opened
 }
 
 export type AutomationRunWorkspaceAction = ReturnType<typeof createAutomationRunWorkspaceAction>

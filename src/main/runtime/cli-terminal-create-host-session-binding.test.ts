@@ -56,7 +56,18 @@ describe('host-initiated terminal creation under an attached window', () => {
 
     await runtime.createTerminal('id:repo-1::/tmp/wt-cli', {})
 
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ persistHostSessionBinding: true }))
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistHostSessionBinding: true,
+        resolvedWorkspace: {
+          id: 'repo-1::/tmp/wt-cli',
+          path: '/tmp/wt-cli',
+          connectionId: null,
+          repo: null,
+          folderWorkspace: null
+        }
+      })
+    )
   })
 
   it('spawns hidden so main answers startup queries before any pane mounts', async () => {

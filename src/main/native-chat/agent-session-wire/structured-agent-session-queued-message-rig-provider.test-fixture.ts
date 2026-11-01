@@ -184,3 +184,7 @@ export function createQueuedRigProvider(
     providerEvents
   }
 }
+
+export function eventually(assertion: () => void | Promise<void>): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}

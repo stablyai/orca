@@ -1,17 +1,12 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
   boundJournalKeyComponent
 } from '../../../shared/agent-session-journal-item-key'
 import type {
-  AgentJournalItemBody,
   AgentJournalItemIdentity,
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
+  AgentJournalMessageItem
 } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -24,7 +19,6 @@ import {
 } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
-  createTrackedJournalOpener,
   openTestJournalHostDatabase,
   insertTestJournalRow
 } from '../agent-session-journal/journal-host-database-test-support'
@@ -36,63 +30,16 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
-const IDENTITY: AgentSessionJournalIdentity = {
-  sessionId: 'session-1',
-  workspaceId: 'ws-1',
-  hostId: 'host-1',
-  agent: 'codex',
-  providerHandle: codexProviderHandle('thread-1')
-}
-
-const journals = createTrackedJournalOpener()
-let root: string
-let clock = 1_000
-let epochs = 0
-let journal: AgentSessionJournal
-
-function tick(): number {
-  clock += 1
-  return clock
-}
-
-function item(ordinal: number): AgentJournalItemIdentity {
-  return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
-}
-
-function body(text: string): AgentJournalItemBody {
-  return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-}
-
-async function appendItems(count: number): Promise<void> {
-  for (let ordinal = 1; ordinal <= count; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`item-${ordinal}`), {
-      fence: 1,
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-  }
-}
-
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-wire-history-'))
-  clock = 1_000
-  epochs = 0
-  journal = await journals.open({
-    identity: IDENTITY,
-    stateDirectory: root,
-    now: tick,
-    mintEpoch: () => {
-      epochs += 1
-      return `epoch-${epochs}`
-    }
-  })
-})
-
-afterEach(async () => {
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
-})
+import {
+  fixture,
+  journals,
+  tick,
+  IDENTITY,
+  appendItems,
+  body,
+  item
+} from './agent-session-history-contract-test-fixture'
 
 describe('resolveHistoryLimit', () => {
   it('clamps rather than rejecting so a mid-scroll client keeps paging', () => {
@@ -107,7 +54,7 @@ describe('resolveHistoryLimit', () => {
 describe('readAgentSessionHistory', () => {
   it('serves the newest page on tail and pages backward from it', async () => {
     await appendItems(5)
-    const tail = readAgentSessionHistory(journal, {
+    const tail = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 2
@@ -118,9 +65,9 @@ describe('readAgentSessionHistory', () => {
     expect(tail.page.items.map((entry) => entry.body)).toEqual([body('item-4'), body('item-5')])
     expect(tail.page.hasOlder).toBe(true)
     expect(tail.page.hasNewer).toBe(false)
-    expect(tail.page.liveCursor).toEqual(journal.cursor())
+    expect(tail.page.liveCursor).toEqual(fixture.journal.cursor())
 
-    const older = readAgentSessionHistory(journal, {
+    const older = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'before',
       cursor: tail.page.window.nextCursor,
@@ -135,8 +82,8 @@ describe('readAgentSessionHistory', () => {
 
   it('resets old contexts and resumes the projected cursor after an atomic retained-log replacement', async () => {
     await appendItems(4)
-    const before = journal.cursor()
-    const kept = journal
+    const before = fixture.journal.cursor()
+    const kept = fixture.journal
       .snapshot()
       .items.slice(0, 2)
       .map((entry, index) => ({
@@ -144,19 +91,19 @@ describe('readAgentSessionHistory', () => {
         body: entry.body,
         observedAt: entry.observedAt,
         turnScope: entry.turnScope,
-        ownerFence: journal.itemFence(entry.itemId) ?? 0
+        ownerFence: fixture.journal.itemFence(entry.itemId) ?? 0
       }))
     let receipt = before
-    await journal.replaceEpochItems('handle_forked', 1, kept, (cursor) => ({
+    await fixture.journal.replaceEpochItems('handle_forked', 1, kept, (cursor) => ({
       write: () => {
         receipt = cursor
       },
       committed: () => {}
     }))
-    expect(receipt).toEqual(journal.cursor())
+    expect(receipt).toEqual(fixture.journal.cursor())
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(journal, {
+        readAgentSessionHistory(fixture.journal, {
           sessionId: IDENTITY.sessionId,
           direction,
           cursor: before
@@ -170,11 +117,11 @@ describe('readAgentSessionHistory', () => {
         }
       })
     }
-    const physical = journal.physicalCursor()
+    const physical = fixture.journal.physicalCursor()
     expect(physical.epoch).toBe(before.epoch)
     expect(physical.sequence).toBeGreaterThan(before.sequence)
     let appendedReceipt = before
-    const appended = await journal.appendItem(
+    const appended = await fixture.journal.appendItem(
       item(5),
       body('after boundary'),
       { fence: 1, turnScope: { kind: 'thread' } },
@@ -185,10 +132,10 @@ describe('readAgentSessionHistory', () => {
         committed: () => {}
       }
     )
-    expect(appended.cursor).toEqual(journal.cursor())
+    expect(appended.cursor).toEqual(fixture.journal.cursor())
     expect(appendedReceipt).toEqual(appended.cursor)
     expect(
-      readAgentSessionHistory(journal, {
+      readAgentSessionHistory(fixture.journal, {
         sessionId: IDENTITY.sessionId,
         direction: 'after',
         cursor: receipt
@@ -201,10 +148,10 @@ describe('readAgentSessionHistory', () => {
         items: [expect.objectContaining({ body: body('after boundary') })]
       }
     })
-    await journal.close()
-    journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
-    expect(journal.cursor()).toEqual(appended.cursor)
-    const tail = readAgentSessionHistory(journal, {
+    await fixture.journal.close()
+    fixture.journal = await journals.open({ identity: IDENTITY, stateDirectory: fixture.root })
+    expect(fixture.journal.cursor()).toEqual(appended.cursor)
+    const tail = readAgentSessionHistory(fixture.journal, {
       sessionId: IDENTITY.sessionId,
       direction: 'tail',
       limit: 2
@@ -214,7 +161,7 @@ describe('readAgentSessionHistory', () => {
       throw new Error('missing tail')
     }
     expect(
-      readAgentSessionHistory(journal, {
+      readAgentSessionHistory(fixture.journal, {
         sessionId: IDENTITY.sessionId,
         direction: 'before',
         cursor: tail.page.window.nextCursor,
@@ -228,9 +175,9 @@ describe('readAgentSessionHistory', () => {
 
   it('catches a live reader up from its cursor and stops at the limit', async () => {
     await appendItems(2)
-    const cursor = journal.cursor()
+    const cursor = fixture.journal.cursor()
     await appendItems(5)
-    const page = readAgentSessionHistory(journal, {
+    const page = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -246,10 +193,10 @@ describe('readAgentSessionHistory', () => {
 
   it('carries tombstones in a forward catch-up page', async () => {
     await appendItems(1)
-    const cursor = journal.cursor()
-    await journal.appendTombstone(item(1), { fence: 1 })
+    const cursor = fixture.journal.cursor()
+    await fixture.journal.appendTombstone(item(1), { fence: 1 })
 
-    const page = readAgentSessionHistory(journal, {
+    const page = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor
@@ -264,26 +211,30 @@ describe('readAgentSessionHistory', () => {
   it('reports a forward read with no cursor as cursor_ahead rather than serving the tail', async () => {
     await appendItems(1)
     expect(
-      readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'after' })
+      readAgentSessionHistory(fixture.journal, { sessionId: 'session-1', direction: 'after' })
     ).toMatchObject({ ok: false, reset: 'cursor_ahead' })
   })
 
   it('resets a cursor from a previous epoch', async () => {
     await appendItems(1)
-    const stale = journal.cursor()
-    await journal.rollEpoch('legacy_import', 2)
+    const stale = fixture.journal.cursor()
+    await fixture.journal.rollEpoch('legacy_import', 2)
     for (const direction of ['before', 'after'] as const) {
       expect(
-        readAgentSessionHistory(journal, { sessionId: 'session-1', direction, cursor: stale })
+        readAgentSessionHistory(fixture.journal, {
+          sessionId: 'session-1',
+          direction,
+          cursor: stale
+        })
       ).toMatchObject({ ok: false, reset: 'epoch_changed' })
     }
   })
 
   it('resets a cursor ahead of the journal', async () => {
     await appendItems(1)
-    const ahead = { epoch: journal.epoch, sequence: journal.cursor().sequence + 10 }
+    const ahead = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence + 10 }
     expect(
-      readAgentSessionHistory(journal, {
+      readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'before',
         cursor: ahead
@@ -292,13 +243,16 @@ describe('readAgentSessionHistory', () => {
   })
 
   it('carries the submission for a message on the page', async () => {
-    await journal.appendSubmission({
+    await fixture.journal.appendSubmission({
       clientMessageId: 'msg-1',
       payloadFingerprint: 'a'.repeat(64),
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       fence: 1
     })
-    const page = readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail' })
+    const page = readAgentSessionHistory(fixture.journal, {
+      sessionId: 'session-1',
+      direction: 'tail'
+    })
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
@@ -317,7 +271,7 @@ describe('history page byte ceiling', () => {
 
   async function appendLargeItems(count: number): Promise<void> {
     for (let ordinal = 1; ordinal <= count; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
+      await fixture.journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
         fence: 1,
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
@@ -336,7 +290,11 @@ describe('history page byte ceiling', () => {
     await appendLargeItems(20)
 
     const tail = pageOf(
-      readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+      readAgentSessionHistory(fixture.journal, {
+        sessionId: 'session-1',
+        direction: 'tail',
+        limit: 40
+      })
     )
     expect(tail.items.length).toBeGreaterThan(0)
     expect(tail.hasOlder).toBe(true)
@@ -349,7 +307,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(journal, {
+        readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'before',
           cursor,
@@ -365,11 +323,11 @@ describe('history page byte ceiling', () => {
   })
 
   it('bounds a forward catch-up page by bytes and keeps replaying to the head', async () => {
-    const start = { epoch: journal.epoch, sequence: 0 }
+    const start = { epoch: fixture.journal.epoch, sequence: 0 }
     await appendLargeItems(20)
 
     const first = pageOf(
-      readAgentSessionHistory(journal, {
+      readAgentSessionHistory(fixture.journal, {
         sessionId: 'session-1',
         direction: 'after',
         cursor: start,
@@ -387,7 +345,7 @@ describe('history page byte ceiling', () => {
       guard += 1
       expect(guard).toBeLessThan(30)
       const page = pageOf(
-        readAgentSessionHistory(journal, {
+        readAgentSessionHistory(fixture.journal, {
           sessionId: 'session-1',
           direction: 'after',
           cursor,
@@ -403,13 +361,17 @@ describe('history page byte ceiling', () => {
   })
 
   it('sends a single over-budget item shortened and marked, never replaced', async () => {
-    await journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), {
+    await fixture.journal.appendItem(item(1), body(`1:${'y'.repeat(3 * 1024 * 1024)}`), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
 
     const tail = pageOf(
-      readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
+      readAgentSessionHistory(fixture.journal, {
+        sessionId: 'session-1',
+        direction: 'tail',
+        limit: 40
+      })
     )
     expect(tail.items).toHaveLength(1)
     const sent = tail.items[0]
@@ -431,13 +393,13 @@ describe('projectJournalBatch', () => {
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
-    await journal.appendItem(
+    await fixture.journal.appendItem(
       turn,
       { kind: 'status', text: 'working' },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    const cursor = journal.cursor()
-    await journal.appendLifecycleBatch({
+    const cursor = fixture.journal.cursor()
+    await fixture.journal.appendLifecycleBatch({
       settlementId: 'settlement-1',
       fence: 1,
       mutations: [
@@ -457,7 +419,7 @@ describe('projectJournalBatch', () => {
       ]
     })
 
-    const page = readAgentSessionHistory(journal, {
+    const page = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -470,7 +432,7 @@ describe('projectJournalBatch', () => {
     expect(page.page.removedItemIds).toHaveLength(1)
     expect(new Set(page.page.items.map((entry) => entry.sequence)).size).toBe(1)
 
-    const tail = readAgentSessionHistory(journal, {
+    const tail = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 1
@@ -483,30 +445,34 @@ describe('projectJournalBatch', () => {
 
   it('reports a hole in the row sequence as journal_gap', async () => {
     await appendItems(3)
-    const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+    const since = fixture.journal.readSince({ epoch: fixture.journal.epoch, sequence: 0 })
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
     const withHole = since.rows.filter((row) => row.seq !== since.rows[1]?.seq)
     expect(
-      projectJournalBatch({ rows: withHole, snapshot: journal.snapshot(), afterSequence: 0 })
+      projectJournalBatch({
+        rows: withHole,
+        snapshot: fixture.journal.snapshot(),
+        afterSequence: 0
+      })
     ).toEqual({ ok: false, reset: 'journal_gap' })
   })
 
   it('publishes touched items at their current reduced state, not as a delta', async () => {
     await appendItems(1)
-    const cursor = journal.cursor()
-    await journal.appendItem(item(1), body('revised'), {
+    const cursor = fixture.journal.cursor()
+    await fixture.journal.appendItem(item(1), body('revised'), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    const since = journal.readSince(cursor)
+    const since = fixture.journal.readSince(cursor)
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
     const projected = projectJournalBatch({
       rows: since.rows,
-      snapshot: journal.snapshot(),
+      snapshot: fixture.journal.snapshot(),
       afterSequence: cursor.sequence
     })
     if (!projected.ok) {
@@ -514,20 +480,20 @@ describe('projectJournalBatch', () => {
     }
     expect(projected.batch.items).toHaveLength(1)
     expect(projected.batch.items[0]).toMatchObject({ body: body('revised'), revision: 2 })
-    expect(projected.batch.cursor).toEqual(journal.cursor())
+    expect(projected.batch.cursor).toEqual(fixture.journal.cursor())
   })
 
   it('lists a tombstoned item as removed', async () => {
     await appendItems(1)
-    const cursor = journal.cursor()
-    await journal.appendTombstone(item(1), { fence: 1 })
-    const since = journal.readSince(cursor)
+    const cursor = fixture.journal.cursor()
+    await fixture.journal.appendTombstone(item(1), { fence: 1 })
+    const since = fixture.journal.readSince(cursor)
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
     const projected = projectJournalBatch({
       rows: since.rows,
-      snapshot: journal.snapshot(),
+      snapshot: fixture.journal.snapshot(),
       afterSequence: cursor.sequence
     })
     if (!projected.ok) {
@@ -543,7 +509,7 @@ describe('projectJournalBatch', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'queued follow-up' }]
     }
-    await journal.appendSubmission({
+    await fixture.journal.appendSubmission({
       clientMessageId: 'client-follow-up',
       payloadFingerprint: structuredAgentSessionPayloadFingerprint({
         method: 'agentSession.send',
@@ -553,7 +519,7 @@ describe('projectJournalBatch', () => {
       body: message,
       fence: 1
     })
-    await journal.replaceEpochItems('handle_forked', 1, [
+    await fixture.journal.replaceEpochItems('handle_forked', 1, [
       {
         identity: { provider: 'orca', clientMessageId: 'client-follow-up' },
         body: message,
@@ -561,8 +527,8 @@ describe('projectJournalBatch', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       }
     ])
-    const cursor = journal.cursor()
-    await journal.resolveDispatch({
+    const cursor = fixture.journal.cursor()
+    await fixture.journal.resolveDispatch({
       clientMessageId: 'client-follow-up',
       state: 'accepted',
       providerIdentity: {
@@ -573,13 +539,13 @@ describe('projectJournalBatch', () => {
       },
       fence: 1
     })
-    await journal.appendItem(
+    await fixture.journal.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'root-turn', ordinal: 2 },
       message,
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    const page = readAgentSessionHistory(journal, {
+    const page = readAgentSessionHistory(fixture.journal, {
       sessionId: IDENTITY.sessionId,
       direction: 'after',
       cursor
@@ -591,7 +557,7 @@ describe('projectJournalBatch', () => {
       { itemId: agentJournalSubmissionKey('client-follow-up'), revision: 2 }
     ])
     expect(
-      journal.canonicalItemId(
+      fixture.journal.canonicalItemId(
         agentJournalItemKey({
           provider: 'codex',
           threadId: 'thread-1',
@@ -619,13 +585,13 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
       ({
         ...row,
         v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-        epoch: journal.epoch,
+        epoch: fixture.journal.epoch,
         fence: 1,
         ts: tick()
       }) as JournalRow
   )
-  await journal.close()
-  const opened = openTestJournalHostDatabase(root)
+  await fixture.journal.close()
+  const opened = openTestJournalHostDatabase(fixture.root)
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of full) {
@@ -635,7 +601,7 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
   } finally {
     await opened.close()
   }
-  return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
+  return journals.open({ identity: IDENTITY, stateDirectory: fixture.root, now: tick })
 }
 
 describe('pre-existing oversized identities', () => {
@@ -643,7 +609,7 @@ describe('pre-existing oversized identities', () => {
   const HUGE_ITEM_ID = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
 
   it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
-    const seq = journal.cursor().sequence
+    const seq = fixture.journal.cursor().sequence
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') },
       { kind: 'tombstone', itemId: HUGE_ITEM_ID, revision: 2, seq: seq + 2 }
@@ -683,7 +649,7 @@ describe('pre-existing oversized identities', () => {
   })
 
   it('charges removal ids into the page budget and splits catch-up instead of overflowing', async () => {
-    const seq = journal.cursor().sequence
+    const seq = fixture.journal.cursor().sequence
     const removalIds = Array.from(
       { length: 30 },
       (_, index) => `codex:thread-1:${'r'.repeat(250 * 1024)}:${index}`
@@ -727,7 +693,7 @@ describe('pre-existing oversized identities', () => {
   })
 
   it('bounds the truncation marker id for a live oversized-id item', async () => {
-    const seq = journal.cursor().sequence
+    const seq = fixture.journal.cursor().sequence
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') }
     ])
@@ -773,18 +739,18 @@ describe('identity bounding at admission', () => {
       turnId: 'T'.repeat(5 * 1024 * 1024),
       ordinal: 1
     }
-    const start = { epoch: journal.epoch, sequence: journal.cursor().sequence }
-    const appended = await journal.appendItem(oversized, body('bounded'), {
+    const start = { epoch: fixture.journal.epoch, sequence: fixture.journal.cursor().sequence }
+    const appended = await fixture.journal.appendItem(oversized, body('bounded'), {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
     expect(appended.itemId.length).toBeLessThan(2048)
     expect(appended.itemId).toContain('~orca-oversized~')
 
-    const beforeTombstone = journal.cursor()
-    await journal.appendTombstone(oversized, { fence: 1 })
+    const beforeTombstone = fixture.journal.cursor()
+    await fixture.journal.appendTombstone(oversized, { fence: 1 })
 
-    const created = readAgentSessionHistory(journal, {
+    const created = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: start,
@@ -798,7 +764,7 @@ describe('identity bounding at admission', () => {
     )
     expect(created.page.removedItemIds).toEqual([appended.itemId])
 
-    const removal = readAgentSessionHistory(journal, {
+    const removal = readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor: beforeTombstone,

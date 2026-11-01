@@ -46,6 +46,7 @@ vi.mock('../components/BottomDrawer', () => ({
 }))
 vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null }))
 vi.mock('./MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))
+vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 
 const route = {

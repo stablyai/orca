@@ -1,3 +1,4 @@
+import type { JournalReducerState } from './journal-reducer'
 import type Database from '../../sqlite/sync-database'
 import { insertJournalRow } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -8,6 +9,7 @@ import type { JournalWriteBody } from './journal-write-queue'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  fold?: (draft: JournalReducerState) => void
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
 }
@@ -20,6 +22,7 @@ export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
+    fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
     write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
     committed: () => receipts.forEach((receipt) => receipt.committed())
   }
@@ -48,6 +51,12 @@ export type JournalRowWriterDeps = {
   highestFence: () => number
   nextSequence: () => number
   project?: (rows: readonly JournalRow[]) => JournalRow[]
+  prepare?: (
+    db: Database.Database,
+    rows: readonly JournalRow[],
+    savedAt: number,
+    finishFold?: (draft: JournalReducerState) => void
+  ) => () => void
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
@@ -66,14 +75,19 @@ export class JournalRowWriter {
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
+      const streamed = !receipt && this.streamed([row])
       this.deps.database().transaction(
         (db) => {
-          insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          if (!this.deps.prepare) {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt, receipt?.fold)
           receipt?.write(db, this.project([row])[0])
+          return adopt
         },
-        !receipt && this.streamed([row])
+        streamed,
+        (adopt) => adopt?.()
       )
-      // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
       this.deps.commit([row], savedAt)
       return this.project([row])[0]!
@@ -106,14 +120,20 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+    const streamed = !receipt && this.streamed(rows)
     this.deps.database().transaction(
       (db) => {
-        for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row, ts)
+        if (!this.deps.prepare) {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
         }
+        const adopt = this.deps.prepare?.(db, rows, ts, receipt?.fold)
         receipt?.write(db, receiptRow?.(this.project(rows)))
+        return adopt
       },
-      !receipt && this.streamed(rows)
+      streamed,
+      (adopt) => adopt?.()
     )
     receipt?.committed()
     this.deps.commit(rows, ts)

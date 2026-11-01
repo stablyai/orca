@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 
+import type * as RuntimeFileImportClient from '@/runtime/runtime-file-import-client'
+import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
@@ -8,6 +10,10 @@ import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { getConnectionIdForFile } from '@/lib/connection-context'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { OpenFile } from '@/store/slices/editor'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 
 vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
 
@@ -25,6 +31,11 @@ vi.mock('@/store', () => ({
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), info: vi.fn() }
 }))
+
+const { useAppStore: store } = await vi.importActual<typeof StoreModule>('@/store')
+const actualImport = await vi.importActual<typeof RuntimeFileImportClient>(
+  '@/runtime/runtime-file-import-client'
+)
 
 const openEditors: Editor[] = []
 
@@ -76,7 +87,96 @@ describe('insertRichMarkdownImageFromPath', () => {
     while (openEditors.length > 0) {
       openEditors.pop()?.destroy()
     }
+    vi.unstubAllGlobals()
   })
+
+  it.each(['probe', 'stage'])(
+    'stops an acquired image import after its source changes during %s',
+    async (phase) => {
+      store.setState(store.getInitialState(), true)
+      const source: OpenFile = {
+        id: 'image-note',
+        worktreeId: 'wt-image',
+        filePath: '/repo/note.md',
+        relativePath: 'note.md',
+        runtimeEnvironmentId: 'image-hub',
+        mode: 'edit',
+        language: 'markdown',
+        isDirty: false
+      }
+      store.setState({
+        openFiles: [source],
+        repos: [{ ...TEST_REPO, executionHostId: 'runtime:image-hub', path: '/repo' }],
+        worktreesByRepo: {
+          [TEST_REPO.id]: [
+            makeWorktree({
+              id: source.worktreeId,
+              repoId: TEST_REPO.id,
+              path: '/repo',
+              hostId: 'runtime:image-hub',
+              runtimeOwnerEnvironmentId: 'image-hub'
+            })
+          ]
+        }
+      })
+      const { useAppStore } = await import('@/store')
+      vi.mocked(useAppStore.getState).mockImplementation(store.getState)
+      vi.mocked(importExternalPathsToRuntime).mockImplementation(
+        actualImport.importExternalPathsToRuntime
+      )
+      markRuntimeEnvironmentCompatible('image-hub')
+      const status = {
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeId: 'image-runtime',
+          capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
+        },
+        _meta: { runtimeId: 'image-runtime' }
+      }
+      let finish!: () => void
+      const paused = new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      const call = vi.fn(async () => {
+        if (phase === 'probe') {
+          await paused
+        }
+        return status
+      })
+      const stage = vi.fn(async () => {
+        if (phase === 'stage') {
+          await paused
+        }
+        return { sources: [] }
+      })
+      const upload = vi.fn()
+      vi.stubGlobal('api', {
+        runtimeEnvironments: { call },
+        fs: { stageExternalPathsForRuntimeUpload: stage, uploadExternalFileToRuntime: upload }
+      })
+      const { editor, chain } = editorWithRunResult(true)
+      const insertion = insertRichMarkdownImageFromPath({
+        editor,
+        filePath: source.filePath,
+        sourcePath: '/tmp/image.png',
+        worktreeId: source.worktreeId,
+        runtimeEnvironmentId: source.runtimeEnvironmentId,
+        getInsertionRange: () => ({ from: 4, to: 4, requestOrder: 1 })
+      })
+      await vi.waitFor(() => expect(phase === 'probe' ? call : stage).toHaveBeenCalledOnce())
+      store.setState({
+        openFiles: [{ ...source, filePath: '/repo/replacement.md', relativePath: 'replacement.md' }]
+      })
+      finish()
+      await insertion
+      expect(call).toHaveBeenCalledOnce()
+      expect(stage).toHaveBeenCalledTimes(phase === 'probe' ? 0 : 1)
+      expect(upload).not.toHaveBeenCalled()
+      expect(chain).not.toHaveBeenCalled()
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Reopen the file'))
+    }
+  )
 
   it('shows an error when TipTap rejects image insertion without throwing', async () => {
     const { editor } = editorWithRunResult(false)

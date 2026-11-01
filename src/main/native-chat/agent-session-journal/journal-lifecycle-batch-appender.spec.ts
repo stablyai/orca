@@ -26,7 +26,7 @@ export function registerJournalLifecycleBatchAppenderTests(): void {
   }
 
   const SESSION = 'repeated-items'
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   let root: string
   let journal: AgentSessionJournal
   const options = () => ({

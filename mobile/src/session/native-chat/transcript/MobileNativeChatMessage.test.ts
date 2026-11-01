@@ -324,18 +324,19 @@ describe('MobileNativeChatMessage', () => {
     )
   })
 
-  it.each(['system', 'user'] as const)(
+  it.each([
+    ['system', 'history-item-too-large'],
+    ['user', 'history-item-too-large']
+  ] as const)(
     'renders a %s host notice as selectable muted text rather than a markdown answer',
-    (role) => {
+    (role, presentation) => {
       const tree = render(
         {
           id: 'notice',
           role,
           timestamp: 1,
           source: 'transcript',
-          blocks: [
-            { type: 'text', text: 'provider fallback', presentation: 'history-item-too-large' }
-          ]
+          blocks: [{ type: 'text', text: 'provider fallback', presentation }]
         },
         { fontScale: 1.5 }
       )
@@ -343,7 +344,7 @@ describe('MobileNativeChatMessage', () => {
       const text = tree.root.find(
         (node) => String(node.type) === 'Text' && node.props.selectable === true
       )
-      expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'])
+      expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY[presentation])
       expect(text.props.selectable).toBe(true)
       expect(Object.assign({}, ...text.props.style)).toMatchObject({
         color: colors.textMuted,

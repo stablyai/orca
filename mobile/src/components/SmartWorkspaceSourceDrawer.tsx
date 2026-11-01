@@ -35,6 +35,7 @@ import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-so
 import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
+import { SheetHeader } from './nav-bar/SheetHeader'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -209,12 +210,14 @@ export function SmartWorkspaceSourceDrawer({
       {/* Fill column ends at keyboard top; non-flex dock stays beside flex results so FlatList cannot clip input. */}
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {t('components.smartWorkspaceSourceDrawer.title', "Name or 'Create From'")}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.done}>{t('common.done', 'Done')}</Text>
-          </Pressable>
+          <SheetHeader
+            title={
+              availability.textOnly
+                ? t('components.smartWorkspaceSourceDrawer.workspaceName', 'Workspace name')
+                : t('components.smartWorkspaceSourceDrawer.startFrom', 'Start from')
+            }
+            trailing={{ label: t('common.done', 'Done'), onPress: onClose }}
+          />
         </View>
 
         <View style={styles.results}>
@@ -277,11 +280,12 @@ export function SmartWorkspaceSourceDrawer({
           <FlatList
             data={rows}
             keyExtractor={(row) => row.value}
-            style={styles.list}
+            style={[styles.list, rows.length === 0 && styles.listEmpty]}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
             nestedScrollEnabled
+            ItemSeparatorComponent={SourceRowSeparator}
             ListFooterComponent={
               loading ? (
                 <View style={styles.loading}>
@@ -366,4 +370,9 @@ export function SmartWorkspaceSourceDrawer({
       </View>
     </BottomDrawer>
   )
+}
+
+function SourceRowSeparator() {
+  useMobileColorScheme()
+  return <View style={styles.separator} />
 }

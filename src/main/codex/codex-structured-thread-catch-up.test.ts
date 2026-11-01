@@ -1,146 +1,24 @@
-import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
-import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
-
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import {
-  closeTestJournalHostDatabase,
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { writeFile } from 'node:fs/promises'
 import { importLegacyTranscriptIntoJournal } from '../native-chat/agent-session-journal/journal-legacy-import'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { join } from 'node:path'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
 import { recoverStructuredRewind } from '../native-chat/agent-session-wire/structured-rewind-recovery'
 import { usableJournalHistoryOrigin } from '../native-chat/agent-session-journal/journal-history-origin'
-import { catchUpCodexThread } from './codex-structured-thread-catch-up'
-
-const SESSION = 'session-codex-catch-up'
-const THREAD = 'thread-abc'
-const STARTED_AT = 1_700_000_000
-
-export function turn(index: number, view: 'full' | 'summary' = 'full'): Record<string, unknown> {
-  return {
-    id: `turn-${index}`,
-    status: 'completed',
-    itemsView: view,
-    startedAt: STARTED_AT + index * 100,
-    completedAt: STARTED_AT + index * 100 + 50,
-    items: [
-      { type: 'userMessage', id: `u-${index}`, content: [{ type: 'text', text: `ask ${index}` }] },
-      { type: 'agentMessage', id: `a-${index}`, text: `answer ${index}` }
-    ]
-  }
-}
-
-/** Serves Codex's saved turns newest first, two to a page. */
-export function codexWith(turns: Record<string, unknown>[]) {
-  return {
-    request: async (method: string, params?: Record<string, unknown>) => {
-      expect(method).toBe('thread/turns/list')
-      expect(params).toMatchObject({ sortDirection: 'desc', limit: 100 })
-      const newestFirst = turns.toReversed()
-      const start = typeof params?.cursor === 'string' ? Number(params.cursor) : 0
-      const data = newestFirst.slice(start, start + 2)
-      return {
-        data,
-        nextCursor: start + 2 < newestFirst.length ? String(start + 2) : null
-      }
-    }
-  }
-}
-
-const journals = createTrackedJournalOpener()
-const cleanups: (() => Promise<void>)[] = []
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0)) {
-    await cleanup()
-  }
-})
-
-export async function chat(clock: { now: number }) {
-  const root = await mkdtemp(join(tmpdir(), 'orca-codex-catch-up-'))
-  const journalOptions = {
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: codexProviderHandle(THREAD)
-    } satisfies AgentSessionJournalIdentity,
-    stateDirectory: root,
-    now: () => clock.now
-  }
-  let journal = await journals.open(journalOptions)
-  let deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  const publications: number[] = []
-  const bind = () =>
-    deferred.bind({
-      journal,
-      fence: 1,
-      publish: () => {
-        publications.push(journal.snapshot().items.length)
-      }
-    })
-  bind()
-  cleanups.push(async () => {
-    deferred.close()
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
-  })
-  return {
-    get journal() {
-      return journal
-    },
-    get deferred() {
-      return deferred
-    },
-    root,
-    get db() {
-      return openTestJournalHostDatabase(root).db
-    },
-    publications,
-    reopen: async () => {
-      deferred.close()
-      await journal.close()
-      await closeTestJournalHostDatabase(root)
-      journal = await journals.open(journalOptions)
-      deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-      bind()
-    },
-    open: async (
-      turns: Record<string, unknown>[],
-      options: Partial<Parameters<typeof catchUpCodexThread>[0]> = {}
-    ) => {
-      await catchUpCodexThread({
-        connection: codexWith(turns),
-        threadId: THREAD,
-        sessionId: SESSION,
-        sink: deferred.sink,
-        ...options
-      })
-      return deferred.drained()
-    },
-    texts: () =>
-      journal.snapshot().items.flatMap((item) => {
-        if (item.body.kind === 'message') {
-          const text = item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-          return [`${item.body.role}:${text.join('')}`]
-        }
-        return item.body.kind === 'status' && item.body.presentation
-          ? [`(${item.body.presentation})`]
-          : []
-      })
-  }
-}
-
+import { describe, expect, it } from 'vitest'
+import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
+import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import {
+  SESSION,
+  THREAD,
+  chat,
+  turn,
+  codexWith
+} from './codex-thread-catch-up-contract-test-fixture'
+export { chat, turn, codexWith } from './codex-thread-catch-up-contract-test-fixture'
 describe('Codex chat catch-up', () => {
   registerCodexCatchUpEchoTests({ chat, turn, codexWith, sessionId: SESSION, threadId: THREAD })
 

@@ -246,13 +246,10 @@ export function canSetStructuredAgentSessionOption(
   id: string,
   value: SessionOptionValue,
   snapshot = structuredAgentSessionOptionSnapshot(state),
-  interactionReady = true
+  interactionReady = true,
+  pending = false
 ): boolean {
-  if (
-    !interactionReady ||
-    state.pendingId === id ||
-    (id === 'fastMode' && state.fastModeRestricted)
-  ) {
+  if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
   if (id === 'permissionMode') {

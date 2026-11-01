@@ -2,6 +2,7 @@ import type { StructuredAgentSessionFirstMessage } from '../../../shared/structu
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { SendParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
@@ -270,6 +271,25 @@ describe('a send carrying its model and effort', () => {
       ok: false,
       refusal: { code: 'agent_session_operation_conflict' }
     })
+  })
+
+  // Every client field the host keeps passes through a reader that drops what it does not know, so
+  // the chat holds only keys storage declares and reopens after a newer client's send.
+  it("sends a newer client's message with a choice this build does not know, storing it without that choice", async () => {
+    const body = hostTestMessage('from a newer client')
+    const fields = { body: agentSessionMessagePayload(body), options: { ...PICKED, later: 'on' } }
+    const params = {
+      envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId()),
+      ...fields,
+      body
+    }
+    expect(SendParams.safeParse(params).success).toBe(true)
+    expect(await rig.host.send(CALLER, params)).toMatchObject({
+      ok: true,
+      value: { submission: { options: PICKED } }
+    })
+    await rig.restartHostProcess()
+    expect((await rig.submission(params.envelope.clientOperationId))?.options).toEqual(PICKED)
   })
 })
 

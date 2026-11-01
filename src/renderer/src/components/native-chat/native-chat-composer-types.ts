@@ -33,6 +33,9 @@ export type NativeChatOptionPickerRequest = {
   consume: () => void
 }
 
+/** How one send goes: `alternate` does the other thing than the follow-up setting. */
+export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendRequest, 'alternate'>
+
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -127,8 +130,12 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** Empty-composer Cmd/Ctrl+Enter steers the newest queued draft; false falls through to ordinary send. */
-  steerQueued?: () => boolean
+  /** The chat's worktree is still being created, so there is no session or file tree yet:
+   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
+   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  workspacePending?: true
+  /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
+  steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */

@@ -94,7 +94,21 @@ describe("a worker's journal page", () => {
       await append(`child-${index}`, subagent)
     }
 
+    const before = await readStructuredJournalPage('session-1')
+    await host.journal!.close()
+    host.journal = await journals.open({
+      identity: {
+        sessionId: 'session-1',
+        workspaceId: 'ws-1',
+        hostId: 'host-1',
+        agent: 'claude',
+        providerHandle: claudeProviderHandle('claude-1', null)
+      },
+      stateDirectory: root,
+      now: () => ++clock
+    })
     const page = await readStructuredJournalPage('session-1')
+    expect(page).toStrictEqual(before)
 
     expect(page?.items.map((item) => item.body)).toEqual([
       said('worker-older'),

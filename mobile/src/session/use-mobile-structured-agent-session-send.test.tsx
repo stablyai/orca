@@ -74,7 +74,9 @@ describe('mobile structured send actions', () => {
   const onSendError = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   })
   const client: RpcClient = {

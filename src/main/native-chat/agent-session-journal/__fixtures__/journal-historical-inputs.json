@@ -1,0 +1,426 @@
+{
+  "main": "981ad63bbfc020e02a7b3ab3bd48c298f85a88d4",
+  "branch": "6d34b4e5a391d485b5e41195d88152d9f1512fdf",
+  "cleaner": "af1ee720dd7bc0ed450dba17efdeb9ba14291e65",
+  "prefix": {
+    "session": {
+      "session_id": "session-1",
+      "workspace_id": "ws-1",
+      "epoch": "epoch-1"
+    },
+    "rows": [
+      [
+        1,
+        1001,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":1,\"ts\":1001,\"fence\":1,\"kind\":\"epoch\",\"reason\":\"session_created\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"}}"
+      ],
+      [
+        2,
+        1002,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":2,\"ts\":1002,\"fence\":1,\"kind\":\"submission\",\"clientMessageId\":\"U\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"original U\"}]},\"payloadFingerprint\":\"c42ddc7c3584b406e49365a78679321b98d0dd75b3bfd2aeb42ed561da281215\",\"providerHandle\":{\"transport\":\"codex-app-server\",\"agent\":\"codex\",\"nativeId\":\"original-thread\"},\"origin\":\"client\",\"source\":{\"kind\":\"user\"},\"handoverRecorded\":true}"
+      ],
+      [
+        3,
+        1003,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":3,\"ts\":1003,\"fence\":1,\"kind\":\"dispatch\",\"clientMessageId\":\"U\",\"state\":\"pending\",\"providerItemId\":null,\"reason\":null}"
+      ],
+      [
+        4,
+        1004,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":4,\"ts\":1004,\"fence\":1,\"kind\":\"dispatch\",\"clientMessageId\":\"U\",\"state\":\"rejected\",\"providerItemId\":null,\"reason\":\"uncertain\",\"rejection\":{\"kind\":\"unconfirmed\"},\"answeredInTurn\":null}"
+      ],
+      [
+        5,
+        1005,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":5,\"ts\":1005,\"fence\":1,\"kind\":\"queue\",\"messageId\":\"Q\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Q\"}]},\"position\":0,\"queuedAt\":null,\"attempt\":\"U\",\"returned\":{\"reason\":\"uncertain\",\"rejection\":{\"kind\":\"unconfirmed\"}}}}"
+      ],
+      [
+        6,
+        1006,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":6,\"ts\":1006,\"fence\":1,\"kind\":\"submission\",\"clientMessageId\":\"V\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"edited Q\"}]},\"payloadFingerprint\":\"9190881619344d57b4500427a7ee1dfd25c4070ec54bb5e35af223a9ee1049de\",\"providerHandle\":{\"transport\":\"codex-app-server\",\"agent\":\"codex\",\"nativeId\":\"original-thread\"},\"origin\":\"client\",\"source\":{\"kind\":\"user\"},\"handoverRecorded\":true,\"queuedMessageId\":\"Q\"}"
+      ],
+      [
+        7,
+        1007,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":7,\"ts\":1007,\"fence\":1,\"kind\":\"dispatch\",\"clientMessageId\":\"V\",\"state\":\"pending\",\"providerItemId\":null,\"reason\":null}"
+      ],
+      [
+        8,
+        1008,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":8,\"ts\":1008,\"fence\":1,\"kind\":\"dispatch\",\"clientMessageId\":\"V\",\"state\":\"rejected\",\"providerItemId\":null,\"reason\":\"uncertain\",\"rejection\":{\"kind\":\"unconfirmed\"},\"answeredInTurn\":null}"
+      ],
+      [
+        9,
+        1009,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":9,\"ts\":1009,\"fence\":1,\"kind\":\"tombstone\",\"itemId\":\"orca:U\",\"revision\":10,\"retireSubmission\":true}"
+      ],
+      [
+        10,
+        1010,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":10,\"ts\":1010,\"fence\":1,\"kind\":\"item\",\"itemId\":\"survivor-a\",\"revision\":10,\"body\":{\"kind\":\"status\",\"text\":\"revision 10\"}}"
+      ],
+      [
+        11,
+        1011,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":11,\"ts\":1011,\"fence\":1,\"kind\":\"item\",\"itemId\":\"survivor-b\",\"revision\":11,\"body\":{\"kind\":\"status\",\"text\":\"revision 11\"}}"
+      ],
+      [12, 1012, "{\"v\":5,\"kind\":\"outcomes\",\"epoch\":\"epoch-1\",\"seq\":12,\"ts\":1012}"]
+    ],
+    "source": {
+      "session_id": "session-1",
+      "epoch": "epoch-1",
+      "generation": 1,
+      "format": 1,
+      "through_seq": 14,
+      "prefix_seq": 11
+    },
+    "outcomes": [
+      [
+        12,
+        "queue.cards",
+        "\"Q\"",
+        1,
+        "b",
+        "[\"Q\",{\"messageId\":\"Q\",\"position\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"final edit\"}]},\"fingerprint\":\"eac7b1ad378504a69cec9fdcde5d31107b21b2818d778f9e51b2fdbcf16cf877\",\"state\":\"dispatched\",\"holdReason\":null,\"returnedReason\":null,\"returnedRejection\":null,\"consumedAs\":\"V\",\"queuedAt\":null}]",
+        0
+      ],
+      [12, "$", "\"queue\"", 1, "s0000000000000012:0000000000000001", "{\"revision\":3}", 0],
+      [
+        13,
+        "queue.cards",
+        "\"Q\"",
+        1,
+        "b",
+        "[\"Q\",{\"messageId\":\"Q\",\"position\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"final edit\"}]},\"fingerprint\":\"eac7b1ad378504a69cec9fdcde5d31107b21b2818d778f9e51b2fdbcf16cf877\",\"state\":\"withdrawn\",\"holdReason\":null,\"returnedReason\":null,\"returnedRejection\":null,\"consumedAs\":\"V\",\"queuedAt\":null}]",
+        0
+      ],
+      [13, "$", "\"queue\"", 1, "s0000000000000012:0000000000000001", "{\"revision\":4}", 0],
+      [14, "items", "\"orca:V\"", 1, "b", "null", 1],
+      [
+        14,
+        "tombstones",
+        "\"orca:V\"",
+        1,
+        "s0000000000000014:0000000000000001",
+        "[\"orca:V\",20]",
+        0
+      ],
+      [14, "itemFences", "\"orca:V\"", 1, "b", "null", 1],
+      [14, "submissions", "\"V\"", 1, "b", "null", 1],
+      [14, "$", "\"lastActivityAt\"", 1, "s0000000000000014:0000000000000004", "1014", 0]
+    ]
+  },
+  "raw": {
+    "session": {
+      "session_id": "session-1",
+      "workspace_id": "ws-1",
+      "epoch": "epoch-1"
+    },
+    "rows": [
+      [
+        1,
+        1001,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":1,\"ts\":1001,\"fence\":1,\"kind\":\"epoch\",\"reason\":\"session_created\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"}}"
+      ],
+      [
+        2,
+        1002,
+        "{\"v\":4,\"epoch\":\"epoch-1\",\"seq\":2,\"ts\":1002,\"fence\":1,\"kind\":\"submission\",\"clientMessageId\":\"raw-U\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"raw original\"}]},\"payloadFingerprint\":\"1a331e4940cb7d17cc199712c227818404d45225e396fea0f750ae48efab6ffc\",\"providerHandle\":{\"transport\":\"codex-app-server\",\"agent\":\"codex\",\"nativeId\":\"original-thread\"},\"origin\":\"client\",\"source\":{\"kind\":\"user\"},\"handoverRecorded\":true}"
+      ],
+      [
+        3,
+        1003,
+        "{\"kind\":\"queue\",\"messageId\":\"raw-Q\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"raw Q\"}]},\"position\":0,\"queuedAt\":null,\"recovers\":\"raw-U\"},\"v\":4,\"epoch\":\"epoch-1\",\"seq\":3,\"fence\":1,\"ts\":1003}"
+      ]
+    ],
+    "source": null,
+    "outcomes": []
+  },
+  "stopped": {
+    "session": {
+      "session_id": "session-1",
+      "workspace_id": "ws-1",
+      "epoch": "epoch-1"
+    },
+    "rows": [
+      [1, 1001, "{\"v\":5,\"kind\":\"outcomes\",\"epoch\":\"epoch-1\",\"seq\":1,\"ts\":1001}"]
+    ],
+    "source": {
+      "session_id": "session-1",
+      "epoch": "epoch-1",
+      "generation": 1,
+      "format": 1,
+      "through_seq": 5,
+      "prefix_seq": 0
+    },
+    "outcomes": [
+      [1, "$", "\"sessionId\"", 1, "s0000000000000001:0000000000000000", "\"session-1\"", 0],
+      [1, "$", "\"epoch\"", 1, "s0000000000000001:0000000000000001", "\"epoch-1\"", 0],
+      [1, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000002", "0", 0],
+      [1, "$", "\"oldestSequence\"", 1, "s0000000000000001:0000000000000003", "1", 0],
+      [1, "$", "\"highestFence\"", 1, "s0000000000000001:0000000000000004", "1", 0],
+      [1, "$", "\"derivedTurnScope\"", 1, "s0000000000000001:0000000000000005", "null", 0],
+      [1, "$", "\"latestAcceptedTurnSequence\"", 1, "s0000000000000001:0000000000000006", "0", 0],
+      [
+        1,
+        "$",
+        "\"queuePauseMarks\"",
+        1,
+        "s0000000000000001:0000000000000007",
+        "{\"latestStop\":null,\"resumedSequence\":0,\"reopenedSequence\":0}",
+        0
+      ],
+      [1, "$", "\"queue\"", 1, "s0000000000000001:0000000000000008", "{\"revision\":0}", 0],
+      [1, "$", "\"historyOrigin\"", 1, "s0000000000000001:0000000000000009", "null", 0],
+      [
+        2,
+        "submissions",
+        "\"stopped-U\"",
+        1,
+        "s0000000000000002:0000000000000000",
+        "[\"stopped-U\",{\"clientMessageId\":\"stopped-U\",\"fence\":1,\"payloadFingerprint\":\"85612c4d622d90c8cfde8de1f26e272f5960cd13852ea5d74a35fdefa5dcb5a2\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":2001,\"resolvedAt\":null,\"submittedSequence\":2,\"handoverRecorded\":true,\"acceptedSequence\":2,\"origin\":\"client\",\"source\":{\"kind\":\"user\"}}]",
+        0
+      ],
+      [
+        2,
+        "items",
+        "\"orca:stopped-U\"",
+        1,
+        "s0000000000000002:0000000000000001",
+        "{\"itemId\":\"orca:stopped-U\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"do this later\"}]},\"sequence\":2,\"observedAt\":2001,\"turnScope\":{\"kind\":\"thread\"}}",
+        0
+      ],
+      [
+        2,
+        "itemFences",
+        "\"orca:stopped-U\"",
+        1,
+        "s0000000000000002:0000000000000002",
+        "[\"orca:stopped-U\",1]",
+        0
+      ],
+      [2, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000002", "2001", 0],
+      [
+        3,
+        "submissions",
+        "\"stopped-U\"",
+        1,
+        "s0000000000000002:0000000000000000",
+        "[\"stopped-U\",{\"clientMessageId\":\"stopped-U\",\"fence\":1,\"payloadFingerprint\":\"85612c4d622d90c8cfde8de1f26e272f5960cd13852ea5d74a35fdefa5dcb5a2\",\"dispatchState\":\"rejected\",\"providerItemId\":null,\"reason\":\"provider_cancelled_before_start\",\"submittedAt\":2001,\"resolvedAt\":2002,\"submittedSequence\":2,\"handoverRecorded\":true,\"acceptedSequence\":2,\"origin\":\"client\",\"source\":{\"kind\":\"user\"},\"rejection\":{\"kind\":\"cancelled\",\"neverReachedAgent\":true},\"answeredInTurn\":null,\"recovered\":true}]",
+        0
+      ],
+      [
+        3,
+        "items",
+        "\"orca:stopped-U\"",
+        1,
+        "s0000000000000002:0000000000000001",
+        "{\"itemId\":\"orca:stopped-U\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"do this later\"}]},\"sequence\":3,\"observedAt\":2002,\"turnScope\":{\"kind\":\"thread\"}}",
+        0
+      ],
+      [3, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000002", "2002", 0],
+      [
+        4,
+        "$",
+        "\"queuePauseMarks\"",
+        1,
+        "s0000000000000001:0000000000000007",
+        "{\"latestStop\":{\"sequence\":4,\"event\":{\"reason\":\"user-stop\",\"at\":2002}},\"resumedSequence\":0,\"reopenedSequence\":0}",
+        0
+      ],
+      [
+        5,
+        "submissions",
+        "\"next\"",
+        1,
+        "s0000000000000005:0000000000000000",
+        "[\"next\",{\"clientMessageId\":\"next\",\"fence\":1,\"payloadFingerprint\":\"9c4d0d06ae941f90e7dd7a1556e6efdc0d794a300b59a019e5f1c959fd509342\",\"dispatchState\":\"pending\",\"providerItemId\":null,\"reason\":null,\"submittedAt\":2004,\"resolvedAt\":null,\"submittedSequence\":5,\"handoverRecorded\":true,\"acceptedSequence\":5,\"origin\":\"client\",\"source\":{\"kind\":\"user\"}}]",
+        0
+      ],
+      [
+        5,
+        "items",
+        "\"orca:next\"",
+        1,
+        "s0000000000000005:0000000000000001",
+        "{\"itemId\":\"orca:next\",\"revision\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"next human words\"}]},\"sequence\":5,\"observedAt\":2004,\"turnScope\":{\"kind\":\"thread\"}}",
+        0
+      ],
+      [
+        5,
+        "itemFences",
+        "\"orca:next\"",
+        1,
+        "s0000000000000005:0000000000000002",
+        "[\"orca:next\",1]",
+        0
+      ],
+      [5, "$", "\"lastActivityAt\"", 1, "s0000000000000001:0000000000000002", "2004", 0]
+    ]
+  },
+  "cleanedStoppedKeys": [
+    [1, "$", "\"derivedTurnScope\""],
+    [1, "$", "\"epoch\""],
+    [1, "$", "\"highestFence\""],
+    [1, "$", "\"historyOrigin\""],
+    [1, "$", "\"lastActivityAt\""],
+    [1, "$", "\"latestAcceptedTurnSequence\""],
+    [1, "$", "\"oldestSequence\""],
+    [1, "$", "\"queue\""],
+    [1, "$", "\"queuePauseMarks\""],
+    [1, "$", "\"sessionId\""],
+    [2, "itemFences", "\"orca:stopped-U\""],
+    [2, "items", "\"orca:stopped-U\""],
+    [2, "submissions", "\"stopped-U\""],
+    [3, "items", "\"orca:stopped-U\""],
+    [3, "submissions", "\"stopped-U\""],
+    [4, "$", "\"queuePauseMarks\""],
+    [5, "$", "\"lastActivityAt\""],
+    [5, "itemFences", "\"orca:next\""],
+    [5, "items", "\"orca:next\""],
+    [5, "submissions", "\"next\""]
+  ],
+  "frozen": {
+    "stateJson": "{\"sessionId\":\"session-1\",\"epoch\":\"epoch-1\",\"lastSequence\":14,\"lastActivityAt\":1014,\"oldestSequence\":1,\"highestFence\":1,\"itemFences\":[[\"survivor-a\",1],[\"survivor-b\",1]],\"itemExecutionOwners\":[],\"providerActivityAt\":[],\"tombstones\":[[\"orca:U\",10],[\"orca:V\",20]],\"removedTurnIds\":[],\"submissions\":[],\"receipts\":[],\"aliases\":[],\"itemEchoes\":[],\"appliedSettlementIds\":[],\"derivedTurnScope\":null,\"latestAcceptedTurnSequence\":0,\"queuePauseMarks\":{\"latestStop\":null,\"resumedSequence\":0,\"reopenedSequence\":0},\"stoppedHistoryCarried\":[],\"queuedHandOffPlaces\":[[\"V\",{\"sequence\":7,\"observedAt\":1007,\"turnScope\":{\"kind\":\"thread\"}}]],\"normalizedHandOffs\":[\"U\",\"V\"],\"queue\":{\"revision\":4,\"cards\":[[\"Q\",{\"messageId\":\"Q\",\"position\":0,\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"final edit\"}]},\"fingerprint\":\"eac7b1ad378504a69cec9fdcde5d31107b21b2818d778f9e51b2fdbcf16cf877\",\"state\":\"withdrawn\",\"holdReason\":null,\"returnedReason\":null,\"returnedRejection\":null,\"consumedAs\":\"V\",\"queuedAt\":null}]]},\"historyOrigin\":null}",
+    "items": [
+      {
+        "itemId": "survivor-a",
+        "itemJson": "{\"itemId\":\"survivor-a\",\"revision\":10,\"body\":{\"kind\":\"status\",\"text\":\"revision 10\"},\"sequence\":10,\"observedAt\":1010,\"turnScope\":{\"kind\":\"thread\"}}",
+        "ordinal": 0
+      },
+      {
+        "itemId": "survivor-b",
+        "itemJson": "{\"itemId\":\"survivor-b\",\"revision\":11,\"body\":{\"kind\":\"status\",\"text\":\"revision 11\"},\"sequence\":11,\"observedAt\":1011,\"turnScope\":{\"kind\":\"thread\"}}",
+        "ordinal": 1
+      }
+    ]
+  },
+  "publicSnapshot": {
+    "sessionId": "session-1",
+    "cursor": {
+      "epoch": "epoch-1",
+      "sequence": 14
+    },
+    "items": [
+      {
+        "itemId": "survivor-a",
+        "revision": 10,
+        "body": {
+          "kind": "status",
+          "text": "revision 10"
+        },
+        "sequence": 10,
+        "observedAt": 1010,
+        "turnScope": {
+          "kind": "thread"
+        }
+      },
+      {
+        "itemId": "survivor-b",
+        "revision": 11,
+        "body": {
+          "kind": "status",
+          "text": "revision 11"
+        },
+        "sequence": 11,
+        "observedAt": 1011,
+        "turnScope": {
+          "kind": "thread"
+        }
+      }
+    ],
+    "submissions": []
+  },
+  "oldStoppedCarry": {
+    "messages": [
+      {
+        "clientMessageId": "stopped-U",
+        "words": "do this later"
+      }
+    ],
+    "covers": ["stopped-U"]
+  },
+  "rawSources": [
+    [
+      "raw-U",
+      {
+        "v": 4,
+        "epoch": "epoch-1",
+        "seq": 2,
+        "ts": 1002,
+        "fence": 1,
+        "kind": "submission",
+        "clientMessageId": "raw-U",
+        "body": {
+          "kind": "message",
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "raw original"
+            }
+          ]
+        },
+        "payloadFingerprint": "1a331e4940cb7d17cc199712c227818404d45225e396fea0f750ae48efab6ffc",
+        "providerHandle": {
+          "transport": "codex-app-server",
+          "agent": "codex",
+          "nativeId": "original-thread"
+        },
+        "origin": "client",
+        "source": {
+          "kind": "user"
+        },
+        "handoverRecorded": true
+      }
+    ]
+  ],
+  "admission": {
+    "kind": "outcome-admission",
+    "epoch": "epoch-1",
+    "sequence": 2,
+    "item": {
+      "itemId": "orca:stopped-U",
+      "revision": 0,
+      "body": {
+        "kind": "message",
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "do this later"
+          }
+        ]
+      },
+      "sequence": 2,
+      "observedAt": 2001,
+      "turnScope": {
+        "kind": "thread"
+      }
+    },
+    "submission": {
+      "clientMessageId": "stopped-U",
+      "fence": 1,
+      "payloadFingerprint": "85612c4d622d90c8cfde8de1f26e272f5960cd13852ea5d74a35fdefa5dcb5a2",
+      "dispatchState": "pending",
+      "providerItemId": null,
+      "reason": null,
+      "submittedAt": 2001,
+      "resolvedAt": null,
+      "submittedSequence": 2,
+      "handoverRecorded": true,
+      "source": {
+        "kind": "user"
+      },
+      "acceptedSequence": 2,
+      "origin": "client"
+    },
+    "fence": 1
+  },
+  "sourceSha256": {
+    "journal-open.ts": "1c70edb6fafb148cc9ab9a72c84e2e9c52bd5ff30c69ba4d7983f8048c53bd2c",
+    "journal-reducer.ts": "30d881ca1825b154fddcb854fdb16a8ae41e5c8b049f8393fc197935a6feb5d5",
+    "journal-outcome-write.ts": "621da14c5f2cdc7a775c3bcb84de528fad34c688c2965d82063de3ee72729480",
+    "journal-stop-acceptance.ts": "fe9c8e01efb679d94a3a94b16149e462d16830f73de204af51854117ae0e2dd0"
+  }
+}

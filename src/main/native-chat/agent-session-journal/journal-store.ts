@@ -1,5 +1,7 @@
+import { journalInputSourceBody } from './journal-input-source'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
+import { JournalWriteProjection } from './journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import * as journalInput from './journal-input-obligations'
@@ -24,6 +26,7 @@ import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
 } from '../../../shared/structured-agent-session-live-turn'
+import { journalWroteBeforeOpen } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'
 import {
@@ -32,7 +35,6 @@ import {
   rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
-  applyJournalRow,
   createJournalReducerState,
   resolveJournalItemId,
   type JournalReducerState
@@ -56,11 +58,7 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import { JournalWriteQueue } from './journal-write-queue'
 import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
 import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import {
-  journalContextCursor,
-  journalContextReceipt,
-  readJournalContextSince
-} from './journal-context-cursor'
+import * as journalContext from './journal-context-cursor'
 import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
 
 export { AgentSessionJournalError } from './journal-write-guards'
@@ -71,8 +69,6 @@ export class AgentSessionJournal {
   private readonly goalAttachments: JournalCollaborators['goalAttachments']
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
-  private readonly now: () => number
-  private readonly mintEpoch: () => string
 
   private state: JournalReducerState
   private readonly readPublic = createJournalPublicReader()
@@ -87,6 +83,7 @@ export class AgentSessionJournal {
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
   private readonly stepWriter: JournalCollaborators['stepWriter']
   private readonly restore: () => Promise<void>
+  private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
   readonly queuedMessages: JournalCollaborators['queuedMessages']
   readonly stopMarks: JournalCollaborators['stopMarks']
@@ -96,14 +93,19 @@ export class AgentSessionJournal {
   constructor(options: AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
-    this.now = options.now ?? (() => Date.now())
-    this.mintEpoch = options.mintEpoch ?? randomUUID
     this.state = createJournalReducerState(options.identity.sessionId, '')
     this.queue = new JournalWriteQueue(options.identity.sessionId)
+    this.projection = new JournalWriteProjection({
+      database: this.database,
+      state: () => this.state,
+      adopt: (state) => {
+        this.state = state
+      }
+    })
     const collaborators = createJournalStoreCollaborators({
       identity: this.identity,
-      now: this.now,
-      mintEpoch: this.mintEpoch,
+      now: options.now ?? (() => Date.now()),
+      mintEpoch: options.mintEpoch ?? randomUUID,
       serialize: (run) => this.queue.serialize(run),
       database: () => this.database,
       state: () => this.state,
@@ -113,11 +115,11 @@ export class AgentSessionJournal {
         this.state = loaded.state
         this.onCommitted?.()
       },
-      commit: (rows, savedAt) => {
-        for (const row of rows) {
-          applyJournalRow(this.state, row, savedAt)
-        }
+      prepare: (db, rows, savedAt, finishFold) =>
+        this.projection.prepare(db, rows, savedAt, finishFold),
+      commit: (rows) => {
         this.onCommitted?.(rows)
+        this.projection.verify()
       },
       notifyCommitted: () => this.onCommitted?.([]),
       journal: () => this,
@@ -138,7 +140,7 @@ export class AgentSessionJournal {
   }
 
   get epoch(): string {
-    return journalContextCursor(this.state).epoch
+    return journalContext.journalContextCursor(this.state).epoch
   }
 
   get agent(): AgentSessionJournalIdentity['agent'] {
@@ -148,11 +150,7 @@ export class AgentSessionJournal {
   /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
    *  wrote it. A provider-context boundary does not change that physical provenance. */
   wroteBeforeOpen(sequence: number | undefined): boolean {
-    return (
-      sequence !== undefined &&
-      this.state.epoch === this.openedThrough.epoch &&
-      sequence <= this.openedThrough.sequence
-    )
+    return journalWroteBeforeOpen(this.state, this.openedThrough, sequence)
   }
 
   /** Fallback reopen boundary until its mark is written; each new handle marks again. */
@@ -183,7 +181,7 @@ export class AgentSessionJournal {
     }
   }
 
-  cursor = (): AgentJournalCursor => journalContextCursor(this.state)
+  cursor = (): AgentJournalCursor => journalContext.journalContextCursor(this.state)
 
   snapshot = (): AgentJournalSnapshot => this.publicRead().snapshot
 
@@ -203,7 +201,7 @@ export class AgentSessionJournal {
     this.state.stoppedHistoryCarried
 
   submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
-    this.state.inputs.sources.get(clientMessageId)?.body ?? null
+    journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
 
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
   item = (itemId: string): AgentJournalRenderItem | null =>
@@ -257,7 +255,7 @@ export class AgentSessionJournal {
 
   /** Reconnecting clients read durable acceptance instead of resending. */
   receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
-    journalContextReceipt(this.state, clientMessageId)
+    journalContext.journalContextReceipt(this.state, clientMessageId)
 
   physicalCursor = (): AgentJournalCursor => ({
     epoch: this.state.epoch,
@@ -277,7 +275,7 @@ export class AgentSessionJournal {
   readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
     const { sessionId } = this.identity
     const rowsAfter = journalRowsAfterReader(this.database.db, sessionId, this.state.epoch, limit)
-    return readJournalContextSince(this.state, rowsAfter, cursor)
+    return journalContext.readJournalContextSince(this.state, rowsAfter, cursor)
   }
 
   /** Assign revisions here so callers cannot publish reducer-stale upserts. */

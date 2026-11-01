@@ -18,6 +18,13 @@ export function knownTags(union: z.ZodDiscriminatedUnion): ReadonlySet<string> {
   )
 }
 
+const fallbacks = new WeakSet<z.core.$ZodType>()
+
+/** The arm that keeps an unknown tag; saved-outcome storage drops it, so an unknown tag refuses. */
+export function isJournalOpenUnionFallback(schema: z.core.$ZodType): boolean {
+  return fallbacks.has(schema)
+}
+
 /** Keep unknown nonblank tags as-is for readers to skip. Abort the catch-all for known malformed arms; blank tags are damage. */
 export function openDiscriminatedUnion<T extends z.ZodDiscriminatedUnion>(known: T) {
   const key = known.def.discriminator
@@ -25,5 +32,6 @@ export function openDiscriminatedUnion<T extends z.ZodDiscriminatedUnion>(known:
   const unknown = z
     .object({ [key]: z.string().regex(/\S/) })
     .refine((value) => !tags.has(value[key] ?? ''), { abort: true })
+  fallbacks.add(unknown)
   return z.union([known, unknown])
 }

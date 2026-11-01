@@ -1,5 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronUp } from 'lucide-react-native'
+import { ActivityIndicator, Text, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
@@ -8,14 +7,17 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
-import { TextField } from './composer-input/TextField'
+import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
+import { SectionHeader } from './list/SectionHeader'
+import { SheetHeader } from './nav-bar/SheetHeader'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
+import { NewWorktreeFormOptions } from './NewWorktreeFormOptions'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
-import { NewWorkspaceSetupScriptField } from './NewWorkspaceSetupScriptField'
 import { NewWorkspaceSshConnectionField } from './NewWorkspaceSshConnectionField'
-import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
+import { SheetPrimaryButton } from './SheetPrimaryButton'
 import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
@@ -61,12 +63,25 @@ export function NewWorktreeFormSheet(props: {
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const gated = props.sshGate.requiresConnection
+  // Desktop's rule: a git project makes a worktree, a folder project a plain workspace.
+  const title = props.selectedRepoIsGit
+    ? t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')
+    : t('components.newWorktreeFormSheet.createWorkspace', 'Create workspace')
+  const agentLabel = gated
+    ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
+    : props.selectedAgent.label
   return (
     <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
       <View style={styles.header}>
-        <Text style={styles.title}>
-          {t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')}
-        </Text>
+        <SheetHeader
+          title={title}
+          leading={{
+            label: t('common.cancel', 'Cancel'),
+            onPress: props.onClose,
+            disabled: props.creating
+          }}
+        />
       </View>
 
       {props.loading ? (
@@ -89,24 +104,6 @@ export function NewWorktreeFormSheet(props: {
             onOpenRunTarget={props.onOpenRunTarget}
           />
 
-          <SmartWorkspaceSourceField
-            composer={props.composer}
-            label={
-              props.selectedRepoIsGit
-                ? t('components.newWorktreeFormSheet.nameOrCreateFrom', "Name or 'Create From'")
-                : t('components.newWorktreeFormSheet.workspaceName', 'Workspace name')
-            }
-            disabled={props.sshGate.requiresConnection}
-            interactive={props.interactive}
-            onOpenExternalUrl={props.onOpenExternalUrl}
-            onBeforeOpen={props.onClearError}
-            onOpenDrawer={props.onOpenSource}
-          />
-
-          {props.composer.forkPushWarning ? (
-            <Text style={styles.sourceWarning}>{props.composer.forkPushWarning}</Text>
-          ) : null}
-
           {props.selectedRepoConnectionId ? (
             <NewWorkspaceSshConnectionField
               repoName={props.selectedRepoName}
@@ -115,86 +112,63 @@ export function NewWorktreeFormSheet(props: {
             />
           ) : null}
 
-          <View style={styles.field}>
-            <Text style={styles.label}>{t('components.newWorktreeFormSheet.agent', 'Agent')}</Text>
-            <Pressable
-              style={[styles.fieldButton, props.sshGate.requiresConnection && styles.disabled]}
-              disabled={props.sshGate.requiresConnection}
-              onPress={props.onOpenAgent}
-            >
-              <MobileAgentIcon agentId={props.selectedAgent.id} size={16} />
-              <Text style={styles.fieldButtonText} numberOfLines={1}>
-                {props.sshGate.requiresConnection
-                  ? t('components.newWorktreeFormSheet.connectTargetFirst', 'Connect target first')
-                  : props.selectedAgent.label}
-              </Text>
-              <ChevronDown size={14} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <SmartWorkspaceSourceField
+            composer={props.composer}
+            label={
+              props.selectedRepoIsGit
+                ? t('components.newWorktreeFormSheet.startFrom', 'Start from')
+                : t('components.newWorktreeFormSheet.workspaceName', 'Workspace name')
+            }
+            disabled={gated}
+            interactive={props.interactive}
+            onOpenExternalUrl={props.onOpenExternalUrl}
+            onBeforeOpen={props.onClearError}
+            onOpenDrawer={props.onOpenSource}
+          />
 
-          <Pressable
-            style={styles.advancedToggle}
-            onPress={() => props.onShowAdvancedChange(!props.showAdvanced)}
-          >
-            <Text style={styles.advancedText}>
-              {t('components.newWorktreeFormSheet.advanced', 'Advanced')}
-            </Text>
-            {props.showAdvanced ? (
-              <ChevronUp size={14} color={colors.textSecondary} />
-            ) : (
-              <ChevronDown size={14} color={colors.textSecondary} />
-            )}
-          </Pressable>
-
-          {props.showAdvanced ? (
-            <>
-              <SmartWorkspaceAdvancedFields
-                composer={props.composer}
-                selectedRepoIsGit={props.selectedRepoIsGit}
-              />
-              <View style={styles.field}>
-                <Text style={styles.label}>
-                  {t('components.newWorktreeFormSheet.note', 'Note')}
-                </Text>
-                <TextField
-                  value={props.note}
-                  onChangeText={props.onNoteChange}
-                  placeholder={t('components.newWorktreeFormSheet.notePlaceholder', 'Write a note')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-              {props.setupCommand ? (
-                <NewWorkspaceSetupScriptField
-                  command={props.setupCommand}
-                  source={props.setupSource}
-                  runPolicy={props.setupRunPolicy}
-                  decision={props.setupDecisionChoice}
-                  runSetup={props.runSetup}
-                  onDecisionChange={props.onSetupDecisionChange}
-                  onRunSetupChange={props.onRunSetupChange}
-                />
-              ) : null}
-            </>
+          {props.composer.forkPushWarning ? (
+            <Text style={styles.notice}>{props.composer.forkPushWarning}</Text>
           ) : null}
 
+          <SectionHeader title={t('components.newWorktreeFormSheet.agent', 'Agent')} />
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            <ListRow
+              key="agent"
+              title={agentLabel}
+              leading={<MobileAgentIcon agentId={props.selectedAgent.id} size={20} />}
+              navigates
+              disabled={gated}
+              onPress={props.onOpenAgent}
+              accessibilityLabel={`${t('components.newWorktreeFormSheet.agent', 'Agent')}, ${agentLabel}`}
+            />
+          </ListGroup>
+
+          <NewWorktreeFormOptions
+            expanded={props.showAdvanced}
+            composer={props.composer}
+            selectedRepoIsGit={props.selectedRepoIsGit}
+            note={props.note}
+            setupCommand={props.setupCommand}
+            setupSource={props.setupSource}
+            setupRunPolicy={props.setupRunPolicy}
+            setupDecisionChoice={props.setupDecisionChoice}
+            runSetup={props.runSetup}
+            onExpandedChange={props.onShowAdvancedChange}
+            onNoteChange={props.onNoteChange}
+            onSetupDecisionChange={props.onSetupDecisionChange}
+            onRunSetupChange={props.onRunSetupChange}
+          />
+
           {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.createButton, !props.canCreate && styles.createButtonDisabled]}
+          <View style={styles.footer}>
+            <SheetPrimaryButton
+              label={
+                gated ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target') : title
+              }
+              busy={props.creating}
               disabled={!props.canCreate}
               onPress={props.onCreate}
-            >
-              {props.creating ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : (
-                <Text style={styles.createText}>
-                  {props.sshGate.requiresConnection
-                    ? t('components.newWorktreeFormSheet.connectTarget', 'Connect target')
-                    : t('components.newWorktreeFormSheet.createWorktree', 'Create worktree')}
-                </Text>
-              )}
-            </Pressable>
+            />
           </View>
         </>
       )}

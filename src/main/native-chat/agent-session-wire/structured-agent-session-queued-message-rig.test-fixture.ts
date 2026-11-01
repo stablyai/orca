@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi } from 'vitest'
+import { expect } from 'vitest'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -30,9 +30,11 @@ import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
+  eventually,
   type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
@@ -44,15 +46,12 @@ type RigSendOptions = {
   carried?: Readonly<Record<string, string>>
 }
 
-export function eventually(assertion: () => void | Promise<void>): Promise<void> {
-  return vi.waitFor(assertion, { timeout: 10_000 })
-}
-
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
 
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
+    legacyInputs?: true
     idleSweep?: { idleMs: number; intervalMs: number }
     now?: () => number
     /** Teardown records its restart offers, which `restartOffers` lists. */
@@ -100,7 +99,11 @@ export async function createQueuedMessageTestRig(
         } as const)
       : {})
   })
+  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  if (pinLegacy) {
+    pinLegacy(host)
+  }
 
   function envelope(
     fields: Record<string, unknown>,
@@ -327,3 +330,5 @@ export async function createQueuedMessageTestRig(
     dispose
   }
 }
+
+export { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'

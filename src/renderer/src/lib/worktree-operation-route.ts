@@ -20,6 +20,7 @@ import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
@@ -50,8 +51,9 @@ export type WorktreeOperationOwnerRecord = {
 }
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
-export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
-  repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
+export type WorktreeOperationRouteState = Omit<FolderWorkspaceRuntimeOwnerState, 'repos'> & {
+  repos?: readonly (Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'> &
+    Partial<Pick<AppState['repos'][number], 'path' | 'projectGroupId'>>)[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
   runtimeEnvironmentCatalogHydrated?: boolean
@@ -171,6 +173,23 @@ function resolveSelectedHostRoute(
         executionHostId: selectedHost.id,
         runtimeEnvironmentId: null
       })
+    }
+  }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(state, scope.folderWorkspaceId, selectedHost.id)
+  ) {
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: selectedHost.id,
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
+          state,
+          scope.folderWorkspaceId,
+          selectedHost.id
+        )
+      }
     }
   }
   const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
@@ -312,7 +331,10 @@ function resolveFolderWorkspaceOperationRoute(
     kind: 'resolved',
     route: {
       executionHostId,
-      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+      runtimeEnvironmentId:
+        parsedHost?.kind === 'runtime'
+          ? parsedHost.environmentId
+          : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, executionHostId)
     }
   }
 }

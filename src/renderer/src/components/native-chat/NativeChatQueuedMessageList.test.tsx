@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-
-const mocks = vi.hoisted(() => ({
-  updateSettings: vi.fn()
-}))
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 // A card's sender line opens and names agents through modules this test does not exercise.
@@ -13,12 +9,6 @@ vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.f
 vi.mock('@/runtime/structured-conversation-name', () => ({
   useStructuredChatTabConversationName: () => null
 }))
-vi.mock('../../store', () => {
-  const state = { updateSettings: mocks.updateSettings }
-  const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
-  useAppStore.getState = () => state
-  return { useAppStore }
-})
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
@@ -62,7 +52,8 @@ function card(overrides: Partial<QueuedMessageCard> & { messageId: string }): Qu
 function controller(
   cards: QueuedMessageCard[],
   pause: { reason: string } | null = null,
-  queueCapable = true
+  queueCapable = true,
+  isWorking = true
 ): StructuredAgentSessionQueuedMessagesController & {
   steer: ReturnType<typeof vi.fn>
   remove: ReturnType<typeof vi.fn>
@@ -84,7 +75,8 @@ function controller(
     steer: vi.fn(async () => {}),
     remove: vi.fn(async () => {}),
     edit: vi.fn(async () => {}),
-    steerNewest: vi.fn(() => false)
+    steerHead: vi.fn(() => false),
+    isWorking
   }
 }
 
@@ -137,10 +129,6 @@ function renderHeldQueue(
   )
   return { ...view, mutate }
 }
-
-beforeEach(() => {
-  mocks.updateSettings.mockReset()
-})
 
 afterEach(cleanup)
 
@@ -300,11 +288,9 @@ describe('NativeChatQueuedMessageList', () => {
     expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
   })
 
-  it('a command card offers no Edit: its text is not a draft', async () => {
+  it('a command card offers no Edit, so no menu: its text is not a draft', () => {
     renderList(controller([card({ messageId: 'compact-1', text: '/compact', command: true })]))
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
-    expect(await screen.findByRole('menuitem', { name: 'Turn off queueing' })).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: 'Edit message' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
   })
 
   it("a paused command card's ways out are Delete and the queue's Resume", () => {
@@ -459,7 +445,7 @@ describe('NativeChatQueuedMessageList', () => {
   })
 
   it.each(['stopped', 'some-newer-reason'])(
-    "a queue the host holds ('%s') shows one header row above the cards, with Resume; the held card still reads Steer",
+    "a queue the host holds ('%s') shows one header row above the cards, with Resume; the idle agent's held card reads Send",
     (reason) => {
       const text = 'Paused'
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a newer host may publish a reason this client's type does not list.
@@ -472,8 +458,8 @@ describe('NativeChatQueuedMessageList', () => {
       const row = within(list).getByRole('listitem')
       // The text is the card's only line: the header carries the why.
       expect(row.querySelectorAll('p')).toHaveLength(1)
-      expect(within(row).queryByRole('button', { name: 'Send' })).toBeNull()
-      expect(within(row).getByRole('button', { name: 'Steer' })).toBeTruthy()
+      expect(within(row).queryByRole('button', { name: 'Steer' })).toBeNull()
+      expect(within(row).getByRole('button', { name: 'Send' })).toBeTruthy()
       fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
       expect(mutate).toHaveBeenCalledWith(
         'agentSession.queuedMessagesResume',
@@ -489,8 +475,9 @@ describe('NativeChatQueuedMessageList', () => {
     // The open question below already says the agent waits; the text is the card's only line.
     expect(row.querySelectorAll('p')).toHaveLength(1)
     expect(within(row).getByRole('button', { name: 'Delete' })).toBeTruthy()
-    expect(within(row).getByRole('button', { name: 'More actions' })).toBeTruthy()
-    fireEvent.click(within(row).getByRole('button', { name: 'Steer' }))
+    // This host edits nothing in place, so the card has no menu.
+    expect(within(row).queryByRole('button', { name: 'More actions' })).toBeNull()
+    fireEvent.click(within(row).getByRole('button', { name: 'Send' }))
     expect(mutate).toHaveBeenCalledWith(
       'agentSession.queuedMessageSend',
       'agentSession.queuedMessageSend',
@@ -502,7 +489,7 @@ describe('NativeChatQueuedMessageList', () => {
     renderHeldQueue([waitingDraft('a', 1), waitingDraft('b', 2)], { reason: 'stopped' })
     const header = screen.getByRole('list').previousElementSibling!
     expect(header.textContent).toBe('Paused·2Clear allResume')
-    expect(screen.getAllByRole('button', { name: 'Steer' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Send' })).toHaveLength(2)
   })
 
   it('offers Clear all through per-card Delete on any host with a paused queue', () => {
@@ -661,20 +648,18 @@ describe('NativeChatQueuedMessageList', () => {
     expect(owner.steer).toHaveBeenCalledWith('waiting')
   })
 
-  it('every card still waiting on the queue reads Steer; one held on its own or returned, Send', () => {
+  it('a card waiting on the queue reads Steer while the agent works; held, returned or idle, Send', () => {
+    const send = { steers: false, label: 'Send', hint: 'Send this message now' }
     for (const hold of ['turn', 'behind-returned', 'queue-paused'] as const) {
-      expect(queuedMessageCardSendNow(card({ messageId: hold, hold }))).toEqual({
+      expect(queuedMessageCardSendNow(card({ messageId: hold, hold }), true)).toEqual({
         steers: true,
         label: 'Steer',
         hint: 'Submit without interrupting the model'
       })
+      expect(queuedMessageCardSendNow(card({ messageId: hold, hold }), false)).toEqual(send)
     }
     for (const hold of ['paused', 'returned'] as const) {
-      expect(queuedMessageCardSendNow(card({ messageId: hold, hold }))).toEqual({
-        steers: false,
-        label: 'Send',
-        hint: 'Send this message now'
-      })
+      expect(queuedMessageCardSendNow(card({ messageId: hold, hold }), true)).toEqual(send)
     }
   })
 
@@ -759,36 +744,37 @@ describe('NativeChatQueuedMessageList', () => {
     expect(screen.queryByRole('button', { name: 'Show full message' })).toBeNull()
   })
 
-  it('the menu offers Edit message and Turn off queueing', async () => {
+  it('the menu offers Edit message', async () => {
     const owner = controller([card({ messageId: 'draft-1' })])
     renderList(owner)
     fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit message' }))
     expect(owner.edit).toHaveBeenCalledWith('draft-1')
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Turn off queueing' }))
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: false })
   })
 
-  // Kept cards also work without host queueing; omit queue-only settings and shortcuts there.
+  // Kept cards also work without host queueing; omit the queue-only shortcut there.
   it.each([
     { queueCapable: true, offered: true },
     { queueCapable: false, offered: false }
   ])(
-    'offers Turn off queueing and the send chord only when the host queues sends ($queueCapable)',
+    'shows the steer chord on the head card only, when the host queues sends ($queueCapable)',
     async ({ queueCapable, offered }) => {
-      const owner = controller([card({ messageId: 'kept', hold: 'paused' })], null, queueCapable)
+      const owner = controller(
+        [card({ messageId: 'head' }), card({ messageId: 'next', position: 2 })],
+        null,
+        queueCapable
+      )
       renderList(owner)
-      fireEvent.focus(screen.getByRole('button', { name: 'Send' }))
-      const hint = await screen.findAllByText('Send this message now')
+      const [head, next] = screen.getAllByRole('button', { name: 'Steer' })
+      fireEvent.focus(head!)
+      const hint = await screen.findAllByText('Submit without interrupting the model')
       expect(hint[0]!.parentElement!.children).toHaveLength(offered ? 2 : 1)
-      fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
-      expect(await screen.findByRole('menuitem', { name: 'Edit message' })).toBeTruthy()
-      expect(screen.queryByRole('menuitem', { name: 'Turn off queueing' }) !== null).toBe(offered)
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Edit message' }))
-      expect(owner.edit).toHaveBeenCalledWith('kept')
-      fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-      expect(owner.steer).toHaveBeenCalledWith('kept')
+      fireEvent.blur(head!)
+      fireEvent.focus(next!)
+      const nextHint = await screen.findAllByText('Submit without interrupting the model')
+      expect(nextHint.at(-1)!.parentElement!.children).toHaveLength(1)
+      fireEvent.click(next!)
+      expect(owner.steer).toHaveBeenCalledWith('next')
     }
   )
 

@@ -204,18 +204,20 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     if (!repo || !branch) {
       return
     }
+    // The read must start after the write rather than join an older poll; its failure is not the write's.
     if (activeReview?.provider === 'gitlab') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
         branch,
+        userRefresh: true,
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: fallbackGitHubPRNumber,
         linkedGitLabMR,
         linkedBitbucketPR,
         linkedAzureDevOpsPR,
         linkedGiteaPR
-      })
+      }).catch(() => null)
       const refreshedGitLabReview =
         refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
       if (refreshedGitLabReview) {
@@ -238,13 +240,14 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       repoPath: repo.path,
       repoId: repo.id,
       branch,
+      userRefresh: true,
       linkedGitHubPR: linkedPR,
       fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
       linkedGitLabMR,
       linkedBitbucketPR,
       linkedAzureDevOpsPR,
       linkedGiteaPR
-    })
+    }).catch(() => null)
   }, [
     activeGitLabReview,
     activeReview?.provider,

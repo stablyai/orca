@@ -10,10 +10,11 @@ import { structuredAgentSessionCommandTurnIdentity } from '../../../shared/struc
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'
 import { queuedHandOffInDoubt, queuedHandOffOutcome } from './journal-dispatch-settlement'
+import type { JournalDispatchRow } from './journal-row-schema'
 import type { JournalQueueRow, JournalQueuedChange } from './journal-queue-events'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
-import { placeQueuedHandOffInDoubt } from './journal-submission-fold'
+import { foldQueuedHandOffInDoubt, placeQueuedHandOffInDoubt } from './journal-submission-fold'
 import {
   QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED,
   type QueuedMessageRow
@@ -113,9 +114,13 @@ export function queuedCardFromChange(
   return card
 }
 
-export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow): void {
+export function foldJournalQueueRow(
+  state: JournalReducerState,
+  row: JournalRow,
+  marker5 = false
+): void {
   if (row.kind === 'queue') {
-    applyQueueRow(state, row)
+    applyQueueRow(state, row, marker5)
   } else if (row.kind === 'submission') {
     const card =
       typeof row.queuedMessageId === 'string'
@@ -136,14 +141,14 @@ export function foldJournalQueueRow(state: JournalReducerState, row: JournalRow)
     const card = cardHandedOffAs(state, submission)
     if (card && submission) {
       setCard(state, settledHandOff(state, card, submission))
-      settleHandOffInDoubt(state, row.clientMessageId, row)
+      settleHandOffInDoubt(state, row.clientMessageId, row, marker5)
     }
   } else if (row.kind === 'item' || row.kind === 'lifecycle-batch') {
     spendReportedCommandCards(state)
   }
 }
 
-function applyQueueRow(state: JournalReducerState, row: JournalQueueRow): void {
+function applyQueueRow(state: JournalReducerState, row: JournalQueueRow, marker5: boolean): void {
   const { change } = row
   if (change.op === 'queued') {
     const card = queuedCardFromChange(state, row.messageId, change)
@@ -152,10 +157,10 @@ function applyQueueRow(state: JournalReducerState, row: JournalQueueRow): void {
       change.recovers &&
       state.submissions.get(change.recovers)?.queuedMessageId === row.messageId
     ) {
-      settleHandOffInDoubt(state, change.recovers, row)
+      settleHandOffInDoubt(state, change.recovers, row, marker5)
     }
     if (card.consumedAs !== null) {
-      settleHandOffInDoubt(state, card.consumedAs, row)
+      settleHandOffInDoubt(state, card.consumedAs, row, marker5)
     }
     return
   }
@@ -206,12 +211,23 @@ function settledHandOff(
 function settleHandOffInDoubt(
   state: JournalReducerState,
   clientMessageId: string,
-  row: JournalRow
+  row: JournalDispatchRow | JournalQueueRow,
+  marker5: boolean
 ): void {
   const submission = state.submissions.get(clientMessageId)
-  if (submission && queuedHandOffInDoubt(submission)) {
-    state.inputs.presentations.set(clientMessageId, row)
+  if (
+    submission &&
+    (marker5
+      ? submission.dispatchState === 'rejected' && queuedHandOffOutcome(submission) === 'inDoubt'
+      : queuedHandOffInDoubt(submission))
+  ) {
+    if (!marker5) {
+      state.inputs.presentations.set(clientMessageId, row)
+    }
     placeQueuedHandOffInDoubt(state, submission)
+    if (marker5) {
+      foldQueuedHandOffInDoubt(submission)
+    }
   }
 }
 

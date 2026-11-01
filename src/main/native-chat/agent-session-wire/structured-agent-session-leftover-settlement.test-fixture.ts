@@ -6,7 +6,7 @@ import {
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
-  liveTestJournalRows,
+  readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
@@ -31,10 +31,11 @@ export const TURN: AgentJournalItemIdentity = {
 export const TURN_KEY = agentJournalItemKey(TURN)
 const IN_TURN = { kind: 'turn' as const, turnItemId: TURN_KEY }
 export const APPROVAL: AgentJournalItemIdentity = { ...TURN, ordinal: 2 }
-/** All settlement rows carry recovered=true. */
+/** Recovered outcome values carry recovered=true. */
 export const REJECT_RECOVERED_ROWS = `
-  CREATE TEMP TRIGGER reject_recovered BEFORE INSERT ON journal_rows
-  WHEN json_extract(NEW.row_json, '$.recovered') = 1
+  CREATE TEMP TRIGGER reject_recovered BEFORE INSERT ON journal_outcomes
+  WHEN (NEW.field = 'items' AND json_extract(NEW.value_json, '$.recovered') = 1)
+    OR (NEW.field = 'submissions' AND json_extract(NEW.value_json, '$[1].recovered') = 1)
   BEGIN SELECT RAISE(ABORT, 'temporary storage failure'); END;
 `
 
@@ -73,7 +74,7 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
     throw new Error('expected the original child')
   }
   const database = openTestJournalHostDatabase(current.root)
-  const before = liveTestJournalRows(database.db, SESSION)
+  const before = readTestJournalOutcomes(database.db, SESSION)
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   database.db.exec(REJECT_RECOVERED_ROWS)
   await current.host.handleAdapterEvent({
@@ -91,7 +92,7 @@ export async function exitWhileSettlementFails(current: QueuedMessageTestRig) {
     runtimeFence: child.fence + 1,
     deathEvidence: { kind: 'exit-observed', ownerFence: child.fence }
   })
-  expect(liveTestJournalRows(database.db, SESSION)).toEqual(before)
+  expect(readTestJournalOutcomes(database.db, SESSION)).toEqual(before)
   return { session, database, deadFence: child.fence }
 }
 

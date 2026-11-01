@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
   X: 'X'
@@ -35,6 +36,7 @@ vi.mock('react-native-reanimated', () => ({
 }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'

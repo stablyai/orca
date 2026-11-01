@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
 import { pickedSkillsInText } from '../../../../../src/shared/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session-journal-types'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -62,6 +63,19 @@ export function updateMobileNativeChatDraftInputs(
   }
   drafts.set(destination.scope, update(readMobileNativeChatDraftInputs(destination.scope)))
   listeners.get(destination.scope)?.forEach((listener) => listener())
+}
+/** Adds uploaded images to the draft they were picked for, each under a fresh chip id. */
+export function addMobileNativeChatDraftImages(
+  scope: MobileNativeChatDraftDestination,
+  uploadedImages: Omit<PendingNativeChatImage, 'id'>[]
+): void {
+  updateMobileNativeChatDraftInputs(scope, (current) => ({
+    ...current,
+    images: [
+      ...current.images,
+      ...uploadedImages.map((image) => ({ ...image, id: createUuidV4() }))
+    ]
+  }))
 }
 export function subscribeMobileNativeChatDraftInputs(
   scope: string | null,

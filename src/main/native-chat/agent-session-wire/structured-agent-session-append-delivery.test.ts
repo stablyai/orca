@@ -256,7 +256,9 @@ describe('an open chat receives each row once', () => {
               epoch: row.epoch,
               sequence: row.seq,
               kind: row.kind,
-              itemId: 'itemId' in row ? row.itemId : null
+              // A new chat saves outcomes, whose change index names the items each sequence wrote.
+              itemId:
+                row.kind === 'outcome' ? row.itemIds.join() : 'itemId' in row ? row.itemId : null
             }))
           : []
       })
@@ -285,7 +287,7 @@ describe('an open chat receives each row once', () => {
         {
           epoch: committedCursor.epoch,
           sequence: committedCursor.sequence,
-          kind: 'item',
+          kind: 'outcome',
           itemId: 'orca:streamed'
         }
       ]

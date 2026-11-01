@@ -5,7 +5,8 @@ import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
-import { structuredAgentSessionNewSendsQueue } from './structured-agent-session-queue-request'
+import { structuredAgentSessionSendQueues } from './structured-agent-session-queue-request'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
@@ -33,7 +34,6 @@ import { useStructuredAgentSessionContextUsage } from './use-structured-agent-se
 import { useStructuredAgentSessionRailOutline } from './use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
-import { structuredAgentSessionQueueEnabled } from '../../../../shared/structured-agent-session-queued-cards'
 import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
 import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
@@ -48,7 +48,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     hostStopping = false,
     launch,
     providerStarting = false,
-    queueFollowUps = true,
+    queueFollowUps = nativeChatQueueFollowUps(null),
     sessionId,
     target,
     transportEnabled = true
@@ -120,12 +120,16 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const stopControlInput = { sessionId, target, transportState, hostStopping, mutate }
   const stopControl = useStructuredAgentSessionStop(stopControlInput)
   const prompts = pendingStructuredSessionPrompts(transportState)
-  // Immediate sends enable prompt cancellation.
-  const queueEnabled = structuredAgentSessionQueueEnabled(queueFollowUps, transportState, prompts)
-  const queue = useMemo(
-    () => ({ capability: queueCapability, enabled: queueEnabled }),
-    [queueCapability, queueEnabled]
-  )
+  const isWorking = transportState.isWorking || transportState.queueSendsNext
+  // Resolved per send, so a send's alternate flips the setting before the queue's own rules.
+  const queue = {
+    capability: queueCapability,
+    followUpsQueue: queueFollowUps,
+    isWorking,
+    stopping: stopControl.stopping,
+    session: transportState,
+    prompts
+  }
   const sends = useStructuredAgentSessionSends({
     sessionId,
     target,
@@ -171,7 +175,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     write,
     capturePresentation
   })
-  const isWorking = transportState.isWorking || transportState.queueSendsNext
   const send = (...input: Parameters<typeof sends.send>) =>
     // Legacy: an older host refuses sends while a command runs; removable once those hosts age out.
     (!commandPending.current || hostStatesTurnScopes(journalItems)) &&
@@ -276,8 +279,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,
     capturePresentation,
-    /** Host and send both permit queueing: follow-ups/commands request it and no unanswerable prompt blocks it. */
-    sendsQueue: structuredAgentSessionNewSendsQueue(queue),
+    /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
+    sendsQueue: structuredAgentSessionSendQueues(queue),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>

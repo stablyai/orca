@@ -1,12 +1,14 @@
-import { useRef } from 'react'
-import { Text, View, type TextInput } from 'react-native'
+import { Text, View } from 'react-native'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileSegmentedControl } from './MobileSegmentedControl'
+import { MobileSwitch } from './MobileSwitch'
 import { TextField } from './composer-input/TextField'
+import { LIST_ROW_PADDING, ListGroup } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 
 type Props = {
   composer: MobileComposerSource
@@ -17,14 +19,14 @@ type Props = {
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const branchNameInputRef = useRef<TextInput>(null)
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')
+  const reuseTitle = t('workspace.branchChoice.existing', 'Existing branch')
   return (
     <>
       {selection ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>
+        <View>
+          <Text style={newWorktreeFormStyles.fieldLabel}>
             {t('components.smartWorkspaceAdvancedFields.name', 'Name')}
           </Text>
           <TextField
@@ -41,8 +43,8 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
       ) : null}
 
       {showBranchOverride && !composer.reuseEligibleBranch ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>
+        <View>
+          <Text style={newWorktreeFormStyles.fieldLabel}>
             {t('components.smartWorkspaceAdvancedFields.branchName', 'Branch name')}
           </Text>
           <TextField
@@ -59,42 +61,39 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
       ) : null}
 
       {composer.reuseEligibleBranch ? (
-        <View style={styles.field}>
-          <Text style={styles.label}>
+        <View>
+          <Text style={newWorktreeFormStyles.fieldLabel}>
             {t('workspace.branchChoice.title', 'Branch for this worktree')}
           </Text>
-          <MobileSegmentedControl
-            segments={[
-              { value: 'existing', label: t('workspace.branchChoice.existing', 'Existing branch') },
-              { value: 'new', label: t('workspace.branchChoice.new', 'New branch') }
-            ]}
-            selected={composer.reuseSelectedBranch ? 'existing' : 'new'}
-            onSelect={(value) => {
-              composer.setReuseSelectedBranch(value === 'existing')
-              if (value === 'new') {
-                branchNameInputRef.current?.focus()
+          <ListGroup>
+            <ListRow
+              key="reuse"
+              title={reuseTitle}
+              subtitle={composer.reuseEligibleBranch}
+              accessory={
+                <MobileSwitch
+                  value={composer.reuseSelectedBranch}
+                  onValueChange={composer.setReuseSelectedBranch}
+                  accessibilityLabel={reuseTitle}
+                />
               }
-            }}
-            fill
-          />
+            />
+          </ListGroup>
           {composer.reuseSelectedBranch ? (
-            <View style={styles.branchDetail}>
-              <Text style={styles.branchName}>{composer.reuseEligibleBranch}</Text>
-              <Text style={styles.description}>
-                {t('workspace.branchChoice.existingHint', 'New commits go on this branch.')}
-              </Text>
-            </View>
+            <Text style={styles.hint}>
+              {t('workspace.branchChoice.existingHint', 'New commits go on this branch.')}
+            </Text>
           ) : (
-            <View style={styles.branchDetail}>
-              <Text style={styles.description}>
+            <View style={styles.newBranch}>
+              <Text style={styles.hint}>
                 {t('workspace.branchChoice.newHint', 'Create a new local branch')}
               </Text>
-              <Text style={styles.label}>
+              <Text style={[newWorktreeFormStyles.fieldLabel, styles.newBranchLabel]}>
                 {t('workspace.branchChoice.newName', 'New branch name')}
               </Text>
               <TextField
-                inputRef={branchNameInputRef}
                 accessibilityLabel={t('workspace.branchChoice.newName', 'New branch name')}
+                // Turning reuse off mounts this field, so it takes focus straight away.
                 autoFocus
                 value={composer.branchNameOverride ?? ''}
                 onChangeText={composer.handleBranchNameOverrideChange}
@@ -111,26 +110,17 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
 }
 
 const styles = themedStyleSheet(() => ({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
+  hint: {
     fontSize: 13,
-    fontWeight: '500',
     color: colors.textSecondary,
-    marginBottom: spacing.xs
+    paddingHorizontal: LIST_ROW_PADDING,
+    marginTop: 6
   },
-  branchDetail: {
+  newBranch: {
+    gap: 6
+  },
+  newBranchLabel: {
     marginTop: spacing.sm,
-    gap: spacing.xs
-  },
-  branchName: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    color: colors.textPrimary
-  },
-  description: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
+    marginBottom: 0
   }
 }))

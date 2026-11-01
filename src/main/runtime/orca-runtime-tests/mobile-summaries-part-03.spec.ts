@@ -304,8 +304,8 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(summaries.worktrees[0]?.agents).toHaveLength(100)
-    // Once for the summary and once for the session that names its rows; never once per row.
-    expect(getRepo).toHaveBeenCalledTimes(2)
+    // Naming reads the session once; the qualified summary lookup does not read a bare repo ID.
+    expect(getRepo).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -502,7 +502,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(summaries).toMatchObject({ totalCount: 2_000, truncated: true })
     expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 0)).toBe(true)
-    expect(getRepo).toHaveBeenCalledTimes(remoteWorktrees.length)
+    expect(getRepo).not.toHaveBeenCalled()
     // The prior per-miss path scan exceeded the 3s poll interval at this scale.
     expect(pathReadCount).toBeLessThan(40_000)
   })

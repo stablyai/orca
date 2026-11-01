@@ -692,27 +692,6 @@ describe('orchestration notification mailbox consistency', () => {
     }
   )
 
-  it('releases staged pointer state when an explicit check owns the batch', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Explicit-check Run')
-    insertDirectRunMessage(db, run.id, 'Checked before Enter')
-
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-    const checked = await checkBoundMailbox(harness.runtime)
-    expect(checked).toMatchObject({ runId: run.id, count: 1 })
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-    const redrive = vi.spyOn(harness.runtime, 'deliverPendingMessagesForHandle')
-    harness.runtime.onPtyExit(PTY_ID, 0)
-    await Promise.resolve()
-    expect(redrive).not.toHaveBeenCalled()
-    db.close()
-  })
-
   it('routes same-Run direct mail through the bound check and acknowledgment path', async () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')

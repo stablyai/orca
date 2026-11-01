@@ -10,14 +10,17 @@ import type {
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../codex/codex-structured-thread-facts'
+import type { JournalInputSource } from './journal-input-source-schema'
+import {
+  journalInputSourceBody,
+  journalInputSourceFamily,
+  journalInputSourceId,
+  journalInputSourceSequence,
+  journalInputSourceScope
+} from './journal-input-source'
+import type { JournalQueueRow } from './journal-queue-events'
 import type { JournalReducerState } from './journal-reducer'
-import type {
-  JournalRow,
-  JournalSubmissionRow,
-  JournalDispatchRow,
-  JournalItemRow,
-  JournalTombstoneRow
-} from './journal-row-schema'
+import type { JournalRow, JournalDispatchRow, JournalTombstoneRow } from './journal-row-schema'
 import { foldQueuedHandOffInDoubt } from './journal-submission-fold'
 import { queuedHandOffOutcome } from './journal-dispatch-settlement'
 import type { QueuedMessageRow } from './queued-message-table'
@@ -29,17 +32,21 @@ export type JournalInputWork = {
   generationEnded: (submission: AgentJournalSubmission) => boolean
 }
 
+export type JournalInputEnd =
+  | { kind: 'item'; turnId: string | null }
+  | { kind: 'stop'; event: NonNullable<JournalTombstoneRow['stopEvent']> }
+
 export function createJournalInputObligations() {
   return {
-    sources: new Map<string, JournalSubmissionRow>(),
-    families: new Map<string, JournalSubmissionRow>(),
-    rejections: new Map<string, JournalDispatchRow>(),
-    presentations: new Map<string, JournalRow | QueuedMessageRow>(),
+    sources: new Map<string, JournalInputSource>(),
+    families: new Map<string, JournalInputSource>(),
+    rejections: new Map<string, JournalDispatchRow | AgentJournalSubmission>(),
+    presentations: new Map<string, JournalDispatchRow | JournalQueueRow | QueuedMessageRow>(),
     handovers: new Map<string, JournalDispatchRow>(),
     echoes: new Set<string>(),
     candidates: new Map<string, AgentJournalSubmission>(),
-    ends: new Map<string, JournalItemRow | JournalTombstoneRow>(),
-    ended: new Map<string, JournalItemRow | JournalTombstoneRow>(),
+    ends: new Map<string, JournalInputEnd>(),
+    ended: new Set<string>(),
     revision: 0
   }
 }
@@ -56,7 +63,11 @@ export function foldJournalInputObligations(
     if (row.queuedMessageId) {
       const previous = input.families.get(row.queuedMessageId)
       if (previous) {
-        input.candidates.delete(previous.clientMessageId)
+        input.candidates.delete(
+          previous.kind === 'submission'
+            ? previous.clientMessageId
+            : previous.submission.clientMessageId
+        )
       }
       input.families.set(row.queuedMessageId, row)
     }
@@ -67,7 +78,9 @@ export function foldJournalInputObligations(
   if (row.kind === 'dispatch' && row.state === 'pending') {
     const target = input.handovers
     const source = input.sources.get(row.clientMessageId)
-    const scope = source && state.derivedTurnScope.scopeFor(source.body)
+    const body = journalInputSourceBody(source)
+    const scope = body && state.derivedTurnScope.scopeFor(body)
+    target.delete(row.clientMessageId)
     target.set(
       row.clientMessageId,
       row.state === 'pending' &&
@@ -84,9 +97,10 @@ export function foldJournalInputObligations(
       row.kind === 'dispatch' &&
       row.state === 'rejected' &&
       send &&
-      input.sources.get(row.clientMessageId)?.queuedMessageId &&
+      journalInputSourceFamily(input.sources.get(row.clientMessageId)) &&
       queuedHandOffOutcome(send) === 'inDoubt'
     ) {
+      state.normalizedHandOffs.add(row.clientMessageId)
       input.rejections.set(row.clientMessageId, row)
       foldQueuedHandOffInDoubt(send)
     }
@@ -117,13 +131,13 @@ export function foldJournalInputObligations(
     const turn = readAgentJournalTurn(item.body)
     const frame = item.body.kind === 'status' ? item.body.providerFrame : undefined
     if (turn) {
-      input.ends.set(item.itemId, item)
+      input.ends.set(item.itemId, { kind: 'item', turnId: turn?.turnId ?? null })
     }
     if (
       (turn && turn.state !== 'running' && turn.state !== 'unverifiable') ||
       providerAttemptEnded(frame)
     ) {
-      input.ends.set(item.itemId, item)
+      input.ends.set(item.itemId, { kind: 'item', turnId: turn?.turnId ?? null })
       const candidates = [...input.candidates.values()].filter(
         (send) =>
           (input.handovers.get(send.clientMessageId)?.fence ??
@@ -142,8 +156,9 @@ export function foldJournalInputObligations(
         const handover = input.handovers.get(send.clientMessageId)
         const source = input.sources.get(send.clientMessageId)
         const after =
-          handover?.seq ?? (send.handoverRecorded ? Infinity : (source?.seq ?? Infinity))
-        const scope = handover?.turnScope ?? source?.turnScope
+          handover?.seq ??
+          (send.handoverRecorded ? Infinity : (journalInputSourceSequence(source) ?? Infinity))
+        const scope = handover?.turnScope ?? journalInputSourceScope(source)
         const target = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : item.itemId
         const user = turn?.userItemId
         const matches =
@@ -153,7 +168,7 @@ export function foldJournalInputObligations(
               ? user === agentJournalSubmissionKey(send.clientMessageId)
               : after === latest
         if (matches && item.seq > after && !input.ended.has(send.clientMessageId)) {
-          input.ended.set(send.clientMessageId, item)
+          input.ended.add(send.clientMessageId)
           input.revision++
         }
       }
@@ -162,32 +177,31 @@ export function foldJournalInputObligations(
   if (row.kind === 'tombstone' && row.stopEvent) {
     const previous = input.ends.get(row.itemId)
     if (
-      previous?.kind === 'tombstone' &&
-      JSON.stringify(previous.stopEvent) === JSON.stringify(row.stopEvent)
+      previous?.kind === 'stop' &&
+      JSON.stringify(previous.event) === JSON.stringify(row.stopEvent)
     ) {
       return
     }
-    input.ends.set(row.itemId, row)
+    input.ends.set(row.itemId, { kind: 'stop', event: row.stopEvent })
     for (const send of input.candidates.values()) {
       const handover = input.handovers.get(send.clientMessageId)
       const scope = handover?.turnScope
       const end = scope?.kind === 'turn' ? input.ends.get(scope.turnItemId) : undefined
-      const turn = readAgentJournalTurn(
+      const turnId =
         end?.kind === 'item'
-          ? end.body
+          ? end.turnId
           : scope?.kind === 'turn'
-            ? state.items.get(scope.turnItemId)?.body
+            ? readAgentJournalTurn(state.items.get(scope.turnItemId)?.body)?.turnId
             : undefined
-      )
       if (
         handover &&
         handover.fence === row.fence &&
         row.seq > handover.seq &&
         row.stopEvent.reason === 'user-stop' &&
-        (!row.stopEvent.turnId || turn?.turnId === row.stopEvent.turnId) &&
+        (!row.stopEvent.turnId || turnId === row.stopEvent.turnId) &&
         !input.ended.has(send.clientMessageId)
       ) {
-        input.ended.set(send.clientMessageId, row)
+        input.ended.add(send.clientMessageId)
       }
     }
     input.revision++
@@ -236,11 +250,11 @@ export function journalInputAttemptEnded(
 
 export function refreshJournalInputCandidate(state: JournalReducerState, id: string): void {
   const send = state.submissions.get(id)
-  const family = state.inputs.sources.get(id)?.queuedMessageId
+  const family = journalInputSourceFamily(state.inputs.sources.get(id))
   if (
     send &&
     (send.dispatchState === 'pending' || send.dispatchState === 'unknown') &&
-    (!family || state.inputs.families.get(family)?.clientMessageId === id)
+    (!family || journalInputSourceId(state.inputs.families.get(family)) === id)
   ) {
     state.inputs.candidates.set(id, send)
   } else {

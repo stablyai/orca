@@ -57,7 +57,9 @@ it('draws one row for a run of provider retries, with what failed on its second 
       _meta: { runtimeId: 'runtime-1' }
     }),
     subscribe: (_method, _params, onData) => {
-      listener = onData
+      if (_method === 'agentSession.subscribe') {
+        listener = onData
+      }
       return () => {}
     },
     updateTerminalSubscriptionViewport: () => {},

@@ -22,6 +22,7 @@ import {
   type WorkerSetupReceipt
 } from './worker-topology'
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
+import type { ReopenedWorker, WorkerFollowUp } from './worker-follow-up-placement'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -36,6 +37,10 @@ export type WorkerAgentPlacement = {
   structuredSession: WorkerStructuredSession | null
   setupReceipt: WorkerSetupReceipt
   warning?: string
+  /** Set when a follow-up brought a closed worker back instead of launching one. */
+  reopened?: ReopenedWorker
+  /** Context the fresh agent's Task carries in place of the conversation it could not reopen. */
+  extraSpec?: string
 }
 
 type WorkerAgentPlacementArgs = {
@@ -56,6 +61,8 @@ type WorkerAgentPlacementArgs = {
   effects: WorkerEffect[]
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
+  /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
+  followUp?: WorkerFollowUp | undefined
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -87,7 +94,29 @@ export async function placeWorkerAgent(
       setupReceipt: EXISTING_WORKTREE_SETUP
     }
   }
-  return launchWorkerAgent(args, existing)
+  const reopened = existing && (await args.followUp?.reopen?.(args.dispatchId))
+  if (existing && reopened) {
+    args.effects.push({
+      kind: 'terminal',
+      role: 'agent',
+      // Only a resumed tab is Orca's to clean up; a chat keeps its conversation.
+      action: reopened.chat ? 'reused' : 'created',
+      id: reopened.handle
+    })
+    return {
+      mode: args.mode,
+      worktree: existing,
+      terminalHandle: reopened.handle,
+      structuredSession: null,
+      setupReceipt: EXISTING_WORKTREE_SETUP,
+      reopened
+    }
+  }
+  const launched = await launchWorkerAgent(args, existing)
+  // A reopen refused before spawning anything: the fresh agent gets the earlier work instead.
+  return reopened === null && args.followUp?.earlierWork
+    ? { ...launched, extraSpec: args.followUp.earlierWork }
+    : launched
 }
 
 async function launchWorkerAgent(

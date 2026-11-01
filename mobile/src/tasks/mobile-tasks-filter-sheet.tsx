@@ -1,17 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate as t } from '../i18n/mobile-i18n'
-import {
-  BottomDrawer,
-  Check,
-  ChevronRight,
-  Linking,
-  Pressable,
-  Text,
-  View,
-  colors,
-  type PickerOption
-} from './mobile-tasks-dependencies'
+import { BottomDrawer, Linking, Text, View, type PickerOption } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   LINEAR_GROUP_OPTIONS,
@@ -22,6 +12,9 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import { cycleMobileTasksGitHubProjectSort } from './mobile-tasks-github-project-pickers'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { ListGroup } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListRow'
+import { SectionHeader } from '../components/list/SectionHeader'
 
 /** How many Filter & display settings differ from their defaults; the Filter chip shows it. */
 export function mobileTasksFilterCount(model: ConnectionPresentationModel): number {
@@ -51,53 +44,8 @@ export function mobileTasksFilterCount(model: ConnectionPresentationModel): numb
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <>
-      <Text style={styles.filterSectionLabel}>{title}</Text>
-      <View style={styles.repoPickerGroup}>{children}</View>
-    </>
-  )
-}
-
-function Row({
-  title,
-  subtitle,
-  value,
-  selected,
-  navigates,
-  first,
-  disabled,
-  onPress
-}: {
-  title: string
-  subtitle?: string
-  value?: string
-  selected?: boolean
-  navigates?: boolean
-  first: boolean
-  disabled?: boolean
-  onPress: () => void
-}) {
-  return (
-    <>
-      {first ? null : <View style={styles.actionSeparator} />}
-      <Pressable
-        style={[styles.repoPickerRow, disabled && styles.filterRowDisabled]}
-        disabled={disabled}
-        accessibilityRole="button"
-        accessibilityState={{ selected: selected === true, disabled: disabled === true }}
-        onPress={onPress}
-      >
-        <View style={styles.repoPickerTextWrap}>
-          <Text style={styles.repoPickerTitle}>{title}</Text>
-          {subtitle ? <Text style={styles.repoPickerSubtitle}>{subtitle}</Text> : null}
-        </View>
-        {value ? (
-          <Text style={styles.filterRowValue} numberOfLines={1}>
-            {value}
-          </Text>
-        ) : null}
-        {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-        {navigates ? <ChevronRight size={16} color={colors.textMuted} /> : null}
-      </Pressable>
+      <SectionHeader title={title} />
+      <ListGroup>{children}</ListGroup>
     </>
   )
 }
@@ -111,10 +59,9 @@ function choiceSection<T extends string>(
 ) {
   return (
     <Section title={title}>
-      {options.map((option, index) => (
-        <Row
+      {options.map((option) => (
+        <ListRow
           key={option.value}
-          first={index === 0}
           title={option.label}
           subtitle={option.subtitle}
           selected={option.value === selected}
@@ -144,8 +91,7 @@ function renderGitHubItemsSections(model: ConnectionPresentationModel) {
       )}
       {githubIssueSourceRows.length > 0 ? (
         <Section title={t('tasks.filterSheet.issueSource', 'Issue source')}>
-          <Row
-            first
+          <ListRow
             title={t('tasks.filterSheet.issueSourceRow', 'Upstream or origin')}
             value={githubIssueSourceLabel}
             navigates
@@ -173,8 +119,7 @@ function renderGitHubProjectSections(model: ConnectionPresentationModel) {
   return (
     <>
       <Section title={t('tasks.filterSheet.view', 'View')}>
-        <Row
-          first
+        <ListRow
           title={t('tasks.filterSheet.projectView', 'Project view')}
           subtitle={
             !githubProjectTable
@@ -191,8 +136,7 @@ function renderGitHubProjectSections(model: ConnectionPresentationModel) {
           onPress={() => openFromFilterSheet(model, () => setShowGitHubProjectViewPicker(true))}
         />
         {selectedGitHubProjectViewUrl ? (
-          <Row
-            first={false}
+          <ListRow
             title={t('tasks.githubViewControls.openView', 'Open view in GitHub')}
             onPress={() => void Linking.openURL(selectedGitHubProjectViewUrl)}
           />
@@ -208,8 +152,7 @@ function renderGitHubProjectSections(model: ConnectionPresentationModel) {
         : null}
       {githubProjectAvailableSummaryFields.length > 0 ? (
         <Section title={t('tasks.filterSheet.showOnRows', 'Show on rows')}>
-          <Row
-            first
+          <ListRow
             title={t('tasks.filterSheet.projectFields', 'Project fields')}
             value={githubProjectFieldsLabel}
             navigates
@@ -232,8 +175,7 @@ function renderLinearSections(model: ConnectionPresentationModel) {
     <>
       {linearWorkspaces.length > 1 ? (
         <Section title={t('tasks.filterSheet.workspace', 'Workspace')}>
-          <Row
-            first
+          <ListRow
             title={t('tasks.filterSheet.linearWorkspace', 'Linear workspace')}
             value={linearWorkspaceLabel}
             navigates
@@ -260,8 +202,7 @@ function renderLinearSections(model: ConnectionPresentationModel) {
         model.setLinearOrderBy
       )}
       <Section title={t('tasks.filterSheet.showOnRows', 'Show on rows')}>
-        <Row
-          first
+        <ListRow
           title={t('tasks.filterSheet.displayProperties', 'Display properties')}
           navigates
           onPress={() => openFromFilterSheet(model, () => setShowLinearDisplayPicker(true))}

@@ -280,17 +280,13 @@ describe('what a send carries', () => {
   })
 
   it('carries held picks without committing them to the chat', () => {
-    const listed = {
-      ...withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] }),
-      pendingId: 'model'
-    }
+    const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
     const originalRecord = structuredClone(listed.record)
     const view = structuredAgentSessionOptionView(listed, remembered, {
       model: 'sonnet',
       effort: 'high'
     })
     expect(structuredAgentSessionSendSelection(view)).toEqual({ model: 'sonnet', effort: 'high' })
-    expect(view.pendingId).toBe('model')
     expect(view.record).not.toBe(listed.record)
     expect(listed.record).toEqual(originalRecord)
     expect(carried(listed, remembered, { model: 'sonnet' })).toEqual({

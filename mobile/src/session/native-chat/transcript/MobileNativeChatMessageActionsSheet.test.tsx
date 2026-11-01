@@ -40,6 +40,23 @@ const message: NativeChatMessage = {
   blocks: [{ type: 'text', text: 'First words' }]
 }
 
+const deniedNotice: NativeChatMessage = {
+  ...message,
+  role: 'system',
+  blocks: [
+    {
+      type: 'text',
+      text: 'First words',
+      tone: 'error',
+      providerFrame: {
+        provider: 'claude',
+        kind: 'message:system:permission_denied',
+        payload: { head: '{}', byteLength: 2, digest: 'synthetic', truncated: false }
+      }
+    }
+  ]
+}
+
 describe('message selection actions', () => {
   let renderer: ReactTestRenderer | null = null
   const onClose = vi.fn()
@@ -60,31 +77,34 @@ describe('message selection actions', () => {
   })
   afterEach(() => act(() => renderer?.unmount()))
 
-  it('waits for drawer removal, then selects a stable snapshot while the reply streams', () => {
-    render()
-    act(() =>
-      renderer!.update(
-        createElement(MobileNativeChatMessageActionsSheet, {
-          message: {
-            ...message,
-            blocks: [{ type: 'text', text: 'First words plus streamed text' }]
-          },
-          onClose
-        })
+  it.each([message, deniedNotice])(
+    'selects a stable $role snapshot after drawer removal',
+    (value) => {
+      render(value)
+      act(() =>
+        renderer!.update(
+          createElement(MobileNativeChatMessageActionsSheet, {
+            message: {
+              ...value,
+              blocks: [{ type: 'text', text: 'First words plus streamed text' }]
+            },
+            onClose
+          })
+        )
       )
-    )
-    pressAction(1)
-    expect(nodes('MountedDrawer')[0]!.props.visible).toBe(false)
-    expect(nodes('Modal')).toHaveLength(0)
-    expect(onClose).not.toHaveBeenCalled()
-    finishClosing()
-    expect(nodes('MountedDrawer')).toHaveLength(0)
-    expect(nodes('Modal')).toHaveLength(1)
-    const selected = nodes('Text').find((node) => node.props.selectable)
-    expect(selected?.props.children).toBe('First words')
-    act(() => nodes('Modal')[0]!.props.onRequestClose())
-    expect(onClose).toHaveBeenCalledOnce()
-  })
+      pressAction(1)
+      expect(nodes('MountedDrawer')[0]!.props.visible).toBe(false)
+      expect(nodes('Modal')).toHaveLength(0)
+      expect(onClose).not.toHaveBeenCalled()
+      finishClosing()
+      expect(nodes('MountedDrawer')).toHaveLength(0)
+      expect(nodes('Modal')).toHaveLength(1)
+      const selected = nodes('Text').find((node) => node.props.selectable)
+      expect(selected?.props.children).toBe('First words')
+      act(() => nodes('Modal')[0]!.props.onRequestClose())
+      expect(onClose).toHaveBeenCalledOnce()
+    }
+  )
 
   it('closes selection with the accessible close button', () => {
     render()
@@ -96,15 +116,18 @@ describe('message selection actions', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('copies prose and dismisses only after the drawer closes', () => {
-    render()
-    pressAction(0)
-    expect(writeText).toHaveBeenCalledWith('First words')
-    expect(onClose).not.toHaveBeenCalled()
-    finishClosing()
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(nodes('Modal')).toHaveLength(0)
-  })
+  it.each([message, deniedNotice])(
+    'copies $role prose and dismisses after drawer close',
+    (value) => {
+      render(value)
+      pressAction(0)
+      expect(writeText).toHaveBeenCalledWith('First words')
+      expect(onClose).not.toHaveBeenCalled()
+      finishClosing()
+      expect(onClose).toHaveBeenCalledOnce()
+      expect(nodes('Modal')).toHaveLength(0)
+    }
+  )
 
   it.each([
     [

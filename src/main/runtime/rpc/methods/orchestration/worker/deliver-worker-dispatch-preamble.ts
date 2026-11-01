@@ -134,6 +134,7 @@ function chatTaskTurnStart(delivery: ChatTaskDelivery): WorkerTurnStartObservati
     case 'queued':
       return {
         verdict: 'unobserved',
+        queued: true,
         reason:
           "The task is waiting as a card in the chat's queue and is sent when the queue reaches " +
           'it. If the worker then reports, this Dispatch settles normally. worker-abandon ' +

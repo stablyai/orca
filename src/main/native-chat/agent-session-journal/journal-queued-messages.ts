@@ -51,7 +51,7 @@ export class JournalQueuedMessages {
     return this.deps.sessionId
   }
 
-  displayState = () => this.deps.state()
+  displayState = () => this.legacy.displayState()
 
   revision(): string {
     const { epoch, queue } = this.deps.state()

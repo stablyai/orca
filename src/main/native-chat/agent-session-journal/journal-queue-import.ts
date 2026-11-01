@@ -1,6 +1,7 @@
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
 
+import { journalInputSourceFamily } from './journal-input-source'
 import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffInDoubt } from './journal-dispatch-settlement'
@@ -66,7 +67,8 @@ function unconfirmedHandOff(
   const attempts = [...state.submissions.values()]
     .filter(
       (submission) =>
-        state.inputs.sources.get(submission.clientMessageId)?.queuedMessageId === row.messageId
+        journalInputSourceFamily(state.inputs.sources.get(submission.clientMessageId)) ===
+        row.messageId
     )
     .sort((a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0))
   if (!attempts.some(handOffInDoubt)) {
@@ -107,6 +109,7 @@ export class LegacyQueuedCards {
     owner: JournalReducerState
     key: string
     cards: readonly QueuedMessageRow[]
+    display?: JournalReducerState
   } | null = null
 
   constructor(private readonly deps: LegacyDeps) {}
@@ -135,6 +138,39 @@ export class LegacyQueuedCards {
       this.viewed = { owner: state, key, cards }
     }
     return this.viewed.cards
+  }
+
+  // Failed adoption exposes the same selected presentation without mutating live provenance.
+  displayState(): JournalReducerState {
+    const state = this.deps.state()
+    const cards = this.cards()
+    if (this.viewed?.display) {
+      return this.viewed.display
+    }
+    const selected = cards.flatMap((card) => {
+      const id = card.consumedAs ?? card.recovers
+      const send = id ? state.submissions.get(id) : undefined
+      return send && handOffInDoubt(send) ? [{ card, send: { ...send } }] : []
+    })
+    if (!selected.length) {
+      return state
+    }
+    const display = {
+      ...state,
+      normalizedHandOffs: new Set(state.normalizedHandOffs),
+      items: new Map(state.items),
+      submissions: new Map(state.submissions),
+      inputs: { ...state.inputs, presentations: new Map(state.inputs.presentations) }
+    }
+    for (const { card, send } of selected) {
+      display.submissions.set(send.clientMessageId, send)
+      display.inputs.presentations.set(send.clientMessageId, card)
+      placeQueuedHandOffInDoubt(display, send)
+    }
+    if (this.viewed) {
+      this.viewed.display = display
+    }
+    return display
   }
 
   /** Derived during the existing import pass; the selected operation persists this witness. */
@@ -236,23 +272,31 @@ export class LegacyQueuedCards {
             const state = this.deps.state()
             for (const send of state.submissions.values()) {
               if (
-                state.inputs.sources.get(send.clientMessageId)?.queuedMessageId === row.messageId &&
+                journalInputSourceFamily(state.inputs.sources.get(send.clientMessageId)) ===
+                  row.messageId &&
                 journalDispatchRowApplies(send)
               ) {
                 this.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
               }
             }
-            const selected = change.attempt ?? change.recovers
-            const send = selected && state.submissions.get(selected)
-            if (send) {
-              state.inputs.presentations.set(send.clientMessageId, row)
-              placeQueuedHandOffInDoubt(state, send)
-            }
           }
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {
-          this.deps.writer.writeRows(() => plan, deletion)
+          this.deps.writer.writeRows(() => plan, {
+            ...deletion,
+            fold: (draft) => {
+              for (const row of rows) {
+                const change = this.changes.get(row.messageId)
+                const selected = change?.attempt ?? change?.recovers
+                const send = selected && draft.submissions.get(selected)
+                if (send) {
+                  draft.inputs.presentations.set(send.clientMessageId, row)
+                  placeQueuedHandOffInDoubt(draft, send)
+                }
+              }
+            }
+          })
           return
         }
         // Empty append plans open no transaction, so legacy deletion must commit independently.

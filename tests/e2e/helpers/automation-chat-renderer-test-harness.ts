@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../../src/shared/automations-types'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
-import type { AutomationsPageActionContext } from '../../../src/renderer/src/components/automations/automations-page-action-context'
+import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { expect, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../src/shared/runtime-client-target'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-types'
@@ -11,7 +11,11 @@ import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { createTestStore } from '../../../src/renderer/src/store/slices/store-test-helpers'
+import {
+  createTestStore,
+  makeWorktree,
+  TEST_REPO
+} from '../../../src/renderer/src/store/slices/store-test-helpers'
 import type { SessionTabsStreamEvent } from '../../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { applyStructuredSessionTabSnapshots } from '../../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { applyWebSessionTabsSnapshot } from '../../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
@@ -140,17 +144,24 @@ export async function exerciseRecordedChatOpen(
   if (!run.workspaceId || !run.chatSessionId) {
     throw new Error('a recorded Chat is required')
   }
-  const renderer = await createChatRendererBridge(runtime, run.workspaceId, { kind: 'local' })
+  const workspaceId = run.workspaceId
+  const renderer = await createChatRendererBridge(runtime, workspaceId, { kind: 'local' })
   renderer.store.setState({ activeWorktreeId: run.workspaceId })
-  const pageContext = {
-    store: {
-      repoForRow: () => undefined,
-      worktreeForRow: () => ({ id: run.workspaceId, hostId: 'local' })
-    },
-    list: { selectedRow: { key: 'row' } }
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only row/workspace lookup is scripted; the real Details action, opener, RPC, host, publication and renderer store execute.
-  const context = pageContext as unknown as AutomationsPageActionContext
+  const context = {
+    list: {
+      runTargetFor: (recorded) => ({
+        worktree: makeWorktree({ id: workspaceId, repoId: TEST_REPO.id, hostId: 'local' }),
+        ownerEnvironmentId: null,
+        expectedPairingRevision: undefined,
+        terminalTarget: null,
+        viewState: getAutomationRunViewState({
+          run: recorded,
+          workspaceExists: true,
+          terminalTargetExists: false
+        })
+      })
+    }
+  } satisfies Parameters<typeof createAutomationRunWorkspaceAction>[0]
   bind(renderer)
   try {
     createAutomationRunWorkspaceAction(context)(run)

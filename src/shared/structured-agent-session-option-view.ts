@@ -113,7 +113,7 @@ function modelOptionView(
   if (unconfirmedSeed) {
     view = commitStructuredAgentSessionOptionValues(view, seed, 'seeded')
   }
-  return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
+  return commitStructuredAgentSessionOptionValues(view, held)
 }
 
 /** Claude sends its own values plus held picks. New chats/older hosts pin shown defaults on first send; resumed chats display defaults without sending them. */

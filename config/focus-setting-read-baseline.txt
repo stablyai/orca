@@ -16,9 +16,8 @@
 1 src/renderer/src/components/automations/automations-page-fixtures.ts
 1 src/renderer/src/components/automations/use-automation-source-availability.ts
 1 src/renderer/src/components/automations/use-automation-source-host-availability.ts
-2 src/renderer/src/components/automations/use-automations-page-controller.ts
+1 src/renderer/src/components/automations/use-automations-page-controller.ts
 1 src/renderer/src/components/automations/use-automations-page-destination-form.ts
-2 src/renderer/src/components/automations/use-automations-page-setup-state.ts
 1 src/renderer/src/components/browser-pane/browser-reopen-on-server.ts
 1 src/renderer/src/components/browser-pane/ReopenBrowserPageOnServerButton.tsx
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-stream.ts
@@ -201,7 +200,6 @@
 1 src/renderer/src/hooks/composer-state/composer-navigation-actions.ts
 1 src/renderer/src/hooks/composer-state/composer-source-state.ts
 1 src/renderer/src/hooks/composer-state/runtime-target-selection.ts
-1 src/renderer/src/hooks/editor-external-watch-target-rows.ts
 2 src/renderer/src/hooks/editor-external-watch-targets.ts
 2 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts

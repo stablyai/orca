@@ -1,8 +1,8 @@
+import { exposeDispatchContext } from './dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import {
-  exposeDispatchContext,
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,

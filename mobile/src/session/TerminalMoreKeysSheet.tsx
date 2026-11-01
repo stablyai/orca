@@ -111,6 +111,7 @@ export function TerminalMoreKeysSheet({
       key={id}
       style={({ pressed }) => [
         styles.key,
+        styles.sheetKey,
         pressed && styles.keyPressed,
         !canSend && styles.disabled
       ]}
@@ -198,6 +199,7 @@ export function TerminalMoreKeysSheet({
               key={custom.id}
               style={({ pressed }) => [
                 styles.key,
+                styles.sheetKey,
                 pressed && styles.keyPressed,
                 !canSend && styles.disabled
               ]}

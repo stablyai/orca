@@ -53,13 +53,13 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     padding: spacing.md
   },
   repoPickerGroup: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
   pagePickerList: {
     maxHeight: 420,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface
   },
   projectPickerControls: {
@@ -76,7 +76,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.statusAmber,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   projectWarningTextWrap: {
     flex: 1,
@@ -174,7 +174,7 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     borderBottomColor: colors.borderSubtle
   },
   pickerRowSelected: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   pickerRowContent: {
     flex: 1,

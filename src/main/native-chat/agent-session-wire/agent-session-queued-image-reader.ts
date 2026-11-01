@@ -79,6 +79,22 @@ function sourceItem(journal: AgentSessionJournal, id: string): AgentJournalRende
   const key = agentJournalSubmissionKey(id)
   const state = journal.queuedMessages.displayState()
   const source = state.inputs.sources.get(id)
+  if (source?.kind === 'outcome-admission') {
+    const handover = state.inputs.handovers.get(id)
+    return (
+      journal.item(key) ??
+      (handover
+        ? journalRenderItem(
+            key,
+            0,
+            source.item.body,
+            handover,
+            AGENT_JOURNAL_THREAD_SCOPE,
+            source.item
+          )
+        : source.item)
+    )
+  }
   return (
     journal.item(key) ??
     (source

@@ -34,6 +34,35 @@ beforeAll(async () => {
 })
 
 describe('useMobileStructuredAgentOptions fast mode', () => {
+  it('unlocks after the latest key settles and never restores an earlier pending key', async () => {
+    const client = optionsClient(queuedReads(FAST_OPTIONS))
+    const earlier = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const latest = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { mutate } = recordingMutate(async (index) =>
+      index === 0 ? earlier.promise : latest.promise
+    )
+    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
+    let first!: Promise<boolean>
+    let second!: Promise<boolean>
+    await act(async () => {
+      first = harness.current().setStructuredOption('effort', 'high')
+      second = harness.current().setStructuredOption('fastMode', true)
+    })
+    expect(harness.current().pendingOptionId).toBe('fastMode')
+    await act(async () => {
+      latest.resolve(accepted({ key: 'fastMode', value: 'true' }, true))
+      await second
+    })
+    expect(harness.current().pendingOptionId).toBeNull()
+    await act(async () => {
+      expect(await harness.current().setStructuredOption('effort', 'medium')).toBe(false)
+      earlier.resolve(accepted({ key: 'effort', value: 'high' }, true))
+      await first
+    })
+    expect(harness.current().pendingOptionId).toBeNull()
+    await harness.unmount()
+  })
+
   it('round-trips a boolean fastMode pick as the wire string and remembers the decoded pick', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
     const { calls, mutate } = recordingMutate(async () =>

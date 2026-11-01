@@ -1,3 +1,5 @@
+import { readTestQueueChanges } from '../agent-session-journal/journal-host-database-test-support'
+import * as fixture from './structured-agent-session-queued-legacy-import.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -97,6 +99,12 @@ async function handOff(
 
 /** Each queue row on disk: its card, op and whether it saved a refusal. */
 function queueRows(sessionId = SESSION): string[] {
+  const outcomes = readTestQueueChanges(db(), sessionId)
+  if (outcomes.length) {
+    return outcomes.map(
+      ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
+    )
+  }
   return db()
     .prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
     .all(sessionId)
@@ -168,14 +176,14 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     { messageId: 'edited', state: 'waiting' },
     { messageId: 'held', state: 'waiting', paused: true }
   ]
-  expect(await rig.drafts()).toEqual(published)
+  expect(await fixture.rig.drafts()).toEqual(published)
   const stopped = async () => {
-    const { items, submissions } = await rig.host.journalSnapshot(SESSION)
+    const { items, submissions } = await fixture.rig.host.journalSnapshot(SESSION)
     return projectStructuredAgentSessionMessages(items, [], submissions).find(
       (entry) => entry.id === agentJournalSubmissionKey('att-stopped')
     )
   }
-  const live = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const live = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const rawStopped = structuredClone(live.submission('att-stopped'))
   const displayedStopped = await stopped()
   expect(displayedStopped).toMatchObject({
@@ -195,15 +203,17 @@ it("moves an earlier build's cards into the journal, each action its own card, t
 
   // Delete and Send each move only their own card, in the action's transaction.
   const deletion = hostTestOperationId()
-  expect(await rig.deleteQueued('ret-present', deletion)).toMatchObject({
+  expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     value: { deleted: true }
   })
-  const sent = await rig.sendNow('ret-gone')
+  const sent = await fixture.rig.sendNow('ret-gone')
   expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: 'ret-gone' } } })
+  // Saved cards are whole values: an import stores each card as it reads, refused or not.
   expect(queueRows()).toEqual([
-    'ret-present:queued',
+    'ret-present:queued+refusal',
     'ret-present:withdrawn',
-    'ret-gone:queued+refusal'
+    'ret-gone:queued+refusal',
+    'ret-gone:dispatched'
   ])
   expect(legacyIds()).toEqual(all.filter((id) => id !== 'ret-present' && id !== 'ret-gone'))
   // The returned cards ahead still hold the queue.
@@ -215,9 +225,9 @@ it("moves an earlier build's cards into the journal, each action its own card, t
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(published.slice(2))
   expect(legacyIds()).toEqual(['broken'])
-  expect(queueRows().slice(3)).toEqual([
+  expect(queueRows().slice(4)).toEqual([
     'cmd-gone:queued+refusal',
-    'disp-refused:queued',
+    'disp-refused:queued+refusal',
     'stopped-same:queued',
     'stopped-edited:queued',
     'orphan:queued',
@@ -233,30 +243,30 @@ it("moves an earlier build's cards into the journal, each action its own card, t
     structuredAgentSessionCommandTurnIdentity('att-cmd'),
     { kind: 'status', text: 'Compact failed' },
     {
-      fence: rig.store.getRecord(SESSION)!.lease.runtimeFence,
+      fence: fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
   )
-  expect(await rig.drafts()).toEqual(published.slice(3))
-  expect(await rig.deleteQueued('disp-refused')).toMatchObject({ value: { deleted: true } })
-  await rig.resume()
-  await eventually(async () => expect(await rig.handoff('edited')).toBeDefined())
+  expect(await fixture.rig.drafts()).toEqual(published.slice(3))
+  expect(await fixture.rig.deleteQueued('disp-refused')).toMatchObject({ value: { deleted: true } })
+  await fixture.rig.resume()
+  await eventually(async () => expect(await fixture.rig.handoff('edited')).toBeDefined())
   await nothingSentTo('held')
   expect((await rig.handoff('stopped-edited'))?.clientMessageId).toBe('att-edited')
   // Edited since, it waits for its own Send.
   expect(await rig.sendNow('stopped-edited')).toMatchObject({ ok: true })
   const resent = await rig.handoffId('stopped-edited')
   expect(resent).not.toBe('att-edited')
-  await rig.settleAccepted(resent, 'resent')
+  await fixture.rig.settleAccepted(resent, 'resent')
 
   // A third open finds nothing to move, and an old Delete still answers from its receipt.
   const rows = queueRows()
-  await rig.restartHostProcess()
-  await rig.drafts()
+  await fixture.rig.restartHostProcess()
+  await fixture.rig.drafts()
   expect(queueRows()).toEqual(rows)
   expect(await stopped()).toEqual(displayedStopped)
   expect(legacyIds()).toEqual(['broken'])
-  expect(await rig.deleteQueued('ret-present', deletion)).toMatchObject({
+  expect(await fixture.rig.deleteQueued('ret-present', deletion)).toMatchObject({
     replayed: true,
     value: { deleted: true }
   })
@@ -385,7 +395,7 @@ it.each([false, true])(
     }
     if (failed) {
       db().exec(
-        `CREATE TEMP TRIGGER fail_action BEFORE INSERT ON journal_rows BEGIN SELECT RAISE(ABORT, 'action unavailable'); END`
+        `CREATE TEMP TRIGGER fail_action BEFORE INSERT ON journal_outcomes BEGIN SELECT RAISE(ABORT, 'action unavailable'); END`
       )
       await expect(journal.queuedMessages.withdraw(['recovery:U-deleted'])).rejects.toThrow(
         'action unavailable'

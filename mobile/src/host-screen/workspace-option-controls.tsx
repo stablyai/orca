@@ -1,5 +1,5 @@
 import { useState, type ComponentType } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import * as viewOptions from '../../../src/shared/workspace-view/workspace-view-options'
@@ -23,7 +23,9 @@ import {
   cardPropertyChoices,
   cardDisplayChoices
 } from './workspace-option-controls-copy'
-import { CheckRow, ChoiceRows, OptionRowList, SwitchRow } from './workspace-option-rows'
+import { ListGroup } from '../components/list/ListGroup'
+import { SectionHeader } from '../components/list/SectionHeader'
+import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -88,30 +90,26 @@ function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
     }
   }
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {[
+    <ListGroup style={styles.optionGroup}>
+      <CheckRow
+        key="all"
+        label={t('hostScreen.workspaceOptionControls.allHosts', 'All hosts')}
+        checked={!visible}
+        onPress={() => write(hostVisibility.toggleAllVisibleHosts(hosts, visible))}
+      />
+      {hosts.map((host) => {
+        const next = hostVisibility.toggleVisibleHostRow(hosts, visible, host)
+        return (
           <CheckRow
-            key="all"
-            label={t('hostScreen.workspaceOptionControls.allHosts', 'All hosts')}
-            checked={!visible}
-            onPress={() => write(hostVisibility.toggleAllVisibleHosts(hosts, visible))}
-          />,
-          ...hosts.map((host) => {
-            const next = hostVisibility.toggleVisibleHostRow(hosts, visible, host)
-            return (
-              <CheckRow
-                key={host.id}
-                label={host.label}
-                checked={checked.has(host.id)}
-                disabled={next === undefined}
-                onPress={() => write(next)}
-              />
-            )
-          })
-        ]}
-      </OptionRowList>
-    </View>
+            key={host.id}
+            label={host.label}
+            checked={checked.has(host.id)}
+            disabled={next === undefined}
+            onPress={() => write(next)}
+          />
+        )
+      })}
+    </ListGroup>
   )
 }
 
@@ -138,7 +136,7 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
   )
   return (
-    <View style={styles.filterGroup}>
+    <>
       <View style={styles.optionSearch}>
         <MobileSearchField
           value={query}
@@ -153,26 +151,24 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
           )}
         />
       </View>
-      <OptionRowList>
-        {[
+      <ListGroup style={styles.optionGroup}>
+        <CheckRow
+          key="all"
+          label={t('hostScreen.workspaceOptionControls.allProjects', 'All projects')}
+          checked={selected.length === 0}
+          onPress={() => settings.setFilter('filterRepoIds', [])}
+        />
+        {repos.map((repo) => (
           <CheckRow
-            key="all"
-            label={t('hostScreen.workspaceOptionControls.allProjects', 'All projects')}
-            checked={selected.length === 0}
-            onPress={() => settings.setFilter('filterRepoIds', [])}
-          />,
-          ...repos.map((repo) => (
-            <CheckRow
-              key={repo.key}
-              label={repo.name}
-              checked={selected.includes(repo.id)}
-              onPress={() => settings.toggleRepoFilter(repo.id)}
-              leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
-            />
-          ))
-        ]}
-      </OptionRowList>
-    </View>
+            key={repo.key}
+            label={repo.name}
+            checked={selected.includes(repo.id)}
+            onPress={() => settings.toggleRepoFilter(repo.id)}
+            leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
+          />
+        ))}
+      </ListGroup>
+    </>
   )
 }
 
@@ -187,13 +183,11 @@ function choicePage<Id extends string>(
     Page: function ChoicePage({ controller }) {
       const t = useMobileTranslation()
       return (
-        <View style={styles.filterGroup}>
-          <ChoiceRows
-            choices={choices(t)}
-            selected={selected(controller)}
-            onSelect={onSelect(controller)}
-          />
-        </View>
+        <ChoiceRows
+          choices={choices(t)}
+          selected={selected(controller)}
+          onSelect={onSelect(controller)}
+        />
       )
     }
   }
@@ -206,18 +200,16 @@ function CardPropertyRows(props: {
   useMobileColorScheme()
   const { settings, state } = props.controller
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {props.choices.map((choice) => (
-          <CheckRow
-            key={choice.id}
-            label={choice.label}
-            checked={state.view.worktreeCardProperties.includes(choice.id)}
-            onPress={() => settings.toggleCardProperty(choice.id)}
-          />
-        ))}
-      </OptionRowList>
-    </View>
+    <ListGroup style={styles.optionGroup}>
+      {props.choices.map((choice) => (
+        <CheckRow
+          key={choice.id}
+          label={choice.label}
+          checked={state.view.worktreeCardProperties.includes(choice.id)}
+          onPress={() => settings.toggleCardProperty(choice.id)}
+        />
+      ))}
+    </ListGroup>
   )
 }
 
@@ -254,12 +246,12 @@ function propertiesPage(
           <CardPropertyRows controller={controller} choices={choices(controller, t)} />
           {withAgentLayout && (
             <>
-              <Text style={styles.filterSectionLabel}>
-                {t(
+              <SectionHeader
+                title={t(
                   'hostScreen.workspaceOptionControls.agentActivityLayout',
                   'Agent activity layout'
                 )}
-              </Text>
+              />
               <MobileSegmentedControl
                 segments={activityLayoutChoices(t).map(({ id, label }) => ({
                   value: id,
@@ -268,6 +260,7 @@ function propertiesPage(
                 selected={controller.state.view.agentActivityDisplayMode}
                 onSelect={controller.settings.setAgentActivityDisplayMode}
                 fill
+                onSheet
                 style={styles.optionSegmented}
               />
             </>
@@ -315,6 +308,7 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
           selected={controller.state.view.groupBy}
           onSelect={controller.settings.handleGroupChange}
           fill
+          onSheet
           style={styles.optionSegmented}
         />
       )

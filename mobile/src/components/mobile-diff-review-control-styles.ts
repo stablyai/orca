@@ -77,6 +77,9 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
+  sheetSecondaryButton: {
+    backgroundColor: colors.sheetGroup
+  },
   secondaryButtonText: {
     color: colors.textSecondary,
     fontSize: typography.bodySize,
@@ -99,8 +102,8 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
   },
   drawerTitle: {
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700'
+    fontSize: 16,
+    fontWeight: '600'
   },
   drawerSubtitle: {
     color: colors.textMuted,

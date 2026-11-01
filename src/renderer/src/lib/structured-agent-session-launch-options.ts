@@ -3,6 +3,7 @@ import {
   type LegacyPrerequisites
 } from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../shared/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from './structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
@@ -141,7 +142,7 @@ export async function setStructuredSessionSelectionOption(
       options
     )
     return result.ok
-      ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
+      ? acceptedStructuredSessionSelectionOutcome(fields, result.value.options)
       : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch (error) {
     const failure = agentSessionThrownFailure(

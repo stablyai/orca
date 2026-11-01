@@ -86,5 +86,5 @@ export function OptionPager(props: {
 const styles = themedStyleSheet(() => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  page: { flexGrow: 1, backgroundColor: colors.bgBase }
+  page: { flexGrow: 1, backgroundColor: colors.sheetSurface }
 }))

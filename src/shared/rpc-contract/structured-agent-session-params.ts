@@ -122,7 +122,7 @@ export const SendParams = z
   .object({
     envelope: MutationEnvelope,
     retryUnknown: z.literal(true).optional(),
-    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v1.
+    /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v2.
      * Operation fingerprint only, never body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
     /** Preserve composer options until dispatch; requires agent-session.send-options.v1. Operation fingerprint only. */
@@ -189,7 +189,7 @@ export const CancelParams = z
     }
   })
 
-/** Queued draft actions require agent-session.queued-messages.v1; older hosts lack these methods. */
+/** Queued draft actions require agent-session.queued-messages.v2; older hosts lack these methods. */
 export const QueuedMessageActionParams = z
   .object({
     envelope: MutationEnvelope,

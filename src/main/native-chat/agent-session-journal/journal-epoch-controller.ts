@@ -26,14 +26,16 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number): void {
+  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
     publishNewEpoch({
+      expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
       reason,
       fence,
       now: this.deps.now(),
+      queue: { cards: [], receipt: { write: () => {}, committed: () => {} } },
       onPublished: this.deps.adopt
     })
   }

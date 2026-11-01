@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, Pressable, Switch } from 'react-native'
+import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -31,6 +31,7 @@ import {
   loadTerminalAutocompleteEnabled,
   saveTerminalAutocompleteEnabled
 } from '../src/storage/preferences'
+import { MobileSwitch } from '../src/components/MobileSwitch'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -380,11 +381,13 @@ export default function TerminalSettingsScreen() {
                   : t('app.terminalSettings.autocompleteOff', 'Off')}
               </Text>
             </View>
-            <Switch
+            <MobileSwitch
+              accessibilityLabel={t(
+                'app.terminalSettings.autocomplete',
+                'Autocomplete & autocorrect'
+              )}
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
           </View>
         </View>

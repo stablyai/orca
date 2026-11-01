@@ -376,7 +376,14 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
       fence: 1,
       submissions: [],
       queuedMessageIds: [],
-      queue: { capability: 'unsupported', enabled: false },
+      queue: {
+        capability: 'unsupported',
+        followUpsQueue: false,
+        isWorking: false,
+        stopping: false,
+        session: {},
+        prompts: []
+      },
       historyLoaded: false,
       sendOptions: () => options
     })

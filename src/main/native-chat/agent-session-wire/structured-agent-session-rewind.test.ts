@@ -669,7 +669,7 @@ describe('host rewind', () => {
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   })
 
-  it("keeps a newer Orca's item of an unknown kind, in its place, through a Codex provider hydration", async () => {
+  it('refuses an unsupported item before saving, preserving known history through a Codex provider hydration', async () => {
     expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
     const message = (turnId: string) => ({
       provider: 'codex' as const,
@@ -684,7 +684,23 @@ describe('host rewind', () => {
     sink.appendItem(message('kept'), hostTestMessage('kept'), {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    sink.appendItem(newerRow, newerBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const before = journal.snapshot()
+    const database = openTestJournalHostDatabase(directory)
+    const saved = () =>
+      database.db
+        .prepare('SELECT * FROM journal_outcomes ORDER BY generation,seq,field,entry_key')
+        .all()
+    const bytes = saved()
+    await expect(
+      journal.appendItem(newerRow, newerBody, {
+        fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    ).rejects.toMatchObject({ code: 'journal_row_rejected' })
+    expect(journal.snapshot()).toEqual(before)
+    expect(saved()).toEqual(bytes)
     sink.appendItem(message('drop'), hostTestMessage('drop'), {
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
@@ -699,10 +715,7 @@ describe('host rewind', () => {
         itemId,
         body
       }))
-    ).toEqual([
-      { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept') },
-      { itemId: agentJournalItemKey(newerRow), body: newerBody }
-    ])
+    ).toEqual([{ itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept') }])
   })
 
   it('keeps each retained turn opened by its original canonical source', async () => {

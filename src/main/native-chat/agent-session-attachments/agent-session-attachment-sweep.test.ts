@@ -149,7 +149,7 @@ describe('sweepAgentSessionAttachments', () => {
     expect(await remaining()).toEqual([UNSENT])
   })
 
-  it('removes an upload nobody claimed after 30 days, and keeps a claimed one and a fresh one', async () => {
+  it('removes an upload nobody claimed after 7 days, and keeps a claimed one and a fresh one', async () => {
     claim('session-1', await seedUpload(SENT, OLD))
     await seedUpload(UNSENT, OLD)
     await seedUpload(CARRIED, HOUR)

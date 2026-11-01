@@ -1,21 +1,14 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
+import type { CodexSession } from './codex-structured-session-state'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { describe, expect, it, vi } from 'vitest'
+
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session-turn-record'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import {
   createCodexHistoryTranslator,
@@ -26,76 +19,22 @@ import {
   CODEX_USER_INPUT_METHOD,
   CodexPromptRegistry
 } from './codex-structured-prompt-replies'
-import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import type { CodexSession } from './codex-structured-session-state'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
-const SESSION_ID = 'session-1'
-const THREAD_ID = 'thread-abc'
-const TURN_ID = 'turn-1'
-const LIFECYCLE_KEY = 'legacy:codex:session-1:turn-lifecycle%3Aturn-1'
-const USER_ITEM_ID = 'codex:thread-abc:turn-1:0'
-
-type Row = { key: string; body: AgentJournalItemBody }
-
-function recorder() {
-  const rows: Row[] = []
-  const tombstones: string[] = []
-  const sink: StructuredAgentSessionEventSink = {
-    appendItem: (identity: AgentJournalItemIdentity, body) =>
-      rows.push({ key: agentJournalItemKey(identity), body }),
-    appendTombstone: (identity) => tombstones.push(agentJournalItemKey(identity)),
-    publish: () => {}
-  }
-  return { sink, rows, tombstones }
-}
-
-function reduced(rows: readonly Row[]): Row[] {
-  const latest = new Map<string, Row>()
-  for (const row of rows) {
-    latest.set(row.key, row)
-  }
-  return [...latest.values()]
-}
-
-function notification(
-  method: string,
-  params: unknown,
-  observedAt?: number
-): CodexStructuredSessionEvent {
-  return {
-    type: 'notification',
-    sessionId: SESSION_ID,
-    threadId: THREAD_ID,
-    method,
-    params,
-    ...(observedAt !== undefined ? { observedAt } : {})
-  }
-}
-
-function translatorFor(tap: ReturnType<typeof recorder>, now?: () => number) {
-  return createCodexJournalTranslator({
-    sink: tap.sink,
-    sessionId: SESSION_ID,
-    primaryThreadId: () => THREAD_ID,
-    ...(now ? { now } : {})
-  })
-}
-
-const journals = createTrackedJournalOpener()
-let root: string
-
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-codex-turn-lifecycle-'))
-})
-
-afterEach(async () => {
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
-  vi.useRealTimers()
-})
+import {
+  fixture,
+  LIFECYCLE_KEY,
+  reduced,
+  translatorFor,
+  SESSION_ID,
+  THREAD_ID,
+  TURN_ID,
+  USER_ITEM_ID,
+  journals,
+  notification,
+  recorder
+} from './codex-turn-lifecycle-contract-test-fixture'
 
 describe('codex turn lifecycle rows', () => {
   it('binds a prompt without a provider turn id to the active turn before cleanup', () => {
@@ -225,7 +164,7 @@ describe('codex turn lifecycle rows', () => {
         providerHandle: codexProviderHandle(THREAD_ID)
       },
       now: () => 9_000,
-      stateDirectory: join(root, SESSION_ID)
+      stateDirectory: join(fixture.root, SESSION_ID)
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const translator = createCodexJournalTranslator({
@@ -241,17 +180,7 @@ describe('codex turn lifecycle rows', () => {
 
     const appended = journal.readSince(before)
     expect(appended.ok && appended.rows).toEqual([
-      expect.objectContaining({
-        kind: 'item',
-        ts: 1_000,
-        body: {
-          kind: 'turn',
-          turnId: TURN_ID,
-          state: 'running',
-          userItemId: USER_ITEM_ID,
-          startedAt: 1_000
-        }
-      })
+      expect.objectContaining({ kind: 'outcome', seq: before.sequence + 1 })
     ])
     expect(journal.snapshot().items).toEqual([
       expect.objectContaining({

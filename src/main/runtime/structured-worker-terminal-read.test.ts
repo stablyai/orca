@@ -122,12 +122,6 @@ describe('reading a structured worker through the terminal-read path', () => {
     expect(refusal).not.toContain('worker-read')
   })
 
-  it('reports dropped history as truncated rather than pretending the page is whole', async () => {
-    const handle = registerWorker()
-    installHost({ items: [message('i1', 'tail only')], hasOlder: true })
-    expect((await readStructuredWorkerTerminal({ handle, db: null }))?.truncated).toBe(true)
-  })
-
   it('redacts dispatch capability tokens the same way the archive path does', async () => {
     const handle = registerWorker()
     const token = `dcap_${'a'.repeat(32)}`

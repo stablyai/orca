@@ -10,6 +10,7 @@ import {
   composerInputStyles,
   COMPOSER_TEXT_SIZE
 } from '../components/composer-input/composer-input-styles'
+import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
 export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   groupSeparator: {
@@ -59,13 +60,70 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginTop: 2
   },
+  itemHeader: {
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md,
+    gap: 2
+  },
+  itemKindRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  itemKind: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textSecondary
+  },
+  itemTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 22,
+    color: colors.textPrimary
+  },
+  itemMeta: {
+    fontSize: 13,
+    color: colors.textSecondary
+  },
+  itemActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  itemStartButton: {
+    flex: 1,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radii.control,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.md
+  },
+  itemStartButtonPressed: {
+    opacity: 0.85
+  },
+  itemStartButtonBusy: {
+    opacity: 0.6
+  },
+  itemStartText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.bgBase
+  },
+  // Lines prose up with the row text of the groups above it.
+  itemSectionBody: {
+    paddingHorizontal: LIST_ROW_PADDING,
+    gap: spacing.sm
+  },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
   detailGroup: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.md,
@@ -111,14 +169,14 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   detailChip: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.translucentFill,
     borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
   detailChipSelected: {
     borderColor: colors.accentBlue,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   detailChipText: {
     fontSize: 11,
