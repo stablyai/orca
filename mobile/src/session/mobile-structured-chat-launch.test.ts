@@ -1,5 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import pageAsyncStorage, {
+  publishPageStorage,
+  refreshPageTerminalShortcuts
+} from '../mobile-web-shell/bridge/page-async-storage'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch-runtime-capability'
 import { AGENT_SESSION_AGENTS_METHOD } from '../../../src/shared/agent-session/agent-session-registered-agents'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
@@ -19,7 +23,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 const chatHost: MobileStructuredChatLaunchContext = {
   defaultView: 'chat',
   registeredAgents: ['hermes', 'claude'],
-  canRequestSurface: true
+  canRequestSurface: true,
+  hostCapabilities: [
+    AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  ]
 }
 
 const registered = (agent: string) => ({ agent, capabilities: {} })
@@ -104,7 +112,8 @@ describe('loadMobileStructuredChatLaunchContext', () => {
     expect(context).toEqual({
       defaultView: 'terminal',
       registeredAgents: [],
-      canRequestSurface: false
+      canRequestSurface: false,
+      hostCapabilities: ['agent.launch.v2']
     })
   })
 
@@ -122,5 +131,62 @@ describe('loadMobileStructuredChatLaunchContext', () => {
     expect(context.registeredAgents).toEqual([])
     expect(context.canRequestSurface).toBe(true)
     expect(mobileStructuredChatLaunchSurface('hermes', context)).toBeUndefined()
+  })
+
+  it('reads a fresh status when the gate capability list is still empty', async () => {
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'status.get') {
+        return ok({
+          capabilities: [
+            AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+            STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+          ]
+        })
+      }
+      expect(method).toBe(AGENT_SESSION_AGENTS_METHOD)
+      return ok({ agents: [registered('hermes'), registered('claude')] })
+    })
+    const context = await loadMobileStructuredChatLaunchContext({
+      client: client(sendRequest),
+      hostCapabilities: []
+    })
+    expect(context.canRequestSurface).toBe(true)
+    expect(context.registeredAgents).toEqual(['hermes', 'claude'])
+    expect(mobileStructuredChatLaunchSurface('hermes', context)).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('claude', context)).toBeUndefined()
+  })
+
+  it('uses the page store for Chat UI and still marks Hermes when that store is empty', async () => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation((key: string) =>
+      pageAsyncStorage.getItem(key)
+    )
+    publishPageStorage({}, () => true, 'host-1', '/h/host-1/session/wt-1')
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'status.get') {
+        return ok({
+          capabilities: [
+            AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
+            STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+          ]
+        })
+      }
+      return ok({ agents: [registered('hermes')] })
+    })
+    const unread = await loadMobileStructuredChatLaunchContext({
+      client: client(sendRequest),
+      hostCapabilities: null
+    })
+    expect(unread.defaultView).toBe('terminal')
+    expect(withMobileStructuredChatLaunch([{ agent: 'hermes', label: 'Hermes' }], unread)).toEqual([
+      { agent: 'hermes', label: 'Hermes', opensAsChat: true }
+    ])
+
+    refreshPageTerminalShortcuts({ 'orca:defaultSessionView': 'chat' }, [])
+    const refreshed = await loadMobileStructuredChatLaunchContext({
+      client: client(sendRequest),
+      hostCapabilities: null
+    })
+    expect(refreshed.defaultView).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', refreshed)).toBe('chat')
   })
 })

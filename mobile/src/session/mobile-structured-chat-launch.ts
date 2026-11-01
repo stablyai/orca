@@ -6,12 +6,18 @@ import {
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
 import type { RpcClient } from '../transport/rpc-client'
+import {
+  hostStatusProbe,
+  readProbedHostCapabilities
+} from '../transport/host-status-probe-operations'
 import { loadDefaultSessionView, type MobileSessionView } from '../storage/session-view-preferences'
 
 export type MobileStructuredChatLaunchContext = {
   defaultView: MobileSessionView
   registeredAgents: readonly string[]
   canRequestSurface: boolean
+  // The list this decision used. A launch must not keep the gate's empty placeholder.
+  hostCapabilities: readonly string[] | null | undefined
 }
 
 let currentContext: MobileStructuredChatLaunchContext | null = null
@@ -60,6 +66,28 @@ export function withMobileStructuredChatLaunch<T extends { agent: string }>(
   )
 }
 
+// The new-tab sheet stays open on the gate's empty placeholder and then caches "not chat".
+function capabilitySnapshotUnproven(
+  hostCapabilities: readonly string[] | null | undefined
+): boolean {
+  return hostCapabilities == null || hostCapabilities.length === 0
+}
+
+async function capabilitiesForStructuredChat(
+  client: RpcClient,
+  hostCapabilities: readonly string[] | null | undefined
+): Promise<readonly string[] | null | undefined> {
+  if (!capabilitySnapshotUnproven(hostCapabilities)) {
+    return hostCapabilities
+  }
+  try {
+    const reply = await hostStatusProbe.request(client)
+    return readProbedHostCapabilities(reply) ?? hostCapabilities
+  } catch {
+    return hostCapabilities
+  }
+}
+
 async function registeredStructuredAgents(
   client: RpcClient,
   hostCapabilities: readonly string[] | null | undefined
@@ -86,15 +114,16 @@ export async function loadMobileStructuredChatLaunchContext(args: {
   client: RpcClient
   hostCapabilities: readonly string[] | null | undefined
 }): Promise<MobileStructuredChatLaunchContext> {
+  const hostCapabilities = await capabilitiesForStructuredChat(args.client, args.hostCapabilities)
   const [defaultView, registeredAgents] = await Promise.all([
     loadDefaultSessionView(),
-    registeredStructuredAgents(args.client, args.hostCapabilities)
+    registeredStructuredAgents(args.client, hostCapabilities)
   ])
   const context: MobileStructuredChatLaunchContext = {
     defaultView,
     registeredAgents,
-    canRequestSurface:
-      args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true
+    canRequestSurface: hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
+    hostCapabilities
   }
   publishMobileStructuredChatLaunch(context)
   return context

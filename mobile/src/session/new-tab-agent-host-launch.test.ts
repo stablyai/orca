@@ -31,10 +31,16 @@ const launchReply = ok({
   receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' }
 })
 
-function scriptedClient(agents: readonly string[]) {
+function scriptedClient(agents: readonly string[], statusCapabilities?: readonly string[]) {
   const calls: Array<{ method: string; params: unknown }> = []
   const sendRequest = vi.fn(async (method: string, params?: unknown) => {
     calls.push({ method, params })
+    if (method === 'status.get') {
+      if (!statusCapabilities) {
+        throw new Error('unexpected request: status.get')
+      }
+      return ok({ capabilities: [...statusCapabilities] })
+    }
     if (method === 'agentSession.agents') {
       return ok({ agents: agents.map((agent) => ({ agent, capabilities: {} })) })
     }
@@ -60,9 +66,10 @@ function scriptedClient(agents: readonly string[]) {
 async function launch(
   agent: TuiAgent,
   hostCapabilities: readonly string[],
-  agents: readonly string[] = ['hermes', 'claude']
+  agents: readonly string[] = ['hermes', 'claude'],
+  statusCapabilities?: readonly string[]
 ) {
-  const { client, calls } = scriptedClient(agents)
+  const { client, calls } = scriptedClient(agents, statusCapabilities)
   const pendingSelectionRef: { current: PendingSessionSelection | null } = { current: null }
   const launched = await launchNewTabAgentThroughHost({
     client,
@@ -134,5 +141,24 @@ describe('launchNewTabAgentThroughHost chat surface', () => {
     ])
     expect(methods).toEqual(['agent.launchReplay'])
     expect(params).not.toHaveProperty('surface')
+  })
+
+  it('starts Hermes chat from a fresh status when the gate list is still empty', async () => {
+    const { launched, params, methods } = await launch(
+      'hermes',
+      [],
+      ['hermes'],
+      LAUNCH_CAPABILITIES
+    )
+    expect(launched).toBe(true)
+    expect(methods).toEqual(['status.get', 'agentSession.agents', 'agent.launchReplay'])
+    expect(params).toMatchObject({ agent: 'hermes', surface: 'chat' })
+  })
+
+  it('does not launch when that fresh status cannot be read', async () => {
+    const { launched, params, methods } = await launch('hermes', [])
+    expect(launched).toBe(false)
+    expect(methods).toEqual(['status.get'])
+    expect(params).toBeUndefined()
   })
 })

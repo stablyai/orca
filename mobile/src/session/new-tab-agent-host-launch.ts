@@ -68,21 +68,20 @@ export async function launchNewTabAgentThroughHost(args: {
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
   // Chat UI lives on the phone. A headless host keeps its terminal default unless the launch asks for chat.
-  const surface = mobileStructuredChatLaunchSurface(
-    args.agent,
-    await loadMobileStructuredChatLaunchContext({
-      client: args.client,
-      hostCapabilities: args.hostCapabilities
-    })
-  )
-  const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
+  const launchContext = await loadMobileStructuredChatLaunchContext({
+    client: args.client,
+    hostCapabilities: args.hostCapabilities
+  })
+  const hostCapabilities = launchContext.hostCapabilities
+  const surface = mobileStructuredChatLaunchSurface(args.agent, launchContext)
+  const afterTabId = hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
   // Arm selection before requesting: tabs publish before prompt delivery settles, and later user picks must win.
   pendingSelectionRef.current = launchedSelection(args.lock, reservation, null)
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
-    hostCapabilities: args.hostCapabilities,
+    hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
     ...(surface ? { surface } : {}),

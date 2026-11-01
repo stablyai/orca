@@ -77,7 +77,11 @@ export function useMobileNewTabAgentOptions(args: {
         hostCapabilities
       }).catch(() => null)
       const options = withMobileStructuredChatLaunch(inventory.options, launchContext)
-      setCachedNewTabAgentInventory(hostId, workspaceKey, { ...inventory, options })
+      const snapshotUnproven = hostCapabilities == null || hostCapabilities.length === 0
+      // An empty gate list is not a host answer. Caching it would keep the hint off after status arrives.
+      if (!snapshotUnproven || options.some((option) => option.opensAsChat)) {
+        setCachedNewTabAgentInventory(hostId, workspaceKey, { ...inventory, options })
+      }
       setOptions(options)
       setLoadState('loaded')
     })().catch((error: unknown) => {
