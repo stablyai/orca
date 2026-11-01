@@ -30,6 +30,7 @@ import {
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
+  normalizeClipboardWriteFileRequest,
   writeFileToClipboard,
   type ClipboardFileDeps,
   type ClipboardFileResult
@@ -44,6 +45,7 @@ import { uploadPasteToAgentSessionAttachments } from '../ipc/agent-session-attac
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
+import { readClipboardPlainText } from './clipboard-plain-text-read'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
 import {
@@ -58,11 +60,6 @@ import { agentSessionPastedImageName } from '../../shared/agent-session-attachme
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null
-
-type ClipboardWriteFileRequest = {
-  filePath: string
-  connectionId?: string
-}
 
 export type ClipboardHandlerOptions = {
   /** This machine's chat attachment store, after starting its chat host; null when it can't. */
@@ -131,7 +128,7 @@ export function registerClipboardHandlers(
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
-    return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
+    return assertClipboardTextWithinLimitWithYield(readClipboardPlainText(clipboard), options)
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
@@ -288,24 +285,6 @@ export function registerClipboardHandlers(
       clipboard.writeImage(image)
     })
   })
-}
-
-function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRequest | null {
-  if (typeof args === 'string') {
-    return { filePath: args }
-  }
-  if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return null
-  }
-  const filePath = (args as { filePath?: unknown }).filePath
-  if (typeof filePath !== 'string') {
-    return null
-  }
-  const connectionId = (args as { connectionId?: unknown }).connectionId
-  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
-    return { filePath, connectionId }
-  }
-  return { filePath }
 }
 
 function assertTrustedClipboardSender(event: IpcMainInvokeEvent): void {
