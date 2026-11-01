@@ -130,6 +130,8 @@ export function resolveLeftSidebarStyleVariables(
     case 'match-terminal':
       return resolveTerminalSurfaceVariables(settings, systemPrefersDark)
     case 'tinted':
-      return resolveTintedSurfaceVariables(settings)
+      return normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity) === 0
+        ? undefined
+        : resolveTintedSurfaceVariables(settings)
   }
 }
