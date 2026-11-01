@@ -24,9 +24,11 @@ export function createRemoteTerminalStreamWatchdog(
   let responseTimer: ReturnType<typeof setTimeout> | null = null
   let deliveryTimer: ReturnType<typeof setTimeout> | null = null
   let outstandingDeliveryBytes = 0
+  // Unsettled deliveries in arrival order; the oldest one's start is the stall anchor.
+  const unsettledDeliveries = new Set<{ startedAtMs: number }>()
   // Host credit reopens on ACK frames; parsed-but-unacked bytes remain credit whose loss can stall output.
-  let unacknowledgedBytes = 0
-  let deliveryPendingSinceMs: number | null = null
+  const unacknowledgedChunks: { bytes: number; startedAtMs: number }[] = []
+  let armedDeadlineAnchorMs: number | null = null
   let lastInboundAtMs = Date.now()
   let commandResponseProbePending = false
   let disposed = false
@@ -60,28 +62,41 @@ export function createRemoteTerminalStreamWatchdog(
       reason
     })
   }
-  // Anchor deadline: sibling settles must not postpone it forever, and clearing at zero parse credit would require the very inbound output a stall blocks.
+  // Why oldest pending: flowing output always has bytes in flight; only the oldest byte not moving is a stall.
   const syncDeliveryTimer = (): void => {
-    if (disposed || outstandingDeliveryBytes + unacknowledgedBytes <= 0) {
+    const oldestDelivery = unsettledDeliveries.values().next().value
+    const anchorMs = Math.min(
+      oldestDelivery?.startedAtMs ?? Infinity,
+      unacknowledgedChunks[0]?.startedAtMs ?? Infinity
+    )
+    if (disposed || anchorMs === Infinity) {
       clearDeliveryTimer()
-      deliveryPendingSinceMs = null
+      armedDeadlineAnchorMs = null
       return
     }
-    deliveryPendingSinceMs ??= Date.now()
-    if (deliveryTimer) {
+    if (deliveryTimer && armedDeadlineAnchorMs === anchorMs) {
       return
     }
+    clearDeliveryTimer()
+    armedDeadlineAnchorMs = anchorMs
     const remainingMs = Math.max(
       0,
-      REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - (Date.now() - deliveryPendingSinceMs)
+      REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - (Date.now() - anchorMs)
     )
     deliveryTimer = setTimeout(() => trip('delivery-credit-timeout'), remainingMs)
   }
 
   return {
     beginOutputDelivery(bytes) {
+      if (disposed) {
+        return () => {}
+      }
+      const delivery = { startedAtMs: Date.now() }
       outstandingDeliveryBytes += bytes
-      unacknowledgedBytes += bytes
+      unsettledDeliveries.add(delivery)
+      if (bytes > 0) {
+        unacknowledgedChunks.push({ bytes, startedAtMs: delivery.startedAtMs })
+      }
       syncDeliveryTimer()
       let settled = false
       return () => {
@@ -90,6 +105,7 @@ export function createRemoteTerminalStreamWatchdog(
         }
         settled = true
         outstandingDeliveryBytes = Math.max(0, outstandingDeliveryBytes - bytes)
+        unsettledDeliveries.delete(delivery)
         syncDeliveryTimer()
       }
     },
@@ -97,7 +113,16 @@ export function createRemoteTerminalStreamWatchdog(
       if (disposed) {
         return
       }
-      unacknowledgedBytes = Math.max(0, unacknowledgedBytes - bytes)
+      let remaining = bytes
+      while (remaining > 0 && unacknowledgedChunks.length > 0) {
+        const oldest = unacknowledgedChunks[0]
+        const consumed = Math.min(oldest.bytes, remaining)
+        oldest.bytes -= consumed
+        remaining -= consumed
+        if (oldest.bytes === 0) {
+          unacknowledgedChunks.shift()
+        }
+      }
       syncDeliveryTimer()
     },
     completeCommandResponseProbe() {
@@ -124,8 +149,9 @@ export function createRemoteTerminalStreamWatchdog(
       clearResponseTimer()
       clearDeliveryTimer()
       outstandingDeliveryBytes = 0
-      unacknowledgedBytes = 0
-      deliveryPendingSinceMs = null
+      unsettledDeliveries.clear()
+      unacknowledgedChunks.length = 0
+      armedDeadlineAnchorMs = null
     }
   }
 }
