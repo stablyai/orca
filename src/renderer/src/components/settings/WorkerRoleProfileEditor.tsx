@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import {
   findCatalogModel,
   findCatalogOption
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { WorkerRoleProfile } from '../../../../shared/orchestration-worker-roles'

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-launch'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
   applyStructuredAgentSessionModelCatalog,
   createStructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import {
   readAgentSessionUnavailable,

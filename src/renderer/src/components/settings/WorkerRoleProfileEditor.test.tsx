@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-launch'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { WorkerRoleProfileEditor } from './WorkerRoleProfileEditor'
 
 const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: '' }))
