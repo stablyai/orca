@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { hostedReviewOptionArgs, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
 
 export type GiteaRepoSelectorArgs = {

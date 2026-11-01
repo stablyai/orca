@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { getGiteaJobTrace } from '../gitea/actions-job-logs'
 import { addGiteaPRComment, addGiteaPRInlineComment } from '../gitea/pull-request-review-comments'
 import {
