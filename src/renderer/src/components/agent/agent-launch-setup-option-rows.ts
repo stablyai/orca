@@ -105,13 +105,11 @@ export function agentLaunchSetupCatalogState(
   models: readonly { hidden?: true }[]
 ) {
   const hasModels = models.some((model) => !model.hidden)
-  const catalogPending =
-    !hasModels &&
-    ((entry.catalogRead === undefined && entry.catalog.origin === 'unknown') ||
-      entry.catalogRead === 'pending')
+  const catalogPending = !hasModels && entry.catalogRead === 'pending'
   const catalogMessage = catalogPending
     ? null
-    : entry.catalogRead === 'unsupported'
+    : entry.catalogRead === 'unsupported' ||
+        (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
       ? translate(
           'agentPicker.catalogUnsupported',
           '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',

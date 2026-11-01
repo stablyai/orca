@@ -31,7 +31,11 @@ class AgentPickerAcquisition {
     private initial: AgentPickerEntry[],
     private reads: Reads
   ) {
-    this.entries = initial.map((entry) => ({ ...entry, catalogRead: 'pending' }))
+    this.entries = initial.map((entry) => ({
+      ...entry,
+      catalogRead:
+        entry.surfaces.length && entry.catalogRead !== 'unsupported' ? 'pending' : 'unsupported'
+    }))
     this.defaults = initial
     for (const [i, entry] of initial.entries()) {
       if (entry.structuredDefaultsPending) {
@@ -39,7 +43,9 @@ class AgentPickerAcquisition {
       }
     }
     this.queued = {
-      catalog: new Set(initial.flatMap((e, i) => (e.surfaces.length ? [i] : []))),
+      catalog: new Set(
+        this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
+      ),
       support: new Set(this.supports.keys())
     }
   }
@@ -50,6 +56,8 @@ class AgentPickerAcquisition {
     if (first) {
       for (const [i, entry] of this.entries.entries()) {
         if (
+          this.initial[i].catalogRead !== 'unsupported' &&
+          entry.surfaces.length &&
           entry.catalogRead !== 'pending' &&
           (entry.catalog.origin === 'unknown' ||
             entry.catalogRead === 'failed' ||

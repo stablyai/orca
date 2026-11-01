@@ -16,6 +16,8 @@ import {
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { parseStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
@@ -54,6 +56,10 @@ export function useAgentLaunchPickerInventory(
       }
     }).executionHostId
   const target = structuredAgentSessionTargetForHost(executionHostId)
+  const registeredAgents = readHostStructuredAgentsForRuntime(
+    executionHostId,
+    target?.kind === 'local' ? null : context?.runtimeId
+  )
   const repo = context?.workspace.repoId
     ? useAppStore.getState().repos.find((candidate) => candidate.id === context.workspace.repoId)
     : undefined
@@ -137,7 +143,16 @@ export function useAgentLaunchPickerInventory(
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
           formatAgentTypeLabel
-        )
+        ).map((entry) => ({
+          ...entry,
+          ...(!target ||
+          !entry.surfaces.length ||
+          (registeredAgents &&
+            !registeredAgents.some(({ agent }) => agent === entry.agent) &&
+            !getAgentSessionOptionLaunchCatalog(entry.agent))
+            ? { catalogRead: 'unsupported' as const }
+            : {})
+        }))
       : []
   const fallback = useMemo(
     () =>

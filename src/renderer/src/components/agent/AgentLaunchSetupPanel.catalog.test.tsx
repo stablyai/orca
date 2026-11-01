@@ -13,6 +13,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
 it.each([
+  [undefined, { origin: 'unknown' }, 'Pi models are unavailable on this host.', false],
+  [undefined, { origin: 'probe', fetchedAt: 1, models: [] }, 'Pi has no available models.', false],
   ['pending', { origin: 'unknown' }, null, true],
   ['failed', { origin: 'unknown' }, 'Could not load Pi models.', false],
   ['unsupported', { origin: 'unknown' }, 'Pi models are unavailable on this host.', false],
@@ -27,7 +29,7 @@ it.each([
   ['settled', { origin: 'unknown', unavailable: { reason: 'cliMissing' } }, 'Install Pi', false],
   ['settled', { origin: 'probe', fetchedAt: 1, models: [] }, 'Pi has no available models.', false]
 ] satisfies [
-  NonNullable<AgentPickerEntry['catalogRead']>,
+  AgentPickerEntry['catalogRead'],
   AgentPickerEntry['catalog'],
   string | null,
   boolean
