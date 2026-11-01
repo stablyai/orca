@@ -11,6 +11,7 @@ const CLASS_HEADER = 'class MainActivity : ReactActivity() {'
 const IMPORTS = [
   'android.content.res.Configuration',
   'android.os.Bundle',
+  'android.util.DisplayMetrics',
   'com.facebook.react.uimanager.DisplayMetricsHolder'
 ]
 
@@ -19,7 +20,8 @@ const METHODS = `
   // React Native re-seeds from the application context when it creates the root view (onCreate)
   // and in onConfigurationChanged, so these run before the next measure. Its root view's layout
   // listener also re-seeds whenever the rotation differs from the last one it saw, after measuring;
-  // the pre-draw check runs after every layout listener and lays out again.
+  // the pre-draw check runs after every layout listener and asks for another pass, in which React
+  // Native re-sends the window size to JS.
   override fun onPostCreate(savedInstanceState: Bundle?) {
     super.onPostCreate(savedInstanceState)
     window.decorView.viewTreeObserver.addOnPreDrawListener {
@@ -42,13 +44,19 @@ const METHODS = `
     useWindowDensity()
   }
 
+  // React Native's initDisplayMetrics with the pane's density on the real display size, built before
+  // it is published because text measurement reads it off the UI thread.
+  @Suppress("DEPRECATION")
   private fun useWindowDensity() {
-    DisplayMetricsHolder.initDisplayMetrics(this)
     val pane = resources.displayMetrics
-    DisplayMetricsHolder.getScreenDisplayMetrics().apply {
+    val screen = DisplayMetrics().apply {
+      windowManager.defaultDisplay.getRealMetrics(this)
       density = pane.density
       densityDpi = pane.densityDpi
+      scaledDensity = pane.scaledDensity
     }
+    DisplayMetricsHolder.setWindowDisplayMetrics(pane)
+    DisplayMetricsHolder.setScreenDisplayMetrics(screen)
   }
 `
 
