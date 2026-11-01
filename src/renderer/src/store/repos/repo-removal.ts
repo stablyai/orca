@@ -207,13 +207,25 @@ export function createRepoRemovalActions(
               ]
             : []
         // Backstop for the host's sweep, which a spent budget or reloading graph can cut short.
+        // One kill per id: the row, the binding list, and the last relay can name the same PTY.
         for (const wId of exclusiveWorktreeIds) {
           const tabs = get().tabsByWorktree[wId] ?? []
+          const ptyIdsToKill = new Set<string>()
           for (const tab of tabs) {
             for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!isRemoteRuntimePtyId(ptyId)) {
-                window.api.pty.kill(ptyId)
-              }
+              ptyIdsToKill.add(ptyId)
+            }
+            if (tab.ptyId) {
+              ptyIdsToKill.add(tab.ptyId)
+            }
+            const lastKnownRelayPtyId = get().lastKnownRelayPtyIdByTabId[tab.id]
+            if (lastKnownRelayPtyId) {
+              ptyIdsToKill.add(lastKnownRelayPtyId)
+            }
+          }
+          for (const ptyId of ptyIdsToKill) {
+            if (!isRemoteRuntimePtyId(ptyId)) {
+              window.api.pty.kill(ptyId)
             }
           }
         }

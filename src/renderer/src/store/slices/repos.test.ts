@@ -797,11 +797,12 @@ describe('repo slice runtime routing', () => {
         ]
       },
       tabsByWorktree: {
-        [worktreeId]: [{ id: 'tab-1', worktreeId } as never]
+        [worktreeId]: [{ id: 'tab-1', worktreeId, ptyId: 'pty-current' } as never]
       },
       ptyIdsByTabId: {
-        'tab-1': ['remote:term-1', 'pty-local-stale']
-      }
+        'tab-1': ['remote:term-1', 'pty-local-stale', 'pty-current']
+      },
+      lastKnownRelayPtyIdByTabId: { 'tab-1': 'pty-last-known-relay' }
     })
 
     await store.getState().removeProject(remoteRepo.id, ownerOf(serverRepo))
@@ -813,6 +814,9 @@ describe('repo slice runtime routing', () => {
       timeoutMs: 15_000
     })
     expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')
+    expect(ptyKill).toHaveBeenCalledWith('pty-current')
+    expect(ptyKill).toHaveBeenCalledWith('pty-last-known-relay')
+    expect(ptyKill).toHaveBeenCalledTimes(3)
     expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
   })
 
