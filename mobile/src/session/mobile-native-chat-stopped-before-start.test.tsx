@@ -9,7 +9,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from '../../../src/shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../src/shared/agent-session-goal-control-copy'

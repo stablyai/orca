@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
@@ -11,12 +11,12 @@ import {
   askTypedText,
   toggleAskOption
 } from '../../../../../src/shared/native-chat-ask-card-rules'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input-font-size'
+import { MessageBox } from '../../../components/composer-input/MessageBox'
 import { MobileNativeChatCardHeaderAction } from '../../MobileNativeChatCardHeaderAction'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
@@ -185,7 +185,11 @@ export function MobileNativeChatAsk({
             <Pressable
               // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Questions are positional: selections are index-addressed and a prompt never reorders them.
               key={i}
-              style={[styles.tab, i === index && styles.tabActive]}
+              style={({ pressed }) => [
+                styles.tab,
+                i === index && styles.tabActive,
+                pressed && pressedStyle
+              ]}
               disabled={submitting}
               onPress={() => {
                 autoAdvance.cancel()
@@ -243,16 +247,15 @@ export function MobileNativeChatAsk({
           />
         ) : null}
         {otherSelected || typesOnly(index) ? (
-          <TextInput
-            ref={inputRef}
+          <MessageBox
+            inputRef={inputRef}
             onFocus={revealReply}
-            style={styles.input}
-            value={otherText[index]}
+            style={styles.other}
+            value={otherText[index] ?? ''}
             onChangeText={(v) => setOther(index, v)}
             placeholder={
               freeTextInput?.placeholder ?? t('chat.ask.answerPlaceholder', 'Type your answer')
             }
-            placeholderTextColor={colors.textMuted}
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
             autoFocus
@@ -262,7 +265,7 @@ export function MobileNativeChatAsk({
 
       <View style={styles.footer}>
         <Pressable
-          style={styles.cancel}
+          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
           onPress={() => void cancel()}
           disabled={submitting}
           hitSlop={8}
@@ -275,7 +278,11 @@ export function MobileNativeChatAsk({
           </Text>
         ) : null}
         <Pressable
-          style={[styles.next, !currentAnswered && styles.nextSkip]}
+          style={({ pressed }) => [
+            styles.next,
+            !currentAnswered && styles.nextSkip,
+            pressed && pressedStyle
+          ]}
           onPress={confirm}
           disabled={submitting}
         >
@@ -339,15 +346,7 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     marginVertical: spacing.sm
   },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    padding: spacing.sm,
-    minHeight: 44,
+  other: {
     marginBottom: spacing.xs
   },
   footer: {
@@ -375,7 +374,7 @@ const styles = themedStyleSheet(() => ({
   next: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   nextSkip: {

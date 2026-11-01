@@ -65,6 +65,7 @@ export type FilesystemApi = {
       followSymlinks?: boolean
       /** A user act (open or Retry); may start a stopped WSL distro. */
       wakeWslDistro?: boolean
+      access?: LocalFileAccess
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string

@@ -1,4 +1,4 @@
-import { delimiter, isAbsolute, resolve } from 'node:path'
+import { pathEnvRelativeTo } from '../../shared/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -18,7 +18,7 @@ import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/structured-agent-launch-composition'
-import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
+import type { CodexStructuredLaunch } from './codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import {
@@ -86,11 +86,7 @@ async function readCodexStructuredInvocation(
   )
   assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
-  const pathEnv =
-    (environment?.PATH ?? environment?.Path)
-      ?.split(delimiter)
-      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
-      .join(delimiter) ?? null
+  const pathEnv = pathEnvRelativeTo(environment?.PATH ?? environment?.Path, cwd ?? process.cwd())
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const options = {
     pathEnv,

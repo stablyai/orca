@@ -17,7 +17,7 @@ import {
   Workflow
 } from 'lucide-react-native'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-child-row-model'
-import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
 import { sayMobileBackgroundTask as say } from '../../mobile-background-task-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
@@ -278,7 +278,7 @@ const styles = themedStyleSheet(() => ({
   },
   box: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     overflow: 'hidden'
@@ -382,7 +382,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   stopAll: {
     alignSelf: 'flex-start',

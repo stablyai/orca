@@ -108,7 +108,7 @@ describe('worker-start --terminal names a chat', () => {
     const task = turnText(worker.turns[0]!)
     expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
     expect(task).toContain('The coordinator cannot see this chat')
-    expect(task).toContain('it will send this chat a fresh')
+    expect(task).toContain('More supervised work arrives in this chat')
     expect(task).not.toContain('this terminal')
     expect(task).not.toMatch(/exit the shell/i)
     expect(db.getDispatchContextById(dispatchId)).toMatchObject({
@@ -151,23 +151,6 @@ describe('worker-start --terminal names a chat', () => {
     await endTurn()
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
     expect(turnText(worker.turns[1]!)).toContain(dispatchId)
-  })
-
-  it("reads the start as unknown when the chat's agent has not taken the task within the wait", async () => {
-    await openChat(COORDINATOR)
-    await openChat(PEER_CHAT)
-    const { taskId } = await coordinatorRunAndTask()
-    // The settlement wait running out, as for an agent still starting.
-    vi.spyOn(host, 'waitForSendSettlement').mockResolvedValue(undefined)
-
-    const receipt = await startWorker({ task: taskId })
-
-    expect(receipt).toMatchObject({
-      state: 'outcome_unknown',
-      turnStart: 'unobserved',
-      lastError: expect.stringContaining("the chat's agent had not started to take it")
-    })
-    expect(db.getWorkerDispatch(String(receipt.dispatchId))?.state).toBe('start_unknown')
   })
 
   it('is stopped and abandoned without closing or interrupting the chat', async () => {

@@ -174,7 +174,7 @@ describeRender(
       const opened = await openRoute(SESSION_ROUTE, 'Terminal')
       const text = await opened.page.evaluate(() => document.body.innerText)
       // Accessory-bar keys prove session screen, beyond generic header text.
-      for (const key of ['Esc', 'Tab', 'Ctrl+C', 'Ctrl+R']) {
+      for (const key of ['esc', 'ctrl', 'tab', 'alt']) {
         expect(text).toContain(key)
       }
       expect(text).not.toContain(UNMATCHED)

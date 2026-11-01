@@ -34,6 +34,19 @@ afterEach(() => {
   clearStructuredHostStub()
 })
 
+// These are RPC forwarding fixtures; receiving authority is exercised through the real host separately.
+function catalogHost() {
+  const host = hostStub()
+  host.readModelCatalog = async (params) => {
+    const catalog = host.deps.modelCatalog
+    if (!params.savedOnly) {
+      void catalog?.demand(params)
+    }
+    return catalog ? catalog.read(params) : { origin: 'unknown' }
+  }
+  return host
+}
+
 describe('agentSession.modelCatalog', () => {
   const read = vi.fn(async () => ({ origin: 'unknown' as const }))
   let record: AgentSessionRecord | null = null
@@ -42,7 +55,7 @@ describe('agentSession.modelCatalog', () => {
     read.mockClear()
     record = null
     setStructuredAgentSessionHost(
-      Object.assign(hostStub(), {
+      Object.assign(catalogHost(), {
         deps: {
           modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: {
@@ -103,7 +116,7 @@ describe('agentSession.modelCatalog', () => {
       }
     })
     setStructuredAgentSessionHost(
-      Object.assign(hostStub(), {
+      Object.assign(catalogHost(), {
         deps: {
           modelCatalog: catalog,
           store: {
@@ -246,7 +259,7 @@ describe('agentSession.modelCatalog', () => {
       probes: { claude: Object.assign(run, { resolve }) }
     })
     setStructuredAgentSessionHost(
-      Object.assign(hostStub(), {
+      Object.assign(catalogHost(), {
         sessionAgent: () => 'claude',
         deps: {
           modelCatalog: catalog,
@@ -296,7 +309,7 @@ describe('agentSession.modelCatalog before anything built the host', () => {
   }))
   const installHost = vi.fn(async () => {
     setStructuredAgentSessionHost(
-      Object.assign(hostStub(), {
+      Object.assign(catalogHost(), {
         deps: {
           modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: { getRecord: () => null, getConversation: () => null },
@@ -362,7 +375,7 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
 
   beforeEach(() => {
     setStructuredAgentSessionHost(
-      Object.assign(hostStub(), {
+      Object.assign(catalogHost(), {
         deps: {
           modelCatalog: { read, demand: vi.fn(async () => {}) },
           store: {
@@ -377,7 +390,14 @@ describe('agentSession.modelCatalog for a chat on a model its CLI stopped listin
   })
 
   it("lists the chat's own model, so an older client that replaces an unlisted one keeps it", async () => {
-    const own = { id: 'opus[1m]', label: 'opus[1m]', isDefault: false, efforts: [] }
+    const own = {
+      id: 'opus[1m]',
+      label: 'Opus (1M context)',
+      description: 'opus[1m]',
+      isDefault: false,
+      efforts: [],
+      effortsKnown: false
+    }
     const forChat = { agent: 'claude', sessionId: record.sessionId }
     expect(await call('agentSession.modelCatalog', forChat, OLD_STRUCTURED_CLIENT)).toMatchObject({
       ok: true,

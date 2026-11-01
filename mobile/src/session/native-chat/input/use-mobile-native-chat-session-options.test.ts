@@ -6,7 +6,7 @@ import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveNativeChatSessionOptionDefaults
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session/options/agent-session-option-launch'
 import type {
   PersistedNativeChatSessionOptions,
   NativeChatSessionOptionSettingsMutation
@@ -124,7 +124,13 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(model.kind).toMatchObject({
       type: 'select',
       currentValue: 'deepseek/deepseek-v4-pro',
-      choices: [{ value: 'deepseek/deepseek-v4-pro', label: 'deepseek/deepseek-v4-pro' }]
+      choices: [
+        {
+          value: 'deepseek/deepseek-v4-pro',
+          label: 'Deepseek Deepseek V4 Pro',
+          description: 'deepseek/deepseek-v4-pro'
+        }
+      ]
     })
   })
 
@@ -300,7 +306,9 @@ describe('useMobileNativeChatSessionOptions', () => {
         action: { type: 'agent-picker' },
         kind: {
           currentValue: 'gpt-6.1-sol',
-          choices: expect.arrayContaining([{ value: 'gpt-6.1-sol', label: 'gpt-6.1-sol' }])
+          choices: expect.arrayContaining([
+            { value: 'gpt-6.1-sol', label: 'GPT 6.1 Sol', description: 'gpt-6.1-sol' }
+          ])
         }
       })
       const snapshot = api!.snapshot

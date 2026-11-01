@@ -1,33 +1,26 @@
-import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
-import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Image as ImageIcon, Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { type JSX, type SyntheticEvent, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
-import ImageViewerPopup from './ImageViewerPopup'
-import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { listenForViewerZoomRequests } from './viewer-zoom-request'
 import PdfViewer from './PdfViewer'
-import {
-  type ApplyImageViewerZoomChange,
-  applyAnchoredImageViewerZoomChange,
-  applyImageSurfaceWheel,
-  getElementSurfaceSize,
-  getImageLayoutStyle
-} from './image-viewer-dom-zoom'
-import {
-  IMAGE_VIEWER_ZOOM_STEP,
-  MAX_IMAGE_VIEWER_ZOOM,
-  MIN_IMAGE_VIEWER_ZOOM,
-  type ImageViewerImageDimensions,
-  type ImageViewerSurfaceSize,
-  getZoomedImageLayoutSize
-} from './image-viewer-zoom'
+import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
+import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
+import { PanZoomImageDialog } from './PanZoomImageDialog'
+import { PanZoomImageSurface } from './PanZoomImageSurface'
+import { usePanZoomViewport } from './use-pan-zoom-viewport'
+import { useViewerZoomCommands } from './use-viewer-zoom-commands'
+import { useSvgObjectUrl } from './use-svg-object-url'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
+import { decodeSvgBase64, readSvgIntrinsicSize } from '../../../../shared/svg-document'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
+const SVG_MIME_TYPE = 'image/svg+xml'
 
 type ImageViewerProps = {
   /** Base64 bytes, for git blobs, diffs and the web client. */
   content?: string
+  /** SVG markup, for an SVG opened as text; wins over `content` and `src`. */
+  svgSource?: string
   /** An orca-media URL the image or PDF is read from by range; wins over `content`. */
   src?: string
   /** The file's size when `src` hides the bytes. */
@@ -41,8 +34,19 @@ type ImageViewerProps = {
   scrollCacheKey?: string | null
 }
 
+function formatByteSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function ImageViewer({
   content = '',
+  svgSource,
   src,
   byteSize,
   filePath,
@@ -51,215 +55,43 @@ export default function ImageViewer({
   preferenceKey,
   scrollCacheKey = null
 }: ImageViewerProps): JSX.Element {
-  const [isPopupOpen, setIsPopupOpen] = useState(false)
-  const [inlineZoom, setInlineZoom] = useState(1)
-  const [popupZoom, setPopupZoom] = useState(1)
-  const inlineSurfaceRef = useRef<HTMLDivElement | null>(null)
-  const popupSurfaceRef = useRef<HTMLDivElement | null>(null)
-  const [inlineSurfaceSize, setInlineSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
-  const [popupSurfaceSize, setPopupSurfaceSize] = useState<ImageViewerSurfaceSize | null>(null)
-  const [imageDimensions, setImageDimensions] = useState<ImageViewerImageDimensions | null>(null)
+  const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
-  const isCommandOwner = useContext(EditorCommandOwnerContext)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
-  // A remint changes only the URL's revision; keep zoom unless the grant or the file's size changed.
-  const srcIdentity = src ? src.split('?')[0] : undefined
-  const imageStateKey = useMemo(
-    () =>
-      `${filePath}\n${mimeType}\n${srcIdentity !== undefined ? `${srcIdentity}\n${byteSize ?? ''}` : cleanedContent}`,
-    [filePath, mimeType, srcIdentity, byteSize, cleanedContent]
-  )
-  const [lastImageStateKey, setLastImageStateKey] = useState(imageStateKey)
-  if (lastImageStateKey !== imageStateKey) {
-    setLastImageStateKey(imageStateKey)
-    setInlineZoom(1)
-    setPopupZoom(1)
-    setImageDimensions(null)
-  }
   const isPdf = mimeType === 'application/pdf'
-  const isIntrinsicLayout = layout === 'intrinsic'
-  const previewSrc = useMemo(
+  const svgMarkup = useMemo(
     () =>
-      src && mimeType.startsWith('image/') ? src : buildImageDataUri(mimeType, cleanedContent),
-    [cleanedContent, mimeType, src]
+      svgSource ??
+      (mimeType === SVG_MIME_TYPE && !src && cleanedContent
+        ? decodeSvgBase64(cleanedContent)
+        : null),
+    [cleanedContent, mimeType, src, svgSource]
   )
+  const svgUrl = useSvgObjectUrl(svgMarkup)
+  const svgSize = useMemo(() => (svgMarkup ? readSvgIntrinsicSize(svgMarkup) : null), [svgMarkup])
+  const previewSrc = useMemo(() => {
+    if (svgMarkup !== null) {
+      return svgUrl
+    }
+    return src && mimeType.startsWith('image/') ? src : buildImageDataUri(mimeType, cleanedContent)
+  }, [cleanedContent, mimeType, src, svgMarkup, svgUrl])
   const imageError =
-    (previewSrc === null && cleanedContent.length > 0) ||
+    (previewSrc === null && svgMarkup === null && cleanedContent.length > 0) ||
     (previewSrc !== null && failedPreviewSrc === previewSrc)
+  // A remint changes only the URL's revision; keep the size, and with it the zoom, across it.
+  const loadedKey = src && svgMarkup === null ? src.split('?')[0] : previewSrc
+  const imageSize = svgSize ?? (loaded && loaded.key === loadedKey ? loaded.size : null)
   const estimatedSize = useMemo(() => {
+    if (svgMarkup !== null) {
+      return formatByteSize(new Blob([svgMarkup]).size)
+    }
     if (src && byteSize === undefined) {
       return ''
     }
-    const bytes = byteSize ?? Math.floor((cleanedContent.length * 3) / 4)
-    if (bytes < 1024) {
-      return `${bytes} B`
-    }
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }, [byteSize, cleanedContent, src])
-  const inlineZoomPercent = Math.round(inlineZoom * 100)
-  const inlineImageLayoutSize = useMemo(
-    () =>
-      isIntrinsicLayout
-        ? null
-        : getZoomedImageLayoutSize({
-            imageDimensions,
-            surfaceSize: inlineSurfaceSize,
-            zoom: inlineZoom
-          }),
-    [imageDimensions, inlineSurfaceSize, inlineZoom, isIntrinsicLayout]
-  )
-  const popupImageLayoutSize = useMemo(
-    () =>
-      getZoomedImageLayoutSize({
-        imageDimensions,
-        surfaceSize: popupSurfaceSize,
-        zoom: popupZoom
-      }),
-    [imageDimensions, popupSurfaceSize, popupZoom]
-  )
-  const inlineImageLayoutStyle = useMemo(
-    () => getImageLayoutStyle(inlineImageLayoutSize),
-    [inlineImageLayoutSize]
-  )
-  const popupImageLayoutStyle = useMemo(
-    () => getImageLayoutStyle(popupImageLayoutSize),
-    [popupImageLayoutSize]
-  )
-  const applyInlineZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
-    applyAnchoredImageViewerZoomChange(inlineSurfaceRef.current, setInlineZoom, getNextZoom, anchor)
-  }, [])
-  const applyPopupZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
-    applyAnchoredImageViewerZoomChange(popupSurfaceRef.current, setPopupZoom, getNextZoom, anchor)
-  }, [])
-  const openPopup = useCallback(() => {
-    setPopupZoom(inlineZoom)
-    setIsPopupOpen(true)
-  }, [inlineZoom])
-  const handlePopupOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        setPopupZoom(inlineZoom)
-      }
-      setIsPopupOpen(open)
-    },
-    [inlineZoom]
-  )
-  const handleInlineImageSurfaceWheel = useCallback(
-    (event: WheelEvent) => {
-      applyImageSurfaceWheel(event, applyInlineZoomChange)
-    },
-    [applyInlineZoomChange]
-  )
-  const handlePopupImageSurfaceWheel = useCallback(
-    (event: WheelEvent) => {
-      applyImageSurfaceWheel(event, applyPopupZoomChange)
-    },
-    [applyPopupZoomChange]
-  )
-  const setInlineSurfaceRef = useCallback(
-    (surface: HTMLDivElement | null) => {
-      if (inlineSurfaceRef.current) {
-        inlineSurfaceRef.current.removeEventListener('wheel', handleInlineImageSurfaceWheel)
-      }
-      inlineSurfaceRef.current = surface
-      if (surface) {
-        setInlineSurfaceSize(getElementSurfaceSize(surface))
-        // Chromium reports pinch as ctrl-wheel; a non-passive listener must cancel browser zoom.
-        surface.addEventListener('wheel', handleInlineImageSurfaceWheel, { passive: false })
-      } else {
-        setInlineSurfaceSize(null)
-      }
-    },
-    [handleInlineImageSurfaceWheel]
-  )
-  const setPopupSurfaceRef = useCallback(
-    (surface: HTMLDivElement | null) => {
-      if (popupSurfaceRef.current) {
-        popupSurfaceRef.current.removeEventListener('wheel', handlePopupImageSurfaceWheel)
-      }
-      popupSurfaceRef.current = surface
-      if (surface) {
-        setPopupSurfaceSize(getElementSurfaceSize(surface))
-        surface.addEventListener('wheel', handlePopupImageSurfaceWheel, { passive: false })
-      } else {
-        setPopupSurfaceSize(null)
-      }
-    },
-    [handlePopupImageSurfaceWheel]
-  )
-
-  useEffect(() => {
-    const surface = inlineSurfaceRef.current
-    if (!surface) {
-      setInlineSurfaceSize(null)
-      return
-    }
-
-    const updateSize = () => setInlineSurfaceSize(getElementSurfaceSize(surface))
-    updateSize()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(updateSize)
-    observer.observe(surface)
-    return () => observer.disconnect()
-  }, [previewSrc])
-
-  useEffect(() => {
-    if (!isPopupOpen) {
-      setPopupSurfaceSize(null)
-      return
-    }
-
-    const surface = popupSurfaceRef.current
-    if (!surface) {
-      return
-    }
-
-    const updateSize = () => setPopupSurfaceSize(getElementSurfaceSize(surface))
-    updateSize()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(updateSize)
-    observer.observe(surface)
-    return () => observer.disconnect()
-  }, [isPopupOpen])
-
-  useEffect(() => {
-    // Why: PDFs own their zoom; combined diff images yield to editor text until a popup opens.
-    if (!isCommandOwner || isPdf || (isIntrinsicLayout && !isPopupOpen)) {
-      return
-    }
-    const applyZoomChange = isPopupOpen ? applyPopupZoomChange : applyInlineZoomChange
-    return listenForViewerZoomRequests(
-      (direction) =>
-        applyZoomChange((currentZoom) => {
-          if (direction === 'reset') {
-            return 1
-          }
-          return direction === 'in'
-            ? currentZoom * IMAGE_VIEWER_ZOOM_STEP
-            : currentZoom / IMAGE_VIEWER_ZOOM_STEP
-        }),
-      isPopupOpen ? popupSurfaceRef : inlineSurfaceRef,
-      isPopupOpen ? 'popup' : 'pane'
-    )
-  }, [
-    applyInlineZoomChange,
-    applyPopupZoomChange,
-    isCommandOwner,
-    isIntrinsicLayout,
-    isPdf,
-    isPopupOpen
-  ])
+    return formatByteSize(byteSize ?? Math.floor((cleanedContent.length * 3) / 4))
+  }, [byteSize, cleanedContent, src, svgMarkup])
 
   if (isPdf) {
     return (
@@ -274,6 +106,7 @@ export default function ImageViewer({
     )
   }
 
+  const isIntrinsicLayout = layout === 'intrinsic'
   if (imageError) {
     return (
       <div
@@ -307,115 +140,172 @@ export default function ImageViewer({
     )
   }
 
-  return (
-    <>
-      <div className={cn('flex min-h-0 flex-col', isIntrinsicLayout ? 'h-auto' : 'h-full')}>
-        <div
-          ref={setInlineSurfaceRef}
-          className={cn(
-            'cursor-pointer bg-muted/20',
-            isIntrinsicLayout
-              ? 'flex justify-center overflow-visible p-4'
-              : 'flex-1 overflow-auto scrollbar-editor'
-          )}
-          onClick={openPopup}
-          title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
-        >
-          <div
-            className={cn(
-              'flex justify-center',
-              isIntrinsicLayout
-                ? 'max-w-full items-start'
-                : 'h-max min-h-full w-max min-w-full items-center p-4'
-            )}
-          >
-            <div
-              className="flex items-center justify-center"
-              style={
-                isIntrinsicLayout
-                  ? { transform: `scale(${inlineZoom})`, transformOrigin: 'center center' }
-                  : inlineImageLayoutStyle
-              }
-            >
-              <img
-                src={previewSrc}
-                alt={filename}
-                className={cn(
-                  'object-contain',
-                  isIntrinsicLayout
-                    ? 'block h-auto max-h-none max-w-full'
-                    : inlineImageLayoutSize
-                      ? 'block h-full w-full'
-                      : // Percentage maxima cannot constrain the w-max/h-max box before load; use viewport units.
-                        'block max-h-[100vh] max-w-[100vw]'
-                )}
-                onLoad={(event) => {
-                  const img = event.currentTarget
-                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
-                  setFailedPreviewSrc(null)
-                }}
-                // Key failures by source so new images retry immediately without an effect reset.
-                onError={() => setFailedPreviewSrc(previewSrc)}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom / IMAGE_VIEWER_ZOOM_STEP)
-              }
-              disabled={inlineZoom <= MIN_IMAGE_VIEWER_ZOOM}
-              title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
-            >
-              <ZoomOut size={14} />
-            </button>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() => applyInlineZoomChange(() => 1)}
-              disabled={inlineZoom === 1}
-              title={translate('auto.components.editor.ImageViewer.6c89c73d9f', 'Reset zoom')}
-            >
-              <RotateCcw size={14} />
-            </button>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
-              onClick={() =>
-                applyInlineZoomChange((currentZoom) => currentZoom * IMAGE_VIEWER_ZOOM_STEP)
-              }
-              disabled={inlineZoom >= MAX_IMAGE_VIEWER_ZOOM}
-              title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
-            >
-              <ZoomIn size={14} />
-            </button>
-            <span className="ml-1 tabular-nums">{inlineZoomPercent}%</span>
-          </div>
-          <span className="min-w-0 truncate" title={filename}>
-            {filename}
-          </span>
-          {imageDimensions && (
-            <span>
-              {imageDimensions.width} x {imageDimensions.height}
-            </span>
-          )}
-          <span>{estimatedSize}</span>
-        </div>
-      </div>
-      <ImageViewerPopup
+  const onLoad = (event: SyntheticEvent<HTMLImageElement>): void => {
+    const { naturalWidth: width, naturalHeight: height } = event.currentTarget
+    if (width > 0 && height > 0) {
+      setLoaded({ key: loadedKey, size: { width, height } })
+    }
+    setFailedPreviewSrc(null)
+  }
+  // Key failures by source so new images retry immediately without an effect reset.
+  const onError = (): void => setFailedPreviewSrc(previewSrc)
+
+  if (isIntrinsicLayout) {
+    return (
+      <IntrinsicImage
+        previewSrc={previewSrc}
         filename={filename}
-        imageLayoutSize={popupImageLayoutSize}
-        imageLayoutStyle={popupImageLayoutStyle}
-        isOpen={isPopupOpen}
-        onOpenChange={handlePopupOpenChange}
-        previewUrl={previewSrc}
-        setSurfaceRef={setPopupSurfaceRef}
-        zoomPercent={Math.round(popupZoom * 100)}
+        imageSize={imageSize}
+        onLoad={onLoad}
+        onError={onError}
       />
-    </>
+    )
+  }
+  return (
+    <FilledImage
+      previewSrc={previewSrc}
+      filename={filename}
+      imageSize={imageSize}
+      isVector={svgMarkup !== null}
+      estimatedSize={estimatedSize}
+      onLoad={onLoad}
+      onError={onError}
+    />
+  )
+}
+
+type ImageLoadHandlers = {
+  onLoad: (event: SyntheticEvent<HTMLImageElement>) => void
+  onError: () => void
+}
+
+/** The editor pane's viewer: fit, zoom at the cursor, and drag to pan. */
+function FilledImage({
+  previewSrc,
+  filename,
+  imageSize,
+  isVector,
+  estimatedSize,
+  onLoad,
+  onError
+}: {
+  previewSrc: string
+  filename: string
+  imageSize: PanZoomSize | null
+  isVector: boolean
+  estimatedSize: string
+} & ImageLoadHandlers): JSX.Element {
+  const panZoom = usePanZoomViewport({ content: imageSize, upscale: isVector, contain: true })
+  useViewerZoomCommands(panZoom, 'pane')
+  const zoomPercent = Math.round(panZoom.scale * 100)
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="relative min-h-0 flex-1">
+        <PanZoomImageSurface
+          panZoom={panZoom}
+          src={previewSrc}
+          alt={filename}
+          content={imageSize}
+          className="absolute inset-0 bg-muted/20"
+          onLoad={onLoad}
+          onError={onError}
+        />
+      </div>
+      <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={() => panZoom.zoomBy(1 / IMAGE_VIEWER_ZOOM_STEP)}
+            disabled={!panZoom.canZoomOut}
+            title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
+          >
+            <ZoomOut size={14} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={panZoom.fit}
+            disabled={panZoom.isFitted}
+            title={translate('auto.components.editor.ImageViewer.fitToView', 'Fit to view')}
+          >
+            <RotateCcw size={14} />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
+            onClick={() => panZoom.zoomBy(IMAGE_VIEWER_ZOOM_STEP)}
+            disabled={!panZoom.canZoomIn}
+            title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
+          >
+            <ZoomIn size={14} />
+          </button>
+          <button
+            type="button"
+            className="ml-1 rounded px-1 tabular-nums hover:bg-accent hover:text-foreground disabled:hover:bg-transparent"
+            onClick={panZoom.showActualSize}
+            disabled={!imageSize || zoomPercent === 100}
+            title={translate('auto.components.editor.ImageViewer.actualSize', 'Actual size')}
+          >
+            {imageSize ? `${zoomPercent}%` : '—'}
+          </button>
+        </div>
+        <span className="min-w-0 truncate" title={filename}>
+          {filename}
+        </span>
+        {imageSize && (
+          <span>
+            {Math.round(imageSize.width)} x {Math.round(imageSize.height)}
+          </span>
+        )}
+        <span>{estimatedSize}</span>
+      </div>
+    </div>
+  )
+}
+
+/** An image at its own size inside a scrolling diff; expanding opens the pan and zoom viewer. */
+function IntrinsicImage({
+  previewSrc,
+  filename,
+  imageSize,
+  onLoad,
+  onError
+}: {
+  previewSrc: string
+  filename: string
+  imageSize: PanZoomSize | null
+} & ImageLoadHandlers): JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const label = translate('auto.components.editor.ImageViewer.expand', 'Expand image')
+  return (
+    <div className="group/image relative flex justify-center bg-muted/20 p-4">
+      <img
+        src={previewSrc}
+        alt={filename}
+        className="block h-auto max-h-none max-w-full object-contain"
+        style={imageSize ? { width: imageSize.width } : undefined}
+        onLoad={onLoad}
+        onError={onError}
+      />
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={() => setExpanded(true)}
+        className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-opacity hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none can-hover:opacity-0 can-hover:group-hover/image:opacity-100 can-hover:focus-visible:opacity-100"
+      >
+        <Maximize2 className="size-3.5" />
+      </button>
+      <PanZoomImageDialog
+        open={expanded}
+        onOpenChange={setExpanded}
+        src={previewSrc}
+        size={imageSize}
+        title={filename}
+        showTitle
+      />
+    </div>
   )
 }

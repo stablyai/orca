@@ -483,7 +483,7 @@ describe('shared agent-hook-listener', () => {
     expect(lateTool).toBeNull()
   })
 
-  // Event order captured from agy 1.4.7 running an in-process invoke_subagent (#17650).
+  // Event order captured from agy 1.4.7 (#17650); transcript contents below are synthetic, not origin evidence.
   it('keeps an Antigravity parent working until its own idle Stop when a subagent finishes', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-subagent-'))
     const writeTranscript = (name: string, request: string, reply: string): string => {

@@ -1,6 +1,6 @@
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -46,12 +46,7 @@ import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
-
-export type {
-  CodexStructuredLaunch,
-  CodexStructuredSessionAdapterDeps,
-  CodexStructuredSessionEvent
-} from './codex-structured-session-state'
+import { renameCodexProviderSession } from './codex-provider-session-rename'
 
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
@@ -89,6 +84,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.sessions.get(sessionId)?.skillReport?.read()
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
+
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) =>
+    renameCodexProviderSession({
+      ...input,
+      session: this.sessions.get(input.record.sessionId),
+      invocation: this.deps.renameInvocation
+    })
 
   permissionModeRequiresAcquisition = (): boolean => false
 
@@ -320,8 +324,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
     this.teardown.close(...args)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (...args) =>
-    this.teardown.close(...args)
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

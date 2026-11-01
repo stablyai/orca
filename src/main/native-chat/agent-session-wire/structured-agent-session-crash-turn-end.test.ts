@@ -14,7 +14,7 @@ import type {
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { describeNativeChatTurnStatus } from '../../../shared/native-chat-turn-status'
+import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
@@ -195,7 +195,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await host?.flushAllStreamedEvents()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

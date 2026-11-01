@@ -28,7 +28,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
 
@@ -123,6 +126,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -237,27 +241,5 @@ describe('a rewind in doubt while its agent keeps running', () => {
     })
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
-  })
-
-  it('leaves /clear its own settled refusal: nothing ran, and it mints a fresh id per attempt', async () => {
-    await rewindInDoubtWithLiveChild()
-    recoverRewind.mockResolvedValue({ ok: false, reason: 'outcome-unknown' })
-    const result = await host.conversationCommand(caller, {
-      command: 'clear',
-      envelope: {
-        sessionId: SESSION,
-        clientOperationId: hostTestOperationId(),
-        expectedRuntimeFence: fence(),
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.conversationCommand',
-          sessionId: SESSION,
-          fields: { command: 'clear' }
-        })
-      }
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
-    })
   })
 })

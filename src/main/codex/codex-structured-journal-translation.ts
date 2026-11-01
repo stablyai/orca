@@ -22,7 +22,7 @@ import {
   observeCodexExecutionFrame,
   readCodexBackgroundTaskFrame
 } from './codex-background-task-frames'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 export type {
   CodexJournalTranslationAdmission,
@@ -77,6 +77,7 @@ export function createCodexJournalTranslator(
     resetActivity,
     attributionFor,
     commands,
+    ...(deps.dispatchTurnOpener ? { turnOpener: deps.dispatchTurnOpener } : {}),
     ...(deps.now ? { now: deps.now } : {})
   })
   const routeThreadItem = createCodexThreadItemRouter({

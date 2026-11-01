@@ -9,24 +9,34 @@ const { rowRenders, agentRenders } = vi.hoisted(() => ({
   agentRenders: vi.fn()
 }))
 
+// Banner and chevron motion run on Reanimated and Animated, which these mocks leave out.
+vi.mock('../components/AutoHeight', () => ({
+  Presence: ({ children }: { children: unknown }) => children || null,
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
-  SectionList: ({
-    sections,
-    keyExtractor,
-    renderItem
-  }: {
-    sections: Section[]
-    keyExtractor: (item: Worktree) => string
-    renderItem: (info: { item: Worktree }) => ReactNode
-  }) =>
-    sections.flatMap((section) =>
-      section.data.map((item) =>
-        createElement(Fragment, { key: keyExtractor(item) }, renderItem({ item }))
+  Animated: {
+    SectionList: ({
+      sections,
+      keyExtractor,
+      renderItem
+    }: {
+      sections: Section[]
+      keyExtractor: (item: Worktree) => string
+      renderItem: (info: { item: Worktree }) => ReactNode
+    }) =>
+      sections.flatMap((section) =>
+        section.data.map((item) =>
+          createElement(Fragment, { key: keyExtractor(item) }, renderItem({ item }))
+        )
       )
-    ),
+  },
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
   View: 'View'
@@ -49,8 +59,6 @@ vi.mock('../components/WorktreeMetaGlyphs', () => ({
     return null
   }
 }))
-vi.mock('../components/MobileSearchField', () => ({}))
-vi.mock('../components/NewWorkspaceFab', () => ({ FAB_SIZE: 56 }))
 
 import { buildSections } from '../worktree/workspace-list-sections'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
@@ -121,12 +129,11 @@ function listProps(worktrees: Worktree[]) {
       setActionTarget: noop,
       view: { ...INITIAL_MOBILE_VIEW, groupBy: 'none' },
       search: '',
-      showSearch: false,
       worktreesLoaded: true
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list reads only the controller fields above on this connected, embedded, error-free path.
-  return { controller } as unknown as Parameters<typeof HostWorkspaceList>[0]
+  return { controller, bottomBarHeight: 0 } as unknown as Parameters<typeof HostWorkspaceList>[0]
 }
 
 describe('host list rows across polls', () => {

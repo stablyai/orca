@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { withChatTabChanges } from '../../agent-session/agent-session-tab-layout'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
 import * as historyPages from '../../../native-chat/agent-session-wire/agent-session-history-page'
 import * as subscriberFrames from '../../../native-chat/agent-session-wire/agent-session-subscriber-frame-fields'
@@ -25,6 +28,7 @@ import { STATUS_METHODS } from './status'
 import { createKeyedTrailingEdgeCoalescer } from '../../keyed-trailing-edge-coalescer'
 import { idOf, resultOf } from '../orchestration-session-caller-test-fixture'
 import { createStructuredWorkerSessionForWorktree } from './orchestration/worker/worker-topology'
+import { completeWorkerTerminalRelease } from './orchestration/worker/worker-release-completion'
 
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: async (args: { envelope: { sessionId: string } }) => {
@@ -46,7 +50,7 @@ vi.mock('./structured-agent-session-create', () => ({
 const harness = createOrchestrationRpcHarness()
 let state: ReturnType<typeof harness.setup>
 let dispatchId: string
-let dispatchIds: string[]
+let workerSessionIds: string[]
 
 function createDispatch() {
   const task = state.db.createTask({ spec: 'redrive test' })
@@ -56,7 +60,6 @@ function createDispatch() {
     taskId: task.id,
     startOptions: {}
   }).dispatch.id
-  dispatchIds.push(id)
   return id
 }
 
@@ -86,12 +89,12 @@ beforeEach(() => {
     }
   })
   setStructuredAgentSessionHost(host)
-  dispatchIds = []
+  workerSessionIds = []
   dispatchId = createDispatch()
 })
 
 afterEach(() => {
-  for (const id of dispatchIds) {
+  for (const id of workerSessionIds) {
     releaseStructuredWorkerSession(id, state.runtime)
   }
   vi.useRealTimers()
@@ -112,6 +115,7 @@ async function startWorker(
     dispatchId: workerDispatchId,
     onJournalActivity
   })
+  workerSessionIds.push(identity.sessionId)
   return { ...workerJournal(identity), onJournalActivity }
 }
 
@@ -140,6 +144,69 @@ function workerJournal(identity: StructuredWorkerIdentity) {
     journal: session.journal,
     fence: store.requireWritableRecord(identity.sessionId).lease.runtimeFence,
     append
+  }
+}
+
+async function startOwnedWorker() {
+  const { identity } = await createStructuredWorkerSessionForWorktree({
+    runtime: state.runtime,
+    worktreeId: 'workspace-1',
+    agent: 'codex',
+    dispatchId,
+    effects: []
+  })
+  workerSessionIds.push(identity.sessionId)
+  await reattach(identity.sessionId)
+  state.db.prepareStartingWorkerAuthority({
+    dispatchId,
+    ...identity,
+    hostScope: JSON.stringify(identity.hostScope),
+    setupState: 'not_applicable',
+    terminalOwnership: 'created',
+    effects: []
+  })
+  state.db.markWorkerDispatchReady(dispatchId)
+  return workerJournal(identity)
+}
+
+function claimAutomaticRelease(identity: StructuredWorkerIdentity) {
+  const worker = state.db.getDispatchContextById(dispatchId)
+  if (!worker?.task_id) {
+    throw new Error('Worker Dispatch is missing')
+  }
+  expect(
+    state.db.settleWorkerReport({
+      taskId: worker.task_id,
+      dispatchId,
+      outcome: 'succeeded',
+      result: 'Worker finished'
+    }).action
+  ).toBe('settled')
+  expect(state.db.claimDueWorkerTerminalAutoReleases(Date.now() + 120_000)).toBe(1)
+  const resource = state.db.getWorkerTerminalResourceByOwner(dispatchId)
+  if (!resource) {
+    throw new Error('Worker resource is missing')
+  }
+  expect(resource.terminal_handle).toBe(identity.handle)
+  return resource
+}
+
+function holdClose(sessionId: string) {
+  const { host } = hostTestState()
+  const lane = Promise.withResolvers<void>()
+  const entered = Promise.withResolvers<void>()
+  const held = host.collaboratorsForTests().serialize(sessionId, () => lane.promise)
+  const close = host.close
+  vi.spyOn(host, 'close').mockImplementation((...args) => {
+    entered.resolve()
+    return close(...args)
+  })
+  return {
+    entered: entered.promise,
+    release: async () => {
+      lane.resolve()
+      await held
+    }
   }
 }
 
@@ -256,7 +323,10 @@ describe('the structured redrive publication edge', () => {
       const sendMail = async (subject: string) => {
         output.mockClear()
         process.exitCode = undefined
-        await main(['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json'], root)
+        await main(
+          ['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json', '--full'],
+          root
+        )
         expect(process.exitCode, JSON.stringify(output.mock.calls)).toBeUndefined()
         const response: unknown = JSON.parse(String(output.mock.calls.at(-1)?.[0]))
         return idOf(resultOf(response).message)
@@ -302,7 +372,7 @@ describe('the structured redrive publication edge', () => {
         const cancelledId = await sendMail('Do not deliver after teardown')
         expect(state.db.getMessageById(cancelledId)?.delivered_at).toBeNull()
         await worker.journal.appendTombstone(nextTurn, { fence })
-        releaseStructuredWorkerSession(dispatchId, state.runtime)
+        releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
         disposeStream()
         notify.mockClear()
         await worker.append('after-teardown')
@@ -318,6 +388,206 @@ describe('the structured redrive publication edge', () => {
       }
     }
   )
+
+  it.each(['new-turn', 'kept-released-owner'] as const)(
+    'retains ownership, presentation and parked mail on refused automatic close: %s',
+    async (mode) => {
+      vi.useRealTimers()
+      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+      harness.cleanup()
+      let savedSession = getDefaultWorkspaceSession()
+      state = harness.setup(
+        true,
+        partialRuntimeStore({
+          getWorkspaceSession: () => savedSession,
+          getWorkspaceSessionHostIds: () => ['local'],
+          setWorkspaceSession: (next) => {
+            savedSession = next
+          }
+        })
+      )
+      vi.spyOn(state.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+      dispatchId = createDispatch()
+      const { host, store, dispatch } = hostTestState()
+      const { identity, journal } = await startOwnedWorker()
+      const tabId = host.getSessionTabId(identity.sessionId)
+      if (!tabId) {
+        throw new Error('Worker has no listed tab')
+      }
+      savedSession =
+        withChatTabChanges('local', savedSession, identity.worktreeId, [
+          {
+            open: { sessionId: identity.sessionId, agent: 'codex', tabId }
+          }
+        ]) ?? savedSession
+      await state.runtime.publishStructuredAgentSessionTab({
+        workspaceId: identity.worktreeId,
+        sessionId: identity.sessionId,
+        agent: 'codex',
+        activate: true
+      })
+      await vi.advanceTimersByTimeAsync(300)
+      const mailbox = `dispatch:${dispatchId}`
+      const { id: messageId } = state.db.insertMessage({
+        from: 'term_coord',
+        to: mailbox,
+        subject: 'Continue when available'
+      })
+      const send = vi.spyOn(host, 'send').mockRejectedValueOnce(new Error('provider unavailable'))
+      dispatch.mockClear()
+      state.runtime.notifyMessageArrived(mailbox, 'message')
+      await vi.advanceTimersByTimeAsync(300)
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      const attached = host.collaboratorsForTests().sessions.get(identity.sessionId)
+      if (mode === 'kept-released-owner') {
+        const child = attached?.child
+        if (!child?.generation) {
+          throw new Error('Worker has no acquired child')
+        }
+        await host.handleAdapterEvent({
+          type: 'ended',
+          sessionId: identity.sessionId,
+          fence: child.fence,
+          acquisitionGeneration: child.generation,
+          reason: 'Provider naturally exited',
+          cause: 'unexpected-exit'
+        })
+        expect(store.requireWritableRecord(identity.sessionId).lease).toMatchObject({
+          claimStatus: 'released',
+          deathEvidence: { kind: 'exit-observed' }
+        })
+        expect(host.collaboratorsForTests().sessions.get(identity.sessionId)?.journal).toBe(journal)
+      }
+      const lease = store.requireWritableRecord(identity.sessionId).lease
+      const resource = claimAutomaticRelease(identity)
+      const presentation = state.runtime.captureStructuredAgentSessionPresentation(
+        identity.sessionId
+      )
+      expect(presentation.raw).toEqual({
+        worktreeId: identity.worktreeId,
+        tabId: `agent-session:${identity.sessionId}`
+      })
+      expect(presentation.saved).toContainEqual({ worktreeId: identity.worktreeId, tabId })
+      const savedBefore = structuredClone(savedSession)
+      const providerStop = vi.fn<NonNullable<typeof host.deps.adapter.closeSession>>(
+        async () => true
+      )
+      host.deps.adapter.closeSession = providerStop
+      const forget = vi.spyOn(state.runtime, 'forgetStructuredSessionMail')
+      const retire = vi.spyOn(state.runtime, 'retireStructuredAgentSessionTabFromSnapshot')
+      const saved = vi.spyOn(state.runtime, 'removeCapturedStructuredSessionSavedTabs')
+      const hide = vi.spyOn(host, 'setSessionTabVisibility')
+      const admission = vi.spyOn(state.db, 'admitWorkerChatReleaseClose')
+      const observe = vi.spyOn(host, 'observeJournalPublications')
+      const create = vi.spyOn(host, 'create')
+      const heldClose = holdClose(identity.sessionId)
+      const closing = completeWorkerTerminalRelease({
+        runtime: state.runtime,
+        db: state.db,
+        dispatchId,
+        resource
+      })
+      const newTurn = { provider: 'orca', clientMessageId: 'new-turn-before-close' } as const
+      try {
+        await heldClose.entered
+        expect(state.db.getWorkerTerminalResource(resource.id)?.release_state).toBe('releasing')
+        expect(state.db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
+        if (mode === 'new-turn') {
+          await journal.appendItem(
+            newTurn,
+            { kind: 'turn', turnId: 'new-turn-before-close', state: 'running' },
+            { fence: lease.runtimeFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+          )
+          expect(state.runtime.isWorkerAgentInTurn(resource)).toBe(true)
+        } else {
+          expect(state.db.keepWorkerTerminalOpen(identity.paneKey)).toBe(1)
+        }
+      } finally {
+        await heldClose.release()
+      }
+      expect(await closing).toMatchObject({ state: 'retained', processAction: 'none' })
+      expect(admission).toHaveBeenCalledExactlyOnceWith(resource.id, expect.any(Function))
+      expect(admission.mock.results[0]?.value).toBe(false)
+      for (const effect of [providerStop, retire, saved, hide]) {
+        expect(effect).not.toHaveBeenCalled()
+      }
+      expect(host.getSessionTabId(identity.sessionId)).toBe(tabId)
+      expect(host.collaboratorsForTests().sessions.get(identity.sessionId)).toBe(attached)
+      expect(store.requireWritableRecord(identity.sessionId).lease).toEqual(lease)
+      expect(state.db.getWorkerTerminalResource(resource.id)).toMatchObject({
+        ownership_state: 'owned',
+        release_state: mode === 'new-turn' ? 'not_requested' : 'retained',
+        ...(mode === 'kept-released-owner' ? { retained_reason: 'user_kept' } : {})
+      })
+      expect(state.db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
+      expect.soft(forget).not.toHaveBeenCalled()
+      expect.soft(structuredWorkerIdentities.get(identity.handle)).toEqual(identity)
+      expect(state.runtime.captureStructuredAgentSessionPresentation(identity.sessionId)).toEqual(
+        presentation
+      )
+      expect(savedSession).toEqual(savedBefore)
+      expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+      if (mode === 'new-turn') {
+        await journal.appendTombstone(newTurn, { fence: lease.runtimeFence })
+        await vi.advanceTimersByTimeAsync(300)
+        expect(observe).not.toHaveBeenCalled()
+        expect(create).not.toHaveBeenCalled()
+        expect(send).toHaveBeenCalledTimes(2)
+        expect(dispatch).toHaveBeenCalledTimes(1)
+        expect(dispatch.mock.calls[0]![0].body).toMatchObject({
+          kind: 'message',
+          role: 'user',
+          from: { orchestration: { message: 'mail-notice', mailbox, messages: [{ messageId }] } }
+        })
+        expect(state.db.getMessageById(messageId)?.delivered_at).not.toBeNull()
+      }
+    }
+  )
+
+  it('releases bookkeeping after an admitted genuinely failed provider Stop without retiring its surface', async () => {
+    const { host, store } = hostTestState()
+    const { identity } = await startWorker()
+    await reattach(identity.sessionId)
+    const tabId = host.getSessionTabId(identity.sessionId)
+    const child = host.collaboratorsForTests().sessions.get(identity.sessionId)?.child
+    if (!child?.generation) {
+      throw new Error('Worker has no acquired child')
+    }
+    const providerStop = vi.fn(async () => false)
+    host.deps.adapter.closeSession = providerStop
+    const admit = vi.fn(() => true)
+    const forget = vi.spyOn(state.runtime, 'forgetStructuredSessionMail')
+    const hide = vi.spyOn(host, 'setSessionTabVisibility')
+    const retire = vi.spyOn(state.runtime, 'retireStructuredAgentSessionTabFromSnapshot')
+    try {
+      expect(await stopStructuredWorker(identity, state.runtime, admit)).toMatchObject({
+        stopped: false,
+        closeAttempted: true
+      })
+      expect(admit).toHaveBeenCalledOnce()
+      expect(providerStop).toHaveBeenCalledOnce()
+      expect(admit.mock.invocationCallOrder[0]).toBeLessThan(
+        providerStop.mock.invocationCallOrder[0]!
+      )
+      expect(forget).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
+      expect(structuredWorkerIdentities.get(identity.handle)).toBeNull()
+      expect(store.requireWritableRecord(identity.sessionId).lease.claimStatus).toBe('live')
+      expect(host.getSessionTabId(identity.sessionId)).toBe(tabId)
+      expect(hide).not.toHaveBeenCalled()
+      expect(retire).not.toHaveBeenCalled()
+    } finally {
+      await host.handleAdapterEvent({
+        type: 'ended',
+        sessionId: identity.sessionId,
+        fence: child.fence,
+        acquisitionGeneration: child.generation,
+        reason: 'Provider exited after failed Stop',
+        cause: 'unexpected-exit'
+      })
+    }
+  })
 
   it.each([16, 160])('bounds publication work with %i resting workers', async (count) => {
     const { host } = hostTestState()
@@ -388,8 +658,8 @@ describe('the structured redrive publication edge', () => {
       visits.get(worker.identity.sessionId)!.mockClear()
       await worker.append('pending-at-release')
     }
-    for (const id of dispatchIds) {
-      releaseStructuredWorkerSession(id, state.runtime)
+    for (const worker of workers) {
+      releaseStructuredWorkerSession(worker.identity.sessionId, state.runtime)
     }
     for (const worker of workers) {
       visits.get(worker.identity.sessionId)!.mockClear()
@@ -534,10 +804,20 @@ describe('the structured redrive publication edge', () => {
       await append('before-release')
 
       if (action === 'release') {
-        releaseStructuredWorkerSession(dispatchId, state.runtime)
+        releaseStructuredWorkerSession(identity.sessionId, state.runtime)
       } else if (action === 'stop') {
-        await stopStructuredWorker(identity, dispatchId, state.runtime)
+        await stopStructuredWorker(identity, state.runtime)
       } else {
+        // Abandon finds the worker by the authority its start recorded.
+        state.db.prepareStartingWorkerAuthority({
+          dispatchId,
+          handle: identity.handle,
+          paneKey: identity.paneKey,
+          processIncarnation: identity.processIncarnation,
+          worktreeId: identity.worktreeId,
+          effects: [],
+          setupState: 'not_applicable'
+        })
         await harness.call('orchestration.workerAbandon', { dispatch: dispatchId }, state.ctx)
       }
 

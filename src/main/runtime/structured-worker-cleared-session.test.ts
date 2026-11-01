@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 /** Worker-level reads/operations follow clear successors and the full lineage; unresolved successors remain unverifiable. */
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -17,8 +18,12 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { readStructuredWorkerTerminal } = await import('./structured-worker-terminal-read')
-const { observeStructuredSession, observeStructuredWorker, resolveStructuredWorkerAuthority } =
-  await import('./structured-worker-authority')
+const {
+  observeStructuredSession,
+  observeStructuredWorker,
+  resolveStructuredWorkerAuthority,
+  resolveStructuredWorkerIdentityForSession
+} = await import('./structured-worker-authority')
 const { structuredSessionMailTarget, structuredSessionOwnedMailboxes } =
   await import('./orchestration/structured-session-mail-target')
 const { structuredSessionMailReach } =
@@ -200,6 +205,7 @@ function installHost(): void {
       },
       logger: { warn: () => {} }
     },
+    getSessionTabId: (id: string) => (visibleTabs.includes(id) ? `agent-session:${id}` : null),
     hasSession: (id: string) => open.has(id) || children.has(id),
     getPersistedVisibleSessionTabIndex: () => ({
       present: tabIndexPresent,
@@ -328,13 +334,16 @@ function readJournal(identity: ReturnType<typeof registerWorker>, cursor?: strin
   })
 }
 
-function texts(messages: readonly { blocks: readonly unknown[] }[] | undefined): string {
-  return JSON.stringify(messages ?? [])
-}
+const texts = (messages: readonly { blocks: readonly unknown[] }[] | undefined): string =>
+  JSON.stringify(messages ?? [])
 
 let db: Db
 
 beforeEach(() => {
+  // This fixture has no raw layout; visibility and lease proof remain host-owned.
+  const p = OrcaRuntimeService.prototype
+  vi.spyOn(p, 'captureStructuredAgentSessionPresentation').mockReturnValue({ raw: null, saved: [] })
+  vi.spyOn(p, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
   structuredWorkerIdentities.clear()
   closed.length = 0
   historyAsked.length = 0
@@ -425,7 +434,7 @@ describe.each(['live', 'at-rest'] as const)(
 
     it('stops the worker by closing the successor, and can then release it', async () => {
       const identity = registerWorker()
-      const stop = await stopStructuredWorker(identity, 'ctx_1')
+      const stop = await stopStructuredWorker(identity)
       expect(closed).toEqual([SUCCESSOR])
       expect(stop.stopped).toBe(true)
       // Never-started successors have no death evidence; retiring their tab must still let release prove exit.
@@ -476,13 +485,6 @@ describe.each(['live', 'at-rest'] as const)(
       expect(sealedChildEnv(SUCCESSOR).ORCA_TERMINAL_HANDLE).toBe(identity.handle)
     })
 
-    it("records the user's takeover when they type into the successor", () => {
-      const identity = registerWorker()
-      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(SUCCESSOR)).toBe(
-        identity.paneKey
-      )
-    })
-
     it("keeps the successor running for the worker's open Dispatch", () => {
       startWorkerDispatch(db, registerWorker())
       const successorRecord = records.get(SUCCESSOR)
@@ -493,7 +495,7 @@ describe.each(['live', 'at-rest'] as const)(
       const identity = registerWorker()
       startWorkerDispatch(db, identity)
       structuredWorkerIdentities.clear()
-      expect(new RuntimeProbe().withDb(db).getStructuredWorkerPaneKeyForSession(SUCCESSOR)).toBe(
+      expect(resolveStructuredWorkerIdentityForSession(SUCCESSOR, db)?.paneKey).toBe(
         identity.paneKey
       )
       structuredWorkerIdentities.clear()
@@ -504,32 +506,18 @@ describe.each(['live', 'at-rest'] as const)(
   }
 )
 
-describe("a /clear typed into the worker's chat", () => {
-  it('is a user takeover: the report names the pre-clear session and reaches the worker', async () => {
-    installClearedWorker('at-rest')
-    const identity = registerWorker()
-    const dispatchId = startWorkerDispatch(db, identity)
+describe("Keep open on a worker's chat after a /clear", () => {
+  it.each([
+    ['the pre-clear session', 'at-rest', MINTED],
+    ['the successor session', 'live', SUCCESSOR]
+  ] as const)('reaches the worker when named by %s', async (_case, state, sessionId) => {
+    installClearedWorker(state)
+    const dispatchId = startWorkerDispatch(db, registerWorker())
     const { call } = rpcRuntime(db)
-    // The composer reports every accepted send, a handled /clear included, by the session it sent to.
-    await expect(
-      call('orchestration.workerTerminalUserInput', { sessionId: MINTED })
-    ).resolves.toEqual({ changed: 1 })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      ownership_state: 'user_owned'
+    await expect(call('orchestration.workerKeepOpen', { sessionId, keep: true })).resolves.toEqual({
+      autoClose: { kept: true }
     })
-  })
-
-  it('and so is typing after the clear, reported by the successor session', async () => {
-    installClearedWorker('live')
-    const identity = registerWorker()
-    const dispatchId = startWorkerDispatch(db, identity)
-    const { call } = rpcRuntime(db)
-    await expect(
-      call('orchestration.workerTerminalUserInput', { sessionId: SUCCESSOR })
-    ).resolves.toEqual({ changed: 1 })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      ownership_state: 'user_owned'
-    })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe('user_kept')
   })
 })
 
@@ -587,6 +575,7 @@ describe('a released session whose start was attempted stays unverifiable withou
   })
 
   afterEach(async () => {
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -648,16 +637,16 @@ describe('stopping a worker while a /clear commits', () => {
   })
 
   it('closes the successor the clear handed the worker to', async () => {
-    const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
+    const stop = await stopStructuredWorker(registerWorker())
     expect(closed).toEqual([MINTED, SUCCESSOR])
     expect(stop.stopped).toBe(true)
   })
 
-  it('keeps an earlier close on the receipt when a later one fails', async () => {
+  it('keeps provider Stop proved when the successor hide fails', async () => {
     failHideOf = SUCCESSOR
-    const stop = await stopStructuredWorker(registerWorker(), 'ctx_1')
-    expect(closed).toEqual([MINTED])
-    expect(stop).toMatchObject({ stopped: false, closeAttempted: true })
+    const stop = await stopStructuredWorker(registerWorker())
+    expect(closed).toEqual([MINTED, SUCCESSOR])
+    expect(stop).toMatchObject({ stopped: true, closeAttempted: true })
   })
 
   it('stops through worker-stop when the old session already reads exited mid-clear', async () => {
@@ -767,14 +756,14 @@ describe('a worker cleared twice', () => {
     expect(resolveStructuredWorkerAuthority(identity.handle, null)?.running.sessionId).toBe(SECOND)
     await readJournal(identity)
     expect(historyAsked).toEqual([SECOND, SUCCESSOR, MINTED])
-    await stopStructuredWorker(identity, 'ctx_1')
+    await stopStructuredWorker(identity)
     expect(closed).toEqual([SECOND])
   })
 
   it('forgets parked mail on every session of the lineage at settlement, binding or not', () => {
     const forgetStructuredSessionMail = vi.fn()
     // No binding: what a restarted runtime holds when the worker settles.
-    releaseStructuredWorkerSession('ctx_after_restart', { forgetStructuredSessionMail }, MINTED)
+    releaseStructuredWorkerSession(MINTED, { forgetStructuredSessionMail })
     expect(forgetStructuredSessionMail.mock.calls.map(([sessionId]) => sessionId)).toEqual([
       MINTED,
       SUCCESSOR,
@@ -819,7 +808,7 @@ describe('a running session that cannot be verified is refused, never declared e
     await expect(
       readStructuredWorkerTerminal({ handle: identity.handle, db: null })
     ).rejects.toMatchObject({ code })
-    const stop = await stopStructuredWorker(identity, 'ctx_1')
+    const stop = await stopStructuredWorker(identity)
     expect(stop).toMatchObject({ stopped: false, closeAttempted: false })
     expect(stop.reason).toContain('No effects were applied')
     expect(historyAsked).toEqual([])

@@ -26,6 +26,9 @@ export function useNewWorkspaceRepositories(args: {
   selectedRepo: MobileWorkspaceRepo | null
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
   loading: boolean
+  /** Set when the project list failed to load and nothing is cached to show. */
+  loadError: string | null
+  retryLoad: () => void
 } {
   const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
   const [initialRepos] = useState(() =>
@@ -35,6 +38,9 @@ export function useNewWorkspaceRepositories(args: {
   const serverRepos = useServerRepos<MobileWorkspaceRepo>(serverClients, visible)
   const [pickedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
   const [loading, setLoading] = useState(initialRepos == null)
+  // Null until a read fails; an empty string is a refusal with no reason to show.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
   // Why: trust checks count same-id rows on every host, as desktop does; only the picker filters.
   const allRepos = useMemo(
@@ -71,9 +77,14 @@ export function useNewWorkspaceRepositories(args: {
     }
     let stale = false
     setLoading(true)
+    setLoadError(null)
     void listHostRepos<MobileWorkspaceRepo>(client)
       .then((listed) => {
-        if (stale || !listed) {
+        if (stale) {
+          return
+        }
+        if (!listed) {
+          setLoadError('')
           return
         }
         setDesktopRepos(listed)
@@ -81,7 +92,11 @@ export function useNewWorkspaceRepositories(args: {
           setCachedRepos(hostId, listed)
         }
       })
-      .catch(() => undefined)
+      .catch((err: unknown) => {
+        if (!stale) {
+          setLoadError(err instanceof Error ? err.message : '')
+        }
+      })
       .finally(() => {
         if (!stale) {
           setLoading(false)
@@ -90,7 +105,16 @@ export function useNewWorkspaceRepositories(args: {
     return () => {
       stale = true
     }
-  }, [visible, client, hostId])
+  }, [visible, client, hostId, loadAttempt])
 
-  return { repos, allRepos, selectedRepo, setSelectedRepo, loading: loading && repos.length === 0 }
+  return {
+    repos,
+    allRepos,
+    selectedRepo,
+    setSelectedRepo,
+    loading: loading && repos.length === 0,
+    // Cached rows stay usable, so a failed refresh only matters when there is nothing to pick.
+    loadError: repos.length === 0 ? loadError : null,
+    retryLoad: () => setLoadAttempt((attempt) => attempt + 1)
+  }
 }

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '../../store'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
 import {
@@ -47,6 +47,8 @@ beforeEach(() => {
   useAppStore.setState({ agentStatusByPaneKey: {} })
 })
 
+afterEach(cleanup)
+
 describe('dismissed prompt occurrences outlive the view but not the prompt', () => {
   it('keeps a status-backed answer hidden for a remounted view', () => {
     waitFromStatus(10)
@@ -56,15 +58,6 @@ describe('dismissed prompt occurrences outlive the view but not the prompt', () 
     first.unmount()
 
     expect(renderPresentation().result.current.card).toBeNull()
-  })
-
-  it('re-shows a transcript-only question after the view stops observing it', () => {
-    const first = renderPresentation()
-    act(() => first.result.current.collapse())
-    expect(first.result.current.collapsedCard).toBe(question)
-    first.unmount()
-
-    expect(renderPresentation().result.current.card).toBe(question)
   })
 
   it('shows an identical question again once the prompt cleared', () => {

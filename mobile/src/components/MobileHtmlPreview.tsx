@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Code, Eye } from 'lucide-react-native'
+import { View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { MobilePreviewSourceTabs, type MobilePreviewMode } from './MobilePreviewSourceTabs'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
@@ -28,7 +27,7 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const [mode, setMode] = useState<'preview' | 'source'>('preview')
+  const [mode, setMode] = useState<MobilePreviewMode>('preview')
   // Read immutable session grants once after init, before page mounts.
   const linksOpen = useHtmlPreviewLinkGrant()
   // Only the path that rewrites pays for a parse, and only when the artifact changes.
@@ -39,35 +38,12 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
 
   return (
     <View style={styles.container}>
-      {/* Expose selected tab to assistive readers; active styling alone is silent. */}
-      <View style={styles.toolbar} accessibilityRole="tablist">
-        <Pressable
-          style={[styles.toggle, mode === 'preview' && styles.toggleActive]}
-          onPress={() => setMode('preview')}
-          accessibilityRole="tab"
-          // Set both native accessibilityState and web aria-selected: RN Web drops former without emitting latter.
-          accessibilityState={{ selected: mode === 'preview' }}
-          aria-selected={mode === 'preview'}
-          accessibilityLabel={t(
-            'components.htmlPreview.previewRenderedHtml',
-            'Preview rendered HTML'
-          )}
-        >
-          <Eye size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>{t('components.htmlPreview.preview', 'Preview')}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.toggle, mode === 'source' && styles.toggleActive]}
-          onPress={() => setMode('source')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: mode === 'source' }}
-          aria-selected={mode === 'source'}
-          accessibilityLabel={t('components.htmlPreview.viewHtmlSource', 'View HTML source')}
-        >
-          <Code size={13} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.toggleText}>{t('components.htmlPreview.source', 'Source')}</Text>
-        </Pressable>
-      </View>
+      <MobilePreviewSourceTabs
+        mode={mode}
+        onModeChange={setMode}
+        previewLabel={t('components.htmlPreview.previewRenderedHtml', 'Preview rendered HTML')}
+        sourceLabel={t('components.htmlPreview.viewHtmlSource', 'View HTML source')}
+      />
       {/* Show author’s original source; inert-link rewrite is only this shell’s rendering policy. */}
       {mode === 'preview' ? <PreviewFrame html={rendered} linksOpen={linksOpen} /> : renderSource()}
     </View>
@@ -103,28 +79,5 @@ const IFRAME_STYLE = {
 
 const styles = themedStyleSheet(() => ({
   container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
-  },
-  toggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
   frame: { flex: 1, backgroundColor: '#ffffff' }
 }))

@@ -1,4 +1,5 @@
-import type { WorkerDispatchState } from './types'
+import type { FederatedDispatchRow, WorkerDispatchState } from './types'
+import { exposeUtcTimestamp } from './db/utc-timestamp'
 
 export type WorkerTerminalOwnershipState =
   | 'owned'
@@ -20,6 +21,8 @@ export type WorkerTerminalRetainedReason =
   | 'ownership_transferred'
   | 'user_takeover'
   | 'user_requested'
+  // The user chose Keep open: neither Orca nor the coordinator closes or reuses it until they allow auto-close.
+  | 'user_kept'
   | 'no_owned_resource'
   | 'identity_unproven'
   | 'legacy_ambiguous'
@@ -49,8 +52,12 @@ export type WorkerTerminalResourceRow = {
   last_recovery_at: string | null
   archive_source: string | null
   archive_status: WorkerTerminalArchiveStatus | null
+  auto_release_at: string | null
+  auto_release_dispatch_id: string | null
   created_at: string
   updated_at: string
+  /** JSON WorkerResumeSession: the conversation a closed terminal worker reopens in. */
+  resume_session: string | null
 }
 
 // Terminal state exposed by worker-list; process accounting, never Task/Dispatch outcome.
@@ -146,10 +153,58 @@ export function decideWorkerTerminalRelease(
     case 'transferred':
       return { action: 'retained', reason: 'ownership_transferred' }
     case 'owned':
-      return { action: 'proceed' }
+      return isUserKeptWorkerTerminal(resource)
+        ? { action: 'retained', reason: 'user_kept' }
+        : { action: 'proceed' }
   }
 }
+
+export function isUserKeptWorkerTerminal(
+  resource: Pick<WorkerTerminalResourceRow, 'release_state' | 'retained_reason'>
+): boolean {
+  return resource.release_state === 'retained' && resource.retained_reason === 'user_kept'
+}
+
+export const USER_KEPT_WORKER_TERMINAL_SQL =
+  "release_state = 'retained' AND retained_reason = 'user_kept'"
 
 /** SQL form of the table's `proceed` arm, for the compare-and-set race guard on the same row. */
 export const WORKER_TERMINAL_RELEASABLE_ROW_SQL =
   "ownership_state = 'owned' AND release_state <> 'released'"
+
+// A deadline binds to the Dispatch that armed it; transfer, retain, keep or a release request void it.
+// An armed row whose deadline is NULL is suspended while its agent works again.
+export const WORKER_TERMINAL_AUTO_RELEASE_LIVE_SQL =
+  "auto_release_at IS NOT NULL AND auto_release_dispatch_id = owner_dispatch_id AND ownership_state = 'owned' AND release_state = 'not_requested'"
+
+export function liveWorkerTerminalAutoReleaseAt(
+  resource:
+    | Pick<
+        WorkerTerminalResourceRow,
+        | 'auto_release_at'
+        | 'auto_release_dispatch_id'
+        | 'owner_dispatch_id'
+        | 'ownership_state'
+        | 'release_state'
+      >
+    | null
+    | undefined
+): string | null {
+  return resource?.auto_release_at &&
+    resource.auto_release_dispatch_id === resource.owner_dispatch_id &&
+    resource.ownership_state === 'owned' &&
+    resource.release_state === 'not_requested'
+    ? exposeUtcTimestamp(resource.auto_release_at)
+    : null
+}
+
+export function liveFederatedHomeAutoReleaseAt(
+  federated:
+    | Pick<FederatedDispatchRow, 'home_auto_release_at' | 'home_auto_release_state'>
+    | null
+    | undefined
+): string | null {
+  return federated?.home_auto_release_state === 'armed'
+    ? exposeUtcTimestamp(federated.home_auto_release_at)
+    : null
+}

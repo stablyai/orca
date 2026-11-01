@@ -2,7 +2,6 @@ import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-setti
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
@@ -21,9 +20,10 @@ import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin
 import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import {
   isAllowedPluginGitUrl,
+  PLUGIN_COMMIT_PATTERN,
   type PluginLockfile
 } from '../../shared/plugins/installation/plugin-install-lockfile'
-import { trackPluginUninstalled } from '../telemetry/plugin-install-telemetry'
+import { resolvePluginGitSource } from '../plugins/installation/plugin-git-ref-resolution'
 import {
   registerPluginMarketplaceHandlers,
   type PluginMarketplaceHandlerServices
@@ -65,9 +65,16 @@ const installArgsSchema = z.discriminatedUnion('kind', [
     kind: z.literal('git'),
     url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
     // Why: installs must stay reproducible even when callers bypass renderer validation.
-    ref: z.string().trim().min(1)
+    ref: z.string().trim().min(1),
+    /** The commit the dialog showed; install fails if the ref moved since. */
+    expectedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).optional()
   })
 ])
+
+const resolveGitSourceArgsSchema = z.object({
+  url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
+  ref: z.string().trim().max(4096)
+})
 
 export function parsePluginInstallArgs(args: unknown): z.infer<typeof installArgsSchema> {
   return installArgsSchema.parse(args)
@@ -99,23 +106,8 @@ function rendererPanelOwner(webContentsId: number): string {
 export function registerPluginHandlers(
   store: Store,
   pluginService: PluginService,
-  runtime: OrcaRuntimeService | null,
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
-  // A structural delegate binds the real runtime without importing Electron into the facade.
-  if (runtime) {
-    pluginService.setRuntimeDelegate(runtime)
-  }
-
-  store.onSettingsChanged((updates) => {
-    if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
-      // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
-      void pluginService.refresh().catch((error) => {
-        console.warn('[plugins] failed to apply plugin settings change:', error)
-      })
-    }
-  })
-
   // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
   ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {
@@ -140,7 +132,7 @@ export function registerPluginHandlers(
   handleContentPacks('plugins:loadSyntax', (id) =>
     typeof id === 'string' ? contentPacks.syntaxes.load(id) : null
   )
-  ipcMain.handle('plugins:consent', async (event, args: unknown) => {
+  ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
     await applyPluginConsent({
@@ -148,21 +140,19 @@ export function registerPluginHandlers(
       pluginService,
       pluginKey: parsed.pluginKey,
       reviewedFingerprint: parsed.reviewedFingerprint,
-      decision: parsed.decision,
-      originWebContentsId: event.sender.id
+      decision: parsed.decision
     })
     return listPluginsForClients(pluginService)
   })
 
-  ipcMain.handle('plugins:setEnabled', async (event, args: unknown) => {
+  ipcMain.handle('plugins:setEnabled', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = setEnabledArgsSchema.parse(args)
     await applyPluginEnablement({
       store,
       pluginService,
       pluginKey: parsed.pluginKey,
-      enabled: parsed.enabled,
-      originWebContentsId: event.sender.id
+      enabled: parsed.enabled
     })
     return listPluginsForClients(pluginService)
   })
@@ -216,6 +206,10 @@ export function registerPluginHandlers(
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
   })
 
+  ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>
+    resolvePluginGitSource(resolveGitSourceArgsSchema.parse(args))
+  )
+
   ipcMain.handle('plugins:install', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginInstallArgs(args)
@@ -235,6 +229,7 @@ export function registerPluginHandlers(
             pluginsDir,
             url: parsed.url,
             ref: parsed.ref,
+            ...(parsed.expectedCommit ? { expectedCommit: parsed.expectedCommit } : {}),
             hostVersion,
             blockedPluginReason
           })
@@ -244,7 +239,7 @@ export function registerPluginHandlers(
     return result
   })
 
-  ipcMain.handle('plugins:remove', async (event, args: unknown) => {
+  ipcMain.handle('plugins:remove', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = removeArgsSchema.parse(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
@@ -259,7 +254,6 @@ export function registerPluginHandlers(
         pluginKey: parsed.pluginKey
       })
     )
-    trackPluginUninstalled(parsed.pluginKey, lock.plugins[parsed.pluginKey]?.source)
     const settings = store.getSettings()
     const consents = { ...settings.pluginConsents }
     delete consents[parsed.pluginKey]
@@ -272,7 +266,8 @@ export function registerPluginHandlers(
         disabledPlugins,
         ...pluginThemeSettingsAfterRemoval(settings, parsed.pluginKey)
       },
-      { notifyListeners: true, originWebContentsId: event.sender.id }
+      // Why no origin: the uninstalling window must also drop the plugin's theme choices.
+      { notifyListeners: true }
     )
     await pluginService.refresh()
     return listPluginsForClients(pluginService)
@@ -292,14 +287,13 @@ export function registerPluginHandlers(
       pluginService,
       marketplaceServices,
       () => store.getSettings(),
-      (pluginKey, reviewedFingerprint, originWebContentsId) =>
+      (pluginKey, reviewedFingerprint) =>
         applyPluginConsent({
           store,
           pluginService,
           pluginKey,
           reviewedFingerprint,
-          decision: 'approve',
-          originWebContentsId
+          decision: 'approve'
         })
     )
   }

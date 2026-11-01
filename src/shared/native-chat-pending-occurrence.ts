@@ -3,7 +3,7 @@ import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
 } from './native-chat/transcript/native-chat-image-transcript-markers'
-import { isImageRefBlock, type NativeChatMessage } from './native-chat-types'
+import { isImageRefBlock, type NativeChatMessage } from './native-chat/native-chat-types'
 
 export type NativeChatPendingOccurrence = {
   text: string

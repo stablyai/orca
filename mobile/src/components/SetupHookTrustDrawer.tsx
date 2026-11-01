@@ -18,6 +18,7 @@ type Props = {
   visible: boolean
   prompt: SetupTrustPrompt | null
   busy: boolean
+  allowAlwaysTrust?: boolean
   onRunOnce: () => void
   onAlwaysTrust: () => void
   onDontRun: () => void
@@ -29,6 +30,7 @@ export function SetupHookTrustDrawer({
   visible,
   prompt,
   busy,
+  allowAlwaysTrust = true,
   onRunOnce,
   onAlwaysTrust,
   onDontRun,
@@ -74,21 +76,46 @@ export function SetupHookTrustDrawer({
           </View>
 
           <View style={styles.trustActionGroup}>
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.trustActionRow,
+                pressed && { backgroundColor: colors.translucentFill }
+              ]}
+              disabled={busy}
+              onPress={onRunOnce}
+            >
               <Check size={16} color={colors.textPrimary} />
               <Text style={styles.trustActionText}>
                 {t('components.setupHookTrustDrawer.runHooks', 'Run hooks')}
               </Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>
-                {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
-              </Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
+            {allowAlwaysTrust ? (
+              <>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.trustActionRow,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
+                  disabled={busy}
+                  onPress={onAlwaysTrust}
+                >
+                  <Check size={16} color={colors.textPrimary} />
+                  <Text style={styles.trustActionText}>
+                    {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
+                  </Text>
+                </Pressable>
+                <View style={styles.trustActionSeparator} />
+              </>
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [
+                styles.trustActionRow,
+                pressed && { backgroundColor: colors.translucentFill }
+              ]}
+              disabled={busy}
+              onPress={onDontRun}
+            >
               <Text style={styles.trustActionText}>
                 {t('components.setupHookTrustDrawer.dontRun', "Don't run")}
               </Text>
@@ -116,8 +143,8 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.md
   },
   trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,
@@ -135,8 +162,8 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary
   },
   trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   trustActionRow: {

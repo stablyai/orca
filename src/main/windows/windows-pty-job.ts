@@ -195,11 +195,15 @@ export function __setConptyJobNativeForTests(loader?: () => ConptyNative | null)
 type UnreadyWindowsPty = IPty & { _agent?: { kill?: () => void } }
 
 // Bypass node-pty's output-deferred kill to release silent ConPTY hosts, input pipes and output workers immediately.
-export function killConptyNow(proc: IPty): void {
+export function killConptyNow(proc: IPty): boolean {
   const pane: UnreadyWindowsPty = proc
   try {
-    pane._agent?.kill?.()
+    if (!pane._agent?.kill) {
+      return false
+    }
+    pane._agent.kill()
+    return true
   } catch {
-    // Best effort; the host job still reaps the console host with the daemon.
+    return false
   }
 }

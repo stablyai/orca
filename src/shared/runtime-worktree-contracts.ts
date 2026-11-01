@@ -33,6 +33,8 @@ export type RuntimeWorktreeAgentRow = {
   prompt: string
   taskTitle: string | null
   displayName: string | null
+  /** The name desktop's compact row leads with (rename, chat or live title). Old hosts omit it. */
+  conversationName?: string
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null
@@ -202,9 +204,17 @@ export type RuntimeWorktreePsUnchangedResult = {
   snapshotId: string
 }
 
+/** Rows the caller already holds under `baseSnapshotId` arrive as their index in that catalog. */
+export type RuntimeWorktreePsRowDeltaResult = Omit<RuntimeWorktreePsResult, 'worktrees'> & {
+  snapshotId: string
+  baseSnapshotId: string
+  rowsFromBase: (number | RuntimeWorktreePsSummary)[]
+}
+
 export type RuntimeWorktreePsConditionalResult =
   | RuntimeWorktreePsSnapshotResult
   | RuntimeWorktreePsUnchangedResult
+  | RuntimeWorktreePsRowDeltaResult
 
 export type RuntimeRepoList = { repos: Repo[] }
 

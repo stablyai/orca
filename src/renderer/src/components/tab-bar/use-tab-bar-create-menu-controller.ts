@@ -1,43 +1,26 @@
+import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
+export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
+import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'
 import { useTabAgentMenuLaunch } from './QuickLaunchButton'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
+import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
-import { buildTabAgentLaunchOptionsFromRows } from './tab-agent-launch-options'
+import { buildAgentPickerLaunchOptions } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
-import {
-  buildWindowsShellMenuEntries,
-  type WindowsShellMenuEntry
-} from './tab-bar-windows-shell-options'
+import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
 import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
 } from './use-tab-bar-runtime-model'
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
-export type TabBarCreateMenuController = {
-  agentMenu: NewTabAgentMenuModel
-  agentLaunchOptions: TabAgentLaunchOption[]
-  launchAgentRow: ReturnType<typeof useTabAgentMenuLaunch>
-  newTabMenuOpen: boolean
-  setNewTabMenuOpen: (open: boolean) => void
-  setCreateMenuQuery: (query: string) => void
-  createMenuOptions: TabCreateMenuOption[]
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
-  handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (option: TabAgentLaunchOption) => void
-  runPendingNewTabMenuFocusAfterClose: () => void
-  clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
-  queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
-  queueTerminalTabFocusAfterNewTabMenuClose: (tabId: string) => void
-  queueFocusAfterNewTabMenuClose: (focus: () => void) => void
-  showStaticCreateMenuItems: boolean
-}
 export function useTabBarCreateMenuController({
   worktreeId,
   resolvedGroupId,
@@ -92,9 +75,15 @@ export function useTabBarCreateMenuController({
     agentDetectionTarget,
     { wakeOnOpen: true }
   )
+  const [selectedPickerAgent, selectPickerAgent] = useState<AgentPickerEntry['agent']>()
+  const agentPickerEntries = useAgentLaunchPickerInventory(
+    worktreeId,
+    agentMenu,
+    newTabMenuOpen && showAgentLaunchItems,
+    selectedPickerAgent
+  )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
-  const settledAgentRows = agentMenu.state === 'settled' ? agentMenu.rows : []
-  const agentLaunchOptions = buildTabAgentLaunchOptionsFromRows(settledAgentRows, commandOverrides)
+  const agentLaunchOptions = buildAgentPickerLaunchOptions(agentPickerEntries, commandOverrides)
   const pendingNewTabMenuFocusRef = useRef<{ focus: () => void; synchronous?: true } | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -240,7 +229,11 @@ export function useTabBarCreateMenuController({
   })
   const launchAgentFromNewTabEntry = (option: TabAgentLaunchOption): void => {
     if (option.row) {
-      launchAgentRow(option.row)
+      if (option.setup) {
+        launchAgentRow(option.row, option.setup, option.pickerEntry)
+      } else {
+        launchAgentRow(option.row)
+      }
     }
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
@@ -285,6 +278,8 @@ export function useTabBarCreateMenuController({
   return {
     agentMenu,
     agentLaunchOptions,
+    agentPickerEntries,
+    selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,
     setNewTabMenuOpen,

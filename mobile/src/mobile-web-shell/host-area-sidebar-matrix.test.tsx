@@ -81,6 +81,7 @@ vi.mock('../theme/mobile-theme', async (original) => ({
   colors: {}
 }))
 vi.mock('../storage/preferences', () => ({
+  HOST_SIDEBAR_DEFAULT_WIDTH: 320,
   HOST_SIDEBAR_MAX_WIDTH: 480,
   HOST_SIDEBAR_MIN_WIDTH: 240,
   loadHostSidebarWidth: async () => 320,
@@ -173,7 +174,7 @@ function pageRoutes(page: Page): MobileWebPageRoute[] | null {
     {
       pathname: '/h/[hostId]',
       grants: ['navigate'],
-      ...(page === 'declared' ? { canOwnHostArea: true } : {})
+      ...(page === 'declared' ? { canOwnHostArea: true, canOwnHostAreaAcrossLayouts: true } : {})
     },
     { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
   ]
@@ -346,11 +347,11 @@ describe('the page sidebar rule', () => {
 })
 
 describe('a phone', () => {
-  it('reports nothing to the layout from a served host route', async () => {
+  it('reports host ownership without drawing a sidebar on a narrow viewport', async () => {
     const hostSession = sessionFor('declared', HOST, false)
     expect(hostSession.state.kind).toBe('activating')
     env.reports.length = 0
     expect(await sidebarsIn('native', PHONE, { hostSession })).toBe(0)
-    expect(env.reports).toEqual([])
+    expect(env.reports).toEqual([true, false])
   })
 })

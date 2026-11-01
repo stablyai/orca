@@ -25,7 +25,13 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('lucide-react-native', () => ({ ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
+  ChevronRight: 'ChevronRight',
+  CircleAlert: 'Icon',
+  GitCommitHorizontal: 'Icon',
+  WifiOff: 'Icon'
+}))
 const transport = vi.hoisted(
   (): { forceReconnect: ((hostId: string) => Promise<void>) | null } => ({
     forceReconnect: () => Promise.resolve()
@@ -259,7 +265,9 @@ describe('MobileGitHistoryList', () => {
     function retryControls() {
       return (
         renderer?.root.findAll(
-          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Retry'
+          (node) =>
+            String(node.type) === 'Pressable' &&
+            node.findAll((child) => child.props.children === 'Reconnect').length > 0
         ) ?? []
       )
     }
@@ -278,7 +286,7 @@ describe('MobileGitHistoryList', () => {
     it('is absent on the page, where nothing can re-dial', async () => {
       transport.forceReconnect = null
       await renderUnreachable()
-      expect(tree()).toContain('Waiting for desktop...')
+      expect(tree()).toContain('Waiting for desktop')
       expect(retryControls()).toHaveLength(0)
     })
 

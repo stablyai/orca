@@ -2,7 +2,7 @@
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { canReplaceBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import { isBackgroundTaskBlock } from '../../../shared/native-chat-types'
+import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 
 export function relightsProviderTimelineBackgroundTask(
   held: AgentJournalItemBody | null,

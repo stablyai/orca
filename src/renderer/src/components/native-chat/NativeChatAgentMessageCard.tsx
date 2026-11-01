@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentMessageHeading,
@@ -28,8 +28,10 @@ import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
 
-function heading(from: AgentMessageSource): string {
-  switch (agentMessageHeading(from)) {
+function heading(from: AgentMessageSource, agentStart: boolean): string {
+  switch (agentMessageHeading(from, agentStart)) {
+    case 'started':
+      return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
     case 'task':
       return translate(
         'components.native-chat.agentMessage.taskFromCoordinator',
@@ -93,11 +95,20 @@ export function NativeChatAgentMessageCard({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>{heading(from)}</span>
-          <NativeChatMessageTimestamp
-            timestamp={message.timestamp}
-            className="text-muted-foreground"
-          />
+          <span>{heading(from, message.agentStart === true)}</span>
+          <div className="flex items-center gap-1">
+            {agentMessageCanCopy(text) ? (
+              // Why: -my-1 keeps the 24px button inside the text-xs header line, so copy costs no row of its own.
+              <NativeChatCopyButton
+                text={text}
+                className="-my-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
+              />
+            ) : null}
+            <NativeChatMessageTimestamp
+              timestamp={message.timestamp}
+              className="text-muted-foreground"
+            />
+          </div>
         </div>
         <NativeChatAgentMessageSenders from={from} chatWorktreeId={worktreeId} target={target} />
         <NativeChatImageAttachments
@@ -129,35 +140,25 @@ export function NativeChatAgentMessageCard({
             allowFileUriLinks={allowFileUriLinks}
           />
         </div>
-        <div className="flex items-center justify-between">
-          {overflows ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              aria-expanded={disclosure.open}
-              aria-controls={clipId}
-              onClick={() => {
-                disclosure.setOpen(!disclosure.open)
-                if (disclosure.open) {
-                  requestAnimationFrame(onRefolded)
-                }
-              }}
-            >
-              {agentMessageFoldLabel(disclosure.open) === 'expanded'
-                ? translate('components.native-chat.userMessage.showLess', 'Show less')
-                : translate('components.native-chat.agentMessage.showMore', 'Show more')}
-            </Button>
-          ) : (
-            <span />
-          )}
-          {agentMessageCanCopy(text) ? (
-            <NativeChatCopyButton
-              text={text}
-              className="transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
-            />
-          ) : null}
-        </div>
+        {overflows ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            aria-expanded={disclosure.open}
+            aria-controls={clipId}
+            onClick={() => {
+              disclosure.setOpen(!disclosure.open)
+              if (disclosure.open) {
+                requestAnimationFrame(onRefolded)
+              }
+            }}
+          >
+            {agentMessageFoldLabel(disclosure.open) === 'expanded'
+              ? translate('components.native-chat.userMessage.showLess', 'Show less')
+              : translate('components.native-chat.agentMessage.showMore', 'Show more')}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

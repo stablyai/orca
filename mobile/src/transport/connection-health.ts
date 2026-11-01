@@ -7,6 +7,14 @@ import type { ConnectionState } from './types'
 // Absorb brief wake/network failures before warning; keep unreachable aligned with the retry loop’s GIVE_UP_AFTER_ATTEMPTS.
 // After a prior success, stale time distinguishes a changed/unreachable host from a transient drop.
 const WARNING_ATTEMPTS = 3
+
+/** A redial still inside the attempts the UI calls connecting, before it warns the host is unreachable. */
+export function isEarlyConnectRetry(
+  state: ConnectionState,
+  readReconnectAttempts: () => number
+): boolean {
+  return state === 'reconnecting' && readReconnectAttempts() < WARNING_ATTEMPTS
+}
 const UNREACHABLE_ATTEMPTS = 12
 const STALE_SINCE_LAST_CONNECT_MS = 60_000
 

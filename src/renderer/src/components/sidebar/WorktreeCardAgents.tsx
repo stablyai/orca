@@ -10,6 +10,7 @@ import {
   selectSendTargetInputs
 } from './worktree-card-send-target-inputs'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
@@ -19,7 +20,6 @@ import {
   CompactAgentSummaryButton
 } from './worktree-card-compact-agents'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
-import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealCompactAgentCard } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
@@ -69,8 +69,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   className
 }: BodyProps) {
   const languageRevision = useUiLanguageRevision()
-  const agentActivityDisplayMode =
-    useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+  const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
@@ -221,6 +220,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       <React.Fragment key={agent.paneKey}>
         <DashboardAgentRow
           agent={agent}
+          showModel={showAgentModels}
           onDismiss={handleDismissAgent}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
@@ -281,6 +281,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       <div key={agent.paneKey} className="min-w-0">
         <CompactAgentRow
           agent={agent}
+          showModel={showAgentModels}
           now={now}
           parentConversationDescription={
             opensClaudeParentConversation(agent)

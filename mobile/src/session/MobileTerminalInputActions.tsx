@@ -2,6 +2,10 @@ import { ActivityIndicator, Pressable, View, type StyleProp, type ViewStyle } fr
 import { ImagePlus, Mic } from 'lucide-react-native'
 import type { MobileDictationMeter } from '../hooks/mobile-dictation-meter'
 import { colors } from '../theme/mobile-theme'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles
+} from '../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
@@ -13,9 +17,8 @@ type DictationState = {
   readonly isProcessing: boolean
 }
 
-type MobileTerminalInputActionsProps = {
+type MobileTerminalDictationButtonProps = {
   readonly canSend: boolean
-  readonly isAttaching: boolean
   readonly dictation: DictationState
   readonly dictationMode: string | undefined
   readonly dictationEnabled?: boolean
@@ -24,17 +27,77 @@ type MobileTerminalInputActionsProps = {
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
-  readonly onAttachImage: () => void
-  readonly onAttachFile: () => void
   readonly onDictationToggle: () => void
   readonly onDictationPressIn: () => void
   readonly onDictationPressOut: () => void
   readonly onDictationCancel: () => void
 }
 
-export function MobileTerminalInputActions({
+type MobileTerminalAttachButtonProps = {
+  readonly canSend: boolean
+  readonly isAttaching: boolean
+  readonly buttonStyle: StyleProp<ViewStyle>
+  readonly disabledButtonStyle: StyleProp<ViewStyle>
+  readonly onAttachImage: () => void
+  readonly onAttachFile: () => void
+}
+
+type MobileTerminalInputActionsProps = MobileTerminalDictationButtonProps &
+  MobileTerminalAttachButtonProps
+
+export function MobileTerminalInputActions(props: MobileTerminalInputActionsProps) {
+  return (
+    <>
+      <MobileTerminalAttachButton {...props} />
+      <MobileTerminalDictationButton {...props} />
+    </>
+  )
+}
+
+export function MobileTerminalAttachButton({
   canSend,
   isAttaching,
+  buttonStyle,
+  disabledButtonStyle,
+  onAttachImage,
+  onAttachFile
+}: MobileTerminalAttachButtonProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        buttonStyle,
+        pressed && composerInputStyles.pressed,
+        (!canSend || isAttaching) && disabledButtonStyle
+      ]}
+      disabled={!canSend || isAttaching}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+      // Upload through host RPC so remote/SSH terminals attach images the same way as local terminals.
+      onPress={onAttachImage}
+      onLongPress={onAttachFile}
+      delayLongPress={350}
+      accessibilityLabel={
+        isAttaching
+          ? t('session.terminalInputActions.sendingImage', 'Sending image')
+          : t('session.terminalInputActions.attachPhoto', 'Attach a photo')
+      }
+      accessibilityHint={t(
+        'session.terminalInputActions.attachFileHint',
+        'Long press to attach a file instead'
+      )}
+    >
+      {isAttaching ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : (
+        <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+      )}
+    </Pressable>
+  )
+}
+
+export function MobileTerminalDictationButton({
+  canSend,
   dictation,
   dictationMode,
   dictationEnabled = true,
@@ -42,26 +105,29 @@ export function MobileTerminalInputActions({
   buttonStyle,
   activeButtonStyle,
   disabledButtonStyle,
-  onAttachImage,
-  onAttachFile,
   onDictationToggle,
   onDictationPressIn,
   onDictationPressOut,
   onDictationCancel
-}: MobileTerminalInputActionsProps) {
+}: MobileTerminalDictationButtonProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  if (!dictationEnabled) {
+    return null
+  }
   const dictationActive = dictation.isStarting || dictation.isRecording
   // Dictation outlives a reconnect, so its stop and cancel must too; only starting needs the connection.
   const micDisabled = !canSend && !dictationActive && !dictation.isProcessing
   const mic = (
     <Pressable
-      style={[
+      style={({ pressed }) => [
         buttonStyle,
         dictationActive && activeButtonStyle,
+        pressed && composerInputStyles.pressed,
         micDisabled && disabledButtonStyle
       ]}
       disabled={micDisabled}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
       onPress={dictationMode === 'toggle' ? onDictationToggle : undefined}
       onPressIn={dictationMode === 'hold' ? onDictationPressIn : undefined}
       onPressOut={dictationMode === 'hold' ? onDictationPressOut : undefined}
@@ -100,42 +166,13 @@ export function MobileTerminalInputActions({
       )}
     </Pressable>
   )
-  return (
-    <>
-      <Pressable
-        style={[buttonStyle, (!canSend || isAttaching) && disabledButtonStyle]}
-        disabled={!canSend || isAttaching}
-        // Upload through host RPC so remote/SSH terminals attach images the same way as local terminals.
-        onPress={onAttachImage}
-        onLongPress={onAttachFile}
-        delayLongPress={350}
-        accessibilityLabel={
-          isAttaching
-            ? t('session.terminalInputActions.sendingImage', 'Sending image')
-            : t('session.terminalInputActions.attachPhoto', 'Attach a photo')
-        }
-        accessibilityHint={t(
-          'session.terminalInputActions.attachFileHint',
-          'Long press to attach a file instead'
-        )}
-      >
-        {isAttaching ? (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        ) : (
-          <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
-        )}
-      </Pressable>
-      {dictationEnabled ? (
-        meterHalo ? (
-          // Always wrapped, so the mic never remounts under a held press.
-          <View>
-            {dictation.isRecording ? <MobileDictationHalo meter={meterHalo} size={34} /> : null}
-            {mic}
-          </View>
-        ) : (
-          mic
-        )
-      ) : null}
-    </>
+  return meterHalo ? (
+    // Always wrapped, so the mic never remounts under a held press.
+    <View>
+      {dictation.isRecording ? <MobileDictationHalo meter={meterHalo} size={34} /> : null}
+      {mic}
+    </View>
+  ) : (
+    mic
   )
 }

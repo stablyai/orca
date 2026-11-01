@@ -31,6 +31,9 @@ export function aiVaultSearchHitToSession(
     subagentTranscriptCount: 0,
     resumeCommand: hit.resumeCommand ?? '',
     subagent: null,
+    ...(hit.accountHome !== undefined
+      ? { accountHome: hit.accountHome, accountWslDistro: hit.accountWslDistro }
+      : {}),
     ...(hit.structuredSession ? { structuredSession: hit.structuredSession } : {})
   }
 }

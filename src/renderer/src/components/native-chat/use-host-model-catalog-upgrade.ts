@@ -5,22 +5,22 @@ import {
 } from '../../../../shared/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import type { StructuredAgentSessionOptionRecord } from '../../../../shared/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionRecord } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../../shared/host-model-listing-waits'
 
-/** Warm visible chats from the host catalog; share one listing wait per chat while built-ins stay usable. Recheck held unavailability on agent changes, focus and turn edges. */
+/** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */
 export function useHostModelCatalogUpgrade(args: {
   agent: AgentType
   sessionId: string
@@ -140,10 +140,10 @@ export function useHostModelCatalogUpgrade(args: {
       )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
-      // The host already answered that its listing is running: the built-in list stands meanwhile.
+      // A joined listing is still pending, so it cannot settle the seed as installed inventory.
       updateOptionState((current) =>
         current.record === activeOptionRecordRef.current
-          ? settleStructuredAgentSessionBuiltinCatalog(current)
+          ? settleStructuredAgentSessionBuiltinCatalog(current, true)
           : current
       )
       waitForListing()

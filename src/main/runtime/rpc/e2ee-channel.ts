@@ -1,5 +1,6 @@
 // Keep E2EE framing outside transport-independent plaintext RPC handlers.
 import type { WebSocket } from 'ws'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../shared/paired-e2ee-handshake-deadline'
 import { deriveSharedKey, encrypt, decrypt, decryptBytes } from '../../../shared/e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
@@ -13,25 +14,23 @@ import {
   describeMobileE2EEAuthFailure,
   type DeviceKeyResolution
 } from './mobile-e2ee-auth-validation'
-import { isMobileE2EEOutboundItemWithinLimit } from './mobile-e2ee-outbound-admission'
+import {
+  isMobileE2EEOutboundItemWithinLimit,
+  trackMobileE2EEOutboundBudgetClose,
+  type MobileE2EEOutboundBudgetEmitter
+} from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
 import { createLegacyReplySenders } from './mobile-e2ee-legacy-reply-senders'
-import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import type {
   RpcBinarySendOptions,
   RpcBinarySendResult,
   RpcBinarySender
 } from './rpc-binary-sender'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
-import type { EventProps } from '../../../shared/telemetry-events'
-import { track } from '../../telemetry/client'
 import type { DevicePrincipal } from '../device-principal'
 
-type OutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']
-
-const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
 export type E2EEChannelOptions = {
@@ -85,7 +84,7 @@ export class E2EEChannel {
     return this.v2Session?.transcriptHashB64 ?? null
   }
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
-  clientCapabilities: readonly RuntimeCapability[] = []
+  readonly capabilitySource = new RuntimeClientCapabilities()
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -99,12 +98,13 @@ export class E2EEChannel {
       ws,
       () => Boolean(this.sharedKey),
       () => this.closeForOutboundBudget('queue'),
+      this.capabilitySource,
       options.outboundMemoryBudget
     )
 
     this.handshakeTimer = setTimeout(() => {
       this.onError(4002, 'E2EE handshake timeout')
-    }, HANDSHAKE_TIMEOUT_MS)
+    }, PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   onMessage(
@@ -257,7 +257,7 @@ export class E2EEChannel {
     }
     const authenticatedDevice = authentication.device
 
-    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.clientCapabilities)
+    this.capabilitySource.replace(authentication.clientCapabilities)
     this.deviceToken = authenticatedDevice.deviceToken ?? null
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'
@@ -311,12 +311,8 @@ export class E2EEChannel {
   }
 
   // Both budget closes kill the remote session: size identifies an oversized producer, queue a backed-up link.
-  private closeForOutboundBudget(emitter: OutboundBudgetEmitter): void {
-    try {
-      track('remote_outbound_budget_close', { emitter })
-    } catch {
-      // Telemetry is best-effort; closing the unsafe socket remains authoritative.
-    }
+  private closeForOutboundBudget(emitter: MobileE2EEOutboundBudgetEmitter): void {
+    trackMobileE2EEOutboundBudgetClose(emitter)
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 
@@ -330,6 +326,7 @@ export class E2EEChannel {
   }
 
   destroy(): void {
+    this.capabilitySource.dispose()
     if (this.handshakeTimer) {
       clearTimeout(this.handshakeTimer)
       this.handshakeTimer = null

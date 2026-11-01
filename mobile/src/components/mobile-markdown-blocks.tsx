@@ -23,6 +23,7 @@ import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -34,6 +35,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
   listText: StyleProp<TextStyle>
+  listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
@@ -70,7 +72,7 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText style={ctx.listMarker}>
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
@@ -164,7 +166,7 @@ function renderBlock(
         return (
           <Pressable
             key={key}
-            style={styles.imageFrame}
+            style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
             onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
             onLongPress={ctx.rowLongPress}
           >
@@ -230,9 +232,7 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
-            {`[${node.label ?? node.identifier}]`}
-          </NativeText>
+          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>

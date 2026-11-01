@@ -5,7 +5,7 @@ import {
   createNativeChatMerger,
   replaceList
 } from './native-chat-merge'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 
 function row(id: string, overrides: Partial<NativeChatMessage> = {}): NativeChatMessage {
   return {

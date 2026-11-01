@@ -5,7 +5,7 @@ import type { AgentSessionPromptResponse } from '../../../shared/agent-session-q
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
@@ -106,7 +106,13 @@ export type AcpDialect = {
     params: unknown
   ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  modelEfforts?(model: ModelInfo): {
+    efforts: AgentSessionOptionChoice[]
+    defaultEffort?: string
+    declaredDefaultEffort?: string | null
+  }
+  /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
+  clampsUnlistedEffort?: true
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined

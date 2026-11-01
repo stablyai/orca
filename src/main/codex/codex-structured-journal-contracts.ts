@@ -1,9 +1,12 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
+import type {
+  CodexDispatchEchoes,
+  CodexDispatchRequestOrigin
+} from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
 import type { CodexThreadItem } from './codex-structured-item-translation'
 import type { CodexHelperName } from './codex-collab-agent-item-translation'
@@ -42,6 +45,8 @@ export type CodexJournalTranslatorDeps = {
   primaryThreadId?: () => string | null
   /** Submission origin for a dispatch still armed. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** Armed send whose turn/start reply named this turn. */
+  dispatchTurnOpener?: CodexDispatchEchoes['turnOpener']
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number

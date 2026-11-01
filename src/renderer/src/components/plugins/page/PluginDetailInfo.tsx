@@ -6,8 +6,17 @@ import { PluginCategoryBadges } from '../list/PluginCategoryBadge'
 import { pluginFilterKinds } from '../list/plugin-list-filter'
 import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
+import {
+  formatPluginInstallCount,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
+import {
+  pluginListingRepositoryUrl,
+  pluginReadmePageUrl,
+  pluginRepositoryPageUrl
+} from '../../../../../shared/plugins/catalog/plugin-repository-link'
 
 function InfoRow({
   label,
@@ -32,9 +41,8 @@ function InfoRow({
   )
 }
 
-function LinkButton({ url, label }: { url: string | null; label: string }) {
-  // Why: catalog and manifest links are untrusted; only open web links.
-  if (!url?.startsWith('https://')) {
+function ExternalLink({ url, label }: { url: string | null; label: string }) {
+  if (!url) {
     return null
   }
   return (
@@ -63,14 +71,24 @@ export function PluginDetailInfo({
   const rollbackVersion = usePluginRollbackVersion(
     plugin?.source?.kind === 'marketplace' ? plugin.pluginKey : null
   )
+  const installCount = usePluginInstallCount(entry)
   const updated = formatPluginReleaseDate(listing?.updatedAt)
   const license = plugin?.license ?? listing?.license
-  const repository =
-    plugin?.repository ??
-    listing?.repository ??
-    listing?.source.url ??
-    (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
-  const homepage = plugin?.homepage ?? listing?.homepage ?? null
+  // Why never the manifest's `repository`/`homepage`: author text; Orca rebuilds every link.
+  const sourceUrl = listing
+    ? pluginListingRepositoryUrl(listing)
+    : plugin?.source?.kind === 'git'
+      ? plugin.source.reference
+      : null
+  const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
+  const readme =
+    listing?.release && sourceUrl
+      ? pluginReadmePageUrl({
+          gitUrl: sourceUrl,
+          commit: listing.release.commit,
+          path: listing.source.path
+        })
+      : null
 
   return (
     <aside className="mt-6">
@@ -102,6 +120,12 @@ export function PluginDetailInfo({
             value={updated}
           />
         ) : null}
+        {installCount !== null ? (
+          <InfoRow
+            label={translate('auto.components.settings.PluginDetailInfo.installs', 'Installs')}
+            value={formatPluginInstallCount(installCount)}
+          />
+        ) : null}
         {entry.minimumOrca ? (
           <InfoRow
             label={translate('auto.components.settings.PluginDetailPage.requires', 'Requires')}
@@ -131,13 +155,17 @@ export function PluginDetailInfo({
         />
       </dl>
       <div className="mt-2 flex flex-col items-start">
-        <LinkButton
+        <ExternalLink
           url={repository}
           label={translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
         />
-        <LinkButton
-          url={homepage}
-          label={translate('auto.components.settings.PluginDetailInfo.homepage', 'Homepage')}
+        <ExternalLink
+          url={readme}
+          label={translate(
+            'auto.components.settings.PluginDetailInfo.readme',
+            'Read the README on {{value0}}',
+            { value0: readme?.startsWith('https://gitlab.com/') ? 'GitLab' : 'GitHub' }
+          )}
         />
       </div>
     </aside>

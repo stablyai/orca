@@ -56,8 +56,20 @@ const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
 
 async function startupTerminalOptions(startupPaneKey?: string) {
   const { createTerminal, ports } = createPorts()
+  const observe = vi.fn()
+  const followup = { agent: 'codex' as const, prompt: 'task' }
+  const terminal = {
+    handle: 'term-1',
+    worktreeId: worktree.id,
+    title: null,
+    ptyId: 'pty-startup',
+    incarnationId: 'inc-startup',
+    isReattach: true as const
+  }
+  createTerminal.mockResolvedValueOnce(terminal)
   await startRuntimeLocalWorktreeTerminals({
     request: {
+      onStartupTerminalCreated: observe,
       repoSelector: `id:${repo.id}`,
       name: worktree.displayName,
       ...(startupPaneKey ? { startupPaneKey } : {})
@@ -66,8 +78,11 @@ async function startupTerminalOptions(startupPaneKey?: string) {
     worktree,
     createdWithAgent: 'codex',
     startup: { command: 'codex' },
+    startupFollowup: followup,
     ports
   })
+  expect(observe).toHaveBeenCalledExactlyOnceWith(terminal)
+  expect(ports.sendFollowup).toHaveBeenCalledExactlyOnceWith(terminal.handle, followup, terminal)
   return createTerminal.mock.calls[0]?.[1] ?? {}
 }
 
@@ -239,5 +254,25 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
       undefined,
       undefined
     )
+  })
+})
+
+describe('startRuntimeLocalWorktreeTerminals held startup terminal (E9)', () => {
+  it('names the stopped WSL distro in the warning, not the raw hold code', async () => {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockRejectedValueOnce(new Error('terminal_held_wsl_distro_stopped:Ubuntu'))
+
+    const result = await startRuntimeLocalWorktreeTerminals({
+      request: { repoSelector: `id:${repo.id}`, name: worktree.displayName },
+      repo,
+      worktree,
+      startup: { command: 'codex' },
+      ports
+    })
+
+    expect(result.warning).toBe(
+      "Failed to create the startup terminal for /worktree: The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    )
+    expect(result.warning).not.toContain('terminal_held_wsl_distro')
   })
 })

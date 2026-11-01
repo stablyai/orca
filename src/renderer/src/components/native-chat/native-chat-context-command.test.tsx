@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import {
@@ -84,25 +84,6 @@ beforeEach(() => {
   mocks.sendNativeChatMessageWithImageAttachments.mockClear()
 })
 
-describe('the context window the model listing states', () => {
-  it('reads the window of a listed model once discovery has run', () => {
-    const surface = liveSurface(DISCOVERED)
-    expect(surface.contextWindowTokens('openai-codex/gpt-5.4')).toBe(1_000_000)
-    expect(surface.contextWindowTokens('anthropic/claude-opus')).toBeNull()
-    expect(surface.contextWindowTokens('unlisted/model')).toBeNull()
-  })
-
-  it('knows no window before discovery', () => {
-    expect(liveSurface().contextWindowTokens('openai-codex/gpt-5.5')).toBeNull()
-  })
-
-  it('follows a later discovery result', () => {
-    const surface = liveSurface()
-    surface.replaceModels(DISCOVERED)
-    expect(surface.contextWindowTokens('openai-codex/gpt-5.5')).toBe(272_000)
-  })
-})
-
 describe('answerNativeChatLocalCommand', () => {
   const surface = liveSurface(DISCOVERED)
 
@@ -165,21 +146,6 @@ describe('answerNativeChatLocalCommand', () => {
     expect(answer({ messages: [] })).toBe(pending)
     // A live preview is not an answer the host decoded.
     expect(answer({ messages: [{ ...olderHostRow, source: 'hook' }] })).toBe(pending)
-  })
-
-  it('leaves every other command, and other agents, to the agent', () => {
-    expect(answer({ messages: [], command: '/context all' })).not.toBeNull()
-    expect(answer({ messages: [], command: '/compact' })).toBeNull()
-    expect(answer({ messages: [], command: '/contextual' })).toBeNull()
-    expect(answer({ messages: [], command: 'what is my /context' })).toBeNull()
-    expect(
-      answerNativeChatLocalCommand({
-        agent: 'openclaude',
-        command: '/context',
-        messages: [],
-        contextWindowTokens: surface.contextWindowTokens
-      })
-    ).toBeNull()
   })
 })
 

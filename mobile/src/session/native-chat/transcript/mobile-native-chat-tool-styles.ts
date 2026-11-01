@@ -92,7 +92,7 @@ export const toolStyles = themedStyleSheet(() => ({
     gap: 6
   },
   codeBox: {
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,

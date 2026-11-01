@@ -1,3 +1,14 @@
+import {
+  hostTestCatalogReadOperation,
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
+  hostTestSendParams as sendParams,
+  hostTestCancelParams,
+  hostTestSubmission,
+  resetHostTestOperationIds
+} from './structured-agent-session-host-test-data'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +17,10 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput,
@@ -17,16 +31,6 @@ import {
   NO_STRUCTURED_AGENTS
 } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import {
-  HOST_TEST_NOW as NOW,
-  HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as THREAD,
-  hostTestAttachParams,
-  hostTestSendParams as sendParams,
-  hostTestCancelParams,
-  hostTestSubmission,
-  resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 
@@ -101,6 +105,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
       setOption
     },
     modelCatalog: {
+      captureRead: hostTestCatalogReadOperation,
       snapshot: vi.fn(() => ({ origin: 'unknown' as const })),
       demand: vi.fn(async () => {}),
       prepareSaved: vi.fn(async () => ({ origin: 'unknown' as const })),
@@ -108,6 +113,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
       retireContext: vi.fn(),
       peek: () => null,
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
+
       recordLiveListing,
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),
@@ -164,6 +170,7 @@ export function registerStartupAttemptHostTests(): void {
   afterEach(async () => {
     try {
       await host.flushAllStreamedEvents()
+      await closeTestJournalHostDatabases()
       await rm(root, { recursive: true, force: true })
     } finally {
       vi.useRealTimers()

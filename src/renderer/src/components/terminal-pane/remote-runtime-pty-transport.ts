@@ -59,6 +59,7 @@ import type {
   PtyTransportRecoveryState
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-output-processor'
+import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
 import {
@@ -700,7 +701,7 @@ export function createRemoteRuntimePtyTransport(
       surfacedErrorMessages.delete(oldest)
     }
     surfacedErrorMessages.add(message)
-    storedCallbacks.onError?.(message)
+    storedCallbacks.onError?.(localizeWslDistroHoldText(message))
   }
 
   function markRecoveryHealthy(result?: PtyConnectResult): void {
@@ -3927,6 +3928,14 @@ export function createRemoteRuntimePtyTransport(
     // Why: dedup exists to stop one outage spamming the surface; once the user dismisses it, the next occurrence is new information again.
     notifyErrorSurfaceDismissed() {
       surfacedErrorMessages.clear()
+    },
+
+    reopenAfterHostReturned() {
+      // Why only an idle pane: one already retrying or connected owns its own path back.
+      if (connecting || recovery.currentPhase !== 'idle') {
+        return false
+      }
+      return replayLastTransportEntryPoint()
     },
 
     retryRecovery() {

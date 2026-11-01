@@ -1,6 +1,6 @@
 import {
   captureStructuredAgentCliSource,
-  structuredAgentCliSourcePathFromEvidence
+  structuredAgentCliSourceFromEvidence
 } from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
@@ -81,7 +81,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     if (input.resumeFrom) {
-      const { providerSessionId, cliSource } = input.resumeFrom
+      const { providerSessionId } = input.resumeFrom
       try {
         requireUnownedStructuredAgentSessionAdoption({
           host: getStructuredAgentSessionHost(),
@@ -91,18 +91,18 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         })
       } catch (ownerConflict) {
         // Refuse transfer from a live terminal or the chat's first send starts a second writer.
-        await this.assertStructuredAdoptionTerminalWritersExited(
-          input.agent,
-          providerSessionId,
-          cliSource
-        )
+        await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
         throw ownerConflict
       }
     }
     const structuredAgentCliSourceEvidence =
       input.structuredAgentCliSourceEvidence ??
       (input.resumeFrom?.cliSource
-        ? captureStructuredAgentCliSource(() => this.getAgentProviderSessionRows())
+        ? captureStructuredAgentCliSource(
+            () => this.getAgentProviderSessionRows(),
+            input.resumeFrom.cliSource,
+            (source) => this.getStructuredAgentCliSourceRoute(source)
+          )
         : undefined)
     const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
@@ -165,7 +165,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
-    const options = this.structuredAgentSessionLaunchSeedOptions(input.agent)
+    const options = structuredLaunchSeedOptions(
+      {
+        ...settings,
+        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
+      },
+      input.agent
+    )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()
@@ -182,8 +188,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     if (resumeFrom) {
       await this.assertStructuredAdoptionTerminalWritersExited(
         input.agent,
-        resumeFrom.providerSessionId,
-        resumeFrom.cliSource
+        resumeFrom.providerSessionId
       )
     }
     const workspaceCwd = resumeFrom
@@ -198,8 +203,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             agent: input.agent,
             transcriptImport,
             providerSessionId: resumeFrom.providerSessionId,
-            resolveTranscriptPath: () =>
-              structuredAgentCliSourcePathFromEvidence({
+            resolveTranscriptSource: () =>
+              structuredAgentCliSourceFromEvidence({
                 agent: input.agent,
                 resumeFrom,
                 workspaceId: location.workspaceId,
@@ -228,6 +233,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             adopt: structuredAgentSessionAdoptAttach({
               definition,
               handleNamesTranscript: transcriptImport!.handleNamesTranscript,
+              ...(input.agent === 'codex'
+                ? {
+                    conversationStore:
+                      transcriptImport!.conversationStore({
+                        accountHome: adoption.accountHome,
+                        launchEnv
+                      }) ?? undefined
+                  }
+                : {}),
               transcriptPath: adoption.transcriptPath,
               providerSessionId: input.resumeFrom.providerSessionId,
               workspaceCwd
@@ -243,7 +257,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       this.restoreStructuredAgentSessionTabsOnce().then(
         () => {
           // Only host answers finalize restoration; without one, retry so journals opened later can publish.
-          if (this.structuredAgentSessionInventoryUnverifiable) {
+          if (
+            this.structuredAgentSessionInventoryUnverifiable ||
+            !getStructuredAgentSessionHost()
+          ) {
             this.structuredAgentSessionTabRestorePromise = null
           }
         },

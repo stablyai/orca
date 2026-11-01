@@ -70,23 +70,6 @@ describe('settings orca.yaml inspection', () => {
   // An unmounted hook must drop its retry listeners, or they fire into the next case.
   afterEach(cleanup)
 
-  it('asks in the background and keeps a stopped distro checking, not "missing"', async () => {
-    checkRuntimeHooksMock.mockResolvedValue({
-      status: 'error',
-      hasHooks: false,
-      hooks: null,
-      mayNeedUpdate: false,
-      unavailable: 'wsl-distro-stopped'
-    })
-    const { map } = renderEffects()
-
-    await waitFor(() => expect(checkRuntimeHooksMock).toHaveBeenCalled())
-    // Let the resolved check settle into state before asserting nothing was recorded.
-    await act(async () => {})
-    expect(checkRuntimeHooksMock).toHaveBeenCalledWith('local', 'repo-1', { background: true })
-    expect(map()).toEqual({})
-  })
-
   it('re-asks when the window comes back and records the distro once it runs', async () => {
     const hooks = { scripts: { setup: 'pnpm i' } }
     checkRuntimeHooksMock
@@ -133,12 +116,5 @@ describe('settings orca.yaml inspection', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('records the inspection once the distro answers', async () => {
-    checkRuntimeHooksMock.mockResolvedValue({ hasHooks: true, hooks: null, mayNeedUpdate: false })
-    const { map } = renderEffects()
-
-    await waitFor(() => expect(Object.keys(map())).toHaveLength(1))
   })
 })

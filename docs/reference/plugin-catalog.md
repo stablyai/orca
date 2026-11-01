@@ -23,8 +23,9 @@ One installable plugin.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `id` | string | yes | 1.4.245 | `<publisher>.<id>`, matching the plugin's manifest. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused. Example: `"acme.gleam-syntax"` |
+| `id` | string | yes | 1.4.245 | `<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused. Example: `"acme.gleam-syntax"` |
 | `source` | [CatalogGitSource](#cataloggitsource) | yes |  | Where the plugin source lives. |
+| `ownerId` | integer | no | 1.4.246 | GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it. Example: `1234567` |
 | `description` | string | no | 1.4.245 | Listing text shown in the catalog. |
 | `categories` | string[] | no | 1.4.245 | Lowercase slugs used to filter the catalog, each listed once. At most 16; extras are ignored. |
 | `releases` | [CatalogRelease](#catalogrelease)[] | yes | 1.4.245 | Installable releases, newest first. Orca installs the first one whose `minimumOrca` it meets, so keep older releases listed when you raise `engines.orca`. At most 32. |
@@ -54,7 +55,8 @@ The exact release the catalog vouches for. Orca refuses bytes that differ.
 | `types` | (`"interface-language"` \| `"app-theme"` \| `"terminal-theme"` \| `"icon-theme"` \| `"syntax"` \| `"instructions"` \| `"panel"` \| `"editor"` \| `"worker"`)[] | no | 1.4.245 | Optional; Orca derives it from `contributes` and `execution`. When present, every kind of contribution the release carries, matching its manifest exactly. `instructions` needs the `declarative` profile or higher, `panel` and `editor` need `sandboxed-ui`, and `worker` needs `trusted-worker`. Example: `["syntax"]` |
 | `name` | string | no | 1.4.245 | The manifest's `name`, so Orca can suggest the plugin before downloading it. Example: `"Gleam"` |
 | `license` | string | no | 1.4.245 | SPDX license expression. Example: `"MIT"` |
-| `repository` | string | no | 1.4.245 | Source repository page, https only. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `repository` | string | no | 1.4.245 | Source repository page, https only. Orca links it when it is a github.com or gitlab.com repository of the plugin's publisher. Example: `"https://github.com/acme/orca-gleam-syntax"` |
+| `sourceUnavailable` | `true` | no | 1.4.246 | Set when the release's `repository` is gone and `source` serves an archived copy, so Orca links `source` instead. Example: `true` |
 | `homepage` | string | no | 1.4.245 | Project homepage, https only. Example: `"https://example.com/gleam"` |
 | `updatedAt` | string | no | 1.4.245 | When this release was published, as an ISO 8601 date or date-time. Example: `"2026-10-20"` |
 | `changelog` | string | no | 1.4.245 | What changed in this release, as plain text. At most 2000 characters. Example: `"Adds highlighting for use expressions."` |
@@ -118,7 +120,8 @@ One thing the release adds to Orca.
 
 ## Publisher names and trust
 
-- **Publisher is the repository owner.** The official and community catalogs list a plugin only when its `publisher` equals the GitHub or GitLab user or organization that owns its repository (`acme` for `github.com/acme/gleam-syntax`). Their CI enforces this; Orca does not check it for catalogs you add yourself.
+- **Publisher is the repository owner.** Like a Go module path, a plugin's publisher is where it lives, never what its manifest says: the official and community catalogs set each entry's `id` to `<owner>.<manifest id>` from the GitHub user or organization that owns the repository (`acme` for `github.com/acme/gleam-syntax`), and Orca installs under that `id`. A Git URL install uses the URL's owner and a folder uses `local`. The manifest's `publisher` is deprecated and ignored. Orca does not check the owner for catalogs you add yourself; their `id` is what they say.
+- **Listed names are pinned to GitHub ids.** The community catalog records the numeric owner and repository ids when a plugin is first listed, pauses new versions after a rename or transfer until Stably confirms it, and refuses a repository that was deleted and recreated under the same name. Each listed version is permanent: a moved tag never replaces it.
 - **Reserved names install only from Orca's official catalog.** The publishers `stablyai`, `official`, `anthropic`, `openai`, `github` and any starting `orca` (any case), and ids starting `orca-`, are refused from any other catalog, a Git URL or a local folder. A catalog that lists one is refused whole. `pnpm validate:plugin` rejects these publishers except `stablyai`.
 - **Trust comes from the catalog's address.** Orca labels a plugin with where it came from: the Official mark for Orca's catalog, otherwise the catalog's name and the owner in its Git URL (`github.com/acme`, `gitlab.com/acme/tools`), never the manifest's text. Development folders show `Dev · unverified`, Git URL installs `Unverified`.
 - **An install stays with its catalog.** Orca records the catalog each plugin was installed from and updates it only from there. When another catalog lists the same id, the plugin page says so, and switching means removing the plugin and installing it again.

@@ -5,13 +5,15 @@ import {
   main as verifyCatalog
 } from './verify-localization-catalog.mjs'
 import { main as verifyRuntimeCatalog } from './generate-runtime-required-english-catalog.mjs'
+import { main as verifyProtectedCopyKeys } from './protected-copy-keys.mjs'
 
 export async function main(root = process.cwd()) {
   // Share only this invocation's scan, never cached evidence from another checkout.
   const references = await collectLocalizationReferences(root)
   const results = await Promise.allSettled([
     verifyCatalog(root, {}, references),
-    verifyRuntimeCatalog(root, [], references)
+    verifyRuntimeCatalog(root, [], references),
+    verifyProtectedCopyKeys(root, [])
   ])
   let exitCode = 0
   for (const result of results) {

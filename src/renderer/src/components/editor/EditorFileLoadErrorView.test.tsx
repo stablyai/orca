@@ -1,57 +1,64 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import {
-  WORKTREE_HOST_UNRESOLVED_CODE,
-  WORKTREE_HOST_UNRESOLVED_ERROR
-} from './editor-panel-content-types'
 
-describe('EditorFileLoadErrorView', () => {
-  afterEach(cleanup)
+const mocks = vi.hoisted(() => {
+  const stopped: { current: StoppedWslHost | null } = { current: null }
+  return {
+    stopped,
+    start: vi.fn<(environmentId: string) => Promise<boolean>>()
+  }
+})
 
-  it('offers Retry as its only action', () => {
-    // Only the tab-strip close path enforces pins, shared references and unsaved-change checks.
+vi.mock('../wsl-host-stopped/use-stopped-wsl-host', () => ({
+  useStoppedWslHost: (worktreeId: string | undefined) =>
+    worktreeId === 'wt-wsl' ? mocks.stopped.current : null
+}))
+vi.mock('@/lib/wsl-host-user-start', () => ({
+  startWslHostAndReloadProjects: mocks.start
+}))
+
+afterEach(() => {
+  cleanup()
+  mocks.stopped.current = null
+  mocks.start.mockReset()
+})
+
+describe('EditorFileLoadErrorView on a stopped WSL host', () => {
+  it('offers Start instead of the read error, and reloads the file once started', async () => {
+    mocks.stopped.current = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
+    mocks.start.mockResolvedValue(true)
     const onRetry = vi.fn()
+    const view = render(
+      <EditorFileLoadErrorView
+        message="The server isn't answering"
+        worktreeId="wt-wsl"
+        onRetry={onRetry}
+      />
+    )
+    expect(view.queryByText('Unable to load file')).toBeNull()
+    expect(view.getByText('Ubuntu is stopped')).toBeTruthy()
+    expect(mocks.start).not.toHaveBeenCalled()
 
-    render(<EditorFileLoadErrorView message="selector_not_found" onRetry={onRetry} />)
-
-    screen.getByText('selector_not_found')
-    expect(screen.getAllByRole('button')).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(onRetry).toHaveBeenCalledOnce()
+    await act(async () => fireEvent.click(view.getByRole('button', { name: 'Start' })))
+    expect(mocks.start).toHaveBeenCalledWith('wsl:ubuntu')
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
-  it('drops the IPC wrapper from a stored host error', () => {
-    render(
+  it('keeps the read error and Retry for any other workspace', () => {
+    mocks.stopped.current = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
+    const view = render(
       <EditorFileLoadErrorView
-        message="Error invoking remote method 'runtimeEnvironments:call': Error: WSL hosts are turned off in Settings → Experimental."
+        message="Permission denied"
+        worktreeId="wt-local"
         onRetry={vi.fn()}
       />
     )
-
-    screen.getByText('WSL hosts are turned off in Settings → Experimental.')
-    expect(screen.queryByText(/Error invoking remote method/)).toBeNull()
-  })
-
-  it('localizes the host-unresolved state by its sentinel code, not by the stored text', () => {
-    // Select localized text by machine code so stored English cannot affect state classification.
-    render(
-      <EditorFileLoadErrorView
-        message="stored fallback text"
-        code={WORKTREE_HOST_UNRESOLVED_CODE}
-        onRetry={vi.fn()}
-      />
-    )
-
-    screen.getByText(WORKTREE_HOST_UNRESOLVED_ERROR)
-    expect(screen.queryByText('stored fallback text')).toBeNull()
-  })
-
-  it("explains a host's file_too_large code instead of showing it", () => {
-    render(<EditorFileLoadErrorView message="file_too_large" onRetry={vi.fn()} />)
-
-    screen.getByText('This file is too large to open from its host.')
-    expect(screen.queryByText('file_too_large')).toBeNull()
+    expect(view.getByText('Unable to load file')).toBeTruthy()
+    expect(view.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    expect(view.queryByText('Ubuntu is stopped')).toBeNull()
   })
 })

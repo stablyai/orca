@@ -27,12 +27,16 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
 import { readRuntimeMetadata } from '../runtime-metadata'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { ORCHESTRATION_CALLER_METHODS } from '../rpc/methods/orchestration/caller-show'
+import { MOBILE_RPC_METHOD_ROUTES } from '../runtime-rpc/runtime-rpc-mobile-method-routing'
+import { MOBILE_RPC_METHOD_ALLOWLIST } from '../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 import { STATUS_METHODS } from '../rpc/methods/status'
 import { TERMINAL_METHODS } from '../rpc/methods/terminal'
 import { BROWSER_CORE_METHODS } from '../rpc/methods/browser-core'
 import { BROWSER_SCREENCAST_METHODS } from '../rpc/methods/browser-screencast'
 import { SSH_METHODS } from '../rpc/methods/ssh'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../rpc/methods/runtime-client-capabilities'
+import { WORKTREE_METHODS } from '../rpc/methods/worktree'
 import { CLIENT_UI_METHODS } from '../rpc/methods/client-ui'
 import { PAIRING_METHODS } from '../rpc/methods/pairing'
 import { sendRequest } from '../runtime-rpc-test-harness'
@@ -107,7 +111,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     }
   })
 
-  async function startRuntime(spawnedOnThisHost: string[] = []) {
+  async function startRuntime(spawnedOnThisHost: string[] = [], locator = true) {
     const writes: string[] = []
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store carries the surface these RPCs read, as in the sibling streaming tests.
     const runtime = new SeatObservableRuntime(makeStore() as never)
@@ -131,12 +135,14 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       userDataPath,
       methods: [
         ...STATUS_METHODS,
+        ...(locator ? ORCHESTRATION_CALLER_METHODS : []),
         ...TERMINAL_METHODS,
         ...BROWSER_CORE_METHODS,
         ...BROWSER_SCREENCAST_METHODS,
         ...SSH_METHODS,
         ...RUNTIME_CLIENT_CAPABILITY_METHODS,
         ...CLIENT_UI_METHODS,
+        ...WORKTREE_METHODS,
         ...PAIRING_METHODS
       ],
       enableWebSocket: true,
@@ -159,8 +165,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     return parsePairingCode(offer.pairingUrl)!
   }
 
-  async function startTopology() {
-    const host = await startRuntime()
+  async function startTopology(locator = true) {
+    const host = await startRuntime([], locator)
     const desktopSpawns: string[] = []
     const desktop = await startRuntime(desktopSpawns)
     const desktopOnHost = pair(host.server, 'runtime', 'MacBook')
@@ -278,10 +284,17 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
       frames,
       binaries,
       close: () => ws.close(),
-      send(id: string, method: string, params: unknown, executionHost: string | null = TARGET) {
+      send(
+        id: string,
+        method: string,
+        params: unknown,
+        executionHost: string | null = TARGET,
+        untrustedScope?: { callerScope: string; clientKind: string }
+      ) {
         ws.send(
           encrypt(
             JSON.stringify({
+              ...untrustedScope,
               id,
               deviceToken: token,
               method,
@@ -301,6 +314,60 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     }
   }
   type Phone = Awaited<ReturnType<typeof connectPhone>>
+
+  it('admits a proven phone locator on the configured delegated target, never the relay owner', async () => {
+    expect(MOBILE_RPC_METHOD_ROUTES.get('orchestration.partyLocation')).toBe('execution-host')
+    const { host, desktop, handle } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'sender-open')
+    const atHost = vi.spyOn(host.runtime, 'getTerminalPaneKey')
+    const atDesktop = vi.spyOn(desktop.runtime, 'getTerminalPaneKey')
+    phone.send('locate', 'orchestration.partyLocation', { address: handle, messageIds: [] })
+    expect(await phone.next('locate')).toMatchObject({
+      ok: true,
+      result: { location: { kind: 'terminal', handle } }
+    })
+    expect(atHost).toHaveBeenCalledWith(handle)
+    expect(atDesktop).not.toHaveBeenCalled()
+    phone.send('forged', 'orchestration.partyLocation', { address: handle, callerScope: 'owner' })
+    expect(await phone.next('forged')).toMatchObject({
+      ok: true,
+      result: { location: { kind: 'terminal', handle } }
+    })
+    phone.send('unlisted', 'orchestration.callerShow', {}, TARGET, {
+      callerScope: 'owner',
+      clientKind: 'runtime'
+    })
+    expect(await phone.next('unlisted')).toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    phone.send(
+      'unknown-target',
+      'orchestration.partyLocation',
+      { address: handle },
+      'runtime:not-configured'
+    )
+    expect(await phone.next('unknown-target')).toMatchObject({ ok: false })
+    expect(atDesktop).not.toHaveBeenCalled()
+    // Historical hops refuse before forwarding; do not substitute the relay's local authority.
+    MOBILE_RPC_METHOD_ALLOWLIST.delete('orchestration.partyLocation')
+    try {
+      phone.send('old-hop', 'orchestration.partyLocation', { address: handle })
+      expect(await phone.next('old-hop')).toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    } finally {
+      MOBILE_RPC_METHOD_ALLOWLIST.add('orchestration.partyLocation')
+    }
+    expect(atHost).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a target missing the locator as a refusal, with no relay-local substitution', async () => {
+    const { desktop, handle } = await startTopology(false)
+    const phone = await connectPhone(desktop.server, 'old-target')
+    const local = vi.spyOn(desktop.runtime, 'getTerminalPaneKey')
+    phone.send('old-target', 'orchestration.partyLocation', { address: handle })
+    expect(await phone.next('old-target')).toMatchObject({
+      ok: false,
+      error: { code: 'method_not_found' }
+    })
+    expect(local).not.toHaveBeenCalled()
+  })
 
   async function subscribe(phone: Phone, handle: string, id = 'sub') {
     phone.send(id, 'terminal.subscribe', {
@@ -462,7 +529,12 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
   })
 
   it('answers a targeted desktop-owned call on the desktop, exactly as the untargeted one', async () => {
-    const { desktop } = await startTopology()
+    const { host, desktop } = await startTopology()
+    vi.spyOn(host.runtime, 'getClientAgentLaunchSettings').mockReturnValue({
+      ...host.runtime.getClientAgentLaunchSettings(),
+      defaultTuiAgent: 'pi',
+      disabledTuiAgents: ['claude']
+    })
     const phone = await connectPhone(desktop.server, 'iPhone')
     const opensBefore = passthroughOpens.count
 
@@ -472,6 +544,17 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     expect(isOk(targeted)).toBe(true)
     expect(targeted.result).toEqual((await phone.next('settings:untargeted')).result)
     expect(passthroughOpens.count).toBe(opensBefore)
+    phone.send('automation:policy', 'settings.getAgentLaunch', {})
+    expect(await phone.next('automation:policy')).toMatchObject({
+      ok: true,
+      result: { settings: { defaultTuiAgent: 'pi', disabledTuiAgents: ['claude'] } }
+    })
+    phone.send('automation:workspaces', 'worktree.list', {})
+    expect(await phone.next('automation:workspaces')).toMatchObject({
+      ok: true,
+      result: { worktrees: expect.any(Array) }
+    })
+    // An execution-host method under the same target still relays.
     phone.send('list', 'terminal.list', {})
     expect(isOk(await phone.next('list'))).toBe(true)
     expect(passthroughOpens.count).toBe(opensBefore + 1)

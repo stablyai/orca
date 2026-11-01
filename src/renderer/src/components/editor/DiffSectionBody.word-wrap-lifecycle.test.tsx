@@ -16,6 +16,7 @@ const { mountedEditors, syncWordWrap, cleanupShiftWheel, createEditor } = vi.hoi
     return {
       editor: {
         getModifiedEditor: () => modified,
+        getContainerDomNode: () => document.createElement('div'),
         getModel: () => null,
         onDidDispose: vi.fn(() => ({ dispose: vi.fn() }))
       },
@@ -87,7 +88,14 @@ const props: ComponentProps<typeof DiffSectionBody> = {
   language: 'markdown',
   modelPathBase: 'wrap-lifecycle',
   isEditable: false,
-  diffEditorFontSize: 13,
+  typography: {
+    fontFamily: 'monospace',
+    cssFontFamily: 'monospace',
+    fontSize: 13,
+    fontWeight: 'normal',
+    lineHeight: 0,
+    fontLigatures: false
+  },
   diffWordWrap: true,
   onRetrySection: vi.fn(),
   onLoadDeferredSection: vi.fn(),

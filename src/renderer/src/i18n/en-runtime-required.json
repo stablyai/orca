@@ -176,6 +176,9 @@
           "automationCount_one": "{{count}} automation",
           "automationCount_other": "{{count}} automations"
         },
+        "capturedOwner": {
+          "hostReselection": "Edit the automation and reselect its host before running it."
+        },
         "externalScope": {
           "uncheckedHostCount_one": "External automation managers on {{count}} host could not be checked.",
           "uncheckedHostCount_other": "External automation managers on {{count}} hosts could not be checked."
@@ -633,11 +636,8 @@
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
         },
         "OrchestrationPane": {
-          "chatErrorEscalationKeywordChat": "chat",
-          "chatErrorEscalationKeywordError": "error",
-          "heartbeatKeywordHeartbeat": "heartbeat",
-          "heartbeatKeywordInterval": "interval",
-          "heartbeatKeywordStalled": "stalled"
+          "workerAutoReleaseKeywordClose": "close",
+          "workerAutoReleaseKeywordRelease": "release"
         },
         "OrchestrationSkillAgentCoverage": {
           "fullCoverage_one": "All 1 detected agent has the skill.",
@@ -1877,6 +1877,26 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continue Now",
+        "leadIn": "Continue this chat without waiting:",
+        "switchAccount": "Switch Account",
+        "addAccount": "Add Account…",
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+      },
+      "resumeInNewChat": {
+        "historyUnavailable": "Orca couldn't read the conversation",
+        "chatHeld": "another chat or terminal is using it",
+        "startFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
+        "notSavedAfterClose": "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
+        "otherTerminalAfterClose": "{{agent}}'s terminal was closed, but {{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History.",
+        "chatFailedAfterClose": "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
+        "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
+        "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
+        "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
+        "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.",
+        "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again."
       }
     },
     "onboarding": {
@@ -2110,6 +2130,10 @@
   },
   "settings": {
     "agents": {
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
       "permissionOverrideMore_one": "and {{count}} more",
       "permissionOverrideMore_other": "and {{count}} more",
       "permissionOverridesFollow_one": "{{count}} agent now follows {{mode}}",
@@ -2243,6 +2267,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}"

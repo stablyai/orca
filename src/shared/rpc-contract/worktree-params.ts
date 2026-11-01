@@ -86,6 +86,10 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  // Opt-in: the caller holds afterSnapshotId's rows and can rebuild a catalog from rowsFromBase; older hosts ignore it.
+  acceptRowDelta: z.literal(true).optional(),
+  // Opt-in: skip poll coarsening for readers that show or rank exact activity; older hosts ignore it.
+  exactActivity: z.literal(true).optional(),
   supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
   // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
   includeAgentWait: z.literal(true).optional()
@@ -194,6 +198,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).

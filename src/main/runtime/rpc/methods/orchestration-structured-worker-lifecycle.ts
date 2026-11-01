@@ -1,6 +1,7 @@
 /** Use live/unverifiable/exited evidence like SSH: loss of host-generation contact never proves death, including a structured host not yet installed. */
 
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
@@ -39,7 +40,10 @@ import { structuredWorkerOwned } from '../../structured-worker-custody'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
-import { closeStructuredAgentSessionChild } from '../../agent-session/structured-agent-session-close'
+import {
+  closeStructuredAgentSessionChild,
+  type StructuredSessionSurfaceRuntime
+} from '../../agent-session/structured-agent-session-close'
 import {
   chatAssigneeJournal,
   type StructuredJournalSource
@@ -69,11 +73,9 @@ export type StructuredWorkerStopOutcome = {
  * Re-resolve /clear successors after each close. Unverifiable sessions remain untouched and retained. */
 export async function stopStructuredWorker(
   identity: StructuredWorkerIdentity,
-  dispatchId: string,
-  runtime?: Pick<
-    OrcaRuntimeService,
-    'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
-  >
+  runtime?: StructuredSessionSurfaceRuntime &
+    Pick<OrcaRuntimeService, 'forgetStructuredSessionMail'>,
+  admitClose?: () => boolean
 ): Promise<StructuredWorkerStopOutcome> {
   const closed = new Set<string>()
   // Any close this stop issued, so a later session's failure cannot erase an earlier close.
@@ -93,8 +95,9 @@ export async function stopStructuredWorker(
     closed.add(sessionId)
     const outcome = await closeStructuredAgentSessionChild(sessionId, {
       ...(runtime ? { runtime } : {}),
+      ...(admitClose ? { admitClose } : {}),
       // Release redrive after close but before proof; an unsettled close returns early, leaving an unowned subscription otherwise.
-      afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime, identity.sessionId)
+      afterClose: () => releaseStructuredWorkerSession(identity.sessionId, runtime)
     })
     closeAttempted ||= outcome.closeAttempted
     if (!outcome.stopped) {

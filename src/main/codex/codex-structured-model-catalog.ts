@@ -1,9 +1,9 @@
 import type {
   AgentSessionModelOption,
-  AgentSessionOptionChoice,
-  AgentSessionOptionsResult
+  AgentSessionOptionChoice
 } from '../../shared/agent-session-wire'
-import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
+import { effectiveServiceTier } from '../../shared/agent-session/options/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -79,6 +79,7 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
     ...(description ? { description } : {}),
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
+    declaredDefaultEffort: defaultEffort ?? null,
     efforts,
     ...(!Array.isArray(row.supportedReasoningEfforts) ||
     efforts.length !== row.supportedReasoningEfforts.length

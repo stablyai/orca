@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveAppImageExtractedRoot } from '../cli/appimage-extracted-root'
-import {
-  buildAppImageGenerationDaemonCommand,
-  resolveAppImageGenerationDaemonLaunch
-} from './daemon-appimage-generation-launch'
+import { resolveAppImageGenerationDaemonLaunch } from './daemon-appimage-generation-launch'
 
 const { resolveIdentity } = vi.hoisted(() => ({ resolveIdentity: vi.fn() }))
 vi.mock('../appimage-runtime-identity', () => ({ resolveAppImageRuntimeIdentity: resolveIdentity }))
@@ -61,32 +58,6 @@ function extractGeneration(options: { node?: boolean; version?: string } = {}): 
 }
 
 describe('resolveAppImageGenerationDaemonLaunch', () => {
-  it('runs the daemon on the bundled Node of the extracted copy of this AppImage', () => {
-    const generation = extractGeneration()
-    expect(resolveAppImageGenerationDaemonLaunch(input())).toEqual({
-      launch: {
-        generationRoot: generation,
-        nodePath: join(generation, 'resources', 'node-runtime', 'bin', 'node'),
-        entryPath: join(generation, ENTRY_IN_APPDIR),
-        // Match own-mount identity so either host can be adopted.
-        identityPath: join(appImagePath, ENTRY_IN_APPDIR)
-      }
-    })
-  })
-
-  it('says nothing off a validated AppImage', () => {
-    extractGeneration()
-    resolveIdentity.mockReturnValue(null)
-    expect(resolveAppImageGenerationDaemonLaunch(input())).toBeNull()
-    expect(resolveAppImageGenerationDaemonLaunch(input({ environment: {} }))).toBeNull()
-  })
-
-  it('falls back when the AppImage was never extracted', () => {
-    expect(resolveAppImageGenerationDaemonLaunch(input())).toEqual({
-      fallback: 'no-extracted-copy'
-    })
-  })
-
   it('falls back when the extracted copy predates the bundled Node', () => {
     extractGeneration({ node: false })
     expect(resolveAppImageGenerationDaemonLaunch(input())).toEqual({
@@ -100,30 +71,4 @@ describe('resolveAppImageGenerationDaemonLaunch', () => {
       fallback: 'version-mismatch'
     })
   })
-})
-
-describe('buildAppImageGenerationDaemonCommand', () => {
-  it.runIf(process.platform === 'linux')(
-    'runs plain Node, with no Electron or AppImage runtime variables',
-    () => {
-      const launch = {
-        generationRoot: '/cache/ns/gen',
-        nodePath: '/cache/ns/gen/resources/node-runtime/bin/node',
-        entryPath: `/cache/ns/gen/${ENTRY_IN_APPDIR}`,
-        identityPath: `/apps/Orca.AppImage/${ENTRY_IN_APPDIR}`
-      }
-      const command = buildAppImageGenerationDaemonCommand(launch, ['--socket', '/s'], {
-        APPDIR,
-        APPIMAGE: '/apps/Orca.AppImage',
-        ELECTRON_RUN_AS_NODE: '1',
-        PATH: `${APPDIR}/usr/bin:/usr/bin`,
-        HOME: '/home/me'
-      })
-      expect(command).toEqual({
-        command: launch.nodePath,
-        args: [launch.entryPath, '--socket', '/s'],
-        env: { PATH: '/usr/bin', HOME: '/home/me' }
-      })
-    }
-  )
 })

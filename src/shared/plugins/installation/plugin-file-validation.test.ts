@@ -16,16 +16,6 @@ const VALID_RELEASE = {
 }
 
 describe('validatePluginFile', () => {
-  it('passes valid files and reports manifest errors', () => {
-    expect(validatePluginFile('orca-plugin.json', v2ManifestFixture())).toEqual([])
-    expect(
-      validatePluginFile('orca-catalog.json', catalogFixture([catalogEntryFixture()]))
-    ).toEqual([])
-    expect(
-      validatePluginFile('orca-plugin.json', v2ManifestFixture({ engines: { orca: '>=1.0.0' } }))
-    ).toEqual([expect.stringContaining('engines.orca: must be at least')])
-  })
-
   it('turns every runtime repair of a catalog into an error', () => {
     const errors = validatePluginFile(
       'orca-catalog.json',

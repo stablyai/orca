@@ -27,7 +27,7 @@ import {
 } from './release-checkout'
 
 // Newer journals must yield the newer-Orca refusal to old clients, never damage wording.
-// Unknown bodies remain writable here; also probe the older host’s handling of those rows.
+// Unknown bodies refuse as a newer Orca's here; also probe the older host’s handling of those rows.
 const SUITE_TIMEOUT_MS = 180_000
 // The last release that does not know the newer-Orca reason: its words fall back to the code's.
 const BEFORE_NEWER_REASON_REF = 'v1.4.218'
@@ -58,7 +58,7 @@ type NoticeEnglish = (parts: unknown[]) => string
 type IsFinal = (refusal: AgentSessionRefusalReference | undefined) => boolean
 
 let directory: string
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 beforeAll(() => {
   directory = mkdtempSync(join(tmpdir(), 'orca-newer-chat-xv-'))
@@ -115,12 +115,12 @@ async function journalWithNewerRow(
     newer,
     2_000
   )
-  return { rows: storedRows(), newer }
+  return { rows: await storedRows(), newer }
 }
 
-function storedRows(): string[] {
+async function storedRows(): Promise<string[]> {
   const rows = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   return rows.map((row) => row.rowJson)
 }
 
@@ -191,7 +191,7 @@ describe('a chat a newer Orca saved, across versions', () => {
     ['body kind', NEWER_BODY_KIND],
     ['plan subject kind', NEWER_NESTED_LITERAL]
   ])(
-    "this build keeps a newer build's %s and stays writable; a build before it deletes it",
+    "this build refuses a newer build's %s as a newer Orca's and keeps it; a build before it deletes it",
     async (_value, body) => {
       rmSync(directory, { recursive: true, force: true })
       directory = mkdtempSync(join(tmpdir(), 'orca-newer-chat-xv-'))
@@ -201,10 +201,11 @@ describe('a chat a newer Orca saved, across versions', () => {
         revision: 1,
         body
       })
-      const reopened = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-      expect(reopened.snapshot().items).toHaveLength(3)
+      await expect(
+        journals.open({ identity: IDENTITY, stateDirectory: directory })
+      ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
       await journals.closeAll()
-      expect(storedRows()).toEqual(rows)
+      expect(await storedRows()).toEqual(rows)
 
       const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
       const support = await importReleaseCheckoutModule(
@@ -225,7 +226,7 @@ describe('a chat a newer Orca saved, across versions', () => {
       } finally {
         await older.closeAll()
       }
-      expect(storedRows()).not.toContain(newer)
+      expect(await storedRows()).not.toContain(newer)
     },
     SUITE_TIMEOUT_MS
   )

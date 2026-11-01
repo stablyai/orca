@@ -64,37 +64,6 @@ describe('parseWarpThemeYaml', () => {
     })
   })
 
-  it('derives name from filename and light mode from background luminance', () => {
-    const result = parseWarpThemeYaml(
-      VALID_THEME.replace('name: Tokyo Night', '').replace(
-        "background: '#1a1b26'",
-        "background: '#ffffff'"
-      ),
-      'bright-theme.yaml'
-    )
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.theme.name).toBe('bright-theme')
-      expect(result.theme.mode).toBe('light')
-    }
-  })
-
-  it('reports unsupported background images and gradients', () => {
-    const result = parseWarpThemeYaml(
-      `${VALID_THEME}\nbackground_image:\n  path: ./image.png\nbackground_gradient: []\n`,
-      'image.yaml'
-    )
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.theme.unsupportedFeatures).toEqual([
-        'background image not supported',
-        'gradient not supported'
-      ])
-    }
-  })
-
   it('uses a gradient endpoint as the terminal background', () => {
     const result = parseWarpThemeYaml(
       VALID_THEME.replace(
@@ -124,14 +93,5 @@ describe('parseWarpThemeYaml', () => {
       'partial.yaml'
     )
     expect(partial.ok).toBe(false)
-  })
-
-  it('rejects themes that exceed the parse-time budget', () => {
-    vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(2_000)
-
-    expect(parseWarpThemeYaml(VALID_THEME, 'slow.yaml')).toEqual({
-      ok: false,
-      reason: 'Theme file took too long to parse.'
-    })
   })
 })

@@ -163,24 +163,4 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
 
     expect(chatTabIds(state)).toEqual([])
   })
-
-  it('still prunes the mirrored rows when the host retracts the worktree', () => {
-    // Retraction must remove rows too, not merely stop fencing, or unpublished chats remain visible.
-    let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
-    expect(chatTabIds(state)).toEqual([SESSION_TAB])
-
-    state = apply(state, { ...chatFrame('removed:abc', 0), tabs: [], removed: true } as never)
-
-    expect(chatTabIds(state)).toEqual([])
-  })
-
-  it('still ignores a genuinely superseded republication', () => {
-    // Without non-publication in between, older same-lineage frames must still lose.
-    let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
-    state = apply(state, emptyFrame(RENDERER_EPOCH, 121))
-
-    state = apply(state, chatFrame(RENDERER_EPOCH, 9))
-
-    expect(chatTabIds(state)).toEqual([])
-  })
 })

@@ -85,6 +85,42 @@ describe('AgentBrowserBridge under a host revocation', () => {
     bridge.setActiveTab(100)
   })
 
+  it('stops a long type at the next run once the host is revoked', async () => {
+    const wc = mockWebContents(100)
+    wc.getType.mockReturnValue('webview')
+    let resumeTyping = (): void => {}
+    const paused = new Promise<void>((resolve) => {
+      resumeTyping = resolve
+    })
+    let evaluations = 0
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        evaluations += 1
+        // The first run's settle wait: hold it while the host is revoked.
+        if (evaluations === 2) {
+          await paused
+        }
+        return { result: { type: 'object', subtype: 'null' } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+    const revoked = new AbortController()
+
+    const typing = runInRemoteCliBrowserScope(
+      WORKSPACE,
+      () => bridge.type('x'.repeat(2000), undefined, 'tab-1'),
+      revoked.signal
+    )
+    await vi.waitFor(() => expect(evaluations).toBe(2))
+    const sentBeforeRevocation = wc.sendInputEvent.mock.calls.length
+    revoked.abort()
+    resumeTyping()
+
+    await expect(typing).rejects.toMatchObject({ code: 'desktop_browser_bridge_unavailable' })
+    expect(wc.sendInputEvent.mock.calls.length).toBe(sentBeforeRevocation)
+  })
+
   it('never presses the mouse once the host is revoked during a running click', async () => {
     const wc = mockWebContents(100)
     let answerHitTest = (): void => {}
@@ -490,5 +526,28 @@ describe('AgentBrowserBridge under a host revocation', () => {
     await runInRemoteCliBrowserScope(WORKSPACE, () => bridge.click('@e1', undefined, 'tab-1'))
 
     expect(startedInHostScope).toBe(false)
+  })
+
+  it('never reports the URL or title of a desktop page a snapshot ended up on', async () => {
+    let admitted = true
+    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb) => {
+      if (command[0] === 'snapshot') {
+        // The page navigates to a desktop-local document while agent-browser answers.
+        admitted = false
+      }
+      cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+    })
+    webContentsFromIdMock.mockReturnValue(
+      mockWebContents(100, 'file:///Users/me/notes.txt', 'notes')
+    )
+
+    await expect(
+      runInRemoteCliBrowserScope(
+        WORKSPACE,
+        () => bridge.snapshot(undefined, 'tab-1'),
+        undefined,
+        () => admitted
+      )
+    ).rejects.toMatchObject({ code: 'desktop_browser_bridge_unrouted' })
   })
 })

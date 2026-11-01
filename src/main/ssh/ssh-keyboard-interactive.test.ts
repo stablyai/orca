@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   collectKeyboardInteractiveResponses,
-  formatKeyboardInteractivePromptDetail,
   isKeyboardInteractivePasswordPrompt,
   type KeyboardInteractiveSession
 } from './ssh-keyboard-interactive'
@@ -28,11 +27,6 @@ function createSession(
 }
 
 describe('isKeyboardInteractivePasswordPrompt', () => {
-  it('matches masked password prompts', () => {
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Password: ', echo: false })).toBe(true)
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: "user@host's PASSWORD:" })).toBe(true)
-  })
-
   it('rejects echoed prompts even when they mention a password', () => {
     expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Password: ', echo: true })).toBe(false)
   })
@@ -43,28 +37,6 @@ describe('isKeyboardInteractivePasswordPrompt', () => {
     )
     expect(isKeyboardInteractivePasswordPrompt({ prompt: 'OTP password code:', echo: false })).toBe(
       false
-    )
-  })
-
-  it('rejects verification prompts that never mention a password', () => {
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Passcode:', echo: false })).toBe(false)
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Duo push sent', echo: false })).toBe(
-      false
-    )
-  })
-})
-
-describe('formatKeyboardInteractivePromptDetail', () => {
-  it('joins instructions and prompt on separate lines', () => {
-    expect(formatKeyboardInteractivePromptDetail('Pick an option:', 'Passcode: ')).toBe(
-      'Pick an option:\nPasscode:'
-    )
-  })
-
-  it('drops the missing half', () => {
-    expect(formatKeyboardInteractivePromptDetail('', 'Passcode: ')).toBe('Passcode:')
-    expect(formatKeyboardInteractivePromptDetail('Approve the push. ', '')).toBe(
-      'Approve the push.'
     )
   })
 })

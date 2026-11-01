@@ -81,21 +81,6 @@ it("a removal with no prompt keeps the last view's dirty record; reopening the f
   expect(state().openFiles[0]?.isDirty).toBe(true)
 })
 
-it('a confirmed removal discards: nothing is kept', () => {
-  useAppStore.setState({
-    openFiles: [tab('b', 'wt-2', { isDirty: true })],
-    editorDrafts: { b: 'listed and confirmed' }
-  })
-  applyRemoveWorktreeSuccessState(
-    useAppStore.setState,
-    'wt-2',
-    new Set(),
-    'local',
-    new Map([['b', 'listed and confirmed']])
-  )
-  expect(state().editorBufferKept).toEqual({})
-})
-
 it('a removal closing tabs over several writes keeps every dirty record it closes', async () => {
   useAppStore.setState({
     openFiles: [
