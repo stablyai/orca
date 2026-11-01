@@ -235,7 +235,10 @@ export function readJournalRowsAfterCursor(
     }
     const remaining = limit === undefined ? undefined : limit - rows.length
     const groups = readJournalOutcomeGroups(db, epoch, source, after, remaining)
-    rows.push(...groups)
+    // Append one by one: spreading an unlimited read into push's arguments overflows the stack.
+    for (const group of groups) {
+      rows.push(group)
+    }
     // A write whose fold changed nothing stores no record, so no group names its sequence; a read
     // that returned every group still covers the epoch through its newest write.
     return remaining === undefined || groups.length < remaining
