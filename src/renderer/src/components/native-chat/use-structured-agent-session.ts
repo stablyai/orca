@@ -6,7 +6,10 @@ import { useStructuredAgentSessionSendOptions } from './use-structured-agent-ses
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './use-structured-agent-session-command-write'
 import { structuredAgentSessionSendQueues } from './structured-agent-session-queue-request'
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
+import {
+  nativeChatQueueFollowUps,
+  nativeChatSendFollowUp
+} from '../../../../shared/native-chat-follow-up-behavior'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
@@ -32,7 +35,7 @@ import { useStructuredAgentSessionRailOutline } from './use-structured-agent-ses
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './structured-conversation-command-send'
 import { pendingSendsOutsideQueuedCards } from './structured-agent-session-sending-queued-cards'
-import { hostStatesTurnScopes } from '../../../../shared/native-chat-turn-membership'
+import { hostStatesTurnScopes } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
@@ -89,7 +92,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     reportedThreadGoal,
     contextUsage: usageSupport,
     rewind: rewindSupport,
-    acceptsImages
+    sessionSupport
   } = useStructuredAgentSessionOptions({
     agent,
     sessionId,
@@ -279,6 +282,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     capturePresentation,
     /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionSendQueues(queue),
+    /** What a plain send does now, and whether its alternate would send any differently. */
+    sendFollowUp: nativeChatSendFollowUp((alternate) =>
+      structuredAgentSessionSendQueues(queue, alternate)
+    ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       promptResponse.cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>
@@ -300,6 +307,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     threadGoal,
     contextUsage: usage,
     /** Whether this session takes images, by its options report; undefined until it answers. */
-    acceptsImages
+    ...sessionSupport
   }
 }

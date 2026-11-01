@@ -1,3 +1,4 @@
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import { structuredAgentSessionDefaultModelChoice } from '../../../src/shared/structured-agent-session-default-model-choice'
 import {
@@ -11,10 +12,9 @@ import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/in
 import {
   commitStructuredAgentSessionModelDefault,
   commitStructuredAgentSessionOptionValues,
-  lockedStructuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
-} from '../../../src/shared/structured-agent-session-options'
-import { structuredAgentSessionShownSnapshot } from '../../../src/shared/structured-agent-session-option-view'
+} from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import type { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { nativeChatSessionOptionsWrite } from './mobile-session-launch-operations'

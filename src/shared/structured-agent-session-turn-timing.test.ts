@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
-import { selectNativeChatTurnStatuses } from './native-chat-turn-status'
+import { selectNativeChatTurnStatuses } from './native-chat/transcript/native-chat-turn-status'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming,

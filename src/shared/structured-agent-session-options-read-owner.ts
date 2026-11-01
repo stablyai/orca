@@ -1,16 +1,14 @@
-import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionsResult
-} from './agent-session-wire'
+import type { AgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog-types'
+import type { AgentSessionModelCatalogResult } from './agent-session-wire'
+import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
 import { createCoalescingKeyedRunner } from './coalescing-keyed-runner'
-import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
+import { cloneStructuredAgentSessionOptionRecord } from './agent-session/options/structured-agent-session-option-state'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
-} from './structured-agent-session-options'
+} from './agent-session/options/structured-agent-session-options'
 import type { StructuredSessionSelectionController } from './structured-agent-session-selection-operations'
 import {
   createStructuredOptionPickBook,
@@ -38,6 +36,7 @@ type ReadSnapshot = {
   optionState: StructuredAgentSessionOptionState
   support: {
     result: AgentSessionOptionsResult
+    owner: readonly unknown[]
     sessionId: string | null
     fence: number | null
   } | null
@@ -88,14 +87,32 @@ export function createStructuredAgentSessionOptionsReadOwner(
       const record = snapshot.optionState.record
       const authority = attached.authority()
       const completed = attached.controller.captureRead()
-      const result = await attached.request()
-      if (
-        lease !== attached ||
-        version !== capturedVersion ||
-        snapshot.optionState.record !== record ||
-        !attached.isCurrent() ||
-        !Object.is(attached.authority(), authority)
-      ) {
+      const isCurrentRead = () =>
+        lease === attached &&
+        version === capturedVersion &&
+        snapshot.optionState.record === record &&
+        attached.isCurrent() &&
+        Object.is(attached.authority(), authority)
+      let result: AgentSessionOptionsResult
+      try {
+        result = await attached.request()
+      } catch {
+        const support = snapshot.support
+        if (
+          isCurrentRead() &&
+          support &&
+          same(support.owner, attached.owner) &&
+          support.result.canSwitchAccount === true
+        ) {
+          snapshot = {
+            ...snapshot,
+            support: { ...support, result: { ...support.result, canSwitchAccount: false } }
+          }
+          notify()
+        }
+        return
+      }
+      if (!isCurrentRead()) {
         return
       }
       snapshot = {
@@ -107,7 +124,12 @@ export function createStructuredAgentSessionOptionsReadOwner(
               attached
             )
           : snapshot.optionState,
-        support: { result, sessionId: attached.sessionId, fence: attached.fence }
+        support: {
+          result,
+          owner: attached.owner,
+          sessionId: attached.sessionId,
+          fence: attached.fence
+        }
       }
       attached.accepted?.()
       attached.controller.setModelDefault(result.current.modelDefault === true)
@@ -122,6 +144,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
   }
   return {
     getSnapshot: () => snapshot,
+    supportFor: (owner: readonly unknown[]) =>
+      snapshot.support && same(snapshot.support.owner, owner) ? snapshot.support : null,
     subscribe: (listener: () => void) => {
       listeners.add(listener)
       return () => {

@@ -3,8 +3,8 @@
 import { compareAgentJournalPositions } from '../../../../shared/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
 import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { nativeChatRowRendersContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { compareMessages } from './native-chat-session-assembler'
 import {
   isNativeChatCodexCollabCallFrameRow,

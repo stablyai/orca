@@ -11,12 +11,9 @@ const pressables = vi.hoisted(() => ({ unmounted: 0 }))
 vi.mock('react-native', async () => {
   const { createElement: h, useEffect } = await import('react')
   return {
+    ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
-    AccessibilityInfo: {
-      isReduceMotionEnabled: () => Promise.resolve(false),
-      addEventListener: () => ({ remove: () => {} })
-    },
     Pressable: (props: { children?: unknown }) => {
       useEffect(
         () => () => {

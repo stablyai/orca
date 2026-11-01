@@ -57,7 +57,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 import { resetHostReadableTranscriptPathCacheForTests } from './host-readable-transcript-path'
 import { subscribeNativeChatTranscript } from './transcript-watch'
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
-import { resetWslTranscriptRunningObserverForTests } from './wsl-transcript-running-observer'
+import {
+  resetWslTranscriptRunningObserverForTests,
+  WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS
+} from './wsl-transcript-running-observer'
 
 const realPlatform = process.platform
 
@@ -147,7 +150,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     expect(mocks.resolve).toHaveBeenCalledTimes(1)
     mocks.resolve.mockClear()
-    await vi.advanceTimersByTimeAsync(6_100)
+    await vi.advanceTimersByTimeAsync(2_100 + 2 * WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
 
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(3)
     expect(mocks.resolve).not.toHaveBeenCalled()
@@ -168,7 +171,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     await vi.advanceTimersByTimeAsync(2_100)
     expect(mocks.install).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_100)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(2)
     expect(mocks.install).toHaveBeenCalledTimes(1)
     subscription.unsubscribe()
@@ -188,7 +191,7 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
 
     await vi.advanceTimersByTimeAsync(2_100)
     expect(mocks.install).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(2_100)
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_RUNNING_OBSERVATION_MS)
     expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(2)
     expect(mocks.install).toHaveBeenCalledTimes(1)
     subscription.unsubscribe()

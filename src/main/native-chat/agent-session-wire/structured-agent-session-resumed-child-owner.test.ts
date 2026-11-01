@@ -5,7 +5,10 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { isBackgroundTaskBlock, isSubagentBlock } from '../../../shared/native-chat-types'
+import {
+  isBackgroundTaskBlock,
+  isSubagentBlock
+} from '../../../shared/native-chat/native-chat-types'
 import {
   ClaudeBackgroundTaskIdentityResolver,
   writeClaudeBackgroundTaskRow

@@ -559,3 +559,66 @@ it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }]
     ).toBe(false)
   }
 )
+
+it('keeps ordering context additive and treats malformed optional facts as legacy annotations', () => {
+  const row = {
+    ...BASE,
+    kind: 'submission',
+    clientMessageId: 'context',
+    payloadFingerprint: 'context',
+    providerHandle: { kind: 'codex', threadId: 't' },
+    body: { kind: 'message', role: 'user', blocks: [] },
+    inputOrderContext: { source: { epoch: 'source', sequence: 2 }, basis: 'observed', cut: 2 }
+  }
+  expect(parseJournalRow(JSON.stringify(row))).toMatchObject({
+    ok: true,
+    row: { inputOrderContext: row.inputOrderContext, body: row.body }
+  })
+  expect(
+    parseJournalRow(
+      JSON.stringify({
+        ...row,
+        inputOrderContext: { ...row.inputOrderContext, basis: 'unreadable' }
+      })
+    )
+  ).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderContext: expect.anything() })
+  })
+  const epoch = {
+    ...BASE,
+    kind: 'epoch',
+    reason: 'unreconcilable_prefix',
+    providerHandle: row.providerHandle,
+    inputOrderLineage: {
+      clock: 10,
+      cards: [{ messageId: 'C', introduced: 1, baseline: { coordinate: null } }]
+    }
+  }
+  expect(parseJournalRow(JSON.stringify(epoch))).toMatchObject({
+    ok: true,
+    row: { inputOrderLineage: epoch.inputOrderLineage }
+  })
+  const overlapping = {
+    ...epoch,
+    inputOrderLineage: {
+      clock: 10,
+      cards: [
+        {
+          messageId: 'C',
+          introduced: 1,
+          baseline: { coordinate: { epoch: 'old', sequence: -1 } }
+        }
+      ]
+    }
+  }
+  expect(parseJournalRow(JSON.stringify(overlapping))).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderLineage: expect.anything() })
+  })
+  const invalid = parseJournalRow(JSON.stringify({ ...epoch, inputOrderLineage: { clock: 'bad' } }))
+  expect(invalid).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderLineage: expect.anything() })
+  })
+})

@@ -4,7 +4,7 @@
   "family": "worktree.catalog-snapshot",
   "namedDeltas": [],
   "values": {
-    "04ab3c489b82": {
+    "0889f58065ee": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -15,6 +15,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -29,17 +30,38 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
-    "0a36593f50b5": {
+    "0ce4a7117a8d": {
+      "admitted": {
+        "$rpc": "null"
+      },
+      "fetched": {
+        "code": "refused",
+        "kind": "request_failed"
+      }
+    },
+    "0d9bf2f46a5e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "code": "refused",
+        "kind": "request_failed"
+      }
+    },
+    "11008b947f78": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -50,6 +72,46 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "1778a8674d67": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -79,25 +141,11 @@
         }
       }
     },
-    "0ce4a7117a8d": {
-      "admitted": {
-        "$rpc": "null"
-      },
-      "fetched": {
-        "code": "refused",
-        "kind": "request_failed"
-      }
+    "253b98015b8d": {
+      "admitted": "unadmitted",
+      "fetched": "unfetched"
     },
-    "0d9bf2f46a5e": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "code": "refused",
-        "kind": "request_failed"
-      }
-    },
-    "15732ec17ea7": {
+    "298c6fbd5d42": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -108,6 +156,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -127,12 +176,12 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "2314cb04d03b": {
+    "34fb08d01b03": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -143,6 +192,52 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "3ef9b57ea9ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "invalid"
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
+      }
+    },
+    "4e0fffc7f5de": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -163,22 +258,18 @@
         "value": {
           "error": {
             "code": "refused",
-            "message": "outer refused"
+            "message": ""
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "253b98015b8d": {
-      "admitted": "unadmitted",
-      "fetched": "unfetched"
-    },
-    "3ef9b57ea9ad": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
+    "50c4271e912d": {
+      "admitted": {
+        "$rpc": "null"
+      },
+      "fetched": {
         "kind": "response",
         "pending": {
           "admission": {
@@ -189,7 +280,7 @@
         }
       }
     },
-    "467c6314050f": {
+    "5e982fcaacf9": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -200,6 +291,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -221,24 +313,8 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
-        }
-      }
-    },
-    "50c4271e912d": {
-      "admitted": {
-        "$rpc": "null"
-      },
-      "fetched": {
-        "kind": "response",
-        "pending": {
-          "admission": {
-            "kind": "invalid"
-          },
-          "client": "logical-client",
-          "hostId": "host-1"
         }
       }
     },
@@ -253,6 +329,41 @@
         "code": "incompatible_reply"
       }
     },
+    "817623c64ce1": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
     "8e2c2fbe7e94": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -262,9 +373,59 @@
         "kind": "request_failed"
       }
     },
+    "922cb68379ac": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"acceptRowDelta\":true,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "976f56339476": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          }
+        }
+      }
     },
     "9948855e8b8d": {
       "status": "fulfilled",
@@ -287,35 +448,6 @@
           "client": "logical-client",
           "hostId": "host-1"
         }
-      }
-    },
-    "9c5a8d7d6c68": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
       }
     },
     "a947768bc0ed": {
@@ -355,7 +487,7 @@
         }
       }
     },
-    "b2f5e4b6fd8b": {
+    "afbf8da70602": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -366,6 +498,46 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
+            "afterSnapshotId": {
+              "$rpc": "null"
+            },
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "b3e35186771c": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -392,49 +564,6 @@
         }
       }
     },
-    "b60ceeb27890": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "b63e233c7e15": {
-      "name": "worktree.ps#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"afterSnapshotId\":null,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
     "ba9be29baf40": {
       "admitted": {
         "$rpc": "null"
@@ -442,40 +571,6 @@
       "fetched": {
         "code": "method_not_found",
         "kind": "request_failed"
-      }
-    },
-    "bb43258baffa": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
       }
     },
     "c7584e82c72f": {
@@ -488,7 +583,7 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "d641db1a2655": {
+    "c82b2286dfc6": {
       "name": "worktree.ps#1",
       "ordinal": 1,
       "args": [
@@ -499,6 +594,7 @@
         {
           "name": "params",
           "value": {
+            "acceptRowDelta": true,
             "afterSnapshotId": {
               "$rpc": "null"
             },
@@ -513,97 +609,13 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "e1ca3e7405fa": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "f47f57400b0a": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            },
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "snapshotId": "snapshot-1",
-            "worktrees": [
-              {
-                "displayName": "One",
-                "repo": "Repo",
-                "worktreeId": "w-1"
-              }
-            ]
-          }
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     }
@@ -614,8 +626,8 @@
       {
         "id": "worktree-catalog-snapshot.prelude:catalog-pending",
         "observation": {
-          "sender": ["9c5a8d7d6c68"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["34fb08d01b03"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "9270aeb7d9c6"
           },
@@ -626,8 +638,8 @@
       {
         "id": "worktree-catalog-snapshot.normal:settled",
         "observation": {
-          "sender": ["f47f57400b0a"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["976f56339476"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "9948855e8b8d"
           },
@@ -638,8 +650,8 @@
       {
         "id": "worktree-catalog-snapshot.result-absent:settled",
         "observation": {
-          "sender": ["bb43258baffa"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["817623c64ce1"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "7fb1c6f9f3ae"
           },
@@ -650,8 +662,8 @@
       {
         "id": "worktree-catalog-snapshot.result-null:settled",
         "observation": {
-          "sender": ["b2f5e4b6fd8b"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["b3e35186771c"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "7fb1c6f9f3ae"
           },
@@ -662,8 +674,8 @@
       {
         "id": "worktree-catalog-snapshot.inner-ok-missing:settled",
         "observation": {
-          "sender": ["d641db1a2655"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["5e982fcaacf9"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -674,8 +686,8 @@
       {
         "id": "worktree-catalog-snapshot.inner-false-string-error:settled",
         "observation": {
-          "sender": ["467c6314050f"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["afbf8da70602"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -686,8 +698,8 @@
       {
         "id": "worktree-catalog-snapshot.inner-false-object-error:settled",
         "observation": {
-          "sender": ["0a36593f50b5"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["1778a8674d67"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "3ef9b57ea9ad"
           },
@@ -698,8 +710,8 @@
       {
         "id": "worktree-catalog-snapshot.outer-refused:settled",
         "observation": {
-          "sender": ["2314cb04d03b"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["11008b947f78"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "0d9bf2f46a5e"
           },
@@ -710,8 +722,8 @@
       {
         "id": "worktree-catalog-snapshot.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["e1ca3e7405fa"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["4e0fffc7f5de"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "0d9bf2f46a5e"
           },
@@ -722,8 +734,8 @@
       {
         "id": "worktree-catalog-snapshot.method-not-found:settled",
         "observation": {
-          "sender": ["b60ceeb27890"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["0889f58065ee"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "8e2c2fbe7e94"
           },
@@ -734,8 +746,8 @@
       {
         "id": "worktree-catalog-snapshot.transport-rejection:settled",
         "observation": {
-          "sender": ["15732ec17ea7"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["c82b2286dfc6"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "a947768bc0ed"
           },
@@ -746,8 +758,8 @@
       {
         "id": "worktree-catalog-snapshot.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["04ab3c489b82"],
-          "payloads": ["b63e233c7e15"],
+          "sender": ["298c6fbd5d42"],
+          "payloads": ["922cb68379ac"],
           "settlements": {
             "fetch": "c7584e82c72f"
           },

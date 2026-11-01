@@ -8,7 +8,7 @@ import {
   write,
   writeSpy
 } from './structured-queued-edit.test-fixture'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
 import { ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX } from '../../../../shared/orca-dispatch-status-prompt'
@@ -73,7 +73,13 @@ const transport: NativeChatStructuredComposerTransport = {
   runtimeEnvironmentId: null
 }
 
-function QueuedTask({ message }: { message: AgentSessionQueuedMessage }) {
+function QueuedTask({
+  message,
+  queueFollowUps
+}: {
+  message: AgentSessionQueuedMessage
+  queueFollowUps: boolean
+}) {
   const messages = [message]
   const cards = projectQueuedMessageCards(messages, [], {})
   const { editor, begin } = useStructuredAgentSessionQueuedEdit({
@@ -95,7 +101,13 @@ function QueuedTask({ message }: { message: AgentSessionQueuedMessage }) {
         onDelete={() => {}}
         onEdit={() => void begin(message.messageId)}
         editor={editor ?? undefined}
-        editAttachTo={{ terminalTabId: 'tab', transport }}
+        editAttachTo={{
+          terminalTabId: 'tab',
+          transport: {
+            ...transport,
+            sendFollowUp: { action: queueFollowUps ? 'queue' : 'steer', offersChoice: true }
+          }
+        }}
       />
     </ul>
   )
@@ -103,69 +115,80 @@ function QueuedTask({ message }: { message: AgentSessionQueuedMessage }) {
 
 afterEach(() => vi.restoreAllMocks())
 
-it('shows the queued task and edits, saves and reopens its full raw input in the chat composer', async () => {
-  const prefix = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX} You are a dispatched worker.\n=== TASK ===\n`
-  const task = 'Inspect the queued task'
-  const changedTask = 'Inspect the edited task'
-  const message: AgentSessionQueuedMessage = {
-    messageId: 'card',
-    position: 1,
-    state: 'waiting',
-    body: {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: prefix + task }],
-      from: {
-        kind: 'agent',
-        senders: [],
-        orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+it.each([false, true])(
+  'queue %s: shows the queued task and edits, saves and reopens its full raw input in the chat composer',
+  async (queueFollowUps) => {
+    const prefix = `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX} You are a dispatched worker.\n=== TASK ===\n`
+    const task = 'Inspect the queued task'
+    const changedTask = 'Inspect the edited task'
+    const message: AgentSessionQueuedMessage = {
+      messageId: 'card',
+      position: 1,
+      state: 'waiting',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: prefix + task }],
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+        }
       }
     }
-  }
-  // The host's queuedMessageUpdateDecision removes attribution on a content-changing Save.
-  const { from: _sender, ...userBody } = message.body
-  const saved: AgentSessionQueuedMessage = {
-    ...message,
-    body: { ...userBody, blocks: [{ type: 'text', text: prefix + changedTask }] }
-  }
-  script.answer = done({
-    status: 'updated',
-    messageId: message.messageId,
-    fingerprint: agentSessionSendBodyFingerprint(SESSION, saved.body)
-  })
-  const view = render(<QueuedTask message={message} />)
-  expect(screen.getByTitle(task).textContent).toBe(task)
-  expect(screen.getByText('From')).toBeDefined()
-  expect(screen.getByText('an agent')).toBeDefined()
-  expect(screen.queryByText(/You are working inside Orca/)).toBeNull()
+    // The host's queuedMessageUpdateDecision removes attribution on a content-changing Save.
+    const { from: _sender, ...userBody } = message.body
+    const saved: AgentSessionQueuedMessage = {
+      ...message,
+      body: { ...userBody, blocks: [{ type: 'text', text: prefix + changedTask }] }
+    }
+    script.answer = done({
+      status: 'updated',
+      messageId: message.messageId,
+      fingerprint: agentSessionSendBodyFingerprint(SESSION, saved.body)
+    })
+    const view = render(<QueuedTask message={message} queueFollowUps={queueFollowUps} />)
+    expect(screen.getByTitle(task).textContent).toBe(task)
+    expect(screen.getByText('From')).toBeDefined()
+    expect(screen.getByText('an agent')).toBeDefined()
+    expect(screen.queryByText(/You are working inside Orca/)).toBeNull()
 
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit message' }))
-  const field = await screen.findByRole('textbox', { name: 'Edit message' })
-  await waitFor(() => expect(field.getAttribute('contenteditable')).toBe('true'))
-  expect(promptValue(field)).toBe(prefix + task)
-  changePrompt(field, prefix + changedTask)
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(writeSpy).toHaveBeenCalledOnce())
-  expect(writeSpy.mock.calls[0]?.[2]).toMatchObject({
-    messageId: 'card',
-    text: prefix + changedTask
-  })
-  await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull())
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit message' }))
+    const field = await screen.findByRole('textbox', { name: 'Edit message' })
+    await waitFor(() => expect(field.getAttribute('contenteditable')).toBe('true'))
+    expect(promptValue(field)).toBe(prefix + task)
+    changePrompt(field, prefix + changedTask)
+    act(() => screen.getByRole('button', { name: 'Save' }).focus())
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.keyDown(field, {
+      key: 'Enter',
+      keyCode: 13,
+      metaKey: true,
+      ctrlKey: true,
+      isComposing: false
+    })
+    await waitFor(() => expect(writeSpy).toHaveBeenCalledOnce())
+    expect(writeSpy.mock.calls[0]?.[2]).toMatchObject({
+      messageId: 'card',
+      text: prefix + changedTask
+    })
+    await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull())
 
-  view.rerender(<QueuedTask message={saved} />)
-  expect(screen.getByTitle(prefix + changedTask, { normalizer: (text) => text }).textContent).toBe(
-    prefix + changedTask
-  )
-  expect(screen.queryByText('From')).toBeNull()
-  expect(screen.queryByText('an agent')).toBeNull()
-  fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit message' }))
-  const reopened = await screen.findByRole('textbox', { name: 'Edit message' })
-  await waitFor(() => expect(reopened.getAttribute('contenteditable')).toBe('true'))
-  expect(promptValue(reopened)).toBe(prefix + changedTask)
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-  await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull())
-  expect(writeSpy).toHaveBeenCalledOnce()
-  expect(transport.send).not.toHaveBeenCalled()
-})
+    view.rerender(<QueuedTask message={saved} queueFollowUps={queueFollowUps} />)
+    expect(
+      screen.getByTitle(prefix + changedTask, { normalizer: (text) => text }).textContent
+    ).toBe(prefix + changedTask)
+    expect(screen.queryByText('From')).toBeNull()
+    expect(screen.queryByText('an agent')).toBeNull()
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit message' }))
+    const reopened = await screen.findByRole('textbox', { name: 'Edit message' })
+    await waitFor(() => expect(reopened.getAttribute('contenteditable')).toBe('true'))
+    expect(promptValue(reopened)).toBe(prefix + changedTask)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull())
+    expect(writeSpy).toHaveBeenCalledOnce()
+    expect(transport.send).not.toHaveBeenCalled()
+  }
+)

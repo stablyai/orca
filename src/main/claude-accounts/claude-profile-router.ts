@@ -1,3 +1,5 @@
+import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
+import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
 import { getClaudeAgentViewService } from '../claude/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -333,22 +335,14 @@ export class ClaudeProfileRouter {
 
   /** Read usage from the same login the account would launch with. */
   accountUsagePreparation(accountId: string): ClaudeRuntimeAuthPreparation {
-    if (this.coveredBySystemDefault(accountId)) {
-      // Setting CLAUDE_CONFIG_DIR for System default changes its Keychain identity.
-      return {
-        configDir: this.systemDefaultHome(),
-        envPatch: {},
-        provenance: 'system'
-      }
-    }
-    const home = this.accountHome(accountId)
-    return {
-      configDir: home,
-      envPatch: { CLAUDE_CONFIG_DIR: home },
-      provenance: `profile:${accountId}`
-    }
+    return claudeAccountUsagePreparation(this, accountId)
   }
 
+  async accountSelectionHomes(launchEnv: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+    return claudeProfileSelectionHomes(this, this.args.getSettings(), this.envReady, launchEnv)
+  }
+
+  /** Every account folder on this host, selected or not. */
   accountHomes(): string[] {
     return listClaudeProfileHomes(this.args.dataRoot)
   }

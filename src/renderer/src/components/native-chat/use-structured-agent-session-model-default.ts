@@ -1,3 +1,4 @@
+import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -5,9 +6,8 @@ import type { AgentSessionOptionResult } from '../../../../shared/agent-session-
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   commitStructuredAgentSessionModelDefault,
-  commitStructuredAgentSessionOptionValues,
-  structuredAgentSessionOptionSnapshot
-} from '../../../../shared/structured-agent-session-options'
+  commitStructuredAgentSessionOptionValues
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   STRUCTURED_MODEL_DEFAULT_PICK,
   beginStructuredOptionPick,

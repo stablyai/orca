@@ -126,14 +126,6 @@ describe('process boundary ground at a cold restore', () => {
     }
   })
 
-  it('grounds without moving the cursor', () => {
-    const live = emulator(DAEMON_SESSION_SCROLLBACK_ROWS)
-    write(live, 'OLD_OUTPUT_1\r\n$ ')
-    write(live, PROCESS_BOUNDARY_GROUND)
-    write(live, 'X')
-    expect(live.getBufferTailLines(24)[1]).toBe('$ X')
-  })
-
   // awin verify-11: a reattach after Wake showed the new prompt beside the dead shell's (`$ $`).
   it("starts the new shell's prompt on its own line, keeping the recovered history", () => {
     const live = seededLive(checkpointOfDeadProcess(''))

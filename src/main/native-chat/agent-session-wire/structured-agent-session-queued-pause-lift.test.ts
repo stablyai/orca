@@ -1,12 +1,12 @@
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { piOptionRefreshHost } from './structured-agent-session-option-refresh.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'

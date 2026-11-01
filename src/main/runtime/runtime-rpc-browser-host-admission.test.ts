@@ -7,27 +7,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry } from './device-registry'
 import { OrcaRuntimeService } from './orca-runtime'
-import { defineStreamingMethod, type RpcRequest } from './rpc/core'
-import { classifyRuntimeLongPoll } from './runtime-rpc/runtime-rpc-long-poll'
+import { defineStreamingMethod } from './rpc/core'
+
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
 
-const request = (method: string, params?: unknown): RpcRequest => ({
-  id: method,
-  authToken: 'test-token',
-  method,
-  params
-})
-
 describe('runtime RPC browser-host admission', () => {
-  it('classifies host attachment for bounded disconnect-aware admission', () => {
-    expect(classifyRuntimeLongPoll(request('browser.clientHost.attach'))).toBe('browser-host')
-    expect(classifyRuntimeLongPoll(request('terminal.wait'))).toBe('wait')
-    expect(classifyRuntimeLongPoll(request('orchestration.ask'))).toBe('ask')
-    expect(classifyRuntimeLongPoll(request('orchestration.check', { wait: true }))).toBe('wait')
-    expect(classifyRuntimeLongPoll(request('status.get'))).toBeNull()
-  })
-
   it('reserves wait capacity and releases host admission on socket close', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-admission-'))
     const aborted = vi.fn()

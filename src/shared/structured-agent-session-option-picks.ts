@@ -1,11 +1,11 @@
-import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
+import type { StructuredAgentSessionOptionState } from './agent-session/options/structured-agent-session-options'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionShownModel } from './structured-agent-session-option-snapshot'
+import { structuredAgentSessionShownModel } from './agent-session/options/structured-agent-session-option-snapshot'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+} from './agent-session/options/structured-agent-session-option-codec'
 
 /** The model a pick's other values were chosen under: the chat's own, else the default shown. */
 function structuredAgentSessionControlsModelId(

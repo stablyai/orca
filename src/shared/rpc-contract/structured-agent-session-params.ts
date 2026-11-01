@@ -1,6 +1,6 @@
 import { ExecutionLocation } from './structured-agent-session-location-params'
 export { ExecutionHostId, ExecutionLocation } from './structured-agent-session-location-params'
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -16,7 +16,7 @@ import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
   AGENT_SESSION_HISTORY_MAX_LIMIT
 } from '../agent-session-wire'
-import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session-thread-goal-wire'
+import { AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH } from '../agent-session/agent-session-thread-goal-wire'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 
 export {
@@ -200,6 +200,9 @@ export const SetOptionParams = z
   )
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const RevealParams = OptionsParams.extend({
+  navigation: z.literal('caller').optional()
+}).strict()
 export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({

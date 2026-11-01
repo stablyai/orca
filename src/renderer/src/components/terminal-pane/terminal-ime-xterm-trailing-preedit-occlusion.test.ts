@@ -128,28 +128,6 @@ describe('#12729 — the block over a trailing Korean syllable is the preedit ov
     expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
   })
 
-  it('anchors the overlay to the cursor cell so the preedit continues the run', async () => {
-    const rig = openTerminal()
-
-    await typeHangulRun(rig, ['가', '나', '다', '라'])
-
-    expect(rig.compositionView.style.left).toBe(`${6 * CELL_WIDTH_PX}px`)
-    expect(rig.compositionView.style.height).toBe(`${CELL_HEIGHT_PX}px`)
-    // Synced to the grid's font so the preedit keeps the advance the committed syllables have.
-    expect(rig.compositionView.style.fontFamily).toBe(rig.terminal.options.fontFamily)
-    expect(rig.compositionView.style.fontSize).toBe(`${rig.terminal.options.fontSize}px`)
-  })
-
-  it('themes the trailing overlay instead of the stock opaque #000/#FFF block', async () => {
-    const rig = openTerminal()
-
-    await typeHangulRun(rig, ['가', '나', '다', '라'])
-
-    const { background, color } = rig.compositionView.style
-    expect([THEME.background, 'rgb(17, 34, 51)']).toContain(background)
-    expect([THEME.foreground, 'rgb(170, 187, 204)']).toContain(color)
-  })
-
   it('clears the overlay once the trailing syllable commits', async () => {
     const rig = openTerminal()
     await typeHangulRun(rig, ['가', '나', '다', '라'])

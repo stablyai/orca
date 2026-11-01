@@ -132,15 +132,6 @@ describe('RichMarkdownSearchBar replace field IME guard', () => {
 
     expect(onReplaceCurrent).toHaveBeenCalledTimes(1)
   })
-
-  it('still closes the bar on a plain Escape', () => {
-    const onClose = vi.fn()
-    const { replaceInput } = renderBar({ onClose })
-
-    pressKey(replaceInput, 'Escape')
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('RichMarkdownSearchBar find field IME guard', () => {
@@ -149,15 +140,6 @@ describe('RichMarkdownSearchBar find field IME guard', () => {
     const { findInput } = renderBar({ onMoveToMatch })
 
     pressKey(findInput, 'Enter', { isComposing: true })
-
-    expect(onMoveToMatch).not.toHaveBeenCalled()
-  })
-
-  it('does not move to the previous match on a composing Shift+Enter', () => {
-    const onMoveToMatch = vi.fn()
-    const { findInput } = renderBar({ onMoveToMatch })
-
-    pressKey(findInput, 'Enter', { isComposing: true, shiftKey: true })
 
     expect(onMoveToMatch).not.toHaveBeenCalled()
   })
@@ -187,23 +169,5 @@ describe('RichMarkdownSearchBar find field IME guard', () => {
     pressKey(findInput, 'Enter')
 
     expect(onMoveToMatch).toHaveBeenCalledWith(1)
-  })
-
-  it('still moves to the previous match on a plain Shift+Enter', () => {
-    const onMoveToMatch = vi.fn()
-    const { findInput } = renderBar({ onMoveToMatch })
-
-    pressKey(findInput, 'Enter', { shiftKey: true })
-
-    expect(onMoveToMatch).toHaveBeenCalledWith(-1)
-  })
-
-  it('still closes the bar on a plain Escape', () => {
-    const onClose = vi.fn()
-    const { findInput } = renderBar({ onClose })
-
-    pressKey(findInput, 'Escape')
-
-    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

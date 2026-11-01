@@ -7,7 +7,7 @@ import {
   summarizeSubagentGroup,
   withoutSubagentGroupTwins
 } from './native-chat-subagent-summary'
-import type { NativeChatSubagentEntry } from '../../native-chat-types'
+import type { NativeChatSubagentEntry } from '../native-chat-types'
 
 function agent(entry: Partial<NativeChatSubagentEntry>): NativeChatSubagentEntry {
   return { id: 'a', label: 'task', state: 'working', ...entry }

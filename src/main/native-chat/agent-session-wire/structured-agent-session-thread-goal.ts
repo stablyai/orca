@@ -8,14 +8,12 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionOptionsResult
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../shared/agent-session-thread-goal-wire'
+} from '../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'

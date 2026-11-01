@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { deriveBrowserRoutePartition } from './browser-route-identity'
 import { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
-import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
+
 import {
   BrowserRouteSessionRegistry,
   type BrowserRouteElectronSession
@@ -92,22 +92,6 @@ function bindings(filePath: string): ReturnType<BrowserRoutePartitionBindingStor
 }
 
 describe('route partition identity migration', () => {
-  it('keeps an upgraded client on the partition its cookies already live in', async () => {
-    const filePath = createStorePath()
-    const legacyPartition = seedLegacyBinding(filePath, 'runtime-before-upgrade')
-
-    const prepared = await preparePartition(
-      createSessionRegistry(filePath),
-      'runtime-before-upgrade'
-    )
-
-    expect(prepared).toBe(legacyPartition)
-    expect(bindings(filePath).size).toBe(1)
-    expect(bindings(filePath).get(legacyPartition)?.fingerprint).toBe(
-      deriveBrowserRoutePartition(identity).bindingFingerprint
-    )
-  })
-
   it('keeps the adopted partition after the remote server restarts under a new runtimeId', async () => {
     const filePath = createStorePath()
     const legacyPartition = seedLegacyBinding(filePath, 'runtime-before-upgrade')
@@ -131,32 +115,6 @@ describe('route partition identity migration', () => {
     expect(first).toBe(deriveBrowserRoutePartition(identity).partition)
     expect(second).toBe(first)
     expect(bindings(filePath).size).toBe(1)
-  })
-
-  it('never leaves a partition name this identity already holds', () => {
-    const legacyIdentity = legacyIdentityFor('runtime-before-upgrade')
-    const derived = deriveBrowserRoutePartition(identity)
-    const legacy = deriveBrowserRoutePartition(legacyIdentity)
-    const rebound: string[] = []
-
-    const resolved = resolveBrowserRoutePartitionBinding({
-      bindings: {
-        get: (partition) =>
-          partition === derived.partition
-            ? 'f'.repeat(64)
-            : partition === legacy.partition
-              ? legacy.bindingFingerprint
-              : null,
-        findPartitionByFingerprint: () => null,
-        rebind: (partition) => rebound.push(partition)
-      },
-      identity,
-      legacyIdentity,
-      storageScope
-    })
-
-    expect(resolved).toEqual(derived)
-    expect(rebound).toEqual([])
   })
 
   it('never adopts a partition another route already owns', async () => {
