@@ -112,6 +112,7 @@
       "./plugins/android-respect-rotation-lock.js",
       "./plugins/ios-pod-deployment-target-floor.js",
       "./plugins/ios-scene-lifecycle.js",
+      "./plugins/ios-bundle-phase-quoted-script-path.js",
       [
         "expo-splash-screen",
         {
