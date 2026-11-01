@@ -17,7 +17,7 @@ import { nativeChatToolLineView } from '../../../../../src/shared/native-chat/to
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'

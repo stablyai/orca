@@ -6,8 +6,8 @@ import type {
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { foldToolMessages } from './native-chat-tool-fold'
 import { nativeChatRowsInDrawOrder } from '../transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../native-chat-turn-membership'
-import type { NativeChatMessage, NativeChatRole } from '../../native-chat-types'
+import { nativeChatTurnMembership } from '../transcript/native-chat-turn-membership'
+import type { NativeChatMessage, NativeChatRole } from '../native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../structured-agent-session-projection'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }

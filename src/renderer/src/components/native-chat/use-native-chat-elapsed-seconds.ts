@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNow } from '@/hooks/use-now'
-import { nativeChatElapsedSeconds } from '../../../../shared/native-chat-turn-status'
+import { nativeChatElapsedSeconds } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 
 /** Share one visibility-gated second clock across running turns to avoid per-turn intervals and commits. */
 export function useNativeChatElapsedSeconds(startedAt: number | null, counting: boolean): number {

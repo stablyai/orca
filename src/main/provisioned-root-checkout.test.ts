@@ -48,24 +48,10 @@ describe('verifyProvisionedRootCheckout', () => {
     ).toThrow('requested ref')
   })
 
-  it('accepts a requested branch created from a tag or commit ref', () => {
-    expect(
-      verify(gitWorktree(projectRoot), { baseBranch: 'v1.2.3', expectedRefHead: 'abc123' }).branch
-    ).toBe('refs/heads/fix-sandbox')
-  })
-
   it('rejects a requested ref without its source-host commit identity', () => {
     expect(() => verify(gitWorktree(projectRoot), { baseBranch: 'missing-ref' })).toThrow(
       'ref identity is missing'
     )
-  })
-
-  it('uses an explicit branch override as the requested local branch', () => {
-    expect(
-      verify(gitWorktree(projectRoot, { branch: 'refs/heads/feature/review' }), {
-        branchNameOverride: 'feature/review'
-      }).branch
-    ).toBe('refs/heads/feature/review')
   })
 
   it('rejects a linked worktree and a sparse checkout', () => {

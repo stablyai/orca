@@ -39,80 +39,7 @@
         }
       }
     },
-    "3b32328e5154": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "worktrees": [
-              {
-                "displayName": "One",
-                "repo": "Repo",
-                "status": "working",
-                "worktreeId": "w-1"
-              },
-              {
-                "displayName": "Two",
-                "repo": "Repo",
-                "status": "idle",
-                "worktreeId": "w-2"
-              }
-            ]
-          }
-        }
-      }
-    },
     "44136fa355b3": {},
-    "4cebf6258ec1": {
-      "name": "worktree.ps#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "87aae336d391": {
       "host-1": {
         "activeCount": 2,
@@ -148,10 +75,38 @@
       "status": "pending",
       "startedAt": 0
     },
-    "ab49c180f672": {
+    "9b4aecdf9e7c": {
       "name": "worktree.ps#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"acceptRowDelta\":true,\"exactActivity\":true,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
+    "ccaecdb423f6": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
+            "exactActivity": true,
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -159,6 +114,55 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
+      }
+    },
+    "f70002e86376": {
+      "name": "worktree.ps#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptRowDelta": true,
+            "exactActivity": true,
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "status": "working",
+                "worktreeId": "w-1"
+              },
+              {
+                "displayName": "Two",
+                "repo": "Repo",
+                "status": "idle",
+                "worktreeId": "w-2"
+              }
+            ]
+          }
+        }
       }
     }
   },
@@ -168,8 +172,8 @@
       {
         "id": "catalog-pending",
         "observation": {
-          "sender": ["4cebf6258ec1"],
-          "payloads": ["ab49c180f672"],
+          "sender": ["ccaecdb423f6"],
+          "payloads": ["9b4aecdf9e7c"],
           "settlements": {
             "load": "9270aeb7d9c6"
           },
@@ -180,8 +184,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["3b32328e5154"],
-          "payloads": ["ab49c180f672"],
+          "sender": ["f70002e86376"],
+          "payloads": ["9b4aecdf9e7c"],
           "settlements": {
             "load": "eb79a9b3682a"
           },

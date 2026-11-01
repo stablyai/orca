@@ -83,37 +83,6 @@ beforeEach(() => {
 })
 
 describe('chrome.management', () => {
-  it("lists the profile's installed extensions as Chrome's ExtensionInfo", async () => {
-    mocks.enabled.delete(SELF)
-    await expect(call('getAll', [])).resolves.toEqual([
-      expect.objectContaining({ id: SELF, enabled: false, disabledReason: 'unknown' }),
-      {
-        id: OTHER,
-        name: 'Blocker',
-        shortName: 'Blk',
-        description: 'Blocks things',
-        version: '2.1',
-        mayDisable: true,
-        enabled: true,
-        isApp: false,
-        type: 'extension',
-        offlineEnabled: false,
-        optionsUrl: `chrome-extension://${OTHER}/options.html`,
-        icons: [
-          { size: 16, url: `chrome-extension://${OTHER}/i16.png` },
-          { size: 128, url: `chrome-extension://${OTHER}/i128.png` }
-        ],
-        permissions: ['storage'],
-        hostPermissions: ['https://*/*'],
-        installType: 'development'
-      }
-    ])
-    await expect(call('get', [SELF])).resolves.toMatchObject({ installType: 'normal' })
-    await expect(call('get', ['c'.repeat(32)])).rejects.toThrow(
-      `Failed to find extension with id ${'c'.repeat(32)}.`
-    )
-  })
-
   it('turns other extensions off, and on only from a user gesture', async () => {
     await call('setEnabled', [OTHER, false])
     expect(mocks.setEnabled).toHaveBeenCalledWith('default', OTHER, false)

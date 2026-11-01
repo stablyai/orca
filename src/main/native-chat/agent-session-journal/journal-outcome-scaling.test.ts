@@ -28,6 +28,7 @@ import { encodeJournalState } from './journal-state-codec'
 import type * as RowStorage from './journal-storage-row-schema'
 import type * as Strict from './journal-storage-strict'
 import type * as OutcomeFormat1 from './journal-outcome-format-1'
+import type * as OutcomeFormat2 from './journal-outcome-format-2'
 import type * as Transition from './journal-reducer-transition'
 import {
   projectionBase as base,
@@ -44,7 +45,7 @@ import {
 
 // Admission's own work: strict walks of input rows and of outcome records, counted at the calls,
 // and every strict walk at all, counted at each strict schema storage builds.
-const admission = vi.hoisted(() => ({ rows: 0, records: 0, walks: 0 }))
+const admission = vi.hoisted(() => ({ rows: 0, records: 0, walks: 0, tombstones: 0 }))
 vi.mock('./journal-storage-strict', async (original) => {
   const actual = await original<typeof Strict>()
   // A schema storage cannot close further comes back as it is, so one instance can recur.
@@ -84,13 +85,31 @@ vi.mock('./journal-outcome-format-1', async (original) => {
     ...actual,
     admitOutcomeFormat1: (value: Parameters<typeof actual.admitOutcomeFormat1>[0]) => {
       admission.records += 1
+      if (value.deleted) {
+        admission.tombstones++
+      }
       return actual.admitOutcomeFormat1(value)
+    }
+  }
+})
+vi.mock('./journal-outcome-format-2', async (original) => {
+  const actual = await original<typeof OutcomeFormat2>()
+  return {
+    ...actual,
+    admitOutcomeFormat2: (value: Parameters<typeof actual.admitOutcomeFormat2>[0]) => {
+      if (actual.isNativeOutcomeField(value.field)) {
+        admission.records++
+        if (value.deleted) {
+          admission.tombstones++
+        }
+      }
+      return actual.admitOutcomeFormat2(value)
     }
   }
 })
 // Every draft transition a write or a replacement folds through, to count the nodes it reaches.
 const transitions = vi.hoisted(() => {
-  const opened: { tracked: () => number }[] = []
+  const opened: { tracked: () => number; trackedDerived: () => number }[] = []
   return opened
 })
 vi.mock('./journal-reducer-transition', async (original) => {
@@ -146,7 +165,16 @@ const send = (seq: number, clientMessageId: string, handoverRecorded?: true): Jo
   clientMessageId,
   body: message(clientMessageId),
   providerHandle,
-  ...(handoverRecorded ? { handoverRecorded } : {}),
+  ...(handoverRecorded
+    ? {
+        handoverRecorded,
+        inputOrderContext: {
+          source: { epoch, sequence: seq },
+          basis: 'observed' as const,
+          cut: seq
+        }
+      }
+    : {}),
   payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, message(clientMessageId))
 })
 const revision =
@@ -466,9 +494,23 @@ it.each(['rewind', 'replacement', 'rollover'] as const)(
           rows
         ]),
         ...work.writes.map(([target, rows]): [string, number] => [`${target}`, Number(rows)]),
-        ['draft nodes', transitions.reduce((sum, transition) => sum + transition.tracked(), 0)]
+        [
+          'canonical draft nodes',
+          transitions.reduce(
+            (sum, transition) => sum + transition.tracked() - transition.trackedDerived(),
+            0
+          )
+        ]
       ])
-      return { statements: work.statements, counts }
+      const derived = transitions.reduce((sum, transition) => sum + transition.trackedDerived(), 0)
+      // Two coordinate indexes each have an all-card and a domain AVL; a point path
+      // visits at most twice log2(K+2), reaching at most eight objects at each level.
+      expect(derived).toBeLessThanOrEqual(64 * (size + 1) * Math.ceil(Math.log2(size + 2)))
+      console.info(
+        'replacement-draft',
+        JSON.stringify({ path, size, canonical: counts.get('canonical draft nodes'), derived })
+      )
+      return { statements: work.statements, counts, derived }
     }
     // A chat's first item and card start collections an empty chat lacks, so the line is taken
     // between non-empty chats: 10N more restated items cost ten times what N more do.
@@ -484,7 +526,10 @@ it.each(['rewind', 'replacement', 'rollover'] as const)(
         grown: 10 * ((small.counts.get(counted) ?? 0) - from)
       })
     }
-    expect(large.counts.get('draft nodes')).toBeGreaterThan(small.counts.get('draft nodes') ?? 0)
+    expect(large.counts.get('canonical draft nodes')).toBeGreaterThan(
+      small.counts.get('canonical draft nodes') ?? 0
+    )
+    expect(large.derived).toBeGreaterThan(small.derived)
   }
 )
 
@@ -522,8 +567,15 @@ it("opens a new chat reading each key's newest record once, the same with N and 
     journal_outcome_epochs: 1,
     journal_outcomes: small.keys,
     journal_rows: 1,
-    journal_sessions: 2
+    journal_sessions: 2,
+    other: 0
   })
+  // Empty legacy ownership still costs one session-scoped, position-ordered lookup per restore.
+  for (const { work } of [small, large]) {
+    expect(work.statements.filter((sql) => !/\bFROM\s+journal_\w+/.test(sql))).toStrictEqual([
+      'SELECT message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json FROM queued_messages WHERE session_id = ? ORDER BY position ASC'
+    ])
+  }
   // Each read is one seek down the key index from the last key: no scan, no sort, no revision walk.
   const plan = small.database.db
     .prepare(`EXPLAIN QUERY PLAN ${JOURNAL_NEWEST_OUTCOME_SQL}`)
@@ -553,14 +605,22 @@ async function prefixChat(size: number, label: string) {
 it('writes to an existing chat without reading its prefix, the same at N and 10N', async () => {
   const small = await prefixChat(N, 'prefix-append-small')
   const large = await prefixChat(10 * N, 'prefix-append-large')
-  for (const key of ['first', 'streamed', 'accepted'] as const) {
+  for (const key of ['streamed', 'accepted'] as const) {
     expectSameWork(small[key], large[key])
   }
-  // The first write appends the marker, then the item's record and the two scalars it changed.
-  expect(small.first.writes).toStrictEqual([
-    ['journal_outcomes INSERT', 3],
-    ['journal_rows INSERT', 1]
-  ])
+  // Conversion writes each existing identity and the one own entry once, plus the
+  // item's record and two scalars; every subsequent ordinary append stays point work.
+  for (const [size, fixture] of [
+    [N, small],
+    [10 * N, large]
+  ] as const) {
+    expect(fixture.first.writes).toStrictEqual([
+      ['journal_outcomes INSERT', size + 4],
+      ['journal_rows INSERT', 1]
+    ])
+    expect(fixture.first.read.journal_rows).toBe(1) // Newly inserted marker read-back, no prefix scan.
+  }
+  expect(large.first.statements).toEqual(small.first.statements) // Prepared statements are reused for each converted key.
   expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 1]])
   expect(large.rig.state().submissions.get('send')?.dispatchState).toBe('accepted')
 })
@@ -587,7 +647,8 @@ it("opens an existing chat reading main's prefix rows and each tail key's newest
     expect(work.read.journal_rows).toBe(prefix + 2)
     expect(work.read.journal_outcomes).toBe(keys)
   }
-  expect(large.keys).toBe(small.keys)
+  // The first mandatory conversion persisted one native identity per original card.
+  expect(large.keys - small.keys).toBe(9 * N)
 })
 
 /** The text of each keyed record an open decodes: every key's newest live record. */
@@ -613,6 +674,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     admission.rows = 0
     admission.records = 0
     admission.walks = 0
+    admission.tombstones = 0
     const parses = vi.spyOn(JSON, 'parse')
     restoreJournal(database.db, sessionId)
     const parsed = parses.mock.calls.filter(([text]) => entries.texts.has(text)).length
@@ -624,6 +686,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     admission.rows = 0
     admission.records = 0
     admission.walks = 0
+    admission.tombstones = 0
     await rig.writer.enqueue(revision('answer', message('z'.repeat(4_096), 'assistant'), 3))
     const written = { ...admission, writes: watched.take().writes }
     watched.stop()
@@ -634,7 +697,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     expect(open.read.journal_rows).toBe(prefix + 2)
     expect(open.rows).toBe(prefix)
     expect(open.records).toBe(keys)
-    expect(open.walks).toBe(open.rows + open.records)
+    expect(open.walks).toBe(open.rows + open.records - open.tombstones)
     expect(open.entries).toBeGreaterThan(0)
     expect(open.parsed).toBe(open.entries)
     expect(paged.rows).toHaveLength(100)
@@ -642,7 +705,7 @@ it('admits each row and record an existing chat reads or writes once, at N and 1
     // The written row's read-back, and each record the write inserts.
     expect(written.rows).toBe(1)
     expect(written.writes).toStrictEqual([['journal_outcomes INSERT', written.records]])
-    expect(written.walks).toBe(written.rows + written.records)
+    expect(written.walks).toBe(written.rows + written.records - written.tombstones)
   }
 })
 

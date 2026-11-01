@@ -32,6 +32,7 @@ import { firstFrameOptionState } from './structured-agent-session-option-first-f
 /** The picker's option state for one session: seeded, kept across its fences, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
   agent: AgentType
+  transportEnabled: boolean
   optionCatalog: AgentSessionOptionCatalog | null
   identity: string
   fence: number | null
@@ -73,26 +74,35 @@ export function useStructuredAgentSessionOptionState(args: {
       })
     )
   )
-  const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const { optionState } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
+  const authority = structuredSessionSelectionAuthority(target)
+  const controller = structuredSessionSelectionController(target, sessionId, agent)
+  const hostKey = structuredAgentSessionHostKey(target)
+  const owner = useMemo(
+    () => [agent, sessionId, hostKey, identity, controller],
+    [agent, sessionId, hostKey, identity, controller]
+  )
+  const acceptedSupport = reader.supportFor(owner)
   // Projected once per accepted answer so consumers keep stable references between answers.
   const conversationSupport = useMemo(
     () =>
-      support && support.sessionId !== null
+      acceptedSupport && acceptedSupport.sessionId !== null
         ? {
-            sessionId: support.sessionId,
-            commands: support.result.conversationCommands ?? [],
-            threadGoal: support.result.threadGoal,
-            reportedThreadGoal: support.result.reportedThreadGoal,
-            contextUsage: support.result.contextUsage,
-            acceptsImages: support.result.acceptsImages,
-            rewind: support.result.rewind ?? {
+            sessionId: acceptedSupport.sessionId,
+            commands: acceptedSupport.result.conversationCommands ?? [],
+            threadGoal: acceptedSupport.result.threadGoal,
+            reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,
+            contextUsage: acceptedSupport.result.contextUsage,
+            acceptsImages: acceptedSupport.result.acceptsImages,
+            canSwitchAccount: acceptedSupport.result.canSwitchAccount === true,
+            rewind: acceptedSupport.result.rewind ?? {
               supported: false as const,
               reason: 'unsupported' as const
             },
-            fence: support.fence
+            fence: acceptedSupport.fence
           }
         : null,
-    [support]
+    [acceptedSupport]
   )
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
   const {
@@ -102,13 +112,10 @@ export function useStructuredAgentSessionOptionState(args: {
     receiveCatalog,
     invalidate: rereadOptions
   } = reader
-  const authority = structuredSessionSelectionAuthority(target)
-  const controller = structuredSessionSelectionController(target, sessionId, agent)
   const takesSelection = useStructuredAgentSessionHostCapability(
     target,
     AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY
   )
-  const hostKey = structuredAgentSessionHostKey(target)
   const contextKey = JSON.stringify([identity, hostKey, newLaunch, worktree, fence, observation])
   const contextRef = useRef(contextKey)
   useEffect(() => {
@@ -122,7 +129,7 @@ export function useStructuredAgentSessionOptionState(args: {
   useEffect(
     () =>
       reader.attach({
-        owner: [agent, sessionId, hostKey, identity, controller],
+        owner,
         reset: [contextKey, authority],
         sessionId,
         fence,
@@ -154,6 +161,7 @@ export function useStructuredAgentSessionOptionState(args: {
       }),
     [
       reader,
+      owner,
       agent,
       sessionId,
       hostKey,
@@ -214,13 +222,21 @@ export function useStructuredAgentSessionOptionState(args: {
     AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
   )
 
+  const support =
+    args.transportEnabled && conversationSupport?.sessionId === sessionId
+      ? conversationSupport
+      : null
   return {
     // What the picker shows and a send carries.
     optionView,
     controller,
     takesSelection,
     takesSendOptions,
-    conversationSupport,
+    conversationSupport: support,
+    sessionSupport: {
+      acceptsImages: support?.acceptsImages,
+      canSwitchAccount: support?.canSwitchAccount
+    },
     rereadOptions,
     receiveCatalog,
     isCurrentContext,

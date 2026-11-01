@@ -251,7 +251,7 @@ describe('stable logical RPC client', () => {
     expect(client.getPendingPath()).toBeNull()
 
     const migrating = client.migrateTo(replacement, 'relay')
-    replacement.setState('connecting')
+    // The replacement never announces its initial connecting state; the client must still show it.
     expect(client.getState()).toBe('connecting')
     expect(client.getPendingPath()).toBe('relay')
     replacement.setState('handshaking')
@@ -424,7 +424,7 @@ describe('stable logical RPC client', () => {
     replacement.setState('disconnected')
 
     await expect(migrating).rejects.toThrow(/disconnected/)
-    expect(states).toEqual(['handshaking', 'disconnected'])
+    expect(states).toEqual(['connecting', 'handshaking', 'disconnected'])
     expect(client.getState()).toBe('disconnected')
     expect(client.getPendingPath()).toBeNull()
   })

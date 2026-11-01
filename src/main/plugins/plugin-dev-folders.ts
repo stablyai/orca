@@ -45,7 +45,7 @@ function assertPluginSystemEnabled(service: PluginDevFolderService): void {
       'Plugins are turned off on this Orca host.',
       {
         nextSteps: [
-          'Ask the user to open Orca Settings → Plugins and click "Turn on plugins", then run the command again.'
+          'Ask the user to click "Turn on plugins" in Orca Settings → Plugins (or, on a host with no window such as `orca serve`, to run `orca plugin system on` against it), then run the command again.'
         ]
       }
     )

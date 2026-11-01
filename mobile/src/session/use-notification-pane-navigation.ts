@@ -1,3 +1,5 @@
+import { structuredSessionIdFromNotificationPane } from '../../../src/shared/structured-session-notification-pane'
+import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
 import { useEffect, useRef, useState } from 'react'
 import { usePageBridgeClient } from '../transport/client-context.web'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -9,11 +11,17 @@ import { notificationPaneTab } from './notification-pane-tab'
 export function useNotificationPaneNavigation({
   sessionTabs,
   terminalsLoaded,
-  switchSessionTab
+  connState,
+  switchSessionTab,
+  worktreeId,
+  openNativeSession
 }: {
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
+  connState?: string
   switchSessionTab: (tab: MobileSessionTab) => void
+  worktreeId?: string
+  openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
 }) {
   const client = usePageBridgeClient()
   // The opening tap arrives only in the initial init, before route-update listeners.
@@ -50,12 +58,43 @@ export function useNotificationPaneNavigation({
     if (paneKey === null || paneKey === '' || !terminalsLoaded) {
       return
     }
-    applied.current = paneKey
     const tab = notificationPaneTab(sessionTabs, paneKey)
+    if (
+      openNativeSession &&
+      connState !== undefined &&
+      connState !== 'connected' &&
+      (tab?.type === 'agent-session' || structuredSessionIdFromNotificationPane(paneKey))
+    ) {
+      return
+    }
+    applied.current = paneKey
     // A pre-reconnect inventory can predate the pane named by the push.
     if (tab) {
       pending.current = null
-      switchSessionTab(tab)
+      if (tab.type === 'agent-session' && openNativeSession && worktreeId) {
+        void openNativeSession({
+          kind: 'notification',
+          sessionId: tab.sessionId,
+          worktreeId,
+          agent: tab.agent
+        })
+      } else {
+        switchSessionTab(tab)
+      }
+    } else if (openNativeSession && worktreeId) {
+      const sessionId = structuredSessionIdFromNotificationPane(paneKey)
+      if (sessionId) {
+        pending.current = null
+        void openNativeSession({ kind: 'notification', sessionId, worktreeId })
+      }
     }
-  }, [asked, sessionTabs, switchSessionTab, terminalsLoaded])
+  }, [
+    asked,
+    connState,
+    sessionTabs,
+    switchSessionTab,
+    terminalsLoaded,
+    worktreeId,
+    openNativeSession
+  ])
 }

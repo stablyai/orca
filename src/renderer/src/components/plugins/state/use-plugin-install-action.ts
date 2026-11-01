@@ -7,6 +7,8 @@ import type {
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { translate } from '@/i18n/i18n'
 import { pluginInstallErrorMessage } from '../presentation/plugin-error-presentation'
+import { catalogInstallTrustPrompt } from '../presentation/plugin-install-trust'
+import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { applyPluginThemesNow } from './plugin-theme-apply'
 import { pluginTryAction } from './plugin-try-action'
@@ -119,6 +121,15 @@ export function usePluginInstallAction({
           message: catalogInstallErrorMessage(new Error('marketplace changed'))
         })
         return
+      }
+      // Why here: the card, the page and every link-opened page install through this one gate.
+      const trustPrompt = catalogInstallTrustPrompt(listing, preview)
+      if (trustPrompt) {
+        setPhase(pluginKey, null)
+        if (!(await confirmPluginInstallTrust(trustPrompt))) {
+          return
+        }
+        setPhase(pluginKey, { kind: 'installing' })
       }
       const execution = listing.release?.execution ?? pluginExecutionProfile(preview.manifest)
       try {

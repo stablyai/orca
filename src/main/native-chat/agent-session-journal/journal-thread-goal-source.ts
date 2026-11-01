@@ -4,7 +4,7 @@ import type {
   AgentJournalThreadGoal
 } from '../../../shared/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session-thread-goal'
+import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 
 export type JournalThreadGoalSource = {
   goal: AgentJournalThreadGoal | null

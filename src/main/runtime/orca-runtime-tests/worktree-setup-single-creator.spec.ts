@@ -79,7 +79,7 @@ async function createActivated(options: {
   ensurePathWithinWorkspaceMock.mockReturnValue(WORKTREE_PATH)
   vi.mocked(getEffectiveHooks).mockReturnValue({ scripts: { setup: 'pnpm worktree:setup' } })
   vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-  vi.mocked(createSetupRunnerScript).mockReturnValue({
+  vi.mocked(createSetupRunnerScript).mockResolvedValue({
     runnerScriptPath: RUNNER,
     envVars: { ORCA_ROOT_PATH: '/tmp/repo', ORCA_WORKTREE_PATH: WORKTREE_PATH }
   })

@@ -1,11 +1,11 @@
 export const DESKTOP_READ_WINDOW = 300
 export const UNFLUSHED_SETTLE_MS = 1_500
 
+import type { AgentType } from '../../shared/agent-status-types'
 import type {
-  AgentType,
   NativeChatMessage,
   NativeChatTurnLifecycle
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {

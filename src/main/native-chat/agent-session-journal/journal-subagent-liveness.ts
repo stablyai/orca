@@ -29,7 +29,7 @@ import {
   type NativeChatBackgroundTaskBlock,
   type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 
 export type JournalSubagentLivenessRevision = {
   identity: AgentJournalItemIdentity

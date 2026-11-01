@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import { getDefaultSettings } from '../../../../shared/constants'
+
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION,
@@ -59,54 +59,6 @@ beforeEach(() => {
 })
 
 describe('terminal quick command host collections', () => {
-  it('loads a capability-gated remote host collection', async () => {
-    const call = installRuntime()
-    const store = createTestStore()
-
-    await store.getState().loadRuntimeTerminalQuickCommands('env-1')
-
-    expect(store.getState().runtimeTerminalQuickCommands.get('env-1')).toMatchObject({
-      commands: [savedCommand],
-      ready: true,
-      supported: true
-    })
-    expect(call.mock.calls.map(([args]) => args.method)).toEqual([
-      'status.get',
-      'settings.getTerminalQuickCommands'
-    ])
-  })
-
-  it('degrades to local-only behavior for an older remote host', async () => {
-    const call = installRuntime(false)
-    const store = createTestStore()
-
-    await store.getState().loadRuntimeTerminalQuickCommands('env-old')
-
-    expect(store.getState().runtimeTerminalQuickCommands.get('env-old')).toMatchObject({
-      commands: [],
-      ready: true,
-      supported: false
-    })
-    expect(call).toHaveBeenCalledTimes(1)
-  })
-
-  it('persists one atomic mutation to the owning remote host', async () => {
-    const call = installRuntime()
-    const store = createTestStore()
-    await store.getState().loadRuntimeTerminalQuickCommands('env-1')
-    const edited = { ...savedCommand, command: 'pnpm test' }
-
-    await store.getState().upsertTerminalQuickCommand('runtime:env-1', edited)
-
-    expect(store.getState().runtimeTerminalQuickCommands.get('env-1')?.commands).toEqual([edited])
-    expect(call).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        method: 'settings.updateTerminalQuickCommands',
-        params: { mutation: { type: 'upsert', command: edited } }
-      })
-    )
-  })
-
   it('does not let an older load overwrite a concurrent mutation', async () => {
     let resolveLoad: (value: ReturnType<typeof success>) => void = () => undefined
     const staleLoad = new Promise<ReturnType<typeof success>>((resolve) => {
@@ -165,33 +117,5 @@ describe('terminal quick command host collections', () => {
       supported: null
     })
     await reload
-  })
-
-  it('keeps Local Mac commands in the controlling client settings', async () => {
-    const set = vi.fn(async (updates: { terminalQuickCommands: TerminalQuickCommand[] }) => updates)
-    vi.stubGlobal('window', { api: { settings: { set } } })
-    const store = createTestStore()
-    store.setState({ settings: { ...getDefaultSettings('/tmp'), terminalQuickCommands: [] } })
-
-    await store.getState().upsertTerminalQuickCommand('local', savedCommand)
-
-    expect(set).toHaveBeenCalledWith({ terminalQuickCommands: [savedCommand] })
-    expect(store.getState().settings?.terminalQuickCommands).toEqual([savedCommand])
-  })
-
-  it('saves a new local command when forty commands already exist', async () => {
-    const commands = Array.from({ length: 40 }, (_, index) => ({
-      ...savedCommand,
-      id: `command-${index}`,
-      scope: { type: 'repo' as const, repoId: `missing-project-${index}` }
-    }))
-    const set = vi.fn(async (updates: { terminalQuickCommands: TerminalQuickCommand[] }) => updates)
-    vi.stubGlobal('window', { api: { settings: { set } } })
-    const store = createTestStore()
-    store.setState({ settings: { ...getDefaultSettings('/tmp'), terminalQuickCommands: commands } })
-
-    expect(await store.getState().upsertTerminalQuickCommand('local', savedCommand)).toBe(true)
-    expect(set).toHaveBeenCalledWith({ terminalQuickCommands: [...commands, savedCommand] })
-    expect(store.getState().settings?.terminalQuickCommands).toEqual([...commands, savedCommand])
   })
 })

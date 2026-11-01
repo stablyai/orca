@@ -21,6 +21,7 @@ import {
   settleTurn,
   turnText
 } from './structured-chat-coordinator-mail-rig.test-fixture'
+import { getFollowUpDispatch } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 import { createStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'
 import type { placeWorkerAgent } from './rpc/methods/orchestration/worker/worker-start-agent-placement'
@@ -373,11 +374,15 @@ describe('a send to a finished structured worker', () => {
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
     await settleTurn(identity.sessionId, 1)
 
-    expect(turnText(worker.turns[1]!)).toContain('and the docs')
+    expect(turnText(worker.turns[1]!)).toContain('`check` command above')
     await vi.waitFor(
       () => expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toHaveLength(0),
       WAIT
     )
+    const followUp = getFollowUpDispatch(db, firstDispatchId)!
+    expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
+      { body: 'and the docs' }
+    ])
   })
 })
 

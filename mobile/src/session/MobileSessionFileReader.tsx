@@ -3,13 +3,11 @@ import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-op
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
-  Image,
   View,
   Text,
   ScrollView,
   Pressable,
   Platform,
-  ActivityIndicator,
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
@@ -21,6 +19,8 @@ import {
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
+import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
+import { MobileSvgPreview } from '../components/MobileSvgPreview'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -35,7 +35,7 @@ import type {
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from './mobile-diff-comments'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
+import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -165,7 +165,7 @@ function FileReaderDocument({
 
     // Defer highlighting one tick so large files appear as plain text immediately.
     const timer = setTimeout(() => {
-      if (doc.kind === 'file' || doc.kind === 'html') {
+      if (doc.kind === 'file' || doc.kind === 'html' || doc.kind === 'svg') {
         setFileSyntax({
           doc,
           language: syntaxLanguage,
@@ -186,14 +186,10 @@ function FileReaderDocument({
   }, [doc, syntaxLanguage])
 
   if (!doc || doc.status === 'loading') {
-    return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    )
+    return <MobileStateView loading title={t('session.fileReader.loading', 'Loading file…')} />
   }
   if (doc.status === 'error') {
-    return <MobileLoadErrorState message={doc.message} />
+    return <MobileLoadErrorState error={doc.message} />
   }
 
   if (doc.kind === 'diff') {
@@ -282,20 +278,10 @@ function FileReaderDocument({
   if (doc.kind === 'image') {
     return (
       <View style={styles.imagePreviewContainer}>
-        <ScrollView
-          style={styles.imagePreviewScroll}
-          contentContainerStyle={styles.imagePreviewContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: doc.dataUri }}
-            style={styles.imagePreview}
-            resizeMode="contain"
-            accessibilityLabel={t('session.fileReader.imageLabel', '{{title}} image', { title })}
-          />
-        </ScrollView>
+        <MobilePanZoomImage
+          uri={doc.dataUri}
+          label={t('session.fileReader.imageLabel', '{{title}} image', { title })}
+        />
       </View>
     )
   }
@@ -327,6 +313,18 @@ function FileReaderDocument({
     return (
       <View style={styles.markdownEditor}>
         <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
+      </View>
+    )
+  }
+
+  if (doc.kind === 'svg' && !doc.truncated) {
+    return (
+      <View style={styles.markdownEditor}>
+        <MobileSvgPreview
+          markup={doc.content}
+          title={title}
+          renderSource={() => renderSourceText(doc.content)}
+        />
       </View>
     )
   }
