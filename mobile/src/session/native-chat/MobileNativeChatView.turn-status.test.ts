@@ -31,7 +31,7 @@ vi.mock('react-native', async () => {
         props.ListFooterComponent
       )
     }),
-    Platform: { OS: 'ios' },
+    Platform: { OS: 'ios', select: (specifics: { ios?: unknown }) => specifics.ios },
     Pressable: 'Pressable',
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',

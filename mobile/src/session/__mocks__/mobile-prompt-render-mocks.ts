@@ -1,12 +1,26 @@
 import { vi } from 'vitest'
 
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
+  Easing: { bezier: () => (t: number) => t },
+  ReduceMotion: { Never: 'never' },
+  useReducedMotion: () => false,
+  useSharedValue: (value: unknown) => ({ value }),
+  useAnimatedStyle: () => ({}),
+  useAnimatedRef: () => ({ current: null }),
+  useAnimatedScrollHandler: () => () => {},
+  withTiming: (to: unknown) => to,
+  withSpring: (to: unknown) => to,
+  runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  cancelAnimation: () => {}
+}))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ...(await import('../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    Platform: { OS: 'ios' },
+    Platform: { OS: 'ios', select: (specifics: { ios?: unknown }) => specifics.ios },
     Keyboard: { dismiss: vi.fn() },
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd: vi.fn(), scrollToOffset: vi.fn() }), [])
