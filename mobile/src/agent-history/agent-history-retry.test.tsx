@@ -1,6 +1,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { aiVaultScanIssueText } from '../../../src/shared/ai-vault-scan-issue-copy'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -40,6 +41,7 @@ vi.mock('react-native', () => ({
   Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
+  ScrollView: 'ScrollView',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
@@ -111,6 +113,29 @@ afterEach(() => {
   doubles.nativeRedial = undefined
   doubles.connection = { client: null, state: 'reconnecting' }
 })
+
+const HOST_A_SESSION: AiVaultSession = {
+  id: 'claude:host-a',
+  executionHostId: 'local',
+  agent: 'claude',
+  sessionId: 'host-a-session',
+  title: 'Host A session',
+  cwd: '/host-a/workspace',
+  branch: null,
+  model: null,
+  filePath: '/host-a/session.jsonl',
+  codexHome: null,
+  createdAt: null,
+  updatedAt: null,
+  modifiedAt: '2026-10-21T00:00:00.000Z',
+  messageCount: 2,
+  totalTokens: 10,
+  previewMessages: [],
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: '',
+  subagent: null
+}
 
 function panel(pair: ReturnType<typeof createFakeBridgePortPair>) {
   return (
@@ -184,28 +209,6 @@ it.each([
   async (hostId, retainedLists, alreadyScanning) => {
     const pair = createFakeBridgePortPair()
     await pair.flush()
-    const session: AiVaultSession = {
-      id: 'claude:host-a',
-      executionHostId: 'local',
-      agent: 'claude',
-      sessionId: 'host-a-session',
-      title: 'Host A session',
-      cwd: '/host-a/workspace',
-      branch: null,
-      model: null,
-      filePath: '/host-a/session.jsonl',
-      codexHome: null,
-      createdAt: null,
-      updatedAt: null,
-      modifiedAt: '2026-10-21T00:00:00.000Z',
-      messageCount: 2,
-      totalTokens: 10,
-      previewMessages: [],
-      queuedMessageCount: 0,
-      subagentTranscriptCount: 0,
-      resumeCommand: '',
-      subagent: null
-    }
     const reply = (result: unknown): RpcResponse => ({ id: 'history', ok: true, result })
     const previous = new FakeSession('connected')
     previous.sendRequest.mockImplementation(async (method) =>
@@ -214,7 +217,7 @@ it.each([
           ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
           : method === 'worktree.ps'
             ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
-            : { sessions: [session], issues: [] }
+            : { sessions: [HOST_A_SESSION], issues: [] }
       )
     )
     doubles.connection = { client: previous, state: 'connected' }
@@ -260,3 +263,46 @@ it.each([
     )
   }
 )
+
+it('counts a too-large transcript and shows its path and English reason on demand', async () => {
+  const pair = createFakeBridgePortPair()
+  await pair.flush()
+  const path = '/host-a/too-large.jsonl'
+  const issue = {
+    executionHostId: 'local',
+    agent: 'claude',
+    path,
+    ...aiVaultScanIssueText('transcriptTooLarge', { params: { label: 'Claude' } })
+  }
+  const host = new FakeSession('connected')
+  host.sendRequest.mockImplementation(async (method) => ({
+    id: 'history',
+    ok: true,
+    result:
+      method === 'status.get'
+        ? { capabilities: ['aiVault.v1'], hostPlatform: 'darwin' }
+        : method === 'worktree.ps'
+          ? { worktrees: [{ worktreeId: 'wt-1', repoId: 'repo', path: '/host-a/workspace' }] }
+          : { sessions: [HOST_A_SESSION], issues: [issue] }
+  }))
+  doubles.connection = { client: host, state: 'connected' }
+  const rendered = await mountPanel(pair)
+  const texts = () =>
+    rendered.root.findAll((node) => String(node.type) === 'Text').map((node) => node.props.children)
+
+  expect(texts()).toContain('1 transcript skipped')
+  expect(texts()).not.toContain(path)
+  const showDetails = rendered.root
+    .findAll((node) => String(node.type) === 'Pressable')
+    .find((node) => node.findAll((text) => text.props.children === 'Show details').length > 0)
+  act(() => {
+    showDetails?.props.onPress()
+  })
+  // The phone shows the host's English message verbatim, not a translation by code.
+  expect(texts()).toEqual(
+    expect.arrayContaining([
+      path,
+      'A Claude conversation is too large to load in Session History. Try resuming it in Claude directly.'
+    ])
+  )
+})

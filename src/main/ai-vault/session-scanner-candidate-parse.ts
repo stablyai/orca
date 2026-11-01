@@ -191,8 +191,9 @@ function unreadableTranscriptIssue(
     executionHostId,
     agent: candidate.agent,
     path: candidate.file.path,
+    // Name the parsed writer: a shared discovery root (OMP files under Pi's) can differ from it.
     ...aiVaultScanIssueText('transcriptTooLarge', {
-      params: { label: aiVaultAgentLabel(candidate.agent) }
+      params: { label: aiVaultAgentLabel(session.agent) }
     })
   }
 }
