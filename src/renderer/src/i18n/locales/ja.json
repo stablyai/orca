@@ -19019,6 +19019,8 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "コーディネーターからのメッセージ",
         "startedWorker": "ワーカーを開始しました",
+        "handedOffToAgent": "Agentに引き継ぎました",
+        "startedAgent": "Agentを開始しました",
         "taskFromCoordinator": "コーディネーターからのタスク",
         "updateFromWorker": "ワーカーからの更新"
       },

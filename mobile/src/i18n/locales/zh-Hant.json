@@ -521,6 +521,10 @@
       "disconnected": "附加失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已交接給代理程式",
+      "startedAgent": "已啟動代理程式"
     }
   },
   "common": {

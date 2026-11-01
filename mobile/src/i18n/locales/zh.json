@@ -521,6 +521,10 @@
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "已移交给智能体",
+      "startedAgent": "已启动智能体"
     }
   },
   "common": {

@@ -2995,6 +2995,8 @@
     },
     "agentMessage": {
       "startedWorker": "Started worker",
+      "handedOffToAgent": "Handed off to agent",
+      "startedAgent": "Started agent",
       "taskFromCoordinator": "Task from coordinator",
       "messageFromCoordinator": "Message from coordinator",
       "updateFromWorker": "Update from worker",

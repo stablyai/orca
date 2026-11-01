@@ -20702,6 +20702,8 @@
         "unnamedSender": "um agente",
         "messageFromCoordinator": "Mensagem do coordenador",
         "startedWorker": "Worker iniciado",
+        "handedOffToAgent": "Entregue a um agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarefa do coordenador",
         "updateFromWorker": "Atualização do worker"
       },
