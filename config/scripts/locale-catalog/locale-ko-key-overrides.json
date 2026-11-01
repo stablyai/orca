@@ -5635,5 +5635,17 @@
   },
   "components.workspace.cleanup.browse.agent.idle": {
     "ko": "유휴 상태"
+  },
+  "auto.components.activity.clearCompleted.undo": {
+    "ko": "실행 취소"
+  },
+  "auto.components.settings.terminal.search.stop": {
+    "ko": "중지"
+  },
+  "components.native-chat.backgroundTasks.stop": {
+    "ko": "중지"
+  },
+  "rendererRecovery.quit": {
+    "ko": "종료"
   }
 }
