@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Text } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileLocalBrowserNetwork } from '../storage/preferences'
@@ -22,6 +22,7 @@ type Props = {
   tunnel?: MobileBrowserLocalTunnel
   onViewModeChange?: (viewMode: MobileBrowserViewMode) => void
   onNetworkChange?: (network: MobileLocalBrowserNetwork) => void
+  onUrlChange?: (url: string) => void
   // Leaving full screen hands back the page the view was on.
   onClose: (url: string) => void
   onStreamFromHost: () => void
@@ -38,6 +39,7 @@ export function MobileLocalBrowserFullScreen({
   tunnel,
   onViewModeChange,
   onNetworkChange,
+  onUrlChange,
   onClose,
   onStreamFromHost
 }: Props): React.JSX.Element {
@@ -45,12 +47,15 @@ export function MobileLocalBrowserFullScreen({
   const [toast, setToast] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const [currentUrl, setCurrentUrl] = useState(url)
+  // A new url prop is the host's first address for a view still blank; it reopens the view there.
+  useEffect(() => setCurrentUrl(url), [url])
   const close = (): void => onClose(currentUrl)
   const dismissToast = useCallback(() => setToast(null), [])
   return (
     <MobileBrowserFullScreenFrame onRequestClose={close}>
       {failure === null ? (
         <MobileLocalBrowser
+          key={url}
           client={client}
           hostId={hostId}
           worktreeId={worktreeId}
@@ -68,7 +73,10 @@ export function MobileLocalBrowserFullScreen({
           }
           onStreamFromHost={onStreamFromHost}
           onHostTunnelFailed={setFailure}
-          onUrlChange={setCurrentUrl}
+          onUrlChange={(next) => {
+            setCurrentUrl(next)
+            onUrlChange?.(next)
+          }}
           onToast={setToast}
         />
       ) : (

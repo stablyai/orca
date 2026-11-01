@@ -186,6 +186,29 @@ describe('native.browser.view', () => {
     expect(drawn()[0]!.props.initialUrl).toBe('about:blank')
   })
 
+  it('opens the address the host reports on a full screen that is still blank', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    await act(async () => {
+      void show('a', { url: 'about:blank', fullScreen: true })
+    })
+    await act(async () => {
+      await shell.serveView({ action: 'adopt', id: 'a', url: 'https://example.com/' })
+    })
+    expect(fullScreen()[0]!.props.url).toBe('https://example.com/')
+  })
+
+  it('leaves the page the user went to in full screen when the host reports its address', async () => {
+    vi.mocked(loadBrowserDrawing).mockResolvedValue('host')
+    await act(async () => {
+      void show('a', { url: 'about:blank', fullScreen: true })
+    })
+    act(() => fullScreen()[0]!.props.onUrlChange('https://user.example/'))
+    await act(async () => {
+      await shell.serveView({ action: 'adopt', id: 'a', url: 'https://example.com/' })
+    })
+    expect(fullScreen()[0]!.props.url).toBe('about:blank')
+  })
+
   it('opens at the address the host reported while the show was starting', async () => {
     let finishRead = (_drawing: 'host') => {}
     vi.mocked(loadBrowserDrawing).mockImplementation(

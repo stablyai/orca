@@ -142,6 +142,7 @@ export function useNativeLocalBrowser(
           const next = { ...tab, url: parsed.url }
           live.current = next
           place({ ...current, ...next, generation: current.generation + 1 })
+          setFullScreen((open) => (open?.fromPlaced ? { ...open, url: parsed.url } : open))
         }
         if (current?.id !== parsed.id && wanted.current === parsed.id) {
           startingUrl.current = parsed.url
@@ -283,6 +284,11 @@ export function useNativeLocalBrowser(
           onNetworkChange={(network) =>
             setFullScreen((current) => current && { ...current, network })
           }
+          onUrlChange={(url) => {
+            if (fullScreen.fromPlaced) {
+              updateLive({ url })
+            }
+          }}
           onClose={(url) => {
             const current = placedRef.current
             if (fullScreen.fromPlaced && current) {
