@@ -185,8 +185,8 @@ your coordinator's mail.
 \`\`\`
 
 Once your helpers have started, end your turn; Orca wakes you with their mail.
-Send worker_done once every helper has settled or failed to start, and name any
-that failed. Nesting is capped; your helpers may not be able to start
+Send worker_done only when your task is done and every helper has settled or
+failed to start; name any that failed. Nesting is capped; your helpers may not be able to start
 helpers of their own.
 
 ---`
@@ -205,8 +205,8 @@ If the task asks for sub-workers, create your own Run first, then:
 \`\`\`
 
 Once your sub-workers have started, end your turn; Orca wakes you with their
-mail. Send worker_done once every sub-worker has settled or failed to start, and
-name any that failed. Nesting is capped; your sub-workers may not be able to
+mail. Send worker_done only when your task is done and every sub-worker has
+settled or failed to start; name any that failed. Nesting is capped; your sub-workers may not be able to
 dispatch further.
 
 ---`
