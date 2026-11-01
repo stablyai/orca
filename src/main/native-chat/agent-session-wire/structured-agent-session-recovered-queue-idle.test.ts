@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createQueuedMessageTestRig,
   eventually

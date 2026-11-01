@@ -82,7 +82,7 @@ export function abandonWorkerDispatch(
       reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
       this.closeQuestionsForDispatch(dispatchId)
       const terminal = this.getWorkerTerminalResourceByOwner(dispatchId)
-      // Abandon hands an owned terminal back instead of closing it, by the same rule as worker-retain.
+      // Abandon hands an owned terminal back instead of closing it, by the same rule as worker-keep-open.
       if (terminal?.ownership_state === 'owned') {
         retainTerminalResourceInTransaction(this, terminal.id, dispatchId)
       }

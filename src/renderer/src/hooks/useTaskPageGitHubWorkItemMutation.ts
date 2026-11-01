@@ -21,6 +21,7 @@ import {
   setTaskPageGitHubMutationQueryKey
 } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 import { useMountedRef } from './useMountedRef'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string
@@ -105,7 +106,12 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       item: GitHubWorkItem
       intent: TaskPageGitHubMutationIntent
       sourceContext?: TaskSourceContext | null
-      mutate: () => Promise<{ ok?: boolean; error?: string | { message?: string } } | void>
+      mutate: () => Promise<{
+        ok?: boolean
+        error?: string | { message?: string }
+        errorCode?: unknown
+        errorDetail?: unknown
+      } | void>
       successToast?: string
       errorToast: string
       serverEntityFromResult?: (result: unknown) => Partial<GitHubWorkItem> | undefined
@@ -128,7 +134,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       try {
         const result = await input.mutate()
         const activeQuery = activeQueryRef.current
-        const typed = result as { ok?: boolean; error?: string | { message?: string } } | void
+        const typed = result
         if (typed && typeof typed === 'object' && typed.ok === false) {
           const rolled = rollbackTaskPageGitHubWorkItemMutation({
             key: began.key,
@@ -143,7 +149,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           if (rolled === 'rolled_back' && mountedRef.current) {
             const message =
               typeof typed.error === 'string'
-                ? typed.error
+                ? codeHostErrorText({ ...typed, error: typed.error })
                 : (typed.error?.message ?? input.errorToast)
             toast.error(message)
           }

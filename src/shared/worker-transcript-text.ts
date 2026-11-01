@@ -4,9 +4,9 @@ import { claimBackgroundTaskTwins } from './native-chat/input/native-chat-backgr
 import {
   isSubagentGroupFallbackText,
   subagentGroupFallbackText
-} from './native-chat-subagent-summary'
-import { subagentFallbackText } from './native-chat-subagent-items'
-import type { NativeChatMessage } from './native-chat-types'
+} from './native-chat/transcript/native-chat-subagent-summary'
+import { subagentFallbackText } from './native-chat/transcript/native-chat-subagent-items'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 
 export function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
   // Print roster text twins instead of blocks. Renderer uses the inverse presentation rule (draw groups, hide fallback-shaped text).

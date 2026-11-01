@@ -22,6 +22,8 @@ export function createAgentBrowserProcessEnvironment(options: {
   if (!env.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim()) {
     env.AGENT_BROWSER_IDLE_TIMEOUT_MS = String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
   }
+  // Its auto-accept dropped alert text; Orca keeps every dialog open until someone answers it.
+  env.AGENT_BROWSER_NO_AUTO_DIALOG = '1'
   if (options.platform === 'win32' || env.AGENT_BROWSER_SOCKET_DIR?.trim()) {
     return { env, ownsSocketDirectory: false }
   }

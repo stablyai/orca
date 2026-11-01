@@ -17,6 +17,8 @@ export type WslMoveOrchestratorPorts = {
   appVersion: string
   /** Kill switches for automatic starts (env, rollout); explicit user actions still run. */
   autoMoveEnabled: () => boolean
+  /** Stage 2: wakes may start a move of the user's bridge projects. Stage 1: only their own act. */
+  autoMovesBridgeProjects: () => boolean
   /**
    * Readies the distro's host for an automatic step, only if the distro is confirmed running:
    * connects or adds its host then, and never boots it (A1). A failed running-distro read is
@@ -31,7 +33,8 @@ export type WslMoveOrchestratorPorts = {
   hasHost: (distro: string) => boolean
   /** Whether the distro's host connection is ready now; never connects. Gates timer steps. */
   isHostReady: (distro: string) => boolean
-  preview: (distro: string) => Promise<WslMovePreview>
+  /** `userAsked`: the user's own step may finish a committed earlier move now, reloading the window. */
+  preview: (distro: string, userAsked: boolean) => Promise<WslMovePreview>
   /**
    * Runs the move. `stillWanted` turns false once the user released or snoozed the distro; the
    * port checks it after its own waits (the window's panes) and refuses rather than start.

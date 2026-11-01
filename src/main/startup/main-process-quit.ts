@@ -1,4 +1,5 @@
 import { killWslChannelsInCloseGrace } from '../wsl/wsl-command-channel'
+import { markHostShuttingDown } from '../host-shutdown-state'
 import { app, type Event } from 'electron'
 import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
@@ -9,7 +10,7 @@ import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
-import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
@@ -34,7 +35,7 @@ import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { desktopConnectorCloud } from './main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
-import { getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
@@ -111,6 +112,7 @@ function installWillQuitHandler(): void {
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
+    markHostShuttingDown()
     state.desktopPushService?.stop()
     state.unsubscribeSystemResumeBroadcast?.()
     state.unsubscribeSystemResumeBroadcast = null
@@ -131,10 +133,17 @@ function installWillQuitHandler(): void {
     // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
-    // Await plugin shutdown/SIGKILL escalation or forked hosts can outlive Electron.
+    // Why: plugin hosts are forked children; dispose sends shutdown and
+    // escalates to SIGKILL so they cannot outlive the app. The promise joins
+    // the teardown barrier below — quitting before it resolves would let
+    // Electron exit first and orphan the hosts.
+    state.pluginKillListService?.dispose()
     state.pluginKillListService = null
     state.pluginMarketplaceService = null
     state.pluginMarketplaceInstaller = null
+    state.pluginAutoUpdater?.dispose()
+    state.pluginAutoUpdater = null
+    state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()
@@ -191,6 +200,7 @@ function installWillQuitHandler(): void {
       .then((routes) => routes.closeAllLocalSshBrowserRoutes())
       .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
+    browserManager.setOffscreenTabOpener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store
@@ -298,7 +308,8 @@ function installWindowAllClosedHandler(): void {
       shouldQuitWhenAllWindowsClosed({
         platform: process.platform,
         isQuitting: state.isQuitting,
-        isServeMode: state.isServeMode
+        isServeMode: state.isServeMode,
+        hasOpenedMainWindow: state.hasOpenedMainWindow
       })
     ) {
       app.quit()

@@ -1,4 +1,6 @@
+import { sourceControlActionRecipeEntry } from '../../../../shared/source-control-action-selection'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
+import { trimActionArgumentDocument } from '../../../../shared/source-control-action-argument-choices'
 import {
   normalizeRepoSourceControlAiOverrides,
   normalizeSourceControlAiSettings,
@@ -21,6 +23,7 @@ type NormalizedSourceControlActionRecipe = {
   commandInputTemplate: string
   agentArgs: string | undefined
   launchPreferences: string
+  argumentChoices: string
   surface: string
 }
 
@@ -28,31 +31,46 @@ type PersistedSourceControlActionRecipe = {
   agentId?: SourceControlActionRecipe['agentId']
   commandInputTemplate?: string | null
   agentArgs?: string | null
+  argumentChoices?: SourceControlActionRecipe['argumentChoices']
   launchPreferences?: SourceControlActionRecipe['launchPreferences']
   surface?: SourceControlActionRecipe['surface']
+  resolvedChoiceSources?: SourceControlActionRecipe['resolvedChoiceSources']
 }
 
 function normalizeSourceControlActionRecipeForComparison(
   actionId: SourceControlActionId,
   recipe: PersistedSourceControlActionRecipe | null | undefined
 ): NormalizedSourceControlActionRecipe {
+  const document = trimActionArgumentDocument({
+    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs : undefined,
+    argumentChoices: recipe?.argumentChoices
+  })
+  const { model: selection, permission } = sourceControlActionRecipeEntry({
+    ...recipe,
+    agentArgs: document.agentArgs,
+    argumentChoices: document.argumentChoices,
+    commandInputTemplate: recipe?.commandInputTemplate ?? undefined
+  }).resolvedChoiceSources
   return {
     agentId: recipe?.agentId ?? null,
     commandInputTemplate:
       typeof recipe?.commandInputTemplate === 'string'
         ? recipe.commandInputTemplate.trim()
         : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId],
-    agentArgs: typeof recipe?.agentArgs === 'string' ? recipe.agentArgs.trim() : undefined,
-    launchPreferences: recipe?.launchPreferences
-      ? JSON.stringify([
-          recipe.launchPreferences.agentId,
-          recipe.launchPreferences.model ?? null,
-          Object.entries(recipe.launchPreferences.options ?? {}).sort(([a], [b]) =>
-            a.localeCompare(b)
-          ),
-          recipe.launchPreferences.permissionMode ?? null
-        ])
-      : '',
+    agentArgs: document.agentArgs,
+    argumentChoices: JSON.stringify(document.argumentChoices ?? null),
+    launchPreferences:
+      permission || selection
+        ? JSON.stringify([
+            permission?.agentId ?? null,
+            selection?.base ?? null,
+            selection?.model ? [selection.model.agentId, selection.model.value] : null,
+            Object.entries(selection?.options ?? {})
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, entry]) => [key, entry.agentId, entry.value]),
+            permission?.permissionMode ?? null
+          ])
+        : '',
     surface: recipe?.surface ?? ''
   }
 }
@@ -66,6 +84,7 @@ function sourceControlActionRecipesMatch(
     left.commandInputTemplate === right.commandInputTemplate &&
     left.agentArgs === right.agentArgs &&
     left.launchPreferences === right.launchPreferences &&
+    left.argumentChoices === right.argumentChoices &&
     left.surface === right.surface
   )
 }

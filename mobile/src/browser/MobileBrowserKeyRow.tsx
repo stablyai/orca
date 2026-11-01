@@ -46,7 +46,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm
   },

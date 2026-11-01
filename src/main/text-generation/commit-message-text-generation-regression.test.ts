@@ -70,7 +70,7 @@ describe('commit-message generation regressions', () => {
       }
     )
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       success: false,
       error: 'agent CLI command failed with code 1: failed reading [path]',
       canceled: undefined

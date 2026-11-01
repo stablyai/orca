@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import * as React from 'react'
 import * as ReactJsxRuntime from 'react/jsx-runtime'
 import { sha256 } from '@noble/hashes/sha256'
+import * as i18next from 'i18next'
 import * as lowlight from 'lowlight'
 import * as zod from 'zod'
 import {
@@ -37,6 +38,15 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
     ['zod', zod],
     // Use real highlighting so preview tokens come from product behavior.
     ['lowlight', lowlight],
+    // Real catalogs and plural rules; recordings run in English, the device language below.
+    ['i18next', i18next],
+    [
+      'expo-localization',
+      partialNativeModule('expo-localization', {
+        getLocales: () => [{ languageTag: 'en-US' }],
+        useLocales: () => [{ languageTag: 'en-US' }]
+      })
+    ],
     ['@noble/hashes/sha256', partialNativeModule('@noble/hashes/sha256', { sha256 })],
     [
       'expo-crypto',
@@ -56,7 +66,8 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         Platform: { OS: 'ios' },
         AppState: { currentState: 'active', addEventListener: silentNativeSubscription },
         BackHandler: { addEventListener: silentNativeSubscription },
-        Keyboard: { dismiss: () => {} },
+        Keyboard: { dismiss: () => {}, addListener: silentNativeSubscription },
+        Dimensions: { get: () => ({ width: 390, height: 844 }) },
         useWindowDimensions: () => ({ width: 390, height: 844 }),
         ...reactNativeScreenMembers()
       })
@@ -88,6 +99,11 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         activateKeepAwakeAsync: () => Promise.resolve(),
         deactivateKeepAwake: () => {}
       })
+    ],
+    // Without the reserved-regions module: no fold, and the keyboard reports through Keyboard alone.
+    [
+      'expo-modules-core',
+      partialNativeModule('expo-modules-core', { requireOptionalNativeModule: () => null })
     ],
     ...screenNativeSubstitutes(),
     [

@@ -101,6 +101,11 @@ describe('WSL move telemetry', () => {
     })
   })
 
+  it('reports a move refused while one of its projects comes back', async () => {
+    const events = await tracked({ outcome: 'refused', code: 'wsl_move_undo_running' })
+    expect(events[1]).toMatchObject({ outcome: 'refused', refusal: 'undo_running' })
+  })
+
   it('reports why a pause refusal after a reset happened', async () => {
     const events = await tracked({
       outcome: 'refused',

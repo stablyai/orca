@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { app, BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { z } from 'zod'
 import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
 import type { SkillDiscoveryResult, SkillDiscoveryTargetSchema } from '../../shared/skills'
@@ -35,11 +35,15 @@ import {
   skillSharePrepareIpcSchema,
   skillSharePublishIpcSchema
 } from './skill-share-publishing-ipc-schemas'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
-function registerSharingHandlers(
-  runtime: OrcaRuntimeService,
-  discover: (target?: z.infer<typeof SkillDiscoveryTargetSchema>) => Promise<SkillDiscoveryResult>
-): void {
+/** Discovery for Share; `skillDirectories` limits which stopped WSL roots it may read. */
+export type SkillShareDiscover = (
+  target?: z.infer<typeof SkillDiscoveryTargetSchema>,
+  skillDirectories?: readonly string[]
+) => Promise<SkillDiscoveryResult>
+
+function registerSharingHandlers(runtime: OrcaRuntimeService, discover: SkillShareDiscover): void {
   const preparations = new SkillSharePreparationService(
     join(app.getPath('userData'), 'skill-share-preparations'),
     {
@@ -51,7 +55,7 @@ function registerSharingHandlers(
   )
   handleMainWindowSkillIpc('skills:prepareShare', async (_event, value: unknown) => {
     const input = skillSharePrepareIpcSchema.parse(value)
-    const result = await discover(input.target)
+    const result = await discover(input.target, input.skillDirectories)
     const requested = new Set(input.skillIds)
     const skills = result.skills.filter((candidate) => requested.has(candidate.id))
     if (skills.length !== requested.size) {
@@ -65,13 +69,11 @@ function registerSharingHandlers(
       packageId: input.packageId
     })
   })
-  handleMainWindowSkillIpc('skills:publishShare', async (_event, value: unknown) => {
+  handleMainWindowSkillIpc('skills:publishShare', async (event, value: unknown) => {
     const input = skillSharePublishIpcSchema.parse(value)
     return preparations.publish(input, (progress) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (!window.isDestroyed()) {
-          window.webContents.send('skills:shareProgress', progress)
-        }
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('skills:shareProgress', progress)
       }
     })
   })
@@ -147,7 +149,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
     if (
       input.environmentId &&
-      !(await supportsSkillRuntimeInstall(app.getPath('userData'), input.environmentId))
+      !(await supportsSkillRuntimeInstall(getRuntimeEnvironmentRegistryRoot(), input.environmentId))
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
@@ -169,7 +171,10 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     if (
       input.environmentId &&
       !input.environmentId.startsWith('ssh:') &&
-      !(await supportsSkillRuntimeBundleInstall(app.getPath('userData'), input.environmentId))
+      !(await supportsSkillRuntimeBundleInstall(
+        getRuntimeEnvironmentRegistryRoot(),
+        input.environmentId
+      ))
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
@@ -194,7 +199,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     sendSkillInstallProgress(event, { operationId: input.operationId, phase: 'authorizing' })
     if (
       input.environmentId &&
-      !(await supportsSkillRuntimeInstall(app.getPath('userData'), input.environmentId))
+      !(await supportsSkillRuntimeInstall(getRuntimeEnvironmentRegistryRoot(), input.environmentId))
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
@@ -217,7 +222,10 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
     if (
       input.environmentId &&
       !input.environmentId.startsWith('ssh:') &&
-      !(await supportsSkillRuntimeBundleInstall(app.getPath('userData'), input.environmentId))
+      !(await supportsSkillRuntimeBundleInstall(
+        getRuntimeEnvironmentRegistryRoot(),
+        input.environmentId
+      ))
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
@@ -249,11 +257,16 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { cancelled: runtime.cancelSharedSkillInstall(input.operationId) }
     }
     const transferCancelled = remoteInstallCancellation.cancel(input.operationId)
-    if (!(await supportsSkillRuntimeCancellation(app.getPath('userData'), input.environmentId))) {
+    if (
+      !(await supportsSkillRuntimeCancellation(
+        getRuntimeEnvironmentRegistryRoot(),
+        input.environmentId
+      ))
+    ) {
       return { cancelled: transferCancelled }
     }
     const response = await callRuntimeEnvironment(
-      app.getPath('userData'),
+      getRuntimeEnvironmentRegistryRoot(),
       input.environmentId,
       'skills.cancelInstall',
       { operationId: input.operationId },
@@ -279,7 +292,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
 
 export function registerSkillCloudIpcHandlers(
   runtime: OrcaRuntimeService,
-  discover: (target?: z.infer<typeof SkillDiscoveryTargetSchema>) => Promise<SkillDiscoveryResult>
+  discover: SkillShareDiscover
 ): void {
   registerSharingHandlers(runtime, discover)
   registerCloudInstallHandlers(runtime)

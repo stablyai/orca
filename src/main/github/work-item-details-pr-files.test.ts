@@ -104,7 +104,7 @@ function auxiliaryPRResponse(args: string[]): { stdout: string } {
       stdout: JSON.stringify({
         data: {
           repository: {
-            pullRequest: {
+            viewedPullRequest: {
               id: 'PR_file_list',
               files: { pageInfo: { hasNextPage: false }, nodes: [] }
             }

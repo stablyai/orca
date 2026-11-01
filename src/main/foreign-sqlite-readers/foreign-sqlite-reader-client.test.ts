@@ -70,6 +70,52 @@ function settle(): Promise<void> {
 }
 
 describe('ForeignSqliteReaderClient', () => {
+  it('includes queue time in the native failure deadline and removes expired work', async () => {
+    vi.useFakeTimers()
+    const workers: FakeWorker[] = []
+    const client = new ForeignSqliteReaderClient({ workerFactory: fakeFactory(workers), log() {} })
+    try {
+      const query = { dbPath: '/a/opencode.db', sessionId: 'a', startedAt: 100, failedAt: 200 }
+      const first = client.readOpenCodePromptFailure(query)
+      const second = client.readOpenCodePromptFailure({ ...query, sessionId: 'b' })
+      let queued: unknown
+      void second.then((value) => {
+        queued = value
+      })
+      await vi.advanceTimersByTimeAsync(1_999)
+      workers[0]?.reply({ failure: null })
+      await first
+      await vi.advanceTimersByTimeAsync(1)
+      expect(queued).toEqual({ failure: null })
+      expect(workers[0]?.terminated).toBe(true)
+    } finally {
+      client.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not share native prompt evidence across different turns in the same session', async () => {
+    const workers: FakeWorker[] = []
+    const client = new ForeignSqliteReaderClient({ workerFactory: fakeFactory(workers), log() {} })
+    const query = { dbPath: '/a/opencode.db', sessionId: 'ses-own', startedAt: 100, failedAt: 200 }
+    const first = client.readOpenCodePromptFailure(query)
+    expect(client.readOpenCodePromptFailure(query)).toBe(first)
+    const next = client.readOpenCodePromptFailure({ ...query, startedAt: 300, failedAt: 400 })
+    const quota = {
+      failure: { inputId: 'input', type: 'provider.quota', message: 'Quota exhausted', status: 429 }
+    }
+    workers[0]?.reply(quota)
+    await expect(first).resolves.toEqual(quota)
+    await settle()
+    workers[0]?.reply({ failure: null })
+    await expect(next).resolves.toEqual({ failure: null })
+    expect(workers[0]?.posted.map((request) => request.kind)).toEqual([
+      'openCodePromptFailure',
+      'openCodePromptFailure'
+    ])
+    client.dispose()
+  })
+
   it('returns the reader result the worker posts', async () => {
     const workers: FakeWorker[] = []
     const client = new ForeignSqliteReaderClient({ workerFactory: fakeFactory(workers), log() {} })

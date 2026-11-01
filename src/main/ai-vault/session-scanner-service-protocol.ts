@@ -105,6 +105,8 @@ export type AiVaultServiceParentMessage =
       roots: SessionSearchScanRoots | null
     }
   | { type: 'shutdown' }
+  // Main's WSL stop and wake notes, so the child's transcript gate never trusts a stale running read.
+  | { type: 'wslDistroNote'; kind: 'stopped' | 'woken'; distro: string }
 
 export type AiVaultServiceResultValue =
   | {

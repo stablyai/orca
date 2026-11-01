@@ -1,5 +1,6 @@
+import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import { homedir } from 'node:os'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
@@ -19,14 +20,20 @@ export async function resolveAgentModelCatalogScope(
   params: Parameters<AgentModelCatalogService['read']>[0],
   record: AgentModelCatalogRecord | undefined,
   base: string,
-  home: AgentSessionAccountHome | null
+  home: AgentSessionAccountHome | null,
+  current: () => boolean = () => true,
+  operation?: StructuredAgentResolutionOperation
 ): Promise<{
   base: string
   fingerprint: string
   exact: boolean
+  accountListing?: boolean
   cwd?: string
   resolved?: AgentModelCatalogResolvedProbe
 } | null> {
+  if (!current()) {
+    return null
+  }
   if (!independentAgentModelCatalog(params.agent) || !home) {
     return { base, fingerprint: base, exact: false }
   }
@@ -40,7 +47,10 @@ export async function resolveAgentModelCatalogScope(
     const resolved =
       savedOnly() || !deps.store.probeDue(fingerprint)
         ? null
-        : await probe?.resolveLegacy?.(home).catch(() => null)
+        : await probe?.resolveLegacy?.(home, operation).catch(() => null)
+    if (!current()) {
+      return null
+    }
     return {
       base,
       fingerprint,
@@ -52,25 +62,33 @@ export async function resolveAgentModelCatalogScope(
     params.workspacePath === null
       ? null
       : (params.workspacePath ?? (record ? await sessionWorkspacePath(deps, record) : homedir()))
+  if (!current()) {
+    return null
+  }
   if (!cwd) {
     return { base, fingerprint: base, exact: false }
   }
   const resolve = (lookup: AgentModelCatalogLookup) =>
-    probe?.resolve?.(home, cwd, lookup).catch(() => null)
+    probe?.resolve?.(home, cwd, lookup, operation).catch(() => null)
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
     agentModelCatalogScopeFingerprint(base, cwd, resolved?.identity)
   let resolved = await resolve(savedOnly() ? 'saved' : 'snapshot')
+  if (!current()) {
+    return null
+  }
   // Rerun shells only for reads due to list; saved-only reads must remain passive.
   if (!savedOnly() && (!resolved || deps.store.probeDue(scopeKey(resolved)))) {
     resolved = await resolve('recover')
   }
-  if (probe?.resolve && !resolved) {
+  if (!current() || (probe?.resolve && !resolved)) {
     return null
   }
   return {
     base,
     fingerprint: scopeKey(resolved),
     exact: true,
+    // The account's own listing (prewarm names no folder or chat) seeds what unlisted folders show.
+    accountListing: !record && params.workspacePath === undefined && !params.legacy,
     cwd,
     ...(resolved ? { resolved } : {})
   }

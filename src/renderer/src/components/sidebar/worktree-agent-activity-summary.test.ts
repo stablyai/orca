@@ -64,6 +64,33 @@ describe('selectWorktreeAgentActivitySummary', () => {
     vi.restoreAllMocks()
   })
 
+  it('attributes migration-blocked UUID and legacy terminal panes without affecting other worktrees', () => {
+    for (const paneKey of [makePaneKey('tab-1', LEAF_ID), 'tab-1:0', undefined, 'malformed']) {
+      const state: AgentActivityInput = {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 0,
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        migrationUnsupportedByPtyId: {
+          legacy: {
+            ptyId: 'legacy',
+            paneKey,
+            worktreeId: 'repo::/wt-1',
+            tabId: 'tab-1',
+            reason: 'legacy-numeric-pane-key',
+            source: 'local',
+            updatedAt: 1_000
+          }
+        }
+      }
+      expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1').hasPermission).toBe(
+        paneKey !== undefined && paneKey !== 'malformed'
+      )
+      expect(selectWorktreeAgentActivitySummary(state, 'other').hasPermission).toBe(false)
+    }
+  })
+
   it('builds one cached agent summary index for multiple worktree lookups', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)

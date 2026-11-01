@@ -51,7 +51,7 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
   }
 }
 
-async function resolveRepoSlug(repo: Repo): Promise<string | null> {
+export async function resolveRepoSlug(repo: Repo): Promise<string | null> {
   // The index spans hosts; read each repo’s remote metadata from its owner.
   const target = repoSlugOwnerTarget(repo)
   if (!target) {

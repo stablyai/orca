@@ -9,6 +9,7 @@
 
 export const PRELOAD_BROWSER_EXTENSION_INVOKE_CHANNEL = 'browserExtension:invoke'
 export const PRELOAD_BROWSER_EXTENSION_EVENT_CHANNEL = 'browserExtension:event'
+export const PRELOAD_BROWSER_EXTENSION_FRAME_LIFETIME_CHANNEL = 'browserExtension:frameLifetime'
 
 export type BrowserExtensionSurfaceMethod = {
   /**
@@ -134,7 +135,7 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
       detectLanguage: {}
     },
     events: ['onActivated', 'onCreated', 'onUpdated', 'onRemoved', 'onReplaced'],
-    constants: { TAB_ID_NONE: -1 }
+    constants: { TAB_ID_NONE: -1, MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND: 2 }
   },
   webNavigation: {
     permission: 'webNavigation',

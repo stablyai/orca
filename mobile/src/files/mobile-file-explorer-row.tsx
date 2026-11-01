@@ -9,6 +9,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react-native'
 import { triggerSelection } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
@@ -25,6 +26,7 @@ type Props = {
 }
 
 export function MobileFileExplorerRow(props: Props) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const { item, maximumIndentation, expanded, onPreviewFile, onRetryDirectory, onToggleDirectory } =
     props
@@ -35,7 +37,9 @@ export function MobileFileExplorerRow(props: Props) {
       <View style={[styles.inlineStatusRow, { paddingLeft }]}>
         <View style={styles.chevronSpacer} />
         <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.inlineStatusText}>Loading...</Text>
+        <Text style={styles.inlineStatusText}>
+          {t('files.fileExplorerRow.loading', 'Loading...')}
+        </Text>
       </View>
     )
   }
@@ -45,17 +49,16 @@ export function MobileFileExplorerRow(props: Props) {
       <View style={[styles.inlineStatusRow, { paddingLeft }]}>
         <View style={styles.chevronSpacer} />
         <Text style={styles.inlineErrorText} numberOfLines={1}>
-          {item.message || 'Unable to load folder'}
+          {item.message || t('files.fileExplorerRow.loadFolderFailed', 'Unable to load folder')}
         </Text>
         <Pressable
           style={({ pressed }) => [styles.inlineRetryButton, pressed && styles.rowPressed]}
-          onPress={() => {
-            triggerSelection()
-            onRetryDirectory(item.relativePath)
-          }}
-          accessibilityLabel={`Retry loading ${item.relativePath}`}
+          onPress={() => onRetryDirectory(item.relativePath)}
+          accessibilityLabel={t('files.fileExplorerRow.retryLoading', 'Retry loading {{path}}', {
+            path: item.relativePath
+          })}
         >
-          <Text style={styles.inlineRetryText}>Retry</Text>
+          <Text style={styles.inlineRetryText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       </View>
     )
@@ -87,6 +90,7 @@ function TreeRow(props: {
   onPreviewFile: (relativePath: string, displayName: string) => void
   onToggleDirectory: (relativePath: string) => void
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
@@ -108,8 +112,9 @@ function TreeRow(props: {
       ]}
       disabled={disabled}
       onPress={() => {
-        triggerSelection()
         if (isDirectory) {
+          // Expanding a folder toggles in place; opening a file navigates and stays quiet.
+          triggerSelection()
           onToggleDirectory(item.relativePath)
         } else if (!disabled) {
           onPreviewFile(item.relativePath, item.name)
@@ -117,10 +122,12 @@ function TreeRow(props: {
       }}
       accessibilityLabel={
         isDirectory
-          ? `Open folder ${item.name}`
+          ? t('files.fileExplorerRow.openFolder', 'Open folder {{name}}', { name: item.name })
           : disabled
-            ? `${item.name} unavailable on mobile`
-            : `Preview file ${item.name}`
+            ? t('files.fileExplorerRow.fileUnavailable', '{{name}} unavailable on mobile', {
+                name: item.name
+              })
+            : t('files.fileExplorerRow.previewFile', 'Preview file {{name}}', { name: item.name })
       }
     >
       {isDirectory ? (
@@ -145,7 +152,11 @@ function TreeRow(props: {
         <Text style={[styles.rowTitle, disabled && styles.rowTitleDisabled]} numberOfLines={1}>
           {item.name}
         </Text>
-        {disabled ? <Text style={styles.rowMeta}>Unavailable on mobile</Text> : null}
+        {disabled ? (
+          <Text style={styles.rowMeta}>
+            {t('files.fileExplorerRow.unavailable', 'Unavailable on mobile')}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   )

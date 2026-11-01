@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { codexJournalItem, CodexThreadItem } from './codex-structured-item-translation'
@@ -56,7 +56,8 @@ export type CodexStructuredItemStreams = {
     params: unknown
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
-  flush: () => boolean
+  /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
+  flush: (threadId?: string) => boolean
   dispose: () => void
   snapshot: (
     threadId: string,

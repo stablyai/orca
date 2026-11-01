@@ -27,12 +27,12 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 
-import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 
@@ -40,10 +40,8 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
 
 {
   const session: NativeChatLiveSession = {

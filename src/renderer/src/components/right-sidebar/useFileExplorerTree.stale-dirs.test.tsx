@@ -247,7 +247,11 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
       older = hook.result.current.refreshTree()
       await Promise.resolve()
     })
-    expect(readDirectoryMock).toHaveBeenLastCalledWith('wt-1', '/repo', '/repo/link')
+    // The refresh re-reads at least the one row already listed.
+    expect(readDirectoryMock).toHaveBeenLastCalledWith('wt-1', '/repo', '/repo/link', {
+      paged: undefined,
+      minEntries: 1
+    })
     hook.rerender({ expanded: new Set() })
     await act(async () => {
       await hook.result.current.refreshTree()

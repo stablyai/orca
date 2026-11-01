@@ -22,6 +22,7 @@ type BrowserNetworkTunnelClientStreamFrameActions = {
   flushWrites: (stream: BrowserNetworkTunnelClientStream) => void
   claimApplicationBytes: (bytes: number) => (() => void) | null
   retire: (stream: BrowserNetworkTunnelClientStream, error?: Error) => void
+  fail: (stream: BrowserNetworkTunnelClientStream, error: Error) => void
 }
 
 export function handleBrowserNetworkTunnelClientStreamFrame(
@@ -32,8 +33,7 @@ export function handleBrowserNetworkTunnelClientStreamFrame(
   dispatchBrowserNetworkTunnelClientFrame(frame, {
     opened: () => openedStream(stream, actions),
     grantCredit: () => grantStreamCredit(stream, frame.payload, actions),
-    deliverData: () =>
-      deliverStreamData(stream, frame.payload, actions.claimApplicationBytes, actions.closeTunnel),
+    deliverData: () => deliverStreamData(stream, frame.payload, actions),
     halfClose: () => halfCloseStream(stream, actions.closeTunnel),
     close: () => closeStream(stream, actions),
     remoteFailure: (error) => actions.retire(stream, error),
@@ -86,11 +86,14 @@ function grantStreamCredit(
 function deliverStreamData(
   stream: BrowserNetworkTunnelClientStream,
   payload: Uint8Array<ArrayBufferLike>,
-  claimApplicationBytes: (bytes: number) => (() => void) | null,
-  closeTunnel: (error: Error) => void
+  actions: BrowserNetworkTunnelClientStreamFrameActions
 ): void {
-  if (!queueBrowserNetworkSourceData(stream, payload, claimApplicationBytes)) {
-    closeTunnel(new Error('Browser tunnel received invalid destination data'))
+  const result = queueBrowserNetworkSourceData(stream, payload, actions.claimApplicationBytes)
+  // Valid credit can exceed the shared memory budget, so exhaustion must only fail its stream.
+  if (result === 'budget_exhausted') {
+    actions.fail(stream, new Error('Browser tunnel receive buffer overflow'))
+  } else if (result === 'invalid') {
+    actions.closeTunnel(new Error('Browser tunnel received invalid destination data'))
   }
 }
 

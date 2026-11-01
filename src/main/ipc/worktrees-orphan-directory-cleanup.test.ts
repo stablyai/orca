@@ -389,7 +389,7 @@ describe('registerWorktreeHandlers', () => {
           worktreeId: `${repo.id}::${localPath}`,
           force: true
         })
-      ).rejects.toThrow('Remote connection dropped')
+      ).rejects.toThrow('isn’t served by Orca’s server')
 
       await expect(lstat(localPath)).resolves.toBeTruthy()
       expect(removeWorktreeMock).not.toHaveBeenCalled()

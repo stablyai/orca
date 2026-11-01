@@ -35,6 +35,8 @@ export type WslMoveOrchestratorParkReason =
   | 'removal-pending'
   /** An earlier move never finished settling for a day; the waits stopped and need the user. */
   | 'stuck'
+  /** An earlier move committed on the host; the next start, or the user's Move, finishes it here. */
+  | 'finish-pending'
 
 export type WslMoveOrchestratorState =
   /** Nothing of the distro left to move. */

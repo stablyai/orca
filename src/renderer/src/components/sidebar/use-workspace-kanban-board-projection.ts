@@ -42,15 +42,22 @@ export function useWorkspaceKanbanBoardProjection(args: {
     () => buildUnambiguousWorktreeIdIndex(args.allWorktrees),
     [args.allWorktrees]
   )
+  // Drops carry each card's host identity, so same-id copies on two hosts stay separate cards.
+  const worktreeByKey = useMemo(
+    () =>
+      new Map(args.allWorktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
+    [args.allWorktrees]
+  )
   const boardWorktrees = useMemo(
     () => args.workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
     [args.workspaceStatuses, worktreesByStatus]
   )
+  // Lane members are host identities, as in the sidebar's drag groups.
   const boardDragGroups = useMemo<WorktreeDragGroup[]>(
     () =>
       args.workspaceStatuses.map((status) => ({
         key: status.id,
-        worktreeIds: (worktreesByStatus.get(status.id) ?? []).map((worktree) => worktree.id)
+        worktreeIds: (worktreesByStatus.get(status.id) ?? []).map(getWorktreeHostIdentity)
       })),
     [args.workspaceStatuses, worktreesByStatus]
   )
@@ -101,6 +108,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
     renderedBoardWorktrees,
     search,
     worktreeById,
+    worktreeByKey,
     worktreesByStatus
   }
 }

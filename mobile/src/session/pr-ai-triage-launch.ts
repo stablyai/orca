@@ -1,7 +1,6 @@
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control-ai-actions'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE,
   launchAgentInExistingWorkspace,
   supportsMobileExistingAgentLaunch
 } from './mobile-existing-agent-launch'
@@ -11,6 +10,7 @@ import {
 } from './mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 import { projectSourceControlActionLaunch } from '../../../src/shared/source-control-action-launch-preferences'
+import { translate } from '../i18n/mobile-i18n'
 
 // Have the host launch and deliver AI prompts; mobile must never type them into a shell.
 
@@ -25,6 +25,13 @@ export type MobilePromptedAgentLaunch =
 
 export const AGENT_PROMPT_NOT_SENT_MESSAGE = "The agent started, but the prompt wasn't sent."
 
+export function agentPromptNotSentMessage(): string {
+  return translate(
+    'session.prAiTriageLaunch.promptNotSent',
+    "The agent started, but the prompt wasn't sent."
+  )
+}
+
 export async function launchAgentWithPrompt(args: {
   client: RpcClient
   hostCapabilities: readonly string[] | null | undefined
@@ -34,7 +41,13 @@ export async function launchAgentWithPrompt(args: {
   launchSource: string
 }): Promise<MobilePromptedAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
-    return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
+    return {
+      kind: 'not-started',
+      message: translate(
+        'session.prAiTriageLaunch.updateRequired',
+        'Update Orca on your computer to start an agent from your phone.'
+      )
+    }
   }
   let resolved
   try {
@@ -48,7 +61,12 @@ export async function launchAgentWithPrompt(args: {
     )
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : ''
-    return { kind: 'not-started', message: message || 'Could not load the available agents.' }
+    return {
+      kind: 'not-started',
+      message:
+        message ||
+        translate('session.prAiTriageLaunch.loadFailed', 'Could not load the available agents.')
+    }
   }
   if (resolved.kind === 'unavailable') {
     return { kind: 'not-started', message: resolved.message }
@@ -61,8 +79,10 @@ export async function launchAgentWithPrompt(args: {
   if (!text) {
     return {
       kind: 'not-started',
-      message:
+      message: translate(
+        'session.prAiTriageLaunch.emptyPrompt',
         "This action's saved prompt is empty. Update Source Control AI settings on your computer."
+      )
     }
   }
   const launched = await launchAgentInExistingWorkspace({
@@ -71,8 +91,7 @@ export async function launchAgentWithPrompt(args: {
     worktreeId: args.worktreeId,
     agent: resolved.agent,
     ...(projection.sessionOptions ? { chatOptions: projection.sessionOptions } : {}),
-    // The phone lacks the workspace shell needed to project inherited choices over raw flags.
-    agentArgs: projection.sessionOptionsYieldToAgentArgs ? undefined : projection.agentArgs,
+    agentArgs: projection.agentArgs,
     surface: projection.requestedSurface,
     prompt: { text, delivery: 'submit' },
     launchSource: args.launchSource
@@ -86,7 +105,13 @@ export async function launchAgentWithPrompt(args: {
         : { kind: 'prompt-not-sent', prompt: text, ...extra }
     }
     case 'unsupported':
-      return { kind: 'not-started', message: AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE }
+      return {
+        kind: 'not-started',
+        message: translate(
+          'session.prAiTriageLaunch.updateRequired',
+          'Update Orca on your computer to start an agent from your phone.'
+        )
+      }
     case 'failed':
     case 'tab-closed':
       return { kind: 'not-started', message: launched.message }
@@ -97,7 +122,9 @@ export async function launchAgentWithPrompt(args: {
 
 export function agentStartedMessage(workspaceLabel: string | null | undefined): string {
   const label = workspaceLabel?.trim()
-  return label ? `Agent started in ${label}` : 'Agent started'
+  return label
+    ? translate('session.prAiTriageLaunch.agentStartedIn', 'Agent started in {{label}}', { label })
+    : translate('session.prAiTriageLaunch.agentStarted', 'Agent started')
 }
 
 // Host warnings describe completed launches and must not become failure notices.
@@ -124,7 +151,7 @@ export function promptedLaunchNotice(
       return {
         succeeded: false,
         success: null,
-        error: AGENT_PROMPT_NOT_SENT_MESSAGE,
+        error: agentPromptNotSentMessage(),
         warning: result.warning ?? null,
         undeliveredPrompt: result.prompt
       }

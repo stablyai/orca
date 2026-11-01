@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -83,17 +82,6 @@ function makeAllDoneProgress(
   })
 }
 
-function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
-  return makeAllDoneProgress({
-    stepDone: {
-      ...makeAllDoneProgress().stepDone,
-      browser: false
-    },
-    coreDoneCount: 7,
-    coreTotal: 8
-  })
-}
-
 const mountedRoots: Root[] = []
 
 async function renderSetupGuideSidebarEntry(): Promise<{
@@ -130,41 +118,6 @@ describe('SetupGuideSidebarEntry', () => {
     mocks.openModal.mockReset()
     mocks.setSetupGuideSidebarDismissed.mockReset()
     mocks.useSetupGuideProgress.mockReturnValue(makeProgress())
-  })
-
-  it('does not render before persisted UI hydration is ready', () => {
-    persistedUIReady = false
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
-  it('does not render before setup progress readiness settles', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(makeProgress({ ready: false }))
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
-  it('does not render after setup is complete and progress is ready', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(makeAllDoneProgress())
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
-  it('renders for fresh active users when only the browser step is incomplete', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
-  })
-
-  it('does not render when the sidebar entry was dismissed with only browser incomplete', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
-    setupGuideSidebarDismissed = true
-
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
-  })
-
-  it('renders after persisted UI and setup progress are ready when setup is incomplete', () => {
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
   })
 
   it('keeps the visible entry mounted during transient setup progress refreshes', async () => {

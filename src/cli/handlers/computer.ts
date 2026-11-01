@@ -6,7 +6,12 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
+import { queryComputerTreeText } from '../computer-tree-query'
 import { RuntimeClientError } from '../runtime-client'
 import {
   formatComputerAction,
@@ -45,6 +50,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       helperAppPath: string | null
       openedSettings: boolean
       launchedHelper: boolean
+      launchQueued?: boolean
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
     }>('computer.permissions', id ? { id } : {})
@@ -52,9 +58,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'
       }
-      const firstLine = value.launchedHelper
-        ? 'Opened Orca Computer Use permission setup.'
-        : 'Computer Use permissions checked.'
+      const firstLine = permissionSetupHeadline(value)
       return [
         firstLine,
         `Helper app: ${value.helperAppPath}`,
@@ -78,11 +82,17 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer get-app-state': async ({ flags, client, cwd, json }) => {
     const observeFlags = getComputerObserveFlags(flags)
+    const query = getOptionalStringFlag(flags, 'query')
+    const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
       ...observeFlags
     })
+    if (query !== undefined || maxElements !== undefined) {
+      const { snapshot } = result.result
+      snapshot.treeText = queryComputerTreeText(snapshot.treeText, { query, maxElements })
+    }
     printResult(result, json, formatGetAppState)
   },
   'computer click': async ({ flags, client, cwd, json }) => {
@@ -236,6 +246,19 @@ function formatComputerCapabilities(value: ComputerProviderCapabilities): string
     `  Actions: ${Object.entries(value.supports.actions)
       .filter(([, enabled]) => enabled)
       .map(([name]) => name)
-      .join(', ')}`
+      .join(', ')}`,
+    ...(value.supports.input ? [`  Input: background=${value.supports.input.background}`] : [])
   ].join('\n')
+}
+
+function permissionSetupHeadline(result: {
+  launchedHelper: boolean
+  launchQueued?: boolean
+}): string {
+  if (result.launchQueued) {
+    return 'Queued Orca Computer Use permission setup; a newer request or a reset may replace it.'
+  }
+  return result.launchedHelper
+    ? 'Opened Orca Computer Use permission setup.'
+    : 'Computer Use permissions checked.'
 }

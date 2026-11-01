@@ -400,7 +400,10 @@ export function writeFakeWindowsRegistry(projectDir) {
 export function writeFakeWindowsSecurity(projectDir) {
   const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
   mkdirSync(securityDir, { recursive: true })
-  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
+  )
 }
 
 // Healthy patched addon must report CreationTime; no exports represents upstream tarball prebuild to the probe.

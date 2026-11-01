@@ -37,9 +37,11 @@ export class PluginBundledBootstrapCoordinator {
       hostVersion: this.options.hostVersion,
       ...(this.options.blockedPluginReason
         ? { blockedPluginReason: this.options.blockedPluginReason }
-        : {})
+        : {}),
+      ...(this.options.beforeRetire ? { beforeRetire: this.options.beforeRetire } : {}),
+      ...(this.options.afterRetire ? { afterRetire: this.options.afterRetire } : {})
     })
-    if (result.installed.length > 0) {
+    if (result.installed.length > 0 || result.retired.length > 0) {
       await this.options.refreshPlugins()
     }
     return result

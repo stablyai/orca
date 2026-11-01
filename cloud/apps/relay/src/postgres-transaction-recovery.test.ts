@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
   openRelayDatabase,
   type RelayDatabase,

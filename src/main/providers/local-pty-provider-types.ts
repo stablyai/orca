@@ -15,6 +15,8 @@ export type LocalPtyProviderOptions = {
       shellPath?: string
       isWsl?: boolean
       wslDistro?: string | null
+      /** A restore no user act asked for (#35813): its prep must not start a stopped distro. */
+      wslPassiveRestore?: boolean
     }
     // Async Codex hook/trust preparation must keep Electron main responsive (#16441).
   ) => Record<string, string> | Promise<Record<string, string>>

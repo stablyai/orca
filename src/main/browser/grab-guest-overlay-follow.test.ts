@@ -25,6 +25,13 @@ async function armGuest(previousMarker?: string, inShadowRoot = false) {
     shadowRoots.push(root)
     return root
   }
+  // happy-dom has no Popover API; the outline's top-layer placement is checked in Chromium.
+  for (const method of ['showPopover', 'hidePopover']) {
+    Object.defineProperty(window.HTMLElement.prototype, method, {
+      value: () => {},
+      configurable: true
+    })
+  }
 
   const scroller = document.createElement('div')
   const target = document.createElement('button')

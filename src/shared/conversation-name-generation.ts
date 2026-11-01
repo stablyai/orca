@@ -1,6 +1,7 @@
 import { normalizeAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
 import { cleanGeneratedCommitMessage } from './commit-message-agent-output'
 import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
+import { renderSourceControlActionCommandTemplate } from './source-control-ai-actions'
 
 export type ConversationNameContext = { firstPrompt: string }
 
@@ -27,6 +28,19 @@ First request:
 ${firstPrompt}`
   const extra = customPrompt.trim()
   return extra ? `${basePrompt}\n\nAdditional instructions:\n${extra}` : basePrompt
+}
+
+export function renderConversationNamePrompt(
+  context: ConversationNameContext,
+  recipe: { commandInputTemplate?: string; customPrompt?: string }
+): string {
+  const firstPrompt = clampConversationNameFirstPrompt(context.firstPrompt)
+  return recipe.commandInputTemplate !== undefined
+    ? renderSourceControlActionCommandTemplate(recipe.commandInputTemplate, {
+        basePrompt: buildConversationNamePrompt({ firstPrompt }),
+        firstPrompt
+      })
+    : buildConversationNamePrompt({ firstPrompt }, recipe.customPrompt ?? '')
 }
 
 export function sanitizeGeneratedConversationName(raw: string): string | null {

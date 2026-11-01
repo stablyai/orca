@@ -1,28 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, type RefObject } from 'react'
 import { browserPageZoomLevelToPercent } from '../../../../../shared/browser-page-zoom'
-import { BROWSER_PAGE_ZOOM_FEEDBACK_MS } from '../describe-page/browser-annotation-geometry'
+import type { BrowserPageFeedbackBadgeHandle } from '../assemble-chrome/browser-page-feedback-badge'
+import type { BrowserPageViewportSize } from './use-browser-page-viewport-size-feedback'
 
 export function useBrowserPageZoomFeedback(): {
-  browserZoomPercent: number
-  browserZoomFeedbackVisible: boolean
+  feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   showBrowserZoomFeedback: (level: number) => void
+  showBrowserViewportSizeFeedback: (size: BrowserPageViewportSize) => void
+  hideBrowserFeedback: () => void
 } {
-  const [browserZoomPercent, setBrowserZoomPercent] = useState(100)
-  const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
-  const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  useEffect(() => {
-    return () => {
-      clearTimeout(browserZoomFeedbackTimerRef.current)
-    }
-  }, [])
+  // Why one badge: zoom and resize share the corner, so the latest change wins instead of stacking.
+  const feedbackBadgeRef = useRef<BrowserPageFeedbackBadgeHandle>(null)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
-    setBrowserZoomPercent(browserPageZoomLevelToPercent(level))
-    setBrowserZoomFeedbackVisible(true)
-    clearTimeout(browserZoomFeedbackTimerRef.current)
-    browserZoomFeedbackTimerRef.current = setTimeout(() => {
-      setBrowserZoomFeedbackVisible(false)
-    }, BROWSER_PAGE_ZOOM_FEEDBACK_MS)
+    feedbackBadgeRef.current?.flash(`${browserPageZoomLevelToPercent(level)}%`)
+  }, [])
+  const showBrowserViewportSizeFeedback = useCallback((size: BrowserPageViewportSize): void => {
+    feedbackBadgeRef.current?.flash(`${size.width} × ${size.height}`)
+  }, [])
+  const hideBrowserFeedback = useCallback((): void => {
+    feedbackBadgeRef.current?.hide()
   }, [])
 
-  return { browserZoomPercent, browserZoomFeedbackVisible, showBrowserZoomFeedback }
+  return {
+    feedbackBadgeRef,
+    showBrowserZoomFeedback,
+    showBrowserViewportSizeFeedback,
+    hideBrowserFeedback
+  }
 }

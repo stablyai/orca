@@ -13,6 +13,7 @@ import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/termin
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../../runtime-terminal-view-subscribers'
+import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
@@ -141,10 +142,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     >
   >()
 
-  // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).
-  protected readonly terminalViewSubscribers = new RuntimeTerminalViewSubscribers({
-    notifyPresenceChanged: (ptyId) => this.notifyRemoteTerminalViewPresenceChanged(ptyId),
-    hasMobileSubscribers: (ptyId) => (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0,
+  protected readonly mainDaemonAttachments = new MainDaemonAttachments({
     isUnattachedLocalCandidate: (ptyId) => {
       if (
         this.headlessTerminals.has(ptyId) ||
@@ -157,9 +155,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
       const pty = this.ptysById.get(ptyId)
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
-    attachProvider: (ptyId) => {
-      const attach = this.ptyController?.attach
-      return attach ? (async () => attach(ptyId))() : null
-    }
+    attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
+  })
+
+  // Remote xterms own query replies; ref-count streams and retain suppression through mobile soft-leave grace (terminal-query-authority.md).
+  protected readonly terminalViewSubscribers = new RuntimeTerminalViewSubscribers({
+    notifyPresenceChanged: (ptyId) => this.notifyRemoteTerminalViewPresenceChanged(ptyId),
+    hasMobileSubscribers: (ptyId) => (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0,
+    ensureProviderAttach: (ptyId) => this.mainDaemonAttachments.ensure(ptyId)
   })
 }

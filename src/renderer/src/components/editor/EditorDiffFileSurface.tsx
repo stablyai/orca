@@ -1,3 +1,4 @@
+import { DiffTooLargeNotice } from './DiffTooLargeNotice'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
@@ -54,6 +55,9 @@ export function EditorDiffFileSurface({
 
   const isEditable = activeFile.diffSource === 'unstaged'
   if (diffContent.kind === 'binary') {
+    if (diffContent.tooLarge) {
+      return <DiffTooLargeNotice />
+    }
     if (diffContent.isImage) {
       return (
         <ImageDiffViewer

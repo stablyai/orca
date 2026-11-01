@@ -1,24 +1,19 @@
-import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { evaluateMobileWebBundleCompat } from '../transport/mobile-web-bundle-compat'
 import type {
   CachedGeneration,
   MobileWebShellGates,
   MobileWebShellManifestFacts,
+  MobileWebShellReportedFailure as ShellFailure,
   MobileWebShellSession,
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
-import {
-  readFailureSide,
-  type MobileWebShellUpdateFailureCause,
-  type MobileWebShellUpdateFailureFacts
-} from './mobile-web-shell-update-failure'
-import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
+import { onDownloadFailed } from './mobile-web-shell-download-failure'
 import {
   awaitsGates,
-  cachedGenerationWall,
   CHECKING,
+  OFFLINE,
   gateKey,
   gateState,
   gateVerdict,
@@ -94,7 +89,8 @@ function onCacheRead(
   if (gates.reachability === 'unreachable') {
     // No current host verdict exists offline; open trusted cache and recheck on the next connected entry.
     if (generation === null) {
-      return step(session, { cached: null, state: { kind: 'offline' } })
+      // A first open has nothing to show offline; keep checking while the dial is still retrying.
+      return step(session, { cached: null, ...(gates.retrying === true ? {} : { state: OFFLINE }) })
     }
     // Use cached routes offline; an absent route means offline, not evidence the unreachable desktop is outdated.
     return openByOwnRoutes(session, generation, {
@@ -158,17 +154,15 @@ function onManifestRead(
 }
 
 // Retry suspect disk bytes once via delete/refetch; renderer loss gets one remount without deletion; unavailable isolation is terminal.
-// Ignore reports outside ready: retired-view batches must not interrupt recovery already in flight.
-function onShellFailed(
-  session: MobileWebShellSession,
-  reason: MobileWebShellFailureReason
-): MobileWebShellStep {
-  if (session.state.kind !== 'ready') {
+// Retired document reports cannot interrupt recovery; profile failures can end startup before ready.
+function onShellFailed(session: MobileWebShellSession, reason: ShellFailure): MobileWebShellStep {
+  if (session.state.kind !== 'ready' && reason !== 'host-profile-unreadable') {
     return step(session, {})
   }
   const failed = { kind: 'failed', reason, retriedOnce: session.retriedOnce } as const
-  if (reason === 'isolation-unavailable') {
-    return step(session, { state: failed })
+  if (reason === 'isolation-unavailable' || reason === 'host-profile-unreadable') {
+    // Terminal failures advance flow so pending startup work is cancelled and its completions rejected.
+    return step(session, { state: failed, flow: session.flow + 1 })
   }
   if (reason === 'render-process-gone') {
     return session.remountedOnce
@@ -184,49 +178,10 @@ function onShellFailed(
   ])
 }
 
-// Record the resulting decision once for Troubleshoot; release builds forward no console logs.
-function onDownloadFailed(
-  session: MobileWebShellSession,
-  cause: MobileWebShellUpdateFailureCause
-): MobileWebShellStep {
-  const decided = decideDownloadFailed(session, cause)
-  const failure: MobileWebShellUpdateFailureFacts = {
-    ...cause,
-    offeredBuildId: session.requestedBuildId,
-    cachedBuildId: session.cached?.buildId ?? null,
-    ...updateFailureOutcomeOf(decided.session.state)
-  }
-  return { ...decided, effects: [...decided.effects, { kind: 'record-update-failure', failure }] }
-}
-
-// Fall back to intact cached bytes under their own routes, checking compatibility when the host remains reachable.
-// Name only bundle refusals: link loss cannot establish an update existed; absent cache still gets download failure.
-function decideDownloadFailed(
-  session: MobileWebShellSession,
-  cause: MobileWebShellUpdateFailureCause
-): MobileWebShellStep {
-  const cached = session.cached
-  const gates = session.gates
-  if (cached === null || gates === null) {
-    return step(session, {
-      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
-    })
-  }
-  // Read current gates because they can change while fetching without restarting the flow.
-  const verdict = gateVerdict(gates)
-  const gated = gateState(verdict, session.retriedOnce)
-  if (gated !== null) {
-    return step(session, { state: gated })
-  }
-  return openByOwnRoutes(session, cached, {
-    // Missing cached routes remain a retryable download failure after the new manifest claimed them or never arrived.
-    unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
-    served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
-    wall: cachedGenerationWall(verdict, gates, cached.compat)
-  })
-}
-
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
+  if (session.state.kind === 'failed' && session.state.reason === 'host-profile-unreadable') {
+    return step(session, { wide })
+  }
   const view = routeViewOf(session.routes, session.routePathname, wide)
   if (session.gates === null || sameRouteView(view, session)) {
     return step(session, { wide })

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { unwrapHostRefusalIpcLines } from './terminal-error-ipc-unwrap'
 import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import {
@@ -156,8 +157,9 @@ export function humanizeTerminalError(error: string, agentId?: string | null): s
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error)
   }
+  const unwrapped = unwrapHostRefusalIpcLines(error)
   let humanized = humanizeFolderWorkspacePathErrors(
-    localizeTerminalSpawnHints(agentLaunchErrorText(error, agentId) ?? error)
+    localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId) ?? unwrapped)
   )
   if (humanized.includes(PANE_OWNER_UNVERIFIED_MARKER)) {
     const explanation = isPaneOwnerUnverifiedError(humanized)

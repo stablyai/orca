@@ -288,6 +288,26 @@ describe('worktree removal against the real Git binary', () => {
     expect(await isRegistered(subWorktreePath)).toBe(false)
   })
 
+  it.each([
+    ['a checked-out submodule', false],
+    ['a deinitialized submodule whose repository stays in the admin directory', true]
+  ])('refuses a clean checkout with %s before teardown, as Git would', async (_name, deinit) => {
+    // A background delete that Git refuses would surface only after terminals were stopped (#35135).
+    const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()
+    await git(['commit', '-qam', 'bump vendor'], subWorktreePath)
+    if (deinit) {
+      await git(['submodule', '-q', 'deinit', '-f', 'vendor'], subWorktreePath)
+    }
+
+    const refusal = await assertWorktreeCleanForRemoval(subWorktreePath).catch((error) => error)
+    expect(refusal).toBeInstanceOf(Error)
+    const message = formatWorktreeRemovalError(refusal, subWorktreePath, false)
+    expect(classifyWorktreeForceDeleteReason(message)).toBe('submodules')
+    // Git itself, not Orca's native Windows remover, decides what counts.
+    const gitRefusal = await git(['worktree', 'remove', subWorktreePath], repoPath).catch((e) => e)
+    expect(String(gitRefusal?.stderr)).toContain('containing submodules')
+  })
+
   it('names submodules when the dirty check refuses a checkout that has them', async () => {
     // Parent status cannot show the submodule-only commit that Force Delete would destroy.
     const { subWorktreePath } = await addSubmoduleCheckoutWithLocalCommit()

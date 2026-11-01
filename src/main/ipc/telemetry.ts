@@ -11,7 +11,7 @@ import {
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classifier'
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
 import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 
@@ -29,6 +29,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'daemon_pty_cwd_readable',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
+  'plugin_installed',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',
   'ssh_host_server_conversion',
@@ -37,6 +38,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'ssh_host_server_legacy_relay_bridge',
   'wsl_move',
   'wsl_move_orchestrator',
+  'wsl_move_undo',
   'wsl_usage_snapshot'
 ])
 

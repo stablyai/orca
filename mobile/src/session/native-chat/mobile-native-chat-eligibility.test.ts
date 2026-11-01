@@ -8,7 +8,7 @@ import {
   withRememberedNativeChatIdentity
 } from './mobile-native-chat-eligibility'
 import type { MobileSessionTab } from '../mobile-session-route-types'
-import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
 
 function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
@@ -64,7 +64,8 @@ describe('resolveMobileNativeChat', () => {
       agent: 'claude',
       sessionId: 'sess-1',
       transcriptPath: '/tmp/claude-real-transcript.jsonl',
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: true
     })
   })
 
@@ -74,7 +75,13 @@ describe('resolveMobileNativeChat', () => {
         type: 'terminal',
         agentStatus: status({ agentType: 'codex' })
       })
-    ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null, agentConfirmed: true })
+    ).toEqual({
+      agent: 'codex',
+      sessionId: null,
+      transcriptPath: null,
+      agentConfirmed: true,
+      sessionLive: false
+    })
   })
 
   it('admits OpenClaude with its distinct agent identity', () => {
@@ -82,7 +89,8 @@ describe('resolveMobileNativeChat', () => {
       agent: 'openclaude',
       sessionId: null,
       transcriptPath: null,
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: false
     })
   })
 
@@ -98,7 +106,8 @@ describe('resolveMobileNativeChat', () => {
       agent,
       sessionId: 'real-session',
       transcriptPath: null,
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: true
     })
     expect(resolveMobileNativeChat(tab, false)).toBeNull()
   })
@@ -155,7 +164,8 @@ describe('resolveMobileNativeChat', () => {
       agent: 'codex',
       sessionId: 'structured-1',
       transcriptPath: null,
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: true
     })
   })
 
@@ -170,7 +180,8 @@ describe('resolveMobileNativeChat', () => {
       agent: 'claude',
       sessionId: 'structured-1',
       transcriptPath: null,
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: true
     })
   })
 
@@ -179,7 +190,13 @@ describe('resolveMobileNativeChat', () => {
     (agent) => {
       expect(
         resolveMobileNativeChat({ type: 'agent-session', sessionId: 'structured-1', agent })
-      ).toEqual({ agent, sessionId: 'structured-1', transcriptPath: null, agentConfirmed: true })
+      ).toEqual({
+        agent,
+        sessionId: 'structured-1',
+        transcriptPath: null,
+        agentConfirmed: true,
+        sessionLive: true
+      })
     }
   )
 
@@ -236,7 +253,8 @@ describe('withRememberedNativeChatIdentity', () => {
       agent: 'claude',
       sessionId: 'sess-1',
       transcriptPath: '/t/sess-1.jsonl',
-      agentConfirmed: false
+      agentConfirmed: false,
+      sessionLive: false
     })
     expect(resolveMobileNativeChatSessionId(next)).toBe('sess-1')
   })
@@ -258,7 +276,8 @@ describe('withRememberedNativeChatIdentity', () => {
       agent: 'codex',
       sessionId: null,
       transcriptPath: null,
-      agentConfirmed: true
+      agentConfirmed: true,
+      sessionLive: false
     })
   })
 

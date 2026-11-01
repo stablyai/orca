@@ -3,12 +3,17 @@ import type {
   CreateHostedReviewInput,
   CreateStackedHostedReviewInput,
   HostedReviewCreationEligibility,
+  HostedReviewForBranchArgs,
+  HostedReviewForBranchOutcome,
+  HostedReviewForBranchReply,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
+import { hostedReviewForBranchOutcome } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {
@@ -17,6 +22,8 @@ export type HostedReviewCacheEntry<T> = {
   stale?: boolean
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
+  /** Lookup generation of the newest request the host answered from a provider read it stored as current. */
+  providerReadGeneration?: number
 }
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
@@ -24,6 +31,7 @@ export type HostedReviewFetchOptions = {
   /** Source-qualified exact lookup; does not replace the branch’s selected review. */
   exactReviewKey?: string
   force?: boolean
+  userRefresh?: boolean
   repoId?: string
   admissionTier?: 'interactive' | 'status' | 'background'
   staleWhileRevalidate?: boolean
@@ -34,6 +42,8 @@ export type HostedReviewFetchOptions = {
    */
   active?: boolean
   repoOwnerExecutionHostId?: string
+  /** An explicit Refresh: may start a stopped WSL distro. Local IPC only. */
+  wakeWslDistro?: boolean
 }
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
@@ -114,10 +124,15 @@ export function findHostedReviewRepoForFetch(
 
 export function hostedReviewOwnerIpcArgs(options: HostedReviewFetchOptions | undefined): {
   repoOwnerExecutionHostId?: string
+  wakeWslDistro?: true
 } {
-  return options?.repoOwnerExecutionHostId
-    ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
-    : {}
+  return {
+    ...(options?.repoOwnerExecutionHostId
+      ? { repoOwnerExecutionHostId: options.repoOwnerExecutionHostId }
+      : {}),
+    // Not admissionTier: the visible scheduler sends 'interactive' for the selected card on a timer.
+    ...(options?.wakeWslDistro ? { wakeWslDistro: true as const } : {})
+  }
 }
 
 export function shouldRefetchForLinkedHint(
@@ -222,6 +237,9 @@ export function hostedReviewBranchLookupArgs(
   return {
     branch,
     ...(options?.force === true ? { force: true } : {}),
+    ...(options?.userRefresh === true ? { userRefresh: true } : {}),
+    // Only this store asks, so the Checks panel can tell a real provider read from a cached answer.
+    reportReadOutcome: true,
     ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
     ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
     currentHeadOid: options?.currentHeadOid ?? null,
@@ -232,5 +250,42 @@ export function hostedReviewBranchLookupArgs(
     linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: options?.linkedGiteaPR ?? null
+  }
+}
+
+export async function requestHostedReviewForBranch(
+  target: RuntimeClientTarget,
+  runtimeParams: Record<string, unknown>,
+  ipcArgs: HostedReviewForBranchArgs
+): Promise<HostedReviewForBranchOutcome> {
+  return hostedReviewForBranchOutcome(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<HostedReviewForBranchReply>(
+          target,
+          'hostedReview.forBranch',
+          runtimeParams,
+          // Remote git/gh, especially Windows paths, can be slow; main queue bounds concurrency so longer timeout cannot cause stampedes.
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.hostedReview.forBranch(ipcArgs)
+  )
+}
+
+export function hostedReviewCallerSettlement(
+  readPreserved: () => HostedReviewCacheEntry<HostedReviewInfo> | undefined,
+  options?: HostedReviewFetchOptions
+): (request: Promise<HostedReviewInfo | null>) => Promise<HostedReviewInfo | null> {
+  return async (request) => {
+    try {
+      return await request
+    } catch (error) {
+      if (options?.userRefresh) {
+        throw error
+      }
+      const preserved = readPreserved()
+      return isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)
+        ? null
+        : (preserved?.data ?? null)
+    }
   }
 }

@@ -1,12 +1,14 @@
 /** Reuse SSH update admission: keep newer, rolled-back or launch-rejected incumbents serving; fenced activation replans before committing. */
 import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
+  ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
   type WslHostDeferredUpdate
 } from '../../shared/wsl-host-types'
 import { refuseOrcadHostDowngrade } from '../ssh/orcad-host-version-admission'
 import type { ServeReadiness } from '../server/serve-readiness'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../managed-server/activation/orcad-activation-record-store'
+import { readOrcadActivationTransaction } from '../managed-server/activation/orcad-activation-transaction-store'
 import { isWaitingOrcadUpdateDeferral } from '../managed-server/lifecycle/orcad-managed-auto-update'
 import {
   orcadUpdateSkipRefusal,
@@ -46,6 +48,8 @@ export async function admitWslOrcadUpdate(args: {
   appVersion: string
   host: OrcadUpdateFailureHost
   intent: OrcadUpdateIntent
+  /** A project move to this distro runs here: a redeploy would cut it off, even when forced. */
+  moveRunning?: boolean
 }): Promise<WslOrcadUpdateAdmission> {
   const { record, candidateVersion, appVersion } = args
   if (!record.active) {
@@ -58,7 +62,8 @@ export async function admitWslOrcadUpdate(args: {
     appVersion,
     failedBefore: failure !== null
   })
-  if (plan.action !== 'skip' || plan.reason === 'current') {
+  const heldForMove = args.moveRunning === true && plan.action === 'update'
+  if (!heldForMove && (plan.action !== 'skip' || plan.reason === 'current')) {
     return { action: 'deploy', record }
   }
   const adopted = await adoptRunningOrcadVersion(args.slot, record, candidateVersion)
@@ -80,7 +85,15 @@ export async function admitWslOrcadUpdate(args: {
     deferredUpdate:
       adopted.version === candidateVersion
         ? null
-        : skippedUpdateHint(plan, failure, record, candidateVersion, appVersion)
+        : heldForMove
+          ? {
+              candidateVersion,
+              code: ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
+              reason:
+                'A project is moving to this WSL host; its server updates once the move finishes.',
+              forceable: false
+            }
+          : skippedUpdateHint(plan, failure, record, candidateVersion, appVersion)
   }
 }
 
@@ -169,4 +182,17 @@ export async function wslOrcadDeferralCode(
   return record && refuseOrcadHostDowngrade(record, deployed.fullVersion, appVersion)
     ? ORCAD_HOST_NEWER_DEFERRAL_CODE
     : deployed.code
+}
+
+/** The record only once the incumbent is back and no journal awaits recovery; else null. */
+export async function readRestoredWslOrcadRecord(
+  slot: OrcadSlotOptions,
+  incumbent: string
+): Promise<OrcadActivationRecord | null> {
+  // Unreadable transaction state proves no restoration; preserve the rejection.
+  if (await readOrcadActivationTransaction(slot).catch(() => true)) {
+    return null
+  }
+  const record = await readOrcadActivationRecord(slot).catch(() => null)
+  return record?.active === incumbent ? record : null
 }

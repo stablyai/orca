@@ -1,4 +1,26 @@
-// Bridge into native storage: Android disables localStorage and iOS origins change per session. Explicit keys prevent pages rewriting pairings/push registrations in the same orca: namespace.
+/**
+ * Which of the app's stored keys the page may read and write, and how much of each.
+ *
+ * AsyncStorage's web build is `window.localStorage`, which the page does not have: Android turns
+ * DOM storage off and on iOS the origin host is the session id, so anything written there is empty
+ * again on the next remount. A pin that silently forgets itself is worse than one that cannot be
+ * set, so the page's store is the app's, reached over the `storage` grant.
+ *
+ * An allowlist and not a passthrough. Everything the app keeps under `orca:` is in one namespace —
+ * paired hosts, push registrations — and a page that could write any of them could rewrite state
+ * the native app owns. A prefix is listed only where the key carries an id the desktop chooses; the
+ * rest are exact.
+ *
+ * Every key here was read off a page route's own closure rather than taken from a list: a key a
+ * screen reads and this file does not name is a preference that silently falls back to its default
+ * inside the page and keeps working outside it, which is the failure the grant exists to end
+ * (rulings-ota-c7.md ruling 7).
+ */
+export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
+  'orca:terminal-accessory-layout',
+  'orca:custom-accessory-keys'
+] as const
+
 export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:last-visited-worktree',
   'orca:hostSidebarWidth',
@@ -10,8 +32,39 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:mobileStructuredSendOperations:v1',
   'orca:terminalTextScale',
   'orca:terminalAutocompleteEnabled',
-  'orca:terminalLinkOpenMode'
+  /** Whether a terminal link opens in Orca's browser or the phone's. */
+  'orca:terminalLinkOpenMode',
+  /** The split terminal's chosen direction. */
+  'orca:terminalSplitLayout'
 ] as const
+
+/**
+ * Keys added after pages stopped sharing one allowlist with every host. An older page's `init`
+ * reader refines each key against its own list and refuses the whole frame on one it lacks, so
+ * the host sends these only to a page whose `ready` named them in `storageKeys`.
+ */
+export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+
+/** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
+export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {
+  return (
+    !NEGOTIATED_PAGE_STORAGE_KEYS.some((negotiated) => negotiated === key) ||
+    (declared?.includes(key) ?? false)
+  )
+}
+
+/** The part of `init` storage the page on the other side can read. */
+export function pageStorageForReader(
+  held: PageStorageForInit,
+  declared: readonly string[] | null
+): PageStorageForInit {
+  return {
+    storage: Object.fromEntries(
+      Object.entries(held.storage).filter(([key]) => pageReadsStorageKey(key, declared))
+    ),
+    storageOversize: held.storageOversize.filter((key) => pageReadsStorageKey(key, declared))
+  }
+}
 
 export const PAGE_STORAGE_KEY_PREFIXES = [
   'orca:pins:',

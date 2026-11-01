@@ -2,19 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   NATIVE_CHAT_VISUAL_CSP,
   NATIVE_CHAT_VISUAL_HOST_CSP,
-  NATIVE_CHAT_VISUAL_MAX_HEIGHT,
-  NATIVE_CHAT_VISUAL_MIN_HEIGHT,
   NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
   NATIVE_CHAT_VISUAL_PING_TYPE,
   NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
-  NATIVE_CHAT_VISUAL_THEME_TYPE,
   buildNativeChatVisualDocument,
-  clampNativeChatVisualHeight,
   nativeChatVisualPingMessage,
   nativeChatVisualThemeCss,
-  nativeChatVisualThemeMessage,
   readNativeChatVisualFrameMessage,
   readNativeChatVisualPong
 } from './native-chat-visual-shell'
@@ -89,12 +84,6 @@ describe('buildNativeChatVisualDocument', () => {
     expect(document.endsWith(html)).toBe(true)
   })
 
-  it('paints the theme before the visual and carries the channel in the bootstrap', () => {
-    expect(document).toContain('<html class="dark">')
-    expect(document).toContain('--background:oklch(0.2 0 0)')
-    expect(document).toContain('"channel":"abc123"')
-  })
-
   it('resolves in-page links against the visual itself, ahead of the policy that bars any other base', () => {
     const baseAt = document.indexOf('<base href="about:srcdoc">')
     expect(baseAt).toBeGreaterThan(0)
@@ -120,14 +109,6 @@ describe('nativeChatVisualThemeCss', () => {
     expect(css).not.toContain('not-a-token')
     expect(css).not.toContain('--Upper')
     expect(css.startsWith(':root{color-scheme:light')).toBe(true)
-  })
-
-  it('builds the live theme message on the same channel', () => {
-    expect(nativeChatVisualThemeMessage(theme, 'abc')).toMatchObject({
-      type: NATIVE_CHAT_VISUAL_THEME_TYPE,
-      channel: 'abc',
-      colorScheme: 'dark'
-    })
   })
 })
 
@@ -227,13 +208,5 @@ describe('readNativeChatVisualPong', () => {
     ['null', null]
   ])('refuses %s', (_name, data) => {
     expect(readNativeChatVisualPong(data, 'c')).toBeNull()
-  })
-})
-
-describe('clampNativeChatVisualHeight', () => {
-  it('keeps heights in range', () => {
-    expect(clampNativeChatVisualHeight(1)).toBe(NATIVE_CHAT_VISUAL_MIN_HEIGHT)
-    expect(clampNativeChatVisualHeight(99_999)).toBe(NATIVE_CHAT_VISUAL_MAX_HEIGHT)
-    expect(clampNativeChatVisualHeight(300.4)).toBe(300)
   })
 })

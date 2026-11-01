@@ -45,6 +45,7 @@ import { registerGitRepositoryRegistrationBinaryCompatibilityCase } from './git-
 import { registerGitLocalBaseBranchBinaryCompatibilityCase } from './git-local-base-branch-binary-compatibility.test-cases'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
 import { registerGitWorktreeBinaryCompatibilityCases } from './git-worktree-binary-compatibility.test-cases'
+import { registerPluginGitDownloadBinaryCompatibilityCase } from './plugin-git-download-binary-compatibility.test-cases'
 
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
 const binary = process.env.ORCA_GIT_COMPAT_BINARY
@@ -624,6 +625,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ).rejects.toMatchObject({ code: 1 })
   })
 
+  it('lists exact and descendant refs from batched for-each-ref probes', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    const presentRef = 'refs/remotes/origin/compat-batch'
+    const nestedRef = 'refs/remotes/origin/compat-batch-parent/nested'
+    await runGit(['update-ref', presentRef, head])
+    await runGit(['update-ref', nestedRef, head])
+
+    // A miss still exits 0; callers keep only exact lines, so the parent stays absent.
+    await expect(
+      runGit([
+        'for-each-ref',
+        '--format=%(refname)',
+        '--',
+        presentRef,
+        'refs/remotes/origin/compat-batch-parent',
+        'refs/remotes/missing/compat-batch'
+      ])
+    ).resolves.toMatchObject({ stdout: `${presentRef}\n${nestedRef}\n` })
+  })
+
   it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
     // Pin baseline Git 2.25 pack-refs --all --prune (not 2.45+ --auto) and maintenance.auto opt-out reads.
     const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
@@ -816,6 +837,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   registerGitLocalBaseBranchBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
+  registerPluginGitDownloadBinaryCompatibilityCase(runGit, () => repoPath)
   registerGitResolutionBinaryCompatibilityCases(runGit, (name) =>
     image ? `/repo/${name}.git` : join(repoPath, `${name}.git`)
   )

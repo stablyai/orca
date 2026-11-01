@@ -2,9 +2,12 @@ import type {
   PRMergeableState,
   ProviderCheckSummary
 } from '../../../src/shared/github/pull-request-types'
+import { translate } from '../i18n/mobile-i18n'
+import { resolveGitHubPRMergeState } from '../../../src/shared/github/pull-request-merge-state'
 import { getProviderChecksLabel } from '../../../src/shared/provider-check-summary'
 
 export type MobileHostedReviewStatus = {
+  state?: string
   checksSummary?: ProviderCheckSummary
   reviewDecision?: string | null
   reviewRequests?: readonly unknown[]
@@ -29,17 +32,47 @@ export function getHostedReviewLabel(item: MobileHostedReviewStatus): string {
     : 'No reviewers'
 }
 
-export function getHostedMergeLabel(item: MobileHostedReviewStatus): string {
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'Conflicts'
+function hostedMergeState(item: MobileHostedReviewStatus) {
+  return resolveGitHubPRMergeState({
+    state:
+      item.state === 'merged' || item.state === 'closed' || item.state === 'draft'
+        ? item.state
+        : 'open',
+    mergeable: item.mergeable,
+    mergeStateStatus: item.mergeStateStatus,
+    checksSummary: item.checksSummary
+  }).kind
+}
+
+export function getHostedMergeLabel(item: MobileHostedReviewStatus): string | null {
+  switch (hostedMergeState(item)) {
+    case 'merged':
+      return translate('tasks.hostedMerge.merged', 'Merged')
+    case 'closed':
+      return translate('tasks.hostedMerge.closed', 'Closed')
+    case 'conflicts':
+      return translate('tasks.hostedMerge.conflicts', 'Conflicts')
+    case 'behind':
+      return translate('tasks.hostedMerge.behind', 'Behind')
+    case 'blocked':
+      return translate('tasks.hostedMerge.blocked', 'Blocked')
+    case 'mergeable_checks_pending':
+      return translate('tasks.hostedMerge.checksPending', 'Checks pending')
+    case 'mergeable':
+    case 'mergeable_checks_failed':
+    case 'mergeable_checks_passed':
+      return translate('tasks.hostedMerge.ableToMerge', 'Able to merge')
+    case 'merge_status_unavailable':
+    case 'checks_passed':
+    case 'draft':
+      return null
+    case 'review_required':
+    case 'changes_requested':
+    case 'merge_queue':
+    case 'merge_queue_auto_merge_on':
+    case 'checking':
+      return translate('tasks.hostedMerge.unknown', 'Unknown')
   }
-  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'Behind'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
 }
 
 export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
@@ -82,14 +115,27 @@ export function getHostedReviewSignalTone(
     }
     return 'neutral'
   }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'BLOCKED') {
-    return 'danger'
+  switch (hostedMergeState(item)) {
+    case 'conflicts':
+    case 'blocked':
+      return 'danger'
+    case 'behind':
+    case 'mergeable_checks_pending':
+      return 'warning'
+    case 'mergeable':
+    case 'mergeable_checks_failed':
+    case 'mergeable_checks_passed':
+      return 'success'
+    case 'merged':
+    case 'closed':
+    case 'draft':
+    case 'review_required':
+    case 'changes_requested':
+    case 'merge_queue':
+    case 'merge_queue_auto_merge_on':
+    case 'merge_status_unavailable':
+    case 'checks_passed':
+    case 'checking':
+      return 'neutral'
   }
-  if (item.mergeStateStatus === 'BEHIND' || item.checksSummary?.state === 'pending') {
-    return 'warning'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'success'
-  }
-  return 'neutral'
 }

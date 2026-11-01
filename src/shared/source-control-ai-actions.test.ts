@@ -53,11 +53,23 @@ describe('source-control AI launch action defaults', () => {
         agentId: 'codex',
         launchPreferences: {
           agentId: 'codex' as const,
-          model: 'gpt-5.6-terra',
-          options: { effort: 'high' }
+          modelSelection: {
+            base: 'default',
+            model: { agentId: 'codex', value: 'gpt-5.6-terra' },
+            options: { effort: { agentId: 'codex', value: 'high' } }
+          }
         }
       },
-      resolveConflicts: { agentId: 'claude' },
+      resolveConflicts: {
+        agentId: 'claude',
+        launchPreferences: {
+          agentId: 'claude',
+          modelSelection: {
+            base: 'default',
+            options: { effort: { agentId: 'claude', value: 'high' } }
+          }
+        }
+      },
       resolveComments: { agentId: 'claude' }
     })
   })

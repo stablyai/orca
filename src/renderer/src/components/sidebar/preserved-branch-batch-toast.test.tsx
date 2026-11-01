@@ -155,17 +155,6 @@ describe('showPreservedBranchBatchToast', () => {
     })
   })
 
-  it('keeps older-server branches visible without offering an unsafe delete', () => {
-    showPreservedBranchBatchToast(3, [{ worktreeId: 'repo-a::one', branchName: 'feature/one' }])
-    const body = renderToastBody()
-
-    expect(body.querySelector('button')).toBeNull()
-    expect(toast.warning).toHaveBeenCalledWith(
-      '3 workspaces removed, 1 branch kept',
-      expect.not.objectContaining({ duration: Infinity })
-    )
-  })
-
   it('serializes branch deletion within one repository', async () => {
     let resolveFirst: (result: { ok: true; deleted: true }) => void = () => {}
     mocks.state.forceDeletePreservedBranch

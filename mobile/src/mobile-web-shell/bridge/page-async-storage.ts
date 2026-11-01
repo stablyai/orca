@@ -1,4 +1,5 @@
 import {
+  TERMINAL_SHORTCUT_STORAGE_KEYS,
   isHostWorkspaceStorageKey,
   isPageStorageKeyForRoute,
   PAGE_STORAGE_MAX_VALUE_CHARS
@@ -56,6 +57,28 @@ export function publishPageStorage(
   hostId = forHostId
   routePathname = forRoutePathname
   readWorkspaceKey = forWorkspaceKeyReader
+}
+
+/** Apply native shortcut settings without replacing page-owned drafts or pending journals. */
+export function refreshPageTerminalShortcuts(
+  entries: Readonly<Record<string, string>>,
+  oversize: readonly string[]
+): void {
+  const nextOversize = new Set(oversizeKeys)
+  for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+    const value = entries[key]
+    if (value === undefined) {
+      values.delete(key)
+    } else {
+      values.set(key, value)
+    }
+    if (oversize.includes(key)) {
+      nextOversize.add(key)
+    } else {
+      nextOversize.delete(key)
+    }
+  }
+  oversizeKeys = nextOversize
 }
 
 function getItem(key: string): Promise<string | null> {

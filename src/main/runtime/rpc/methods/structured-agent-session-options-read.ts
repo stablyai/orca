@@ -1,4 +1,4 @@
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 // options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
@@ -14,12 +14,14 @@ import {
   ModelCatalogParams,
   OptionsParams
 } from './structured-agent-session-schemas'
-import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+import { agentSessionPinnedLaunchDirectory } from '../../agent-session/records/agent-session-record-launch-directory'
+import {
+  clientRequestsCommands,
+  clientReadsOptionsWithoutModel
+} from './structured-agent-session-policy'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
-import { finishedListingIds } from '../../../../shared/structured-agent-session-options'
+import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-options'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -41,7 +43,10 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) =>
-      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(params.sessionId)
+      (await requireInstalledStructuredHost(ctx, params.sessionId)).readCommands(
+        params.sessionId,
+        clientRequestsCommands(ctx)
+      )
   }),
   defineMethod({
     name: 'agentSession.options',
@@ -49,13 +54,17 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     params: OptionsParams,
     handler: async (params, ctx) => {
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
-      const result = await (
-        await requireInstalledStructuredHost(ctx, params.sessionId)
-      ).readOptions(params.sessionId, { readsWithoutModel })
+      const host = await requireInstalledStructuredHost(ctx, params.sessionId)
+      const result = await host.readOptions(params.sessionId, { readsWithoutModel })
       if (result.current.model === undefined && !readsWithoutModel) {
-        throw agentSessionRefusalError('structured_agent_session_unsupported', {
-          reason: 'clientCapabilityMissing'
-        })
+        return {
+          ...result,
+          current: { ...result.current, model: '' },
+          models: [
+            { id: '', label: 'Model not reported', isDefault: false, efforts: [] },
+            ...result.models.filter((model) => model.id !== '')
+          ]
+        }
       }
       return result
     }
@@ -84,16 +93,29 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         }
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
-        if (launchDirectory) {
-          return catalog.read({ ...params, ...scope, workspacePath: launchDirectory })
+        const request = {
+          ...params,
+          ...scope,
+          ...(launchDirectory
+            ? { workspacePath: launchDirectory }
+            : worktree === undefined
+              ? {}
+              : {
+                  workspace: {
+                    selector: worktree,
+                    identity: () =>
+                      ctx.runtime.structuredAgentSessionCatalogWorkspaceIdentity(worktree),
+                    resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
+                  }
+                })
         }
-        if (worktree === undefined) {
-          return catalog.read({ ...params, ...scope })
+        if (params.sessionId !== undefined) {
+          return host.readModelCatalog(request)
         }
-        const workspacePath = await ctx.runtime
-          .resolveStructuredAgentSessionLocalWorkspacePath(worktree)
-          .catch(() => null)
-        return catalog.read({ ...params, ...scope, workspacePath })
+        if (!params.savedOnly) {
+          void catalog.demand(request)
+        }
+        return catalog.read(request)
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null

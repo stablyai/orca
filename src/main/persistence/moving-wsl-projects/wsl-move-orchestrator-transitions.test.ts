@@ -84,8 +84,17 @@ describe('classifyWslMoveOutcome', () => {
     ] as const) {
       expect(refused(code)).toEqual({ next: 'transient', reason: code })
     }
+    // A committed earlier move left for the next start: retrying before then changes nothing.
+    expect(
+      classifyWslMoveOutcome({
+        outcome: 'refused',
+        code: 'wsl_move_finished_earlier_move',
+        detail: 'finish-pending'
+      })
+    ).toEqual({ next: 'parked', reason: 'finish-pending' })
     expect(refused('wsl_move_nothing_new')).toEqual({ next: 'idle' })
     expect(refused('wsl_move_already_running')).toEqual({ next: 'stay' })
+    expect(refused('wsl_move_undo_running')).toEqual({ next: 'stay' })
     expect(
       classifyWslMoveOutcome({
         outcome: 'refused',
@@ -247,6 +256,15 @@ describe('R38 verdicts and user actions', () => {
     })
     const deferred = record({ kind: 'deferred', blockers: [blocker], rechecks: 0 })
     expect(settleWslMoveOrchestratorRecord(deferred, NOW, false)).toBe(deferred)
+  })
+
+  it('waits out a finish left for the next start, then resumes at that start', () => {
+    const parked = record({ kind: 'parked', reason: 'finish-pending' })
+    for (const trigger of ['timer', 'connect', 'project-opened', 'startup'] as const) {
+      expect(mayStartWslMove(parked, trigger, NOW, '1.0.0')).toBe(false)
+    }
+    expect(mayStartWslMove(parked, 'user', NOW, '1.0.0')).toBe(true)
+    expect(settleWslMoveOrchestratorRecord(parked, NOW, false).state).toEqual({ kind: 'pending' })
   })
 })
 

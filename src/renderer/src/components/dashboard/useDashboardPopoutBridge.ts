@@ -190,7 +190,22 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       open = next
       if (open) {
         if (!unsubscribeStore) {
-          unsubscribeStore = watchSnapshotInputs(publishThrottled)
+          const stopInputs = watchSnapshotInputs(publishThrottled)
+          const stopStatuses = useAppStore.getState().subscribeAgentStatusChanges((changes) => {
+            if (
+              changes.some(
+                ({ previous, current }) =>
+                  previous?.terminalResumeEligible === false ||
+                  current?.terminalResumeEligible === false
+              )
+            ) {
+              publishThrottled()
+            }
+          })
+          unsubscribeStore = () => {
+            stopInputs()
+            stopStatuses()
+          }
         }
         publishNow(true)
       } else {

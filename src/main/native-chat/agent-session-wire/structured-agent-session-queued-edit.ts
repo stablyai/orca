@@ -1,12 +1,14 @@
-// Save compares body fingerprints without changing card identity/order/sender; edit leases block automatic delivery.
+// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
 
 import type {
   AgentSessionMutationEnvelope,
-  AgentSessionMutationResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageEditableText } from '../../../shared/queued-message-edit'
 import {
   queuedMessageUpdateDecision,

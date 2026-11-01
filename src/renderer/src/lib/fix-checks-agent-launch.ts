@@ -295,7 +295,6 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     resolveAgentArgs: (agent) =>
       sourceControlActionAgentArgs(recipe(), agent, useAppStore.getState().settings),
     resolveSessionOptions: (agent) => resolveSourceControlActionSessionOptions(recipe(), agent),
-    sessionOptionsYieldToAgentArgs: recipe().launchPreferencesYieldToAgentArgs,
     ...(agentOverride.kind === 'agent'
       ? {
           agentOverride: agentOverride.agent,

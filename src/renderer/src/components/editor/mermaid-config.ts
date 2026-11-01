@@ -11,7 +11,6 @@ export type MermaidThemeColors = {
 
 export function getMermaidConfig(
   isDark: boolean,
-  htmlLabels = false,
   colors?: MermaidThemeColors
 ): Parameters<typeof mermaid.initialize>[0] {
   return {
@@ -47,6 +46,7 @@ export function getMermaidConfig(
           }
         }
       : {}),
-    htmlLabels
+    // Strict mode sanitizes label HTML; sanitizeMermaidSvg keeps the foreignObject labels it emits.
+    htmlLabels: true
   }
 }

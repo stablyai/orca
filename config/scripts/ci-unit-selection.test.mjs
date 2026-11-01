@@ -167,7 +167,7 @@ describe('conservative unit selection', () => {
     )
   })
 
-  it('uses ten complete PR shards while selected drafts retain the five-shard cap', () => {
+  it('uses ten complete PR shards while selected drafts stay within the full-count cap', () => {
     const expandedSources = new Map(sources)
     for (let index = 0; index < 5; index++) {
       expandedSources.set(`src/additional-${index}.test.ts`, `import './leaf'`)
@@ -196,7 +196,7 @@ describe('conservative unit selection', () => {
       mode: 'selected',
       event: { pull_request: { draft: true } }
     })
-    expect(selected.shards).toHaveLength(5)
+    expect(selected.shards).toHaveLength(Math.min(FULL_SHARD_COUNT, selected.executionFiles.length))
     expect(selected.executionFiles).toEqual(
       selectUnitFiles(expandedFiles, ['src/leaf.ts'], expandedGraph).files
     )

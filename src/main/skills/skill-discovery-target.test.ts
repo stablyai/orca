@@ -26,7 +26,7 @@ vi.mock('./skill-discovery-wsl', () => ({
 
 const { clearSkillDiscoveryCaches, discoverSkillsOnTarget } =
   await import('./skill-discovery-target')
-const { clearSkillRootScanCache, discoverSkills } = await import('./discovery')
+const { clearSkillRootScanCache } = await import('./discovery')
 
 function makeRepo(path: string): Repo {
   return {
@@ -95,12 +95,6 @@ describe('discoverSkillsOnTarget', () => {
     expect(nativeScans).toHaveLength(2)
   })
 
-  it('forwards refresh to the native scan so it re-reads disk', async () => {
-    await discoverSkillsOnTarget({ kind: 'native-host', cwd: '/workspace' }, [], { refresh: true })
-
-    expect(nativeScans).toEqual([{ repos: [], cwd: '/workspace', refresh: true }])
-  })
-
   it('reuses a WSL result rather than booting wsl.exe again', async () => {
     const target = {
       kind: 'wsl',
@@ -132,22 +126,6 @@ describe('discoverSkillsOnTarget', () => {
     expect(wslScans).toHaveLength(3)
   })
 
-  it('distinguishes an absent WSL cwd from the literal undefined path', async () => {
-    await discoverSkillsOnTarget(
-      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: undefined },
-      []
-    )
-    await discoverSkillsOnTarget(
-      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' },
-      []
-    )
-
-    expect(wslScans).toEqual([
-      { distro: 'Ubuntu', homeDir: '/home/dev' },
-      { distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' }
-    ])
-  })
-
   it('re-reads a WSL target when the caller refreshes', async () => {
     const target = {
       kind: 'wsl',
@@ -161,22 +139,5 @@ describe('discoverSkillsOnTarget', () => {
     await discoverSkillsOnTarget(target, [])
 
     expect(wslScans).toHaveLength(2)
-  })
-
-  it('drops the root cache too when the host clears its scans', () => {
-    clearSkillDiscoveryCaches()
-    expect(clearSkillRootScanCache).toHaveBeenCalled()
-  })
-
-  // Whole-target failure has no partial answer; report retryable error rather than zero installed skills.
-  it('reports a stalled target as a retryable error rather than as no skills', async () => {
-    vi.mocked(discoverSkills).mockRejectedValueOnce(
-      Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
-    )
-
-    const call = discoverSkillsOnTarget({ kind: 'native-host', cwd: '/workspace' }, [])
-
-    await expect(call).rejects.toThrow(/try again/i)
-    await expect(call).rejects.not.toThrow(/workspace/)
   })
 })

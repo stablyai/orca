@@ -9,6 +9,8 @@ import type {
   FileExplorerTreeRefreshOutcome
 } from './file-explorer-types'
 
+type WatchStoreState = { pendingExplorerReveal: null }
+
 const ownerRef = vi.hoisted(() => ({ current: { kind: 'local' } as FileExplorerOperationOwner }))
 const runtimeWatch = vi.hoisted(() => ({
   subscribe: vi.fn()
@@ -16,7 +18,9 @@ const runtimeWatch = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({
   useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector({}), {
-    getState: () => ({})
+    getState: () => ({}),
+    setState: (update: (state: WatchStoreState) => unknown) =>
+      update({ pendingExplorerReveal: null })
   })
 }))
 vi.mock('./file-explorer-operation-owner', () => ({
@@ -28,6 +32,7 @@ vi.mock('@/runtime/runtime-file-watch-client', () => ({
 }))
 
 import { useFileExplorerWatch } from './useFileExplorerWatch'
+import * as reconciliation from './file-explorer-watch-reconcile'
 
 type WatchHandler = (payload: FsChangedPayload) => void
 
@@ -58,6 +63,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
 
   afterEach(() => {
     cleanup()
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
@@ -67,7 +73,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
   ) {
     const setDirCache = vi.fn()
     const setSelectedPath = vi.fn()
-    return renderHook(
+    const hook = renderHook(
       ({
         visiblePath,
         activeInteraction
@@ -94,6 +100,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
         }),
       { initialProps: { visiblePath: worktreePath, activeInteraction: interaction } }
     )
+    return { ...hook, setSelectedPath }
   }
 
   function emit(handler: WatchHandler): void {
@@ -211,4 +218,57 @@ describe('useFileExplorerWatch pending refreshes', () => {
       expect(refreshTree).not.toHaveBeenCalled()
     }
   )
+
+  it.each(['rename', 'drag', 'native'] as const)(
+    'bounds a watcher storm during %s and catches up once the interaction ends',
+    async (interaction) => {
+      const processPayload = vi.spyOn(reconciliation, 'processFileExplorerFsPayload')
+      const hook = renderWatch('/repo', interaction)
+      const handler = mainWatchHandler
+      if (!handler) {
+        throw new Error('Filesystem listener was not registered')
+      }
+      act(() => {
+        for (let index = 0; index < 10_000; index++) {
+          handler({
+            worktreePath: '/repo',
+            events: [{ kind: 'create', absolutePath: `/repo/file-${index}.ts` }]
+          })
+        }
+      })
+      expect(processPayload).not.toHaveBeenCalled()
+      expect(refreshTree).not.toHaveBeenCalled()
+      expect(refreshDir).not.toHaveBeenCalled()
+
+      hook.rerender({ visiblePath: '/repo', activeInteraction: null })
+      await act(async () => vi.advanceTimersByTimeAsync(0))
+      expect(processPayload).toHaveBeenCalledOnce()
+      expect(refreshTree).toHaveBeenCalledOnce()
+      expect(refreshDir).not.toHaveBeenCalled()
+    }
+  )
+
+  it('preserves exact deferred deletion cleanup below the overflow budget', async () => {
+    const hook = renderWatch('/repo', 'rename')
+    const handler = mainWatchHandler
+    if (!handler) {
+      throw new Error('Filesystem listener was not registered')
+    }
+    act(() => {
+      handler({
+        worktreePath: '/repo',
+        events: [{ kind: 'delete', absolutePath: '/repo/deleted.ts' }]
+      })
+      emit(handler)
+    })
+    expect(hook.setSelectedPath).not.toHaveBeenCalled()
+    hook.rerender({ visiblePath: '/repo', activeInteraction: null })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(hook.setSelectedPath).toHaveBeenCalledOnce()
+    const updateSelection = hook.setSelectedPath.mock.calls[0]?.[0]
+    expect(updateSelection('/repo/deleted.ts')).toBeNull()
+    expect(updateSelection('/repo/kept.ts')).toBe('/repo/kept.ts')
+    expect(refreshTree).not.toHaveBeenCalled()
+    expect(refreshDir).toHaveBeenCalledExactlyOnceWith('/repo')
+  })
 })

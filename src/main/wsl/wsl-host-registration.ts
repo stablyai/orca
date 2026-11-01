@@ -5,8 +5,8 @@ import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-s
 import { wslHostEnvironmentLabel, type WslHostAddResult } from '../../shared/wsl-host-types'
 import {
   admitWslHostDistro,
-  WSL_HOSTS_DISABLED_MESSAGE,
-  wslHostRunRefusal
+  wslHostAddRefusal,
+  wslHostNewWorkRefusal
 } from './wsl-host-add-admission'
 import { abandonWslHostAdd, connectForWslHostAdd } from './wsl-host-first-connect'
 import type { WslHostConnector, WslHostServiceDependencies } from './wsl-host-service'
@@ -30,7 +30,7 @@ export async function registerWslHost(
   context: WslHostRegistrationContext,
   args: { distro: string; startIfStopped?: boolean }
 ): Promise<WslHostAddResult> {
-  const refusal = wslHostRunRefusal(context.deps)
+  const refusal = wslHostNewWorkRefusal(context.deps)
   if (refusal) {
     return refusal
   }
@@ -55,8 +55,8 @@ export async function registerWslHost(
   const environmentId = defaultWslOrcadEnvironmentId(distro.name)
   const connected = await connectForWslHostAdd(context.wsl(), distro.name, () =>
     generation === context.disableGeneration()
-      ? wslHostRunRefusal(context.deps)
-      : { ok: false, kind: 'disabled', message: WSL_HOSTS_DISABLED_MESSAGE }
+      ? wslHostNewWorkRefusal(context.deps)
+      : wslHostAddRefusal('disabled', 'turnedOff')
   )
   if (!('connection' in connected)) {
     return connected

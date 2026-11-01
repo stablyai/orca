@@ -109,7 +109,11 @@ export function settleWslMoveOrchestratorRecord(
   hasFinishedMove: boolean
 ): WslMoveOrchestratorRecord {
   // The driver's own startup recovery resumes or resets the journal; the next trigger previews.
-  if (record.state.kind === 'moving') {
+  // A finish left for this start ran in the startup pass before the window opened.
+  if (
+    record.state.kind === 'moving' ||
+    (record.state.kind === 'parked' && record.state.reason === 'finish-pending')
+  ) {
     return withWslMoveOrchestratorState(record, { kind: 'pending' }, now)
   }
   // A Restore that released the move before the app quit has nothing left to restore.

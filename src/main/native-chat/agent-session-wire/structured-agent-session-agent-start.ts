@@ -1,23 +1,22 @@
 // Only queued work or provider operations start children. Run waits outside serialization;
 // fence each state commit so concurrent sends remain immediately acceptable.
 
-import {
-  providerDiagnosticOf,
-  type SubmissionRejectionFact,
-  type AgentSessionArgumentProblem,
-  type ProviderDiagnostic
-} from '../../../shared/agent-session-failure'
+import type {
+  SubmissionRejectionFact,
+  ProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
 import { argumentProblemOf } from '../structured-agent-arguments-error'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError,
-  readAgentSessionRefusalReference
-} from '../../../shared/agent-session-wire-refusals'
+  readAgentSessionRefusalReference,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationResult,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { attachStructuredAgentSessionForStart } from './structured-agent-session-attach-orchestration'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
@@ -28,6 +27,7 @@ import {
 } from './structured-agent-session-start-attempts'
 import { retryableStructuredAgentSessionAcquisition } from './structured-agent-session-start-retry'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
+import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
   joinClosingStructuredAgentSessionChild,
   releaseLeaseOfEndedStructuredAgentSessionChild
@@ -218,7 +218,7 @@ function withDiagnostic(
   error: unknown,
   { aborted, expired }: { aborted: boolean; expired: boolean }
 ): StructuredAgentSessionResumeOutcome {
-  const diagnostic = providerDiagnosticOf(error)
+  const diagnostic = startFailureDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
   return {
     ok: false,

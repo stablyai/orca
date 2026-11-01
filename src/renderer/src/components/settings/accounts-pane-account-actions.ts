@@ -193,7 +193,7 @@ export function createClaudeAccountActionRunner(
             description: switched
               ? translate(
                   'accounts.claude.nextLaunch',
-                  '{{value0}} → {{value1}}. The next Claude you start uses it. Running sessions keep their account.',
+                  '{{value0}} → {{value1}}. The next Claude terminal you start uses it. Running Claude terminals keep their account.',
                   {
                     value0: getClaudeAccountLabel(claudeAccounts, previousActiveAccountId),
                     value1: getClaudeAccountLabel(next, nextActiveAccountId)

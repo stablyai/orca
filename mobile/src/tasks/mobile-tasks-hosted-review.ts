@@ -1,3 +1,4 @@
+import { getHostedMergeLabel } from './mobile-hosted-check-status'
 import { projectRowType } from './mobile-tasks-item-mapping'
 import type {
   HostedReviewItem,
@@ -131,29 +132,8 @@ export function hostedBranchSummary(item: TaskItem): { head: string; base: strin
   return null
 }
 
-export function getGitHubMergeLabel(item: GitHubWorkItem): string {
-  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
-    return 'Merge'
-  }
-  if (item.state === 'merged') {
-    return 'Merged'
-  }
-  if (item.state === 'closed') {
-    return 'Closed'
-  }
-  if (item.mergeable === 'CONFLICTING') {
-    return 'Conflicts'
-  }
-  if (item.mergeStateStatus === 'BEHIND') {
-    return 'Behind'
-  }
-  if (item.mergeStateStatus === 'BLOCKED') {
-    return 'Blocked'
-  }
-  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
-    return 'Able to merge'
-  }
-  return 'Unknown'
+export function getGitHubMergeLabel(item: GitHubWorkItem): string | null {
+  return getHostedMergeLabel(item)
 }
 
 export function getHostedReviewMergeMethodLabel(method: HostedReviewMergeMethod): string {

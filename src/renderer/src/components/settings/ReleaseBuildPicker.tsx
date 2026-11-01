@@ -10,7 +10,8 @@ import {
   CommandList
 } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import { parseDevBuildStamp, type ReleaseBuild } from '../../../../shared/release-channel'
 
@@ -22,7 +23,7 @@ function formatBuildLabel(build: ReleaseBuild): string {
   if (!stamp) {
     return build.version
   }
-  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(undefined, {
+  return `${build.version.split('-')[0]} · ${stamp.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -45,6 +46,7 @@ export function ReleaseBuildPicker({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const languageRevision = useUiLanguageRevision()
   const entries = useMemo(
     () =>
       builds.map((build) => {
@@ -55,7 +57,8 @@ export function ReleaseBuildPicker({
           searchText: `${label} ${build.version} ${build.tag}`.toLowerCase()
         }
       }),
-    [builds]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- labels format dates in the UI language.
+    [builds, languageRevision]
   )
   const terms = query.trim().toLowerCase().split(/\s+/)
   const filtered = entries.filter((entry) => terms.every((term) => entry.searchText.includes(term)))

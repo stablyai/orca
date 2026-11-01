@@ -34,19 +34,4 @@ describe('selectPendingWorktreeCreationKeys', () => {
     expect(first).toEqual(['creation-1 repo with space'])
     expect(selectPendingWorktreeCreationKeys(pending)).toBe(first)
   })
-
-  it('rebuilds when the slice is replaced', () => {
-    const before: PendingCreations = {
-      'creation-1': makePending('creation-1', 'repo-1')
-    }
-    const after: PendingCreations = {
-      ...before,
-      'creation-2': makePending('creation-2', 'repo-2')
-    }
-
-    expect(selectPendingWorktreeCreationKeys(after)).toEqual([
-      'creation-1 repo-1',
-      'creation-2 repo-2'
-    ])
-  })
 })

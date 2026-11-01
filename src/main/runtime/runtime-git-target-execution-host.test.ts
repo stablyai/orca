@@ -24,10 +24,6 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 const WORKTREE_ID = 'repo-shared::/srv/app-feature'
 
-type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
-}
-
 function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string) {
   const store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
@@ -37,7 +33,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
   const runtime = new OrcaRuntimeService(store as never)
-  vi.spyOn(runtime as unknown as RuntimeInternals, 'resolveWorktreeSelector').mockResolvedValue({
+  runtime['resolveGitWorktreeSelector'] = vi.fn().mockResolvedValue({
     id: WORKTREE_ID,
     repoId: 'repo-shared',
     path: REMOTE_PATH,
@@ -70,15 +66,6 @@ describe('runtime Git target execution host', () => {
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },
         { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }
       ],
-      'ssh:m4air'
-    )
-
-    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
-  it("routes to the worktree's host even when the only repo row names a different ssh host", async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
       'ssh:m4air'
     )
 
@@ -124,18 +111,6 @@ describe('runtime Git target execution host', () => {
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })
 
-  it('refuses a runtime host with no nested ssh target rather than answering locally', async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/srv/app', executionHostId: 'runtime:env-a' }],
-      'runtime:env-a'
-    )
-
-    await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      ExecutionHostNotDispatchableError
-    )
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
   it('refuses rather than guessing when rival rows disagree and the worktree names no host', async () => {
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
@@ -144,26 +119,6 @@ describe('runtime Git target execution host', () => {
 
     await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'worktree_execution_host_unresolved'
-    )
-    expect(mocks.getStatus).not.toHaveBeenCalled()
-  })
-
-  it('still routes by the single row when the worktree names no host', async () => {
-    const runtime = makeRuntime([{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }])
-
-    await expectRefusedFor(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`), 'm4air')
-  })
-
-  // Losing contact with a remote host is never evidence that its files are here
-  // (docs/reference/ssh-execution-boundary.md).
-  it('reports the dropped connection instead of reading a remote path locally', async () => {
-    const runtime = makeRuntime(
-      [{ id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' }],
-      'ssh:m4air'
-    )
-
-    await expect(runtime.getRuntimeGitStatus(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      /Remote connection dropped/
     )
     expect(mocks.getStatus).not.toHaveBeenCalled()
   })

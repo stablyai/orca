@@ -29,6 +29,7 @@ function openMainWindowForContextMenu() {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
@@ -36,7 +37,9 @@ function openMainWindowForContextMenu() {
     openDevTools: vi.fn(),
     closeDevTools: vi.fn(),
     replaceMisspelling: vi.fn(),
-    session: { addWordToSpellCheckerDictionary: vi.fn() }
+    session: { addWordToSpellCheckerDictionary: vi.fn() },
+    getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+    isLoadingMainFrame: vi.fn(() => true)
   }
   const browserWindowInstance = {
     webContents,
@@ -74,6 +77,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
@@ -122,6 +126,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -175,6 +180,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -234,6 +240,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -293,6 +300,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -373,6 +381,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -447,6 +456,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -531,7 +541,12 @@ describe('createMainWindow', () => {
         expect.objectContaining({ label: 'Table' })
       ])
     )
-    expect(menuPopupMock).toHaveBeenCalledWith({ window: browserWindowInstance, x: 42, y: 84 })
+    expect(menuPopupMock).toHaveBeenCalledWith({
+      window: browserWindowInstance,
+      x: 42,
+      y: 84,
+      callback: expect.any(Function)
+    })
   })
 
   it('builds the plain edit menu for the one right-click the renderer marks as plain text', () => {
@@ -566,5 +581,57 @@ describe('createMainWindow', () => {
       2,
       expect.arrayContaining([expect.objectContaining({ label: 'Format' })])
     )
+  })
+
+  it('retires the edit menu with its document but not on same-document navigation', () => {
+    const { webContents } = openMainWindowForContextMenu()
+    const emit = (event: string, ...args: unknown[]): void => {
+      for (const [name, handler] of webContents.on.mock.calls) {
+        if (name === event) {
+          handler(...args)
+        }
+      }
+    }
+    const openMenu = () => {
+      const closePopup = vi.fn()
+      buildFromTemplateMock.mockImplementationOnce(() => ({
+        popup: menuPopupMock,
+        closePopup
+      }))
+      emit(
+        'context-menu',
+        {},
+        {
+          x: 1,
+          y: 2,
+          isEditable: true,
+          formControlType: 'input',
+          dictionarySuggestions: [],
+          misspelledWord: ''
+        }
+      )
+      const template = buildFromTemplateMock.mock.calls.at(-1)?.[0]
+      const paste = Array.isArray(template)
+        ? template.find((item) => item.label === 'Paste')
+        : undefined
+      expect(paste?.click).toBeTypeOf('function')
+      return { closePopup, paste }
+    }
+    const nextDocument = 'file:///opt/orca/renderer/index.html?reload'
+
+    const first = openMenu()
+    emit('did-start-navigation', {}, `${nextDocument}#hash`, true, true)
+    expect(first.closePopup).not.toHaveBeenCalled()
+    emit('did-start-navigation', {}, nextDocument, false, true)
+    expect(first.closePopup).toHaveBeenCalledTimes(1)
+
+    // The old document still takes right-clicks until the pending reload commits.
+    const pending = openMenu()
+    emit('did-frame-navigate', {}, nextDocument, 200, 'OK', false)
+    expect(pending.closePopup).not.toHaveBeenCalled()
+    emit('did-frame-navigate', {}, nextDocument, 200, 'OK', true)
+    expect(pending.closePopup).toHaveBeenCalledTimes(1)
+    pending.paste.click()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:editableContextPaste', expect.anything())
   })
 })

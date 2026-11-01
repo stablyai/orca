@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type { AppState } from '../../types'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
 vi.mock('sonner', () => ({
@@ -106,10 +106,17 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     const store = createTestStore()
     seedPaneState(store)
     const epochBefore = store.getState().agentStatusEpoch
+    const previous = store.getState().agentStatusByPaneKey[PANE]
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
 
     store.getState().purgeWorktreeTerminalState([WT])
 
     const s = store.getState()
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([
+      { paneKey: PANE, previous, current: undefined }
+    ])
+    dispose()
     expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
     expect(s.agentStatusEpoch).toBe(epochBefore + 1)
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()

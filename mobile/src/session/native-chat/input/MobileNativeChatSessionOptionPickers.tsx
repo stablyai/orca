@@ -1,13 +1,5 @@
 import { useEffect, useRef } from 'react'
-import {
-  AccessibilityInfo,
-  ActivityIndicator,
-  Keyboard,
-  Platform,
-  Pressable,
-  Text,
-  View
-} from 'react-native'
+import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
   FilePenLine,
@@ -15,12 +7,16 @@ import {
   LockKeyhole,
   ShieldAlert,
   ShieldCheck,
-  X,
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../../../components/BottomDrawer'
+import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
+import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
+import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { translate } from '../../../i18n/mobile-i18n'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -31,12 +27,12 @@ import {
   nativeChatModelPillLabel,
   nativeChatOptionValuesLabel,
   nativeChatSessionOptionDisabledReason,
-  nativeChatSessionOptionLabel,
-  sayNativeChatSessionOptionEnglish as say
+  nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat-session-option-labels'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
 import {
-  DescriptorRows,
+  descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
   SessionOptionSummaryRow
@@ -58,7 +54,7 @@ export type MobileNativeChatPickerPresentation = { page: string | null; refocus:
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
-  // Mid-turn model commands would interleave with agent output.
+  // Mid-turn terminal model commands would interleave with agent output.
   isWorking: boolean
   // Block applies during composer send: the host’s body/Enter delay could submit the setting as prompt text.
   sendInFlight?: boolean
@@ -91,6 +87,17 @@ function permissionModeIcon(value: string): LucideIcon | undefined {
   }
 }
 
+function permissionChoiceLeading(value: string): React.JSX.Element | null {
+  const Icon = permissionModeIcon(value)
+  return Icon ? (
+    <Icon
+      size={18}
+      color={permissionChoiceColor(value) ?? colors.textSecondary}
+      strokeWidth={2.2}
+    />
+  ) : null
+}
+
 function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
   return descriptor?.kind.type === 'select'
     ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
@@ -107,6 +114,7 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const open = presentation?.page != null
   const wasOpen = useRef(false)
   useEffect(() => {
@@ -116,23 +124,36 @@ export function MobileNativeChatSessionOptionPickers({
     wasOpen.current = open
   }, [open, controller.optionSurface])
   const { snapshot, pendingId } = controller
+  const hasControls = snapshot.some((descriptor) => descriptor.settable)
+  const canOpen = !sendInFlight && pendingId === null && hasControls
+  useEffect(() => {
+    if (open && !hasControls) {
+      onNavigate(null)
+    }
+  }, [open, hasControls, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
+  const activeDescriptor = hasControls
+    ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
+    : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const showWorkingNotice =
     (model !== undefined || permission !== undefined) &&
     activeDescriptor !== undefined &&
     isWorking &&
+    activeDescriptor.transport !== 'agent-session' &&
     !permissionView
 
   useEffect(() => {
     if (Platform.OS === 'ios' && showWorkingNotice) {
       // Queued announcements cannot be canceled when the picker closes or changes pages.
       AccessibilityInfo.announceForAccessibilityWithOptions(
-        'Agent is working. Model settings unlock when this turn finishes.',
+        translate(
+          'chat.sessionOptionPickers.workingAnnouncement',
+          'Agent is working. Model settings unlock when this turn finishes.'
+        ),
         { queue: false }
       )
     }
@@ -145,8 +166,9 @@ export function MobileNativeChatSessionOptionPickers({
   const home = model ?? permission!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
-  // Permission mode affects the next send, so a working turn must not lock it.
-  const locked = isWorking || busy
+  // Structured picks and permission mode affect the next send, not the running turn.
+  const locked = (descriptor: SessionOptionDescriptor): boolean =>
+    busy || (isWorking && descriptor.transport !== 'agent-session' && descriptor !== permission)
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
   const permissionChoice = selectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
@@ -165,6 +187,7 @@ export function MobileNativeChatSessionOptionPickers({
     if (
       descriptor !== permission &&
       descriptor.valueSource !== 'unknown' &&
+      descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
     ) {
@@ -197,11 +220,26 @@ export function MobileNativeChatSessionOptionPickers({
         icon={permissionIcon}
         accessibleName={
           model
-            ? `Model, ${secondary ? `${primary} ${secondary}` : primary}${permissionColor ? ', full access' : ''}`
-            : `Permissions, ${primary}`
+            ? permissionColor
+              ? t(
+                  'chat.sessionOptionPickers.modelFullAccessLabel',
+                  'Model, {{value}}, full access',
+                  {
+                    value: secondary ? `${primary} ${secondary}` : primary
+                  }
+                )
+              : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', {
+                  value: secondary ? `${primary} ${secondary}` : primary
+                })
+            : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
+                value: primary
+              })
         }
-        disabled={busy || (!model && permission?.settable === false)}
+        disabled={!canOpen}
         onPress={() => {
+          if (!canOpen) {
+            return
+          }
           onDrawerOpen(home.id)
           Keyboard.dismiss()
         }}
@@ -213,61 +251,78 @@ export function MobileNativeChatSessionOptionPickers({
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
-            <View style={styles.sheetHeader}>
-              <Pressable
-                accessibilityLabel={homeView ? 'Close picker' : 'Back to models'}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
-                onPress={homeView ? closePicker : () => onNavigate(home.id)}
-                hitSlop={8}
-              >
-                {homeView ? (
-                  <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                ) : (
-                  <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
-                )}
-              </Pressable>
-              <Text style={styles.sheetTitle}>
-                {nativeChatSessionOptionLabel(activeDescriptor, say)}
-              </Text>
-              <View style={styles.sheetHeaderSide}>
-                {pendingId !== null ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : null}
-              </View>
+            <View style={styles.header}>
+              <SheetHeader
+                title={nativeChatSessionOptionLabel(activeDescriptor, say)}
+                subtitle={
+                  pendingId !== null
+                    ? t('chat.sessionOptionPickers.applying', 'Applying…')
+                    : undefined
+                }
+                trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
+              />
+              {homeView ? null : (
+                <View style={styles.back}>
+                  <NavBarButton
+                    icon={ChevronLeft}
+                    accessibilityLabel={t(
+                      'chat.sessionOptionPickers.backToModels',
+                      'Back to models'
+                    )}
+                    onPress={() => onNavigate(home.id)}
+                  />
+                </View>
+              )}
             </View>
             {showWorkingNotice ? (
               <View style={styles.lockNotice} accessibilityLiveRegion="polite">
                 <LockKeyhole size={16} color={colors.textSecondary} />
                 <View style={styles.lockNoticeBody}>
-                  <Text style={styles.lockNoticeTitle}>Agent is working</Text>
+                  <Text style={styles.lockNoticeTitle}>
+                    {t('chat.sessionOptionPickers.agentWorking', 'Agent is working')}
+                  </Text>
                   <Text style={styles.lockNoticeDescription}>
-                    Model settings unlock when this turn finishes.
+                    {t(
+                      'chat.sessionOptionPickers.settingsLocked',
+                      'Model settings unlock when this turn finishes.'
+                    )}
                   </Text>
                 </View>
               </View>
             ) : null}
+            {homeView && model ? (
+              <SectionHeader title={nativeChatSessionOptionLabel(model, say)} first />
+            ) : (
+              <View style={styles.pageTop} />
+            )}
+            <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
+              {descriptorRowElements(
+                {
+                  descriptor: activeDescriptor,
+                  disabled: locked(activeDescriptor),
+                  onSetOption: (value) => applyOption(activeDescriptor, value),
+                  onInvokeAction: () => invokeAction(activeDescriptor),
+                  ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
+                },
+                t
+              )}
+            </ListGroup>
             {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
-              <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
+              <SessionOptionCaption>
+                {t(
+                  'chat.sessionOptionPickers.dispatchUnconfirmed',
+                  'Sent to the agent — not confirmed'
+                )}
+              </SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            <View style={styles.group}>
-              <DescriptorRows
-                descriptor={activeDescriptor}
-                disabled={permissionView ? busy : locked}
-                grouped
-                onSetOption={(value) => applyOption(activeDescriptor, value)}
-                onInvokeAction={() => invokeAction(activeDescriptor)}
-                {...(permissionView ? { choiceLabelColor: permissionChoiceColor } : {})}
-              />
-            </View>
             {homeView && model ? (
               <>
                 {segmentOptions.map((descriptor) => (
                   <SessionOptionSegments
                     key={descriptor.id}
                     descriptor={descriptor}
-                    disabled={locked}
+                    disabled={locked(descriptor)}
                     onSetOption={(value) => applyOption(descriptor, value)}
                   />
                 ))}
@@ -276,7 +331,6 @@ export function MobileNativeChatSessionOptionPickers({
                   permission={permission}
                   permissionColor={permissionColor}
                   locked={locked}
-                  busy={busy}
                   onNavigate={onNavigate}
                   onSetOption={applyOption}
                 />
@@ -294,55 +348,58 @@ function OptionRows({
   permission,
   permissionColor,
   locked,
-  busy,
   onNavigate,
   onSetOption
 }: {
   descriptors: readonly SessionOptionDescriptor[]
   permission: SessionOptionDescriptor | undefined
   permissionColor: string | undefined
-  locked: boolean
-  busy: boolean
+  locked: (descriptor: SessionOptionDescriptor) => boolean
   onNavigate: (page: string) => void
   onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (descriptors.length === 0) {
     return null
   }
   return (
-    <View style={[styles.group, styles.groupSpaced]}>
-      {descriptors.map((descriptor, index) => {
-        const isPermission = descriptor === permission
-        const disabled = isPermission ? busy || !descriptor.settable : locked
-        if (descriptor.kind.type === 'boolean' && !descriptor.action) {
-          return (
-            <View key={descriptor.id} style={index < descriptors.length - 1 && styles.divided}>
-              <DescriptorRows
-                descriptor={descriptor}
-                disabled={disabled}
-                grouped
-                onSetOption={(value) => onSetOption(descriptor, value)}
-                onInvokeAction={() => onNavigate(descriptor.id)}
-              />
-            </View>
-          )
-        }
-        const value = mobileSessionOptionSummaryValue(descriptor)
-        return (
-          <SessionOptionSummaryRow
-            key={descriptor.id}
-            label={isPermission ? 'Permissions' : nativeChatSessionOptionLabel(descriptor, say)}
-            value={value}
-            valueColor={isPermission ? permissionColor : undefined}
-            disabled={disabled}
-            divided={index < descriptors.length - 1}
-            onPress={
-              isReadOnlySessionOptionValue(descriptor) ? undefined : () => onNavigate(descriptor.id)
-            }
-          />
-        )
-      })}
-    </View>
+    <>
+      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
+      <ListGroup>
+        {descriptors.flatMap((descriptor) => {
+          const isPermission = descriptor === permission
+          const disabled = locked(descriptor) || !descriptor.settable
+          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+            return descriptorRowElements(
+              {
+                descriptor,
+                disabled,
+                onSetOption: (value) => onSetOption(descriptor, value),
+                onInvokeAction: () => onNavigate(descriptor.id)
+              },
+              t
+            )
+          }
+          return [
+            <SessionOptionSummaryRow
+              key={descriptor.id}
+              label={
+                isPermission
+                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
+                  : nativeChatSessionOptionLabel(descriptor, say)
+              }
+              value={mobileSessionOptionSummaryValue(descriptor)}
+              valueColor={isPermission ? permissionColor : undefined}
+              disabled={disabled}
+              onPress={
+                isReadOnlySessionOptionValue(descriptor)
+                  ? undefined
+                  : () => onNavigate(descriptor.id)
+              }
+            />
+          ]
+        })}
+      </ListGroup>
+    </>
   )
 }

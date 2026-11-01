@@ -41,7 +41,7 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
       : null
   }
 }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: mocks.admitStructuredLaunchOnHost
 }))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
@@ -170,30 +170,41 @@ describe('resumeAiVaultSessionInNewChat', () => {
     }
   )
 
-  it('reveals the workspace and opens chat before provider settlement', async () => {
-    let settle!: (value: StructuredAgentLaunchSettlement) => void
-    const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
-      settle = resolve
-    })
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.beforeOpen?.('session-1')
-      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
-    })
-
-    await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1', 'resume-click')
-
-    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        plan: expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } }),
-        hooks: {}
+  it.each([false, true])(
+    'reveals the workspace and opens chat before provider settlement (aliases: %s)',
+    async (aliases) => {
+      const source = {
+        ...session,
+        cwd: '/private/var/example',
+        ...(aliases ? { cwdAliases: ['/var/example'], sessionId: 'provider-1' } : {})
+      }
+      let settle!: (value: StructuredAgentLaunchSettlement) => void
+      const settlement = new Promise<StructuredAgentLaunchSettlement>((resolve) => {
+        settle = resolve
       })
-    )
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
-      executionHostId: 'local'
-    })
-    expect(mocks.toastError).not.toHaveBeenCalled()
-    settle({ kind: 'structured', sessionId: 'session-1' })
-  })
+      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+        args.beforeOpen?.('session-1')
+        return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' }, settlement }
+      })
+
+      await resumeAiVaultSessionInNewChat(source, 'codex', 'worktree-1', 'resume-click')
+
+      expect(mocks.prepareAiVaultSessionForResume).toHaveBeenCalledWith(source)
+      expect(mocks.beginStructuredAgentSessionProvisionalLaunch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          plan: expect.objectContaining({ resumeFrom: { providerSessionId: 'provider-1' } }),
+          hooks: {}
+        })
+      )
+      expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('worktree-1', {
+        executionHostId: 'local'
+      })
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expect(source.cwd).toBe('/private/var/example')
+      expect(source.sessionId).toBe(aliases ? 'provider-1' : session.sessionId)
+      settle({ kind: 'structured', sessionId: 'session-1' })
+    }
+  )
 
   // Where `opencode` is 1.x, only the OpenCode 2 chat can load a 2.x conversation.
   it.each([
@@ -257,7 +268,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
     [
       'agent_session_conflict',
       'conversationHeldElsewhere',
-      'Codex is already running this conversation in another terminal. Quit Codex there or close that terminal, then open this conversation from Session History.'
+      'Codex is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
     ],
     [
       'agent_session_identity_required',

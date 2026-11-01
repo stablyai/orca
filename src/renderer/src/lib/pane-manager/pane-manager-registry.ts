@@ -16,11 +16,20 @@ type RegisteredPaneManager = {
 
 const liveManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
+/** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
+type WebglRendererDetacher = () => () => void
+const webglRendererDetachers = new WeakMap<RegisteredPaneManager, WebglRendererDetacher>()
 let nextManagerId = 1
 
-export function registerLivePaneManager(manager: RegisteredPaneManager): void {
+export function registerLivePaneManager(
+  manager: RegisteredPaneManager,
+  detachWebglRenderers?: WebglRendererDetacher
+): void {
   if (!managerIds.has(manager)) {
     managerIds.set(manager, nextManagerId++)
+  }
+  if (detachWebglRenderers) {
+    webglRendererDetachers.set(manager, detachWebglRenderers)
   }
   liveManagers.add(manager)
 }
@@ -62,6 +71,25 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
       }
     } catch {
       // Panes may unmount between reset and repaint; continue with remaining managers.
+    }
+  }
+}
+
+/** Recreates every WebGL renderer; xterm shares atlases across terminals, so all detach before any reattach. */
+export function rebuildAllTerminalWebglRenderers(reason: string): void {
+  recordTerminalWebglDiagnostic('webgl-renderer-rebuild', { managers: liveManagers.size, reason })
+  const reattachSteps = Array.from(liveManagers, (manager) => {
+    try {
+      return webglRendererDetachers.get(manager)?.()
+    } catch {
+      return undefined
+    }
+  })
+  for (const reattach of reattachSteps) {
+    try {
+      reattach?.()
+    } catch {
+      // A manager disposed mid-rebuild must not block its siblings.
     }
   }
 }

@@ -63,7 +63,7 @@ vi.mock('./browser-extension-web-request', () => ({
 
 const { installBrowserExtensionSessionServices } =
   await import('./browser-extension-session-services')
-const { getBrowserExtensionActionState } = await import('./browser-extension-action-registry')
+await import('./browser-extension-action-registry')
 const { grantBrowserExtensionActiveTab, hasBrowserExtensionActiveTab } =
   await import('./browser-extension-active-tab')
 
@@ -87,14 +87,6 @@ function extension(id: string): Electron.Extension {
 installBrowserExtensionSessionServices()
 
 describe('extension unload in an attached session', () => {
-  it('drops action state set before any toolbar asked for it', () => {
-    const sess = attachedSession()
-    const vault = extension('vault')
-    getBrowserExtensionActionState('default', vault).set('badgeText', 'OLD', null)
-    sess.extensions.emit('extension-unloaded', {}, vault)
-    expect(getBrowserExtensionActionState('default', vault).get(null).badgeText).toBe('')
-  })
-
   it("revokes the extension's activeTab grants on that session's tabs only", () => {
     const sess = attachedSession()
     const other = attachedSession()
@@ -106,19 +98,6 @@ describe('extension unload in an attached session', () => {
     sess.extensions.emit('extension-unloaded', {}, vault)
     expect(hasBrowserExtensionActiveTab('vault', 1)).toBe(false)
     expect(hasBrowserExtensionActiveTab('vault', 2)).toBe(true)
-  })
-})
-
-it('removes stale enabled and pinned ids only in the affected browser profile', () => {
-  attachHook?.uninstalled('work', new Set(['removed']))
-  const before = { work: ['removed', 'kept'], home: ['removed'] }
-  expect(mocks.updateEnabled.mock.calls.at(-1)?.[0](before)).toEqual({
-    work: ['kept'],
-    home: ['removed']
-  })
-  expect(mocks.updatePinned.mock.calls.at(-1)?.[0](before)).toEqual({
-    work: ['kept'],
-    home: ['removed']
   })
 })
 

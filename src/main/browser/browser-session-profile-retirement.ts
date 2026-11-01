@@ -29,8 +29,19 @@ export async function retireFailedBrowserSessionProfile(
 
 /** Profile delete, after the registry has dropped it: unload extensions and clear its storage. */
 export async function retireDeletedBrowserSessionProfile(
-  profile: BrowserSessionProfile
+  profile: BrowserSessionProfile,
+  beforeRetirement?: () => Promise<void> | undefined
 ): Promise<void> {
+  try {
+    await beforeRetirement?.()
+  } catch (error) {
+    // Why: the profile is already deleted and persisted, so route cleanup stays best-effort.
+    console.warn('[browser-session] Failed to retire route partitions for deleted profile', error)
+  }
+  await clearDeletedBrowserSessionProfile(profile)
+}
+
+async function clearDeletedBrowserSessionProfile(profile: BrowserSessionProfile): Promise<void> {
   await detachBrowserExtensionsFromProfileSession(profile)
   // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
   try {

@@ -10,6 +10,40 @@ import {
 } from './quick-open-search'
 
 describe('quick-open-search', () => {
+  it('ranks each keystroke of a typed query exactly as a fresh full ranking would', () => {
+    const segments = ['src', 'native-chat', 'Quick_Open', 'renderer', 'ΑΣΑ', 'my dir', 'a-b_c']
+    const names = [
+      'index.ts',
+      'NativeChatComposer.tsx',
+      'quick-open-search.ts',
+      'read_me.md',
+      'ας.txt'
+    ]
+    const paths: string[] = []
+    for (let index = 0; index < 3000; index++) {
+      const depth = 1 + (index % 3)
+      const dirs = Array.from(
+        { length: depth },
+        (_, d) => segments[(index * (d + 3)) % segments.length]
+      )
+      paths.push(
+        [...dirs, `${index % 7}-${names[index % names.length]}`].join(index % 11 ? '/' : '\\')
+      )
+    }
+    const files = prepareQuickOpenFiles(paths)
+    const typed = ['native chat comp', 'Quick-open\\se', 'qo_s', 'ΑΣ', 'ΑΣΑ', 'a b c', 'src/re']
+    for (const query of typed) {
+      const steps = [
+        ...Array.from(query, (_, end) => query.slice(0, end + 1)),
+        query.slice(0, 2),
+        query
+      ]
+      for (const step of steps) {
+        expect(rankQuickOpenFiles(step, files)).toEqual(rankQuickOpenFiles(step, [...files]))
+      }
+    }
+  })
+
   it('finds and retains a target after 100k non-matches without retaining the inventory', () => {
     const ranker = new QuickOpenPathRanker('sta-4354-tail-target', 32)
     for (let index = 0; index < 100_100; index++) {

@@ -16,6 +16,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 type ReviewerRequestArgs = {
   submitting: boolean
@@ -118,7 +119,7 @@ export async function requestPRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
       )
       return
@@ -232,7 +233,7 @@ export async function removePRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
       )
       return

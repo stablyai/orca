@@ -10,23 +10,23 @@ import {
   structuredWorkerProcessIncarnation
 } from '../runtime/structured-worker-identity'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { StructuredAgentSessionStatusFeed } from './agent-session-wire/structured-agent-session-status-feed'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../shared/agent-session-context-clear'
+} from '../../shared/agent-session/agent-session-wire'
+import { agentSessionCurrentContextRows } from '../../shared/agent-session/agent-session-context-clear'
 import {
   firstStructuredAgentSessionPrompt,
   STRUCTURED_CHAT_NAME_PROMPT_LIMIT
-} from '../../shared/structured-agent-session-first-prompt'
+} from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,
   setAgentSessionRecordUserName
-} from '../runtime/agent-session-record-conversation-name'
+} from '../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredChatNamingHandler,
   type StructuredChatNameGeneration,
@@ -354,6 +354,19 @@ describe.each(['claude', 'codex'] as const)('structured %s chat naming', (provid
       null
     )
     expect(state.handle.failure(state.summary.sessionId)).toBeUndefined()
+  })
+
+  it('codes the Orca-authored failure when the chat-name agent cannot run', async () => {
+    const state = rig(provider)
+    state.deps.generate = vi.fn(async () => {
+      throw new Error('spawn ENOENT')
+    })
+    state.handle(state.summary, { replay: false })
+    await settle()
+    expect(state.handle.failure(state.summary.sessionId)).toMatchObject({
+      message: 'Orca could not run the chat-name agent.',
+      messageCode: 'agentNotRun'
+    })
   })
 
   it.each(['read', 'save'] as const)(

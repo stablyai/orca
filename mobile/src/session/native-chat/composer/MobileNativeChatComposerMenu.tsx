@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
@@ -11,15 +11,21 @@ const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as cons
 
 export function MobileNativeChatComposerMenu({
   rows,
-  onPick
+  onPick,
+  nestedScrollEnabled
 }: {
   rows: readonly ComposerMenuRow[]
   onPick: (row: ComposerMenuRow) => void
+  nestedScrollEnabled?: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
   return (
     <View style={styles.card}>
-      <ScrollView keyboardShouldPersistTaps="always" style={styles.scroll}>
+      <ScrollView
+        keyboardShouldPersistTaps="always"
+        nestedScrollEnabled={nestedScrollEnabled}
+        style={styles.scroll}
+      >
         {rows.map((row, index) => (
           <View key={row.id}>
             {rows[index - 1]?.kind !== row.kind ? (
@@ -86,7 +92,7 @@ const styles = themedStyleSheet(() => ({
     marginHorizontal: 10,
     marginBottom: spacing.sm,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: radii.floating,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.composerBorder,
     backgroundColor: colors.bgPanel,

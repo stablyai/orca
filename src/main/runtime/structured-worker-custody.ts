@@ -19,9 +19,16 @@ import {
   structuredWorkerRecordIsCurrent
 } from './structured-worker-identity'
 
+type SessionTabReader = Pick<
+  NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  'getPersistedVisibleSessionTabIndex'
+>
+
 /** Judge ownership on the resolved successor session; absent host returns null because reading storage would install it. */
-export function structuredWorkerOwned(running: RunningStructuredSession): boolean | null {
-  const host = getStructuredAgentSessionHost()
+export function structuredWorkerOwned(
+  running: RunningStructuredSession,
+  host: SessionTabReader | null = getStructuredAgentSessionHost()
+): boolean | null {
   if (!host) {
     return null
   }
@@ -38,6 +45,9 @@ export function structuredSessionTabRetired(
   sessionId: string
 ): boolean {
   try {
+    if (typeof host.deps?.store?.isSessionTabRetired === 'function') {
+      return host.deps.store.isSessionTabRetired(sessionId)
+    }
     const index = host.getPersistedVisibleSessionTabIndex?.()
     return index?.present === true && !index.sessionIds.includes(sessionId)
   } catch {
@@ -46,10 +56,7 @@ export function structuredSessionTabRetired(
 }
 
 /** Retirement is the tab index: every path that ends a chat for good hides its tab. */
-function structuredSessionTabListed(
-  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
-  sessionId: string
-): boolean {
+function structuredSessionTabListed(host: SessionTabReader, sessionId: string): boolean {
   try {
     return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
   } catch {
@@ -76,9 +83,10 @@ function ownerState(
 export function structuredWorkerAddressable(
   db: OrchestrationDb | null | undefined,
   running: RunningStructuredSession,
-  row: CustodyRow | undefined
+  row: CustodyRow | undefined,
+  host: SessionTabReader | null = getStructuredAgentSessionHost()
 ): boolean | null {
-  const owned = structuredWorkerOwned(running)
+  const owned = structuredWorkerOwned(running, host)
   if (owned === null) {
     return null
   }

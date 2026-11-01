@@ -1,25 +1,21 @@
 import type { ClassifiedError } from '../../shared/classified-error'
+import { classifiedCodeHostError as classified } from '../../shared/code-host-failure-copy'
 import { GlabNonListResponseError } from './glab-api-response'
 
 export function classifyGlabError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
+  const trimmed = stderr.trim()
   if (s.includes('http 403') || s.includes('forbidden') || s.includes('insufficient_scope')) {
-    return {
-      type: 'permission_denied',
-      message: "You don't have permission to edit this issue. Check your GitLab token scopes."
-    }
+    return classified('permission_denied', 'gitlab.issuePermissionDenied')
   }
   if (s.includes('http 404') || s.includes('project not found')) {
-    return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
+    return classified('not_found', 'issueNotFound')
   }
   if (s.includes('http 422') || s.includes('unprocessable')) {
-    return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
+    return classified('validation_error', 'invalidUpdate', trimmed)
   }
   if (s.includes('rate limit') || s.includes('http 429')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitLab rate limit hit. Try again in a few minutes.'
-    }
+    return classified('rate_limited', 'gitlab.rateLimited')
   }
   if (
     s.includes('timeout') ||
@@ -27,9 +23,9 @@ export function classifyGlabError(stderr: string): ClassifiedError {
     s.includes('network') ||
     s.includes('could not resolve host')
   ) {
-    return { type: 'network_error', message: 'Network error — check your connection.' }
+    return classified('network_error', 'networkError')
   }
-  return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
+  return classified('unknown', 'issueUpdateFailed', trimmed)
 }
 
 const LIST_READ_FAILURE = 'Failed to load issues'
@@ -63,19 +59,22 @@ export function classifyListFetchError(err: unknown): ClassifiedError {
 export function classifyJobLogError(stderr: string): ClassifiedError {
   const c = classifyGlabError(stderr)
   const trimmed = stderr.trim()
-  const logMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to read this job's log. Check your GitLab token scopes.",
+  switch (c.type) {
+    case 'permission_denied':
+      return classified(c.type, 'gitlab.jobLogPermissionDenied')
     // A missing log is already reported as an empty log, so a 404 that reaches here
     // means the project itself is gone or invisible to this token.
-    not_found: "Could not find this job's GitLab project.",
-    issues_disabled: `Failed to load the job log: ${trimmed}`,
-    validation_error: `Invalid request — ${trimmed}`,
-    rate_limited: 'GitLab rate limit hit. Try again in a few minutes.',
-    network_error: 'Network error — check your connection.',
-    unknown: `Failed to load the job log: ${trimmed}`
+    case 'not_found':
+      return classified(c.type, 'gitlab.jobProjectNotFound')
+    case 'validation_error':
+      return classified(c.type, 'invalidRequest', trimmed)
+    case 'issues_disabled':
+    case 'unknown':
+      return classified(c.type, 'gitlab.jobLogFailed', trimmed)
+    case 'rate_limited':
+    case 'network_error':
+      return c
   }
-  return { type: c.type, message: logMessages[c.type] }
 }
 
 /** Missing/erased traces return empty logs, including ambiguous job 404s; explicit project failures remain errors. */

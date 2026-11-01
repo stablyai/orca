@@ -134,14 +134,17 @@ function ImageHarness({
       <button type="button" data-native-chat-copy-image-src={src}>
         <img alt="shot" src="data:thumbnail" />
       </button>
-      {source ? (
-        <div data-selection-prose>
-          <NativeChatMarkdown content={source} />
-        </div>
-      ) : (
-        <p>text</p>
-      )}
+      <div data-native-chat-scroll>
+        {source ? (
+          <div data-selection-prose>
+            <NativeChatMarkdown content={source} />
+          </div>
+        ) : (
+          <p>text</p>
+        )}
+      </div>
       <textarea aria-label="composer" />
+      <input aria-label="answer" disabled defaultValue="read only" />
       <div role="textbox" aria-label="prompt" contentEditable suppressContentEditableWarning>
         typo
         <span contentEditable={false}>pill</span>
@@ -202,7 +205,7 @@ it('updates nominal toggle labels, including an unassigned binding', () => {
   vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
   useAppStore.setState({ keybindings: {} })
   const view = render(<Harness onSwitchToTerminal={() => {}} />)
-  expect(view.container.textContent).toContain('Ctrl+Shift+J')
+  expect(view.container.textContent).toContain('Ctrl+⇧+J')
   act(() =>
     useAppStore.setState({
       keybindings: { 'terminal.toggleNativeChat': ['Mod+Alt+Y', 'Mod+Alt+K'] }
@@ -325,6 +328,50 @@ describe('useNativeChatContextMenu', () => {
       expect(fireEvent.pointerDown(screen.getByText('text'), init)).toBe(defaultRuns)
     }
   )
+
+  it.each([
+    ['on a reply selection offers it', 'text', () => screen.getByText('text'), 'text', true],
+    [
+      'away from a reply selection drops it',
+      'text',
+      () => screen.getByRole('button'),
+      undefined,
+      false
+    ],
+    [
+      'a disabled field still offers the reply selection',
+      'text',
+      () => screen.getByRole('textbox', { name: 'answer' }),
+      'text',
+      true
+    ],
+    [
+      'away from a composer selection keeps it unoffered',
+      'typo',
+      () => screen.getByText('text'),
+      undefined,
+      true
+    ]
+  ])('right-clicking %s', (_case, selected, pressed, copied, kept) => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeClipboardText } })
+    render(<ImageHarness />)
+    const selection = window.getSelection()
+    selection?.selectAllChildren(screen.getByText(selected))
+    // happy-dom lays out no text, so map the press to the pressed element as Chromium does.
+    const node = pressed()
+    Object.defineProperty(document, 'caretPositionFromPoint', {
+      configurable: true,
+      value: () => ({ offsetNode: node, offset: node instanceof HTMLInputElement ? 5 : 0 })
+    })
+    fireEvent.contextMenu(node)
+    Reflect.deleteProperty(document, 'caretPositionFromPoint')
+
+    copyTextItem()?.onSelect?.()
+
+    expect(writeClipboardText.mock.calls[0]?.[0]).toBe(copied)
+    expect(selection?.isCollapsed).toBe(!kept)
+  })
 
   it('offers no image copy when the right-click is not on an image', () => {
     render(<ImageHarness />)

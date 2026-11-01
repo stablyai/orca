@@ -219,6 +219,66 @@ describePosix('daemon shell-ready bash wrapper', () => {
     }
   )
 
+  // Profiles discard Bash's own prompt output the way attached ble.sh does (internal_suppress_bash_output).
+  itWithBash('signals readiness at the first prompt once ble.sh attaches its decoder', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    // Prompt-time ble-attach renders, running Orca's epilogue, before its decoder attaches.
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      [
+        '__fake_ble_attach() {',
+        '  [[ -z "${_ble_attached-}" ]] || return 0',
+        '  _ble_attached=1 _ble_decode_bind_state=none',
+        '  __orca_osc133_epilogue',
+        '  _ble_decode_bind_state=emacs',
+        "  printf 'DECODER_ATTACHED\\n'",
+        '}',
+        'PROMPT_COMMAND=__fake_ble_attach',
+        'exec 2>/dev/null'
+      ].join('\n')
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
+    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    expect(marker).toBeGreaterThan(output.indexOf('DECODER_ATTACHED'))
+    expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
+  })
+
+  itWithBash('signals readiness when a system bashrc already attached ble.sh', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    // Bash sources /etc/bash.bashrc before --rcfile, so ble.sh state can already be live.
+    const systemBashrc = '_ble_attached=1\n_ble_decode_bind_state=emacs\nexec 2>/dev/null\n'
+
+    const output = runInteractiveBashRcfile(
+      systemBashrc + getDaemonBashShellReadyRcfileContent(),
+      userDataPath
+    )
+
+    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
+    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
+  })
+
+  itWithBash('keeps the PS1 marker when ble.sh state is only inherited', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=\'printf "PS1=[%s]\\n" "$PS1"\'\nexec 2>/dev/null\n'
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath, {
+      _ble_attached: '1',
+      _ble_decode_bind_state: 'emacs',
+      BLE_ATTACHED: '1',
+      'BASH_FUNC_ble-attach%%': '() { :; }'
+    })
+
+    expect(output).not.toContain('\x1b]777;orca-shell-ready\x07')
+    expect(output).toContain('\\e]777;orca-shell-ready\\a')
+  })
+
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
     const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
     writeFileSync(

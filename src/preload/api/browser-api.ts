@@ -1,3 +1,4 @@
+import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
 import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
@@ -241,7 +242,6 @@ export type BrowserApi = {
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
-  sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionDetectBrowsersForClientHost: (args: {
@@ -263,7 +263,6 @@ export type BrowserApi = {
   sessionClientRouteImportSources: (args: {
     environmentId: string
   }) => Promise<Record<string, BrowserSessionProfileSource>>
-  sessionClearDefaultCookies: () => Promise<boolean>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */
@@ -306,7 +305,8 @@ export type BrowserApi = {
   onExtensionsChanged: (callback: () => void) => () => void
 } & BrowserExtensionToolbarApi &
   BrowserExtensionWebStoreApi &
-  BrowserExtensionContextMenuApi
+  BrowserExtensionContextMenuApi &
+  BrowserSessionCookieApi
 
 export type DetectedBrowserProfileInfo = {
   name: string

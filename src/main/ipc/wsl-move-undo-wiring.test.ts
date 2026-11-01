@@ -17,7 +17,12 @@ const host = vi.hoisted(() => ({
   enabledOnHost: new Map<string, boolean>(),
   listed: true,
   unreadable: false,
-  removalPending: false
+  removalPending: false,
+  connect: vi.fn(async (..._args: unknown[]): Promise<boolean> => true),
+  keptForPeers: false
+}))
+vi.mock('../wsl/wsl-host-kept-for-peers', () => ({
+  wasWslHostKeptForPeers: () => host.keptForPeers
 }))
 vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: () => {
@@ -28,8 +33,10 @@ vi.mock('../../shared/runtime-environment-store', () => ({
   }
 }))
 vi.mock('./wsl-move-host-connect', () => ({
-  wslHostRemovalPending: () => host.removalPending
+  wslHostRemovalPending: () => host.removalPending,
+  connectWslMoveHostService: (...args: unknown[]) => host.connect(...args)
 }))
+vi.mock('../wsl/wsl-host-service-instance', () => ({ getWslHostService: () => ({}) }))
 vi.mock('./wsl-host-automation-disable', () => ({
   readWslHostAutomationStates: async (_userData: string, _environmentId: string, ids: string[]) =>
     Object.fromEntries(ids.map((id) => [id, host.enabledOnHost.get(id) ?? false])),
@@ -146,6 +153,22 @@ describe("undo's host automation port", () => {
     ).toBe('stopped')
     expect(host.disabled).toEqual([])
   })
+
+  // R39: another Orca on this computer kept the removed host's server, so the move's copies may run.
+  it('refuses a removed host whose server was kept for another Orca', async () => {
+    host.disabled = []
+    host.listed = false
+    host.keptForPeers = true
+    try {
+      const { store } = storeWith()
+      const ports = createWslMoveUndoPorts(store, '/user-data')
+      expect((await ports.stopHostAutomations?.(move))?.outcome).toBe('unreachable')
+      expect(await ports.stopHostCopies(move)).toBe('unreachable')
+      expect(host.disabled).toEqual([])
+    } finally {
+      host.keptForPeers = false
+    }
+  })
 })
 
 describe("undo's host automation port, refusing", () => {
@@ -224,7 +247,10 @@ describe("undo's stop of the host's terminals", () => {
       ].filter((terminal) => worktree === null || terminal.worktreeId === worktree)
       return { ok: true, result: { terminals, truncated: false } }
     })
-    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toBe('stopped')
+    expect(await createWslMoveUndoPorts(store, '/user-data').stopHostCopies(move)).toEqual({
+      outcome: 'stopped',
+      slept: true
+    })
     const slept = rpc.call.mock.calls
       .filter(([, , method]) => method === 'worktree.sleep')
       .map(([, , , params]) => params)
@@ -275,5 +301,44 @@ describe("undo's stop of the host's terminals", () => {
         )
       }
     })
+  })
+})
+
+// After a relaunch the host has no open work, so a background-only reconnect refused every undo.
+describe("undo's connect to the host", () => {
+  const move = wslMoveCutoverFixture('move-1', 'retained', {}, { repoIds: ['repo-a'] })
+  const store = {
+    getWorkspaceSession: () => getDefaultWorkspaceSession(),
+    patchWorkspaceSession: vi.fn(),
+    listAutomations: () => [],
+    updateAutomation: vi.fn()
+  }
+
+  it('connects the host as the user’s act before asking it anything', async () => {
+    host.listed = true
+    host.connect.mockClear()
+    rpc.call.mockReset()
+    rpc.call.mockResolvedValue({ ok: true, result: { terminals: [], truncated: false } })
+    const ports = createWslMoveUndoPorts(store, '/user-data')
+    expect((await ports.stopHostAutomations?.(move))?.outcome).toBe('stopped')
+    expect(await ports.stopHostCopies(move)).toBe('stopped')
+    expect(host.connect.mock.calls.map(([, , distro, mode]) => [distro, mode])).toEqual([
+      [move.manifest.source.distro, 'user'],
+      [move.manifest.source.distro, 'user']
+    ])
+  })
+
+  it('refuses as unreachable, asking the host nothing, when it does not connect', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    host.listed = true
+    host.disabled = []
+    host.connect.mockRejectedValueOnce(new Error('distro failed to start'))
+    host.connect.mockRejectedValueOnce(new Error('distro failed to start'))
+    rpc.call.mockReset()
+    const ports = createWslMoveUndoPorts(store, '/user-data')
+    expect(await ports.stopHostAutomations?.(move)).toEqual({ outcome: 'unreachable' })
+    expect(await ports.stopHostCopies(move)).toBe('unreachable')
+    expect(host.disabled).toEqual([])
+    expect(rpc.call).not.toHaveBeenCalled()
   })
 })

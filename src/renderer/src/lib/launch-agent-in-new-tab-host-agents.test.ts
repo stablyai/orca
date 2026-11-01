@@ -1,10 +1,11 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -12,7 +13,7 @@ const REGISTERED: RuntimeCapability[] = [
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 ]
 const SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 const mocks = vi.hoisted(() => {
@@ -187,11 +188,7 @@ describe('a new tab whose chat route waits on the host agent list', () => {
       plan: { route: 'structured-native-chat' }
     })
     expect(
-      routeNewTabLaunch(
-        storeWithSettings({ ...SETTINGS, experimentalNativeChat: false }),
-        args,
-        request
-      )
+      routeNewTabLaunch(storeWithSettings({ ...SETTINGS, nativeChatProviders: {} }), args, request)
     ).toMatchObject({ plan: { route: 'terminal-tui' } })
   })
 })

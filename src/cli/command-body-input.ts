@@ -25,27 +25,41 @@ export async function readCommandBody(
   cwd: string,
   options: BodyOptions
 ): Promise<string | undefined> {
-  const hasBody = flags.has('body')
-  const hasBodyFile = flags.has('body-file')
-  if (hasBody && hasBodyFile) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --body or --body-file, not both')
-  }
-  if (!hasBody && !hasBodyFile) {
-    if (options.required) {
-      throw new RuntimeClientError('invalid_argument', 'Missing --body or --body-file')
-    }
-    return undefined
-  }
-  const body = hasBody
-    ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
-  if (body.length > options.maximumCharacters) {
+  const body = await readTextOrFileFlag(flags, cwd, 'body', options.required)
+  if (body !== undefined && body.length > options.maximumCharacters) {
     throw new RuntimeClientError(
       options.tooLargeCode,
       `${options.label} must be at most ${options.maximumCharacters} characters`
     )
   }
   return body
+}
+
+/** Reads `--<flag> <text>` or `--<flag>-file <path|->`, refusing both. */
+export async function readTextOrFileFlag(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  flag: string,
+  required: boolean
+): Promise<string | undefined> {
+  const fileFlag = `${flag}-file`
+  const hasText = flags.has(flag)
+  const hasFile = flags.has(fileFlag)
+  if (hasText && hasFile) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Use either --${flag} or --${fileFlag}, not both`
+    )
+  }
+  if (!hasText && !hasFile) {
+    if (required) {
+      throw new RuntimeClientError('invalid_argument', `Missing --${flag} or --${fileFlag}`)
+    }
+    return undefined
+  }
+  return hasText
+    ? getRequiredStringFlagAllowingEmpty(flags, flag)
+    : readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd)
 }
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {

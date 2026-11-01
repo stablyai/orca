@@ -29,6 +29,7 @@ vi.mock('react-native', () => ({
     multiply: (value: { current: number }, factor: number) => ({ value, factor }),
     timing: mocks.animatedTiming
   },
+  Easing: { bezier: () => 'push-easing' },
   BackHandler: {
     addEventListener: vi.fn(() => ({ remove: vi.fn() }))
   },

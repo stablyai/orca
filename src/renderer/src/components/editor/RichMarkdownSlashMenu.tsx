@@ -4,7 +4,33 @@ import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { runSlashCommand } from './rich-markdown-slash-commands'
 import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
+import type { SlashCommandGroup } from './rich-markdown-slash-command-primitives'
 import { translate } from '@/i18n/i18n'
+import { RichMarkdownCompletionPopover } from './RichMarkdownCompletionPopover'
+import { useRichMarkdownCompletionScroll } from './useRichMarkdownCompletionScroll'
+
+function slashCommandGroupLabel(group: SlashCommandGroup): string {
+  switch (group) {
+    case 'Headings':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupHeadings', 'Headings')
+    case 'Toggle headings':
+      return translate(
+        'auto.components.editor.RichMarkdownSlashMenu.groupToggleHeadings',
+        'Toggle headings'
+      )
+    case 'Basic blocks':
+      return translate(
+        'auto.components.editor.RichMarkdownSlashMenu.groupBasicBlocks',
+        'Basic blocks'
+      )
+    case 'Advanced':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupAdvanced', 'Advanced')
+    case 'Media':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupMedia', 'Media')
+    case 'Others':
+      return translate('auto.components.editor.RichMarkdownSlashMenu.groupOthers', 'Others')
+  }
+}
 
 type RichMarkdownSlashMenuProps = {
   editor: Editor | null
@@ -13,6 +39,7 @@ type RichMarkdownSlashMenuProps = {
   selectedIndex: number
   onImagePick: () => void
   onEmojiPick: () => void
+  onClose: () => void
 }
 
 export function RichMarkdownSlashMenu({
@@ -21,16 +48,23 @@ export function RichMarkdownSlashMenu({
   filteredCommands,
   selectedIndex,
   onImagePick,
-  onEmojiPick
+  onEmojiPick,
+  onClose
 }: RichMarkdownSlashMenuProps): React.JSX.Element {
+  const { viewportRef, activeItemRef } = useRichMarkdownCompletionScroll(
+    selectedIndex,
+    filteredCommands
+  )
   let currentGroup: SlashCommand['group'] | null = null
 
   return (
-    <div
+    <RichMarkdownCompletionPopover
+      editor={editor}
+      position={slashMenu.to}
+      onClose={onClose}
       className="rich-markdown-slash-menu"
-      style={{ left: slashMenu.left, top: slashMenu.top }}
       role="dialog"
-      aria-label={translate(
+      ariaLabel={translate(
         'auto.components.editor.RichMarkdownSlashMenu.2e0400b958',
         'Slash commands'
       )}
@@ -51,7 +85,7 @@ export function RichMarkdownSlashMenu({
           )}
         />
       </div>
-      <div className="rich-markdown-slash-results scrollbar-sleek" role="listbox">
+      <div ref={viewportRef} className="rich-markdown-slash-results scrollbar-sleek" role="listbox">
         {filteredCommands.length === 0 ? (
           <div className="rich-markdown-slash-empty">
             {translate(
@@ -66,9 +100,12 @@ export function RichMarkdownSlashMenu({
             return (
               <React.Fragment key={command.id}>
                 {showGroup ? (
-                  <div className="rich-markdown-slash-section">{command.group}</div>
+                  <div className="rich-markdown-slash-section">
+                    {slashCommandGroupLabel(command.group)}
+                  </div>
                 ) : null}
                 <button
+                  ref={index === selectedIndex ? activeItemRef : undefined}
                   type="button"
                   title={command.description}
                   role="option"
@@ -97,6 +134,6 @@ export function RichMarkdownSlashMenu({
           })
         )}
       </div>
-    </div>
+    </RichMarkdownCompletionPopover>
   )
 }

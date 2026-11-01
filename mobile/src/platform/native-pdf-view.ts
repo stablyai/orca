@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { Platform } from 'react-native'
 import { Directory, File as FsFile, Paths } from 'expo-file-system'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useNavigation } from 'expo-router'
 import { presentPdf } from '../../modules/orca-mobile-web-shell/src'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { PDF_MIME_TYPE } from '../files/mobile-file-media'
@@ -38,13 +38,19 @@ function pdfFileSink(file: FsFile): MobileMediaSink {
 
 // An external viewer may still read the last PDF, so earlier ones are cleared only when the next starts.
 // Each open gets its own folder so an aborted download's cleanup cannot delete its replacement.
-export function createNativePdfViewer(readClient: () => RpcClient | null) {
+export function createNativePdfViewer(
+  readClient: () => RpcClient | null,
+  isFocused: () => boolean
+) {
   let current: AbortController | null = null
   const open = async ({
     worktreeId,
     relativePath,
     executionHost
   }: BridgePdfOpenParams): Promise<Record<string, never>> => {
+    if (!isFocused()) {
+      throw new Error('the PDF page is not focused')
+    }
     const client = readClient()
     if (!client) {
       throw new Error('no desktop connection to download the PDF from')
@@ -94,11 +100,15 @@ export function useNativePdfViewer(
   sessionId: string | null
 ): (params: unknown) => Promise<unknown> {
   const { client } = useHostClient(hostId)
+  const navigation = useNavigation()
   const clientRef = useRef(client)
   useLayoutEffect(() => {
     clientRef.current = client
   }, [client])
-  const viewer = useMemo(() => createNativePdfViewer(() => clientRef.current), [sessionId])
+  const viewer = useMemo(
+    () => createNativePdfViewer(() => clientRef.current, navigation.isFocused),
+    [navigation, sessionId]
+  )
   useFocusEffect(useCallback(() => () => viewer.dispose(), [viewer]))
   return viewer.serve
 }

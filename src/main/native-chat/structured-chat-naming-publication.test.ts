@@ -1,10 +1,10 @@
 import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../shared/constants'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { listResult } from '../ai-vault/structured-session-ownership.test-support'
 import * as scanner from '../ai-vault/session-scanner-background'
 import { resetAiVaultSessionListCacheForTests } from '../ai-vault/cached-session-list'
@@ -45,6 +45,7 @@ it.each(['J', 'R', 'P', 'L', 'T', 'U', 'C'] as const)(
           () => ({ getSettings: () => getDefaultSettings('/isolated') }),
           {
             resolveWorkspace: async () => ({ path: '/fixture', executionHostId: 'local' }),
+            resolveNamingEnvironment: async () => ({}),
             getAgentEnvResolvers: () => undefined,
             workerTaskTitle: () => null,
             retitleOpenTab: runtime.refreshStructuredConversationTabTitle.bind(runtime)

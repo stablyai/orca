@@ -25,7 +25,7 @@ function pick<T extends string>(values: readonly T[], value: string, fallback: T
   return values.find((candidate) => candidate === value) ?? fallback
 }
 
-function durationBucket(durationMs: number): Props['duration_bucket'] {
+export function durationBucket(durationMs: number): Props['duration_bucket'] {
   if (durationMs < 5_000) {
     return 'lt_5s'
   }

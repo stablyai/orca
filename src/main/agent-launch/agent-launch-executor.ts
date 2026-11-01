@@ -1,11 +1,14 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
 import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
-import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
+import {
+  type AgentLaunchResult,
+  withoutReservedAgentCreateFields
+} from '../../shared/agent-launch-intent'
 import {
   combineLaunchWarnings,
   ignoredStructuredLaunchInputsWarning
@@ -19,7 +22,7 @@ import {
   settledAtCreation,
   settleLaunchPromptDisposal
 } from './agent-launch-prompt-delivery'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,
@@ -112,7 +115,8 @@ export async function executeAgentLaunch(
           placed.promptRodeLaunchCommand
             ? HANDED_TO_TERMINAL
             : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle, {
-                freshLaunch: true
+                freshLaunch: true,
+                terminalCreation: placed.startupTerminalCreation
               })
         )
       }
@@ -233,6 +237,7 @@ async function resolveWorkspace(
 export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
+  terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   promptRodeLaunchCommand?: boolean
 }
@@ -288,6 +293,7 @@ async function createTerminalSurface(
       handle: terminal.handle,
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
+    terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }

@@ -3,7 +3,7 @@ import type {
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import type { CodexUsageDailyPoint, CodexUsageSummary } from '../../../../shared/codex-usage-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 
 export type ClaudeShareData = {
@@ -25,7 +25,7 @@ export function formatTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatCost(value: number | null): string {
@@ -37,7 +37,11 @@ export function formatCost(value: number | null): string {
 
 export function formatDateRange(range: string): string {
   const now = new Date()
-  const end = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const end = now.toLocaleDateString(getIntlLocale(), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
   if (range === 'all') {
     return `Through ${end}`
   }
@@ -46,7 +50,7 @@ export function formatDateRange(range: string): string {
     return end
   }
   const start = new Date(now.getTime() - days * 86_400_000)
-  const startStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const startStr = start.toLocaleDateString(getIntlLocale(), { month: 'short', day: 'numeric' })
   return `${startStr} – ${end}`
 }
 

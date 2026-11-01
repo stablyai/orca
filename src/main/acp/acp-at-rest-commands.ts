@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
@@ -9,7 +9,7 @@ import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-cha
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/structured-session-child-env'
 import {
@@ -66,7 +66,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           record.location,
           deps.isWindowsProcessStartTimeAvailable
         ),
-      scan: (record, cwd, isCurrent, _generation, contextSignal) => {
+      scan: (record, cwd, isCurrent, _generation, contextSignal, _admitted, demand) => {
         const signal = AbortSignal.any([lifetime.signal, contextSignal])
         let answer: (value: AtRestCommandScan) => void = () => {}
         let fail: (reason: unknown) => void = () => {}
@@ -82,20 +82,31 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
         }
         const run = async () => {
           check()
-          if (admitted >= 34) {
+          if (!demand.independent && admitted >= 34) {
             throw new Error('ACP command discovery busy')
           }
-          admitted++
+          let countedLegacy = !demand.independent
+          if (countedLegacy) {
+            admitted++
+          }
           let release: () => void
           try {
-            release = await admission.acquire(0, signal)
+            release = await demand.acquire(admission, signal)
+            if (countedLegacy && demand.independent) {
+              admitted--
+              countedLegacy = false
+            }
           } catch (error) {
-            admitted--
+            if (countedLegacy) {
+              admitted--
+            }
             throw error
           }
           const releasePermit = release
           release = () => {
-            admitted--
+            if (countedLegacy) {
+              admitted--
+            }
             releasePermit()
           }
           let folder: Awaited<ReturnType<typeof acpRunFolder>> | undefined
@@ -162,6 +173,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               ...launch,
               env: { ...launch.env, ...skill?.env },
               args: [
+                ...invocation.prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
                 ...listing.sessionFolderArgs(folder.path)
               ]

@@ -17,6 +17,7 @@ import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,
@@ -35,6 +36,7 @@ import {
 } from '@/lib/ime-composition-keyboard-event'
 
 const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
+  useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)

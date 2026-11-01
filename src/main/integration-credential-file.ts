@@ -46,7 +46,8 @@ export function writeEncryptedCredential(
 export function writeCredentialFileAtomic(
   path: string,
   data: Buffer,
-  shouldPublish?: () => boolean
+  shouldPublish?: () => boolean,
+  requirePrivateWindowsFile = false
 ): boolean {
   // Unique temp names prevent concurrent writers from truncating staged bytes.
   const tempPath = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
@@ -54,7 +55,10 @@ export function writeCredentialFileAtomic(
   try {
     if (process.platform === 'win32') {
       // Create owner-only staging files so replacement cannot inherit a permissive Windows DACL.
-      writeRestrictedWindowsFile(tempPath, data)
+      const protectedFile = writeRestrictedWindowsFile(tempPath, data, requirePrivateWindowsFile)
+      if (requirePrivateWindowsFile && !protectedFile) {
+        throw new Error('Private Windows credential-file protection could not be verified.')
+      }
       fsyncFileSync(tempPath)
       return publishStagedCredential(tempPath, path, shouldPublish)
     }

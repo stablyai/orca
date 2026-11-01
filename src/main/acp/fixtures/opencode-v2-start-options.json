@@ -1,0 +1,499 @@
+{
+  "sessionId": "ses_eeda46a79ffedz4yHR5GrxQyR6",
+  "configOptions": [
+    {
+      "id": "model",
+      "name": "Model",
+      "category": "model",
+      "type": "select",
+      "currentValue": "opencode/fledge-alpha-free",
+      "options": [
+        {
+          "value": "opencode/big-pickle",
+          "name": "opencode/Big Pickle"
+        },
+        {
+          "value": "opencode/claude-fable-5",
+          "name": "opencode/Claude Fable 5"
+        },
+        {
+          "value": "opencode/claude-fable-5-1",
+          "name": "opencode/Claude Fable 5.1"
+        },
+        {
+          "value": "opencode/claude-haiku-4-5",
+          "name": "opencode/Claude Haiku 4.5"
+        },
+        {
+          "value": "opencode/claude-opus-4-5",
+          "name": "opencode/Claude Opus 4.5"
+        },
+        {
+          "value": "opencode/claude-opus-4-6",
+          "name": "opencode/Claude Opus 4.6"
+        },
+        {
+          "value": "opencode/claude-opus-4-7",
+          "name": "opencode/Claude Opus 4.7"
+        },
+        {
+          "value": "opencode/claude-opus-4-8",
+          "name": "opencode/Claude Opus 4.8"
+        },
+        {
+          "value": "opencode/claude-opus-5",
+          "name": "opencode/Claude Opus 5"
+        },
+        {
+          "value": "opencode/claude-opus-5-5",
+          "name": "opencode/Claude Opus 5.5"
+        },
+        {
+          "value": "opencode/claude-sonnet-4",
+          "name": "opencode/Claude Sonnet 4"
+        },
+        {
+          "value": "opencode/claude-sonnet-4-5",
+          "name": "opencode/Claude Sonnet 4.5"
+        },
+        {
+          "value": "opencode/claude-sonnet-4-6",
+          "name": "opencode/Claude Sonnet 4.6"
+        },
+        {
+          "value": "opencode/claude-sonnet-5",
+          "name": "opencode/Claude Sonnet 5"
+        },
+        {
+          "value": "opencode/claude-sonnet-5-5",
+          "name": "opencode/Claude Sonnet 5.5"
+        },
+        {
+          "value": "opencode/deepseek-v4-flash",
+          "name": "opencode/DeepSeek V4 Flash"
+        },
+        {
+          "value": "opencode/deepseek-v4-flash-vision-exp",
+          "name": "opencode/DeepSeek V4 Flash Vision Exp"
+        },
+        {
+          "value": "opencode/deepseek-v4-pro",
+          "name": "opencode/DeepSeek V4 Pro"
+        },
+        {
+          "value": "opencode/deepseek-v4.1-flash",
+          "name": "opencode/DeepSeek V4.1 Flash"
+        },
+        {
+          "value": "opencode/fledge-alpha-free",
+          "name": "opencode/Fledge Alpha Free"
+        },
+        {
+          "value": "opencode/gemini-3-flash",
+          "name": "opencode/Gemini 3 Flash"
+        },
+        {
+          "value": "opencode/gemini-3.1-pro",
+          "name": "opencode/Gemini 3.1 Pro Preview"
+        },
+        {
+          "value": "opencode/gemini-3.5-flash",
+          "name": "opencode/Gemini 3.5 Flash"
+        },
+        {
+          "value": "opencode/gemini-3.5-flash-lite",
+          "name": "opencode/Gemini 3.5 Flash Lite"
+        },
+        {
+          "value": "opencode/gemini-3.6-flash",
+          "name": "opencode/Gemini 3.6 Flash"
+        },
+        {
+          "value": "opencode/gemini-3.7-flash",
+          "name": "opencode/Gemini 3.7 Flash"
+        },
+        {
+          "value": "opencode/gemini-3.8-flash",
+          "name": "opencode/Gemini 3.8 Flash"
+        },
+        {
+          "value": "opencode/glm-5",
+          "name": "opencode/GLM-5"
+        },
+        {
+          "value": "opencode/glm-5.1",
+          "name": "opencode/GLM-5.1"
+        },
+        {
+          "value": "opencode/glm-5.2",
+          "name": "opencode/GLM-5.2"
+        },
+        {
+          "value": "opencode/glm-5.3",
+          "name": "opencode/GLM-5.3"
+        },
+        {
+          "value": "opencode/glm-5.3-flash",
+          "name": "opencode/GLM-5.3-Flash"
+        },
+        {
+          "value": "opencode/gpt-5",
+          "name": "opencode/GPT-5"
+        },
+        {
+          "value": "opencode/gpt-5-codex",
+          "name": "opencode/GPT-5 Codex"
+        },
+        {
+          "value": "opencode/gpt-5-nano",
+          "name": "opencode/GPT-5 Nano"
+        },
+        {
+          "value": "opencode/gpt-5.1",
+          "name": "opencode/GPT-5.1"
+        },
+        {
+          "value": "opencode/gpt-5.1-codex",
+          "name": "opencode/GPT-5.1 Codex"
+        },
+        {
+          "value": "opencode/gpt-5.1-codex-max",
+          "name": "opencode/GPT-5.1 Codex Max"
+        },
+        {
+          "value": "opencode/gpt-5.1-codex-mini",
+          "name": "opencode/GPT-5.1 Codex Mini"
+        },
+        {
+          "value": "opencode/gpt-5.2",
+          "name": "opencode/GPT-5.2"
+        },
+        {
+          "value": "opencode/gpt-5.2-codex",
+          "name": "opencode/GPT-5.2 Codex"
+        },
+        {
+          "value": "opencode/gpt-5.3-codex",
+          "name": "opencode/GPT-5.3 Codex"
+        },
+        {
+          "value": "opencode/gpt-5.3-codex-spark",
+          "name": "opencode/GPT-5.3 Codex Spark"
+        },
+        {
+          "value": "opencode/gpt-5.4",
+          "name": "opencode/GPT-5.4"
+        },
+        {
+          "value": "opencode/gpt-5.4-mini",
+          "name": "opencode/GPT-5.4 Mini"
+        },
+        {
+          "value": "opencode/gpt-5.4-nano",
+          "name": "opencode/GPT-5.4 Nano"
+        },
+        {
+          "value": "opencode/gpt-5.4-pro",
+          "name": "opencode/GPT-5.4 Pro"
+        },
+        {
+          "value": "opencode/gpt-5.5",
+          "name": "opencode/GPT-5.5"
+        },
+        {
+          "value": "opencode/gpt-5.5-pro",
+          "name": "opencode/GPT-5.5 Pro"
+        },
+        {
+          "value": "opencode/gpt-5.6-luna",
+          "name": "opencode/GPT-5.6 Luna"
+        },
+        {
+          "value": "opencode/gpt-5.6-sol",
+          "name": "opencode/GPT-5.6 Sol"
+        },
+        {
+          "value": "opencode/gpt-5.6-terra",
+          "name": "opencode/GPT-5.6 Terra"
+        },
+        {
+          "value": "opencode/gpt-6-astra",
+          "name": "opencode/GPT-6 Astra"
+        },
+        {
+          "value": "opencode/gpt-6-luna",
+          "name": "opencode/GPT-6 Luna"
+        },
+        {
+          "value": "opencode/gpt-6-sol",
+          "name": "opencode/GPT-6 Sol"
+        },
+        {
+          "value": "opencode/gpt-6.1-sol",
+          "name": "opencode/GPT-6.1 Sol"
+        },
+        {
+          "value": "opencode/grok-4.5",
+          "name": "opencode/Grok 4.5"
+        },
+        {
+          "value": "opencode/grok-4.6",
+          "name": "opencode/Grok 4.6"
+        },
+        {
+          "value": "opencode/grok-4.7",
+          "name": "opencode/Grok 4.7"
+        },
+        {
+          "value": "opencode/grok-build-0.1",
+          "name": "opencode/Grok Build 0.1"
+        },
+        {
+          "value": "opencode/kimi-k2.5",
+          "name": "opencode/Kimi K2.5"
+        },
+        {
+          "value": "opencode/kimi-k2.6",
+          "name": "opencode/Kimi K2.6"
+        },
+        {
+          "value": "opencode/kimi-k2.7-code",
+          "name": "opencode/Kimi K2.7 Code"
+        },
+        {
+          "value": "opencode/kimi-k3",
+          "name": "opencode/Kimi K3"
+        },
+        {
+          "value": "opencode/ling-3.0-flash-fin-free",
+          "name": "opencode/Ling 3.0 Flash Fin Free"
+        },
+        {
+          "value": "opencode/ling-3.1-flash-free",
+          "name": "opencode/Ling 3.1 Flash Free"
+        },
+        {
+          "value": "opencode/longcat-2.5-preview-free",
+          "name": "opencode/LongCat 2.5 Preview Free"
+        },
+        {
+          "value": "opencode/mimo-v2.6-flash-free",
+          "name": "opencode/MiMo-V2.6-Flash Free"
+        },
+        {
+          "value": "opencode/minimax-m2.5",
+          "name": "opencode/MiniMax-M2.5"
+        },
+        {
+          "value": "opencode/minimax-m2.7",
+          "name": "opencode/MiniMax-M2.7"
+        },
+        {
+          "value": "opencode/minimax-m3",
+          "name": "opencode/MiniMax-M3"
+        },
+        {
+          "value": "opencode/muse-spark-1.2",
+          "name": "opencode/Muse Spark 1.2"
+        },
+        {
+          "value": "opencode/muse-spark-1.3",
+          "name": "opencode/Muse Spark 1.3"
+        },
+        {
+          "value": "opencode/muse-spark-1.3-contributor-free",
+          "name": "opencode/Muse Spark 1.3 Free"
+        },
+        {
+          "value": "opencode/nemotron-3-ultra-free",
+          "name": "opencode/Nemotron 3 Ultra Free"
+        },
+        {
+          "value": "opencode/nemotron-3.5-lightning-free",
+          "name": "opencode/Nemotron 3.5 Lightning Free"
+        },
+        {
+          "value": "opencode/qwen3.5-plus",
+          "name": "opencode/Qwen3.5 Plus"
+        },
+        {
+          "value": "opencode/qwen3.6-plus",
+          "name": "opencode/Qwen3.6 Plus"
+        },
+        {
+          "value": "opencode/qwen3.8-flash",
+          "name": "opencode/Qwen3.8 Flash"
+        },
+        {
+          "value": "opencode/qwen3.8-max",
+          "name": "opencode/Qwen3.8 Max"
+        },
+        {
+          "value": "opencode/space-bunny-free",
+          "name": "opencode/Space Bunny Free"
+        },
+        {
+          "value": "opencode-go/deepseek-v4-flash",
+          "name": "opencode-go/DeepSeek V4 Flash"
+        },
+        {
+          "value": "opencode-go/deepseek-v4-flash-vision-exp",
+          "name": "opencode-go/DeepSeek V4 Flash Vision Exp"
+        },
+        {
+          "value": "opencode-go/deepseek-v4-pro",
+          "name": "opencode-go/DeepSeek V4 Pro (New)"
+        },
+        {
+          "value": "opencode-go/deepseek-v4.1-flash",
+          "name": "opencode-go/DeepSeek V4.1 Flash"
+        },
+        {
+          "value": "opencode-go/glm-5.2",
+          "name": "opencode-go/GLM-5.2"
+        },
+        {
+          "value": "opencode-go/glm-5.3",
+          "name": "opencode-go/GLM-5.3"
+        },
+        {
+          "value": "opencode-go/glm-5.3-flash",
+          "name": "opencode-go/GLM-5.3-Flash"
+        },
+        {
+          "value": "opencode-go/gpt-5.6-luna",
+          "name": "opencode-go/GPT-5.6 Luna"
+        },
+        {
+          "value": "opencode-go/gpt-6-luna",
+          "name": "opencode-go/GPT-6 Luna"
+        },
+        {
+          "value": "opencode-go/grok-4.6",
+          "name": "opencode-go/Grok 4.6"
+        },
+        {
+          "value": "opencode-go/grok-4.7",
+          "name": "opencode-go/Grok 4.7"
+        },
+        {
+          "value": "opencode-go/hy3",
+          "name": "opencode-go/Hy3"
+        },
+        {
+          "value": "opencode-go/hy4-preview",
+          "name": "opencode-go/Hy4 preview"
+        },
+        {
+          "value": "opencode-go/kimi-k2.7-code",
+          "name": "opencode-go/Kimi K2.7 Code"
+        },
+        {
+          "value": "opencode-go/kimi-k3",
+          "name": "opencode-go/Kimi K3"
+        },
+        {
+          "value": "opencode-go/longcat-2.5-preview-free",
+          "name": "opencode-go/LongCat 2.5 Preview Free"
+        },
+        {
+          "value": "opencode-go/longcat-2.0",
+          "name": "opencode-go/LongCat-2.0"
+        },
+        {
+          "value": "opencode-go/mimo-v2.5",
+          "name": "opencode-go/MiMo V2.5"
+        },
+        {
+          "value": "opencode-go/mimo-v2.5-pro",
+          "name": "opencode-go/MiMo V2.5 Pro"
+        },
+        {
+          "value": "opencode-go/mimo-v2.6-flash",
+          "name": "opencode-go/MiMo-V2.6-Flash"
+        },
+        {
+          "value": "opencode-go/mimo-v2.6-pro",
+          "name": "opencode-go/MiMo-V2.6-Pro"
+        },
+        {
+          "value": "opencode-go/minimax-m2.7",
+          "name": "opencode-go/MiniMax-M2.7"
+        },
+        {
+          "value": "opencode-go/minimax-m3",
+          "name": "opencode-go/MiniMax-M3"
+        },
+        {
+          "value": "opencode-go/muse-spark-1.2-contributor",
+          "name": "opencode-go/Muse Spark 1.2 Contributor"
+        },
+        {
+          "value": "opencode-go/muse-spark-1.3-contributor",
+          "name": "opencode-go/Muse Spark 1.3 Contributor"
+        },
+        {
+          "value": "opencode-go/qwen3.7-plus",
+          "name": "opencode-go/Qwen3.7 Plus"
+        },
+        {
+          "value": "opencode-go/qwen3.8-flash",
+          "name": "opencode-go/Qwen3.8 Flash"
+        },
+        {
+          "value": "opencode-go/qwen3.8-max",
+          "name": "opencode-go/Qwen3.8 Max"
+        },
+        {
+          "value": "opencode-go/space-bunny",
+          "name": "opencode-go/Space Bunny"
+        }
+      ]
+    },
+    {
+      "id": "effort",
+      "name": "Effort",
+      "description": "Available effort levels for this model",
+      "category": "thought_level",
+      "type": "select",
+      "currentValue": "default",
+      "options": [
+        {
+          "value": "low",
+          "name": "Low"
+        },
+        {
+          "value": "high",
+          "name": "High"
+        },
+        {
+          "value": "max",
+          "name": "Max"
+        },
+        {
+          "value": "default",
+          "name": "Default"
+        }
+      ]
+    },
+    {
+      "id": "mode",
+      "name": "Session Mode",
+      "category": "mode",
+      "type": "select",
+      "currentValue": "build",
+      "options": [
+        {
+          "value": "build",
+          "name": "Build",
+          "description": "The default agent. Executes tools based on configured permissions."
+        },
+        {
+          "value": "plan",
+          "name": "Plan",
+          "description": "Read-only agent for exploring the codebase and planning work before implementation."
+        }
+      ]
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SessionInfo } from '../daemon/types'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { hydrateLocalPtyRegistryAtBoot as HydrateFn } from './hydrate-local-pty-registry'
 import type {
   listRegisteredPtys as ListFn,

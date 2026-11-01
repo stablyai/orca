@@ -1,29 +1,9 @@
 name: Unit transform cache producer
 
-# Cold full unit run on main that publishes per-shard Vitest transform caches for PRs.
+# Cold full unit run on main that publishes per-shard Vitest transform caches.
+# Dispatch only: PR shards run on hosted runners, which cannot read this Blacksmith-store cache.
 on:
-  schedule:
-    - cron: '17 */6 * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    # Cache-key inputs (see ci-unit-module-cache.mjs) change the key; reseed right away.
-    paths:
-      - '.github/workflows/unit-module-cache.yml'
-      - '.github/workflows/unit-tests.yml'
-      - 'config/vitest.config.ts'
-      - 'config/scripts/vitest*'
-      - 'config/scripts/ci-unit-module-cache*.mjs'
-      - 'config/patches/**'
-      - 'config/scripts/workspace-source-exports.mjs'
-      - 'config/dark-build-switches.cjs'
-      - 'config/pnpmfile.cjs'
-      - '.npmrc'
-      - '**/package.json'
-      - '**/tsconfig*.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'config/.bun-version'
 
 concurrency:
   group: unit-module-cache-${{ github.ref }}

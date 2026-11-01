@@ -35,8 +35,8 @@ jobs:
         env:
           ORCA_UNIT_SELECTION_MODE: ${{ inputs.selection_mode }}
           ORCA_PULL_REQUEST_DRAFT: ${{ github.event.pull_request.draft }}
-          # Same count as PR preflight so transform cache shard keys line up.
-          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '5' }}
+          # Twelve 4-vCPU hosted shards match the old 8-vCPU wall time; the repository variable can request 2 to 16.
+          ORCA_UNIT_FULL_SHARD_COUNT: ${{ vars.ORCA_UNIT_FULL_SHARD_COUNT || '12' }}
         run: node config/scripts/ci-unit-plan.mjs
       - uses: actions/upload-artifact@v7
         continue-on-error: true

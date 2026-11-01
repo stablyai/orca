@@ -22,6 +22,7 @@ export function beginTerminalSurfaceSwap(scope: TerminalDocumentScope) {
     }
     scope.pendingSurface = null
     scope.pendingTerm = null
+    scope.term = scope.committedTerm
   }
   const swap = {
     oldTerm: scope.committedTerm,

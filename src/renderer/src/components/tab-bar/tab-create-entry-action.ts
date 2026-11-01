@@ -15,11 +15,17 @@ import type { RuntimeFileListState } from '../quick-open-file-list'
 import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 import {
   classifyTabEntryQuery,
-  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  getTabEntryAbsolutePathRemoteBlockedMessage,
   type TabEntryActionClassification,
   type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
 import { openAbsoluteTabEntryFile } from './tab-create-entry-absolute-file'
+import {
+  getTabEntryCannotOpenDirectoryMessage,
+  getTabEntryFileNoLongerExistsMessage,
+  getTabEntryNoActiveWorktreeMessage,
+  getTabEntryParentNotDirectoryMessage
+} from './tab-create-entry-copy'
 import { getNetworkTabRequest, isNetworkTabEntry } from './tab-create-entry-browser-request'
 import {
   getTabEntryAllowAbsolutePaths,
@@ -30,7 +36,7 @@ export {
   classifyTabEntryQuery,
   getTabEntryOptions,
   isTabEntryAbsolutePathLike,
-  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  getTabEntryAbsolutePathRemoteBlockedMessage,
   validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath,
   type TabEntryActionClassification,
@@ -114,7 +120,7 @@ async function createParentDirectoriesForNewFile(args: {
       }
       const stat = await args.operations.statRuntimePath(args.context, currentPath)
       if (!stat.isDirectory) {
-        throw new Error(`Cannot create file because ${currentPath} is not a directory.`)
+        throw new Error(getTabEntryParentNotDirectoryMessage(currentPath))
       }
     }
   }
@@ -134,11 +140,11 @@ async function openExistingFile(args: {
   try {
     stat = await args.operations.statRuntimePath(args.context, filePath)
   } catch {
-    throw new Error(`File no longer exists: ${args.relativePath}`)
+    throw new Error(getTabEntryFileNoLongerExistsMessage(args.relativePath))
   }
   args.assertCurrent()
   if (stat.isDirectory) {
-    throw new Error(`Cannot open a directory: ${args.relativePath}`)
+    throw new Error(getTabEntryCannotOpenDirectoryMessage(args.relativePath))
   }
   args.operations.openFile(
     {
@@ -192,7 +198,7 @@ export async function openTabEntryWithOperations({
 
   if (classification.kind === 'absolute-file') {
     if (!allowAbsolutePaths) {
-      throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+      throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
     }
     await openAbsoluteTabEntryFile({
       context: runtimeContext,
@@ -257,7 +263,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     getFileContext: () => {
       const worktree = state.getKnownWorktreeById(args.worktreeId)
       if (!worktree) {
-        throw new Error('No active worktree.')
+        throw new Error(getTabEntryNoActiveWorktreeMessage())
       }
       const provenance = captureEditorFileOperationProvenance(
         state,
@@ -287,7 +293,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
       statUserOpenedPath,
       assertAbsolutePathAllowed: () => {
         if (!getTabEntryAllowAbsolutePaths(useAppStore.getState(), args.worktreeId)) {
-          throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+          throw new Error(getTabEntryAbsolutePathRemoteBlockedMessage())
         }
       }
     }

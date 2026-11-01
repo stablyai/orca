@@ -4,14 +4,14 @@ import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   agentSessionWriteKindForMethod as writeKind,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'

@@ -2,13 +2,13 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 // Regression: initialize listed Grok 4.7 while new sessions actually ran Grok 4.6.
 
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
-import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
+import type { AgentSessionModelCatalogResult } from '../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -20,7 +20,7 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from '../native-chat/agent-model-catalog/agent-project-model-override'
-import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import { createAcpModelCatalogProbe } from './acp-model-catalog-probe'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { AcpStructuredOptions } from './acp-structured-options'
@@ -29,7 +29,7 @@ import { AcpSessionRuntime } from './acp-session-runtime'
 import { GROK, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
 import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { createTestParams } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import { attachParams, launch, openHostRig } from './acp-structured-host.test-support'
 
 const GROK_HOME = { variable: 'GROK_HOME', path: '/grok' }
@@ -167,7 +167,11 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     const { catalog, host } = await openGrokHost('grok-4.6')
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
 
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(answer).toMatchObject({
       listingNamesConfiguredModel: true,
       defaultHoldsInEveryWorkspace: true
@@ -184,13 +188,21 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     const prompt = await rig.frame('session/prompt')
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
     // The start taught the catalog before any options read.
-    expect(firstFrame(await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' }))).toEqual({
+    expect(
+      firstFrame(
+        await catalog.read({ agent: 'grok', workspacePath: '/elsewhere', waitForListing: true })
+      )
+    ).toEqual({
       model: 'grok-4.6',
       effort: 'high'
     })
 
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(answer).toMatchObject({ listingNamesConfiguredModel: true })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
   })
@@ -205,7 +217,11 @@ describe('Grok’s default comes from what a chat with no pick runs', () => {
     )
     catalog.recordLiveListing(OTHER_CHAT, newer.startListing())
     await host.readOptions(SESSION)
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
+    const answer = await catalog.read({
+      agent: 'grok',
+      workspacePath: '/elsewhere',
+      waitForListing: true
+    })
     expect(firstFrame(answer)).toEqual({ model: 'grok-4.7', effort: 'high' })
   })
 })

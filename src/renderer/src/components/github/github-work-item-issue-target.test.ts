@@ -83,7 +83,9 @@ describe('issue edits retain the displayed repository', () => {
     expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
       ...UPSTREAM,
       number: 12,
-      updates: { body: 'Project edit' }
+      updates: { body: 'Project edit' },
+      // An edit is a click: it may start a stopped WSL distro (E9).
+      wakeWslDistro: true
     })
     expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
   })
@@ -108,7 +110,8 @@ describe('issue edits retain the displayed repository', () => {
     expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
       ...UPSTREAM,
       number: 12,
-      updates
+      updates,
+      wakeWslDistro: true
     })
     expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
   })

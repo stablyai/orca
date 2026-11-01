@@ -6,7 +6,7 @@ import {
 } from '../../shared/tui-agent-startup'
 import { planStartupWithPromptCandidate } from '../../shared/startup-line-prompt-carry'
 import { buildSleepingAgentLaunchConfig } from '../../shared/sleeping-agent-launch-config'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { probeOpenCodeLaunchModelContext } from './opencode-launch-model-context'
 import { resolveOpenCodeLaunchModelConfig } from './opencode-launch-model-config'

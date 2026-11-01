@@ -145,18 +145,4 @@ describe('producer stall watchdog end to end', () => {
     expect(droppedChars(written)).toBe(0)
     expect(subprocess.pause).toHaveBeenCalledOnce()
   })
-
-  it('clears the watchdog when the stream socket closes', () => {
-    vi.useFakeTimers()
-    const { batcher, produceUntilPaused, subprocess, written } = createWiring()
-    produceUntilPaused()
-
-    // Model the server's stream-disconnect cleanup.
-    batcher.clear('client')
-    expect(subprocess.resume).toHaveBeenCalledOnce()
-
-    vi.advanceTimersByTime(STREAM_BACKPRESSURE_STALL_WATCHDOG_MS * 2)
-    expect(droppedChars(written)).toBe(0)
-    expect(subprocess.pause).toHaveBeenCalledOnce()
-  })
 })

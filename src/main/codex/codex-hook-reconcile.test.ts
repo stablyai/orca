@@ -20,7 +20,10 @@ import type * as TrustDerivation from './codex-hook-trust-derivation'
 import type * as RealHomeInstall from './codex-real-home-hook-install'
 
 const mocks = vi.hoisted(() => {
-  const held: { holdRealHome: Promise<void> | null } = { holdRealHome: null }
+  const held: { holdRealHome: Promise<void> | null; holdCodexScan: Promise<void> | null } = {
+    holdRealHome: null,
+    holdCodexScan: null
+  }
   return {
     ...held,
     homedir: vi.fn<() => string>(),
@@ -37,7 +40,13 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => mocks.codexPath
+  resolveCodexCommand: () => mocks.codexPath,
+  // Answers what PATH held when the scan began, as a scan that walked past a later install would.
+  resolveCodexCommandForSpawn: async () => {
+    const codexPath = mocks.codexPath
+    await mocks.holdCodexScan
+    return codexPath
+  }
 }))
 vi.mock('./codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
@@ -197,6 +206,7 @@ beforeEach(() => {
   })
   mocks.realHomeRuns = 0
   mocks.holdRealHome = null
+  mocks.holdCodexScan = null
   enabled = true
   usesRealHome = true
   _internals.resetForTesting()
@@ -253,6 +263,43 @@ describe('reconcileCodexHooks', () => {
     await Promise.all([started, launch])
 
     expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('holds the startup lookup and reconcile until startAfter settles', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    const published = Promise.withResolvers<void>()
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: published.promise
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    published.resolve()
+    await _internals.settledForTesting()
+
+    expect(mocks.probeCodexVersion).toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('never makes a launch wait for startAfter', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: new Promise<void>(() => {})
+    })
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(mocks.realHomeRuns).toBe(1)
+    // The launch takes the startup run, so app start's conversion still happens.
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
@@ -333,6 +380,48 @@ describe('reconcileCodexHooks', () => {
     await settleSpawn()
 
     expect(mocks.realHomeRuns).toBe(1)
+  })
+
+  it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
+    const installed = mocks.codexPath
+    mocks.codexPath = join(userData, 'missing-codex')
+    await start()
+    const scan = Promise.withResolvers<void>()
+    mocks.holdCodexScan = scan.promise
+
+    scheduleCodexHookReconcile()
+    await new Promise((resolve) => setImmediate(resolve))
+    mocks.codexPath = installed
+    mocks.holdCodexScan = null
+    scheduleCodexHookReconcile()
+    scan.resolve()
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('rechecks a spawn that lands while Codex is still answering, so an upgrade that moved it is not missed', async () => {
+    await start()
+    rmSync(hooksPath())
+    const old = mocks.codexPath
+    // New bytes make the lookup ask this binary again.
+    writeFileSync(old, 'codex 0.161.0')
+    const probe = Promise.withResolvers<string | null>()
+    mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
+    const probesBefore = mocks.probeCodexVersion.mock.calls.length
+
+    scheduleCodexHookReconcile()
+    await vi.waitFor(() => expect(mocks.probeCodexVersion.mock.calls.length).toBe(probesBefore + 1))
+    rmSync(old)
+    const moved = join(userData, 'moved', 'codex')
+    mkdirSync(join(moved, '..'))
+    writeFileSync(moved, 'codex 0.161.0')
+    mocks.codexPath = moved
+    scheduleCodexHookReconcile()
+    probe.resolve(null)
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
   it("leaves an older build's entry alone on a pane spawn, and converts it at app start", async () => {

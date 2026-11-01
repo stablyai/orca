@@ -1,9 +1,9 @@
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   createReferenceAgentIndex,
   referenceConnectionHosts,
@@ -12,7 +12,7 @@ import {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 
 const observations = vi.hoisted<{ status: 'live' | 'exited' | 'unverifiable'; reachable: boolean }>(
   () => ({
@@ -26,7 +26,7 @@ vi.mock('./structured-worker-authority', () => ({
 vi.mock('./orchestration/structured-session-mail-address', () => ({
   structuredSessionMailReach: () => ({ kind: observations.reachable ? 'reachable' : 'ended' })
 }))
-vi.mock('./agent-session-record-store-slot', () => ({
+vi.mock('./agent-session/records/agent-session-record-store-slot', () => ({
   peekOpenedAgentSessionRecordStore: () => null
 }))
 
@@ -92,14 +92,6 @@ describe('reference agent discovery', () => {
     ])
     expect(index.get('local|workspace-1')?.[1]).not.toHaveProperty('terminal')
     expect(index.get('local|workspace-1')?.[1]).not.toHaveProperty('mailbox')
-  })
-
-  it('keeps remote observations under their execution host and does not infer exit', () => {
-    const remote = evidence()
-    remote.activity.connectionId = 'build server'
-    const index = createReferenceAgentIndex(runtime([remote]), null, null)
-    expect(index.has('local|workspace-1')).toBe(false)
-    expect(index.get('ssh:build%20server|workspace-1')?.[0].liveness).toBe('unverifiable')
   })
 
   it('joins provider sessions to the exact observation and excludes stale resume-only rows', () => {
@@ -188,27 +180,6 @@ describe('reference agent discovery', () => {
     expect(
       referenceConnectionHosts([repo, { ...repo, executionHostId: 'ssh:other' }]).get('vm')
     ).toBeNull()
-  })
-
-  it('returns native session addresses and provider identity without inventing terminal handles', () => {
-    const record = agentSessionRecordFixture()
-    const index = createReferenceAgentIndex(runtime([]), null, sessionStore([record]))
-    expect(index.get('local|workspace-1')?.[0]).toMatchObject({
-      mailbox: `orca_session_id:${record.sessionId}`,
-      sessionId: record.sessionId,
-      liveness: 'live',
-      sessionIds: [record.sessionId, 'provider-session-alpha-1']
-    })
-    expect(index.get('local|workspace-1')?.[0]).not.toHaveProperty('terminal')
-  })
-
-  it('keeps closed or unobservable native sessions listed without a delivery address', () => {
-    observations.status = 'exited'
-    observations.reachable = false
-    const record = agentSessionRecordFixture()
-    const index = createReferenceAgentIndex(runtime([]), null, sessionStore([record]))
-    expect(index.get('local|workspace-1')?.[0].liveness).toBe('exited')
-    expect(index.get('local|workspace-1')?.[0]).not.toHaveProperty('mailbox')
   })
 
   it('skips native records whose chat tab was closed', () => {

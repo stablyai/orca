@@ -28,7 +28,7 @@ export type TerminalOscColorQueryParseResult =
   | { kind: 'partial' }
   | { kind: 'none' }
 
-type TerminalOscTerminatorParseResult =
+export type TerminalOscTerminatorParseResult =
   | { kind: 'complete'; endIndex: number }
   | { kind: 'partial' }
   | { kind: 'none' }
@@ -131,7 +131,17 @@ export function terminalOscColorQuerySlotsForBody(
   return TERMINAL_OSC_COLOR_QUERY_BODIES[slot].find((entry) => entry.body === body)?.slots ?? null
 }
 
-function parseTerminalOscTerminator(
+// One terminator scan avoids quadratic searches through ST-only OSC runs on the PTY hot path.
+// oxlint-disable-next-line no-control-regex -- BEL and ESC are the terminators being matched.
+const OSC_TERMINATOR_START = /[\x07\x1b]/g
+
+/** Index of the BEL or ESC that can end an OSC body starting at `from`, or -1. */
+export function findOscTerminatorStart(data: string, from: number): number {
+  OSC_TERMINATOR_START.lastIndex = from
+  return OSC_TERMINATOR_START.exec(data)?.index ?? -1
+}
+
+export function parseTerminalOscTerminator(
   data: string,
   offset: number
 ): TerminalOscTerminatorParseResult {

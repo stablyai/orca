@@ -67,6 +67,8 @@ describe('updater', () => {
         expect(send).toHaveBeenCalledWith('updater:status', {
           state: 'error',
           message,
+          messageCode: 'channelUnsupportedPlatform',
+          messageParams: { channel: expect.any(String) },
           userInitiated: true
         })
         expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
@@ -92,6 +94,8 @@ describe('updater', () => {
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
         message: expect.stringContaining('Download the installer from the release page'),
+        messageCode: 'unsignedDevChannel',
+        messageParams: { channel: 'Adhoc' },
         userInitiated: true
       })
       expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
@@ -118,11 +122,13 @@ describe('updater', () => {
 
         checkForUpdatesFromMenu({ channel, targetTag })
 
-        expect(send).not.toHaveBeenCalledWith('updater:status', {
-          state: 'error',
-          message: expect.stringContaining('Download the installer'),
-          userInitiated: true
-        })
+        expect(send).not.toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({
+            state: 'error',
+            message: expect.stringContaining('Download the installer')
+          })
+        )
         expect(autoUpdaterMock.allowDowngrade).toBe(true)
       } finally {
         platformSpy.mockRestore()
@@ -553,6 +559,7 @@ describe('updater', () => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })
@@ -586,6 +593,7 @@ describe('updater', () => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
         message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
         userInitiated: true
       })
     })

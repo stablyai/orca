@@ -107,6 +107,13 @@ export function isGrokPermissionNotification(message: string | undefined): boole
   )
 }
 
+export function isGrokSubagentEvent(hookPayload: Record<string, unknown>): boolean {
+  return (
+    readString(hookPayload, 'subagentType') !== undefined ||
+    readString(hookPayload, 'subagent_type') !== undefined
+  )
+}
+
 export function getGrokNotificationType(hookPayload: Record<string, unknown>): string | undefined {
   return (
     readString(hookPayload, 'notificationType') ??

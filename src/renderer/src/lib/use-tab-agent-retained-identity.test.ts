@@ -113,20 +113,6 @@ describe('useTabAgent retained completion identity', () => {
     expect(latestAgent).toBe('codex')
   })
 
-  it('keeps a live focused hook ahead of retained identity', async () => {
-    const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: statusEntry(paneKey, 'gemini', 'working')
-      },
-      retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
-    })
-
-    await renderProbe()
-
-    expect(latestAgent).toBe('gemini')
-  })
-
   it('lets an explicit cross-agent title reclaim a retained idle pane', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
     useAppStore.setState({

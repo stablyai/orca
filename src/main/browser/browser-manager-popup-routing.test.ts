@@ -17,7 +17,7 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    prependOnceListener: vi.fn(),
+    prependListener: vi.fn(),
     off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
@@ -324,6 +324,59 @@ describe('browserManager', () => {
         disposition: 'foreground-tab'
       })
     ).toEqual({ action: 'deny' })
+    expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
+  // #36804: headless serve pages have no renderer to own Orca's tab model.
+  // orcad's Electron browser registers pages without a workspace, so there is no tab list to open into.
+  it.each([
+    ['opens', 'wt-1'],
+    ['keeps denying', undefined]
+  ])('%s a headless serve page new-tab link (workspace %s)', (_outcome, worktreeId) => {
+    const openTab = vi.fn()
+    browserManager.setOffscreenTabOpener(openTab)
+    const guest = {
+      id: 152,
+      isDestroyed: vi.fn(() => false),
+      isCurrentlyAudible: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      prependListener: vi.fn(),
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : null))
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'serve-page',
+      worktreeId,
+      sessionProfileId: 'work',
+      webContentsId: guest.id
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+      features: string
+      disposition: string
+    }) => { action: 'allow' | 'deny' }
+    for (const disposition of ['foreground-tab', 'background-tab']) {
+      expect(
+        handler({ url: 'https://docs.example.com/guide', frameName: '', features: '', disposition })
+      ).toEqual({ action: 'deny' })
+    }
+
+    const request = {
+      worktreeId: 'wt-1',
+      profileId: 'work',
+      url: 'https://docs.example.com/guide',
+      pairedDeviceId: null
+    }
+    expect(openTab.mock.calls).toEqual(
+      worktreeId ? [[{ ...request, activate: true }], [{ ...request, activate: false }]] : []
+    )
     expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
@@ -652,7 +705,7 @@ describe('browserManager', () => {
     expect(returned).toBe(popupContents)
     // Custom-created children skip did-create-window, so attach their guest policies directly.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
-    expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(popupContents.setBackgroundThrottling).not.toHaveBeenCalled()
     expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',

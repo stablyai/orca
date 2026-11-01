@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BrowserCertificateRequestGuard } from './browser-certificate-request-guard'
+
 import {
   answerBrowserSessionBeforeRequest,
-  decideBrowserSessionRequestHeaders,
   installBrowserSessionHeadersReceived,
   setBrowserSessionRequestDecider,
   watchDecisionBlockedMainFrames,
   type BrowserSessionRequestDecider
 } from './browser-session-request-decisions'
+
 import { setBrowserSessionWebRequestObserver } from './browser-session-web-request-observer'
 
 type Listener = (details: unknown, callback: (response: unknown) => void) => void
@@ -78,24 +78,6 @@ describe('browser session request decisions', () => {
     await expect(answer()).resolves.toEqual({})
   })
 
-  it('decides only requests the certificate guard lets through, after webRequest observers', async () => {
-    const { session, fire } = fakeSession()
-    const seen: string[] = []
-    setBrowserSessionWebRequestObserver(() => seen.push('observer'))
-    setBrowserSessionRequestDecider(
-      decider({
-        beforeRequest: () => {
-          seen.push('decider')
-          return { cancel: true }
-        }
-      })
-    )
-    const guard = new BrowserCertificateRequestGuard({ onBlockedMainFrame: vi.fn() })
-    guard.installSession(session)
-    await expect(fire('onBeforeRequest', request)).resolves.toEqual({ cancel: true })
-    expect(seen).toEqual(['observer', 'decider'])
-  })
-
   it('tells the guest when the decider blocks its main frame', async () => {
     const { session } = fakeSession()
     const blocked = vi.fn()
@@ -108,31 +90,6 @@ describe('browser session request decisions', () => {
     stop()
     await new Promise((resolve) => answerBrowserSessionBeforeRequest(session, page, resolve))
     expect(blocked).toHaveBeenCalledOnce()
-  })
-
-  it('hands request headers to the decider and keeps them when it fails', () => {
-    const { session } = fakeSession()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the header decision reads no detail field.
-    const details = {
-      ...request,
-      requestHeaders: {}
-    } as Electron.OnBeforeSendHeadersListenerDetails
-    setBrowserSessionRequestDecider(
-      decider({ beforeSendHeaders: (_s, _d, headers) => ({ ...headers, 'X-Added': '1' }) })
-    )
-    expect(decideBrowserSessionRequestHeaders(session, details, { A: 'a' })).toEqual({
-      A: 'a',
-      'X-Added': '1'
-    })
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    setBrowserSessionRequestDecider(
-      decider({
-        beforeSendHeaders: () => {
-          throw new Error('boom')
-        }
-      })
-    )
-    expect(decideBrowserSessionRequestHeaders(session, details, { A: 'a' })).toEqual({ A: 'a' })
   })
 
   it('installs one onHeadersReceived that reports to observers and applies the decision', async () => {

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { triggerMediumImpact } from '../../../platform/haptics'
 import { MobileNativeChatImageViewer } from '../visual/MobileNativeChatImageViewer'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import {
@@ -9,16 +10,16 @@ import {
 import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
-} from '../../use-mobile-native-chat-conversation-state'
-import type { RpcClient } from '../../../transport/rpc-client'
+} from '../use-mobile-native-chat-conversation-state'
+import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 
 export function MobileNativeChatRowOverlaysHost({
   conversation,
-  imageClient,
+  imageSource,
   children
 }: {
   conversation: MobileNativeChatConversation
-  imageClient?: RpcClient
+  imageSource?: MobileNativeChatImageSource
   children?: React.ReactNode
 }): React.JSX.Element {
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
@@ -29,10 +30,13 @@ export function MobileNativeChatRowOverlaysHost({
   const overlays = useMemo(
     () => ({
       openImage: (image: MobileNativeChatViewedImage) => setShown({ image }),
-      openActions: (actionsFor: NativeChatMessage) => setShown({ actionsFor }),
-      imageClient
+      openActions: (actionsFor: NativeChatMessage) => {
+        triggerMediumImpact()
+        setShown({ actionsFor })
+      },
+      imageSource
     }),
-    [setShown, imageClient]
+    [setShown, imageSource]
   )
   // Memoize overlay callbacks so streamed words cannot rebuild them.
   const opened = useMemo(() => {

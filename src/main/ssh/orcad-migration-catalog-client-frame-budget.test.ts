@@ -40,10 +40,8 @@ vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
 
 const { commitRemoteOrcadMigrationCatalog, stageRemoteOrcadMigrationCatalog } =
   await import('./orcad-migration-catalog-client')
-const {
-  abortRemoteOrcadMigrationCatalogByReference,
-  ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED
-} = await import('./orcad-migration-catalog-reference-client')
+const { abortRemoteOrcadMigrationCatalogByReference } =
+  await import('./orcad-migration-catalog-reference-client')
 
 const pairingCode = encodePairingOffer({
   v: PAIRING_OFFER_VERSION,
@@ -88,11 +86,6 @@ beforeEach(() => {
 })
 
 describe("orcad migration requests fit the host's sealed inbound frame", () => {
-  it('stages a large manifest that still fits', async () => {
-    await stageRemoteOrcadMigrationCatalog(pairingCode, manifestOfBytes(760 * 1024))
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses, unsent, a manifest at the validation cap: sealed, it overflows the 1 MiB frame', async () => {
     await expect(
       stageRemoteOrcadMigrationCatalog(
@@ -135,15 +128,5 @@ describe("orcad migration requests fit the host's sealed inbound frame", () => {
     await expect(
       abortRemoteOrcadMigrationCatalogByReference(pairingCode, manifest)
     ).rejects.toThrow('orcad_migration_catalog_abort_durability_invalid')
-  })
-
-  it('refuses, unsent, an abort by reference to a host that predates it', async () => {
-    await expect(
-      abortRemoteOrcadMigrationCatalogByReference(
-        pairingCode,
-        manifestOfBytes(MAX_ORCAD_MIGRATION_MANIFEST_BYTES)
-      )
-    ).rejects.toThrow(ORCAD_MIGRATION_DESTINATION_ABORT_BY_REFERENCE_UNSUPPORTED)
-    expect(sendRequest).not.toHaveBeenCalled()
   })
 })

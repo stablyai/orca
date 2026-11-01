@@ -6,6 +6,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
+import type { LocalPtyProviderOptions } from '../../../providers/local-pty-provider-types'
+import { runAsWslLaunchUserAct } from '../../../wsl/wsl-background-exec-gate'
 import {
   addOrcaWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
@@ -38,6 +40,101 @@ export function configureLocalPtyProvider(args: {
     return
   }
   const { runtime, getSettings, getSelectedCodexHomePath, trustedTerminalHandleEnv } = args
+  const buildLocalSpawnEnv: NonNullable<LocalPtyProviderOptions['buildSpawnEnv']> = async (
+    id,
+    baseEnv,
+    ctx
+  ) => {
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: ctx?.launchAgent,
+      command: ctx?.command,
+      isWsl: ctx?.isWsl,
+      env: baseEnv,
+      envIsComplete: true
+    })
+    const codexSelectionTarget: CodexAccountSelectionTarget =
+      ctx?.isWsl === true
+        ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
+        : { runtime: 'host' }
+    const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
+      codexSelectionTarget,
+      ctx?.codexHomePathOverride
+        ? ctx.codexHomePathOverride.value
+        : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
+    )
+    const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
+    const ptySettings = getSettings?.()
+    await inheritOmpLaunchEnvironment(baseEnv, {
+      shellPath: ctx?.shellPath,
+      explicitEnv: ctx?.explicitEnv,
+      isWsl: ctx?.isWsl,
+      launchAgent: ctx?.launchAgent,
+      launchCommand: ctx?.command
+    })
+    await awaitExplicitAgentPluginGuestReadiness({
+      settings: ptySettings,
+      isWsl: ctx?.isWsl === true,
+      distro: ctx?.wslDistro,
+      codexHomePath: selectedCodexHomePath,
+      launchAgent: ctx?.launchAgent,
+      launchCommand: ctx?.command
+    })
+    await getClaudeAgentViewService().readyForLaunch({
+      settings: ptySettings,
+      isWsl: ctx?.isWsl,
+      launchAgent: ctx?.launchAgent,
+      launchCommand: ctx?.command
+    })
+    const env = buildPtyHostEnv(id, baseEnv, {
+      isPackaged: getAppEnvironment().isPackaged(),
+      resourcesPath: process.resourcesPath,
+      userDataPath: getAppEnvironment().getPath('userData'),
+      selectedCodexHomePath,
+      skipCodexHomeEnv,
+      stripInheritedOrcaCodexHome: shouldStripInheritedOrcaCodexHome({
+        target: codexSelectionTarget,
+        selectedCodexHomePath,
+        skipCodexHomeEnv,
+        settings: ptySettings
+      }),
+      launchCommand: ctx?.command,
+      launchAgent: ctx?.launchAgent,
+      shellPath: ctx?.shellPath,
+      isWsl: ctx?.isWsl,
+      wslDistro: ctx?.wslDistro ?? null,
+      agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
+      claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
+      terminalInlineImages: ptySettings?.terminalInlineImages,
+      disabledTuiAgents: ptySettings?.disabledTuiAgents,
+      networkProxySettings: ptySettings,
+      routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
+    })
+    // Supply terminal identity at process start so agents can address orchestration without another RPC.
+    const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
+    const preAllocatedHandle =
+      requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
+        ? requestedHandle
+        : runtime?.preAllocateHandleForPty(id)
+    if (requestedHandle && requestedHandle !== preAllocatedHandle) {
+      delete env.ORCA_TERMINAL_HANDLE
+    }
+    if (preAllocatedHandle) {
+      env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
+    }
+    stampWslOrchestrationCompatibilityHost(
+      env,
+      runtime?.getOrchestrationCompatibilityHostId?.(),
+      ctx?.isWsl === true ? ctx.wslDistro : null
+    )
+    stampRuntimeSourceEnv(
+      env,
+      getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
+    )
+    if (ctx?.isWsl === true) {
+      addOrcaWslInteropEnv(env)
+    }
+    return env
+  }
   localProvider.configure({
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
@@ -45,97 +142,16 @@ export function configureLocalPtyProvider(args: {
     getWindowsPowerShellImplementation: () =>
       getSettings ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto') : undefined,
     pwshAvailable: () => isPwshAvailableAsync(),
-    buildSpawnEnv: async (id, baseEnv, ctx) => {
-      await prepareAntigravityAccountForLaunch({
-        launchAgent: ctx?.launchAgent,
-        command: ctx?.command,
-        isWsl: ctx?.isWsl,
-        env: baseEnv,
-        envIsComplete: true
-      })
-      const codexSelectionTarget: CodexAccountSelectionTarget =
-        ctx?.isWsl === true
-          ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
-          : { runtime: 'host' }
-      const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
-        codexSelectionTarget,
-        ctx?.codexHomePathOverride
-          ? ctx.codexHomePathOverride.value
-          : ((await getSelectedCodexHomePath?.(codexSelectionTarget, baseEnv)) ?? null)
-      )
-      const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
-      const ptySettings = getSettings?.()
-      await inheritOmpLaunchEnvironment(baseEnv, {
-        shellPath: ctx?.shellPath,
-        explicitEnv: ctx?.explicitEnv,
-        isWsl: ctx?.isWsl,
-        launchAgent: ctx?.launchAgent,
-        launchCommand: ctx?.command
-      })
-      await awaitExplicitAgentPluginGuestReadiness({
-        settings: ptySettings,
-        isWsl: ctx?.isWsl === true,
-        distro: ctx?.wslDistro,
-        codexHomePath: selectedCodexHomePath,
-        launchAgent: ctx?.launchAgent,
-        launchCommand: ctx?.command
-      })
-      await getClaudeAgentViewService().readyForLaunch({
-        settings: ptySettings,
-        isWsl: ctx?.isWsl,
-        launchAgent: ctx?.launchAgent,
-        launchCommand: ctx?.command
-      })
-      const env = buildPtyHostEnv(id, baseEnv, {
-        isPackaged: getAppEnvironment().isPackaged(),
-        resourcesPath: process.resourcesPath,
-        userDataPath: getAppEnvironment().getPath('userData'),
-        selectedCodexHomePath,
-        skipCodexHomeEnv,
-        stripInheritedOrcaCodexHome: shouldStripInheritedOrcaCodexHome({
-          target: codexSelectionTarget,
-          selectedCodexHomePath,
-          skipCodexHomeEnv,
-          settings: ptySettings
-        }),
-        launchCommand: ctx?.command,
-        launchAgent: ctx?.launchAgent,
-        shellPath: ctx?.shellPath,
-        isWsl: ctx?.isWsl,
-        wslDistro: ctx?.wslDistro ?? null,
-        agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
-        claudeSubagentNavigationEnabled: ptySettings?.claudeSubagentNavigationEnabled,
-        terminalInlineImages: ptySettings?.terminalInlineImages,
-        disabledTuiAgents: ptySettings?.disabledTuiAgents,
-        networkProxySettings: ptySettings,
-        routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
-      })
-      // Supply terminal identity at process start so agents can address orchestration without another RPC.
-      const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
-      const preAllocatedHandle =
-        requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
-          ? requestedHandle
-          : runtime?.preAllocateHandleForPty(id)
-      if (requestedHandle && requestedHandle !== preAllocatedHandle) {
-        delete env.ORCA_TERMINAL_HANDLE
-      }
-      if (preAllocatedHandle) {
-        env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
-      }
-      stampWslOrchestrationCompatibilityHost(
-        env,
-        runtime?.getOrchestrationCompatibilityHostId?.(),
-        ctx?.isWsl === true ? ctx.wslDistro : null
-      )
-      stampRuntimeSourceEnv(
-        env,
-        getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
-      )
-      if (ctx?.isWsl === true) {
-        addOrcaWslInteropEnv(env)
-      }
-      return env
-    },
+    // Daemon-off launches build their env here: the same user-act rule as the daemon path.
+    buildSpawnEnv: (id, baseEnv, ctx) =>
+      runAsWslLaunchUserAct(
+        {
+          isWsl: ctx?.isWsl === true,
+          passiveRestore: ctx?.wslPassiveRestore === true,
+          distro: ctx?.wslDistro
+        },
+        async () => buildLocalSpawnEnv(id, baseEnv, ctx)
+      ),
     onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
     onExit: (id, code, incarnationId, cause) => {
       if (!isCurrentPtyExit({ id, incarnationId })) {

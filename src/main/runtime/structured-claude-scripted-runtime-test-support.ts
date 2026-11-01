@@ -1,6 +1,13 @@
 // Use production runtime/adapter/store/host with only the Claude CLI process replaced.
 
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
+import {
+  CLAUDE_CLI_FLAG_PROBE_BUDGET_MS,
+  createClaudeCliFlagSupport
+} from '../claude/claude-cli-flag-support'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -18,10 +25,13 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 /** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
+/** A Claude Code with every version-gated flag and control Orca uses. */
+const CURRENT_CLAUDE_CODE_VERSION = '2.1.284'
+
 export function scriptedClaudeExitError(diagnostic: string): Error {
   return withProviderDiagnostic(new Error(diagnostic), providerDiagnostic(diagnostic, 'log'))
 }
@@ -155,6 +165,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
           announce()
           return Promise.resolve(initialized)
         },
+        renameSession: () => Promise.resolve(),
         getContextUsage: () => {
           child.calls.push('get_context_usage')
           return Promise.resolve({})
@@ -242,10 +253,17 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
         hostId: 'local',
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => directory,
-        resolveClaudeCommand: () => '/usr/local/bin/claude',
+        resolveClaudeCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
         resolveLaunchArgs: () => [],
         resolveClaudeAuthPolicy: () => ({ account: 'system' }),
         openClaudeConnection: openConnection,
+        // Production always passes flag support; the scripted CLI is a current Claude Code.
+        claudeCliFlags: createClaudeCliFlagSupport({
+          probe: async () => CURRENT_CLAUDE_CODE_VERSION,
+          keyOf: async (command, cwd) => `${command}\n${cwd}`,
+          budgetMs: CLAUDE_CLI_FLAG_PROBE_BUDGET_MS,
+          now: () => performance.now()
+        }),
         readProcessStartTime
       })
       return host

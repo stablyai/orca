@@ -29,6 +29,10 @@ import {
   isLocalWorktreeScanGenerationCurrent
 } from '../../local-worktree-scan-generation'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import {
+  _pendingWslStoppedWorktreeRescanCount,
+  holdWslStoppedWorktreeRescan
+} from '../../wsl-stopped-worktree-rescan-registry'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
 const at = (id: string, hostId: ExecutionHostId) => hostWorktreeTarget({ id, hostId })
@@ -122,6 +126,18 @@ describe('Store', () => {
     }
 
     expect(_getLocalWorktreeScanGenerationCacheSize()).toBe(initialCacheSize)
+  })
+
+  it('drops a pending stopped-WSL worktree re-scan when its repo is removed', async () => {
+    const store = await createStore()
+    const cancel = vi.fn()
+    store.addRepo(makeRepo({ id: 'wsl-repo' }))
+    holdWslStoppedWorktreeRescan('wsl-repo', cancel)
+
+    store.removeProjectForHost({ id: 'wsl-repo', executionHostId: 'local' })
+
+    expect(cancel).toHaveBeenCalledOnce()
+    expect(_pendingWslStoppedWorktreeRescanCount()).toBe(0)
   })
 
   it('setResolvedRepoGitUsername persists the enriched username for hydration', async () => {

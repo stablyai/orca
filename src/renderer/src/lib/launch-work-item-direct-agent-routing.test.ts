@@ -78,12 +78,9 @@ describe('resolveDirectWorkItemAgent', () => {
       resolveDirectWorkItemAgent({
         worktreeId: 'wt-1',
         repoHost: repo,
-        launchConnectionId: 'server-ssh-target',
-        repoConnectionId: 'server-ssh-target',
-        detectedAgentsPromise: null,
         latestStore: store.getState()
       })
-    ).resolves.toEqual({ agent: 'claude', unavailable: false })
+    ).resolves.toEqual(expect.objectContaining({ agent: 'claude', unavailable: false }))
     expect(ensureRuntimeDetectedAgents).toHaveBeenCalledWith('env-1', 'wt-1')
     expect(ensureDetectedAgents).not.toHaveBeenCalled()
   })

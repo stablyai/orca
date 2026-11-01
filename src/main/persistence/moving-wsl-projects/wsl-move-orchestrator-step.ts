@@ -112,6 +112,10 @@ export async function runWslMoveOrchestratorStep(
     }
     record = commit(applyWslMovedDistroVerdict(record, verdict, now()))
   }
+  // Stage 1: only the user starts a move; the checks above (Remove, R38) still run for every wake.
+  if (trigger !== 'user' && !ports.autoMovesBridgeProjects()) {
+    return
+  }
   if (!mayStartWslMove(record, trigger, now(), ports.appVersion)) {
     return
   }
@@ -130,7 +134,7 @@ export async function runWslMoveOrchestratorStep(
       return
     }
   }
-  const preview = await settle(() => ports.preview(distro))
+  const preview = await settle(() => ports.preview(distro, trigger === 'user'))
   if (changedUnder(record)) {
     return
   }

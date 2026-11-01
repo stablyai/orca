@@ -6,7 +6,7 @@ import {
 } from '../../shared/jira/jira-saved-filters'
 import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira-saved-filter-params'
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/wsl-move-window-write-hold'
@@ -57,14 +57,7 @@ export function registerUIHandlers(
   store: Store,
   options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
 ): void {
-  // Broadcast UI state so desktop rehydrates mobile or sibling-window changes.
-  store.onUIChanged((ui) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send('ui:stateChanged', ui)
-      }
-    }
-  })
+  store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
   ipcMain.handle('ui:getJiraQuickFilters', () =>
     normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)

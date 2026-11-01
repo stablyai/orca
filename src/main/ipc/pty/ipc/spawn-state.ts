@@ -9,11 +9,10 @@ import type {
 } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
-import type { PtySpawnTiming } from '../pty-spawn-timing'
-import { createPtySpawnTiming } from '../pty-spawn-timing'
+import { type PtySpawnTiming, createPtySpawnTiming } from '../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
@@ -65,6 +64,7 @@ export type PtyIpcSpawnState = {
   effectiveSessionId: string | undefined
   effectiveSessionAppId: string | undefined
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   baseEnv: Record<string, string> | undefined
   effectiveLaunchConfig: SleepingAgentLaunchConfig | undefined
   preAllocatedHandle: string | null
@@ -143,6 +143,7 @@ export function createPtyIpcSpawnState(
     effectiveSessionId: undefined,
     effectiveSessionAppId: undefined,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     baseEnv: undefined,
     effectiveLaunchConfig: undefined,
     preAllocatedHandle: null,

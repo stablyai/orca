@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { NATIVE_CHAT_QUESTION_AUTO_ADVANCE_MS } from '../../../../../src/shared/native-chat/input/native-chat-question-auto-advance'
-import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session-question-answer'
+import { encodeAgentSessionQuestionAnswers } from '../../../../../src/shared/agent-session/agent-session-question-answer'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatStructuredAsk } from './MobileNativeChatStructuredAsk'
 

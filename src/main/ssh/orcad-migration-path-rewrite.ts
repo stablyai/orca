@@ -30,7 +30,8 @@ export function rewriteOrcadMigrationPayloadPaths(
     return copy
   }
   for (const field of ORCAD_MIGRATION_PATH_FIELDS) {
-    const map = (value: string): string => rewriteValue(value, field.kind, rewriter)
+    const map = (value: string): string =>
+      rewriteOrcadMigrationPathValue(value, field.kind, rewriter)
     visit(copy, parseFieldLocation(field.at), map)
   }
   return copy
@@ -107,7 +108,8 @@ function renameKeys(node: Record<string, unknown>, map: (value: string) => strin
   }
 }
 
-function rewriteValue(
+/** One value of `kind`; anything the rewriter doesn't recognise comes back unchanged. */
+export function rewriteOrcadMigrationPathValue(
   value: string,
   kind: OrcadMigrationPathFieldKind,
   rewriter: OrcadMigrationPathRewriter

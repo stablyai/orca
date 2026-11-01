@@ -37,6 +37,7 @@ function createMockSubprocess(): SubprocessHandle {
 }
 type DaemonServerInternals = {
   endpoint: {
+    publish(bindPath: string): Promise<void>
     hasLostOwnership(): boolean
     requestRetirementForLoss(): void
     checkOwnership(): void
@@ -435,15 +436,23 @@ describe('daemon server error handling', () => {
         tokenPath,
         spawnSubprocess: () => createMockSubprocess()
       })
-      const started = server.start()
       const daemon = server as unknown as DaemonServerInternals
-      await vi.waitFor(() => expect(daemon.lifecycle.server?.listening).toBe(true))
-      daemon.lifecycle.server?.emit('error', new Error('injected accept failure'))
+      const publish = daemon.endpoint.publish.bind(daemon.endpoint)
+      const publication = vi
+        .spyOn(daemon.endpoint, 'publish')
+        .mockImplementationOnce((bindPath) => {
+          daemon.lifecycle.server?.emit('error', new Error('injected accept failure'))
+          return publish(bindPath)
+        })
 
-      await expect(started).rejects.toThrow('injected accept failure')
-      // Startup rejects before publication settles; wait until the failed daemon actually stops serving.
-      await vi.waitFor(() => expect(daemon.lifecycle.server).toBeNull())
-      await expect(waitForEndpointUnreachable(socketPath)).resolves.toBe(true)
+      try {
+        await expect(server.start()).rejects.toThrow('injected accept failure')
+        // Startup rejects before publication settles; wait until the failed daemon actually stops serving.
+        await vi.waitFor(() => expect(daemon.lifecycle.server).toBeNull())
+        await expect(waitForEndpointUnreachable(socketPath)).resolves.toBe(true)
+      } finally {
+        publication.mockRestore()
+      }
     }
   )
 })

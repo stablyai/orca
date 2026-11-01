@@ -71,7 +71,7 @@ export class MacosSystemSleepAssertion {
 
     let child: CaffeinateProcess
     try {
-      child = this.spawn('/usr/bin/caffeinate', ['-i', '-s'], {
+      child = this.spawn('/usr/bin/caffeinate', ['-i', '-s', '-w', String(process.pid)], {
         stdio: 'ignore',
         windowsHide: true
       })

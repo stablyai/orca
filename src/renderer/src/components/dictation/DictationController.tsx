@@ -8,7 +8,7 @@ import {
   insertText,
   type DictationInsertionTarget
 } from './dictation-insertion-target'
-import { formatFinalTranscriptSegment } from './dictation-final-segments'
+import { formatFinalTranscriptSegment } from '../../../../shared/dictation-transcript-spacing'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'
@@ -96,6 +96,8 @@ export function DictationController() {
     const modelId = settings?.voice?.sttModel
     if (!modelId) {
       toast('No speech model selected. Download one in Settings > Voice.', {
+        // Held keys and repeated presses replace this toast instead of stacking it.
+        id: 'dictation-no-model',
         action: {
           label: translate(
             'auto.components.dictation.DictationController.bb7f599ee7',
@@ -280,11 +282,7 @@ export function DictationController() {
     }
 
     const handleKeyDown = (): void => {
-      if (
-        !settings?.voice?.enabled ||
-        !settings.voice.sttModel ||
-        dictationStateRef.current === 'stopping'
-      ) {
+      if (!settings?.voice?.enabled || dictationStateRef.current === 'stopping') {
         return
       }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
@@ -296,16 +294,10 @@ export function DictationController() {
 
     const cleanup = window.api.ui.onDictationKeyDown(handleKeyDown)
     return cleanup
-  }, [
-    settings?.voice?.dictationMode,
-    settings?.voice?.enabled,
-    settings?.voice?.sttModel,
-    startDictation,
-    stopDictation
-  ])
+  }, [settings?.voice?.dictationMode, settings?.voice?.enabled, startDictation, stopDictation])
 
   useEffect(() => {
-    const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
+    const canDictate = (): boolean => Boolean(settings?.voice?.enabled)
     const handleControl = (event: Event): void => {
       if (!canDictate() || dictationStateRef.current === 'stopping') {
         return
@@ -331,7 +323,7 @@ export function DictationController() {
     }
     document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
-  }, [settings?.voice?.enabled, settings?.voice?.sttModel, startDictation, stopDictation])
+  }, [settings?.voice?.enabled, startDictation, stopDictation])
 
   useHoldDictationGesture({
     dictationStateRef,

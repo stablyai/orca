@@ -1,3 +1,4 @@
+import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
 import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -5,7 +6,6 @@ import {
   getDefaultWorkspaceSession,
   setPlatform
 } from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
 import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -95,22 +95,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-ssh',
-          task_id: 'task-ssh',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_ssh_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `${ptyId}:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_ssh_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-ssh',
+        task_id: 'task-ssh',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_ssh_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `${ptyId}:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_ssh_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -228,22 +229,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-wsl',
-          task_id: 'task-wsl',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_wsl_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-wsl-legacy:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_wsl_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-wsl',
+        task_id: 'task-wsl',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_wsl_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-wsl-legacy:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_wsl_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     // Declare the scope parameter so mock.calls retains its type alongside the runtime deadline.
     const listProcesses = vi.fn(async (_connectionId?: string | null) => [
       {

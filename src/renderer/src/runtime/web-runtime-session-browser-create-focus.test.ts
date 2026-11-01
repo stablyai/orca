@@ -14,6 +14,7 @@ import {
 import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
+  changedAgentPaneKeys: new Set<string>(),
   getState: vi.fn(),
   setState: vi.fn(),
   subscribe: vi.fn(),
@@ -53,8 +54,10 @@ vi.mock('./web-session-tabs-sync/tracking-decisions', () => ({
   decideWebSessionTabsSnapshot: mocks.decideWebSessionTabsSnapshot
 }))
 vi.mock('./web-session-tabs-sync/store-patch', () => ({
-  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
-    mocks.setState(buildPatch)
+  applyWebSessionTabsStorePatch: (
+    buildPatch: (state: unknown, changedAgentPaneKeys: Set<string>) => unknown
+  ) => {
+    mocks.setState((state: unknown) => buildPatch(state, mocks.changedAgentPaneKeys))
     return () => {}
   }
 }))
@@ -144,7 +147,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before', activeWorktreeId: WORKTREE_ID },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
     expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
       ENVIRONMENT_ID,
@@ -421,7 +427,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before-stage', activeWorktreeId: 'other-worktree' },
       snapshot,
-      ENVIRONMENT_ID
+      ENVIRONMENT_ID,
+      undefined,
+      undefined,
+      mocks.changedAgentPaneKeys
     )
     expect(setStateResults.at(-1)).toEqual({ state: 'after' })
   })

@@ -1,7 +1,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from './codex-structured-journal-sink'
@@ -166,9 +166,13 @@ export function createCodexStructuredItemStreams(
     return state
   }
 
-  const flush = (): boolean => {
+  const flush = (threadId?: string): boolean => {
     let flushed = coalescer.flushAll()
     for (const key of pendingCheckpoints) {
+      // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
+      if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
+        continue
+      }
       const snapshot = coalescer.snapshot(key)
       if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
         flushed = persist(key, snapshot.text, true) && flushed

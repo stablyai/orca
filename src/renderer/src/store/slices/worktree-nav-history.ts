@@ -147,7 +147,7 @@ function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   return findWorktreeById(selectWorktreesByRepo(state), entry) !== undefined
 }
 
-function appendHistoryEntry(
+export function appendHistoryEntry(
   s: { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number },
   entry: WorktreeNavHistoryEntry
 ): { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number } {

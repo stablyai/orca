@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   acknowledgeAgents: vi.fn(),
+  subscribeAgentStatusChanges: vi.fn(() => vi.fn()),
   setActiveWorktree: vi.fn(),
   subscribeStore: vi.fn((_listener: (state: unknown, previousState: unknown) => void) => vi.fn()),
   onRevealAgent: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('@/store', () => ({
     getState: () => ({
       ...makeSnapshotWatchState(),
       acknowledgeAgents: mocks.acknowledgeAgents,
+      subscribeAgentStatusChanges: mocks.subscribeAgentStatusChanges,
       setActiveWorktree: mocks.setActiveWorktree
     }),
     subscribe: mocks.subscribeStore

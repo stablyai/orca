@@ -9,7 +9,7 @@ type PreviewState = {
   sample: string[][]
   rows: Map<number, string[]>
   progress: number
-  error: string | null
+  error: unknown
 }
 const initialState = (): PreviewState => ({
   index: null,
@@ -36,7 +36,7 @@ export function useCsvPagedPreview(file: CsvFilePreview, delimiter: string) {
       requestRows.current = () => {}
       setState((previous) => ({
         ...previous,
-        error: error instanceof Error ? error.message : String(error)
+        error
       }))
     }
     setState(initialState())

@@ -1,3 +1,4 @@
+import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
@@ -79,7 +80,7 @@ export type RepositoryApi = {
     parentPath: string
     name: string
     kind: 'git' | 'folder'
-  }) => Promise<{ repo: Repo } | { error: string }>
+  }) => Promise<{ repo: Repo } | RepoCreateFailure>
   isGitAvailable: () => Promise<boolean>
   getDefaultCreateProjectParent: () => Promise<string>
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void

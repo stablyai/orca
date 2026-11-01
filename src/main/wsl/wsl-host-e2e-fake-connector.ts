@@ -29,7 +29,9 @@ const FakeWslHostsSchema = z.object({
   /** Each distro the fake is asked to start, one per line, so e2e can prove nothing respawns. */
   connectLogFile: z.string().optional(),
   /** `missing` stands in for a build shipped without the orcad template. */
-  serverFiles: z.enum(['present', 'missing']).optional()
+  serverFiles: z.enum(['present', 'missing']).optional(),
+  /** A stop the fake does not report, as when liveness sees only a quick reboot: a runtime call must. */
+  stopSilently: z.boolean().optional()
 })
 
 export function readFakeWslHostsConfig(
@@ -123,8 +125,13 @@ export function createFakeWslHostConnector(
     // A running fake distro's missing server is reachable by a reconnect; a stopped one's bridge is gone.
     reachability: async (distro) => {
       if (isStopped(distro)) {
-        // As production liveness reports a stopped distro's lost bridge.
-        dropBridge(distro, { state: 'distro-stopped', terminals: 'exited', recovering: false })
+        // As production liveness reports a stopped distro's lost bridge, unless told to stay quiet.
+        dropBridge(
+          distro,
+          config.stopSilently
+            ? { state: 'closed' }
+            : { state: 'distro-stopped', terminals: 'exited', recovering: false }
+        )
         return 'stopped'
       }
       return active.has(key(distro)) ? 'available' : 'unreachable'

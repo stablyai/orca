@@ -255,7 +255,7 @@ describe('a download that reuses the cached generation', () => {
     return { fileSystem, store }
   }
 
-  function runFor(store: GenerationStore) {
+  function runFor(store: GenerationStore, downloads = new Set<AbortController>()) {
     const { events, send } = collect()
     const done = download({
       client: CLIENT,
@@ -269,11 +269,69 @@ describe('a download that reuses the cached generation', () => {
         setTimer: () => () => {}
       },
       startedAt: 0,
-      downloads: new Set(),
+      downloads,
       send
     })
     return done.then(() => events)
   }
+
+  it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    const store = createGenerationStore({ fileSystem })
+    const NEXT = bundle(16)
+    const BLOCKER = deriveHostCacheKey('host-b')
+    let enterBlocker = (): void => {}
+    const blockerEntered = new Promise<void>((resolve) => {
+      enterBlocker = resolve
+    })
+    let releaseBlocker = (): void => {}
+    const blockerReleased = new Promise<void>((resolve) => {
+      releaseBlocker = resolve
+    })
+    const list = fileSystem.list.bind(fileSystem)
+    fileSystem.list = async (uri) => {
+      if (uri.includes(`/${BLOCKER}/`)) {
+        enterBlocker()
+        await blockerReleased
+      }
+      return list(uri)
+    }
+    const writes: string[] = []
+    const writeBytes = fileSystem.writeBytes.bind(fileSystem)
+    fileSystem.writeBytes = async (uri, bytes) => {
+      writes.push(uri)
+      await writeBytes(uri, bytes)
+    }
+    let blocker: Promise<unknown> = Promise.resolve()
+    doubles.fetch = async () => {
+      blocker = store.readActiveGeneration(BLOCKER)
+      await blockerEntered
+      return NEXT
+    }
+    let markQueued = (): void => {}
+    const stageQueued = new Promise<void>((resolve) => {
+      markQueued = resolve
+    })
+    const downloads = new Set<AbortController>()
+    const run = runFor(
+      {
+        ...store,
+        stageGeneration: (...args) => {
+          const staged = store.stageGeneration(...args)
+          markQueued()
+          return staged
+        }
+      },
+      downloads
+    )
+
+    await stageQueued
+    downloads.forEach((controller) => controller.abort())
+    releaseBlocker()
+    await Promise.all([run, blocker])
+
+    expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
+  })
 
   it('commits whole when another mount sweeps the staging trees mid-download', async () => {
     const { fileSystem, store } = await cachedStore()

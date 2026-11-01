@@ -12,7 +12,15 @@ export type MobileRelayStatus = (typeof MOBILE_RELAY_STATUSES)[number]
 export type MobileRelayStatusDetail = {
   status: MobileRelayStatus
   cellUrl?: string
+  /** Local clock minus Relay issuedAt; positive means the computer is ahead. */
+  clockOffsetMs?: number
 }
+
+export type MobileRelayStatusPublisher = (
+  status: MobileRelayStatus,
+  cellUrl?: string,
+  clockOffsetMs?: number
+) => void
 
 // Offline/connecting hosts may retain an assignment for reuse; publish a cell only while actually serving there.
 const STATUSES_SERVED_FROM_A_CELL: readonly MobileRelayStatus[] = ['registered', 'draining']

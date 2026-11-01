@@ -1,6 +1,7 @@
 // Available only on Windows desktops or e2e fakes with the internal gate enabled.
 import { ipcRenderer } from 'electron'
 import {
+  WSL_HOST_CAPABILITY_CHANNEL,
   WSL_HOST_STATUS_CHANNEL,
   type WslHostAddResult,
   type WslHostConnectIntent,
@@ -9,13 +10,12 @@ import {
   type WslHostServerStop,
   type WslHostStatus
 } from '../../shared/wsl-host-types'
-import {
-  hasWslHostsServeOnlyArgument,
-  isWslHostsInternalGateOpen
-} from '../../shared/wsl-host-internal-gate'
+import { isWslHostsServingForWindow } from '../../shared/wsl-host-internal-gate'
 
 export type WslHostsPreloadApi = {
   getCapability: () => Promise<WslHostCapability>
+  /** Main's capability changed mid-run (a block learned this run stops new work). */
+  onCapabilityChanged: (callback: (capability: WslHostCapability) => void) => () => void
   listDistros: () => Promise<WslHostDistro[]>
   add: (args: { distro: string; startIfStopped?: boolean }) => Promise<WslHostAddResult>
   remove: (args: { environmentId: string }) => Promise<WslHostServerStop>
@@ -36,6 +36,12 @@ export type WslHostsPreloadApi = {
 
 const wslHostsApi: WslHostsPreloadApi = {
   getCapability: () => ipcRenderer.invoke('wslHosts:getCapability'),
+  onCapabilityChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, capability: WslHostCapability): void =>
+      callback(capability)
+    ipcRenderer.on(WSL_HOST_CAPABILITY_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(WSL_HOST_CAPABILITY_CHANNEL, listener)
+  },
   listDistros: () => ipcRenderer.invoke('wslHosts:listDistros'),
   add: (args) => ipcRenderer.invoke('wslHosts:add', args),
   remove: (args) => ipcRenderer.invoke('wslHosts:remove', args),
@@ -57,8 +63,8 @@ export function getWslHostsApi(
   platform: NodeJS.Platform = process.platform,
   argv: readonly string[] = process.argv
 ): WslHostsPreloadApi | undefined {
-  // Serve-only: main found saved WSL work behind the closed gate and stamped this window's argv.
-  if (!isWslHostsInternalGateOpen(env) && !hasWslHostsServeOnlyArgument(argv)) {
+  // Main stamps this window's argv for serve-only and for a remote policy block.
+  if (!isWslHostsServingForWindow(env, argv)) {
     return undefined
   }
   return platform === 'win32' || env.ORCA_E2E_FAKE_WSL_HOSTS ? wslHostsApi : undefined

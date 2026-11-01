@@ -60,6 +60,20 @@ describe('assertWorkspaceAcceptsNewPty under a WSL move', () => {
   })
 })
 
+// A moved project's chat, or an agent in it, asking for a terminal here after the move committed.
+describe('a fresh terminal in a project its WSL host now owns', () => {
+  beforeEach(() => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
+  })
+
+  it('refuses, naming the host instead of a move that already finished', async () => {
+    const refusal = await accept('repo-1::/x').catch((error: unknown) => error)
+    expect(refusal).toBeInstanceOf(WslMoveProjectFencedError)
+    expect(String(refusal)).toContain('now runs on its Ubuntu WSL host')
+    expect(String(refusal)).not.toContain('Try again when the move finishes')
+  })
+})
+
 // R46: a terminal the workspace fence misses would otherwise outlive the commit in a moved folder.
 describe('a spawn by its folder, between quiesce and commit', () => {
   beforeEach(() => {

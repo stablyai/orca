@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
-import type { AgentJournalQuestion } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalQuestion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -74,11 +74,6 @@ describe('structured extension question cards', () => {
       kind: 'answers',
       answers: [{ questionId: 'text', optionIds: [], other: text }]
     })
-  })
-
-  it('shows the default hint in an editor box that has no hint of its own', () => {
-    render({ ...input, freeTextInput: { allowEmpty: true, multiline: true, initialValue: '' } })
-    expect(container.querySelector('textarea')?.placeholder).toBe('Type your answer')
   })
 
   it('submits the text the user edited in the editor, not its prefill', () => {

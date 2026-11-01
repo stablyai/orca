@@ -28,7 +28,16 @@ import {
 import type { WslMoveDriverDeps } from '../persistence/moving-wsl-projects/wsl-move-driver-ports'
 import { listUnfinishedWslMoves } from '../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
-import { wslHostsGateOpen, wslHostsServing } from '../wsl/wsl-host-gate'
+import { runTrackedWslMoveUndo } from '../telemetry/wsl-move-undo-telemetry'
+import { isAnyWslMoveRunning } from '../persistence/moving-wsl-projects/wsl-move-running-moves'
+import {
+  wslHostsAcceptNewWork,
+  wslHostsGateOpen,
+  wslHostsOptedIn,
+  wslHostsServing
+} from '../wsl/wsl-host-gate'
+
+type WslHostsSetting = Parameters<typeof wslHostsOptedIn>[0]
 import type { WslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { releaseWslMovedProjectHere } from './wsl-move-release-here'
 
@@ -39,6 +48,7 @@ export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:start',
   'wslMove:cancel',
   'wslMove:listUnfinished',
+  'wslMove:isRunning',
   'wslMove:useProjectHereAgain'
 ] as const
 
@@ -51,7 +61,9 @@ export function registerWslMoveHandlers(
   /** Built per call, only once the gate is open. */
   driverDeps?: () => WslMoveDriverDeps,
   /** Undo's reach into the host; absent, there is no host to stop. */
-  undoPorts: () => WslMoveUndoPorts = () => ({ stopHostCopies: async () => 'stopped' })
+  undoPorts: () => WslMoveUndoPorts = () => ({ stopHostCopies: async () => 'stopped' }),
+  /** The user's settings: the WSL hosts setting governs new moves; with it off, moved projects keep serving. */
+  readSettings: () => WslHostsSetting = () => ({ experimentalWslHosts: true })
 ): void {
   for (const channel of WSL_MOVE_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
@@ -84,18 +96,23 @@ export function registerWslMoveHandlers(
       )
     }
   )
-  registerWslMoveDriverHandlers(getUserDataPath, isMainWindowRenderer, driverDeps)
+  registerWslMoveDriverHandlers(getUserDataPath, isMainWindowRenderer, driverDeps, readSettings)
   registerWslMoveUseHereHandler(getUserDataPath, isMainWindowRenderer, undoPorts)
 }
 
 function registerWslMoveDriverHandlers(
   getUserDataPath: () => string,
   isMainWindowRenderer: (senderId: number) => boolean,
-  driverDeps: (() => WslMoveDriverDeps) | undefined
+  driverDeps: (() => WslMoveDriverDeps) | undefined,
+  readSettings: () => WslHostsSetting
 ): void {
-  // Gate first: with it closed, no dependency is built and nothing is read.
-  const refuseUnlessOpen = (event: RendererEvent): WslMoveRefusal | null => {
-    if (!wslHostsGateOpen() || !driverDeps) {
+  // Gate first: with it closed, no dependency is built and nothing is read. A new move also needs
+  // no block learned this run; cancelling a running one never does.
+  const refuseUnlessOpen = (
+    event: RendererEvent,
+    gate: () => boolean = wslHostsAcceptNewWork
+  ): WslMoveRefusal | null => {
+    if (!gate() || !driverDeps) {
       return { outcome: 'refused', code: 'wsl_move_unavailable' }
     }
     const sender = event.sender
@@ -103,12 +120,18 @@ function registerWslMoveDriverHandlers(
       ? null
       : { outcome: 'refused', code: 'wsl_move_unavailable', detail: 'not-main-window' }
   }
+  // A new move is new work: with the setting off it is refused, as serve-only refuses it.
+  const refuseNewMove = (event: RendererEvent): WslMoveRefusal | null =>
+    refuseUnlessOpen(event) ??
+    (wslHostsOptedIn(readSettings())
+      ? null
+      : { outcome: 'refused', code: 'wsl_move_unavailable', detail: 'wsl-hosts-off' })
   ipcMain.handle(
     'wslMove:preview',
     async (event: RendererEvent, request: unknown): Promise<WslMovePreview> => {
       const parsed = parseWslMoveRequest(request)
       return (
-        refuseUnlessOpen(event) ??
+        refuseNewMove(event) ??
         (parsed && driverDeps ? previewWslMove(driverDeps(), parsed) : invalidRequest())
       )
     }
@@ -118,7 +141,7 @@ function registerWslMoveDriverHandlers(
     async (event: RendererEvent, request: unknown): Promise<WslMoveResult> => {
       const parsed = parseWslMoveRequest(request)
       return (
-        refuseUnlessOpen(event) ??
+        refuseNewMove(event) ??
         (parsed && driverDeps
           ? runTrackedWslMove(driverDeps(), (deps) => moveProjectsToWslHost(deps, parsed))
           : invalidRequest())
@@ -128,10 +151,14 @@ function registerWslMoveDriverHandlers(
   ipcMain.handle('wslMove:listUnfinished', (): WslMoveUnfinished[] =>
     wslHostsServing() ? listUnfinishedWslMoves(getUserDataPath()) : []
   )
+  // The quit prompt's question; a quit now loses the run, which the next launch undoes.
+  ipcMain.handle('wslMove:isRunning', (): boolean => wslHostsGateOpen() && isAnyWslMoveRunning())
   ipcMain.handle(
     'wslMove:cancel',
     (event: RendererEvent, distro: unknown): boolean =>
-      refuseUnlessOpen(event) === null && typeof distro === 'string' && cancelWslMove(distro)
+      refuseUnlessOpen(event, wslHostsGateOpen) === null &&
+      typeof distro === 'string' &&
+      cancelWslMove(distro)
   )
 }
 
@@ -167,13 +194,14 @@ function registerWslMoveUseHereHandler(
       }
       const ref =
         request.kind === 'repo' ? { repoId: request.id } : { folderWorkspaceId: request.id }
-      return releaseWslMovedProjectHere(
-        getUserDataPath(),
-        ref,
+      const unsavedWorkspaceIds =
         'unsavedWorkspaceIds' in request && Array.isArray(request.unsavedWorkspaceIds)
           ? request.unsavedWorkspaceIds.filter((id): id is string => typeof id === 'string')
-          : [],
-        createUndoPorts
+          : []
+      return runTrackedWslMoveUndo(
+        () => performance.now(),
+        () =>
+          releaseWslMovedProjectHere(getUserDataPath(), ref, unsavedWorkspaceIds, createUndoPorts)
       )
     }
   )

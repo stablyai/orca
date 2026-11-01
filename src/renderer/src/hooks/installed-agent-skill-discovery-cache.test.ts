@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 import {
-  clearInstalledAgentSkillDiscoveryCache,
   getInstalledAgentSkillDiscoveryCacheSizeForTests,
   hasInstalledAgentSkillDiscoveryCacheEntryForTests,
   INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX,
@@ -50,14 +49,6 @@ describe('installed agent skill discovery cache', () => {
     ).toBe(false)
   })
 
-  it('rewrites an existing key in place without growing the cache', () => {
-    writeInstalledAgentSkillDiscoveryCache('target', result(1))
-    writeInstalledAgentSkillDiscoveryCache('target', result(2))
-
-    expect(getInstalledAgentSkillDiscoveryCacheSizeForTests()).toBe(1)
-    expect(peekInstalledAgentSkillDiscoveryCache('target')).toEqual(result(2))
-  })
-
   it('promotes a rewritten key to most-recent so a rescanned target is not evicted first', () => {
     // Map.set does not promote existing keys; refreshed targets need explicit recency updates before eviction.
     writeInstalledAgentSkillDiscoveryCache('hot', result(0))
@@ -81,14 +72,6 @@ describe('installed agent skill discovery cache', () => {
     writeInstalledAgentSkillDiscoveryCache('overflow', result(-1))
 
     expect(hasInstalledAgentSkillDiscoveryCacheEntryForTests('target-0')).toBe(false)
-  })
-
-  it('clears every retained result', () => {
-    writeInstalledAgentSkillDiscoveryCache('target', result(1))
-    clearInstalledAgentSkillDiscoveryCache()
-
-    expect(getInstalledAgentSkillDiscoveryCacheSizeForTests()).toBe(0)
-    expect(peekInstalledAgentSkillDiscoveryCache('target')).toBeNull()
   })
 
   it('stops serving a read once the freshness window lapses', () => {

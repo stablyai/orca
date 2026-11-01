@@ -1,77 +1,56 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createTestStore,
-  runtimeOwnedRepoState,
-  seedStore
-} from '../../store/slices/store-test-helpers'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { AppState } from '@/store/types'
 import { selectWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
+import { selectWslHostsServing } from '../sidebar/use-wsl-hosts-enabled'
 
+const WSL_ENV = 'wsl:ubuntu'
 const WORKTREE = 'wsl-repo::/home/me/app'
 
-function stateWith(options: { enabled: boolean; serverFiles?: 'present' | 'missing' }) {
-  const store = createTestStore()
-  seedStore(store, {
-    ...runtimeOwnedRepoState('wsl:ubuntu', 'wsl-repo', '/home/me/app'),
-    runtimeEnvironments: [
+function state(experimentalWslHosts: boolean, withHost = true): AppState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selectors read only these fields.
+  return {
+    settings: { ...getDefaultSettings('/tmp'), experimentalWslHosts },
+    wslHostServerFiles: 'present',
+    folderWorkspaces: [],
+    projectGroups: [],
+    repos: [
       {
-        id: 'wsl:ubuntu',
-        name: 'Ubuntu (WSL)',
-        createdAt: 0,
-        updatedAt: 0,
-        lastUsedAt: null,
-        runtimeId: null,
-        preferredEndpointId: 'ws',
-        endpoints: [],
-        orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 42000, remotePort: 6768 }
+        id: 'wsl-repo',
+        path: '/home/me/app',
+        displayName: 'app',
+        badgeColor: '',
+        addedAt: 0,
+        executionHostId: `runtime:${WSL_ENV}`
       }
     ],
-    wslHostServerFiles: options.serverFiles ?? 'present'
-  })
-  store.setState({
-    settings: { ...getDefaultSettings('/home/me'), experimentalWslHosts: options.enabled }
-  })
-  return store.getState()
+    runtimeEnvironments: withHost
+      ? [
+          {
+            id: WSL_ENV,
+            name: 'Ubuntu (WSL)',
+            createdAt: 0,
+            updatedAt: 0,
+            lastUsedAt: null,
+            runtimeId: null,
+            preferredEndpointId: 'ws',
+            endpoints: [],
+            orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 42000, remotePort: 6768 }
+          }
+        ]
+      : []
+  } as unknown as AppState
 }
 
-describe('selectWslHostUnavailableReason', () => {
-  it('says a WSL host’s terminal is turned off rather than reconnecting', () => {
-    expect(selectWslHostUnavailableReason(stateWith({ enabled: false }), WORKTREE)).toBe(
-      'turned-off'
-    )
+// Stage 1: the setting governs new work only; a moved project on a saved host stays reachable.
+describe('a WSL host project with the WSL hosts setting off', () => {
+  it('stays reachable: its panes and explorer show no "turned off" state', () => {
+    expect(selectWslHostUnavailableReason(state(false), WORKTREE)).toBeNull()
+    expect(selectWslHostsServing(state(false))).toBe(true)
   })
 
-  it('prefers the missing server files, and is quiet when the host can run', () => {
-    expect(
-      selectWslHostUnavailableReason(stateWith({ enabled: true, serverFiles: 'missing' }), WORKTREE)
-    ).toBe('server-files-missing')
-    expect(selectWslHostUnavailableReason(stateWith({ enabled: true }), WORKTREE)).toBeNull()
-  })
-
-  it('leaves other hosts’ workspaces alone', () => {
-    expect(
-      selectWslHostUnavailableReason(stateWith({ enabled: false }), 'repo1::/repo1')
-    ).toBeNull()
-  })
-
-  it('is quiet when no WSL host exists, even for a workspace on another runtime', () => {
-    const store = createTestStore()
-    seedStore(store, {
-      ...runtimeOwnedRepoState('paired', 'remote-repo', '/srv/app'),
-      runtimeEnvironments: [
-        {
-          id: 'paired',
-          name: 'Paired server',
-          createdAt: 0,
-          updatedAt: 0,
-          lastUsedAt: null,
-          runtimeId: null,
-          preferredEndpointId: 'ws',
-          endpoints: []
-        }
-      ]
-    })
-    store.setState({ settings: { ...getDefaultSettings('/home/me'), experimentalWslHosts: false } })
-    expect(selectWslHostUnavailableReason(store.getState(), 'remote-repo::/srv/app')).toBeNull()
+  it('serves nothing when there is no saved host and the setting is off', () => {
+    expect(selectWslHostsServing(state(false, false))).toBe(false)
+    expect(selectWslHostsServing(state(true, false))).toBe(true)
   })
 })

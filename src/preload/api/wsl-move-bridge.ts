@@ -30,6 +30,8 @@ export type WslMoveApi = {
   start: (request: WslMoveRequest) => Promise<WslMoveResult>
   /** Committed moves with host steps still pending (automations not back on yet). */
   listUnfinished: () => Promise<WslMoveUnfinished[]>
+  /** A move of any distro is running now; false while the gate is closed. */
+  isRunning: () => Promise<boolean>
   /** True when a move of the distro was running and had not asked the host to commit yet. */
   cancel: (distro: string) => Promise<boolean>
   /** Returns the unsubscribe. */
@@ -70,6 +72,7 @@ export const wslMoveApi: WslMoveApi = {
   start: (request) => ipcRenderer.invoke('wslMove:start', request),
   cancel: (distro) => ipcRenderer.invoke('wslMove:cancel', distro),
   listUnfinished: () => ipcRenderer.invoke('wslMove:listUnfinished'),
+  isRunning: () => ipcRenderer.invoke('wslMove:isRunning'),
   onProgress: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: WslMoveProgressEvent): void =>
       listener(progress)

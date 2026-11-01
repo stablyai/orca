@@ -273,6 +273,21 @@ describe('graph sync must not prune a tab whose daemon PTY is live', () => {
     expect(h.hasSnapshot(WT_CLI)).toBe(false)
   })
 
+  it('control: prunes an omitted worktree terminal once its PTY exits on a later sync', async () => {
+    const h = createHarness()
+    h.syncRendererGraph([WT_CLI])
+    await h.createCliTerminal(WT_CLI)
+    h.syncRendererGraph([WT_OTHER])
+    vi.advanceTimersByTime(300)
+    expect(h.hasSnapshot(WT_CLI)).toBe(true)
+
+    h.markPtyExited(CLI_PTY)
+    h.syncRendererGraph([WT_OTHER])
+    vi.advanceTimersByTime(300)
+
+    expect(h.hasSnapshot(WT_CLI)).toBe(false)
+  })
+
   it('control: prunes the CLI terminal once a user close de-persists its tab', async () => {
     const h = createHarness()
     h.syncRendererGraph([WT_CLI])

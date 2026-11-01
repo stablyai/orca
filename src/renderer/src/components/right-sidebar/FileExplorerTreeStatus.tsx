@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { openWslHostsExperimentalSetting } from '../sidebar/use-wsl-hosts-enabled'
 import { getWslHostsTurnedOffLabel, getWslHostsTurnOnLabel } from '../sidebar/wsl-host-row-status'
+import type { StoppedWslHost } from '../wsl-host-stopped/use-stopped-wsl-host'
+import { WslHostStoppedNotice } from '../wsl-host-stopped/WslHostStoppedNotice'
 
 type FileExplorerTreeStatusProps = {
   isLoading: boolean
@@ -13,6 +15,9 @@ type FileExplorerTreeStatusProps = {
   emptyMessage?: string
   /** The workspace's WSL host is turned off: offer the switch instead of a read error. */
   wslHostsTurnedOff?: boolean
+  /** The workspace's WSL host is stopped: offer Start instead of a read error. */
+  stoppedWslHost?: StoppedWslHost | null
+  onWslHostStarted?: () => void
 }
 
 /** Treats even an empty error message as a failed read, keeping unreadable directories distinct from empty ones. */
@@ -22,7 +27,9 @@ export function FileExplorerTreeStatus({
   isEmpty,
   emptyMessage,
   scopedToFolder = false,
-  wslHostsTurnedOff = false
+  wslHostsTurnedOff = false,
+  stoppedWslHost = null,
+  onWslHostStarted
 }: FileExplorerTreeStatusProps): React.JSX.Element | null {
   if (isLoading) {
     return (
@@ -43,6 +50,17 @@ export function FileExplorerTreeStatus({
           {getWslHostsTurnOnLabel()}
         </Button>
       </div>
+    )
+  }
+
+  if (error !== null && stoppedWslHost) {
+    return (
+      <WslHostStoppedNotice
+        environmentId={stoppedWslHost.environmentId}
+        distro={stoppedWslHost.distro}
+        className="h-full text-[11px]"
+        onStarted={onWslHostStarted}
+      />
     )
   }
 

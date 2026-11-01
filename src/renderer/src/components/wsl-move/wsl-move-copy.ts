@@ -57,6 +57,12 @@ export function wslMoveRefusalMessage(
         'A move into {{distro}} is already running. Wait for it to finish, then try again.',
         { distro }
       )
+    case 'wsl_move_undo_running':
+      return translate(
+        'wslMove.refusal.undoRunning',
+        'A project is coming back from {{distro}}. Try again once that finishes.',
+        { distro }
+      )
     case 'wsl_move_already_in_flight':
       return context === 'preview'
         ? translate(

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 const { persistScanResultMock, readScanSnapshotMock, scanWorkspaceCleanupMock } = vi.hoisted(
   () => ({

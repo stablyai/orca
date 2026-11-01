@@ -1,3 +1,7 @@
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '../../combined-diff-viewport'
 import type React from 'react'
 import { useMemo } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
@@ -10,6 +14,7 @@ import { DiffNotesSendMenu } from '../../DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff-section-preview'
 import type { DiffSection } from '../../diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
+import { translate } from '@/i18n/i18n'
 
 export function CombinedDiffSectionList({
   activeGroupId,
@@ -35,7 +40,6 @@ export function CombinedDiffSectionList({
   setScrollContainerRef,
   setSectionHeights,
   setSections,
-  settings,
   sideBySide,
   skippedConflictNotice,
   toggleSection,
@@ -64,7 +68,6 @@ export function CombinedDiffSectionList({
   setScrollContainerRef: (node: HTMLDivElement | null) => void
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  settings: DiffSectionItemProps['settings']
   sideBySide: boolean
   skippedConflictNotice: React.ReactNode
   toggleSection: (index: number) => void
@@ -81,6 +84,7 @@ export function CombinedDiffSectionList({
   return (
     <div className="relative min-w-0 flex-1">
       <div
+        {...combinedDiffViewportAttributes}
         ref={setScrollContainerRef}
         className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
         onWheel={markDirectScrollInput}
@@ -98,7 +102,7 @@ export function CombinedDiffSectionList({
               <div
                 key={virtualItem.key}
                 data-index={virtualItem.index}
-                data-combined-diff-section-row
+                {...combinedDiffRowAttributes}
                 data-combined-diff-section-key={section.key}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 top-0 w-full"
@@ -111,7 +115,6 @@ export function CombinedDiffSectionList({
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}
                   isDark={isDark}
-                  settings={settings}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
                   loadSection={loadSection}
@@ -120,7 +123,12 @@ export function CombinedDiffSectionList({
                   toggleSection={toggleSection}
                   openSection={openSection}
                   openSectionTitle={
-                    isAllMode || isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                    isAllMode || isBranchMode || isCommitMode
+                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : translate(
+                          'auto.components.editor.CombinedDiffViewer.openInEditor',
+                          'Open in editor'
+                        )
                   }
                   onOpenPreview={
                     canOpenDiffSectionPreviewToSide({

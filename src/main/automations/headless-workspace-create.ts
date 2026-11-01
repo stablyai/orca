@@ -1,3 +1,5 @@
+import { hostQualifiedRepoSelector } from '../runtime/runtime-repo-selector'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
@@ -32,7 +34,7 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
   createdAt?: number
 }): RuntimeCreateManagedWorktreeArgs {
   return {
-    repoSelector: repo.id,
+    repoSelector: hostQualifiedRepoSelector(`id:${repo.id}`, getRepoExecutionHostId(repo)),
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',

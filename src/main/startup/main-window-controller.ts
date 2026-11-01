@@ -198,6 +198,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
   })
   state.mainWindow = window
+  state.hasOpenedMainWindow = true
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))

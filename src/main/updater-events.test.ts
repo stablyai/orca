@@ -198,6 +198,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       expect(context.sendStatus).toHaveBeenLastCalledWith({
         state: 'error',
         message: 'Quit Orca before running the system package install command.',
+        messageCode: 'linuxPackageManualInstall',
         recovery: {
           kind: 'linux-package-install',
           packageType,
@@ -220,6 +221,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       state: 'error',
       message:
         'The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.',
+      messageCode: 'linuxPackageMetadataUnusable',
       version: '1.0.61',
       retryable: false
     }
@@ -261,6 +263,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       state: 'error',
       message:
         'Orca could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.',
+      messageCode: 'linuxPackageMarkerUnusable',
       version: '1.0.61',
       retryable: false
     })
@@ -292,6 +295,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(context.sendStatus).toHaveBeenLastCalledWith({
       state: 'error',
       message: 'Quit Orca before running the system package install command.',
+      messageCode: 'linuxPackageManualInstall',
       recovery: {
         kind: 'linux-package-install',
         packageType: 'deb',
@@ -314,6 +318,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(context.sendStatus).toHaveBeenLastCalledWith({
       state: 'error',
       message: 'Quit Orca before running the system package install command.',
+      messageCode: 'linuxPackageManualInstall',
       recovery: {
         kind: 'linux-package-install',
         packageType: 'deb',
@@ -391,6 +396,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     expect(context.sendStatus).toHaveBeenLastCalledWith({
       state: 'error',
       message: 'Quit Orca before running the system package install command.',
+      messageCode: 'linuxPackageManualInstall',
       recovery: {
         kind: 'linux-package-install',
         packageType: 'deb',
@@ -446,6 +452,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
         expect(context.sendStatus).toHaveBeenLastCalledWith({
           state: 'error',
           message: 'Quit Orca before running the system package install command.',
+          messageCode: 'linuxPackageManualInstall',
           recovery: {
             kind: 'linux-package-install',
             packageType: 'deb',

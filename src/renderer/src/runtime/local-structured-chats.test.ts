@@ -14,8 +14,8 @@ import {
   restoreLocalStructuredChatsAtStartup
 } from './local-structured-chats'
 
-const SETTING_OFF = { experimentalNativeChat: false }
-const SETTING_ON = { experimentalNativeChat: true }
+const SETTING_OFF = {}
+const SETTING_ON = { agentDefaultSurface: 'chat' as const, nativeChatProviders: { claude: false } }
 
 beforeEach(() => {
   vi.clearAllMocks()

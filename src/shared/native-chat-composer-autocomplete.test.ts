@@ -15,8 +15,8 @@ import {
 } from './native-chat-composer-autocomplete'
 import { sessionSlashCommandSuggestions } from './native-chat/input/native-chat-slash-commands'
 import type { DiscoveredSkill } from './skills'
-import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
-import { pickedSkillsInText } from './structured-agent-session-send-mutation'
+import { getNativeChatAgentProfile } from './native-chat/native-chat-agent-profiles'
+import { pickedSkillsInText } from './agent-session/requests/structured-agent-session-send-mutation'
 
 const COMMANDS: SlashCommandSuggestion[] = [
   { name: 'clear' },
@@ -680,4 +680,15 @@ it('preserves known skill completion for unclassified session members only', () 
   expect(
     buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
   ).toEqual(['command'])
+})
+
+it('selected slash membership uses real token starts and keeps Codex provider membership dollar-only', () => {
+  const picked = [{ name: 'model', path: '/A/SKILL.md' }]
+  for (const text of ['/model', 'use /model,', '/model\nnext']) {
+    expect(pickedSkillsInText(text, picked, ['$', '/'])).toEqual(picked)
+    expect(pickedSkillsInText(text, picked)).toEqual([])
+  }
+  for (const text of ['/dir/model', '/model-extra', '/model:other', 'prefix/model']) {
+    expect(pickedSkillsInText(text, picked, ['$', '/'])).toEqual([])
+  }
 })

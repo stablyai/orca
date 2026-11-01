@@ -1,6 +1,7 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { agentHookServer } from '../agent-hooks/server'
 import type { AgentStatusState } from '../../shared/agent-status-types'
+import { normalizeTerminalTitle } from '../../shared/agent-title-status'
 import {
   getSyntheticAgentTitleProfile,
   shouldDriveSyntheticAgentTitleFromHook,
@@ -148,6 +149,27 @@ export function driveSyntheticTitleFromHook(
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, { force: true })
 }
 
+// Why: a profile that leaves working titles to the agent never overwrites the rest label Orca
+// wrote, so an agent that paints no working title (Codex with its activity title off) would read
+// as at rest for the whole next turn, to tui-idle, mailbox delivery and the tab alike.
+function retractSyntheticRestTitle(paneKey: string, profile: SyntheticAgentTitleProfile): void {
+  const ptyId = getPtyIdForPaneKey(paneKey)
+  const title = ptyId ? state.runtime?.getTrackedPtyTitle(ptyId) : null
+  if (
+    !ptyId ||
+    !title ||
+    ![profile.idleLabel, profile.permissionLabel].some(
+      (label) => normalizeTerminalTitle(label) === title
+    )
+  ) {
+    return
+  }
+  // One frame and no spinner timer, so the agent's own titles still win whenever it paints them.
+  sendSyntheticTitle(ptyId, `\x1b]0;${SPINNER_FRAMES[0]} ${profile.workingLabel}\x07`, {
+    semantic: true
+  })
+}
+
 export function initializeSyntheticTitleRuntime(): void {
   // Drop torn-down PTYs explicitly or the shared timer loops forever on no-op sends.
   registerPaneKeyTeardownListener((paneKey) => stopSyntheticTitleSpinner(paneKey))
@@ -175,10 +197,12 @@ export function driveSyntheticTitleFromHookStatus(event: {
   }
   // Inject hook-derived idle/permission frames that native OSC titles can omit.
   const profile = getSyntheticAgentTitleProfile(event.payload.agentType)
-  if (
-    profile &&
-    shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)
-  ) {
+  if (!profile) {
+    return
+  }
+  if (shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)) {
     driveSyntheticTitleFromHook(event.paneKey, event.payload.state, profile)
+  } else if (event.payload.state === 'working' && profile.synthesizeTerminalTitle !== false) {
+    retractSyntheticRestTitle(event.paneKey, profile)
   }
 }

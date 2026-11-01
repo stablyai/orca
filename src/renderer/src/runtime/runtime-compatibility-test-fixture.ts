@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -13,7 +13,7 @@ export type RuntimeEnvironmentCallRequest = {
 
 export function createCompatibleRuntimeStatusResponse(
   runtimeId = 'remote-runtime'
-): RuntimeRpcResponse<RuntimeStatus> {
+): RuntimeRpcSuccess<RuntimeStatus> {
   return {
     id: 'status',
     ok: true,

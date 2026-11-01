@@ -5,6 +5,7 @@ import type {
   SourceControlAiActionDefaults,
   SourceControlActionLaunchPreferences,
   SourceControlActionSurface,
+  SourceControlActionRecipe,
   SourceControlActionId,
   SourceControlTextActionId,
   AiTextActionId
@@ -61,6 +62,7 @@ export type RepoSourceControlAiOverrides = {
         agentId?: TuiAgent | CustomAgentId | null
         commandInputTemplate?: string | null
         agentArgs?: string | null
+        argumentChoices?: SourceControlActionRecipe['argumentChoices']
         launchPreferences?: SourceControlActionLaunchPreferences
         surface?: SourceControlActionSurface
       }
@@ -77,7 +79,8 @@ export type RepoSourceControlAiOverrides = {
 export type CompleteSourceControlActionRecipe = {
   agentId: TuiAgent | CustomAgentId | null
   commandInputTemplate: string
-  agentArgs?: string
+  agentArgs?: string | null
+  argumentChoices?: SourceControlActionRecipe['argumentChoices']
   launchPreferences?: SourceControlActionLaunchPreferences
   surface?: SourceControlActionSurface
 }

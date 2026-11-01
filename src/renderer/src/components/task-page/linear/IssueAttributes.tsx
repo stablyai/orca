@@ -254,7 +254,10 @@ export function TaskPageLinearIssueAttributes({
                 const selectedProj = newLinearIssueProjects.find(
                   (p) => p.id === newLinearIssueProjectId
                 )
-                return selectedProj?.name || 'Project'
+                return (
+                  selectedProj?.name ||
+                  translate('auto.components.TaskPage.linearProjectPlaceholder', 'Project')
+                )
               })()}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />

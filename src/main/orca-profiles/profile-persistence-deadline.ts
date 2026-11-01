@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { ProfileStateMaintenance } from '../persistence/loading-store/profile-state-authority'
 import type { ProfileStateMaintenanceOptions } from '../persistence/loading-store/profile-state-maintenance'
 

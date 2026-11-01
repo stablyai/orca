@@ -279,9 +279,11 @@ export default function OnboardingFlow({
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {flow.progressStepIndex + 1}{' '}
-                {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
-                {flow.progressSteps.length}
+                {translate(
+                  'auto.components.onboarding.OnboardingFlow.stepOfTotal',
+                  '{{current}} of {{total}}',
+                  { current: flow.progressStepIndex + 1, total: flow.progressSteps.length }
+                )}
               </span>
             </div>
 

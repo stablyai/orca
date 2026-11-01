@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  MessageChannelMain: class {
+    port1 = Object.assign(new EventEmitter(), { start: vi.fn(), close: vi.fn() })
+    port2 = { close: vi.fn() }
+  },
   app: { on: vi.fn(), getPath: () => mocks.userData },
   BrowserWindow: vi.fn(),
   Notification: { isSupported: () => false },
@@ -819,11 +823,15 @@ async function listenFrame(extensionId: string, namespace: string, event: string
     processId: 3,
     routingId,
     isDestroyed: () => false,
-    send: vi.fn()
+    send: vi.fn(),
+    postMessage: vi.fn()
   }
   mocks.frames.set(`3:${routingId}`, frame)
   await mocks.handlers.get(BROWSER_EXTENSION_INVOKE_CHANNEL)?.(
-    { senderFrame: frame, sender: { id: 40 + routingId, session, once: vi.fn() } },
+    {
+      senderFrame: frame,
+      sender: Object.assign(new EventEmitter(), { id: 40 + routingId, session })
+    },
     { type: 'listen', namespace, event, active: true }
   )
   return {

@@ -1,3 +1,12 @@
+import {
+  abandonLinearIssueReads,
+  invalidateLinearIssueReads,
+  type LinearIssueRequest
+} from './linear-issue-publication'
+import { rowLessSourceTarget } from '@/lib/default-creation-host'
+import { taskSourceCacheScopeHostId } from '../../../../../shared/task-source-context'
+import type { LinearSlice } from './linear-slice-contract'
+import type { LinearReadScope } from './linear-slice-scope'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {
   LinearCustomViewSummary,
@@ -5,37 +14,18 @@ import type {
   LinearProjectSummary
 } from '../../../../../shared/linear/project-types'
 import type {
+  LinearConnectionStatus,
   LinearCollectionResult,
   LinearTeam
 } from '../../../../../shared/linear/workspace-types'
 import { clearLinearMetadataCache } from '../../../hooks/useIssueMetadata'
 
-export type InflightLinearIssueRequest = {
-  promise: Promise<LinearIssue | null>
-  generation: number
-  contextKey: string
-  mutationGeneration: number
-}
-
-export type InflightLinearListRequest = {
-  promise: Promise<LinearIssue[]>
-  force: boolean
-  generation: number
-  contextKey: string
-  mutationGeneration: number
-}
-
-export type InflightLinearPlainListRequest = {
-  promise: Promise<LinearCollectionResult<LinearIssue>>
-  force: boolean
-  generation: number
-  contextKey: string
-  mutationGeneration: number
-}
+export type InflightLinearIssueRequest = LinearIssueRequest<LinearIssue | null>
+export type InflightLinearListRequest = LinearIssueRequest<LinearIssue[]>
+export type InflightLinearPlainListRequest = LinearIssueRequest<LinearCollectionResult<LinearIssue>>
 
 export type InflightLinearCollectionRequest<T> = {
   promise: Promise<LinearCollectionResult<T>>
-  force: boolean
   generation: number
   contextKey: string
   mutationGeneration: number
@@ -43,17 +33,21 @@ export type InflightLinearCollectionRequest<T> = {
 
 export type InflightLinearDetailRequest<T> = {
   promise: Promise<T>
-  force: boolean
   contextKey: string
   mutationGeneration: number
 }
 
 export type InflightLinearTeamRequest = {
   promise: Promise<LinearTeam[]>
-  force: boolean
   generation: number
   contextKey: string
   mutationGeneration: number
+}
+
+type InflightLinearStatusRequest = {
+  contextKey: string
+  queued: boolean
+  promise: Promise<LinearConnectionStatus | null>
 }
 
 export const linearRequestState = {
@@ -63,18 +57,19 @@ export const linearRequestState = {
   teamRequests: new Map<string, InflightLinearTeamRequest>(),
   projectRequests: new Map<string, InflightLinearCollectionRequest<LinearProjectSummary>>(),
   projectDetailRequests: new Map<string, InflightLinearDetailRequest<LinearProjectDetail | null>>(),
-  projectIssueRequests: new Map<string, InflightLinearCollectionRequest<LinearIssue>>(),
+  projectIssueRequests: new Map<string, InflightLinearPlainListRequest>(),
   customViewRequests: new Map<string, InflightLinearCollectionRequest<LinearCustomViewSummary>>(),
   customViewDetailRequests: new Map<
     string,
     InflightLinearDetailRequest<LinearCustomViewSummary | null>
   >(),
-  customViewIssueRequests: new Map<string, InflightLinearCollectionRequest<LinearIssue>>(),
+  customViewIssueRequests: new Map<string, InflightLinearPlainListRequest>(),
   customViewProjectRequests: new Map<
     string,
     InflightLinearCollectionRequest<LinearProjectSummary>
   >(),
-  inflightStatusRequest: null as { contextKey: string; promise: Promise<void> } | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: null initializes this existing mutable slot; widening to its declared request union admits only typed requests or null.
+  inflightStatusRequest: null as InflightLinearStatusRequest | null,
   statusReadGeneration: 0,
   mutationGeneration: 0,
   cacheGeneration: 0
@@ -93,30 +88,27 @@ export const inflightCustomViewIssueRequests = linearRequestState.customViewIssu
 export const inflightCustomViewProjectRequests = linearRequestState.customViewProjectRequests
 
 export function clearLinearRequestMaps(): void {
-  linearRequestState.issueRequests.clear()
-  linearRequestState.searchRequests.clear()
-  linearRequestState.listRequests.clear()
+  abandonLinearIssueReads()
+  clearLinearMetadataRequests()
+}
+
+function clearLinearMetadataRequests(): void {
   linearRequestState.teamRequests.clear()
   linearRequestState.projectRequests.clear()
   linearRequestState.projectDetailRequests.clear()
-  linearRequestState.projectIssueRequests.clear()
   linearRequestState.customViewRequests.clear()
   linearRequestState.customViewDetailRequests.clear()
-  linearRequestState.customViewIssueRequests.clear()
   linearRequestState.customViewProjectRequests.clear()
 }
 
-export function invalidateLinearCaches(): void {
+export function invalidateLinearCaches(
+  scope: LinearReadScope,
+  affectedWorkspaces?: ReadonlySet<string>
+): void {
   linearRequestState.cacheGeneration += 1
-  clearLinearRequestMaps()
+  clearLinearMetadataRequests()
   clearLinearMetadataCache()
-}
-
-export function clearLinearIssueCollectionRequestMaps(): void {
-  linearRequestState.searchRequests.clear()
-  linearRequestState.listRequests.clear()
-  linearRequestState.projectIssueRequests.clear()
-  linearRequestState.customViewIssueRequests.clear()
+  invalidateLinearIssueReads(scope, undefined, true, undefined, affectedWorkspaces)
 }
 
 export function beginLinearMutation(): number {
@@ -127,6 +119,10 @@ export function beginLinearMutation(): number {
 
 export function isCurrentLinearMutation(generation: number): boolean {
   return generation === linearRequestState.mutationGeneration
+}
+
+export function getLinearStatusReadGeneration(): number {
+  return linearRequestState.statusReadGeneration
 }
 
 export function nextLinearStatusReadGeneration(): number {
@@ -146,15 +142,63 @@ export function getLinearMutationGeneration(): number {
   return linearRequestState.mutationGeneration
 }
 
-export function getInflightStatusRequest(): {
-  contextKey: string
-  promise: Promise<void>
-} | null {
+export function getInflightStatusRequest(): InflightLinearStatusRequest | null {
   return linearRequestState.inflightStatusRequest
 }
 
-export function setInflightStatusRequest(
-  request: { contextKey: string; promise: Promise<void> } | null
-): void {
+export function setInflightStatusRequest(request: InflightLinearStatusRequest | null): void {
   linearRequestState.inflightStatusRequest = request
+}
+
+export function evictLinearScopeCaches(
+  state: LinearSlice,
+  scope: LinearReadScope,
+  affectedWorkspaces?: ReadonlySet<string>
+) {
+  const target = rowLessSourceTarget(scope.settings)
+  const host = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+  const prefix = `linear:${encodeURIComponent(host)}:`
+  const retain = <T extends { fetchedAt: number }>(cache: Record<string, T>): Record<string, T> => {
+    const retained: Record<string, T> = {}
+    for (const [key, entry] of Object.entries(cache)) {
+      if (key.startsWith('linear:') && !key.startsWith(prefix)) {
+        retained[key] = entry
+        continue
+      }
+      if (!affectedWorkspaces) {
+        continue
+      }
+      let localKey = key
+      if (key.startsWith(prefix)) {
+        let separator = key.indexOf('::')
+        while (separator >= 0) {
+          if (taskSourceCacheScopeHostId(key.slice(0, separator))) {
+            localKey = key.slice(separator + 2)
+            break
+          }
+          separator = key.indexOf('::', separator + 1)
+        }
+      }
+      const workspaceId = localKey.split('::')[0]
+      if (workspaceId === 'all') {
+        retained[key] = affectedWorkspaces.size ? { ...entry, fetchedAt: 0 } : entry
+      } else if (!affectedWorkspaces.has(workspaceId)) {
+        retained[key] = entry
+      }
+    }
+    return retained
+  }
+  return {
+    linearIssueCache: retain(state.linearIssueCache),
+    linearSearchCache: retain(state.linearSearchCache),
+    linearListCache: retain(state.linearListCache),
+    linearTeamCache: retain(state.linearTeamCache),
+    linearProjectCache: retain(state.linearProjectCache),
+    linearProjectDetailCache: retain(state.linearProjectDetailCache),
+    linearProjectIssueCache: retain(state.linearProjectIssueCache),
+    linearCustomViewCache: retain(state.linearCustomViewCache),
+    linearCustomViewDetailCache: retain(state.linearCustomViewDetailCache),
+    linearCustomViewIssueCache: retain(state.linearCustomViewIssueCache),
+    linearCustomViewProjectCache: retain(state.linearCustomViewProjectCache)
+  }
 }

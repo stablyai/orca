@@ -213,19 +213,24 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it.each(['remote', 'local', 'busy'])('picker allocation (%s)', async (kind) => {
-    if (kind !== 'busy') {
-      getPRForBranchMock.mockResolvedValue({ number: 42 })
+  it.each(['remote', 'local', 'busy'])('preserves explicit picker intent (%s)', async (kind) => {
+    const branchName = 'fix/bug-0'
+    const remoteTrackingBase = {
+      remote: 'origin',
+      branch: branchName,
+      base: `origin/${branchName}`,
+      ref: `refs/remotes/origin/${branchName}`
     }
-    const branchName = kind === 'busy' ? 'fix/bug-0-2' : 'fix/bug-0'
-    getBranchConflictKindMock.mockImplementation(async (_repo, branch) =>
-      kind !== 'remote' && branch === 'fix/bug-0' ? 'local' : null
-    )
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteTrackingBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
     gitExecFileAsyncMock.mockImplementation(async (argv) => {
-      if (argv.includes('refs/heads/fix/bug-0-2^{commit}')) {
-        throw new Error('missing')
+      if (kind === 'remote' && argv.includes(`refs/heads/${branchName}^{commit}`)) {
+        throw Object.assign(new Error('missing'), { code: 1 })
       }
-      return { stdout: 'abc123', stderr: '' }
+      if (argv[0] === 'for-each-ref') {
+        return { stdout: `refs/heads/${branchName}\n`, stderr: '' }
+      }
+      return { stdout: 'local-ahead', stderr: '' }
     })
     const mainWorktree = {
       path: '/workspace/repo',
@@ -234,83 +239,97 @@ describe('registerWorktreeHandlers', () => {
       isBare: false,
       isMainWorktree: true
     }
-    computeWorktreePathMock.mockImplementation((sanitizedName: string) =>
-      sanitizedName === 'fix-bug-0' ? process.cwd() : `/workspace/${sanitizedName}`
+    computeWorktreePathMock.mockImplementation((name: string) =>
+      name === 'fix-bug-0' ? process.cwd() : `/workspace/${name}`
     )
-    listWorktreesMock.mockResolvedValue([
-      { path: '/workspace/fix-bug-0-2', branch: `refs/heads/${branchName}` }
-    ])
-    if (kind === 'local') {
-      listWorktreesMock.mockResolvedValueOnce([mainWorktree]).mockResolvedValueOnce([mainWorktree])
-    } else if (kind === 'busy') {
-      listWorktreesMock.mockResolvedValueOnce([
-        { path: '/workspace/busy', branch: 'refs/heads/fix/bug-0' }
-      ])
+    const created = {
+      path: '/workspace/fix-bug-0-2',
+      head: 'local-ahead',
+      branch: `refs/heads/${branchName}`,
+      isBare: false,
+      isMainWorktree: false
     }
-
-    const result = await handlers['worktrees:create'](null, {
+    listWorktreesMock.mockResolvedValue([mainWorktree, created])
+    if (kind === 'local') {
+      listWorktreesMock.mockResolvedValueOnce([mainWorktree])
+    } else if (kind === 'remote') {
+      addWorktreeMock.mockResolvedValueOnce({ upstreamWarning: 'Check the push destination.' })
+    } else if (kind === 'busy') {
+      listWorktreesMock.mockResolvedValueOnce([{ ...created, path: '/workspace/busy' }])
+    }
+    const creation = handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'fix/bug-0',
-      baseBranch: 'origin/fix/bug-0',
-      branchNameOverride: 'fix/bug-0',
-      branchIntent: 'open-existing'
+      baseBranch: remoteTrackingBase.base,
+      branchNameOverride: branchName,
+      branchIntent: 'open-existing-v2'
     })
-
-    expect(getBranchConflictKindMock).toHaveBeenCalledTimes(kind === 'busy' ? 3 : 1)
-    expect(getPRForBranchMock.mock.calls.map(([, branch]) => branch)).toEqual(
-      kind === 'busy' ? ['fix/bug-0-2'] : []
-    )
-    expect(addWorktreeMock).toHaveBeenCalledWith(
+    if (kind === 'busy') {
+      await expect(creation).rejects.toThrow('already checked out at "/workspace/busy"')
+      expect(addWorktreeMock).not.toHaveBeenCalled()
+      return
+    }
+    const result = await creation
+    if (kind === 'remote') {
+      expect(result).toMatchObject({ warning: 'Check the push destination.' })
+    }
+    expect(getPRForBranchMock).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledExactlyOnceWith(
       '/workspace/repo',
       '/workspace/fix-bug-0-2',
       branchName,
-      'origin/fix/bug-0',
+      remoteTrackingBase.base,
       false,
       false,
-      kind === 'local' ? { checkoutExistingBranch: true } : {}
+      expect.objectContaining(
+        kind === 'local' ? { checkoutExistingBranch: true } : { trackRemoteBranch: true }
+      )
     )
-    expect(result).toMatchObject({
-      worktree: expect.objectContaining({
-        path: '/workspace/fix-bug-0-2',
-        branch: `refs/heads/${branchName}`
+    expect(result).toMatchObject({ worktree: { branch: `refs/heads/${branchName}` } })
+  })
+
+  it.each([undefined, 'open-existing'] as const)(
+    'suffixes a divergent local branch collision for intent %s',
+    async (branchIntent) => {
+      getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
+        branch === 'feature/something' ? 'local' : null
+      )
+      gitExecFileAsyncMock.mockImplementation(async (argv) => ({
+        stdout: argv.some((arg) => arg.startsWith('refs/heads/')) ? 'local-tip' : 'remote-tip',
+        stderr: ''
+      }))
+      listWorktreesMock.mockResolvedValue([
+        {
+          path: '/workspace/feature-something-2',
+          head: 'abc123',
+          branch: 'refs/heads/feature/something-2',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'feature/something',
+        branchNameOverride: 'feature/something',
+        branchIntent
       })
-    })
-  })
 
-  it('suffixes branchNameOverride when the requested branch collides', async () => {
-    getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
-      branch === 'feature/something' ? 'remote' : null
-    )
-    listWorktreesMock.mockResolvedValue([
-      {
-        path: '/workspace/feature-something-2',
-        head: 'abc123',
-        branch: 'refs/heads/feature/something-2',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    await handlers['worktrees:create'](null, {
-      repoId: 'repo-1',
-      name: 'feature/something',
-      branchNameOverride: 'feature/something'
-    })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['check-ref-format', '--branch', 'feature/something-2'],
-      { cwd: '/workspace/repo' }
-    )
-    expect(addWorktreeMock).toHaveBeenCalledWith(
-      '/workspace/repo',
-      '/workspace/feature-something-2',
-      'feature/something-2',
-      'origin/main',
-      false,
-      false,
-      {}
-    )
-  })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['check-ref-format', '--branch', 'feature/something-2'],
+        { cwd: '/workspace/repo' }
+      )
+      expect(addWorktreeMock).toHaveBeenCalledWith(
+        '/workspace/repo',
+        '/workspace/feature-something-2',
+        'feature/something-2',
+        'origin/main',
+        false,
+        false,
+        {}
+      )
+    }
+  )
 
   it('allows a resolver-provided PR branch override to match its remote push target', async () => {
     getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>

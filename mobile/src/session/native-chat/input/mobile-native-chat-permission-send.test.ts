@@ -1,7 +1,4 @@
 // Takeover RPCs have their own send-site integration tests; these fixtures script PTY acknowledgements.
-vi.mock('../../../terminal/worker-terminal-takeover-report', () => ({
-  reportWorkerTerminalUserInput: vi.fn()
-}))
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'

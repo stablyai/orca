@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   act,
   cleanup,
@@ -11,7 +12,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import type { StructuredLaunchAttempt } from '@/lib/structured-agent-session-launch-request'
+import type { StructuredLaunchAttempt } from '@/lib/agent-session/launch/structured-agent-session-launch-request'
 import type * as WorktreeFixtures from '@/store/slices/worktrees-slice-test-fixtures'
 
 vi.mock('@/hooks/useDetectedAgents', () => ({
@@ -75,7 +76,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/ReviewNotesSendMenuContent'
-import { QuickLaunchAgentMenuItems, ProjectedAgentMenuItems } from './QuickLaunchButton'
+import {
+  QuickLaunchAgentMenuItems,
+  ProjectedAgentMenuItems,
+  useTabAgentMenuLaunch
+} from './QuickLaunchButton'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
@@ -388,7 +393,7 @@ it('gives static/search no agent actions while loading, retaining settings and g
       onNewBrowserTab: vi.fn()
     })
   )
-  expect(controller.result.current.agentLaunchOptions).toEqual([])
+  expect(controller.result.current.agentPickerInventory.getSnapshot()).toEqual([])
   expect(
     controller.result.current.createMenuOptions.some((option) => option.kind === 'new-terminal')
   ).toBe(true)
@@ -460,7 +465,7 @@ function registerLaunch(
     promise: new Promise(() => undefined),
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 
@@ -474,6 +479,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   beforeEach(() => {
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
+    // A host without chats lists every agent as a terminal.
+    setLocalRuntimeCapabilitiesForTests([])
   })
 
   it('keeps every agent launchable while chats start, fail or retry', () => {
@@ -654,4 +661,46 @@ describe('QuickLaunchAgentMenuItems launches', () => {
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
     expect(launchMock).not.toHaveBeenCalled()
   })
+})
+
+it('forwards configured choices through the existing dispatcher and launch-only Arguments only to terminals', () => {
+  launchMock.mockClear()
+  launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
+  const hook = renderHook(() =>
+    useTabAgentMenuLaunch({
+      worktreeId: WORKTREE_ID,
+      groupId: 'group-1',
+      onFocusTerminal: vi.fn()
+    })
+  )
+  const choices = { model: 'astra', options: { effort: 'low' }, permissionMode: 'ask' as const }
+  hook.result.current(
+    { agent: 'codex', kind: 'cli', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'terminal',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[0][0]).toMatchObject({
+    requestedSurface: 'terminal',
+    selectedExecutionHostId: 'runtime:server',
+    agentArgs: expect.stringContaining('--add-dir docs'),
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  hook.result.current(
+    { agent: 'codex', kind: 'chat', executionHostId: 'runtime:server' },
+    {
+      agent: 'codex',
+      surface: 'chat',
+      choices,
+      arguments: '--add-dir docs'
+    }
+  )
+  expect(launchMock.mock.calls[1][0]).toMatchObject({
+    requestedSurface: 'chat',
+    sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
+  })
+  expect(launchMock.mock.calls[1][0]).not.toHaveProperty('agentArgs')
 })
