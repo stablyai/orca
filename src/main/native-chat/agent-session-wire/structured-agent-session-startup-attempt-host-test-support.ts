@@ -46,8 +46,10 @@ export let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 export let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 export let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
+export const providerOpen = vi.fn<NonNullable<StructuredAgentSessionAdapter['open']>>()
 export const providerStarted: Mock = vi.fn()
 export const recordLiveListing: Mock = vi.fn()
+const openFailures = new Map<string, (error: Error) => void>()
 const openGates = new Map<string, (model: string) => void>()
 
 export async function proveOpen(model = 'default'): Promise<void> {
@@ -90,12 +92,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
-      open: ({ acquisitionGeneration }) =>
-        new Promise((resolve) => {
-          openGates.set(acquisitionGeneration!, (model) =>
-            resolve({ reportedOptions: { model, reportedPermissionMode: 'ask' } })
-          )
-        }),
+      open: providerOpen,
       acquire,
       dispatch,
       closeSession,
@@ -126,6 +123,17 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
     ...(startupLimits === undefined ? {} : { startupLimits }),
     now: () => NOW
   })
+  const handleEvent = host.handleAdapterEvent.bind(host)
+  host.handleAdapterEvent = async (event) => {
+    const result = await handleEvent(event)
+    if (event.type === 'ended' && event.acquisitionGeneration) {
+      openFailures.get(event.acquisitionGeneration)?.(
+        new Error('provider exited before open answered')
+      )
+      openFailures.delete(event.acquisitionGeneration)
+    }
+    return result
+  }
 }
 
 export async function restartWith(
@@ -134,6 +142,7 @@ export async function restartWith(
 ): Promise<void> {
   await host.close(SESSION, 'evict')
   await host.flushAllStreamedEvents()
+  providerOpen.mockClear()
   acquire.mockImplementation(next)
   closeSession.mockClear()
   await startHost(options)
@@ -149,7 +158,17 @@ export function registerStartupAttemptHostTests(): void {
     resetHostTestOperationIds()
     providerStarted.mockReset()
     recordLiveListing.mockReset()
+    openFailures.clear()
     openGates.clear()
+    providerOpen.mockReset().mockImplementation(
+      ({ acquisitionGeneration }) =>
+        new Promise((resolve, reject) => {
+          openFailures.set(acquisitionGeneration!, reject)
+          openGates.set(acquisitionGeneration!, (model) =>
+            resolve({ reportedOptions: { model, reportedPermissionMode: 'ask' } })
+          )
+        })
+    )
     acquire = vi.fn(async (input) => acquisition(input))
     dispatch = vi.fn(async () => ({
       state: 'accepted' as const,

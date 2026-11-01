@@ -1,6 +1,9 @@
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control-requests'
-import { AcpAgentError, AcpRpcError } from '../../acp/acp-errors'
+import { claudeStartupAnswer } from '../../claude/claude-startup-failure'
+import { temporaryCodexStartupAnswer } from '../../codex/app-server/codex-startup-failure'
+import { CodexAppServerUnsupportedError } from '../../codex/app-server/codex-app-server-session'
+import { temporaryAcpStartupAnswer } from '../../acp/acp-startup-failure'
+import { AcpRpcError } from '../../acp/acp-errors'
 import { JsonlRpcResponseError } from '../../jsonl-rpc/peer'
 import { findInErrorChain } from '../../provider-process/provider-error-chain'
 import {
@@ -19,33 +22,24 @@ import {
 } from './structured-agent-session-adapter'
 import { providerExitObserved } from './structured-agent-session-failure-text'
 
-function finalAgentStartAnswer(error: Error): boolean {
-  if (error instanceof AcpRpcError && !(error instanceof AcpAgentError)) {
-    return true
+function agentStartAnswer(error: Error): 'temporary' | 'final' | undefined {
+  if (error instanceof CodexAppServerRequestError) {
+    return temporaryCodexStartupAnswer(error) ? 'temporary' : 'final'
   }
-  if (!(error instanceof AcpAgentError || error instanceof CodexAppServerRequestError)) {
-    return false
+  if (error instanceof CodexAppServerUnsupportedError || error instanceof JsonlRpcResponseError) {
+    return 'final'
   }
-  if (error.code === -32601 || error.code === -32602) {
-    return true
+  if (error instanceof AcpRpcError) {
+    return temporaryAcpStartupAnswer(error) ? 'temporary' : 'final'
   }
-  if (
-    !(error instanceof CodexAppServerRequestError) ||
-    error.method !== 'thread/resume' ||
-    error.code !== -32600
-  ) {
-    return false
-  }
-  const message =
-    error.providerDiagnostic?.text ??
-    error.message.replace(/^codex app-server thread\/resume failed: /, '')
-  return /^(?:invalid (?:thread|session) id:|thread not found(?::|$)|no rollout found for thread id )/.test(
-    message
-  )
+  return claudeStartupAnswer(error)
 }
 
 /** Only positive provider evidence retries; an Orca fault or a typed refusal stays final. */
-export function retryableStructuredAgentSessionStart(error: unknown): boolean {
+export function retryableStructuredAgentSessionStart(
+  error: unknown,
+  unexpectedExit = false
+): boolean {
   if (
     providerRequestTimeoutOf(error) ||
     argumentProblemOf(error) ||
@@ -60,7 +54,7 @@ export function retryableStructuredAgentSessionStart(error: unknown): boolean {
     cause instanceof AgentSessionAcquisitionExitUnprovenError ||
     cause instanceof AgentSessionAcquisitionRefusal ||
     isAgentSessionPreSpawnError(cause) ||
-    finalAgentStartAnswer(cause)
+    agentStartAnswer(cause) === 'final'
       ? true
       : undefined
   )
@@ -68,12 +62,10 @@ export function retryableStructuredAgentSessionStart(error: unknown): boolean {
     return false
   }
   return (
+    unexpectedExit ||
     providerExitObserved(error) ||
     findInErrorChain(error, (cause) =>
-      cause instanceof CodexAppServerRequestError ||
-      cause instanceof ClaudeControlRequestError ||
-      cause instanceof AcpAgentError ||
-      cause instanceof JsonlRpcResponseError ||
+      agentStartAnswer(cause) === 'temporary' ||
       ('code' in cause && ['EAGAIN', 'EMFILE', 'ENFILE'].some((code) => code === cause.code))
         ? true
         : undefined

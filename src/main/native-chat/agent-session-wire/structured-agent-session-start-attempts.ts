@@ -1,3 +1,5 @@
+import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -5,7 +7,10 @@ import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/
 import { refuseUnclassified } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
-import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  type SubmissionRejectionFact
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
@@ -18,6 +23,8 @@ import {
   recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
 import {
+  providerStartupFailureFact,
+  withObservedProviderExit,
   structuredAgentSessionStartFailure,
   structuredAgentSessionStartFailureFact
 } from './structured-agent-session-failure-text'
@@ -77,6 +84,20 @@ export function registerStructuredAgentSessionStart(
             if (ready === 'ready') {
               return result
             }
+            if (
+              handle.result.opening &&
+              handle.result.retry !== false &&
+              !finalStartupExitFailure(context.sessions.get(sessionId)?.lastEndedChild?.failure)
+            ) {
+              await lock.wait(
+                waitForPromiseWithSignal(
+                  withTimeout(handle.result.opening, 2_000, undefined),
+                  acquire.signal
+                )
+              )
+              handle.result.cancelOpen?.()
+              throwIfSignalAborted(acquire.signal)
+            }
             result = await lock.commit(async () => {
               const session = context.sessions.get(sessionId)
               const ended = session?.lastEndedChild
@@ -94,16 +115,35 @@ export function registerStructuredAgentSessionStart(
                   'The previous agent process could not be verified as stopped.'
                 )
               }
+              const finalExit = finalStartupExitFailure(ended.failure)
+              const openError = handle.result.openError
+              const openFailure =
+                ended.cause === 'exit' && openError instanceof Error
+                  ? providerStartupFailureFact(withObservedProviderExit(openError))
+                  : handle.result.failure
               const failure = structuredAgentSessionStartFailureFact({
-                exit: handle.result.failure ?? ended.failure
+                exit: finalExit
+                  ? ended.failure
+                  : openFailure
+                    ? { ...openFailure, detail: openFailure.detail ?? ended.failure?.detail }
+                    : ended.failure
               })
               return {
                 ...failedStructuredAgentSessionStart(),
                 startKey: ended.generation,
                 failure,
                 retry:
-                  handle.result.retry ??
-                  (ended.cause === 'exit' && failure.kind === 'providerStartFailed')
+                  !finalExit &&
+                  ('openError' in handle.result
+                    ? retryableStructuredAgentSessionStart(
+                        handle.result.openError,
+                        ended.cause === 'exit'
+                      )
+                    : (handle.result.retry ??
+                      (ended.cause === 'exit' &&
+                        failure.kind === 'providerStartFailed' &&
+                        !failure.refusal &&
+                        !failure.requestTimeout)))
               }
             })
           }
@@ -206,5 +246,14 @@ export function structuredAgentSessionStartStillQueued(
           (isQueuedAgentJournalSubmission(entry) ||
             continuingStructuredAgentSessionInput(session.journal, startedFor))
       ) === true
+  )
+}
+
+function finalStartupExitFailure(failure: SubmissionRejectionFact | undefined): boolean {
+  return (
+    !!failure &&
+    (!['providerExited', 'providerStartFailed', 'startFailed'].includes(failure.kind) ||
+      !!failure.refusal ||
+      !!failure.requestTimeout)
   )
 }

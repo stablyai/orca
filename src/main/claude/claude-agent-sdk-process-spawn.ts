@@ -33,7 +33,8 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
   platform: NodeJS.Platform = process.platform,
-  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] }
+  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
+  observeChild?: (child: PipedChildProcess) => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -59,6 +60,7 @@ export function createClaudeCodeProcessSpawn(
         }
       )
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
+      observeChild?.(managed.child)
       return managed.child
     },
     get child() {

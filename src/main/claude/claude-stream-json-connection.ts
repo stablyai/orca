@@ -1,3 +1,4 @@
+import { claudeStartupAnswerObservation } from './claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
@@ -85,6 +86,8 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
   readonly executableMissing?: boolean
+  exited?: Promise<Error>
+  startupFailure?: () => Error | undefined
   pauseReading?: () => void
   resumeReading?: () => void
   send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
@@ -99,7 +102,8 @@ export async function openClaudeStreamJsonConnection(
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch)
+  const startup = claudeStartupAnswerObservation()
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.attach)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
     withoutKeys(
@@ -128,6 +132,7 @@ export async function openClaudeStreamJsonConnection(
   if (!child || !managed) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
+  const exited = Promise.withResolvers<Error>()
   let closing = false
   let terminalError: Error | null = null
   let faultReported = false
@@ -186,6 +191,7 @@ export async function openClaudeStreamJsonConnection(
     if (managed.rootExitObserved && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
+      exited.resolve(terminalError)
     }
   }
 
@@ -252,6 +258,7 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
+    startup.finish()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
     return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
   }
@@ -285,13 +292,17 @@ export async function openClaudeStreamJsonConnection(
           pid: spawner.pid
         })
       }
+      startup.finish()
       return true
     })()
     return closePromise
   }
 
+  const controls = createClaudeControlSurface(session)
   return {
-    ...createClaudeControlSurface(session),
+    ...controls,
+    startupFailure: startup.failure,
+    exited: exited.promise,
     get pid() {
       return spawner.pid
     },

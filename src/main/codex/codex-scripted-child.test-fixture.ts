@@ -1,3 +1,7 @@
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type { ScriptedAgentChild } from '../runtime/structured-agent-scripted-child.test-fixture'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
@@ -55,6 +59,7 @@ export const codexScriptedChild = (
   let closed = 0
   const prompts: string[] = []
   const requests: { method: string; params?: Record<string, unknown> }[] = []
+  let exitNewest: ((message: string) => void) | undefined
   let newest: ReturnType<typeof Promise.withResolvers<unknown>> | undefined
   const open: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
     notify = (method, params) => handlers.onNotification?.(method, params)
@@ -153,6 +158,12 @@ export const codexScriptedChild = (
         return true
       }
     }
+    exitNewest = (message) => {
+      ended = true
+      const error = withProviderDiagnostic(new Error(message), providerDiagnostic(message, 'log'))
+      gate.reject(error)
+      handlers.onExit?.(error, { expected: false })
+    }
     // A gate can be closed before initialization starts or after it has already answered.
     void gate.promise.catch(() => {})
     await handlers.onSpawned?.(connection.pid ?? 0)
@@ -185,6 +196,7 @@ export const codexScriptedChild = (
       completeTurns = value
     },
     releaseHandshake: () => newest?.resolve({}),
+    exitHandshake: (message) => exitNewest?.(message),
     failHandshake: (message) =>
       newest?.reject(new CodexAppServerRequestError('initialize', -32603, message, message)),
     prompts: () => prompts,

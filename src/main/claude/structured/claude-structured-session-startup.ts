@@ -1,3 +1,9 @@
+import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import {
+  startupAcquisitionRefusal,
+  providerExitObserved
+} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
@@ -64,22 +70,49 @@ export async function readClaudeStartupFacts(input: {
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeInitializeFacts> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  const control = input.connection.initializationResult().then((result) => {
+    const authError = claudeInitializationAuthError(result, input.account)
+    if (authError) {
+      throw authError
+    }
+    return result
+  })
   const initialization = await Promise.race([
-    input.connection
-      .initializationResult()
-      .catch((error: unknown) => {
-        // The SDK may replace the child's own exit diagnostic with a generic closed-query error.
+    control.catch((error: unknown) => {
+      try {
         input.initProof.seen()
-        throw error
-      })
-      .then((result) => {
-        const authError = claudeInitializationAuthError(result, input.account)
-        if (authError) {
-          throw authError
+      } catch (proofError) {
+        if (startupAcquisitionRefusal(proofError)) {
+          throw proofError
         }
-        return result
-      }),
-    input.initProof.promise.then(() => new Promise<never>(() => {})),
+        if (isClaudeQueryClosed(error)) {
+          throw input.connection.startupFailure?.() ?? proofError
+        }
+      }
+      throw input.connection.startupFailure?.() ?? error
+    }),
+    Promise.race([
+      input.initProof.promise.then(() => new Promise<never>(() => {})),
+      input.connection.exited?.then((error) => {
+        throw error
+      }) ?? new Promise<never>(() => {})
+    ]).catch(async (error: unknown) => {
+      if (startupAcquisitionRefusal(error) || !providerExitObserved(error)) {
+        throw error
+      }
+      const outcome = await withTimeout(
+        control.then(
+          () => ({ error }),
+          (error: unknown) => ({ error })
+        ),
+        2_000,
+        { error }
+      )
+      throw (
+        input.connection.startupFailure?.() ??
+        (isClaudeQueryClosed(outcome.error) ? error : outcome.error)
+      )
+    }),
     new Promise<never>((_resolve, reject) => {
       timer = setTimeout(
         () =>
@@ -97,7 +130,10 @@ export async function readClaudeStartupFacts(input: {
     })
   ]).finally(() => clearTimeout(timer))
   if (input.connection.closed) {
-    throw new Error('claude session closed before startup completed')
+    throw (
+      input.connection.startupFailure?.() ??
+      new Error('claude session closed before startup completed')
+    )
   }
   input.emit({
     type: 'options',
@@ -215,7 +251,10 @@ export async function openClaudeSession(input: {
   const { session } = input
   const initialized = await input.facts
   if (!input.isCurrent()) {
-    throw new Error('claude session closed before startup completed')
+    throw (
+      session.connection.startupFailure?.() ??
+      new Error('claude session closed before startup completed')
+    )
   }
   initialized.initProof.onRefusal = (error) => {
     if (input.isCurrent()) {

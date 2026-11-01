@@ -156,6 +156,12 @@ class ScriptedPiConnection implements PiRpcConnection {
     this.exit(error)
   }
 
+  exitHandshake(message: string): void {
+    const error = withProviderDiagnostic(new Error(message), providerDiagnostic(message, 'log'))
+    this.handshake.reject(error)
+    this.exit(error)
+  }
+
   async close(): Promise<Awaited<ReturnType<PiRpcConnection['close']>>> {
     if (!this.closed) {
       this.onClosed()
@@ -288,6 +294,7 @@ export const piScriptedChild = (options: PiScriptOptions = {}): ScriptedPiChild 
     },
     releaseHandshake: () => children.at(-1)?.releaseHandshake(),
     failHandshake: (message) => children.at(-1)?.failHandshake(message),
+    exitHandshake: (message) => children.at(-1)?.exitHandshake(message),
     prompts: () => received,
     spawns: () => children.length,
     resumes: () => resumed,
