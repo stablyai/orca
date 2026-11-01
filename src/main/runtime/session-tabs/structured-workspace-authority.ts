@@ -49,7 +49,6 @@ export async function prepareStructuredWorkspaceAuthority(
   let registered: () => boolean
   let repo: Repo | undefined
   let affirmative = false
-  let listed: boolean | undefined
   if (folder?.type === 'folder') {
     if (!store.getFolderWorkspaces || !store.getProjectGroups) {
       throw new StructuredWorkspaceUnavailable('unknown')
@@ -152,7 +151,7 @@ export async function prepareStructuredWorkspaceAuthority(
       if (scan.superseded) {
         throw new StructuredWorkspaceUnavailable('obsolete')
       }
-      listed = scan.ok && scan.worktrees.some((row) => areWorktreePathsEqual(row.path, path))
+      const listed = scan.ok && scan.worktrees.some((row) => areWorktreePathsEqual(row.path, path))
       if (!listed) {
         if (
           scan.ok &&
@@ -187,7 +186,7 @@ export async function prepareStructuredWorkspaceAuthority(
       }
     }
     check()
-    return { current, check, release: install, listed }
+    return { current, check, release: install }
   } catch (error) {
     install()
     throw error

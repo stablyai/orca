@@ -9,6 +9,7 @@ import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structu
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
+import { structuredSessionPlacementAllowed } from './structured-session-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-types'
 import { DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../orca-runtime-postlude'
@@ -70,11 +71,18 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
       host,
       restored,
-      (id) => this.hasCurrentLocalStructuredSessionTab(id)
+      (id) => this.hasCurrentLocalStructuredSessionTab(id),
+      (id, worktreeId) => structuredSessionPlacementAllowed(this.store, worktreeId, id)
     )
     for (const [worktreeId, worktreeChanges] of changes) {
-      this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
-        this.passiveStructuredSessionTabChangeEligible(change)
+      // A chat moved before its old tab was dropped closes there without retiring the chat.
+      this.changeWindowlessChatTabs(
+        worktreeId,
+        worktreeChanges,
+        (change) =>
+          ('close' in change &&
+            !structuredSessionPlacementAllowed(this.store, worktreeId, change.close)) ||
+          this.passiveStructuredSessionTabChangeEligible(change)
       )
     }
     for (const session of restored) {

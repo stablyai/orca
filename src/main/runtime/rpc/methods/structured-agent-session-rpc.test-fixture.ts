@@ -252,7 +252,7 @@ export function dispatcher(
       runtimeKind: 'native'
     })),
     prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),
-    reconcileStructuredSessionWorkspacePresentation: vi.fn(async () => undefined),
+    retireMovedStructuredSessionPlacement: vi.fn(async () => undefined),
     currentLocalStructuredSessionPresentation: vi.fn(() => null),
     captureStructuredAgentSessionPresentation: vi.fn(() => ({ raw: null, saved: [] })),
     removeCapturedStructuredSessionSavedTabs: vi.fn(),

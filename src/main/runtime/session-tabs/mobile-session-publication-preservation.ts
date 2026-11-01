@@ -11,6 +11,7 @@ import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { isHeadlessBuiltPublication } from '../mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+import { structuredSessionPlacementAllowed } from './structured-session-placement'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
@@ -27,11 +28,14 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     existing: RuntimeMobileSessionTabsSnapshot,
     rendererTabIdentityKeys: ReadonlySet<string>
   ): boolean {
+    // A moved chat is stale even when the renderer still lists it.
     return existing.tabs.some(
       (tab) =>
-        !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-          rendererTabIdentityKeys.has(id)
-        ) && !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+        (tab.type === 'agent-session' ||
+          !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+            rendererTabIdentityKeys.has(id)
+          )) &&
+        !this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
     )
   }
 
@@ -67,7 +71,7 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     tab: RuntimeMobileSessionSnapshotTab
   ): boolean {
     if (tab.type === 'agent-session') {
-      return true
+      return structuredSessionPlacementAllowed(this.store, snapshot.worktree, tab.sessionId)
     }
     if (tab.type === 'browser') {
       const liveClientPage =

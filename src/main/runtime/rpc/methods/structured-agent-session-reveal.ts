@@ -56,6 +56,7 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
               workspace.location,
               () => {
                 workspace!.check()
+                workspace!.admit()
                 if (getStructuredAgentSessionHost() !== host) {
                   throw new StructuredWorkspaceUnavailable('obsolete')
                 }
@@ -91,11 +92,13 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             throw new StructuredWorkspaceUnavailable('obsolete')
           }
         }
-        await ctx.runtime.reconcileStructuredSessionWorkspacePresentation(
-          revealed.sessionId,
-          revealed.workspaceId
-        )
-        check()
+        if (original && original.location.workspaceId !== revealed.workspaceId) {
+          await ctx.runtime.retireMovedStructuredSessionPlacement(
+            revealed.sessionId,
+            original.location.workspaceId
+          )
+          check()
+        }
         await ctx.runtime.publishStructuredAgentSessionTab({
           workspaceAuthority: {
             check,

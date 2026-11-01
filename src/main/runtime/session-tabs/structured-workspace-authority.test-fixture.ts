@@ -5,5 +5,6 @@ export const availableRevealWorkspace: OrcaRuntimeService['prepareStructuredAgen
     location,
     current: () => true,
     check: () => {},
+    admit: () => {},
     release: Object.assign(() => {}, { isCurrent: () => true })
   })

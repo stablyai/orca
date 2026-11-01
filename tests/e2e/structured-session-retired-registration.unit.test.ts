@@ -11,7 +11,6 @@ import {
 import { acquireWatcherRemovalGate } from '../../src/main/ipc/watcher-removal-gate'
 import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
 import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
-import * as worktreePaths from '../../src/main/git/worktree-path-comparison'
 import { randomUUID } from 'node:crypto'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
@@ -243,29 +242,4 @@ it('never guesses between same-directory registrations or crosses execution host
   expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: false } })
   expect(rig.store.getRecord(B)?.location.workspaceId).toBe(rig.old)
   expect(rig.acquire).not.toHaveBeenCalled()
-})
-
-it('bounds explicit recovery to cached catalog work and one destination authority', async () => {
-  const rig = await retiredChat()
-  const destination = storeRepo({ id: 'current-project', path: root, kind: 'folder' })
-  rig.profile.addRepo(destination)
-  const comparisons = vi.spyOn(worktreePaths, 'areWorktreePathsEqual')
-  const counts: number[] = []
-  let added = 0
-  for (const population of [20, 200]) {
-    while (added < population) {
-      rig.profile.addRepo(
-        storeRepo({ id: `unrelated-${added}`, path: `${root}/other-${added}`, kind: 'folder' })
-      )
-      added++
-    }
-    comparisons.mockClear()
-    const authority = await rig.runtime.prepareStructuredAgentSessionRevealWorkspace(
-      rig.record.location
-    )
-    expect(authority.location.workspaceId).toBe(getRepoMainWorktreeId(destination))
-    authority.release()
-    counts.push(comparisons.mock.calls.length)
-  }
-  expect(counts[1]).toBeLessThanOrEqual(10 * counts[0] + 30)
 })

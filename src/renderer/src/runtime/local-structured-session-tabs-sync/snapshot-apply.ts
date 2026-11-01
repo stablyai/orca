@@ -37,6 +37,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { useAppStore } from '../../store'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
+import { retireLocalSessionPlacementsOutside } from '../../lib/retire-moved-structured-session-placement'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
 function isWorktreeRetraction(
@@ -69,6 +70,7 @@ export function applyStructuredSessionTabSnapshots(
 ): void {
   const acceptedAgentSessions: { worktreeId: string; sessionId: string }[] = []
   const drawnChatLabels: DrawnChatLabel[] = []
+  const tabsBefore = useAppStore.getState().unifiedTabsByWorktree
   const settleStructuredSessionMirror = applyWebSessionTabsStorePatch(
     (state, changedAgentPaneKeys) =>
       applyLocalStructuredSessionTabSnapshots(
@@ -94,6 +96,16 @@ export function applyStructuredSessionTabSnapshots(
     snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
+  // Only a chat's first appearance in a workspace can mean it moved.
+  retireLocalSessionPlacementsOutside(
+    acceptedAgentSessions.filter(
+      ({ worktreeId, sessionId }) =>
+        !tabsBefore[worktreeId]?.some(
+          (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+        )
+    ),
+    ORCA_LAYOUT_OWNER_IS_MAIN ? framesDrawWorkspace(useAppStore.getState()) : undefined
+  )
   const { setTabLabel } = useAppStore.getState()
   for (const { tabId, label } of drawnChatLabels) {
     setTabLabel(tabId, label)
