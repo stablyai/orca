@@ -32,10 +32,7 @@ async function openPanel(page: Page, title: string): Promise<void> {
   await button.click()
 }
 
-test('the build-less TSX example renders and updates with no dist folder', async ({
-  orcaPage,
-  electronApp
-}, testInfo) => {
+test('the build-less TSX example renders and updates with no dist folder', async ({ orcaPage }) => {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-buildless-tsx-'))
   const pluginRoot = join(tempRoot, 'hello-tsx')
   try {
@@ -49,53 +46,10 @@ test('the build-less TSX example renders and updates with no dist folder', async
     // From ./todos, imported without an extension and resolved to todos.ts.
     await expect(orcaPage.getByText('Edit src/panel.tsx and save')).toBeVisible()
     await expect(orcaPage.getByText('1 open')).toBeVisible()
-    // The worker answered the panel's first plugin.request from the `suggestions` default.
-    const draft = orcaPage.getByPlaceholder('New task')
-    await expect(draft).toHaveValue('Write a test', { timeout: 15_000 })
-    await draft.fill('Ship without a build')
+    await orcaPage.getByPlaceholder('New task').fill('Ship without a build')
     await orcaPage.getByRole('button', { name: 'Add task' }).click()
     await expect(orcaPage.getByText('Ship without a build')).toBeVisible()
     await expect(orcaPage.getByText('2 open')).toBeVisible()
-
-    // A setting the person changes reaches the worker's next answer.
-    await orcaPage.evaluate(async () => {
-      const plugin = (await window.api.plugins.list()).find((entry) => entry.name === 'Hello TSX')
-      const written = await window.api.plugins.setSetting?.({
-        pluginKey: plugin?.pluginKey ?? '',
-        key: 'suggestions',
-        value: 'Ship the bridge'
-      })
-      if (!written?.ok) {
-        throw new Error(`setSetting failed: ${JSON.stringify(written)}`)
-      }
-    })
-    await orcaPage.getByRole('button', { name: 'Suggest' }).click()
-    await expect(draft).toHaveValue('Ship the bridge')
-
-    // Finishing the list: the atom lands in storage, the worker sees it and posts back.
-    await orcaPage.getByText('Edit src/panel.tsx and save').click()
-    await orcaPage.getByText('Ship without a build').click()
-    await expect(orcaPage.getByText('All 3 done!')).toBeVisible({ timeout: 15_000 })
-
-    // The declared settings show under the plugin in Orca's Settings, with the person's value.
-    const pluginKey = await orcaPage.evaluate(
-      async () =>
-        (await window.api.plugins.list()).find((entry) => entry.name === 'Hello TSX')?.pluginKey
-    )
-    await electronApp.evaluate(({ app }, link) => {
-      app.emit('open-url', { preventDefault: () => undefined }, link)
-    }, `orca://plugins/${pluginKey}`)
-    const article = orcaPage.getByRole('article')
-    await expect(article.locator('#plugin-detail-heading')).toContainText('Hello TSX', {
-      timeout: 30_000
-    })
-    await expect(article.getByText('Celebrate finished lists')).toBeVisible()
-    await expect(article.getByLabel('Task ideas')).toHaveValue('Ship the bridge')
-    await expect(article.getByRole('switch', { name: 'Celebrate finished lists' })).toBeChecked()
-    await testInfo.attach('plugin-settings', {
-      body: await article.screenshot(),
-      contentType: 'image/png'
-    })
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(tempRoot, { recursive: true, force: true })

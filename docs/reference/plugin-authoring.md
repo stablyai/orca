@@ -12,12 +12,13 @@ A plugin is a folder (in practice its own Git repository) with `orca-plugin.json
 Start from one of these, or scaffold one with `orca plugin create` (see [Validate](#3-validate)).
 Add the `$schema` line from `orca-gleam-syntax` to your manifest for editor completion.
 
-| Example                              | Execution        | Shows                                                                                                                      |
-| ------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                                                                                          |
-| `examples/plugins/hello-tsx`         | `trusted-worker` | A [components](plugin-declarative-ui.md) TSX panel with no build step, talking to its worker, storage, settings and events |
-| `examples/plugins/hello-components`  | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first                                               |
-| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events                                                                                       |
+| Example                               | Execution        | Shows                                                                                                                     |
+| ------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `examples/plugins/orca-gleam-syntax`  | `data`           | A syntax, no code                                                                                                         |
+| `examples/plugins/hello-tsx`          | `sandboxed-ui`   | A [components](plugin-declarative-ui.md) TSX panel with no build step                                                     |
+| `examples/plugins/hello-worker-panel` | `trusted-worker` | A TSX panel with its own worker, storage atom, settings and events ([Panels, workers and data](#panels-workers-and-data)) |
+| `examples/plugins/hello-components`   | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first                                              |
+| `examples/plugins/hello-orca`         | `trusted-worker` | A panel, a worker command and events                                                                                      |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the

@@ -1,13 +1,12 @@
 {
   "manifestVersion": 2,
-  "execution": "trusted-worker",
+  "execution": "sandboxed-ui",
   "id": "hello-tsx",
   "name": "Hello TSX",
-  "version": "1.1.0",
-  "description": "Sample build-less TSX panel with its own worker: Orca transpiles src/panel.tsx when it loads, so there is no build step and no dist folder.",
+  "version": "1.0.0",
+  "description": "Sample build-less TSX panel: Orca transpiles src/panel.tsx when it loads, so there is no build step and no dist folder.",
   "engines": { "orca": ">=1.4.246" },
   "pluginApi": 1,
-  "main": "worker/main.mjs",
   "contributes": {
     "panels": [
       {
@@ -17,24 +16,7 @@
         "entry": "src/panel.tsx",
         "ui": "components"
       }
-    ],
-    "settings": [
-      {
-        "key": "celebrate",
-        "title": "Celebrate finished lists",
-        "description": "The worker tells the panel when every task is done.",
-        "type": "boolean",
-        "default": true
-      },
-      {
-        "key": "suggestions",
-        "title": "Task ideas",
-        "description": "One per line; Suggest picks the next one.",
-        "type": "string",
-        "multiline": true,
-        "default": "Write a test\nReview a pull request\nTake a break"
-      }
     ]
   },
-  "capabilities": [{ "kind": "storage:own" }, { "kind": "settings:own" }, { "kind": "agent:read" }]
+  "capabilities": []
 }
