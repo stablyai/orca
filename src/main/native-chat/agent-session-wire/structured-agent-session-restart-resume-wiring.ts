@@ -3,7 +3,7 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'

@@ -7,7 +7,7 @@ import {
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'

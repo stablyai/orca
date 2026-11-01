@@ -11,6 +11,13 @@ export const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
 
 type PluginFile = { path: string; size: number }
 
+// Why dev only: an author's folder holds generated types and installed packages that never ship;
+// installed trees keep hashing everything, so nothing they run escapes the content hash.
+export const DEV_FOLDER_SKIPPED_ROOT_ENTRIES: ReadonlySet<string> = new Set([
+  '.orca',
+  'node_modules'
+])
+
 export type PluginTreeHashResult =
   | { ok: true; hash: string; fileCount: number; totalBytes: number }
   | { ok: false; error: string }
@@ -19,13 +26,14 @@ async function collectFiles(
   root: string,
   dir: string,
   files: PluginFile[],
-  counters: { entries: number; bytes: number }
+  counters: { entries: number; bytes: number },
+  skipped: ReadonlySet<string>
 ): Promise<string | null> {
   const entries = await readdir(dir, { withFileTypes: true })
   // localeCompare varies by locale/ICU; content identities must match across hosts.
   entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0))
   for (const entry of entries) {
-    if (dir === root && entry.name === '.git') {
+    if (dir === root && (entry.name === '.git' || skipped.has(entry.name))) {
       continue
     }
     const segmentError = pluginPathSegmentError(entry.name)
@@ -42,7 +50,7 @@ async function collectFiles(
       return `symlink not allowed in plugin content: ${relative(root, full)}`
     }
     if (stat.isDirectory()) {
-      const error = await collectFiles(root, full, files, counters)
+      const error = await collectFiles(root, full, files, counters, skipped)
       if (error) {
         return error
       }
@@ -61,7 +69,8 @@ async function collectFiles(
 
 async function hashFileBounded(
   hash: ReturnType<typeof createHash>,
-  file: PluginFile
+  file: PluginFile,
+  fileHash: ReturnType<typeof createHash> | null
 ): Promise<number> {
   let bytesRead = 0
   for await (const chunk of createReadStream(file.path)) {
@@ -71,6 +80,7 @@ async function hashFileBounded(
       throw new Error(`plugin file changed while hashing: ${file.path}`)
     }
     hash.update(bytes)
+    fileHash?.update(bytes)
   }
   if (bytesRead !== file.size) {
     throw new Error(`plugin file changed while hashing: ${file.path}`)
@@ -78,11 +88,17 @@ async function hashFileBounded(
   return bytesRead
 }
 
-export async function hashPluginTree(root: string): Promise<PluginTreeHashResult> {
+/** `fileDigests` (optional) receives each file's own sha256, keyed by its `/`-separated path, from
+ *  the same read that hashes the tree, so a later serve can prove it sends exactly those bytes. */
+export async function hashPluginTree(
+  root: string,
+  options: { fileDigests?: Map<string, string>; devFolder?: boolean } = {}
+): Promise<PluginTreeHashResult> {
   const files: PluginFile[] = []
   try {
     const counters = { entries: 0, bytes: 0 }
-    const error = await collectFiles(root, root, files, counters)
+    const skipped = options.devFolder ? DEV_FOLDER_SKIPPED_ROOT_ENTRIES : new Set<string>()
+    const error = await collectFiles(root, root, files, counters, skipped)
     if (error) {
       return { ok: false, error }
     }
@@ -100,7 +116,11 @@ export async function hashPluginTree(root: string): Promise<PluginTreeHashResult
       hashLength(hash, Buffer.byteLength(rel, 'utf8'))
       hash.update(rel, 'utf8')
       hashLength(hash, file.size)
-      await hashFileBounded(hash, file)
+      const fileHash = options.fileDigests ? createHash('sha256') : null
+      await hashFileBounded(hash, file, fileHash)
+      if (fileHash) {
+        options.fileDigests?.set(rel, fileHash.digest('hex'))
+      }
     }
     // Hex (not base64) because the hash becomes a directory name.
     return {

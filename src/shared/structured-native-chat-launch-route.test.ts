@@ -1,10 +1,8 @@
 /** Renderer and orchestration share launch feasibility/defaults; changes here must move both surfaces together. */
 
 import { describe, expect, it } from 'vitest'
-import {
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from './protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from './agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './agent-session/agent-session-runtime-capabilities'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,

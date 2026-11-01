@@ -10,7 +10,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionPromptResult,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'

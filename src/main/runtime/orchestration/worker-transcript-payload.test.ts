@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   boundWorkerTranscriptMessages,
   boundWorkerTranscriptTail

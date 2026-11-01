@@ -5,7 +5,7 @@ import type {
 import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
-import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type {

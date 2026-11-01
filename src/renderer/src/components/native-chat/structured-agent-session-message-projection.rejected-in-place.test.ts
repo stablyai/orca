@@ -12,9 +12,9 @@ import {
 } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   projectStructuredAgentSessionMessages as projectShared,
-  structuredAgentSessionCommandItemIds
-} from '../../../../shared/structured-agent-session-message-projection'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
+  structuredAgentSessionCommandItemIds,
+  type StructuredAgentSessionOptimisticMessage
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'

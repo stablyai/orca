@@ -3,7 +3,7 @@ import type { AgentJournalMessageItem } from '../journal/agent-session-journal-t
 import type { AgentMessageSource } from '../agent-session-message-source'
 import { AgentJournalSubmissionSchema } from '../journal/agent-session-journal-submission-schema'
 import { SendParams } from '../../rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionPayloadFingerprint } from '../../structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../lifecycle/structured-agent-session-mutation'
 import {
   agentSessionSendBodyFingerprint,
   structuredAgentSessionMessageSendMutation

@@ -3,9 +3,9 @@ import {
   type AgentSessionConversationView
 } from '../../shared/agent-session-conversation-view'
 import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionOrcaStopCause } from '../../shared/agent-session-orca-stop'
+import type { AgentSessionOperationRow } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionOrcaStopCause } from '../../shared/agent-session/lifecycle/agent-session-orca-stop'
 import type { AgentSessionTabTable } from './agent-session/agent-session-tab-table'
 
 export type RetiredAgentSessionClaimKey = { keyId: string; retiredAt: number }

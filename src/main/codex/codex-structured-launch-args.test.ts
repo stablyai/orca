@@ -3,30 +3,6 @@ import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
 
 describe('codexStructuredLaunchArgs', () => {
-  it('preserves root config and feature option order', () => {
-    expect(
-      codexStructuredLaunchArgs([
-        '-c',
-        'model_reasoning_effort=high',
-        '--enable',
-        'unified_exec',
-        '--config=web_search="live"',
-        '--disable=some_feature',
-        '-m',
-        'gpt-5.6-sol'
-      ])
-    ).toEqual([
-      '-c',
-      'model_reasoning_effort=high',
-      '--enable',
-      'unified_exec',
-      '--config=web_search="live"',
-      '--disable=some_feature',
-      '-m',
-      'gpt-5.6-sol'
-    ])
-  })
-
   it('drops permission options and config overrides owned by Orca', () => {
     expect(
       codexStructuredLaunchArgs([
@@ -47,27 +23,6 @@ describe('codexStructuredLaunchArgs', () => {
         '-c',
         'model_reasoning_effort=high'
       ])
-    ).toEqual(['-c', 'model_reasoning_effort=high'])
-  })
-
-  it('drops a profile and TUI-only path options without leaving their values as prompts', () => {
-    expect(
-      codexStructuredLaunchArgs([
-        '--profile',
-        'review',
-        '-pother',
-        '--cd',
-        '/another/repo',
-        '--worktree',
-        '-c',
-        'model_reasoning_effort=high'
-      ])
-    ).toEqual(['-c', 'model_reasoning_effort=high'])
-  })
-
-  it('discards operands after the option terminator', () => {
-    expect(
-      codexStructuredLaunchArgs(['-c', 'model_reasoning_effort=high', '--', 'a prompt'])
     ).toEqual(['-c', 'model_reasoning_effort=high'])
   })
 

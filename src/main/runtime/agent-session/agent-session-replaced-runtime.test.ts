@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionLease } from '../../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentSessionReplacedRuntimes } from './agent-session-replaced-runtime'
 import type { AgentSessionStoreState } from '../agent-session-store-state'
 

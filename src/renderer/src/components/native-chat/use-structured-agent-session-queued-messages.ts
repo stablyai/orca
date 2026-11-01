@@ -15,7 +15,7 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionQueuePause
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSendResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import {
   useStructuredAgentSessionQueuedEdit,
   type QueuedEditTransport,

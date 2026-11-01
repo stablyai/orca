@@ -10,14 +10,14 @@ import type { AgentSessionOptionsResult } from '../../../../shared/agent-session
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { StructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-create-capabilities'
+} from '../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   useStructuredAgentSessionHostCapability,
   useStructuredAgentSessionOwnPermissionState,

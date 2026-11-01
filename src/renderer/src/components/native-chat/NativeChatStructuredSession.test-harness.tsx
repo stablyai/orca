@@ -8,7 +8,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 

@@ -14,8 +14,8 @@ import { agentSessionFailureFact } from '../../../src/shared/agent-session/failu
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../src/shared/agent-session-goal-control-copy'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { selectStructuredAgentSettledTurns } from '../../../src/shared/structured-agent-session-turn-timing'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { selectStructuredAgentSettledTurns } from '../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 vi.mock('react-native', async () => {
   const React = await import('react')

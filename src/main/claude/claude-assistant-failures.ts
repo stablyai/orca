@@ -5,7 +5,7 @@ import {
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { BoundedMap } from '../../shared/bounded-map'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 
 /** Associates the assistant's typed error with its duplicate result, never with error text. */
 export class ClaudeAssistantFailures {

@@ -20,11 +20,11 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-create-capabilities'
+} from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import { deferred, MODEL_OPTIONS, sendResult } from './structured-session-send-options.test-fixture'
 import type { RpcResponse } from '../transport/types'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'

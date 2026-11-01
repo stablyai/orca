@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
@@ -17,7 +17,7 @@ import {
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-fold'
 // Force SessionStart-before-init ordering and avoid prompts during the fold window.

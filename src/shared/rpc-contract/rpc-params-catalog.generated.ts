@@ -19,6 +19,7 @@ import {
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
 import {
+  BundledSkillAutoUpdateRequestSchema,
   BundledSkillExecuteRequestSchema,
   BundledSkillPlanRequestSchema
 } from '../bundled-skill-plan'
@@ -58,6 +59,7 @@ import {
   RemoveAccountParams,
   RemoveDataAccountParams,
   SelectAccountParams,
+  SelectClaudeAccountParams,
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
@@ -496,11 +498,13 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
@@ -745,7 +749,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.removeClaude': RemoveAccountParams,
   'accounts.removeCodex': RemoveAccountParams,
   'accounts.removeData': RemoveDataAccountParams,
-  'accounts.selectClaude': SelectAccountParams,
+  'accounts.selectClaude': SelectClaudeAccountParams,
   'accounts.selectCodex': SelectAccountParams,
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.selectData': SelectDataAccountParams,
@@ -1307,6 +1311,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
+  'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
@@ -1315,6 +1320,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.refresh': null,
+  'plugins.restart': PluginRestartParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
   'preflight.check': PreflightCheck,
@@ -1399,6 +1405,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'sidebarInputs.workspaceCreations': null,
   'sidebarInputs.workspaceRows': null,
   'sidebarSession.begin': SidebarSessionBeginParams,
+  'skills.autoUpdateBundledOrca': BundledSkillAutoUpdateRequestSchema,
   'skills.beginUpload': SkillUploadBeginRequestSchema,
   'skills.cancelInstall': SkillsCancelInstallParams,
   'skills.cancelUpload': SkillUploadCommitRequestSchema,

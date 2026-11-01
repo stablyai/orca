@@ -1,5 +1,5 @@
 import type { AgentSessionOptionCatalog } from './agent-session/options/agent-session-option-catalog-types'
-import type { AgentSessionModelCatalogResult } from './agent-session-wire'
+import type { AgentSessionModelCatalogResult } from './agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session/options/agent-session-options-result'
 import { createCoalescingKeyedRunner } from './coalescing-keyed-runner'
 import { cloneStructuredAgentSessionOptionRecord } from './agent-session/options/structured-agent-session-option-state'

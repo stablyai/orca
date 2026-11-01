@@ -5,11 +5,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   claudeProviderHandle,
   claudeProviderHandleLeafUuid
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   CLAUDE_STRUCTURED_BASE_OPTIONS,
   claudeStructuredPermissionOptions

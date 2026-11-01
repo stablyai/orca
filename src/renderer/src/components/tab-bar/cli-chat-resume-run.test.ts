@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { StructuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
 
 const mocks = vi.hoisted(() => {

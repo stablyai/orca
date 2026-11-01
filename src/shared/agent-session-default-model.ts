@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from './agent-session-record'
+import type { AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
 
 /** A default pick is separate from explicit overrides; messages still capture concrete choices. */
 export function effectiveAgentSessionOptions(

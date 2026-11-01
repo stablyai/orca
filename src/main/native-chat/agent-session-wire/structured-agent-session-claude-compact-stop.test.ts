@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { ClaudeControlRequestError } from '../../claude/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
@@ -14,10 +14,8 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import {
-  structuredAgentSessionCommandTurn,
-  structuredAgentSessionCommandWasStopped
-} from './structured-agent-session-command-turn'
+import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
+import { structuredAgentSessionCommandWasStopped } from './structured-agent-session-command-turn'
 import type * as CommandTurnModule from './structured-agent-session-command-turn'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {

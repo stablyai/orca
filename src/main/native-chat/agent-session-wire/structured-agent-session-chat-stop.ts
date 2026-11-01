@@ -5,7 +5,7 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   mutateStructuredAgentSession,
   type StructuredAgentSessionMutationContext
