@@ -1,4 +1,7 @@
-import type { AgentJournalQuestion, AgentJournalQuestionItem } from './agent-session-journal-types'
+import type {
+  AgentJournalQuestion,
+  AgentJournalQuestionItem
+} from './agent-session/journal/agent-session-journal-types'
 
 const GROUP_ANSWER_PREFIX = 'question-group:'
 

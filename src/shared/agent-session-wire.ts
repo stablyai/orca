@@ -1,6 +1,6 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
-import type { AgentSessionCurrentWorkFields } from './agent-session-current-work-wire'
+import type { AgentSessionCurrentWorkFields } from './agent-session/requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -11,25 +11,24 @@ import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from './agent-session-queued-message-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 
 export type {
   AgentSessionOptionsResult,
   AgentSessionOptionResult
 } from './agent-session/options/agent-session-options-result'
 export * from './agent-session-wire-refusals'
-export * from './agent-session-queued-message-wire'
 export * from './agent-session-turn-completion-wire'
 // Use plain JSON and optional additions after structured.v1; hosts/clients update independently (docs/reference/remote-wire-compatibility.md).
 
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalResetReason,
   AgentJournalResolution,
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionRecord } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'

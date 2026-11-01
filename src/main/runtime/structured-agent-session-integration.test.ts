@@ -17,7 +17,7 @@ import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/ag
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent

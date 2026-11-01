@@ -1,4 +1,7 @@
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from './agent-session/journal/agent-session-journal-types'
 import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import {
   isStructuredAgentSessionMainAgentWorking,

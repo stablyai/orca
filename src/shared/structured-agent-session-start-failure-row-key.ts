@@ -1,7 +1,7 @@
 // Key failure rows by start identity so readers never match by prose.
 
-import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
-import type { AgentJournalItemIdentity } from './agent-session-journal-types'
+import { parseAgentJournalItemKey } from './agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from './agent-session-journal-identity'
 
 const START_FAILURE_ROW = 'start-failure:'
 

@@ -6,7 +6,7 @@ import {
   type SubmissionRejectionFact
 } from '../../../shared/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type {

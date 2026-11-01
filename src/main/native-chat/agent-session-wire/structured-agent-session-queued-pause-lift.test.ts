@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD as THREAD,

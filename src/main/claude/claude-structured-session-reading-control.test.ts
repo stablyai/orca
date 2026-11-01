@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -7,11 +7,9 @@ import {
   type StructuredAgentSessionLinkageJournal,
   type StructuredAgentSessionReadingControl
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { blockOf } from './claude-background-task-row-test-support'
 import {

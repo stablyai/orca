@@ -1,4 +1,4 @@
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { ok } from './use-mobile-structured-agent-session-queued.test-fixture'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'

@@ -1,6 +1,6 @@
 import { structuredOptionPickIsPending } from '../../../../shared/structured-agent-session-option-pick-book'
 import { useCallback } from 'react'
-import type { StructuredAgentSessionSendControl } from '../../../../shared/structured-agent-session-send-mutation'
+import type { StructuredAgentSessionSendControl } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection

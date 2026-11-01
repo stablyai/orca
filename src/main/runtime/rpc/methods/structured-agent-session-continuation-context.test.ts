@@ -7,9 +7,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalResolution,
   AgentJournalQuestionItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import '../unused-default-rpc-methods.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'

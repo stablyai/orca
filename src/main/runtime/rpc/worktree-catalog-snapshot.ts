@@ -11,7 +11,7 @@ export type WorktreeCatalogSnapshotReply<Result extends Catalog> =
       rowsFromBase: (number | Result['worktrees'][number])[]
     })
 
-// Why: home, the host screen and other phones each poll their own base; a dozen covers them without holding rows.
+// Why: home, the host screen and other phones each poll their own base; 16 covers them without holding rows.
 const RECENT_SNAPSHOT_LIMIT = 16
 
 // Row hashes only, never row content: eviction costs one full reply, never correctness.
@@ -52,15 +52,32 @@ function rowsFromBase<Row>(
   return result.worktrees.map((row, index) => baseIndexByHash.get(rowHashes[index]!) ?? row)
 }
 
+export type WorktreeCatalogSnapshotParams = {
+  afterSnapshotId?: string | null
+  acceptRowDelta?: true
+}
+
 // ETag-style content identity survives concurrency, limits and restarts; unchanged is valid exactly when serialized catalogs match.
+// Why: callers that send neither field get the byte-exact legacy reply.
 export function resolveWorktreeCatalogSnapshot<Result extends Catalog>(
   result: Result,
-  afterSnapshotId: string | null,
-  options?: { acceptRowDelta?: boolean }
-): WorktreeCatalogSnapshotReply<Result> {
+  params: { afterSnapshotId: string | null; acceptRowDelta?: true }
+): WorktreeCatalogSnapshotReply<Result>
+export function resolveWorktreeCatalogSnapshot<Result extends Catalog>(
+  result: Result,
+  params: WorktreeCatalogSnapshotParams
+): Result | WorktreeCatalogSnapshotReply<Result>
+export function resolveWorktreeCatalogSnapshot<Result extends Catalog>(
+  result: Result,
+  params: WorktreeCatalogSnapshotParams
+): Result | WorktreeCatalogSnapshotReply<Result> {
+  if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
+    return result
+  }
+  const afterSnapshotId = params.afterSnapshotId ?? null
   const { snapshotId, rowHashes } = identify(result)
   const baseRowHashes =
-    options?.acceptRowDelta === true && afterSnapshotId !== null
+    params.acceptRowDelta === true && afterSnapshotId !== null
       ? recentRowHashes.get(afterSnapshotId)
       : undefined
   remember(snapshotId, rowHashes)

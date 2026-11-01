@@ -5,7 +5,7 @@ import type {
   AgentJournalSnapshot,
   AgentJournalItemBody,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type {
@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/agent-session-record'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams

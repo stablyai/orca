@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
 import type { ProviderTimelineHold } from './provider-timeline-budget'

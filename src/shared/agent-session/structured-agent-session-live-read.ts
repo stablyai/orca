@@ -8,11 +8,11 @@ import {
 } from '../structured-agent-session-read-refusal'
 import type { AgentSessionRefusalReference } from '../agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../agent-session-write-failure'
-import { createAgentSessionCurrentRequestsReader } from '../agent-session-current-requests-reader'
+import { createAgentSessionCurrentRequestsReader } from './requests/agent-session-current-requests-reader'
 import type {
   AgentSessionCurrentRequestsPiece,
   AgentSessionCurrentRequestsRead
-} from '../agent-session-current-requests-wire'
+} from './requests/agent-session-current-requests-wire'
 import type { StructuredAgentSessionAction } from '../structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
 

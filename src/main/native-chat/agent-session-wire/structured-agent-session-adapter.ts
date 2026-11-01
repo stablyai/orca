@@ -11,11 +11,13 @@ import type {
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalTurnItem,
+  AgentJournalTurnItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAccountHome,

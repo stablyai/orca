@@ -1,9 +1,7 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { isStructuredAgentSessionCommandTurnId } from './structured-agent-session-command-turn'
 

@@ -3,12 +3,12 @@ import type { AgentSessionFailureFact } from '../../../../shared/agent-session-f
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import {
   structuredAgentSessionDeliveryNotices,

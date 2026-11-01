@@ -3,7 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
 import { structuredAgentSessionRowStateStartedAt } from './structured-agent-session-status-started-at'
 

@@ -2,10 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session-failure'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'

@@ -5,10 +5,8 @@ import { expect, test } from 'vitest'
 import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import type {
-  AgentJournalSubmission,
-  AgentSessionJournalIdentity
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session-journal-identity'
 import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
 import {
   createTrackedJournalOpener,

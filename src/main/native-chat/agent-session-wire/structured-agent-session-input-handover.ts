@@ -3,7 +3,7 @@ import {
   type StructuredAgentSessionInputAdmission
 } from './structured-agent-session-input-admission'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop'
