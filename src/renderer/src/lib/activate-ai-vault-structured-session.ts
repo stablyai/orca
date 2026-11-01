@@ -62,12 +62,14 @@ export async function activateAiVaultStructuredSession(
   if (!session.structuredSession) {
     return false
   }
-  await openDesktopStructuredSession(
+  const result = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
     target,
     deps
   )
-  return true
+  // Why: a workspace activation failure is reported as a failed open by the interaction layer,
+  // so callers must not treat it as an opened session.
+  return result.kind === 'opened'
 }
 
 export function openDesktopStructuredSession(
@@ -89,24 +91,28 @@ function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
   deps: Pick<StructuredSessionActivationDeps, 'unavailable' | 'gone' | 'hostCannotOpen'>
-): void {
+): boolean {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
-    if (useAppStore.getState().activeWorktreeId !== workspace) {
-      // Why: a retained chat can point at a workspace id the current catalog no longer
-      // knows (for example after its project directory is re-registered). Ignoring the
-      // failed activation reports success while Jump to Original Pane does nothing.
-      const activated =
-        activateWslMovedWorkspace(workspace) || activateAndRevealWorktree(workspace) !== false
-      if (!activated) {
-        toast.error(
-          translate(
-            'auto.store.slices.worktrees.c6cf133786',
-            'This workspace is no longer available.'
-          )
-        )
-      }
+    if (useAppStore.getState().activeWorktreeId === workspace) {
+      return true
     }
+    // Why: a retained chat can point at a workspace id the current catalog no longer
+    // knows (for example after its project directory is re-registered). Ignoring the
+    // failed activation reports success while Jump to Original Pane does nothing and
+    // lets the replacement flow close the current chat.
+    const activated =
+      activateWslMovedWorkspace(workspace) || activateAndRevealWorktree(workspace) !== false
+    if (!activated) {
+      toast.error(
+        translate(
+          'auto.store.slices.worktrees.c6cf133786',
+          'This workspace is no longer available.'
+        )
+      )
+      return false
+    }
+    return true
   } else if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
     if (result.failure.reason === 'workspace-missing') {
@@ -128,4 +134,5 @@ function presentDesktopStructuredSession(
       deps.unavailable(agent)
     }
   }
+  return true
 }

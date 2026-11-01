@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { i18n } from '../i18n/i18n'
 import {
@@ -13,7 +13,11 @@ import type * as WorktreeActivation from './worktree-activation'
 
 vi.mock('./worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeActivation>()
-  return { ...actual, activateAndRevealWorktree: vi.fn(() => false) }
+  return { ...actual, activateAndRevealWorktree: vi.fn(() => ({ primaryTabId: null })) }
+})
+
+beforeEach(() => {
+  vi.mocked(activateAndRevealWorktree).mockReturnValue({ primaryTabId: null })
 })
 
 const session = { structuredSession: { sessionId: 'session-1', workspaceId: 'workspace-1' } }
@@ -73,15 +77,40 @@ it.each([
   ).toMatchObject({ kind: 'failed' })
   expect(r.parts[feedback]).toHaveBeenCalledOnce()
 })
-it('reports an unavailable workspace instead of silently ignoring a failed activation', async () => {
+it('reports an unavailable workspace as a failed open while keeping the selected tab', async () => {
   const error = vi.spyOn(toast, 'error').mockImplementation(() => 'toast')
+  vi.mocked(activateAndRevealWorktree).mockReturnValue(false)
   try {
     const { parts } = rig()
     const result = await openDesktopStructuredSession({ kind: 'history', ...session }, owner, parts)
 
-    expect(result).toMatchObject({ kind: 'opened' })
+    // Why: callers such as the AI Vault replacement flow close the current chat on "opened",
+    // so a toast about the missing workspace must also surface as a failed open.
+    expect(result).toEqual({
+      kind: 'failed',
+      failure: { reason: 'workspace-missing', beforeEffects: false }
+    })
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('workspace-1')
     expect(error).toHaveBeenCalledWith('This workspace is no longer available.')
+    // The tab selection already happened; report failure without undoing that side effect.
+    expect(parts.activate).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      worktreeId: 'workspace-1',
+      agent: undefined,
+      target: owner
+    })
+  } finally {
+    error.mockRestore()
+  }
+})
+
+it('returns false from the activation helper when the workspace cannot be activated', async () => {
+  const error = vi.spyOn(toast, 'error').mockImplementation(() => 'toast')
+  vi.mocked(activateAndRevealWorktree).mockReturnValue(false)
+  try {
+    const { parts } = rig()
+    expect(await activateAiVaultStructuredSession(session, parts, owner)).toBe(false)
+    expect(error).toHaveBeenCalledOnce()
   } finally {
     error.mockRestore()
   }
