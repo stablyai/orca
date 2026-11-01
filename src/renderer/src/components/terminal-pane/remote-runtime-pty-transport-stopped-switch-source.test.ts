@@ -228,6 +228,23 @@ describe.each(['claude', 'codex'] as const)(
       transport.destroy?.()
     })
 
+    it('shows an exit main answered without waiting long on a listing that never answers', async () => {
+      const { transport, onPtyExit, endStream, answerStream } = await attachedMirror()
+      endStream('exited')
+      await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
+      const harnessCall = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation(async (request: { method: string }) =>
+        request.method === 'session.tabs.list' ? new Promise(() => {}) : harnessCall?.(request)
+      )
+      answerStream({ type: 'error', message: 'terminal_exited' })
+
+      await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'), {
+        timeout: 3_000
+      })
+      expect(onPtyExit).toHaveBeenCalledTimes(1)
+      transport.destroy?.()
+    })
+
     it('keeps recovering when the host never proved a stop (host loss, or an older host)', async () => {
       const { transport, onPtyExit, endStream } = await attachedMirror()
 
