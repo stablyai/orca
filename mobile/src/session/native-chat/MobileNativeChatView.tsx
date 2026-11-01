@@ -116,6 +116,7 @@ export function MobileNativeChatView({
   onRespondPermission,
   composerTray: { content: trayContent, composerInputRef: inputRef } = NO_COMPOSER_TRAY,
   onOpenFile,
+  dismissalScope = null,
   keyboardInset = 0
 }: MobileNativeChatViewProps): React.JSX.Element {
   useMobileColorScheme()
@@ -330,6 +331,7 @@ export function MobileNativeChatView({
         focusedTranscriptEmpty={subagent.focusedTranscriptEmpty}
         fontScale={fontScale}
         onFocusSubagent={subagent.onFocusSubagent}
+        dismissalScope={dismissalScope}
       />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer

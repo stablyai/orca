@@ -4,7 +4,12 @@ import { harness } from './bridge-host-test-harness'
 import { clientFrame } from './bridge-host-test-fakes'
 import { createPageReadyFrame } from './bridge/bridge-client-init-handshake'
 import { versionSchema } from './bridge/bridge-frame-fields'
-import { NEGOTIATED_PAGE_STORAGE_KEYS, PAGE_STORAGE_EXACT_KEYS } from './page-storage-keys'
+import {
+  NEGOTIATED_PAGE_STORAGE_KEYS,
+  NEGOTIATED_PAGE_STORAGE_PREFIXES,
+  PAGE_STORAGE_EXACT_KEYS,
+  PAGE_STORAGE_KEY_PREFIXES
+} from './page-storage-keys'
 
 /** The exact keys every page shipped before `storageKeys` refines `init` storage against. */
 const LEGACY_EXACT_KEYS = [
@@ -61,6 +66,28 @@ describe('negotiated page storage keys across page and shell versions', () => {
     expect(PAGE_STORAGE_EXACT_KEYS.filter((key) => !LEGACY_EXACT_KEYS.includes(key))).toEqual([
       ...NEGOTIATED_PAGE_STORAGE_KEYS
     ])
+    expect(PAGE_STORAGE_KEY_PREFIXES.filter((prefix) => !LEGACY_PREFIXES.includes(prefix))).toEqual(
+      [...NEGOTIATED_PAGE_STORAGE_PREFIXES]
+    )
+  })
+
+  it('keeps a dismissed-subagent record out of an older page init', () => {
+    const key = 'orca:dismissedSubagents:host-a:wt-1'
+    const bridge = harness({ storage: { ...STORAGE, [key]: '{}' } })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+
+    const init = lastInit(bridge.posted)
+    expect(LegacyInitStorageSchema.safeParse(init).success).toBe(true)
+    expect(init.storage).toEqual({ 'orca:pins:host-a': '["wt-1"]' })
+  })
+
+  it('hands a dismissed-subagent record to a page whose ready names the prefix', () => {
+    const key = 'orca:dismissedSubagents:host-a:wt-1'
+    const storage = { ...STORAGE, [key]: '{}' }
+    const bridge = harness({ storage })
+    bridge.host.receive(JSON.stringify(createPageReadyFrame()))
+
+    expect(lastInit(bridge.posted).storage).toEqual(storage)
   })
 
   it('keeps the split layout out of an older page init, which that page then accepts', () => {

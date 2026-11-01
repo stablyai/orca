@@ -25,6 +25,7 @@ import type { NativeChatSubagentActivity } from '../../../src/shared/native-chat
 import type { NativeChatTaskSeedList } from '../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
 import type { MobileNativeChatSubagentRead } from './native-chat/input/use-mobile-native-chat-subagent-page'
+import type { MobileDismissedSubagentScope } from './native-chat/input/use-mobile-dismissed-subagents'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -102,5 +103,6 @@ type ChatViewProps = MobileNativeChatSendProps & {
   promptKey?: string | null
   onRespondPermission?: (send: string) => Promise<boolean>
   onOpenFile?: (relativePath: string) => void
+  dismissalScope?: MobileDismissedSubagentScope | null
   keyboardInset?: number
 }

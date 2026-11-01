@@ -1,5 +1,8 @@
 import { BRIDGE_PROTOCOL_VERSION, type BridgeClientMessage } from './bridge-envelope'
-import { NEGOTIATED_PAGE_STORAGE_KEYS } from '../page-storage-keys'
+import {
+  NEGOTIATED_PAGE_STORAGE_KEYS,
+  NEGOTIATED_PAGE_STORAGE_PREFIXES
+} from '../page-storage-keys'
 
 export const BRIDGE_READY_RETRY_MIN_MS = 50
 export const BRIDGE_READY_RETRY_MAX_MS = 2000
@@ -45,7 +48,7 @@ export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 're
   return {
     v: BRIDGE_PROTOCOL_VERSION,
     type: 'ready',
-    storageKeys: [...NEGOTIATED_PAGE_STORAGE_KEYS],
+    storageKeys: [...NEGOTIATED_PAGE_STORAGE_KEYS, ...NEGOTIATED_PAGE_STORAGE_PREFIXES],
     connectionPathFrames: true
   }
 }

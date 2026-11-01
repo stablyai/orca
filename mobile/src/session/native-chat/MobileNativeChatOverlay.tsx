@@ -41,6 +41,8 @@ type Props = {
   /** Stable host/worktree/tab identity for accepted-send completion fencing. */
   sendSurfaceId: string
   sessionId: string | null
+  hostId?: string
+  worktreeId?: string
   getSendCompletionGeneration: () => number
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
@@ -67,6 +69,8 @@ export function MobileNativeChatOverlay({
   onClearSendError,
   sendSurfaceId,
   sessionId,
+  hostId,
+  worktreeId,
   getSendCompletionGeneration,
   keyboardInset,
   hostName
@@ -266,6 +270,7 @@ export function MobileNativeChatOverlay({
                     onNeedSkills={controller.loadNativeChatSkills}
                     sessionOptions={controller.nativeChatSessionOptions}
                     structuredComposer={structuredComposer}
+                    dismissalScope={hostId && worktreeId ? { hostId, worktreeId, sessionId } : null}
                     keyboardInset={keyboardInset}
                   />
                 </MobileNativeChatNoticeContext.Provider>

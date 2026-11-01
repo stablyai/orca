@@ -2833,6 +2833,8 @@
       "openTasks": "Tasks, {{label}}",
       "openSubagents": "Subagents, {{label}}",
       "subagentsTitle": "Subagents",
+      "dismissSubagent": "Dismiss {{name}}",
+      "dismissAllFailed": "Dismiss all failed",
       "viewingSubagent": "Viewing {{name}}",
       "composerStays": "The composer still sends to the main agent.",
       "backToMain": "Main agent",
