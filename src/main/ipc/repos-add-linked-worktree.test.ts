@@ -2,6 +2,7 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import type * as KeyedPromiseQueue from '../cli/keyed-promise-queue'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { emitRepoAdded } from './repos/repo-added-telemetry'
 
@@ -32,8 +33,8 @@ const {
   detectRepoIconAndUpstreamMock: vi.fn()
 }))
 
-vi.mock(import('../cli/keyed-promise-queue'), async (original) => {
-  const actual = await original()
+vi.mock('../cli/keyed-promise-queue', async (original) => {
+  const actual = await original<typeof KeyedPromiseQueue>()
   return { ...actual, runKeyedSerializedOperation: vi.fn(actual.runKeyedSerializedOperation) }
 })
 

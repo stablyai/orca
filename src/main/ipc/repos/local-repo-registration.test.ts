@@ -1,5 +1,6 @@
 import type * as FsPromises from 'node:fs/promises'
 import type * as RepoIcons from '../../repo-icon-autodetect'
+import type * as ProjectRealpathIdentity from '../../project-realpath-identity'
 import { mkdir, mkdtemp, realpath, rm, stat, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,8 +20,8 @@ vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof FsPromises>()
   return { ...actual, realpath: vi.fn(actual.realpath), stat: vi.fn(actual.stat) }
 })
-vi.mock(import('../../project-realpath-identity'), async (original) => {
-  const actual = await original()
+vi.mock('../../project-realpath-identity', async (original) => {
+  const actual = await original<typeof ProjectRealpathIdentity>()
   return { ...actual, findProjectAtSameRealPath: vi.fn(actual.findProjectAtSameRealPath) }
 })
 

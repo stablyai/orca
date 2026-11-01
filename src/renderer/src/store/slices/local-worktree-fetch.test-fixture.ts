@@ -1,7 +1,20 @@
-import { vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import type { DirectSshWorktreeFetchOptions, WorktreeFetchOptions } from './worktree-helpers'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../shared/detected-worktree-provider-contract'
 
 export function localWorktreeFetch(result: Promise<boolean>): AppState['fetchWorktrees'] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these fixtures exercise only the local fetch overload; no direct-SSH request reaches this Boolean stub.
-  return vi.fn(() => result) as AppState['fetchWorktrees']
+  function fetchWorktrees(
+    repoId: string,
+    options: DirectSshWorktreeFetchOptions
+  ): Promise<HostQualifiedDetectedWorktreeResult>
+  function fetchWorktrees(repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
+  function fetchWorktrees(
+    _repoId: string,
+    options?: WorktreeFetchOptions
+  ): Promise<boolean | HostQualifiedDetectedWorktreeResult> {
+    return options && 'directSshAuthority' in options
+      ? Promise.reject(new Error('This fixture serves only the local fetch overload.'))
+      : result
+  }
+  return fetchWorktrees
 }

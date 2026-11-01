@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { realpath } from 'node:fs/promises'
 import type * as FsPromises from 'node:fs/promises'
+import type * as ProjectRealpathIdentity from '../../project-realpath-identity'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
@@ -38,8 +39,8 @@ vi.mock(import('../../git/repo'), async (original) => {
     inspectGitRepoForRegistrationAsync: vi.fn(actual.inspectGitRepoForRegistrationAsync)
   }
 })
-vi.mock(import('../../project-realpath-identity'), async (original) => {
-  const actual = await original()
+vi.mock('../../project-realpath-identity', async (original) => {
+  const actual = await original<typeof ProjectRealpathIdentity>()
   return { ...actual, findProjectAtSameRealPath: vi.fn(actual.findProjectAtSameRealPath) }
 })
 vi.mock(import('./repo-added-telemetry'), async (original) => {
