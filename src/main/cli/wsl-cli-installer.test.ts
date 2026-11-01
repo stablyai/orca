@@ -445,4 +445,43 @@ describe('WslCliInstaller', () => {
       }
     }
   )
+
+  it('rewrites a \\\\wsl.localhost\\\\ bridge path to \\\\wsl$\\\\ before PowerShell -File', () => {
+    const launcher = _internals.buildWslLauncher(
+      'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
+    )
+    const bridgeUncRewrite = launcher
+      .split('\n')
+      .find((line) => line.startsWith('ORCA_BRIDGE_PS1_WIN=${ORCA_BRIDGE_PS1_WIN/'))
+    expect(bridgeUncRewrite).toBe(
+      'ORCA_BRIDGE_PS1_WIN=${ORCA_BRIDGE_PS1_WIN/#\\\\\\\\wsl.localhost\\\\/\\\\\\\\wsl\\$\\\\}'
+    )
+    expect(launcher).not.toMatch(/^ORCA_WSL_CWD_WIN=\$\{/m)
+    const rewritten = execFileSync(
+      'bash',
+      [
+        '-c',
+        `ORCA_BRIDGE_PS1_WIN='\\\\wsl.localhost\\Ubuntu-24.04\\tmp\\orca-wsl-bridge.ps1'\n${bridgeUncRewrite}\nprintf '%s' "$ORCA_BRIDGE_PS1_WIN"`
+      ],
+      { encoding: 'utf8' }
+    )
+    expect(rewritten).toBe('\\\\wsl$\\Ubuntu-24.04\\tmp\\orca-wsl-bridge.ps1')
+    const rewriteBridgePath = (windowsPath: string): string =>
+      execFileSync(
+        'bash',
+        [
+          '-c',
+          `ORCA_BRIDGE_PS1_WIN='${windowsPath}'\n${bridgeUncRewrite}\nprintf '%s' "$ORCA_BRIDGE_PS1_WIN"`
+        ],
+        { encoding: 'utf8' }
+      )
+    expect(rewriteBridgePath('\\\\wsl$\\Ubuntu-24.04\\tmp\\orca-wsl-bridge.ps1')).toBe(
+      '\\\\wsl$\\Ubuntu-24.04\\tmp\\orca-wsl-bridge.ps1'
+    )
+    expect(rewriteBridgePath('C:\\Users\\alice\\orca-wsl-bridge.ps1')).toBe(
+      'C:\\Users\\alice\\orca-wsl-bridge.ps1'
+    )
+  })
+
 })
