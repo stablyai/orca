@@ -628,6 +628,35 @@ describe('memoized worktree rows', () => {
     expect(onPress).toHaveBeenCalledWith(baseItem)
   })
 
+  it('announces the lineage toggle as expanded or collapsed', async () => {
+    const onToggleLineage = vi.fn()
+    const row = (lineageCollapsed: boolean) =>
+      createElement(WorktreeListRow, {
+        item: { ...baseItem, lineageChildCount: 2, lineageCollapsed },
+        isReadOnly: false,
+        now: 2_000,
+        repoColor: '#000000',
+        cardDetails: ALL_DETAILS,
+        agentActivityDisplayMode: 'compact',
+        status: 'active',
+        onPress: () => undefined,
+        onToggleLineage
+      })
+    const toggle = () =>
+      findAllByHostType(renderer!.root, 'Pressable').find(
+        (node) => node.props.accessibilityState?.expanded !== undefined
+      )
+    await act(async () => {
+      renderer = create(row(false))
+    })
+    expect(toggle()?.props.accessibilityRole).toBe('button')
+    expect(toggle()?.props.accessibilityState).toEqual({ expanded: true })
+    await act(async () => {
+      renderer!.update(row(true))
+    })
+    expect(toggle()?.props.accessibilityState).toEqual({ expanded: false })
+  })
+
   it('fills the open session and leaves the rest of the workspace card clear', async () => {
     const row = (item: TestItem) =>
       createElement(WorktreeListRow, {

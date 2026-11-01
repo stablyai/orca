@@ -22,6 +22,8 @@ export function WorktreeLineageToggle({
     <Pressable
       style={({ pressed }) => [styles.lineageToggle, pressed && styles.lineageTogglePressed]}
       hitSlop={LINEAGE_TOGGLE_HIT_SLOP}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: !item.lineageCollapsed }}
       onPress={(event) => {
         event.stopPropagation()
         onToggle(item)
