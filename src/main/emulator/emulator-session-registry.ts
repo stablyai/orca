@@ -9,6 +9,10 @@ import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const DEVICE_LISTING_BUDGET_MS = 5_000
 
+type CensusBackendForKind = (
+  kind: EmulatorBackendKind
+) => Pick<EmulatorBackend, 'listRunningDeviceIds' | 'stopHelperForDevice'> | null
+
 export class EmulatorSessionRegistry {
   private readonly activeByWorktree = new Map<string, string>()
   private readonly sessions = new Map<string, EmulatorSessionState>()
@@ -66,8 +70,12 @@ export class EmulatorSessionRegistry {
     return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
   }
 
-  /** One row per worktree's active session; a shared device appears once per worktree. */
-  listActive(worktreeId?: string): EmulatorActiveSession[] {
+  /** One row per worktree's live session; a shared device appears once per worktree. */
+  async listLiveActive(
+    worktreeId: string | undefined,
+    backendForKind: CensusBackendForKind
+  ): Promise<EmulatorActiveSession[]> {
+    await this.pruneGoneManagedSessions(backendForKind)
     const rows: EmulatorActiveSession[] = []
     for (const [activeWorktreeId, key] of this.activeByWorktree) {
       const session = this.sessions.get(key)
@@ -96,11 +104,7 @@ export class EmulatorSessionRegistry {
   }
 
   /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
-  async pruneGoneManagedSessions(
-    backendForKind: (
-      kind: EmulatorBackendKind
-    ) => Pick<EmulatorBackend, 'listRunningDeviceIds' | 'stopHelperForDevice'> | null
-  ): Promise<boolean> {
+  async pruneGoneManagedSessions(backendForKind: CensusBackendForKind): Promise<boolean> {
     const managed = this.listSessions().filter((session) => session.managed)
     let live = false
     for (const kind of new Set(managed.map((session) => session.backend))) {

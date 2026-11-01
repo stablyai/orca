@@ -48,8 +48,7 @@ export class EmulatorBridge {
   }
 
   async listActiveSessions(worktreeId?: string): Promise<EmulatorActiveSession[]> {
-    // The prune drops devices stopped outside Orca before they are listed as attached.
-    return this.hasLiveManagedSessions().then(() => this.sessionRegistry.listActive(worktreeId))
+    return this.sessionRegistry.listLiveActive(worktreeId, (kind) => this.backendForKind(kind))
   }
 
   async checkServeSimAvailable(): Promise<void> {
