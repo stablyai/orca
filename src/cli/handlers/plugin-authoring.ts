@@ -21,7 +21,7 @@ import {
 } from '../plugin-authoring/plugin-cli-output'
 import { writePluginTypeFiles } from '../plugin-authoring/plugin-type-files'
 import { findPluginTestFiles, runPluginTests } from '../plugin-authoring/plugin-test-runner'
-import { checkPluginPanels, type PluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
+import { checkPluginPanels, formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import { RuntimeClientError } from '../runtime/types'
 import { PLUGIN_INVALID_CODE } from '../../shared/plugins/approval/plugin-cli-approval'
 
@@ -72,24 +72,6 @@ async function readTarget<T extends PluginValidationReport>(
       error instanceof Error ? error.message : String(error)
     )
   }
-}
-
-function formatPanelCheck(check: PluginPanelCheck): string[] {
-  const head = `${check.panel} (${check.entry}): `
-  if (check.issues.length === 0) {
-    return [
-      `${head}rendered ${check.elements} element(s)`,
-      ...check.warnings.map((warning) => `  warning: ${warning}`)
-    ]
-  }
-  return [
-    `${head}failed`,
-    ...check.issues.map(
-      (issue) =>
-        `  ${issue.location ?? check.entry}: ${issue.kind === 'refused' ? 'Orca would refuse this render: ' : ''}${issue.message}`
-    ),
-    ...check.warnings.map((warning) => `  warning: ${warning}`)
-  ]
 }
 
 function formatInspection(report: PluginInspection): string {
@@ -213,7 +195,7 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
     const failed = panels.filter((panel) => panel.issues.length > 0)
     const text = [
       `${report.file}: ok`,
-      ...panels.flatMap(formatPanelCheck),
+      ...panels.flatMap(formatPluginPanelCheck),
       ...(panels.length === 0 ? ['No components panels to render.'] : [])
     ].join('\n')
     if (failed.length > 0) {

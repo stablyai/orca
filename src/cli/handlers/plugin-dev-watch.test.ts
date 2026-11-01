@@ -86,3 +86,23 @@ describe('orca plugin dev watch', () => {
     })
   })
 })
+
+describe('plugin dev watch --check', () => {
+  it('parses as a flag before or after the folder', () => {
+    for (const argv of [
+      ['plugin', 'dev', 'watch', '.', '--check'],
+      ['plugin', 'dev', 'watch', '--check', '.']
+    ]) {
+      const parsed = parse(argv)
+      expect(parsed.flags.get('check')).toBe(true)
+      expect(parsed.flags.get('dir')).toBe('.')
+    }
+  })
+
+  it('needs a local folder, since it renders the plugin on this machine', () => {
+    const remote = context(vi.fn())
+    remote.flags.set('check', true)
+    expect(() => bindPluginDevWatchHost(remote, '/work/notes')).toThrow(/needs a local folder/)
+    expect(bindPluginDevWatchHost(context(vi.fn()), '/work/notes').check).toBeUndefined()
+  })
+})

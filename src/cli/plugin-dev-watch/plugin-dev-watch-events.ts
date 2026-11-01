@@ -1,4 +1,6 @@
 import type { PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
+import { formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
+import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
 
 /** `missing`: the host lists no plugin for the folder (for example, its id changed). */
 export type PluginDevWatchStatus = PluginHostStatus | 'missing'
@@ -33,6 +35,8 @@ export type PluginDevWatchEvent =
       error?: string
     }
   | ({ type: 'approval'; pluginKey: string } & PluginDevWatchApproval)
+  /** `--check`: `orca plugin check` after the load and after each reload. */
+  | ({ type: 'check'; pluginKey: string } & PluginDevWatchCheckResult)
   | { type: 'warning'; message: string }
   | { type: 'disconnected'; message: string }
   | { type: 'unloaded'; pluginKey: string; path: string; removed: boolean }
@@ -65,6 +69,14 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
       return `${event.pluginKey} is now ${withError(event.status, event.error)} (was ${event.previousStatus})`
     case 'approval':
       return `${event.pluginKey} needs approval: ${event.message}\n  To approve, run: ${event.command}`
+    case 'check':
+      return [
+        event.ok
+          ? `✓ check passed for ${event.pluginKey}`
+          : `✗ check failed for ${event.pluginKey}`,
+        ...event.invalid.map((error) => `  invalid: ${error}`),
+        ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`)
+      ].join('\n')
     case 'warning':
       return `warning: ${event.message}`
     case 'disconnected':

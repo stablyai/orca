@@ -211,8 +211,10 @@ errors arrive as `[frame] <file>:<line> <message>`, at the line in your source f
 `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another terminal.
 Ctrl-C unloads the folder (unless it was loaded before you started) and exits; press it again
 to exit at once. With `--json` it prints one JSON object per line, with a `type` of `loaded`,
-`log`, `reloaded`, `status`, `approval`, `warning`, `disconnected` or `unloaded`, for coding
-agents. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
+`log`, `reloaded`, `status`, `approval`, `check`, `warning`, `disconnected` or `unloaded`, for
+coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
+prints what each components panel drew or threw, with `file:line:col`. Like `orca plugin check`,
+it runs your code on this machine outside Orca's sandbox, and it needs a local folder. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
 prints the command to re-run with `--approve`).
 
 To keep a folder loaded without a terminal, use Settings instead:

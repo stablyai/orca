@@ -6,6 +6,10 @@ import type {
   PluginDevWatchStatus
 } from './plugin-dev-watch-events'
 import { PluginLogFollower } from './plugin-log-follower'
+import {
+  createPluginDevWatchCheckQueue,
+  type PluginDevWatchCheckResult
+} from './plugin-dev-watch-check'
 
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
@@ -16,6 +20,8 @@ export type PluginDevWatchHost = {
   /** Re-checks the folder's approval; null when it needs none. */
   approvalNeeded(): Promise<PluginDevWatchApproval | null>
   devUnload(): Promise<void>
+  /** `--check` only: validates the folder and renders its components panels once. */
+  check?: () => Promise<PluginDevWatchCheckResult>
 }
 
 export type PluginDevWatchDeps = {
@@ -102,6 +108,17 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     }
     stop.abort()
   })
+  const runCheck = host.check
+  const checks = runCheck
+    ? createPluginDevWatchCheckQueue(async () => {
+        try {
+          emit({ type: 'check', pluginKey, ...(await runCheck()) })
+        } catch (error) {
+          emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
+        }
+      })
+    : null
+  checks?.request()
   const follower = new PluginLogFollower()
   let otherKeys: ReadonlySet<string> | null = null
   let lastWarning: string | null = null
@@ -123,6 +140,7 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     const error = next.error ? { error: next.error } : {}
     if (changes > 0) {
       emit({ type: 'reloaded', pluginKey, changes, status: next.status, ...error })
+      checks?.request()
     } else if (next.status !== snapshot.status || next.error !== snapshot.error) {
       emit({
         type: 'status',
@@ -171,6 +189,8 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       polls += 1
       await deps.wait(PLUGIN_DEV_WATCH_POLL_MS, stop.signal)
     }
+    // A check that is still rendering reports before the unload line.
+    await checks?.idle()
     if (!loaded.added) {
       emit({ type: 'unloaded', pluginKey, path: loaded.path, removed: false })
       return 0

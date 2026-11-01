@@ -15,6 +15,7 @@ import {
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
 import { writeStdoutLine } from '../stdout-line'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
 import {
   callPlugins,
   refreshDevTypes,
@@ -60,7 +61,16 @@ async function pollHost<T>(ctx: HandlerContext, method: string, params?: unknown
 
 export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): PluginDevWatchHost {
   const approve = ctx.flags.get('approve')
+  const check = ctx.flags.get('check') === true
+  // Why local only: the check renders the folder's code on this machine, not on the Orca host.
+  if (check && ctx.client.isRemote) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--check renders the plugin on this machine, so it needs a local folder; drop --environment or --check.'
+    )
+  }
   return {
+    ...(check ? { check: () => checkPluginDevFolder(path) } : {}),
     refreshTypes: () => refreshDevTypes(ctx, path),
     devLoad: () =>
       callPlugins<DevLoadResult>(ctx, 'plugins.devLoad', {

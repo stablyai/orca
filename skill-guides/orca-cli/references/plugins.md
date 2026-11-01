@@ -12,7 +12,7 @@ ORCA plugin inspect <dir> --json
 ORCA plugin release-entry <dir> --json
 ORCA plugin test [dir] --json
 ORCA plugin check [dir] --json
-ORCA plugin dev watch <dir> [--approve <fingerprint>] --json
+ORCA plugin dev watch <dir> [--check] [--approve <fingerprint>] --json
 ORCA plugin dev load <dir> [--approve <fingerprint>] --json
 ORCA plugin dev reload [<dir>] [--approve <fingerprint>] --json
 ORCA plugin dev unload <dir|plugin-key> --json
