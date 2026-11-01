@@ -199,6 +199,16 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
       await expect(pathField).toHaveValue(missingPath)
       expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
+      // Keep a toast mounted so the toaster's resting layer can be measured below.
+      await client.app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+          mode: 'web',
+          surface: 'toast'
+        })
+      })
+      await expect(
+        page.locator('[data-sonner-toast]').filter({ hasText: 'Onboarding completed!' })
+      ).toBeVisible()
       await page
         .getByRole('dialog', { name: /Open host project/i })
         .getByRole('button', { name: 'Close', exact: true })
@@ -207,6 +217,7 @@ for (const theme of ['dark', 'light'] as const) {
       const toaster = page.locator('[data-sonner-toaster]')
       await expect(toaster).toHaveCSS('z-index', '47')
 
+      await page.evaluate(() => window.__store?.getState().closeSettingsPage())
       await page.evaluate(async () => {
         await window.__store?.getState().updateSettings({ experimentalAgentDashboardPopout: true })
       })
