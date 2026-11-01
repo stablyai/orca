@@ -288,13 +288,13 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled,
       sendPty,
       sendStructured,
+      goalCommandAvailable: picker.goalCommandAvailable,
       consumeOrcaCommand: pending ? undefined : resume.consume,
       matchesOrcaCommand: pending ? undefined : resume.matchesDraft,
       setDraft,
       setCaret
     })
 
-    const { goalMode } = submission
     const sendState = nativeChatComposerSendState({
       draft,
       messageDelivery: submission.messageDelivery,
