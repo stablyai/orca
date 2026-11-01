@@ -2742,7 +2742,9 @@
       "sendQueue": "Queue",
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
-      "sendSteerHint": "Goes into what the agent is doing now"
+      "sendSteerHint": "Goes into what the agent is doing now",
+      "skippedUnsupportedPaste_one": "Skipped {{count}} unsupported file",
+      "skippedUnsupportedPaste_other": "Skipped {{count}} unsupported files"
     },
     "composerAttachments": {
       "file": "File",

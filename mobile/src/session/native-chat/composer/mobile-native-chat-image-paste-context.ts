@@ -5,3 +5,7 @@ import type { MobileComposerImagePasteHandler } from './mobile-native-chat-compo
 export const MobileNativeChatImagePasteContext = createContext<
   MobileComposerImagePasteHandler | undefined
 >(undefined)
+
+export const MobileNativeChatImagePasteSkipContext = createContext<
+  ((skippedCount: number) => void) | undefined
+>(undefined)

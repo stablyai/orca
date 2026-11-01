@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import {
   MOBILE_COMPOSER_IMAGE_PASTE_EVENT,
@@ -19,6 +19,7 @@ import {
   MESSAGE_MIN_HEIGHT
 } from '../../../components/composer-input/composer-input-styles'
 import type { MobileNativeChatComposerFieldProps } from './mobile-native-chat-composer-field-skill'
+import { MobileNativeChatImagePasteSkipContext } from './mobile-native-chat-image-paste-context'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
 
 // Share of the space above the keyboard the field may grow into before it scrolls.
@@ -68,6 +69,9 @@ export function MobileNativeChatComposerField({
   onChangeTextRef.current = onChangeText
   const readClipboardImageRef = useRef(readClipboardImage)
   readClipboardImageRef.current = readClipboardImage
+  const notifySkippedPaste = useContext(MobileNativeChatImagePasteSkipContext)
+  const notifySkippedPasteRef = useRef(notifySkippedPaste)
+  notifySkippedPasteRef.current = notifySkippedPaste
   const valueRef = useRef(value)
   valueRef.current = value
   const pasteDeliveryRef = useRef(createMobileComposerPasteImageDelivery())
@@ -115,6 +119,9 @@ export function MobileNativeChatComposerField({
           node.selectionEnd ?? node.selectionStart ?? valueRef.current.length
         )
         deliverPasted(Promise.all(claimed.files.map((file) => readMobileComposerImageFile(file))))
+        if (claimed.skippedCount > 0) {
+          notifySkippedPasteRef.current?.(claimed.skippedCount)
+        }
         return
       }
       // iOS WKWebView omits image items from a textarea paste, so an empty paste asks the pasteboard.

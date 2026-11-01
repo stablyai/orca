@@ -15,6 +15,7 @@ export type ClaimedMobileComposerImagePaste =
       readonly kind: 'files'
       readonly files: readonly File[]
       readonly promptText: string
+      readonly skippedCount: number
     }
   | { readonly kind: 'native' }
 
@@ -57,6 +58,27 @@ function snapshotFrom(data: DataTransfer | null): {
   }
 }
 
+function clipboardFileNames(data: DataTransfer | null): string[] {
+  if (!data) {
+    return []
+  }
+  const listed = Array.from(data.files)
+  if (listed.length > 0) {
+    return listed.map((file) => file.name)
+  }
+  const names: string[] = []
+  for (const item of Array.from(data.items)) {
+    if (item.kind !== 'file') {
+      continue
+    }
+    const file = item.getAsFile()
+    if (file) {
+      names.push(file.name)
+    }
+  }
+  return names
+}
+
 function imageFiles(data: DataTransfer | null): File[] {
   if (!data) {
     return []
@@ -82,20 +104,22 @@ function imageFiles(data: DataTransfer | null): File[] {
 export function claimMobileComposerImagePaste(
   data: DataTransfer | null
 ): ClaimedMobileComposerImagePaste | null {
-  const decision: MobileComposerImagePasteDecision | null = mobileComposerImagePasteDecision(
-    snapshotFrom(data)
-  )
+  const snapshot = snapshotFrom(data)
+  const decision: MobileComposerImagePasteDecision | null =
+    mobileComposerImagePasteDecision(snapshot)
   if (decision === 'files') {
     const files = imageFiles(data)
     if (files.length === 0) {
       return null
     }
+    const names = clipboardFileNames(data)
     return {
       kind: 'files',
       files,
+      skippedCount: snapshot.otherFileCount,
       promptText: mobileComposerImagePastePromptText(
         data?.getData('text/plain') ?? '',
-        files.map((file) => file.name)
+        names.length > 0 ? names : files.map((file) => file.name)
       )
     }
   }
