@@ -19,7 +19,7 @@ import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
-import { emulatorAttachDevice, resolveEmulatorAttachTarget } from './emulator-attach-target'
+import { attachWithAvdFallback, resolveEmulatorAttachTarget } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import {
@@ -196,6 +196,7 @@ export function useEmulatorPaneSession({
           throw noEmulatorDevicesError()
         }
         requestedTarget = target
+        setSelectedUdid(target)
         if (target !== liveTargetRef.current) {
           // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
@@ -203,13 +204,9 @@ export function useEmulatorPaneSession({
           liveTargetRef.current = null
           resetVisualOrientation()
         }
-        const device = await emulatorAttachDevice(list, target, refreshDevices)
-        setSelectedUdid(device)
-        const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
-          device,
-          worktree: worktreeId,
-          focus: false
-        })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
+        const res = (await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
+          callRuntimeRpc({ kind: 'local' }, 'emulator.attach', { device, worktree: worktreeId })
+        )) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
         if (!mountedRef.current) {
           // Attach may finish after unmount cleanup ran before the session was registered.
           await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)

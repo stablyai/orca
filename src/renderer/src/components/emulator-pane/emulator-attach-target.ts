@@ -19,17 +19,22 @@ export function resolveEmulatorAttachTarget({
   return devices.length > 0 ? pickDefaultDevice(devices)?.udid : undefined
 }
 
-// An emulator's adb serial dies with it; once it is gone, its AVD name boots it again.
-// A live serial wins while it is still that AVD: read-only instances can share one AVD name.
-export async function emulatorAttachDevice(
+// An emulator's adb serial dies with it; once the host no longer finds it, its AVD name boots it again.
+export async function attachWithAvdFallback<T>(
   devices: SimulatorDeviceRow[],
   target: string,
-  refreshDevices: () => Promise<SimulatorDeviceRow[]>
-): Promise<string> {
-  const avdName = devices.find((d) => d.udid === target && d.runtime === 'emulator')?.name
-  if (!avdName) {
-    return target
+  onRetarget: (device: string) => void,
+  attachTo: (device: string) => Promise<T>
+): Promise<T> {
+  try {
+    return await attachTo(target)
+  } catch (error) {
+    const avdName = devices.find((d) => d.udid === target && d.runtime === 'emulator')?.name
+    const notFound = error instanceof Error && 'code' in error
+    if (!avdName || avdName === target || !notFound || error.code !== 'emulator_device_not_found') {
+      throw error
+    }
+    onRetarget(avdName)
+    return attachTo(avdName)
   }
-  const current = await refreshDevices()
-  return current.some((d) => d.udid === target && d.name === avdName) ? target : avdName
 }
