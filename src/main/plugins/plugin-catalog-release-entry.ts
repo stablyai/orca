@@ -11,6 +11,7 @@ import {
   PLUGIN_MANIFEST_FILENAME,
   parsePluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
+import { validatePluginInstallTree } from './plugin-artifact-validation'
 import { materializePluginGitTree, type PluginGitBytesRunner } from './installation/plugin-git-tree'
 import { hashPluginTree } from './plugin-content-hash'
 
@@ -95,8 +96,12 @@ async function committedReleaseEntry(
       return { note: `no catalog release entry: HEAD has no valid ${PLUGIN_MANIFEST_FILENAME}` }
     }
     const parsed = parsePluginManifest(rawManifest)
+    // Why: install refuses a commit whose declared files are missing, e.g. a manifest committed alone.
+    const files = parsed.ok
+      ? await validatePluginInstallTree(tree, parsed.manifest)
+      : { ok: true as const }
     const release =
-      hashed.ok && parsed.ok
+      hashed.ok && parsed.ok && files.ok
         ? pluginCatalogReleaseEntry(parsed.manifest, { commit, contentHash: hashed.hash })
         : null
     // Why here: a new release entry must carry the manifest's images, or listings lose their covers.
@@ -120,7 +125,9 @@ async function committedReleaseEntry(
         ? hashed.error
         : !parsed.ok
           ? parsed.error
-          : 'catalogs need manifest format 2'
+          : !files.ok
+            ? files.error
+            : 'catalogs need manifest format 2'
       return { note: `no catalog release entry: committed plugin is not installable (${reason})` }
     }
     return { entry: images ? { ...release, images } : release }
