@@ -151,6 +151,39 @@ export function buildMobileSourceControlPrimaryAction(
   }
 }
 
+export type MobileBranchRemoteAction = {
+  label: string
+  disabled: boolean
+  loading: boolean
+  run: () => Promise<void>
+}
+
+// The Commits list's Push: the branch's remote step from the same decision, with local changes set aside.
+export function buildMobileBranchRemoteAction(
+  args: MobileSourceControlPrimaryActionArgs
+): MobileBranchRemoteAction | null {
+  const decision = resolveSourceControlCommitAreaPrimaryActionDecision({
+    ...buildMobileSourceControlDecisionInputs(args),
+    stagedCount: 0,
+    hasUnstagedChanges: false,
+    hasStageableChanges: false,
+    hasMessage: false
+  })
+  if (decision.kind !== 'push' && decision.kind !== 'publish' && decision.kind !== 'sync') {
+    return null
+  }
+  const ioBusy = args.busyAction !== null
+  const forcePushBlocked =
+    decision.requiresForceWithLease === true &&
+    getMobileForcePushBlockedReason(args.review) !== undefined
+  return {
+    label: getMobilePrimaryActionLabel(decision),
+    disabled: decision.disabled || ioBusy || forcePushBlocked,
+    loading: isLoadingDecision(decision, args.busyAction),
+    run: () => runMobilePrimaryAction(decision, args.handlers)
+  }
+}
+
 function isMobileRemoteOperationActive(busyAction: string | null): boolean {
   return getInFlightRemoteOpKind(busyAction) !== null
 }

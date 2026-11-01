@@ -61,7 +61,7 @@ export function sourceControlScreenReadMountAdapters(
         dispose: hook.unmount
       }
     },
-    'source-control.history-commit-files': ({ client, effect }) => {
+    'source-control.history-branch-commits': ({ client, effect }) => {
       const List = modules.load<typeof import('../../../source-control/MobileGitHistoryList')>(
         'mobile/src/source-control/MobileGitHistoryList.tsx'
       ).MobileGitHistoryList
@@ -86,7 +86,9 @@ export function sourceControlScreenReadMountAdapters(
               connState: 'connected',
               worktreeId: WORKTREE,
               hostId: HOST,
-              bottomInset: 34
+              bottomInset: 34,
+              onOpenCommit: (commit: { id: string }) =>
+                effect('history.open-commit', { id: commit.id })
             })
           ),
         effect
@@ -99,15 +101,15 @@ export function sourceControlScreenReadMountAdapters(
           if (name === 'unmount') {
             return screen.unmount()
           }
-          if (name === 'expand') {
+          if (name === 'open') {
             // The inert FlatList never renders rows; invoke the handler from the screen’s own renderItem.
             return performHookAction(() => pressFirstCommit(screen.tree()))
           }
-          throw new Error(`Unknown history commit action: ${name}`)
+          throw new Error(`Unknown history action: ${name}`)
         },
         state: () => ({
           ...projectMountedScreen(screen),
-          // Render the first row to observe its otherwise-hidden commit file list.
+          // Render the first commit row to observe its timeline, stats and copy.
           commitRow: projectFirstCommitRow(screen.tree())
         }),
         dispose: screen.unmount
@@ -132,7 +134,7 @@ function projectFirstCommitRow(tree: unknown): unknown {
 function pressFirstCommit(tree: unknown): void {
   const press = findPressHandler(renderFirstCommit(tree))
   if (!press) {
-    throw new Error('The history list rendered no commit to expand')
+    throw new Error('The history list rendered no commit to open')
   }
   press()
 }
@@ -141,9 +143,13 @@ function pressFirstCommit(tree: unknown): void {
 function renderFirstCommit(tree: unknown): unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both members are read back optionally and guarded below; FlatList props are whatever the screen passed.
   const list = renderedElementProps(tree, 'FlatList')[0] as CommitList | undefined
-  const rows = Array.isArray(list?.data) ? list.data : []
+  const rows: unknown[] = Array.isArray(list?.data) ? list.data : []
+  // Section headers share the list; the first commit row is the first item of kind commit.
+  const commit = rows.find(
+    (row) => typeof row === 'object' && row !== null && 'kind' in row && row.kind === 'commit'
+  )
   const render = list?.renderItem
-  return typeof render === 'function' && rows.length > 0 ? render({ item: rows[0] }) : null
+  return typeof render === 'function' && commit !== undefined ? render({ item: commit }) : null
 }
 
 function collectElementText(node: unknown, text: string[]): void {

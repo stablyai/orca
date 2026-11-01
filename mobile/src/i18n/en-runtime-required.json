@@ -281,6 +281,14 @@
       "files_one": "{{count}} file",
       "files_other": "{{count}} files"
     },
+    "commitDetail": {
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
+    "commits": {
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits"
+    },
     "dropdownCounts": {
       "fastForwardCount_one": "Fast-forward {{count}} commit",
       "fastForwardCount_other": "Fast-forward {{count}} commits",

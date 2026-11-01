@@ -3468,6 +3468,35 @@
       "keepFile": "Keep file",
       "keepDeletion": "Keep deletion",
       "completeMergeFailed": "Complete merge failed"
+    },
+    "commitDetail": {
+      "copySha": "Copy SHA",
+      "openOnGitHub": "Open on GitHub",
+      "openOnWeb": "Open on the web",
+      "back": "Back to commits",
+      "title": "Commit",
+      "more": "More commit actions",
+      "author": "Author",
+      "date": "Date",
+      "status": "Status",
+      "onOrigin": "On origin",
+      "notPushed": "Not pushed",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "filesHeader": "Files",
+      "authorWithCoAuthors": "{{author}}, with {{coAuthors}}"
+    },
+    "commits": {
+      "branchedFrom": "Branched from {{baseRef}}",
+      "baseUpToDate": "Up to date",
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits",
+      "updateBranch": "Update branch",
+      "back": "Back to source control",
+      "title": "Commits",
+      "loadMoreFailed": "Couldn’t load more commits. Retry",
+      "notPushed": "Not pushed {{count}}",
+      "onOrigin": "On origin {{count}}"
     }
   },
   "newWorkspace": {
