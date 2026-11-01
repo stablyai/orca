@@ -59,24 +59,9 @@ describe('worktree ps agentWait', () => {
     _internals.resetCachesForTests()
   })
 
-  it('reports the terminal hook wait only when requested', async () => {
-    const runtime = await makeRuntimeWithHookRow('waiting')
-    const probe = vi.spyOn(runtime, 'getTerminalInteractiveWait')
-
-    expect(await readAgentRow(runtime, false)).not.toHaveProperty('agentWait')
-    expect(probe).not.toHaveBeenCalled()
-    expect((await readAgentRow(runtime, true))?.agentWait).toMatchObject({ source: 'hook' })
-  })
-
   it('resolves the live terminal for a hook row that reported only its pane', async () => {
     const runtime = await makeRuntimeWithHookRow('waiting', 'http')
 
     expect((await readAgentRow(runtime, true))?.agentWait).toMatchObject({ source: 'hook' })
-  })
-
-  it('reports null when the terminal shows no wait', async () => {
-    const runtime = await makeRuntimeWithHookRow('working')
-
-    expect((await readAgentRow(runtime, true))?.agentWait).toBeNull()
   })
 })

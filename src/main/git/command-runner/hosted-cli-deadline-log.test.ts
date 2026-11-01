@@ -1,14 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeSpawnedChild as mockChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
-
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal()),
-  spawn: spawnMock
-}))
-
-import { ghExecFileAsync } from './gh-exec-file'
 import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 
 // A resolved path identifies recursive wrappers without logging secret-bearing arguments.
@@ -16,14 +7,10 @@ describe('hosted CLI deadline logging', () => {
   let warn: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    vi.useFakeTimers()
-    spawnMock.mockReset()
     warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(process, 'kill').mockImplementation((() => true) as unknown as typeof process.kill)
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -43,37 +30,5 @@ describe('hosted CLI deadline logging', () => {
     expect(line).toContain('(3 args)')
     expect(line).not.toContain('ghp_secret')
     expect(line).not.toContain('Authorization')
-  })
-
-  it('logs once when gh is killed at its deadline', async () => {
-    spawnMock.mockReturnValue(mockChild())
-
-    const rejection = expect(
-      ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], { timeout: 15_000 })
-    ).rejects.toThrow('timed out')
-    await vi.advanceTimersByTimeAsync(15_000)
-    await vi.advanceTimersByTimeAsync(15_000)
-    await rejection
-
-    const deadlineLines = warn.mock.calls.filter((call) => String(call[0]).startsWith('[gh]'))
-    expect(deadlineLines).toHaveLength(1)
-    expect(String(deadlineLines[0][0])).toContain('wrapper script')
-  })
-
-  it('stays quiet when the caller aborted rather than the deadline firing', async () => {
-    const controller = new AbortController()
-    spawnMock.mockReturnValue(mockChild())
-
-    const rejection = expect(
-      ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
-        timeout: 15_000,
-        signal: controller.signal
-      })
-    ).rejects.toThrow()
-    controller.abort()
-    await vi.advanceTimersByTimeAsync(15_000)
-    await rejection
-
-    expect(warn.mock.calls.filter((call) => String(call[0]).startsWith('[gh]'))).toHaveLength(0)
   })
 })

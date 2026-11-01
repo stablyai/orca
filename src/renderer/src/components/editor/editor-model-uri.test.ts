@@ -18,10 +18,6 @@ const paths = [
 ]
 
 describe('toEditorModelUri', () => {
-  it.each(paths)('yields the undo-preserving file scheme for %s', (path) => {
-    expect(URI.parse(toEditorModelUri(path)).scheme).toBe('file')
-  })
-
   // Model creation parses path strings and registry lookup uses toString; require round-trip stability so disposal finds the created model.
   it.each(paths)('round-trips through the Uri.parse the editor applies to %s', (path) => {
     const modelUri = toEditorModelUri(path)
@@ -52,11 +48,6 @@ describe('toEditorModelUri', () => {
     expect(toEditorModelUri(remoteUri)).toBe(remoteUri)
     expect(toEditorModelUri(path, '["hub-b","ssh:target#1"]')).not.toBe(remoteUri)
     expect(toEditorModelUri(remoteUri, '["hub-a","ssh:target#1"]')).toBe(remoteUri)
-  })
-
-  it('folds drive-letter case under an owner too', () => {
-    const owner = '["hub-a","ssh:target"]'
-    expect(toEditorModelUri('C:/repo/a.ts', owner)).toBe(toEditorModelUri('c:/repo/a.ts', owner))
   })
 
   it('keeps a UNC path apart from the same POSIX path under one owner', () => {

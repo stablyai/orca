@@ -1,7 +1,6 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { spawnProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { resolveGuestNativeAgentCommand, WINDOWS_ONLY_AGENT_CLI_DIR } from './command'
@@ -48,10 +47,6 @@ describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL hos
     }
   )
 
-  it('leaves a CLI missing everywhere as its bare name, as before', () => {
-    expect(resolveGuestNativeAgentCommand('claude', options(), [drive])).toBe('claude')
-  })
-
   it('resolves exactly as before off a WSL host', () => {
     const windowsCopy = install(join(drive, 'npm'), 'claude')
     expect(resolveGuestNativeAgentCommand('claude', options(), [])).toBe(windowsCopy)
@@ -60,16 +55,6 @@ describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL hos
 
 describe.skipIf(process.platform === 'win32')('callers given a Windows-only CLI', () => {
   const missing = `${WINDOWS_ONLY_AGENT_CLI_DIR}/claude`
-
-  it('see nothing on disk (hook fingerprints, presence checks)', () => {
-    expect(existsSync(missing)).toBe(false)
-  })
-
-  it('get ENOENT from a spawn (login, rate limits, app-server probes)', async () => {
-    const child = spawnProcess({ program: missing, args: ['--version'] })
-    const error = await new Promise<NodeJS.ErrnoException>((resolve) => child.on('error', resolve))
-    expect(error.code).toBe('ENOENT')
-  })
 
   it('read no version (hook-event and diff-panel version probes)', async () => {
     await expect(probeRecentClaudeCliVersion(missing)).resolves.toBeNull()

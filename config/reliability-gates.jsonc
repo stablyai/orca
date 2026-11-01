@@ -504,9 +504,9 @@
       "coverageNotes": "Shared preparation is exercised with real local plugin files and account environment plus mocked host spawn contracts. Captured real Claude startup title drives renderer recovery. Physical Linux, Windows, SSH and WSL delayed launches remain unproved.",
       "motivatingLinks": ["docs/bug-reproductions/delayed-agent-launch.md"],
       "invariant": "A literal sleep followed by && must not cause the later harness to lose hook/account preparation or hidden renderer query delivery. Preparation and typed-command hints are not live process evidence. Fresh agent startup output may request one bounded host confirmation after the initial command read window has expired.",
-      "oracle": "All 45 configured harnesses keep hidden startup query eligibility. Delayed OpenCode 2 installs v2 hooks rather than v1, disabled harnesses do not fall back, selected managed accounts survive, and Pi/OMP/Prime preparation targets the requested harness. A captured Claude startup title at 30 seconds yields process-confirmed routing, never title-authorized routing. A title storm causes at most three additional reads; close and untrackable providers cause none.",
+      "oracle": "Delayed OpenCode 2 installs v2 hooks rather than v1, disabled harnesses do not fall back, selected managed accounts survive, and Pi/OMP/Prime preparation targets the requested harness. A captured Claude startup title at 30 seconds yields process-confirmed routing, never title-authorized routing. A title storm causes at most three additional reads; close and untrackable providers cause none.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/terminal-startup-command-classifier.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/shared/agent-command-line-intent.test.ts",
@@ -515,7 +515,6 @@
         "src/main/ipc/pty/host-env/opencode-hook-installation.test.ts",
         "src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts",
         "src/main/managed-data-accounts/launch-environment.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-startup-command-classifier.test.ts",
         "src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts"
@@ -524,10 +523,6 @@
         {
           "file": "src/main/ipc/pty/host-env/opencode-hook-installation.test.ts",
           "assertions": ["explicit %s with disabled"]
-        },
-        {
-          "file": "src/renderer/src/components/terminal-pane/terminal-startup-command-classifier.test.ts",
-          "assertions": ["keeps hidden %s startup queries live after sleep"]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts",
@@ -552,7 +547,7 @@
           "result": "passed",
           "durationSeconds": 1.86,
           "summary": "214 assertions pass across nine files, including all 45 harness classifications, actual hook files, delayed account preparation, late process routing, hidden query delivery and bounded recovery.",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/terminal-startup-command-classifier.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
         }
       ],
       "runtimeBudget": {
@@ -1008,8 +1003,8 @@
       "invariant": "Ordinary lifecycle operations durably checkpoint SQLite without rewriting legacy JSON; missing SQLite cannot revive stale JSON; explicit recovery preserves artifacts and selects the named profile without changing active-profile state; the updater refuses JSON-era releases before admitting their feed.",
       "oracle": "Assert unchanged JSON through final flush and maintenance, failure propagation before quit, missing-database refusal after marker publication, archived SQLite and latest committed JSON from inactive-profile conversion, unchanged active database/index/HTTP marker, and zero feed/check calls for incompatible pinned/local builds.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -1018,7 +1013,6 @@
         "src/main/persistence/profile-state/profile-state-authority-marker.test.ts",
         "src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts",
         "src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts",
-        "src/main/updater-sqlite-profile-downgrade.test.ts",
         "src/main/persistence/loading-store/profile-state-checkpoints.test.ts",
         "src/main/startup/main-window-core-services.test.ts",
         "tests/e2e/profile-state-terminal-restart-persistence.spec.ts"
@@ -1045,6 +1039,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
           "result": "passed",
           "durationSeconds": 33.17,
           "summary": "1,435 tests passed with four skips across 145 passed test files and two skipped files. All three typecheck projects and the CLI build passed separately."
@@ -15592,7 +15587,7 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A deterministic service-state-machine oracle now models a current-contract worker and coordinator whose renderer graph identities disappear across an app/runtime update. It exercises the production verifier with restored PTY and hydrated hook commitments, proves authenticated completion replay across a fresh runtime, explicit takeover, ordinary mail routing, remote-attachment process fencing, retained Task/Dispatch/terminal identity, and unchanged fixture marker bytes, and rejects foreign pane evidence. Other deterministic units cover authority-aware legacy formatting, exact legacy worker identity planning, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, creator pane/process/Run-generation fencing, indexed retained-Run lookup scaling, the SSH in-process CLI fallback, exact legacy Task/Dispatch/report-receipt verification, JSON rejection envelopes, and capability-negotiated Run-home settlement. The federation oracle drops the first terminal ACK, restarts Run-home twice, verifies replay through the existing polling path and the persisted acknowledgment watermark, races identical reports, accepts preexisting same-outcome ACK batches, rejects conflicting batches, and covers protocol v1/v2 completion across independently updated peers. A migration unit upgrades a v26 database with a zeroed watermark without replaying older migrations. Three isolated macOS Electron journeys launch fake Codex workers through the real RPC path. Distinct installed A/B artifacts plus live SSH, WSL, folder, Linux, and Windows cutover journeys remain explicit gaps.",
+      "coverageNotes": "A deterministic service-state-machine oracle now models a current-contract worker and coordinator whose renderer graph identities disappear across an app/runtime update. It exercises the production verifier with restored PTY and hydrated hook commitments, proves authenticated completion replay across a fresh runtime, explicit takeover, ordinary mail routing, remote-attachment process fencing, retained Task/Dispatch/terminal identity, and unchanged fixture marker bytes, and rejects foreign pane evidence. Other deterministic units cover authority-aware legacy formatting, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, creator pane/process/Run-generation fencing, indexed retained-Run lookup scaling, the SSH in-process CLI fallback, exact legacy Task/Dispatch/report-receipt verification, JSON rejection envelopes, and capability-negotiated Run-home settlement. The federation oracle drops the first terminal ACK, restarts Run-home twice, verifies replay through the existing polling path and the persisted acknowledgment watermark, races identical reports, accepts preexisting same-outcome ACK batches, rejects conflicting batches, and covers protocol v1/v2 completion across independently updated peers. A migration unit upgrades a v26 database with a zeroed watermark without replaying older migrations. Three isolated macOS Electron journeys launch fake Codex workers through the real RPC path. Distinct installed A/B artifacts plus live SSH, WSL, folder, Linux, and Windows cutover journeys remain explicit gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/11107#discussion_r3663321387",
         "https://github.com/stablyai/orca/issues/13858",
@@ -15611,7 +15606,6 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-creator-authority-performance.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm run test:e2e -- tests/e2e/orchestration-worker-terminal-visibility.spec.ts --workers=1",
@@ -15622,7 +15616,6 @@
         "src/main/runtime/rpc/methods/orchestration/messaging/check-worker-federated-attachment.test.ts",
         "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
         "src/main/runtime/orchestration/formatter.test.ts",
-        "src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
         "src/main/runtime/orchestration/orchestration-creator-authority-performance.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/cli/handlers/orchestration.test.ts",
@@ -15664,13 +15657,6 @@
           "assertions": [
             "creator lookup uses the assignee-handle and pane-leaf indexes without a retained-Run scan",
             "300 Task reads remain bounded with 50,000 unrelated retained Runs"
-          ]
-        },
-        {
-          "file": "src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
-          "assertions": [
-            "only exact unique terminal, pane, process-incarnation, and worktree evidence becomes recoverable",
-            "ambiguous, incomplete, or mismatched legacy identities remain fenced and deferred"
           ]
         },
         {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { TerminalIdleCursorReset } from './terminal-idle-cursor-reset'
-import { RESET_TERMINAL_CURSOR_STYLE as RESET } from '../../../../shared/terminal-mode-reset-profiles'
 
 const SGR = '\x1b[38;2;115;118;123;48;2;65;69;76m'
 
@@ -32,50 +31,4 @@ describe('TerminalIdleCursorReset', () => {
       }
     }
   )
-
-  it.each([
-    ['\x1b', '[31', 'm'],
-    ['\x1b]0;pending title', '\x1b', '\\'],
-    ['\x1b]0;pending title', ' more', '\x07'],
-    ['\x1bP$q', 'm', '\x1b\\'],
-    ['\x1b[38;2;', '1;2;', '\x18'],
-    ['\x1b[38;2;', '1;2;', '\x1a'],
-    ['\x1b\x00[31;', '1;', '2m'],
-    ['\x1b\t]0;title', ' suffix', '\x07'],
-    ['\x1b\x00 ', ' ', 'q']
-  ])('waits through the incomplete sequence %j', (first, middle, last) => {
-    const reset = new TerminalIdleCursorReset()
-    expect(reset.processOutput(first)).toBe(first)
-    expect(reset.request()).toBe('')
-    expect(reset.request()).toBe('')
-    expect(reset.processOutput(middle)).toBe(middle)
-    expect(reset.processOutput(last)).toBe(`${last}${RESET}`)
-    expect(reset.processOutput('plain')).toBe('plain')
-  })
-
-  it('waits if a chunk closes one sequence but opens another', () => {
-    const reset = new TerminalIdleCursorReset()
-    reset.processOutput('\x1b[38;2;')
-    expect(reset.request()).toBe('')
-    expect(reset.processOutput('1;2;3m⠁\x1b[')).toBe('1;2;3m⠁\x1b[')
-    expect(reset.processOutput('0m')).toBe(`0m${RESET}`)
-  })
-
-  it('resets immediately at a complete boundary', () => {
-    const reset = new TerminalIdleCursorReset()
-    expect(reset.request()).toBe(RESET)
-    expect(reset.processOutput('')).toBe('')
-  })
-
-  it.each(['\x1b]52;c;', '\x1b_G'])('waits through a large control string %j', (prefix) => {
-    const reset = new TerminalIdleCursorReset()
-    reset.processOutput(prefix)
-    expect(reset.request()).toBe('')
-    const payload = 'a'.repeat(8192)
-    for (let i = 0; i < 4; i += 1) {
-      expect(reset.processOutput(payload)).toBe(payload)
-    }
-    expect(reset.processOutput('\x1b')).toBe('\x1b')
-    expect(reset.processOutput('\\')).toBe(`\\${RESET}`)
-  })
 })

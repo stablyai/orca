@@ -1043,7 +1043,6 @@
 13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
 2 test-no-wall-clock:src/main/terminal-history-fish-session.node-pty.test.ts
 2 test-no-wall-clock:src/main/terminal-history-gc-fs-call-count.test.ts
-2 test-no-wall-clock:src/main/updater-sqlite-profile-downgrade.test.ts
 4 test-no-wall-clock:src/main/updater/serve-supervisor-install-park.test.ts
 4 test-no-wall-clock:src/main/windows-live-tree-kill.win32.test.ts
 2 test-no-wall-clock:src/main/windows/windows-host-job.win32.test.ts

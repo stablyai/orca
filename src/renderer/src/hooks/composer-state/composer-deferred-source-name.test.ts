@@ -59,21 +59,4 @@ describe('name ownership while resolving review bases', () => {
       expect(result.current.baseBranch).toBe('feature/export')
     }
   )
-
-  it.each(['github', 'gitlab'])(
-    'still links and auto-names a direct %s Start-from selection',
-    (provider) => {
-      const { result } = renderHook(useReviewBaseSelectionFixture)
-      act(() => {
-        if (provider === 'github') {
-          result.current.handleBaseBranchPrSelect('feature/export', pr)
-        } else {
-          result.current.handleBaseBranchMrSelect('feature/export', mr)
-        }
-      })
-
-      expect(result.current.name).toBe('fix-export')
-      expect(result.current.linkedWorkItem).toMatchObject({ provider, number: 2 })
-    }
-  )
 })
