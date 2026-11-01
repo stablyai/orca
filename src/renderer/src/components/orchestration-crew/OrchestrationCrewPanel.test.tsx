@@ -63,17 +63,17 @@ afterEach(() => {
 it('keeps keyboard/body disclosure, chevron, Open, Copy, Escape and collapse independent', async () => {
   const user = userEvent.setup()
   mount()
-  const tab = screen.getByRole('button', { name: 'Show crew: 1 workers' })
+  const tab = screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 working' })
   tab.focus()
   await user.keyboard('{Enter}')
-  expect(screen.getByRole('button', { name: 'Collapse crew panel' })).toHaveFocus()
+  expect(screen.getByRole('button', { name: 'Collapse orchestration panel' })).toHaveFocus()
   expect(screen.getByText('Orchestration')).toBeInTheDocument()
-  const body = screen.getByRole('button', { name: /Worker Check the result/ })
+  const body = screen.getByRole('button', { name: /Check the result The result is ready\./ })
   expect(body).toHaveAttribute('aria-expanded', 'false')
   body.focus()
   await user.keyboard(' ')
   expect(body).toHaveAttribute('aria-expanded', 'true')
-  expect(screen.getByText('The result is ready.')).toBeInTheDocument()
+  expect(screen.getByText('Latest')).toBeInTheDocument()
   expect(rig.open).not.toHaveBeenCalled()
   expect(rig.copy).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: "Show Worker's task and latest message" }))
@@ -99,25 +99,30 @@ it('keeps keyboard/body disclosure, chevron, Open, Copy, Escape and collapse ind
   expect(rig.open).toHaveBeenLastCalledWith(worker, host)
   await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
   expect(body).toHaveAttribute('aria-expanded', 'true')
-  screen.getByRole('button', { name: 'Collapse crew panel' }).focus()
-  expect(await screen.findByRole('tooltip')).toHaveTextContent('Collapse crew panel')
+  screen.getByRole('button', { name: 'Collapse orchestration panel' }).focus()
+  expect(await screen.findByRole('tooltip')).toHaveTextContent('Collapse orchestration panel')
   await user.keyboard('{Escape}')
   expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-  expect(screen.getByRole('complementary', { name: 'Agent crew' })).toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: 'Orchestration' })).toBeInTheDocument()
   body.focus()
   await user.keyboard('{Escape}')
-  expect(screen.queryByRole('complementary', { name: 'Agent crew' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Show crew: 1 workers' })).toHaveFocus()
+  expect(screen.queryByRole('complementary', { name: 'Orchestration' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^Show orchestration:/ })).toHaveFocus()
   await user.keyboard('{Enter}')
-  await user.click(screen.getByRole('button', { name: 'Collapse crew panel' }))
-  expect(screen.getByRole('button', { name: 'Show crew: 1 workers' })).toHaveFocus()
+  await user.click(screen.getByRole('button', { name: 'Collapse orchestration panel' }))
+  expect(screen.getByRole('button', { name: /^Show orchestration:/ })).toHaveFocus()
   expect(rig.copy).toHaveBeenCalledOnce()
 })
 
-it('starts pending questions expanded without navigating or copying', async () => {
+it('shows a pending question on the row and in its details without navigating or copying', async () => {
   const user = userEvent.setup()
   mount({ ...worker, pendingQuestion: { preview: 'Which option?', at: '2026-10-28T01:00:00Z' } })
-  await user.click(screen.getByRole('button', { name: 'Show crew: 1 workers' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Show orchestration: 1 worker, 1 needs attention' })
+  )
+  expect(screen.getByText('Waiting for you · Which option?')).toBeInTheDocument()
+  expect(screen.queryByText('Asks you')).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: "Show Worker's task and latest message" }))
   expect(screen.getByText('Asks you')).toBeInTheDocument()
   expect(screen.getByText('Which option?')).toBeInTheDocument()
   expect(screen.queryByText('The result is ready.')).not.toBeInTheDocument()
@@ -125,7 +130,7 @@ it('starts pending questions expanded without navigating or copying', async () =
   expect(rig.copy).not.toHaveBeenCalled()
 })
 
-it('keeps the stable first manager label, names the Orchestration disclosure and expands every manager', async () => {
+it('names the Orchestration disclosure and expands every manager', async () => {
   const user = userEvent.setup()
   const first = {
     ...worker,
@@ -148,12 +153,13 @@ it('keeps the stable first manager label, names the Orchestration disclosure and
       <OrchestrationCrewPanel target={host} party="term_worker" />
     </TooltipProvider>
   )
-  const tab = screen.getByRole('button', { name: 'Show crew: Managed by First manager' })
+  const tab = screen.getByRole('button', { name: 'Show orchestration: 2 working' })
   await user.hover(tab)
-  expect(await screen.findByRole('tooltip')).toHaveTextContent('Orchestration')
+  expect(await screen.findByRole('tooltip')).toHaveTextContent('Orchestration: 2 working')
   await user.click(tab)
-  expect(screen.getByRole('region', { name: 'Managed by' })).toHaveTextContent('First manager')
-  expect(screen.getByRole('region', { name: 'Managed by' })).toHaveTextContent('Other manager')
+  const managers = within(screen.getByRole('region', { name: 'Managed by' }))
+  expect(managers.getByRole('button', { name: 'Open First manager' })).toBeInTheDocument()
+  expect(managers.getByRole('button', { name: 'Open Other manager' })).toBeInTheDocument()
 })
 
 it('shows one collapsed avatar and question per party with reverse-role relationships while keeping both sections', async () => {
@@ -173,14 +179,17 @@ it('shows one collapsed avatar and question per party with reverse-role relation
         <OrchestrationCrewPanel target={host} party="term_coordinator" />
       </TooltipProvider>
     )
-    const tab = screen.getByRole('button', { name: 'Show crew: 2 workers' })
-    expect(within(tab).getAllByLabelText('Needs attention')).toHaveLength(1)
-    expect(within(tab).getAllByLabelText('Working')).toHaveLength(1)
+    const tab = screen.getByRole('button', {
+      name: 'Show orchestration: 2 workers, 1 needs attention, 1 working'
+    })
     expect(error).not.toHaveBeenCalled()
-    expect(within(tab).getByText('1')).toBeInTheDocument()
+    expect(within(tab).getByText('2')).toBeInTheDocument()
     await user.click(tab)
-    expect(screen.getByRole('region', { name: 'Managed by' })).toHaveTextContent('Worker')
-    expect(screen.getByRole('region', { name: 'Managing' })).toHaveTextContent('Worker')
+    for (const name of ['Managed by', 'Managing']) {
+      expect(
+        within(screen.getByRole('region', { name })).getByRole('button', { name: 'Open Worker' })
+      ).toBeInTheDocument()
+    }
   } finally {
     error.mockRestore()
   }
@@ -191,12 +200,12 @@ it('retains an unavailable peer’s Open/latest/disclosure with one reason and u
   const { sendAddress, ...peer } = { ...worker, role: 'peer' as const, hostLabel: 'Remote host' }
   expect(sendAddress).toBe('dispatch:d1')
   mount(peer, 'talkingWith')
-  await user.click(screen.getByRole('button', { name: 'Show crew: Talking with Worker' }))
+  await user.click(screen.getByRole('button', { name: 'Show orchestration: 1 working' }))
   expect(screen.getAllByText('Sending unavailable')).toHaveLength(1)
-  const body = screen.getByRole('button', { name: /Worker Check the result/ })
+  const body = screen.getByRole('button', { name: /Check the result/ })
   await user.click(body)
   expect(body).toHaveAttribute('aria-expanded', 'true')
-  expect(screen.getByText('The result is ready.')).toBeInTheDocument()
+  expect(screen.getByText('Latest')).toBeInTheDocument()
   expect(screen.getAllByText('Sending unavailable')).toHaveLength(1)
   await user.hover(screen.getByRole('img', { name: 'Codex · Remote host' }))
   expect(await screen.findByRole('tooltip')).toHaveTextContent('Codex · Remote host')
@@ -209,4 +218,67 @@ it('retains an unavailable peer’s Open/latest/disclosure with one reason and u
   await user.click(copy)
   expect(rig.copy).not.toHaveBeenCalled()
   expect(screen.getAllByText('Sending unavailable')).toHaveLength(1)
+})
+
+it('groups the closed tab by status with three icons and +n, and sorts rows by latest message', async () => {
+  const user = userEvent.setup()
+  const at = (sequence: number) => ({ ...worker.latest!, sequence, preview: `Message ${sequence}` })
+  const rows: OrchestrationCrewRow[] = [
+    { ...worker, partyKey: 'a', label: 'A', task: undefined, latest: at(1) },
+    { ...worker, partyKey: 'b', label: 'B', task: undefined, latest: at(5) },
+    { ...worker, partyKey: 'c', label: 'C', task: undefined, latest: at(3) },
+    { ...worker, partyKey: 'd', label: 'D', task: undefined, latest: undefined },
+    { ...worker, partyKey: 'e', label: 'E', task: undefined, status: 'done', latest: at(4) },
+    {
+      ...worker,
+      partyKey: 'f',
+      label: 'F',
+      task: { title: 'Ship it', state: 'failed' },
+      status: 'done',
+      latest: at(2)
+    },
+    {
+      ...worker,
+      partyKey: 'g',
+      label: 'G',
+      task: undefined,
+      latest: at(6),
+      pendingQuestion: { preview: 'Which?', at: '2026-10-28T01:00:00Z' }
+    }
+  ]
+  rig.snapshot = {
+    ...emptyCrew('ok'),
+    sections: { managedBy: [], managing: rows, talkingWith: [] }
+  }
+  render(
+    <TooltipProvider>
+      <OrchestrationCrewPanel target={host} party="term_coordinator" />
+    </TooltipProvider>
+  )
+  const tab = screen.getByRole('button', {
+    name: 'Show orchestration: 7 workers, 1 needs attention, 4 working, 1 idle, 1 failed'
+  })
+  const groups = [...tab.querySelectorAll<HTMLElement>('[data-crew-group]')]
+  expect(groups.map((group) => group.dataset.crewGroup)).toEqual([
+    'needsYou',
+    'working',
+    'idle',
+    'failed'
+  ])
+  expect(groups[1]).toHaveTextContent('+1')
+  expect(groups[0]).not.toHaveTextContent('+')
+  await user.click(tab)
+  const titles = within(screen.getByRole('region', { name: 'Managing' })).getAllByText(
+    /^([A-G]|Ship it)$/
+  )
+  // Most recent message first; a row with no message keeps its place after them.
+  expect(titles.map((title) => title.textContent)).toEqual([
+    'G',
+    'B',
+    'E',
+    'C',
+    'Ship it',
+    'A',
+    'D'
+  ])
 })

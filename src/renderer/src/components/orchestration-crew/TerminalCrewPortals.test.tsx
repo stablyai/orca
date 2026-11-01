@@ -121,8 +121,8 @@ it('retires only the hidden menu before deferred physical close and never replay
   const user = userEvent.setup()
   const { controller, first, update } = mount()
   const pane = within(first.container)
-  await user.click(pane.getByRole('button', { name: 'Show crew: 1 workers' }))
-  const disclosure = pane.getByRole('button', { name: /Worker No shared task/ })
+  await user.click(pane.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
+  const disclosure = pane.getByRole('button', { name: /Worker Keep this disclosure/ })
   await user.click(disclosure)
   const oldMore = pane.getByRole('button', { name: 'More for Worker' })
   await user.click(oldMore)
@@ -136,8 +136,8 @@ it('retires only the hidden menu before deferred physical close and never replay
   expect(oldMore.isConnected).toBe(false)
   expect(tasks).toHaveLength(1)
   expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  expect(pane.getByText('Keep this disclosure')).toBeInTheDocument()
-  expect(pane.getByRole('button', { name: 'Collapse crew panel' })).toBeInTheDocument()
+  expect(pane.getByText('Latest')).toBeInTheDocument()
+  expect(pane.getByRole('button', { name: 'Collapse orchestration panel' })).toBeInTheDocument()
   act(() => {
     controller.isRendererVisible = true
     update()
@@ -172,8 +172,8 @@ it('uses numeric expansion and exact activity leaf identity without dismissing a
   const { controller, first, second, manager, update } = mount()
   const a = within(first.container)
   const b = within(second.container)
-  await user.click(a.getByRole('button', { name: 'Show crew: 1 workers' }))
-  await user.click(b.getByRole('button', { name: 'Show crew: 1 workers' }))
+  await user.click(a.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
+  await user.click(b.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
   await user.click(a.getByRole('button', { name: 'More for Worker' }))
   const popup = screen.getByRole('menu')
   // Existing overlay focus preservation allows a visible split to remain open when another is active.
