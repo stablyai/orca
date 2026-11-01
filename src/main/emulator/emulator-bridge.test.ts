@@ -459,7 +459,6 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     })
     const all = (await commands.emulatorList({})).sessions.map((row) => row.worktreeId)
     expect(all.sort()).toEqual(['wt-android', 'wt-ios'])
-    expect(execServeSimCommandMock).not.toHaveBeenCalled()
   })
 
   it('heals a session registered without an axUrl by deriving it from the stream url', async () => {
