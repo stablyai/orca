@@ -1,7 +1,9 @@
 import type { editor as monacoEditor } from 'monaco-editor'
+import type { DiffCommentVisibility } from './diff-comment-visibility'
 import type { Root } from 'react-dom/client'
 
 export type ZoneEntry = {
+  visibility?: DiffCommentVisibility
   zoneId: string
   domNode: HTMLElement
   // Retain the delegate because Monaco re-reads its mutated heightInPx on layoutZone.
@@ -9,12 +11,11 @@ export type ZoneEntry = {
   root: Root
   disposeMouseDownStopper: () => void
   lastRenderSignature: string
-  // Use the first onDomNodeTop as the layout signal for scroll-to-note instead of polling.
-  laidOut: boolean
 }
 
 export type DraftZoneEntry = {
   editor: monacoEditor.ICodeEditor
+  visibility?: DiffCommentVisibility
   zoneId: string
   domNode: HTMLElement
   marginDomNode: HTMLElement

@@ -2,6 +2,24 @@ import type { editor } from 'monaco-editor'
 import type { CombinedDiffExtent } from './combined-diff-extent'
 import { getMeasuredDiffSectionBodyHeight } from './diff-section-layout'
 
+export function isCombinedDiffGeometryPublished(
+  owner: CombinedDiffExtent,
+  geometry: {
+    index: () => number
+    body: HTMLElement
+    row: HTMLElement
+    panes: readonly editor.ICodeEditor[]
+  },
+  content: number
+): boolean {
+  return (
+    content === Math.max(...geometry.panes.map((pane) => pane.getContentHeight())) &&
+    Math.round(geometry.body.getBoundingClientRect().height) ===
+      Math.round(getMeasuredDiffSectionBodyHeight(content)) &&
+    owner.item(geometry.index())?.size === Math.round(geometry.row.getBoundingClientRect().height)
+  )
+}
+
 export function createCombinedDiffExpansion(
   owner: CombinedDiffExtent,
   geometry: {
@@ -52,11 +70,7 @@ export function createCombinedDiffExpansion(
       // A native flush alone does not acknowledge React's current row measurement.
       if (
         preparedContent !== content ||
-        content !== Math.max(...geometry.panes.map((pane) => pane.getContentHeight())) ||
-        Math.round(geometry.body.getBoundingClientRect().height) !==
-          Math.round(getMeasuredDiffSectionBodyHeight(content)) ||
-        owner.item(geometry.index())?.size !==
-          Math.round(geometry.row.getBoundingClientRect().height)
+        !isCombinedDiffGeometryPublished(owner, geometry, content)
       ) {
         return true
       }

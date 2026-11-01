@@ -1,4 +1,12 @@
+export type CombinedDiffCommentRequest = {
+  read: (availableHeight: number) => { top: number; bottom: number; measured: boolean } | undefined
+  complete: () => void
+  cancelled?: () => void
+}
+export type CombinedDiffCommentOperation = { update: () => void; dispose: () => void }
+
 type Navigation = {
+  comment?: (request: CombinedDiffCommentRequest) => CombinedDiffCommentOperation
   reveal: (top: number, bottom: number, policy: number) => void
   scrollBy: (delta: number) => boolean
 }
@@ -28,4 +36,15 @@ export function revealCombinedDiffTarget(
 
 export function scrollCombinedDiffBy(node: HTMLElement, delta: number): boolean | undefined {
   return navigators.get(node)?.scrollBy(delta)
+}
+
+export function hasCombinedDiffNavigation(node: HTMLElement): boolean {
+  return navigators.has(node)
+}
+
+export function requestCombinedDiffComment(
+  node: HTMLElement,
+  request: CombinedDiffCommentRequest
+): CombinedDiffCommentOperation | undefined {
+  return navigators.get(node)?.comment?.(request)
 }

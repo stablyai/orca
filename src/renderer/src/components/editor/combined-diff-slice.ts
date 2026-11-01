@@ -1,6 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { getCombinedDiffExtent } from './combined-diff-extent-dom'
-import type { CombinedDiffItemAnchor } from './combined-diff-extent'
+import { createCombinedDiffNativeReveal } from './combined-diff-native-reveal'
 import {
   COMBINED_DIFF_HEADER_SELECTOR,
   COMBINED_DIFF_ROW_SELECTOR,
@@ -11,6 +11,7 @@ import {
   resolveCombinedDiffReveal
 } from './combined-diff-slice-geometry'
 import { registerCombinedDiffNavigation } from './combined-diff-navigation'
+import { createCombinedDiffCommentReveal } from './combined-diff-comment-reveal'
 import { createCombinedDiffExpansion } from './combined-diff-expansion'
 import { getMeasuredDiffSectionBodyHeight } from './diff-section-layout'
 
@@ -35,17 +36,6 @@ export function installCombinedDiffSlice(
   let disposed = false
   let transaction = 0
   let frame = 0
-  let revision = 0
-  let queued = false
-  let pending: {
-    request: Exclude<editor.IEditorRevealRequest, { kind: 'save' }>
-    pane: editor.ICodeEditor
-  } | null = null
-  const snapshots = new WeakMap<
-    editor.ICodeEditorViewState,
-    { model: editor.ITextModel; anchor: CombinedDiffItemAnchor }
-  >()
-  let delta = 0
   const applied = new Map(panes.map((pane) => [pane, pane.getScrollTop()]))
   const headerHeight = (): number => header?.getBoundingClientRect().height ?? 0
   const bodyOffset = (): number =>
@@ -98,7 +88,7 @@ export function installCombinedDiffSlice(
     acknowledge
   })
   const updateGeometry = (): void => {
-    if (!expansion.reconcile()) {
+    if (!comments.reconcile() && !expansion.reconcile()) {
       forward()
     }
   }
@@ -120,66 +110,21 @@ export function installCombinedDiffSlice(
       )
     )
   }
+  const native = createCombinedDiffNativeReveal(owner, {
+    index,
+    bodyOffset,
+    paneOrigin,
+    forward,
+    reveal,
+    commit,
+    disposed: () => disposed,
+    hostTop: () => Number.parseFloat(host.style.top || '0'),
+    scrollTop: () => viewport.scrollTop
+  })
   const cancelPending = (): void => {
-    revision += 1
-    pending = null
-    delta = 0
+    native.cancel()
     expansion.cancel()
-  }
-  const schedule = (): void => {
-    if (queued) {
-      return
-    }
-    queued = true
-    const scheduledRevision = revision
-    queueMicrotask(() => {
-      queued = false
-      if (disposed) {
-        return
-      }
-      if (scheduledRevision !== revision) {
-        if (pending || delta) {
-          schedule()
-        }
-        return
-      }
-      const operation = pending
-      const request = operation?.request
-      const scrollDelta = delta
-      pending = null
-      delta = 0
-      const requestedPane = operation?.pane
-      const currentModel = requestedPane?.getModel()
-      if (request && requestedPane && currentModel === request.model) {
-        if (request.kind === 'restore') {
-          const snapshot = snapshots.get(request.state)
-          if (snapshot?.model === request.model) {
-            owner.restore({
-              ...snapshot.anchor,
-              offset: bodyOffset() + requestedPane.getScrollTop()
-            })
-          }
-          forward()
-        } else if (request.kind === 'find') {
-          forward()
-          const top = Number.parseFloat(host.style.top || '0')
-          reveal(top, top + request.height, 0)
-        } else if (request.source === 'restoreState' || request.source === 'modelChange') {
-          forward()
-        } else {
-          forward()
-          const origin = paneOrigin(requestedPane)
-          reveal(
-            request.top + origin,
-            request.bottom + origin,
-            request.verticalType,
-            request.minimal
-          )
-        }
-      } else if (scrollDelta) {
-        commit(viewport.scrollTop + scrollDelta)
-      }
-    })
+    comments.cancel()
   }
   const geometryChanged = (): void => {
     panes.forEach((pane) => applied.set(pane, pane.getScrollTop()))
@@ -190,12 +135,38 @@ export function installCombinedDiffSlice(
       })
     }
   }
+  const comments = createCombinedDiffCommentReveal(owner, {
+    index,
+    body,
+    row,
+    panes,
+    availableHeight: () => viewport.clientHeight - headerHeight(),
+    resolve: (pane, top, bottom) =>
+      resolveCombinedDiffReveal(
+        viewport.scrollTop,
+        viewport.clientHeight,
+        headerHeight(),
+        bodyTop() + paneOrigin(pane) + top,
+        bodyTop() + paneOrigin(pane) + bottom,
+        2
+      ),
+    prepare: (target) => {
+      preparingExpansion = true
+      try {
+        forward(target)
+      } finally {
+        preparingExpansion = false
+      }
+    },
+    publish: publishExtent,
+    commit,
+    schedule: geometryChanged
+  })
   const subscriptions = panes.flatMap((pane) =>
     [
       pane.setScrollAnchorHandler((request) => {
-        revision += 1
-        pending = null
-        delta = 0
+        native.cancel()
+        comments.cancel()
         const claimed = expansion.run(pane, request)
         if (claimed) {
           updateGeometry()
@@ -204,18 +175,15 @@ export function installCombinedDiffSlice(
       }),
       pane.onDidRequestReveal((request) => {
         if (request.kind === 'save') {
-          const anchor = owner.capture(index(), bodyOffset() + pane.getScrollTop())
-          if (anchor) {
-            snapshots.set(request.state, { model: request.model, anchor })
-          }
+          native.request(pane, request)
           return
         }
         if (transaction) {
           return
         }
         expansion.cancel()
-        pending = { request, pane }
-        schedule()
+        comments.cancel()
+        native.request(pane, request)
       }),
       pane.onDidScrollChange((event) => {
         if (transaction) {
@@ -233,8 +201,8 @@ export function installCombinedDiffSlice(
         panes.forEach((peer) => applied.set(peer, peer.getScrollTop()))
         if (change) {
           expansion.cancel()
-          delta += change
-          schedule()
+          comments.cancel()
+          native.scroll(change)
         }
       }),
       pane.onDidChangeModel(() => {
@@ -245,6 +213,10 @@ export function installCombinedDiffSlice(
       pane.onDidChangeViewZones(geometryChanged),
       pane.onDidLayoutChange(geometryChanged),
       registerCombinedDiffNavigation(pane.getContainerDomNode(), {
+        comment: (request) => {
+          cancelPending()
+          return comments.request(pane, request)
+        },
         reveal: (top, bottom, policy) => {
           cancelPending()
           forward()

@@ -1,3 +1,4 @@
+import type { DiffCommentVisibility } from './diff-comment-visibility'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
@@ -11,6 +12,7 @@ import { openAppHttpLink } from '@/lib/app-http-link-open'
 // Render note cards in per-zone React roots; keep persisted DiffComment names while UI says Note to distinguish PR review comments.
 
 type Props = {
+  visibility?: DiffCommentVisibility
   lineNumber: number
   startLine?: number
   label?: string | null
@@ -36,6 +38,7 @@ function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
 }
 
 export function DiffCommentCard({
+  visibility,
   lineNumber,
   startLine,
   label,
@@ -114,10 +117,12 @@ export function DiffCommentCard({
       return
     }
     resizeDiffCommentTextarea(el)
-    el.focus()
+    if (!visibility?.combined) {
+      el.focus()
+    }
     el.setSelectionRange(el.value.length, el.value.length)
     onContentResizeRef.current?.()
-  }, [editing])
+  }, [editing, visibility])
 
   const scheduleContentResizeAfterClose = (): void => {
     // Measure after the body-only commit; async saves must not retain the textarea/footer height.
@@ -125,11 +130,13 @@ export function DiffCommentCard({
   }
 
   const handleStartEdit = (): void => {
+    visibility?.reveal()
     setDraft(body)
     setEditing(true)
   }
 
   const handleCancel = (): void => {
+    visibility?.cancel()
     scheduleContentResizeAfterClose()
     setEditing(false)
     setDraft(body)
@@ -152,6 +159,7 @@ export function DiffCommentCard({
     if (!canSubmit || !onSubmitEdit) {
       return
     }
+    visibility?.cancel()
     setSubmitting(true)
     try {
       const ok = await onSubmitEdit(trimmedDraft)
@@ -170,7 +178,7 @@ export function DiffCommentCard({
   }
 
   return (
-    <div ref={cardRef} className="orca-diff-comment-card">
+    <div ref={cardRef} className="orca-diff-comment-card" onKeyDownCapture={visibility?.onKeyDown}>
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">
@@ -276,6 +284,7 @@ export function DiffCommentCard({
               className="orca-diff-comment-popover-textarea"
               value={draft}
               onChange={(e) => {
+                visibility?.reveal(e.currentTarget)
                 setDraft(e.target.value)
                 // Why: rich-review layout measures every note; skip it when this card stayed put.
                 if (resizeDiffCommentTextarea(e.currentTarget)) {

@@ -1,3 +1,4 @@
+import type { DiffCommentVisibility } from './diff-comment-visibility'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
 import { formatDiffComments } from '@/lib/diff-comments-format'
@@ -50,6 +51,7 @@ export type DiffCommentZoneCardContext = {
   filePath: string
   activeGroupId: string
   formatCommentPrompt?: (comment: DecoratedDiffComment) => string
+  visibility?: DiffCommentVisibility
   resizeZone: (commentId: string) => void
   onDeleteCommentRef: RefObject<(commentId: string) => void>
   onUpdateCommentRef: RefObject<((commentId: string, body: string) => Promise<boolean>) | undefined>
@@ -67,6 +69,7 @@ export function renderDiffCommentZoneCard(
     filePath,
     activeGroupId,
     formatCommentPrompt,
+    visibility,
     resizeZone,
     onDeleteCommentRef,
     onUpdateCommentRef,
@@ -77,6 +80,7 @@ export function renderDiffCommentZoneCard(
     // View zones are separate React roots outside the app root, so App.tsx context providers don't reach them.
     <TooltipProvider delayDuration={400}>
       <DiffCommentCard
+        visibility={visibility}
         lineNumber={comment.lineNumber}
         startLine={comment.startLine}
         body={comment.body}
@@ -126,6 +130,7 @@ export function renderDiffCommentZoneCard(
 }
 
 export type DiffCommentDraftCardContext = {
+  visibility?: DiffCommentVisibility
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
@@ -145,6 +150,7 @@ export function renderDiffCommentDraftCard(
     submittingLabel,
     initialBody,
     onBodyChange,
+    visibility,
     resizeZone,
     onCancel,
     onSubmit
@@ -153,6 +159,7 @@ export function renderDiffCommentDraftCard(
   root.render(
     <TooltipProvider delayDuration={400}>
       <DiffCommentDraftCard
+        visibility={visibility}
         lineNumber={draft.lineNumber}
         startLine={draft.startLine}
         placeholder={placeholder}

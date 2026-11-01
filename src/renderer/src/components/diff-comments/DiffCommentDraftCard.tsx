@@ -1,3 +1,4 @@
+import type { DiffCommentVisibility } from './diff-comment-visibility'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
@@ -12,6 +13,7 @@ import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 
 export type DiffCommentDraftCardProps = {
+  visibility?: DiffCommentVisibility
   lineNumber: number
   startLine?: number
   placeholder?: string
@@ -32,6 +34,7 @@ function resizeDraftTextarea(textarea: HTMLTextAreaElement): boolean {
 }
 
 export function DiffCommentDraftCard({
+  visibility,
   lineNumber,
   startLine,
   placeholder,
@@ -73,12 +76,20 @@ export function DiffCommentDraftCard({
           { value0: lineNumber }
         )
 
-  const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    textareaRef.current = textarea
-    textarea?.focus()
-  }, [])
+  const focusTextareaRef = useCallback(
+    (textarea: HTMLTextAreaElement | null): void => {
+      textareaRef.current = textarea
+      if (!visibility?.combined) {
+        textarea?.focus()
+      }
+    },
+    [visibility]
+  )
 
   useEffect(() => {
+    if (visibility?.combined) {
+      return
+    }
     const focusTextarea = (): void => textareaRef.current?.focus()
     focusTextarea()
     if (typeof requestAnimationFrame !== 'function') {
@@ -86,7 +97,7 @@ export function DiffCommentDraftCard({
     }
     const frame = requestAnimationFrame(focusTextarea)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [visibility])
 
   useLayoutEffect(() => {
     const card = cardRef.current
@@ -151,7 +162,7 @@ export function DiffCommentDraftCard({
       return
     }
     // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
-    textareaRef.current?.focus()
+    textareaRef.current?.focus({ preventScroll: visibility?.combined })
     setSubmitting(true)
     try {
       const result = await onSubmit(bodyState.body)
@@ -199,6 +210,7 @@ export function DiffCommentDraftCard({
   return (
     <div
       ref={cardRef}
+      onKeyDownCapture={visibility?.onKeyDown}
       className="orca-diff-comment-popover orca-diff-comment-draft-card"
       role="region"
       aria-labelledby={labelId}
@@ -224,6 +236,7 @@ export function DiffCommentDraftCard({
           value={body}
           rows={3}
           onChange={(e) => {
+            visibility?.reveal(e.currentTarget)
             setBody(e.target.value)
             onBodyChange?.(e.target.value)
             if (resizeDraftTextarea(e.currentTarget)) {

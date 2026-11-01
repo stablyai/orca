@@ -1,3 +1,4 @@
+import { createDiffCommentVisibility } from './diff-comment-visibility'
 import { useCallback, useEffect, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot } from 'react-dom/client'
@@ -9,34 +10,18 @@ import {
   type DraftZoneEntry
 } from './diff-comment-view-zone-entry'
 
-export type DiffCommentDraft = {
-  lineNumber: number
-  startLine?: number
-}
+import type {
+  DiffCommentDraft,
+  UseDiffCommentDraftZoneArgs,
+  DiffCommentDraftZoneHandle
+} from './diff-comment-draft'
+export type {
+  DiffCommentDraft,
+  UseDiffCommentDraftZoneArgs,
+  DiffCommentDraftZoneHandle
+} from './diff-comment-draft'
 
 type CarriedDraft = { draft: DiffCommentDraft; body: string }
-
-export type UseDiffCommentDraftZoneArgs = {
-  editor: monacoEditor.ICodeEditor | null
-  monacoModelIdentity?: string
-  canOpenDraft?: boolean
-  onCreateComment?: (args: {
-    lineNumber: number
-    startLine?: number
-    body: string
-  }) => Promise<boolean>
-  draftPlaceholder?: string
-  draftSubmitLabel?: string
-  onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
-}
-
-export type DiffCommentDraftZoneHandle = {
-  disposeDraftZone: (focusEditor?: boolean) => void
-  isDraftOpen: () => boolean
-  onAddCommentClickRef: React.RefObject<
-    (args: { lineNumber: number; startLine?: number; top: number }) => void
-  >
-}
 
 export function useDiffCommentDraftZone({
   editor,
@@ -88,6 +73,7 @@ export function useDiffCommentDraftZone({
     if (!entry) {
       return
     }
+    entry.visibility?.cancel()
     draftZoneRef.current = null
     if (entry.editor.getModel()) {
       entry.editor.changeViewZones((accessor) => accessor.removeZone(entry.zoneId))
@@ -100,9 +86,9 @@ export function useDiffCommentDraftZone({
   }, [])
 
   // Re-anchor frames and settling submits need the latest opener.
-  const openDraftRef = useRef<(draft: DiffCommentDraft, initialBody?: string) => boolean>(
-    () => false
-  )
+  const openDraftRef = useRef<
+    (draft: DiffCommentDraft, initialBody?: string, explicit?: boolean) => boolean
+  >(() => false)
 
   // Restore failed submissions after teardown unless another card now owns the composer; the toast covers displaced failures.
   const restoreFailedSubmit = useCallback((draft: DiffCommentDraft, body: string): void => {
@@ -113,101 +99,117 @@ export function useDiffCommentDraftZone({
   }, [])
 
   const openDraft = useCallback(
-    (draft: DiffCommentDraft, initialBody = ''): boolean => {
+    (draft: DiffCommentDraft, initialBody = '', explicit = false): boolean => {
       if (!editor || !editor.getModel() || !onCreateCommentRef.current || !canOpenDraft) {
         return false
       }
 
+      let currentEntry: DraftZoneEntry | undefined
+      const visibility = createDiffCommentVisibility(editor, () => currentEntry)
+      if (explicit) {
+        visibility.reveal()
+      }
       disposeDraftZone()
-      editor.changeViewZones((accessor) => {
-        const dom = document.createElement('div')
-        dom.className = 'orca-diff-comment-inline'
-        const marginDom = document.createElement('div')
-        marginDom.className = 'orca-diff-comment-draft-margin'
-        const disposeDomMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
-        const disposeMarginMouseDownStopper = installDiffCommentZoneMouseDownStopper(marginDom)
-        const root = createRoot(dom)
-        let didFocus = false
-        const delegate: monacoEditor.IViewZone = {
-          afterLineNumber: draft.lineNumber,
-          heightInPx: DRAFT_ZONE_DEFAULT_HEIGHT,
-          domNode: dom,
-          marginDomNode: marginDom,
-          suppressMouseDown: false,
-          onDomNodeTop: () => {
-            if (didFocus) {
-              return
+      try {
+        editor.changeViewZones((accessor) => {
+          const dom = document.createElement('div')
+          dom.className = 'orca-diff-comment-inline'
+          const marginDom = document.createElement('div')
+          marginDom.className = 'orca-diff-comment-draft-margin'
+          const disposeDomMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
+          const disposeMarginMouseDownStopper = installDiffCommentZoneMouseDownStopper(marginDom)
+          const root = createRoot(dom)
+          let didFocus = false
+          const delegate: monacoEditor.IViewZone = {
+            afterLineNumber: draft.lineNumber,
+            heightInPx: DRAFT_ZONE_DEFAULT_HEIGHT,
+            domNode: dom,
+            marginDomNode: marginDom,
+            suppressMouseDown: false,
+            onDomNodeTop: () => {
+              visibility.update()
+              if (visibility.combined || didFocus) {
+                return
+              }
+              const textarea = dom.querySelector<HTMLTextAreaElement>('textarea')
+              if (!textarea) {
+                return
+              }
+              didFocus = true
+              textarea.focus()
             }
-            const textarea = dom.querySelector<HTMLTextAreaElement>('textarea')
-            if (!textarea) {
-              return
+          }
+          const zoneId = accessor.addZone(delegate)
+          const entry: DraftZoneEntry = {
+            editor,
+            visibility,
+            zoneId,
+            domNode: dom,
+            marginDomNode: marginDom,
+            delegate,
+            root,
+            draft,
+            body: initialBody,
+            submitting: false,
+            disposeMouseDownStopper: () => {
+              disposeDomMouseDownStopper()
+              disposeMarginMouseDownStopper()
             }
-            didFocus = true
-            textarea.focus()
           }
-        }
-        const zoneId = accessor.addZone(delegate)
-        const entry: DraftZoneEntry = {
-          editor,
-          zoneId,
-          domNode: dom,
-          marginDomNode: marginDom,
-          delegate,
-          root,
-          draft,
-          body: initialBody,
-          submitting: false,
-          disposeMouseDownStopper: () => {
-            disposeDomMouseDownStopper()
-            disposeMarginMouseDownStopper()
-          }
-        }
-        draftZoneRef.current = entry
+          currentEntry = entry
+          draftZoneRef.current = entry
 
-        renderDiffCommentDraftCard(root, draft, {
-          placeholder: draftPlaceholder,
-          submitLabel: draftSubmitLabel,
-          initialBody,
-          onBodyChange: (body) => {
-            if (draftZoneRef.current === entry) {
-              entry.body = body
-            }
-          },
-          resizeZone: () => {
-            if (draftZoneRef.current === entry) {
-              resizeDiffCommentZone(editor, entry)
-            }
-          },
-          onCancel: () => disposeDraftZone(true),
-          onSubmit: async (body) => {
-            const createComment = onCreateCommentRef.current
-            if (!createComment) {
-              return false
-            }
-            entry.submitting = true
-            let succeeded = false
-            try {
-              const result = await createComment({
-                lineNumber: draft.lineNumber,
-                startLine: draft.startLine,
-                body
-              })
-              succeeded = result !== false
-              return result
-            } finally {
-              entry.submitting = false
-              if (succeeded) {
-                if (draftZoneRef.current === entry) {
-                  // Restore Monaco focus only if this card still owns it when the save settles.
-                  disposeDraftZone(entry.domNode.contains(document.activeElement))
+          renderDiffCommentDraftCard(root, draft, {
+            visibility,
+            placeholder: draftPlaceholder,
+            submitLabel: draftSubmitLabel,
+            initialBody,
+            onBodyChange: (body) => {
+              if (draftZoneRef.current === entry) {
+                entry.body = body
+              }
+            },
+            resizeZone: () => {
+              if (draftZoneRef.current === entry) {
+                resizeDiffCommentZone(editor, entry)
+                visibility.update()
+              }
+            },
+            onCancel: () => disposeDraftZone(true),
+            onSubmit: async (body) => {
+              const createComment = onCreateCommentRef.current
+              if (!createComment) {
+                return false
+              }
+              visibility.cancel()
+              entry.submitting = true
+              let succeeded = false
+              try {
+                const result = await createComment({
+                  lineNumber: draft.lineNumber,
+                  startLine: draft.startLine,
+                  body
+                })
+                succeeded = result !== false
+                return result
+              } finally {
+                entry.submitting = false
+                if (succeeded) {
+                  if (draftZoneRef.current === entry) {
+                    // Restore Monaco focus only if this card still owns it when the save settles.
+                    disposeDraftZone(entry.domNode.contains(document.activeElement))
+                  }
+                } else if (draftZoneRef.current !== entry) {
+                  restoreFailedSubmit(draft, body)
                 }
-              } else if (draftZoneRef.current !== entry) {
-                restoreFailedSubmit(draft, body)
               }
             }
-          }
+          })
         })
-      })
+      } catch (error) {
+        visibility.cancel()
+        throw error
+      }
       // The re-anchor frame drops its draft only after a card actually mounts.
       return draftZoneRef.current !== null
     },
@@ -256,7 +258,9 @@ export function useDiffCommentDraftZone({
       // A new anchor must cancel any frame that would move the card back.
       cancelReanchorFrame()
       pendingDraftRef.current = null
-      if (!openDraft({ lineNumber: args.lineNumber, startLine: args.startLine }, carriedBody)) {
+      if (
+        !openDraft({ lineNumber: args.lineNumber, startLine: args.startLine }, carriedBody, true)
+      ) {
         pendingDraftRef.current = pending
       }
     },
