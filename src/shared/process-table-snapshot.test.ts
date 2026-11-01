@@ -97,6 +97,30 @@ describe('process-table-snapshot reader', () => {
     expect(scans).toBe(2)
   })
 
+  it('supports a dynamic ttlMs function to evaluate staleness window on demand', async () => {
+    let scans = 0
+    let clock = 0
+    let currentTtl = 500
+    const reader = createProcessTableSnapshotReader({
+      runPs: () => {
+        scans += 1
+        return Promise.resolve(`scan-${scans}`)
+      },
+      now: () => clock,
+      ttlMs: () => currentTtl
+    })
+
+    expect(await reader.getSnapshot()).toBe('scan-1')
+    clock = 600
+    currentTtl = 1000
+    expect(await reader.getSnapshot()).toBe('scan-1')
+    expect(scans).toBe(1)
+
+    clock = 1000
+    expect(await reader.getSnapshot()).toBe('scan-2')
+    expect(scans).toBe(2)
+  })
+
   it('stamps capture time after the scan resolves so a slow ps cannot serve a stale snapshot', async () => {
     let scans = 0
     let clock = 0

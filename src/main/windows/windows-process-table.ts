@@ -1,10 +1,19 @@
-import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/orcad-artifacts'
+import {
+  createProcessTableSnapshotReader,
+  PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+} from '../../shared/process-table-snapshot-reader'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
+import {
+  loadWindowsProcessTree,
+  PROCESS_DATA_FLAG,
+  resetCachedModuleForTests,
+  setNativeRequireForTests,
+  type NativeProcessInfo,
+  type NativeRequire,
+  type WindowsProcessTreeModule
+} from './windows-process-tree-loader'
 
 /** Shared Windows snapshots: serialized native identity/command-line views, with CIM fallback only when no usable binding exists. Both views request creation times through limited query handles; Memory stays off. See docs/reference/windows-process-enumeration.md. */
 
@@ -23,128 +32,11 @@ export type WindowsProcessRow = WindowsProcessIdentityRow & {
   command: string
 }
 
-type NativeProcessInfo = {
-  pid: number
-  ppid: number
-  name: string
-  commandLine?: string
-  creationTimeMs?: number
-}
-
-type WindowsProcessTreeModule = {
-  ProcessDataFlag: {
-    None: number
-    CommandLine: number
-    CreationTime?: number
-  }
-  /** Compiled addon capabilities; patched JS enums may sit above an older prebuilt binary. */
-  supportedProcessDataFlags?: number
-  getProcessCreationTime?: (pid: number) => number | undefined
-  getAllProcesses: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags?: number
-  ) => void
-}
-
-const requireFromMain = createRequire(__filename)
-
-/** `resolve` is optional so a test can inject a bare function for the require alone. */
-type NativeRequire = ((specifier: string) => unknown) & {
-  resolve?: (specifier: string) => string
-}
-
-// createRequire bypasses vi.mock; inject actual resolution so relay specifiers are tested.
-let requireNative: NativeRequire = requireFromMain
-
-/** Bare relay addon has no queue; nativeReadGate must serialize it to prevent concurrent native snapshots. The npm wrapper adds its own coalescing queue. */
-type WindowsProcessTreeAddon = {
-  getProcessCreationTime?: (pid: number) => number | undefined
-  getProcessList: (
-    callback: (processes: NativeProcessInfo[] | undefined) => void,
-    flags: number
-  ) => void
-  supportedProcessDataFlags?: number
-}
-
-/** Raw addon flags; Memory stays off. CreationTime in this enum requests it but only supportedProcessDataFlags proves binary support. */
-const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
-
-/** Staged beside the orcad bundle by orcad-windows-process-tree.mjs. */
-const RELAY_ADDON_FILENAME = `./${ORCAD_WINDOWS_PROCESS_TREE_FILENAME}`
-
-/** The import whose absence tells the patched binary from the published prebuilt. */
-const FLAGGED_ADDON_IMPORT = 'ReadProcessMemory'
-
-/** Reject staged addons importing ReadProcessMemory: independently deployed old binaries can load yet restore EDR-flagged PEB reads. Match the build inspector without importing its node-gyp/child_process dependencies; fall back to CIM. */
-function stagedRelayAddonIsUnpatched(): boolean {
-  // Missing resolver denotes a test double; production resolves the binary it just loaded.
-  const addonPath = requireNative.resolve?.(RELAY_ADDON_FILENAME)
-  if (!addonPath) {
-    return false
-  }
-  try {
-    return readFileSync(addonPath).includes(FLAGGED_ADDON_IMPORT)
-  } catch {
-    return false
-  }
-}
-
 /** Warn once where stderr survives; daemon startup reports capability through daemonLog instead. */
 let warnedAboutCimFallback = false
 
-let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
-
-/** Present the bare addon through the same shape as the npm package. */
-function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
-  return {
-    ProcessDataFlag: PROCESS_DATA_FLAG,
-    supportedProcessDataFlags: addon.supportedProcessDataFlags,
-    getProcessCreationTime: addon.getProcessCreationTime,
-    getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
-  }
-}
-
-/** Load the desktop npm package or staged bare relay addon. Both remain optional across platforms/older deployments; null selects CIM on Windows and remains unavailable elsewhere. */
-function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
-  if (cachedModule !== undefined) {
-    return cachedModule
-  }
-  if (process.platform !== 'win32') {
-    cachedModule = null
-    return cachedModule
-  }
-  try {
-    cachedModule = requireNative('@vscode/windows-process-tree') as WindowsProcessTreeModule
-    return cachedModule
-  } catch {
-    // Relays lack the npm package; try their staged addon.
-  }
-  try {
-    const addon = requireNative(RELAY_ADDON_FILENAME) as WindowsProcessTreeAddon
-    // Reject unusable shapes so an invalid addon can fall back to CIM.
-    if (typeof addon?.getProcessList !== 'function') {
-      /* v8 ignore next 2 */
-      cachedModule = null
-      return cachedModule
-    }
-    if (stagedRelayAddonIsUnpatched()) {
-      console.warn(
-        `[windows-process-table] the addon staged beside the relay bundle still imports ` +
-          `${FLAGGED_ADDON_IMPORT}, so it was built from unpatched source and reads every ` +
-          'process address space. Refusing it and falling back to the CIM scan; redeploy the ' +
-          'relay so the staged addon is rebuilt.'
-      )
-      cachedModule = null
-      return cachedModule
-    }
-    cachedModule = adaptAddon(addon)
-  } catch {
-    cachedModule = null
-  }
-  return cachedModule
-}
 
 /** Bound a native read: a missing callback otherwise strands every queued caller. */
 const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
@@ -281,15 +173,21 @@ async function readCimRows(): Promise<WindowsProcessRow[]> {
   return rows
 }
 
+/** Expensive fallback scans take ~1.3s and spawn PowerShell; cache them longer than native in-process reads. */
+export const CIM_PROCESS_TABLE_SNAPSHOT_TTL_MS = 10_000
+
 // TTL/single-flight caches collapse teardown bursts into at most one scan per flag set.
-const identityReader = createProcessTableSnapshotReader<WindowsProcessIdentityRow[]>({
-  runPs: () => readNativeRows(IDENTITY_PROJECTION),
-  now: () => Date.now()
-})
-const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
-  runPs: () => readNativeRows(DETAILED_PROJECTION),
-  now: () => Date.now()
-})
+const makeReader = <Row>(projection: ProcessRowProjection<Row>) =>
+  createProcessTableSnapshotReader<Row[]>({
+    runPs: () => readNativeRows(projection),
+    now: () => Date.now(),
+    ttlMs: () =>
+      moduleLoader() === null
+        ? CIM_PROCESS_TABLE_SNAPSHOT_TTL_MS
+        : PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+  })
+const identityReader = makeReader(IDENTITY_PROJECTION)
+const detailedReader = makeReader(DETAILED_PROJECTION)
 
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
@@ -327,11 +225,8 @@ export function isWindowsProcessTableAvailable(): boolean {
 
 /** PID-reuse protection requires the binary's creation-time capability: pnpm can patch the JS enum while retaining a prebuilt that ignores flag4. */
 export function isWindowsProcessStartTimeAvailable(): boolean {
-  const native = moduleLoader()
-  return (
-    native !== null &&
-    ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
-  )
+  const flags = moduleLoader()?.supportedProcessDataFlags ?? 0
+  return (flags & PROCESS_DATA_FLAG.CreationTime) !== 0
 }
 
 /** Fresh identity for synchronous profile admission; opens one PID without taking a table snapshot. */
@@ -357,16 +252,16 @@ export function __setWindowsProcessTreeLoaderForTests(
   loader?: () => WindowsProcessTreeModule | null
 ): void {
   moduleLoader = loader ?? loadWindowsProcessTree
-  cachedModule = undefined
+  resetCachedModuleForTests()
   resetNativeReaderState()
   resetSnapshotReaders()
 }
 
 /** Inject resolution; attach resolve to exercise staged binary inspection. */
 export function __setWindowsProcessTreeRequireForTests(resolve?: NativeRequire): void {
-  requireNative = resolve ?? requireFromMain
+  setNativeRequireForTests(resolve)
   moduleLoader = loadWindowsProcessTree
-  cachedModule = undefined
+  resetCachedModuleForTests()
   resetNativeReaderState()
   resetSnapshotReaders()
 }
@@ -382,6 +277,6 @@ export function __setWindowsProcessTableCimScanForTests(
 /** Test-only: drop the shared snapshots so suites cannot serve each other's rows. */
 export function resetWindowsProcessTableForTests(): void {
   resetSnapshotReaders()
-  cachedModule = undefined
+  resetCachedModuleForTests()
   resetNativeReaderState()
 }
