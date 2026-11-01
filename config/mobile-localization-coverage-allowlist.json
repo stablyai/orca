@@ -44,6 +44,13 @@
   {
     "filePath": "mobile/src/components/accounts-snapshot.ts",
     "kind": "object-property:message",
+    "text": "Antigravity limits use the wrong provider identity",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "kind": "object-property:message",
     "text": "Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1

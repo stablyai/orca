@@ -14,7 +14,8 @@
       "switchFailed": "无法切换账户",
       "title": "账户",
       "useReset": "使用重置额度",
-      "weeklyWindow": "7天"
+      "weeklyWindow": "7天",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

@@ -14,7 +14,8 @@
       "switchFailed": "Konto konnte nicht gewechselt werden",
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
-      "weeklyWindow": "7 Tage"
+      "weeklyWindow": "7 Tage",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

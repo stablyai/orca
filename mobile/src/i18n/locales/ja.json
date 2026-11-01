@@ -14,7 +14,8 @@
       "switchFailed": "アカウントを切り替えられませんでした",
       "title": "アカウント",
       "useReset": "リセット枠を使用",
-      "weeklyWindow": "7日"
+      "weeklyWindow": "7日",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {
