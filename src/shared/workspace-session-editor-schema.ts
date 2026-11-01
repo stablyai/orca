@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
 export const persistedOpenFileSchema = z.object({
+  // Why: additive; a corrupt id falls back to undefined rather than dropping the file.
+  id: z.string().min(1).optional().catch(undefined),
   filePath: z.string(),
   relativePath: z.string(),
   worktreeId: z.string(),
