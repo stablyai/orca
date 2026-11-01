@@ -17,6 +17,9 @@ export type DashboardAgentRow = {
   startedAt: number
   /** Subagent rows only: what the row shows, decided once for every surface. */
   childRow?: AgentChildRowModel
+  /** When the pane's live cwd maps to a different known sibling worktree than
+   *  the row's parent card. Attribution stays put; compact secondary shows this. */
+  liveWorktreeMismatchLabel?: string
   lineage?: {
     depth: 0 | 1
     parentPaneKey?: string
