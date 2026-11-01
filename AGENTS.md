@@ -1,13 +1,13 @@
 # Useful Commands
 
-- **Validation**: Run the smallest checks that verify the change. Prefer focused tests, including existing consumer suites for changed behavior; shared imports alone don’t justify broad suites. Before handing off code changes, check touched-file lint/format, appropriate project typecheck for TS/TSX edits, and applicable CI gates (e.g. `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`). Read-only reviews and docs-only edits do not require code test suites.
+- **Validation**: Keep tests focused, including relevant existing consumer suites for changed behavior. Shared imports alone don’t justify broad suites. Code handoff also needs touched-file lint/format, appropriate TS/TSX project typecheck, and applicable CI gates—not just a passing test. Read-only reviews and docs-only edits need no code suites.
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
-- **Test**: `pnpm test [path/to/file.test.ts] --maxWorkers=2`; incremental affected tests: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests)). Run tests with `ORCA_BACKGROUND_LAUNCH=1`; relevant rendered UI E2E specs remain separate and need explicit, reproducible viewport/state.
-- **Lint**: `pnpm exec oxlint <files>` is basic lint only; `pnpm lint` runs the full lint gate. Check touched-file formatting with `pnpm exec oxfmt --check <files>`; format with `pnpm exec oxfmt --write <files>`. Basic lint or a single test does not cover typecheck or applicable CI rule gates.
+- **Test**: `pnpm test [path/to/file.test.ts] --maxWorkers=2`; incremental: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests)). Separate rendered UI E2E checks need explicit, reproducible viewport/state.
+- **Lint/format**: Basic: `pnpm exec oxlint <files>`; full lint gate: `pnpm lint`; formatting: `pnpm exec oxfmt --check <files>` (fix: `--write`). Applicable gates include `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`.
 
-`ORCA_BACKGROUND_LAUNCH=1 pnpm check:changed --maxWorkers=2` is an optional convenience when its selected scope is reasonable; if it fans out excessively, use explicit scoped checks and report their limits. Branch-scoped gates must use the PR base (default `origin/main`; explicit `--base=<ref>` for stacked PRs with `check:changed`, positional base for `check:code-quality:changed`, `ORCA_CODE_QUALITY_BASE=<ref>` for the flaky-test ratchet). `--base=HEAD` and dirty-only checks are incremental evidence, not whole-branch validation.
+Optional: `ORCA_BACKGROUND_LAUNCH=1 pnpm check:changed --maxWorkers=2`; if selection fans out excessively, use scoped checks and report limits. Use the PR base (default `origin/main`; `ORCA_CODE_QUALITY_BASE=<ref>` for stacks). `--base=HEAD` and dirty-only checks provide incremental evidence only.
 
-After final edits or rebases, rerun checks the changes can invalidate. After a CI fix, rerun the failed check and affected check types (including typecheck after TS/TSX lint repairs). Stopped or failed checks mean incomplete validation; scoped passes do not establish that full CI is green. Inspect the exact CI step on the current SHA before calling a finding unenforced, pre-existing, or resolved.
+After final edits/rebases, rerun affected check types; after CI fixes, rerun the failed check too (TS/TSX lint repairs also need typecheck). Failed/stopped checks are incomplete; scoped passes do not prove full CI green. Inspect the exact current-SHA CI step before calling findings unenforced, pre-existing, or resolved.
 
 # Ensure main is always releasable
 
