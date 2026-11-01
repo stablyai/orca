@@ -188,4 +188,23 @@ describe('native chat subagent brief', () => {
     expect(tail.at(-1)?.id).toBe('child-1:result')
     expect(text(tail.at(-1)!)).not.toContain('Subagent hand-back')
   })
+
+  it('keeps a sealed spawn to the task name when the roster line is the result', () => {
+    const framed = frameNativeChatSubagentTranscript(
+      '01a19905-3734-7941-9a1b-e256ccbdb54d',
+      [
+        user(
+          'echo',
+          'Call spawn_agent exactly once.\ntask_name: sample_greeting\nmessage: Reply with exactly this sentence and nothing else: Hello from Orca scratch.'
+        ),
+        assistant('end', 'Hello from Orca scratch.')
+      ],
+      [],
+      { title: 'sample_greeting', prompt: 'Hello from Orca scratch.' }
+    )
+    expect(text(framed[0]!)).toBe('sample_greeting')
+    expect(text(framed[1]!)).toContain('Call spawn_agent exactly once.')
+    expect(text(framed.at(-1)!)).toBe('Hello from Orca scratch.')
+    expect(framed.filter((message) => text(message) === 'Hello from Orca scratch.')).toHaveLength(1)
+  })
 })

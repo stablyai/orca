@@ -105,7 +105,7 @@ export function useNativeChatSubagentTranscript({
       requestedId,
       childPage,
       linkUnrecordedSubagentSpawns(messages),
-      focusedAgent ? { title: focusedAgent.label, prompt: focusedAgent.activity } : undefined,
+      focusedAgent ? { title: focusedAgent.label, prompt: null } : undefined,
       !readSubagentPage || page.messages != null
     )
   }, [

@@ -9,7 +9,6 @@ import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/i
 import type { NativeChatTaskSeedList } from '../../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import { projectNativeChatTranscript } from '../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 import { frameNativeChatSubagentTranscript } from '../../../../../src/shared/native-chat/input/native-chat-subagent-brief'
-import { linkUnrecordedSubagentSpawns } from '../../../../../src/shared/native-chat/input/native-chat-unlinked-subagent-spawn'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   foldMobileNativeChatAgentMessages,
@@ -93,11 +92,11 @@ export function useMobileNativeChatSubagentTranscript({
     return frameNativeChatSubagentTranscript(
       focusedId,
       childPage,
-      linkUnrecordedSubagentSpawns(messages),
-      focused ? { title: focused.label, prompt: focused.activity } : undefined,
+      projection.conversation,
+      focused ? { title: focused.label, prompt: null } : undefined,
       !readSubagentPage || page.messages != null
     )
-  }, [focused, focusedId, messages, page.messages, readSubagentPage])
+  }, [focused, focusedId, messages, page.messages, projection.conversation, readSubagentPage])
   const childFolded = useMemo(() => {
     if (!focusedId) {
       return null
