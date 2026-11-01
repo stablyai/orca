@@ -43,6 +43,9 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { HeadlessEmulator } from '../main/daemon/headless-emulator'
+import { projectTerminalVisibleLines } from '../main/runtime/orca-runtime-terminal-projection'
+import { readRuntimeFixture } from '../main/runtime/agent-transcript-replay-test-harness'
 
 function readFixture(overrides: Record<string, unknown> = {}) {
   return okFixture('req_terminal_read', {
@@ -65,6 +68,28 @@ describe('orca terminal read --screen', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  it('reports a recorded labelled draft separately from screen output', async () => {
+    const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+    try {
+      await emulator.write(readRuntimeFixture('claude-2-1-316-labelled-draft'))
+      const projection = projectTerminalVisibleLines(emulator)
+      queueFixtures(
+        callMock,
+        readFixture({ source: 'screen', tail: projection.lines, draft: projection.draft })
+      )
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
+
+      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+      expect(printed.result.terminal.draft).toBe('Refactor the login page so that it')
+      expect(printed.result.terminal.tail).toContain('❯')
+      expect(printed.result.terminal.tail.join('\n')).not.toContain('Refactor the login page')
+    } finally {
+      emulator.dispose()
+    }
   })
 
   it('does not ask for a screen unless requested', async () => {

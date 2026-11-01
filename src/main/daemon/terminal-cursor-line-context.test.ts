@@ -55,6 +55,20 @@ function observeCellReads(terminal: Terminal) {
 }
 
 describe('readTerminalCursorLineContext', () => {
+  it('keeps a recorded empty labelled Claude composer out of draft and placeholder metadata', async () => {
+    const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+    try {
+      await emulator.write(readRuntimeFixture('claude-2-1-316-labelled-empty'))
+      const context = emulator.getCursorLineContext()
+      expect(context?.cursorHidden).toBe(false)
+      expect(context?.rows.at(-2)).toContain('ultracode')
+      expect(detectTerminalComposerDraft(context)).toBeNull()
+      expect(hasTerminalComposerPlaceholder(context)).toBe(false)
+    } finally {
+      emulator.dispose()
+    }
+  })
+
   it('reuses one cell across every scan without retaining it between reads', () => {
     const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
     try {

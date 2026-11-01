@@ -25,6 +25,7 @@ export type TerminalComposerDraft = {
 type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 
 const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
+const COMPOSER_TOP_FRAME_PREFIX = /^[\u2500\u2501-]{8,}/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
@@ -137,6 +138,7 @@ function detectTerminalComposer(
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
+  const continuationEndIndex = continuationRows.length
   const placeholder = isStockPlaceholder(afterCursor, continuationRows)
   if (placeholder) {
     afterCursor = ''
@@ -148,8 +150,17 @@ function detectTerminalComposer(
     const matched = row.match(/^\s*([\u276F\u203A\u00BB])/)?.[1]
     const glyph = (['❯', '›', '»'] as const).find((candidate) => candidate === matched)
     if (glyph) {
-      if (glyph === '❯' && !COMPOSER_FRAME_LINE.test(context.rows[index - 1] ?? '')) {
-        return null
+      if (glyph === '❯') {
+        const top = context.rows[index - 1] ?? ''
+        if (
+          !COMPOSER_FRAME_LINE.test(top) &&
+          (!COMPOSER_TOP_FRAME_PREFIX.test(top.trimStart()) ||
+            !COMPOSER_FRAME_LINE.test(
+              context.rowsBelow.slice(continuationEndIndex).find((row) => row.trim()) ?? ''
+            ))
+        ) {
+          return null
+        }
       }
       if (
         (glyph === '›' || glyph === '»') &&
