@@ -22,7 +22,9 @@ const nodeFiles = [
   'src/transport/pairing-relay-served-recovery.test.ts',
   'src/transport/mobile-relay-rpc-stream-cancellation.test.ts',
   'src/test-support/rpc-recording/subscription-recording.test.ts',
-  'src/test-support/rpc-recording/family-recordings.test.ts'
+  'src/test-support/rpc-recording/family-recordings.test.ts',
+  // Its goldens carry V8's TypeError wording, as family-recordings' do.
+  'src/test-support/rpc-recording/bridged-recording-corpus.test.ts'
 ]
 
 const config = mergeConfig(original, { cacheDir: process.env.ORCA_MOBILE_CI_CACHE_DIR })
