@@ -12,7 +12,7 @@ import {
 import { mobileSessionFrameStyles } from './mobile-session-frame-styles'
 import { MobileSessionTabCardFooter } from './MobileSessionTabCardFooter'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { NavBarButton } from '../components/nav-bar/NavBarButton'
+import type * as NavBarButtonModule from '../components/nav-bar/NavBarButton'
 import type * as TabModule from './MobileSessionTab'
 import type * as FooterModule from './MobileSessionTabCardFooter'
 import type * as TabContentModule from './mobile-session-tab-card-content'
@@ -106,8 +106,9 @@ vi.mock('../components/AgentStateDot', () => ({
   AgentStateDot: (props: Parameters<typeof AgentStateDot>[0]) => createElement('StateDot', props)
 }))
 vi.mock('../components/nav-bar/NavBarButton', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../components/nav-bar/NavBarButton')>()),
-  NavBarButton: (props: Parameters<typeof NavBarButton>[0]) => createElement('HeaderButton', props)
+  ...(await importOriginal<typeof NavBarButtonModule>()),
+  NavBarButton: (props: Parameters<typeof NavBarButtonModule.NavBarButton>[0]) =>
+    createElement('HeaderButton', props)
 }))
 vi.mock('./mobile-session-styles', async () => {
   const { mobileSessionFrameStyles } = await import('./mobile-session-frame-styles')

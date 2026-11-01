@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import type { SessionTitleCard } from './use-session-title-card'
+import type * as NavBarButtonModule from '../components/nav-bar/NavBarButton'
 
 const layout = vi.hoisted(() => ({ sideRail: true, width: 927 }))
 vi.mock('react-native', () => ({
@@ -27,7 +28,7 @@ vi.mock('lucide-react-native', () => ({
   ListChecks: 'Icon'
 }))
 vi.mock('../components/nav-bar/NavBarButton', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../components/nav-bar/NavBarButton')>()),
+  ...(await importOriginal<typeof NavBarButtonModule>()),
   NavBarButton: 'HeaderButton'
 }))
 vi.mock('../components/nav-bar/PullDownMenu', () => ({ PullDownMenu: 'PullDownMenu' }))
