@@ -448,6 +448,47 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('prints terminal wait results for waiting condition and succeeds when satisfied', async () => {
+    process.exitCode = undefined
+    callMock.mockResolvedValueOnce({
+      id: 'req_terminal_wait_waiting',
+      ok: true,
+      result: {
+        wait: {
+          handle: 'term_worker',
+          condition: 'waiting',
+          satisfied: true,
+          status: 'running',
+          exitCode: null,
+          blockedReason: 'agent-interactive-prompt'
+        }
+      },
+      _meta: {
+        runtimeId: 'runtime-1'
+      }
+    })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'wait', '--terminal', 'term_worker', '--for', 'waiting'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'terminal.wait',
+      {
+        terminal: 'term_worker',
+        for: 'waiting',
+        timeoutMs: undefined
+      },
+      {
+        timeoutMs: 300000
+      }
+    )
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('condition: waiting')
+    expect(output).toContain('satisfied: true')
+    expect(output).toContain('blockedReason: agent-interactive-prompt')
+    expect(process.exitCode).toBeUndefined()
+  })
+
   it('does not force remote Codex terminal creates through a local renderer path', async () => {
     queueFixtures(
       callMock,

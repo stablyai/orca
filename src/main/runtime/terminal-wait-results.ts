@@ -68,7 +68,7 @@ export function buildTerminalWait(
   return {
     handle,
     condition,
-    satisfied: blockedReason === undefined,
+    satisfied: condition === 'waiting' ? blockedReason !== undefined : blockedReason === undefined,
     status,
     exitCode,
     ...(exitCause ? { exitCause } : {}),

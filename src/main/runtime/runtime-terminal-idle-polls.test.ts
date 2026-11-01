@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalIdlePolls } from './terminal/wait/terminal-idle-polls'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import type { RuntimeTerminalWait } from '../../shared/runtime-types'
+import type { RuntimeTerminalWait, RuntimeTerminalWaitCondition } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 
@@ -23,11 +23,14 @@ function makePty(ptyId: string, overrides: Partial<RuntimePtyWorktreeRecord> = {
   } as unknown as RuntimePtyWorktreeRecord
 }
 
-function makeWaiter(handle: string): TerminalWaiter {
+function makeWaiter(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition = 'tui-idle'
+): TerminalWaiter {
   return {
     handle,
     ptyId: `${handle}-pty`,
-    condition: 'tui-idle',
+    condition,
     resolve: () => {},
     reject: () => {},
     timeout: null,
@@ -392,6 +395,127 @@ describe('RuntimeTerminalIdlePolls quiet foreground for a launched agent', () =>
     polls.start(makeWaiter('pty'), makePty('pty-claude', { lastOutputAt: Date.now() }))
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 5)
+    expect(resolved).toEqual([])
+  })
+})
+
+describe('RuntimeTerminalIdlePolls waiting condition and status arbitration', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('settles waiting waiter when fresh explicit hook status reports permission', async () => {
+    const resolved: RuntimeTerminalWait[] = []
+    const polls = new RuntimeTerminalIdlePolls({
+      intervalMs: INTERVAL_MS,
+      quiescenceMs: 1500,
+      getForegroundProcess: () => null,
+      hasCommandPainted: () => true,
+      getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => 'codex',
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      readVisibleScreen: () => null,
+      resolve: (_waiter, result) => resolved.push(result),
+      getFreshExplicitAgentStatus: () => ({ status: 'permission', updatedAt: Date.now() })
+    })
+    const waiter = makeWaiter('pty-codex', 'waiting')
+    polls.start(waiter, makePty('pty-codex', { lastAgentStatus: 'working' }))
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    expect(resolved).toEqual([
+      expect.objectContaining({ satisfied: true, blockedReason: 'agent-interactive-prompt' })
+    ])
+  })
+
+  it('does not settle waiting waiter on screen prompt when verdict is ready-strong', async () => {
+    const resolved: RuntimeTerminalWait[] = []
+    const polls = new RuntimeTerminalIdlePolls({
+      intervalMs: INTERVAL_MS,
+      quiescenceMs: 1500,
+      getForegroundProcess: () => null,
+      hasCommandPainted: () => true,
+      getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => 'claude',
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      readVisibleScreen: () =>
+        Promise.resolve(
+          [
+            'This folder has not been trusted yet.',
+            '❯ No, exit',
+            '  Yes, I trust this folder',
+            'Enter to confirm · Esc to cancel'
+          ].join('\n')
+        ),
+      resolve: (_waiter, result) => resolved.push(result)
+    })
+    const waiter = makeWaiter('pty-done', 'waiting')
+    polls.start(
+      waiter,
+      makePty('pty-done', { lastAgentStatus: 'idle', lastOscTitle: '✳ Claude Code' })
+    )
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 2)
+    expect(resolved).toEqual([])
+  })
+
+  it('rejects stale tail blocked text for waiting when explicit status is working', async () => {
+    const resolved: RuntimeTerminalWait[] = []
+    const polls = new RuntimeTerminalIdlePolls({
+      intervalMs: INTERVAL_MS,
+      quiescenceMs: 1500,
+      getForegroundProcess: () => null,
+      hasCommandPainted: () => true,
+      getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => 'codex',
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      readVisibleScreen: () => null,
+      resolve: (_waiter, result) => resolved.push(result),
+      getFreshExplicitAgentStatus: () => ({ status: 'working', updatedAt: Date.now() })
+    })
+    const waiter = makeWaiter('pty-codex', 'waiting')
+    polls.start(
+      waiter,
+      makePty('pty-codex', {
+        tailBuffer: ['Hooks need review. Press enter to confirm']
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 2)
+    expect(resolved).toEqual([])
+  })
+
+  it('does not settle tui-idle as ready when permission status is active', async () => {
+    const resolved: RuntimeTerminalWait[] = []
+    const polls = new RuntimeTerminalIdlePolls({
+      intervalMs: INTERVAL_MS,
+      quiescenceMs: 1500,
+      getForegroundProcess: () => null,
+      hasCommandPainted: () => true,
+      getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => 'claude',
+      getFirstPartyAgentStatus: () => null,
+      readScreenLines: () => null,
+      readVisibleScreen: () => null,
+      resolve: (_waiter, result) => resolved.push(result),
+      getFreshExplicitAgentStatus: () => ({ status: 'permission', updatedAt: Date.now() })
+    })
+    const waiter = makeWaiter('pty-perm', 'tui-idle')
+    polls.start(
+      waiter,
+      makePty('pty-perm', {
+        lastAgentStatus: 'permission',
+        lastOscTitle: '✳ Claude Code'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS * 2)
     expect(resolved).toEqual([])
   })
 })

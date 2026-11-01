@@ -122,7 +122,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  terminal show             Show terminal metadata and preview',
   '  terminal read             Read bounded terminal output',
   '  terminal send             Send input to a live terminal',
-  '  terminal wait             Wait for a terminal condition (exit, tui-idle)',
+  '  terminal wait             Wait for a terminal condition (exit, tui-idle, waiting)',
   '  terminal create           Create a terminal session in a worktree',
   '  terminal rename           Set or clear the title of a terminal tab',
   '  terminal set-pane-title   Set or clear the title of one terminal pane',

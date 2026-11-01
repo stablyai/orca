@@ -264,6 +264,13 @@ describe('OrcaRuntimeService', () => {
       satisfied: false,
       blockedReason: 'agent-interactive-prompt'
     })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'waiting', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      satisfied: true,
+      condition: 'waiting',
+      blockedReason: 'agent-interactive-prompt'
+    })
   })
 
   it('reports permission from blocked wait text over title-only working state', async () => {
