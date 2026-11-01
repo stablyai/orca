@@ -1,3 +1,4 @@
+import { projectClaudePermissionState } from '../shared/agent-hook-listener/claude-permission-projection'
 import { randomUUID } from 'node:crypto'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status-types'
 import { isRecord } from '../shared/agent-status-child-work-value-guards'
@@ -74,8 +75,9 @@ export function applyRelayClaudeInterrupt(
   const cancelled = markClaudeLeadTurnInterrupted(host.state, row.paneKey)
   const { workingMode: _workingMode, interrupted: _interrupted, ...payload } = row.payload
   const accepted = host.apply(
-    {
+    projectClaudePermissionState(host.state, {
       ...row,
+      claudeSettledRequests: undefined,
       hookEventName: undefined,
       toolAgentId: undefined,
       hasExplicitPrompt: undefined,
@@ -86,7 +88,7 @@ export function applyRelayClaudeInterrupt(
         ...cancelled,
         ...(cancelled.state === 'done' ? { interrupted: true } : {})
       }
-    },
+    }),
     meta
   )
   if (!accepted) {

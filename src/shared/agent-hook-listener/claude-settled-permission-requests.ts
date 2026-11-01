@@ -87,8 +87,9 @@ export function retainClaudeSettledRequests(
     return undefined
   }
   const kept = previous && sameClaudeRun(previous, next) ? [...(retained ?? [])] : []
-  const settled = settledRequestOf(next)
-  if (settled) {
+  const own = settledRequestOf(next)
+  const resolutions = next.claudeSettledRequests ?? (own ? [own] : [])
+  for (const settled of resolutions) {
     const existing = kept.findIndex((request) => sameRequest(request, settled))
     if (existing !== -1) {
       kept.splice(existing, 1)
@@ -111,9 +112,13 @@ export function isClaudePermissionSettledByReplay(
   waiting: AgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const toolUseId = readId(waiting.toolUseId)
+  const identity = waiting.claudePermissionState?.pending ?? waiting
+  const toolUseId = readId(identity.toolUseId)
   if (
-    next.isReplay !== true ||
+    (next.isReplay !== true &&
+      next.hookEventName !== 'PostToolBatch' &&
+      next.hookEventName !== 'PostToolUse' &&
+      next.hookEventName !== 'PostToolUseFailure') ||
     !toolUseId ||
     !next.claudeSettledRequests ||
     waiting.connectionId !== next.connectionId ||
@@ -123,13 +128,15 @@ export function isClaudePermissionSettledByReplay(
   ) {
     return false
   }
-  const toolAgentId = readId(waiting.toolAgentId)
-  const toolAgentType = readId(waiting.toolAgentType)
+  const toolAgentId = readId(identity.toolAgentId)
+  const toolAgentType = readId(identity.toolAgentType)
   return next.claudeSettledRequests.some((request) =>
-    sameRequest(request, {
-      toolUseId,
-      ...(toolAgentId ? { toolAgentId } : {}),
-      ...(toolAgentType ? { toolAgentType } : {})
-    })
+    waiting.claudePermissionState?.pending
+      ? request.toolUseId === toolUseId && request.toolAgentId === toolAgentId
+      : sameRequest(request, {
+          toolUseId,
+          ...(toolAgentId ? { toolAgentId } : {}),
+          ...(toolAgentType ? { toolAgentType } : {})
+        })
   )
 }

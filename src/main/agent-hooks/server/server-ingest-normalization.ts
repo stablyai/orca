@@ -1,3 +1,4 @@
+import { markClaudeLeadTurnDone } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
@@ -27,6 +28,16 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.settleClaudePromptBlocked(applied)
     }
     return applied
+  }
+
+  protected recordClaudeTerminalTurnEnd(event: EnrichedAgentHookEventPayload | undefined): void {
+    if (
+      event?.connectionId === null &&
+      event.payload.agentType === 'claude' &&
+      event.payload.state === 'done'
+    ) {
+      markClaudeLeadTurnDone(this.state, event.paneKey)
+    }
   }
 
   protected setClaudeBackgroundEvidence(
@@ -82,11 +93,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
     if (!paneKey) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      return { event: normalizeHookPayload(this.state, source, body, this.env, { isReplay }) }
     }
     const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
     const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const event = normalizeHookPayload(this.state, source, body, this.env, { isReplay })
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).

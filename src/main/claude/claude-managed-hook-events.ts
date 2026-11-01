@@ -84,7 +84,12 @@ const CLAUDE_ELICITATION_EVENTS = [
 export const CLAUDE_MANAGED_EVENTS = [
   ...CLAUDE_EVENTS,
   ...CLAUDE_ELICITATION_EVENTS,
-  CLAUDE_SESSION_END_EVENT
+  CLAUDE_SESSION_END_EVENT,
+  {
+    eventName: 'PostToolBatch',
+    installFrom: '2.1.316',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  }
 ] as const
 
 export type ManagedHookEvent = {

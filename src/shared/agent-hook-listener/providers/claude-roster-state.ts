@@ -1,3 +1,4 @@
+import { retireClaudePermissions } from '../claude-permission-state'
 import type {
   AgentMainAgentStatus,
   AgentStatusState,
@@ -159,6 +160,7 @@ export function markClaudeLeadTurnDone(
   mainAgent?: AgentMainAgentStatus
   claudeTaskWakeupPending?: 'notification' | 'finishing-turn'
 } {
+  retireClaudePermissions(state, paneKey, (owner) => owner === undefined)
   const record = setClaudeMainAgentTurnState(state, paneKey, { state: 'done', outcome })
   const resolved = resolveClaudePaneStatus(state, paneKey, record)
   const mainAgent = claudeMainAgentStatusForPayload(record)
@@ -237,6 +239,7 @@ export function clearClaudePendingWaitForAgent(
   paneKey: string,
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
+  retireClaudePermissions(state, paneKey, (owner) => owner !== undefined && ownsWait(owner))
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return

@@ -268,6 +268,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
+          this.state.claudePermissionByPaneKey.delete(paneKey)
           this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
           this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)

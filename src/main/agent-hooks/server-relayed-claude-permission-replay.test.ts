@@ -1,3 +1,4 @@
+import captures from '../../shared/agent-hook-listener/__fixtures__/declined-permission-hooks.json'
 // Replay captured SSH permission hooks; single-row relay caching can hide the resolving event during disconnect.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -177,4 +178,103 @@ describe('a relayed Claude permission wait across a reconnect (captured)', () =>
     )
     expect(row(pane.desktop)).toMatchObject({ state: 'waiting' })
   })
+})
+
+describe('complete execution-host permission projections', () => {
+  it('keeps the recorded parallel prompt card over live and replayed siblings, then clears after settlement history turns over', async () => {
+    const pane = await startSshPane()
+    const raw = captures.claudeParallel
+    for (const payload of raw.slice(0, 4)) {
+      await pane.post(payload)
+    }
+    const card = row(pane.desktop)
+    pane.connected = false
+    for (const payload of raw.slice(4, 10)) {
+      await pane.post(payload)
+    }
+    reconnect(pane)
+    expect(row(pane.desktop)).toMatchObject({
+      state: 'waiting',
+      toolName: card.toolName,
+      toolInput: card.toolInput,
+      interactivePrompt: card.interactivePrompt
+    })
+    expect(pane.forwarded.at(-1)?.claudePermissionState).toMatchObject({
+      knowledge: 'complete',
+      pending: { toolUseId: expect.any(String) }
+    })
+    pane.connected = false
+    await pane.post(raw[10])
+    for (let i = 0; i < 20; i++) {
+      await pane.post({ ...raw[12], tool_use_id: `later-${i}` })
+    }
+    reconnect(pane)
+    expect(pane.forwarded.at(-1)?.claudeSettledRequests).not.toContainEqual(
+      expect.objectContaining({ toolUseId: raw[2].tool_use_id })
+    )
+    expect(pane.forwarded.at(-1)?.claudePermissionState).toEqual({
+      version: 1,
+      knowledge: 'complete'
+    })
+    expect(row(pane.desktop).state).toBe('working')
+  })
+
+  it('preserves a known descriptor when the producer restarts cold and uses exact batch proof to clear it', async () => {
+    const pane = await startSshPane()
+    const raw = captures.claudeParallel
+    for (const payload of raw.slice(0, 5)) {
+      await pane.post(payload)
+    }
+    const pending = pane.forwarded.at(-1)
+    expect(pending?.hookEventName).toBe('PreToolUse')
+    // Constructed lost-host-cache continuation; the original receiver still owns the request identity.
+    pane.desktop.ingestRemote(
+      {
+        ...pending,
+        paneKey: PANE,
+        hookEventName: 'PreToolUse',
+        claudePermissionState: { version: 1, knowledge: 'unknown' },
+        payload: { agentType: 'claude', state: 'working', prompt: 'continuing' }
+      },
+      'conn-1'
+    )
+    expect(row(pane.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+    pane.desktop.ingestRemote(
+      {
+        ...pending,
+        paneKey: PANE,
+        hookEventName: 'PostToolBatch',
+        claudePermissionState: { version: 1, knowledge: 'unknown' },
+        claudeSettledRequests: [{ toolUseId: String(raw[2].tool_use_id) }],
+        payload: { agentType: 'claude', state: 'working', prompt: 'continuing' }
+      },
+      'conn-1'
+    )
+    expect(row(pane.desktop).state).toBe('working')
+  })
+})
+
+it('invalidates complete observation after an authenticated malformed raw post while preserving the pending card', async () => {
+  const pane = await startSshPane()
+  for (const payload of captures.claudeParallel.slice(0, 4)) {
+    await pane.post(payload)
+  }
+  const { port, token } = pane.relay.getCoordinates()
+  await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Orca-Agent-Hook-Token': token,
+      'X-Orca-Pane-Key': PANE
+    },
+    body: '{'
+  })
+  await pane.post(captures.claudeParallel[4])
+  expect(pane.forwarded.at(-1)?.claudePermissionState).toMatchObject({
+    knowledge: 'unknown',
+    pending: { toolUseId: expect.any(String) }
+  })
+  expect(row(pane.desktop)).toMatchObject({ state: 'waiting', toolName: 'Read' })
+  await pane.post(captures.claudeParallel[10])
+  expect(row(pane.desktop).state).toBe('working')
 })

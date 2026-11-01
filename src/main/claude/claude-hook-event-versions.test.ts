@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { readManagedHookDetectionResult } from '../agent-hooks/managed-hook-detection-commands'
-import { getClaudeManagedHookPlan } from './claude-managed-hook-events'
+import {
+  getClaudeManagedHookPlan,
+  OPENCLAUDE_MANAGED_HOOK_PLAN
+} from './claude-managed-hook-events'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 import { compareAppVersions } from '../../shared/app-version'
@@ -27,9 +30,27 @@ const isTableEvent = (name: string): name is ClaudeHookEventName =>
   name in CLAUDE_HOOK_EVENT_FIRST_VERSIONS
 const tableEntries = Object.keys(CLAUDE_HOOK_EVENT_FIRST_VERSIONS)
   .filter(isTableEvent)
+  .filter((event) => event !== 'PostToolBatch')
   .map((event): [ClaudeHookEventName, string] => [event, CLAUDE_HOOK_EVENT_FIRST_VERSIONS[event]])
 
 describe('Claude hook event version table', () => {
+  it('gates batch installation on measured delivery separately from schema availability', () => {
+    for (const [version, available] of Object.entries(fixture.eventAvailability.PostToolBatch)) {
+      expect(claudeKnowsHookEvent(version, 'PostToolBatch')).toBe(available)
+    }
+    for (const version of [undefined, '2.1.117', '2.1.118', '2.1.315']) {
+      expect(
+        getClaudeManagedHookPlan(version).install.map((event) => event.eventName)
+      ).not.toContain('PostToolBatch')
+    }
+    expect(getClaudeManagedHookPlan('2.1.316').install.map((event) => event.eventName)).toContain(
+      'PostToolBatch'
+    )
+    expect(OPENCLAUDE_MANAGED_HOOK_PLAN.install.map((event) => event.eventName)).not.toContain(
+      'PostToolBatch'
+    )
+  })
+
   it.each(tableEntries)('pins %s to the first release whose enum knows it', (event, first) => {
     expect(versions.find((version) => enums[version].includes(event))).toBe(first)
     for (const version of versions) {
@@ -120,17 +141,17 @@ describe('identified Claude version output', () => {
   // Recorded macOS 2.1.310 / Windows 2.1.221 probes; historical releases' CLI source
   // registers the same suffix (1.0.23, 1.0.64, 2.0.0 and 2.1.100).
   it.each([
-    ['2.1.310 (Claude Code)\n', '', '2.1.310', 15, 0],
-    ['2.1.221 (Claude Code)\n', '', '2.1.221', 14, 1],
-    ['1.0.23 (Claude Code)', '', '1.0.23', 2, 13],
-    ['1.0.64 (Claude Code)', '', '1.0.64', 6, 9],
-    ['2.0.0 (Claude Code)', '', '2.0.0', 6, 9],
-    ['2.1.100 (Claude Code)', '', '2.1.100', 14, 1],
-    ['launcher 11.17.0\n1.0.64 (Claude Code)', '', '1.0.64', 6, 9],
-    ['launcher 0.1.0\n2.1.310 (Claude Code)', '', '2.1.310', 15, 0],
-    ['launcher 0.1.0', '2.1.310 (Claude Code)\n', '2.1.310', 15, 0],
-    ['', '2.1.310 (Claude Code)\n', '2.1.310', 15, 0],
-    ['2.1.94-rc.1+build.2 (Claude Code)', '', '2.1.94-rc.1+build.2', 14, 1],
+    ['2.1.310 (Claude Code)\n', '', '2.1.310', 15, 1],
+    ['2.1.221 (Claude Code)\n', '', '2.1.221', 14, 2],
+    ['1.0.23 (Claude Code)', '', '1.0.23', 2, 14],
+    ['1.0.64 (Claude Code)', '', '1.0.64', 6, 10],
+    ['2.0.0 (Claude Code)', '', '2.0.0', 6, 10],
+    ['2.1.100 (Claude Code)', '', '2.1.100', 14, 2],
+    ['launcher 11.17.0\n1.0.64 (Claude Code)', '', '1.0.64', 6, 10],
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', '', '2.1.310', 15, 1],
+    ['launcher 0.1.0', '2.1.310 (Claude Code)\n', '2.1.310', 15, 1],
+    ['', '2.1.310 (Claude Code)\n', '2.1.310', 15, 1],
+    ['2.1.94-rc.1+build.2 (Claude Code)', '', '2.1.94-rc.1+build.2', 14, 2],
     ['11.17.0\n', '', null, 6, 0],
     ['2.30.0', '', null, 6, 0],
     ['2.1.310\nwrapper for (Claude Code)', '', null, 6, 0],

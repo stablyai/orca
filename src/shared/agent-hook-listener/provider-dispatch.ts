@@ -85,7 +85,7 @@ export function normalizeProviderEvent(input: {
       )
       break
     case 'claude':
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayload, true)
       break
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayload)

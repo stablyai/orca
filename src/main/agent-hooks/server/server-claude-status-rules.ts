@@ -8,6 +8,24 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
+function pendingClaudePermission(event: AgentHookEventPayload): boolean {
+  return (
+    event.payload.agentType === 'claude' &&
+    event.payload.state === 'waiting' &&
+    (event.claudePermissionState?.pending !== undefined ||
+      (event.hookEventName === 'PermissionRequest' &&
+        !isAskUserQuestionTool(event.payload.toolName)))
+  )
+}
+
+function permissionIdentity(event: AgentHookEventPayload): {
+  toolUseId?: string
+  toolAgentId?: string
+  toolAgentType?: string
+} {
+  return event.claudePermissionState?.pending ?? event
+}
+
 /** Retain the shell-work fact only with the main-agent observation that established it. */
 export function pairedClaudeNonAgentWork(
   previous: EnrichedAgentHookEventPayload | undefined,
@@ -27,7 +45,7 @@ export function withHeldChildWaitMainAgent(
   next: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload {
   const mainAgent = next.payload.mainAgent
-  if (!previous.toolAgentId || !mainAgent) {
+  if (!permissionIdentity(previous).toolAgentId || !mainAgent) {
     return previous
   }
   const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
@@ -63,14 +81,19 @@ export function shouldKeepClaudePermissionVisible(
   }
   if (
     previous?.payload.agentType !== 'claude' ||
-    previous.payload.state !== 'waiting' ||
-    previous.hookEventName !== 'PermissionRequest' ||
+    !pendingClaudePermission(previous) ||
+    (next.source === 'claude' &&
+      next.hookEventName !== undefined &&
+      next.claudePermissionState?.knowledge === 'complete') ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {
     return false
   }
-  if (next.hasExplicitPrompt === true) {
+  if (
+    next.hasExplicitPrompt === true &&
+    permissionIdentity(previous).toolAgentId === next.toolAgentId
+  ) {
     return false
   }
   if (isClaudePermissionOwningChildEnding(previous, next)) {
@@ -93,7 +116,7 @@ function isClaudePermissionOwningChildEnding(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const ownerId = previous.toolAgentId?.trim()
+  const ownerId = permissionIdentity(previous).toolAgentId?.trim()
   if (!ownerId) {
     return false
   }
@@ -111,12 +134,13 @@ function isClaudePermissionResumingApprovedTool(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): boolean {
-  const previousToolUseId = previous.toolUseId?.trim() || undefined
+  const request = permissionIdentity(previous)
+  const previousToolUseId = request.toolUseId?.trim() || undefined
   const nextToolUseId = next.toolUseId?.trim() || undefined
-  const previousAgentId = previous.toolAgentId?.trim() || undefined
+  const previousAgentId = request.toolAgentId?.trim() || undefined
   const nextAgentId = next.toolAgentId?.trim() || undefined
   const hasAgentId = previousAgentId !== undefined || nextAgentId !== undefined
-  const previousAgentType = previous.toolAgentType?.trim() || undefined
+  const previousAgentType = request.toolAgentType?.trim() || undefined
   const nextAgentType = next.toolAgentType?.trim() || undefined
   const hasMatchingConcreteAgentId =
     previousAgentId !== undefined && previousAgentId === nextAgentId
@@ -142,6 +166,14 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
+  if (previous.claudePermissionState !== undefined || next.claudePermissionState !== undefined) {
+    return (
+      (next.hookEventName === 'PostToolUse' || next.hookEventName === 'PostToolUseFailure') &&
+      hasMatchingToolUseId &&
+      previousAgentId === nextAgentId
+    )
+  }
+
   // Failure clears tool name/input; require the exact request and owner.
   if (next.hookEventName === 'PostToolUseFailure') {
     return (
@@ -165,6 +197,7 @@ export function shouldInheritClaudeToolUseIdForPermission(
   next: AgentHookEventPayload
 ): boolean {
   if (
+    next.claudePermissionState !== undefined ||
     previous?.restoredUnconfirmed ||
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'working' ||

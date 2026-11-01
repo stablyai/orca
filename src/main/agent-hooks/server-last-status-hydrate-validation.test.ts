@@ -1,3 +1,4 @@
+import { sanitizeHydratedEntry } from './server/server-persistence-validation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
@@ -448,4 +449,26 @@ describe('Last-status persistence', () => {
     const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
     expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
   })
+})
+
+it('hydrates permission display without restoring execution-host authority from disk', () => {
+  const row = sanitizeHydratedEntry(PANE, {
+    paneKey: PANE,
+    connectionId: null,
+    receivedAt: recentTs(),
+    stateStartedAt: recentTs(),
+    source: 'claude',
+    hookEventName: 'PermissionRequest',
+    toolUseId: 'saved-request',
+    claudePermissionState: {
+      version: 1,
+      knowledge: 'complete',
+      pending: { toolUseId: 'saved-request' }
+    },
+    claudeSettledRequests: [{ toolUseId: 'saved-request' }],
+    payload: { agentType: 'claude', state: 'waiting', prompt: 'Saved turn', toolName: 'Read' }
+  })
+  expect(row?.payload).toMatchObject({ state: 'waiting', toolName: 'Read' })
+  expect(row).not.toHaveProperty('claudePermissionState')
+  expect(row).not.toHaveProperty('claudeSettledRequests')
 })

@@ -413,7 +413,8 @@ describe('shared agent-hook-listener', () => {
       expect(blocked?.payload.state).toBe('waiting')
 
       const approved = claudeEvent({
-        hook_event_name: 'PreToolUse',
+        hook_event_name: 'PostToolUse',
+        tool_use_id: 'child-approved',
         agent_id: 'a1',
         tool_name: 'Bash',
         tool_input: { command: 'rm -rf build' }

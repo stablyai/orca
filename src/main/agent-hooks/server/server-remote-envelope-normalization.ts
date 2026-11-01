@@ -1,3 +1,7 @@
+import {
+  readClaudePermissionState,
+  type ClaudePermissionState
+} from '../../../shared/agent-hook-listener/claude-permission-projection'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeClaudePromptId,
@@ -26,6 +30,7 @@ export type RemoteAgentStatusEnvelope = {
   grokPromptBoundary?: unknown
   compactTrigger?: unknown
   toolUseId?: string
+  claudePermissionState?: unknown
   claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
@@ -54,6 +59,7 @@ export type RemoteEnvelopeFields = {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudePermissionState?: ClaudePermissionState
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
@@ -70,6 +76,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudePermissionState?: unknown
   claudeSettledRequests?: unknown
   isReplay?: boolean
   toolAgentId?: string
@@ -110,9 +117,17 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Live hooks settle their own requests; retained settlements only repair replay gaps.
+    claudePermissionState:
+      source === 'claude' && envelope.hookEventName
+        ? readClaudePermissionState(envelope.claudePermissionState)
+        : undefined,
+    // Only settlement hooks or exact cached replays carry resolution proof.
     claudeSettledRequests:
-      source === 'claude' && envelope.isReplay === true
+      source === 'claude' &&
+      (envelope.isReplay === true ||
+        envelope.hookEventName === 'PostToolBatch' ||
+        envelope.hookEventName === 'PostToolUse' ||
+        envelope.hookEventName === 'PostToolUseFailure')
         ? readClaudeSettledRequests(envelope.claudeSettledRequests)
         : undefined,
     toolAgentId:

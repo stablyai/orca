@@ -1,3 +1,4 @@
+import { updateClaudeRunningNonAgentTask } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { normalizeHostTurnRevision } from '../../../shared/agent-hook-interrupt-reconciliation'
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { track } from '../../telemetry/client'
@@ -116,11 +117,11 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       worktreeId,
       promptInteractionKey,
       toolUseId,
-      claudeSettledRequests,
       toolAgentId,
       teammateName,
       toolAgentType,
-      providerSession
+      providerSession,
+      ...permissionFields
     } = normalizeRemoteEnvelopeFields(envelope)
     if (envelope.statusUnavailable === true && envelope.payload === null) {
       const previous = this.state.lastStatusByPaneKey.get(paneKey)
@@ -274,7 +275,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       grokPromptBoundary,
       compactTrigger,
       toolUseId,
-      ...(claudeSettledRequests ? { claudeSettledRequests } : {}),
+      ...permissionFields,
       toolAgentId,
       teammateName,
       toolAgentType,
@@ -300,13 +301,12 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     this.applyNormalizedStatus(
       event,
       applyClaudeBackgroundWork
-        ? () => {
-            if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-            } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-            }
-          }
+        ? () =>
+            updateClaudeRunningNonAgentTask(
+              this.state,
+              paneKey,
+              envelope.claudeRunningNonAgentTask === true
+            )
         : undefined,
       'hook',
       typeof age === 'number' ? Math.max(0, Date.now() - age) : undefined

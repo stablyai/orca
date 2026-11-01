@@ -21,7 +21,7 @@ describe('Claude helper provider evidence', () => {
       })}\n`
     const preservation = () => ({
       child: p.row().payload.subagents?.find((child) => child.id === 'a123')?.state ?? null,
-      waitOwner: p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId ?? null,
+      waitOwner: p.row().claudePermissionState?.pending?.toolAgentId ?? null,
       debt: { ...tasks.get('a123') },
       endings: p.publish.mock.calls.length
     })
@@ -75,7 +75,7 @@ describe('Claude helper provider evidence', () => {
         due.mock.results.map((result) => (result.type === 'return' ? result.value : undefined))
       )
       expect(p.row().payload.subagents ?? []).toEqual([])
-      expect(p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId).toBeUndefined()
+      expect(p.row().claudePermissionState?.pending?.toolAgentId).toBeUndefined()
       expect(tasks.get('a123')?.settled).toBe(true)
       expect(tasks.get('shell')).toEqual({ kind: 'shell', notificationOwedAt: now })
       expect(p.row().payload.workingMode).toBe('monitoring')
@@ -165,7 +165,7 @@ describe('Claude helper provider evidence', () => {
       })
       const preservation = () => ({
         child: p.row().payload.subagents?.find((child) => child.id === 'a123')?.state ?? null,
-        waitOwner: p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId ?? null,
+        waitOwner: p.row().claudePermissionState?.pending?.toolAgentId ?? null,
         debt: { ...tasks.get('a123') },
         endings: p.publish.mock.calls.length
       })
@@ -254,7 +254,7 @@ describe('Claude helper provider evidence', () => {
           notificationOwedAt: undefined,
           settled: true
         })
-        expect(p.state.claudeLeadStateByPaneKey.get(paneKey)?.waitingAgentId).toBeUndefined()
+        expect(p.row().claudePermissionState?.pending?.toolAgentId).toBeUndefined()
         expect(tasks.get('shell')?.notificationOwedAt).toBe(now)
         expect(p.publish).toHaveBeenCalledTimes(1)
         expect(vi.getTimerCount()).toBe(0)
