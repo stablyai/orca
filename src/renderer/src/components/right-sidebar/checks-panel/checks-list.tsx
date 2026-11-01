@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
-import { getCheckStatusLabel } from '../../../../../shared/pr-check-status-label'
+import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { type ChecksListProps, useChecksListState } from './use-checks-list-state'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
 

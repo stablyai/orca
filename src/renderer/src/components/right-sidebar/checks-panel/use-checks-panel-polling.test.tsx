@@ -63,6 +63,28 @@ afterEach(() => {
 })
 
 describe('useChecksPanelPolling live behavior', () => {
+  it('passes a failed pipeline without jobs through to the check rows', async () => {
+    gitlab.fetchDetails.mockResolvedValue({
+      item: { projectRef: { host: 'gitlab.com', path: 'g/p' } },
+      pipelineJobs: [],
+      pipeline: { id: 99, status: 'failed', webUrl: 'https://gitlab.com/g/p/-/pipelines/99' },
+      comments: []
+    })
+    const model = createModel()
+    const { result } = renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => result.current.fetchGitLabDetails({ mrNumberOverride: 17 }))
+
+    expect(model.setChecks).toHaveBeenLastCalledWith([
+      {
+        name: 'Pipeline #99',
+        status: 'completed',
+        conclusion: 'failure',
+        url: 'https://gitlab.com/g/p/-/pipelines/99'
+      }
+    ])
+  })
+
   it('gates installation by panel visibility and cleans the active poller', () => {
     const model = createModel({ isPanelVisible: false })
     const hook = renderHook(({ input }) => useChecksPanelPolling(input), {

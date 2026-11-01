@@ -6,6 +6,7 @@ import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import { isGitLabCheck } from '../../../../../shared/gitlab-pipeline-checks'
 
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
@@ -127,7 +128,10 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       if (!repo) {
         return Promise.resolve(null)
       }
-      if (check.gitlabJobId) {
+      if (isGitLabCheck(check, activeGitLabReview ? gitLabProjectRefRef.current : null)) {
+        if (!check.gitlabJobId) {
+          return Promise.resolve(null)
+        }
         return loadGitLabJobLogDetails({
           repoPath: repo.path,
           repoId: repo.id,
@@ -148,11 +152,14 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
       )
     },
-    [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef]
+    [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef, activeGitLabReview]
   )
 
   // Read the ref at call time because async MR fetches can fill it after render.
-  const getGitLabProjectRef = useCallback(() => gitLabProjectRefRef.current, [gitLabProjectRefRef])
+  const getGitLabProjectRef = useCallback(
+    () => (activeGitLabReview ? gitLabProjectRefRef.current : null),
+    [gitLabProjectRefRef, activeGitLabReview]
+  )
 
   useEffect(() => {
     if (activeGitLabReview) {

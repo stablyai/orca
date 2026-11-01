@@ -136,7 +136,10 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
-          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const checksSummary = buildGitLabCheckSummary(
+            details.pipelineJobs ?? [],
+            details.pipeline
+          )
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'

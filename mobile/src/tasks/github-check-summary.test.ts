@@ -4,6 +4,16 @@ import { buildGitLabCheckSummary } from './gitlab-check-summary'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 
 describe('buildGitHubCheckSummary', () => {
+  it('keeps a failed GitLab pipeline failing when it has no jobs', () => {
+    expect(
+      buildGitLabCheckSummary([], {
+        id: 99,
+        status: 'failed',
+        webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+      })
+    ).toEqual({ state: 'failure', total: 1, passed: 0, failed: 1, pending: 0, neutral: 0 })
+  })
+
   it('returns none for empty check lists', () => {
     expect(buildGitHubCheckSummary([])).toEqual({
       state: 'none',

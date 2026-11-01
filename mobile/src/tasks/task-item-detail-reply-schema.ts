@@ -51,6 +51,14 @@ export const gitlabWorkItemDetailSchema = z
       })
     ),
     assignees: prStringList('assignees'),
+    pipeline: salvagedOptional(
+      'pipeline',
+      z.looseObject({
+        id: z.number().int().positive(),
+        status: z.string(),
+        webUrl: prNullableText('webUrl')
+      })
+    ),
     pipelineJobs: salvagedOptional(
       'pipelineJobs',
       salvagingArray(

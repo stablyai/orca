@@ -500,41 +500,56 @@ describe('createEditorSlice conflict status reconciliation', () => {
   })
 
   // Fork MR job traces live in source project; retain stored project ref on reload (#7732).
-  it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
-    loadGitLabJobLogDetailsMock.mockReset()
-    loadGitLabJobLogDetailsMock.mockResolvedValue(null)
-    const store = createEditorTabsStore()
-    store.setState({
-      activeWorktreeId: 'wt-1',
-      repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
-      worktreesByRepo: {
-        'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
-      },
-      settings: null,
-      fetchPRCheckDetails: vi.fn().mockResolvedValue(null)
-    })
-    const check = {
-      name: 'test: unit',
-      status: 'completed' as const,
-      conclusion: 'failure' as const,
-      url: null,
-      gitlabJobId: 77
+  it.each(['job', 'pipeline'] as const)(
+    'reloads a fork MR %s tab with the stored GitLab project ref',
+    async (kind) => {
+      loadGitLabJobLogDetailsMock.mockReset()
+      loadGitLabJobLogDetailsMock.mockResolvedValue(null)
+      const store = createEditorTabsStore()
+      const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+      store.setState({
+        activeWorktreeId: 'wt-1',
+        repos: [{ ...TEST_REPO, id: 'repo-1', path: '/repo' }],
+        worktreesByRepo: {
+          'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })]
+        },
+        settings: null,
+        fetchPRCheckDetails
+      })
+      const check = {
+        name: kind === 'job' ? 'test: unit' : 'Pipeline #99',
+        status: 'completed' as const,
+        conclusion: 'failure' as const,
+        url: null,
+        ...(kind === 'job' ? { gitlabJobId: 77 } : {})
+      }
+      const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
+
+      store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+        details: null,
+        loading: false,
+        error: null,
+        gitlabProjectRef: projectRef
+      })
+
+      await store
+        .getState()
+        .reloadOpenCheckRunDetailsTab(
+          kind === 'job'
+            ? 'wt-1::check-details::gitlab-job:77'
+            : 'wt-1::check-details::name:Pipeline #99'
+        )
+
+      if (kind === 'job') {
+        expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
+          expect.objectContaining({ check, projectRef })
+        )
+      } else {
+        expect(loadGitLabJobLogDetailsMock).not.toHaveBeenCalled()
+      }
+      expect(fetchPRCheckDetails).not.toHaveBeenCalled()
     }
-    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
-
-    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
-      details: null,
-      loading: false,
-      error: null,
-      gitlabProjectRef: projectRef
-    })
-
-    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:77')
-
-    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ check, projectRef })
-    )
-  })
+  )
 
   it('keeps a stored GitLab project ref when a patch omits it', () => {
     const store = createEditorTabsStore()

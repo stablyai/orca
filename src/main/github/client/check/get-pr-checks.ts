@@ -10,7 +10,7 @@ import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../share
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { extractExecError } from '../../../git/exec-error'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { mapCheckStatus, mapCheckConclusion } from '../../mappers'
+import { mapCheckStatus, mapCheckConclusion, mapCheckRunRESTConclusion } from '../../mappers'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
@@ -25,8 +25,9 @@ import {
   mapRestCheckRun,
   mapRestCommitStatus,
   mapGraphQLPRChecksResponse,
-  getPendingApprovalCheckSuiteName,
-  getPendingApprovalCheckSuiteUrl
+  getCheckSuiteName,
+  getCheckSuiteUrl,
+  shouldIncludeCheckSuite
 } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
 export async function getPRChecksViaRestFallback(
@@ -86,7 +87,7 @@ export async function getPRChecksViaRestFallback(
       console.warn('getPRChecks REST status fallback failed:', err)
     }
 
-    let pendingApprovalChecks: PRCheckDetail[] = []
+    let suiteChecks: PRCheckDetail[] = []
     try {
       const suitesResult = await ghExecFileAsync(
         [
@@ -100,19 +101,19 @@ export async function getPRChecksViaRestFallback(
       const suitesData = JSON.parse(suitesResult.stdout) as {
         check_suites?: RestCheckSuite[]
       }
-      pendingApprovalChecks = (suitesData.check_suites ?? [])
-        .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
+      suiteChecks = (suitesData.check_suites ?? [])
+        .filter((suite) => shouldIncludeCheckSuite(suite.conclusion, suite.latest_check_runs_count))
         .map((suite, index) => ({
-          name: getPendingApprovalCheckSuiteName(suite, headSha, index),
+          name: getCheckSuiteName(suite, headSha, index),
           status: 'completed' as const,
-          conclusion: 'action_required' as const,
-          url: getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.id)
+          conclusion: mapCheckRunRESTConclusion('completed', suite.conclusion),
+          url: getCheckSuiteUrl(ownerRepo, headSha, suite.id)
         }))
     } catch (err) {
       console.warn('getPRChecks REST check-suite fallback failed:', err)
     }
 
-    const checks = [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+    const checks = [...checkRuns, ...legacyStatuses, ...suiteChecks]
     return checks.length > 0 ? checks : null
   } catch (err) {
     console.warn('getPRChecks via REST fallback failed, falling back to gh pr checks:', err)
@@ -122,7 +123,7 @@ export async function getPRChecksViaRestFallback(
   }
 }
 
-/** Read the combined GraphQL rollup, including legacy statuses and suite-only approval blockers. */
+/** Read the combined GraphQL rollup, including legacy statuses and suite-only failures. */
 async function readPRChecks(
   repoPath: string,
   prNumber: number,

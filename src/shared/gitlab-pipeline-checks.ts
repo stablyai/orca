@@ -1,4 +1,4 @@
-import type { GitLabPipelineJob } from './gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob, GitLabProjectRef } from './gitlab-types'
 import type { PRCheckDetail } from './github/check-types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
@@ -56,7 +56,25 @@ export function mapGitLabPipelineJobStatusToConclusion(
   return null
 }
 
-export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheckDetail[] {
+export function isGitLabCheck(check: PRCheckDetail, projectRef?: GitLabProjectRef | null): boolean {
+  return Boolean(check.gitlabJobId || projectRef)
+}
+
+export function gitLabPipelineJobsToPRChecks(
+  jobs: GitLabPipelineJob[],
+  pipeline?: GitLabPipeline,
+  pipelineLabel = 'Pipeline'
+): PRCheckDetail[] {
+  if (jobs.length === 0 && pipeline) {
+    return [
+      {
+        name: `${pipelineLabel} #${pipeline.id}`,
+        status: mapGitLabPipelineJobStatusToCheckStatus(pipeline.status),
+        conclusion: mapGitLabPipelineJobStatusToConclusion(pipeline.status) ?? 'neutral',
+        url: pipeline.webUrl ?? null
+      }
+    ]
+  }
   return jobs.map((job) => ({
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),

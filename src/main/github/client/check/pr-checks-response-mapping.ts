@@ -90,20 +90,35 @@ export function mapRestCommitStatus(status: RestCommitStatus): PRCheckDetail | n
   }
 }
 
-export function mapGraphQLPendingApprovalCheckSuite(
+export function shouldIncludeCheckSuite(
+  conclusion: string | null | undefined,
+  runCount: number | null | undefined,
+  hasKnownRuns = false
+): boolean {
+  const outcome = conclusion?.toLowerCase()
+  if (runCount != null) {
+    return (
+      runCount === 0 &&
+      (outcome === 'action_required' || outcome === 'failure' || outcome === 'startup_failure')
+    )
+  }
+  return outcome === 'action_required' && !hasKnownRuns
+}
+
+export function mapGraphQLCheckSuite(
   ownerRepo: GitHubApiRepository,
   suite: GraphQLCheckSuite,
   headSha: string | null | undefined,
   index: number
 ): PRCheckDetail {
   return {
-    name: getPendingApprovalCheckSuiteName(suite, headSha, index),
+    name: getCheckSuiteName(suite, headSha, index),
     status: 'completed',
-    conclusion: 'action_required',
-    // Approval blockers may have a suite URL without any check run.
+    conclusion: mapCheckRunRESTConclusion('completed', suite.conclusion ?? null),
+    // A suite can fail before it creates any check runs.
     url:
       nullableString(suite.url) ??
-      (headSha ? getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
+      (headSha ? getCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
   }
 }
 
@@ -136,20 +151,21 @@ export function mapGraphQLPRChecksResponse(
     .filter(isGraphQLStatusContext)
     .map(mapGraphQLStatusContext)
     .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
-  const pendingApprovalChecks = (commit.checkSuites?.nodes ?? [])
-    .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
+  const suiteChecks = (commit.checkSuites?.nodes ?? [])
     .filter((suite) => {
       const suiteId = nullableNumber(suite.databaseId)
-      return suiteId === null || !checkSuiteIdsWithRuns.has(suiteId)
+      return shouldIncludeCheckSuite(
+        suite.conclusion,
+        suite.checkRuns?.totalCount,
+        suiteId !== null && checkSuiteIdsWithRuns.has(suiteId)
+      )
     })
-    .map((suite, index) =>
-      mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)
-    )
+    .map((suite, index) => mapGraphQLCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index))
 
-  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+  return [...checkRuns, ...legacyStatuses, ...suiteChecks]
 }
 
-export function getPendingApprovalCheckSuiteName(
+export function getCheckSuiteName(
   suite: {
     id?: number | null
     databaseId?: number | null
@@ -174,7 +190,7 @@ export function getPendingApprovalCheckSuiteName(
   return `${headSha?.slice(0, 12) ?? 'check-suite'}:${index + 1}`
 }
 
-export function getPendingApprovalCheckSuiteUrl(
+export function getCheckSuiteUrl(
   ownerRepo: GitHubApiRepository,
   headSha: string,
   suiteId: number | null | undefined

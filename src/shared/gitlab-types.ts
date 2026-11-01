@@ -254,6 +254,12 @@ export type GitLabPipelineJob = {
 }
 
 // Flatten discussions into the work-item details comment list.
+export type GitLabPipeline = {
+  id: number
+  status: string
+  webUrl?: string | null
+}
+
 export type GitLabWorkItemDetails = {
   /** repoId is stamped by the renderer's caller — the main process doesn't know Orca's Repo.id. */
   item: Omit<GitLabWorkItem, 'repoId'>
@@ -264,6 +270,7 @@ export type GitLabWorkItemDetails = {
   baseSha?: string
   startSha?: string
   files?: GitLabMRFile[]
+  pipeline?: GitLabPipeline
   /** MR-only — populated when the MR's head_pipeline exists. */
   pipelineJobs?: GitLabPipelineJob[]
   /** MR-only reviewers and approval status. */

@@ -13,10 +13,14 @@ import { ChecksPanelEmptyContent } from './empty-content'
 import { getHostedReviewManualRefreshError } from '../github-refresh-error-copy'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { gitLabPipelineJobsToPRChecks } from '../../../../../shared/gitlab-pipeline-checks'
+import { i18n } from '@/i18n/i18n'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
   vi.useRealTimers()
+  await i18n.changeLanguage('en')
 })
 
 describe('checks panel concrete content', () => {
@@ -193,7 +197,7 @@ describe('checks panel concrete content', () => {
     }
   )
 
-  it('renders the active review header and empty check/comment sections with accessible actions', () => {
+  it('renders the active review header and empty check/comment sections with accessible actions', async () => {
     const model = {
       activeConnectionId: null,
       activeConflictReview: null,
@@ -271,7 +275,9 @@ describe('checks panel concrete content', () => {
       titleSaving: false
     } satisfies ChecksPanelActiveContentModel
 
-    const { rerender } = render(<ChecksPanelActiveContent model={model} />)
+    const { rerender } = render(<ChecksPanelActiveContent model={model} />, {
+      wrapper: TooltipProvider
+    })
 
     expect(screen.getByText('Preserve mounted panel behavior')).toBeTruthy()
     expect(screen.getByText('No checks configured')).toBeTruthy()
@@ -280,6 +286,36 @@ describe('checks panel concrete content', () => {
     expect(screen.getByRole('button', { name: '#42' }).getAttribute('title')).toContain(
       'Open on GitHub'
     )
+    rerender(
+      <ChecksPanelActiveContent
+        model={{
+          ...model,
+          activeReview: { ...model.activeReview, provider: 'gitlab', status: 'failure' },
+          checks: gitLabPipelineJobsToPRChecks([], {
+            id: 99,
+            status: 'failed',
+            webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+          })
+        }}
+      />
+    )
+    expect(screen.queryByText('No checks configured')).toBeNull()
+    expect(screen.getByText('Failed')).toBeTruthy()
+    await i18n.changeLanguage('es')
+    rerender(
+      <ChecksPanelActiveContent
+        model={{
+          ...model,
+          checks: gitLabPipelineJobsToPRChecks([], {
+            id: 99,
+            status: 'failed',
+            webUrl: 'https://gitlab.com/g/p/-/pipelines/99'
+          })
+        }}
+      />
+    )
+    expect(screen.getByText('Falló')).toBeTruthy()
+    await i18n.changeLanguage('en')
     const failedModel = {
       ...model,
       checksError: 'Previous detail error',

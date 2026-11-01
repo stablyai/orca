@@ -104,6 +104,17 @@ describe('the GitLab detail pane', () => {
     expect(details?.approvalState).toEqual({ approvalsRequired: null, approvalsLeft: null })
   })
 
+  it('reads the optional parent pipeline and salvages details if that pipeline is malformed', () => {
+    const pipeline = { id: 99, status: 'failed', webUrl: 'https://gitlab.com/g/p/-/pipelines/99' }
+    expect(reads(gitlabWorkItemDetailSchema, { pipeline })?.pipeline).toEqual(pipeline)
+    const details = reads(gitlabWorkItemDetailSchema, {
+      body: 'Keep the MR readable',
+      pipeline: { id: 99, status: null }
+    })
+    expect(details?.body).toBe('Keep the MR readable')
+    expect(details?.pipeline).toBeUndefined()
+  })
+
   it('drops a pipeline job the summary could not classify', () => {
     const jobs = reads(gitlabWorkItemDetailSchema, {
       pipelineJobs: [

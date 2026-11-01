@@ -14,6 +14,7 @@ import { fetchGitLabMRDetailsForChecks, gitLabMRCommentsToPRComments } from './g
 import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -226,7 +227,11 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
           throw new Error('GitLab MR details are unavailable')
         }
         gitLabProjectRefRef.current = details.item.projectRef ?? null
-        const result = gitLabPipelineJobsToPRChecks(details?.pipelineJobs ?? [])
+        const result = gitLabPipelineJobsToPRChecks(
+          details.pipelineJobs ?? [],
+          details.pipeline,
+          translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')
+        )
         setChecks(result)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
         const signature = policyRef.current.accept(result)
