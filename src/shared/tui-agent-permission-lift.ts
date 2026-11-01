@@ -6,6 +6,8 @@ import {
 import { agentPermissionHostPlatform, permissionEnvNameMatches } from './agent-permission-env'
 import type { GlobalSettings } from './global-settings-types'
 import {
+  agentPermissionArgs,
+  agentPermissionChoices,
   agentPermissionEnv,
   hasTypedAgentPermission,
   normalizeAgentPermissionOverrides,
@@ -31,6 +33,31 @@ export function liftAgentPermissionArgs(
     keys: new Set(['permissionMode'])
   })
   return { choice: result.choices.permissionMode ?? null, args: result.userArgs }
+}
+
+const recipeFlagWordsByAgent = new Map<TuiAgent, readonly string[]>()
+
+/** Cheap over-approximation of "this text could lift": every recipe match needs its own flag word
+ *  somewhere in the text, so a miss on the agent's flag words rules the whole analysis out without
+ *  paying the per-grammar tokenization and option inventories the exact lift costs. */
+export function textCouldCarryAgentPermissionRecipe(agent: TuiAgent, text: string): boolean {
+  let flags = recipeFlagWordsByAgent.get(agent)
+  if (!flags) {
+    flags = agentPermissionChoices(agent).map(
+      (choice) => agentPermissionArgs(agent, choice).split(/\s/, 1)[0] ?? ''
+    )
+    recipeFlagWordsByAgent.set(agent, flags)
+  }
+  return flags.some((flag) => flag !== '' && text.includes(flag))
+}
+
+/** Stored text without the recipe a lift would cut; a liftable recipe is replaced by its remainder. */
+export function stripLiftableAgentPermissionArgs(agent: TuiAgent, text: string): string {
+  if (!textCouldCarryAgentPermissionRecipe(agent, text)) {
+    return text
+  }
+  const lifted = liftAgentPermissionArgs(agent, text)
+  return lifted.choice !== null ? lifted.args : text
 }
 
 /** A recorded launch without Orca's permission flag; recorded text it cannot rebuild stays whole. */
