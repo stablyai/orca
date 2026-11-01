@@ -15,6 +15,10 @@ import {
 } from './mobile-new-tab-agent-loader'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
+import {
+  loadMobileStructuredChatLaunchContext,
+  withMobileStructuredChatLaunch
+} from './mobile-structured-chat-launch'
 
 export function useMobileNewTabAgentOptions(args: {
   client: RpcClient | null
@@ -26,7 +30,16 @@ export function useMobileNewTabAgentOptions(args: {
   setLoadState: (state: MobileNewTabAgentLoadState) => void
   setOptions: (options: MobileNewTabAgentOption[]) => void
 }): void {
-  const { client, connState, hostId, worktreeId, open, setLoadState, setOptions } = args
+  const {
+    client,
+    connState,
+    hostCapabilities,
+    hostId,
+    worktreeId,
+    open,
+    setLoadState,
+    setOptions
+  } = args
   const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
   // Include execution host because relayed servers can share workspace ids.
   const workspaceKey = composeWorktreeHostIdentity(useWorkspaceExecutionHost(), worktreeId)
@@ -59,8 +72,13 @@ export function useMobileNewTabAgentOptions(args: {
         return
       }
       observedTargets.add(target)
-      setCachedNewTabAgentInventory(hostId, workspaceKey, inventory)
-      setOptions(inventory.options)
+      const launchContext = await loadMobileStructuredChatLaunchContext({
+        client,
+        hostCapabilities
+      }).catch(() => null)
+      const options = withMobileStructuredChatLaunch(inventory.options, launchContext)
+      setCachedNewTabAgentInventory(hostId, workspaceKey, { ...inventory, options })
+      setOptions(options)
       setLoadState('loaded')
     })().catch((error: unknown) => {
       if (stale) {
@@ -83,6 +101,7 @@ export function useMobileNewTabAgentOptions(args: {
   }, [
     client,
     connState,
+    hostCapabilities,
     hostId,
     hostRefusesOtherRuntime,
     open,

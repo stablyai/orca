@@ -14,6 +14,7 @@ export type MobileNewTabAgentSettings = {
 export type MobileNewTabAgentOption = {
   agent: TuiAgent
   label: string
+  opensAsChat?: true
 }
 
 export function orderMobileNewTabAgents(

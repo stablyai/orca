@@ -81,6 +81,40 @@ describe('getMobileTerminalActionSheetActions', () => {
     expect(onCloseSessionTab).toHaveBeenCalledWith(second)
   })
 
+  it('explains that a Hermes terminal cannot become a chat', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-h', terminal: 'terminal-1', launchAgent: 'hermes' }],
+      structuredAgents: ['hermes']
+    })
+    expect(actions.find((action) => action.id === 'structuredChatUnavailable')).toMatchObject({
+      disabled: true,
+      label: "Can't switch this Hermes terminal to Chat",
+      hint: 'Start a new session with Chat UI on'
+    })
+  })
+
+  it('still offers chat view on a Claude terminal', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-c', terminal: 'terminal-1', launchAgent: 'claude' }],
+      structuredAgents: ['hermes', 'claude']
+    })
+    expect(actions.find((action) => action.id === 'toggleChatView')?.label).toBe(
+      'Switch to chat view'
+    )
+    expect(actions.find((action) => action.id === 'structuredChatUnavailable')).toBeUndefined()
+  })
+
+  it('says nothing about chat when the host did not register Hermes', () => {
+    const actions = buildActions({
+      tabs: [{ type: 'terminal', id: 'tab-h', terminal: 'terminal-1', launchAgent: 'hermes' }]
+    })
+    expect(
+      actions.some(
+        (action) => action.id === 'toggleChatView' || action.id === 'structuredChatUnavailable'
+      )
+    ).toBe(false)
+  })
+
   it('falls back to the handle close when no session tab owns the handle', () => {
     const onClose = vi.fn()
     const onCloseSessionTab = vi.fn()

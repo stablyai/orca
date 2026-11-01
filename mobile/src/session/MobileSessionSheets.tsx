@@ -15,6 +15,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
+import { useMobileStructuredChatLaunch } from './use-mobile-structured-chat-launch'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './mobile-worker-auto-close'
@@ -22,6 +23,10 @@ import { MobileAgentSessionTabActionSheet } from './MobileAgentSessionTabActionS
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
+  const structuredChat = useMobileStructuredChatLaunch(
+    controller.client,
+    controller.hostCapabilities
+  )
   const terminalWorkerActions = useMobileAllowAutoCloseActions(
     controller.client,
     controller.actionTarget && { terminal: controller.actionTarget.handle }
@@ -208,6 +213,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           tabs: sessionTabs.filter((tab) => tab.type === 'terminal'),
           isTabChatView: nativeChatController.isTabChatView,
           nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
+          structuredAgents: structuredChat?.canRequestSurface
+            ? structuredChat.registeredAgents
+            : [],
           onDismiss: () => setActionTarget(null),
           onToggleChat: toggleTabChatView,
           isPhoneMode: (handle) => isTerminalPhoneDisplayMode(handle, terminalModes),

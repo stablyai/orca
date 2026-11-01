@@ -17,6 +17,10 @@ import {
   withoutUnansweredLaunch,
   type PendingSessionSelection
 } from './pending-session-selection'
+import {
+  loadMobileStructuredChatLaunchContext,
+  mobileStructuredChatLaunchSurface
+} from './mobile-structured-chat-launch'
 
 export const PROMPT_UNCONFIRMED_MESSAGE =
   "The agent started, but couldn't confirm the prompt was sent."
@@ -63,6 +67,14 @@ export async function launchNewTabAgentThroughHost(args: {
   const { options, pendingSelectionRef, showToast } = args
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
+  // Chat UI lives on the phone. A headless host keeps its terminal default unless the launch asks for chat.
+  const surface = mobileStructuredChatLaunchSurface(
+    args.agent,
+    await loadMobileStructuredChatLaunchContext({
+      client: args.client,
+      hostCapabilities: args.hostCapabilities
+    })
+  )
   const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
@@ -73,6 +85,7 @@ export async function launchNewTabAgentThroughHost(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
+    ...(surface ? { surface } : {}),
     reservation,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),
