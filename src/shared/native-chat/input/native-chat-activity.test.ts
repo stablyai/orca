@@ -3,7 +3,8 @@ import type { NativeChatMessage } from '../native-chat-types'
 import {
   latestNativeChatTaskList,
   nativeChatSubagentActivities,
-  nativeChatTaskListFromPlanDocument
+  nativeChatTaskListFromPlanDocument,
+  nativeChatVisibleTaskList
 } from './native-chat-activity'
 
 function message(
@@ -147,6 +148,42 @@ describe('latestNativeChatTaskList', () => {
         message('empty', [{ type: 'tool-call', name: 'TodoWrite', input: { todos: [] } }])
       ])?.tasks
     ).toEqual([])
+  })
+})
+
+describe('nativeChatVisibleTaskList', () => {
+  const session = [
+    message('todo', [
+      {
+        type: 'tool-call',
+        name: 'TodoWrite',
+        input: { todos: [{ content: 'Read', status: 'pending' }] }
+      }
+    ])
+  ]
+  const child = [
+    message('child', [
+      {
+        type: 'tool-call',
+        name: 'TodoWrite',
+        input: { todos: [{ content: 'Search', status: 'in_progress' }] }
+      }
+    ])
+  ]
+
+  it('keeps the main plan while the open subagent has no list', () => {
+    expect(nativeChatVisibleTaskList(session, null)?.tasks.map((task) => task.content)).toEqual([
+      'Read'
+    ])
+    expect(nativeChatVisibleTaskList(session, [])?.tasks.map((task) => task.content)).toEqual([
+      'Read'
+    ])
+  })
+
+  it('shows the open subagent’s own list', () => {
+    expect(nativeChatVisibleTaskList(session, child)?.tasks.map((task) => task.content)).toEqual([
+      'Search'
+    ])
   })
 })
 

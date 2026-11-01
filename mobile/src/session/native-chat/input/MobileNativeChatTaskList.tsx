@@ -10,11 +10,17 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors, pressedStyle } from '../../../theme/mobile-theme'
+import { ListGroup } from '../../../components/list/ListGroup'
+import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { toolStyles as styles, toolType } from '../transcript/mobile-native-chat-tool-styles'
 import { useMobileNativeChatDisclosure } from '../transcript/mobile-native-chat-disclosure-store'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+
+const groupedTaskRow = {
+  paddingHorizontal: spacing.md,
+  paddingVertical: spacing.sm + 2
+}
 
 /** Content plus occurrence is the only identity the providers give these entries. */
 function occurrenceKeyed<T>(items: readonly T[], content: (item: T) => string): [T, string][] {
@@ -30,11 +36,13 @@ function occurrenceKeyed<T>(items: readonly T[], content: (item: T) => string): 
 function TaskRow({
   task,
   label,
-  fontScale
+  fontScale,
+  grouped = false
 }: {
   task: NativeChatTask
   label?: string
   fontScale: number
+  grouped?: boolean
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -56,7 +64,7 @@ function TaskRow({
   const active = task.status === 'in_progress'
   return (
     <View
-      style={styles.taskRow}
+      style={[styles.taskRow, grouped && groupedTaskRow]}
       accessibilityLabel={t('chat.taskList.taskStatus', '{{status}}: {{task}}', {
         status: statusWord[task.status],
         task: label ?? nativeChatTaskLabel(task)
@@ -160,12 +168,22 @@ export function MobileNativeChatTaskList({
   const copy = nativeChatTaskListCopy(t, { completed, total: list.tasks.length })
   if (variant === 'sheet') {
     return (
-      <View>
-        <Checklist list={list} fontScale={fontScale} />
+      <>
+        <ListGroup>
+          {list.tasks.length === 0 ? (
+            <Text style={[styles.lineMeta, toolType(fontScale).meta, groupedTaskRow]}>
+              {copy.empty}
+            </Text>
+          ) : (
+            occurrenceKeyed(list.tasks, (task) => task.content).map(([task, key]) => (
+              <TaskRow key={key} task={task} fontScale={fontScale} grouped />
+            ))
+          )}
+        </ListGroup>
         {list.explanation ? (
           <Text style={[styles.lineMeta, toolType(fontScale).meta]}>{list.explanation}</Text>
         ) : null}
-      </View>
+      </>
     )
   }
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null

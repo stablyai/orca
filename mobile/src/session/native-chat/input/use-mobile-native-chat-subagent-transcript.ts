@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { agentJournalItemSubagentId } from '../../../../../src/shared/agent-session-journal-producer'
 import {
-  latestNativeChatTaskList,
   nativeChatSubagentActivities,
+  nativeChatVisibleTaskList,
   type NativeChatSubagentActivity
 } from '../../../../../src/shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
@@ -77,7 +77,11 @@ export function useMobileNativeChatSubagentTranscript({
     (agentId: string | null) => setFocus({ surfaceId: sendSurfaceId, agentId }),
     [sendSurfaceId]
   )
-  const taskList = useMemo(() => latestNativeChatTaskList(shownFolded), [shownFolded])
+  const taskList = useMemo(
+    () =>
+      nativeChatVisibleTaskList(focusedId ? folded : shownFolded, focusedId ? shownFolded : null),
+    [focusedId, folded, shownFolded]
+  )
   return {
     shownFolded,
     shownStreaming: focusedId ? null : streaming,

@@ -4,8 +4,8 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
-  latestNativeChatTaskList,
   nativeChatSubagentActivities,
+  nativeChatVisibleTaskList,
   type NativeChatSubagentActivity
 } from '../../../../shared/native-chat/input/native-chat-activity'
 import { nativeChatCompletedTaskCount } from '../../../../shared/native-chat/input/native-chat-task-list'
@@ -54,14 +54,12 @@ export function NativeChatActivityBar({
   focusedSubagentId: string | null
   onFocusSubagent: (agentId: string | null) => void
 }): React.JSX.Element | null {
-  const taskMessages = useMemo(
-    () =>
-      focusedSubagentId
-        ? (subagentRows.get(focusedSubagentId)?.map((row) => row.message) ?? [])
-        : messages,
-    [focusedSubagentId, messages, subagentRows]
-  )
-  const list = useMemo(() => latestNativeChatTaskList(taskMessages), [taskMessages])
+  const list = useMemo(() => {
+    const focusedMessages = focusedSubagentId
+      ? (subagentRows.get(focusedSubagentId)?.map((row) => row.message) ?? [])
+      : null
+    return nativeChatVisibleTaskList(messages, focusedMessages)
+  }, [focusedSubagentId, messages, subagentRows])
   const subagents = useMemo(
     () => nativeChatSubagentActivities(messages, subagentRows),
     [messages, subagentRows]
