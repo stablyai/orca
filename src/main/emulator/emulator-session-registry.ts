@@ -1,9 +1,17 @@
-import type { EmulatorBackendKind, EmulatorSessionInfo } from './emulator-types'
+import type {
+  EmulatorActiveSession,
+  EmulatorBackendKind,
+  EmulatorSessionInfo
+} from './emulator-types'
 import type { EmulatorSessionState } from './emulator-bridge-types'
 import type { EmulatorBackend } from './backends/emulator-backend'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const DEVICE_LISTING_BUDGET_MS = 5_000
+
+type CensusBackendForKind = (
+  kind: EmulatorBackendKind
+) => Pick<EmulatorBackend, 'listRunningDeviceIds' | 'stopHelperForDevice'> | null
 
 export class EmulatorSessionRegistry {
   private readonly activeByWorktree = new Map<string, string>()
@@ -62,6 +70,26 @@ export class EmulatorSessionRegistry {
     return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
   }
 
+  /** One row per worktree's live session; a shared device appears once per worktree. */
+  async listLiveActive(
+    worktreeId: string | undefined,
+    backendForKind: CensusBackendForKind
+  ): Promise<EmulatorActiveSession[]> {
+    await this.pruneGoneManagedSessions(backendForKind)
+    const rows: EmulatorActiveSession[] = []
+    for (const [activeWorktreeId, key] of this.activeByWorktree) {
+      const session = this.sessions.get(key)
+      if (session && (!worktreeId || activeWorktreeId === worktreeId)) {
+        rows.push({
+          worktreeId: activeWorktreeId,
+          backend: session.backend,
+          ...toSessionInfo(session)
+        })
+      }
+    }
+    return rows
+  }
+
   listSessions(): EmulatorSessionState[] {
     return [...this.sessions.values()]
   }
@@ -76,11 +104,7 @@ export class EmulatorSessionRegistry {
   }
 
   /** Drop managed records whose device stopped outside Orca; true while any managed device still runs. */
-  async pruneGoneManagedSessions(
-    backendForKind: (
-      kind: EmulatorBackendKind
-    ) => Pick<EmulatorBackend, 'listRunningDeviceIds' | 'stopHelperForDevice'> | null
-  ): Promise<boolean> {
+  async pruneGoneManagedSessions(backendForKind: CensusBackendForKind): Promise<boolean> {
     const managed = this.listSessions().filter((session) => session.managed)
     let live = false
     for (const kind of new Set(managed.map((session) => session.backend))) {
@@ -115,6 +139,7 @@ function toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
     streamUrl: session.streamUrl,
     axUrl: session.axUrl,
     helperPid: session.pid,
-    streamCodec: session.streamCodec
+    streamCodec: session.streamCodec,
+    backend: session.backend
   }
 }

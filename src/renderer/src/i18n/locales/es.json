@@ -412,6 +412,8 @@
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operación de Git en otro lugar",
+      "remoteOperationInAnotherWorkspace": "Otro espacio de trabajo está ejecutando una operación de Git, como push, pull o force push. Espera a que termine antes de usar esta acción para que las operaciones no se solapen.",
       "actionModel": {
         "on": "Activado",
         "off": "Desactivado",
@@ -23378,6 +23380,7 @@
       "serveSimUnavailable": "serve-sim no está disponible.",
       "serveSimNoEndpoints": "serve-sim no devolvió puntos de conexión de transmisión.",
       "serveSimEndpointUnreachable": "serve-sim se inició, pero no se puede acceder a su punto de conexión de transmisión.",
+      "deviceHubInputBlocked": "Device Hub de Xcode ha tomado el control de la entrada de este simulador, así que los toques y lo que escribas no le llegarán. Cierra Device Hub y vuelve a conectar el simulador.",
       "androidSdkMissing": "No se encontró el SDK de Android. Instala Android Studio y configura ANDROID_HOME.",
       "adbUnavailable": "adb no está disponible.",
       "noAndroidDevices": "No se encontraron dispositivos Android ni AVD. Crea uno en Android Studio.",

@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca はこのアカウントの Claude フォルダーとサインイン情報をこのコンピュータから削除します。システムのデフォルトと共有しているチャット履歴は残ります。このアカウントが選択されている場合、次に起動する Claude はシステムのデフォルトを使用します。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "他の場所で Git 操作を実行中",
+      "remoteOperationInAnotherWorkspace": "別のワークスペースで Git 操作（プッシュ、プル、フォースプッシュなど）を実行中です。操作が重複しないよう、完了してからこのアクションを使用してください。",
       "actionModel": {
         "on": "オン",
         "off": "オフ",
@@ -22688,6 +22690,7 @@
       "serveSimUnavailable": "serve-sim を利用できません。",
       "serveSimNoEndpoints": "serve-sim からストリームのエンドポイントが返されませんでした。",
       "serveSimEndpointUnreachable": "serve-sim は起動しましたが、ストリームのエンドポイントにアクセスできません。",
+      "deviceHubInputBlocked": "Xcode の Device Hub がこのシミュレータの入力を占有しているため、タップや文字入力が届きません。Device Hub を終了してから、シミュレータを再接続してください。",
       "androidSdkMissing": "Android SDK が見つかりません。Android Studio をインストールし、ANDROID_HOME を設定してください。",
       "adbUnavailable": "adb を利用できません。",
       "noAndroidDevices": "Android デバイスも AVD も見つかりません。Android Studio で作成してください。",

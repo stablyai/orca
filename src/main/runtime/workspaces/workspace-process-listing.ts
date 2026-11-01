@@ -199,13 +199,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
 
   isWorkspaceNotificationMuted(workspaceId: string): boolean {
     const store = this.store
-    return (
-      !!store &&
-      isWorkspaceNotificationMuted(
-        { store, resolvedWorktrees: this.resolvedWorktrees.peek()?.worktrees ?? null },
-        workspaceId
-      )
-    )
+    const resolvedWorktrees = this.resolvedWorktrees.peek()?.worktrees ?? null
+    return !!store && isWorkspaceNotificationMuted({ store, resolvedWorktrees }, workspaceId)
   }
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
@@ -284,6 +279,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
+        this.crewChanges.notify(new Set(['status', 'names']))
         this.onStructuredSessionStatusForMail(summary)
         this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)

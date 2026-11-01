@@ -809,6 +809,8 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",
@@ -22634,6 +22636,7 @@
       "serveSimUnavailable": "無法使用 serve-sim。",
       "serveSimNoEndpoints": "serve-sim 未傳回串流端點。",
       "serveSimEndpointUnreachable": "serve-sim 已啟動，但無法連線至其串流端點。",
+      "deviceHubInputBlocked": "Xcode 的 Device Hub 已接管此模擬器的輸入，因此點按和輸入都無法送達。請結束 Device Hub，然後重新連接模擬器。",
       "androidSdkMissing": "找不到 Android SDK。請安裝 Android Studio 並設定 ANDROID_HOME。",
       "adbUnavailable": "無法使用 adb。",
       "noAndroidDevices": "找不到 Android 裝置或 AVD。請在 Android Studio 中建立一個。",

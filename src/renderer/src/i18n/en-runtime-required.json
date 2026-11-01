@@ -1999,6 +1999,7 @@
       "scrcpyDownloadFailed": "Could not download scrcpy server: {{detail}}",
       "scrcpyServerInvalid": "Downloaded scrcpy server was invalid or truncated.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimUnavailable": "serve-sim is unavailable.",
       "simctlUnavailable": "xcrun simctl is unavailable.",
