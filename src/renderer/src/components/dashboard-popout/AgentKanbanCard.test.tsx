@@ -249,16 +249,69 @@ describe('AgentKanbanCard', () => {
     )
   })
 
-  it('shows the repo as an icon labelled with its name instead of inline text', () => {
+  it('shows the project name as text alongside its icon without repeating the accessible name', () => {
     renderCard({
       card: card(),
       now: 2_000,
       repoIcon: { type: 'emoji', emoji: '🐳' }
     })
 
-    expect(screen.getByLabelText('Orca')).toBeInTheDocument()
+    expect(screen.getByText('Orca')).toBeVisible()
     expect(screen.getByText('🐳')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Orca just now' })).toBeInTheDocument()
   })
+
+  it('distinguishes projects with identical workspace and conversation names', () => {
+    for (const repoName of ['Orca', 'Symphony']) {
+      renderCard({
+        card: card({ repoName, worktreeName: 'main-3', conversationName: 'Review change' }),
+        now: 2_000,
+        repoIcon: { type: 'emoji', emoji: '🐳' }
+      })
+    }
+
+    expect(screen.getByText('Orca / main-3')).toBeVisible()
+    expect(screen.getByText('Symphony / main-3')).toBeVisible()
+  })
+
+  it('shows a folder project without repeating a workspace used as the heading', () => {
+    renderCard({
+      card: card({ repoName: 'Documentation', worktreeName: 'Docs workspace' }),
+      now: 2_000
+    })
+
+    expect(screen.getByText('Documentation')).toBeVisible()
+    expect(screen.getAllByText('Docs workspace')).toHaveLength(1)
+  })
+
+  it('does not repeat the project name when the workspace has the same label', () => {
+    renderCard({
+      card: card({
+        repoName: 'Research notes',
+        worktreeName: 'Research notes',
+        conversationName: 'Organize references'
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByText('Research notes')).toBeVisible()
+    expect(screen.queryByText('Research notes / Research notes')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['customer-support-automation-platform', 'investigate-the-dashboard-label-regression'],
+    ['跨项目智能客服自动化与知识管理平台', '修复实验看板项目名称显示和窄屏布局']
+  ])(
+    'keeps the full label for %s available when long text is truncated',
+    (repoName, worktreeName) => {
+      renderCard({ card: card({ repoName, worktreeName, conversationName: 'Review' }), now: 2_000 })
+
+      expect(screen.getByText(`${repoName} / ${worktreeName}`)).toHaveAttribute(
+        'title',
+        `${repoName} / ${worktreeName}`
+      )
+    }
+  )
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
