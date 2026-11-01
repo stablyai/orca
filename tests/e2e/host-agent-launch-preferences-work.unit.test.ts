@@ -3,11 +3,17 @@ import {
   rpc,
   status
 } from '../../src/renderer/src/components/tab-bar/new-tab-agent-menu-host-preferences-test-fixture'
-import { act, renderHook } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
+import { createElement } from 'react'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { useNewTabAgentMenuRows } from '../../src/renderer/src/components/tab-bar/use-new-tab-agent-menu-rows'
-import { useAgentLaunchPickerInventory } from '../../src/renderer/src/components/agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from '../../src/renderer/src/components/agent/use-agent-launch-picker-inventory'
+import type { AgentPickerEntry } from '../../src/shared/agent-launch-picker'
 import * as acquisitions from '../../src/renderer/src/components/agent/agent-launch-picker-acquisition'
 import * as routes from '@/lib/agent-launch-route-input'
 import * as profile from '../../src/shared/agent-launch-profile'
@@ -46,16 +52,29 @@ const settle = () =>
   })
 function mount(count: number) {
   let renders = 0
-  const holders = Array.from({ length: count }, () =>
-    renderHook(
-      ({ open }) => {
-        const menu = useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' })
-        renders++
-        return useAgentLaunchPickerInventory('wt', menu, open)
+  const holders = Array.from({ length: count }, () => {
+    let entries: AgentPickerEntry[] = []
+    function Subscriber({ source }: { source: AgentPickerInventorySource }) {
+      entries = useAgentPickerInventoryEntries(source)
+      return null
+    }
+    function Owner({ open }: { open: boolean }) {
+      const menu = useNewTabAgentMenuRows('wt', open, { kind: 'runtime', environmentId: 'alpha' })
+      const source = useAgentLaunchPickerInventorySource('wt', menu, open)
+      renders++
+      return createElement(Subscriber, { source })
+    }
+    const view = render(createElement(Owner, { open: true }))
+    return {
+      result: {
+        get current() {
+          return entries
+        }
       },
-      { initialProps: { open: true } }
-    )
-  )
+      rerender: ({ open }: { open: boolean }) => view.rerender(createElement(Owner, { open })),
+      unmount: view.unmount
+    }
+  })
   return { holders, renders: () => renders }
 }
 

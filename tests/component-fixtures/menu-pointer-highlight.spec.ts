@@ -69,6 +69,35 @@ for (const kind of ['dropdown', 'context'] as const) {
       }
     })
 
+    if (kind === 'dropdown') {
+      test('keyboard reopening after wheel dismissal preserves the first item', async ({
+        page
+      }) => {
+        const trigger = page.getByText('Open menu', { exact: true })
+        const point = await center(page.getByRole('menuitem', { name: 'Row 3', exact: true }))
+        const menu = page.locator('[data-slot="dropdown-menu-content"]')
+        await page.mouse.move(point.x, point.y)
+        await page.mouse.wheel(0, 96)
+        await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+        await expectFocusedAtPointer(page, point)
+        await trigger.click()
+        await expect(menu).toBeHidden()
+        await page.mouse.move(point.x, point.y)
+        await trigger.focus()
+        await page.keyboard.press('ArrowDown')
+        await expect(menu).toBeVisible()
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            )
+        )
+        await expect(page.getByRole('menuitem', { name: 'First', exact: true })).toBeFocused()
+        await page.keyboard.press('Enter')
+        await expect(page.getByRole('menuitem', { name: 'First child', exact: true })).toBeVisible()
+      })
+    }
+
     test('resting over the next submenu completes the pointer handoff', async ({ page }) => {
       const first = page.getByRole('menuitem', { name: 'First', exact: true })
       const second = page.getByRole('menuitem', { name: 'Second', exact: true })

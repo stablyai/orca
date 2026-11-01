@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
@@ -67,21 +67,6 @@ export function useAgentPickerInventoryEntries(
   source: AgentPickerInventorySource
 ): AgentPickerEntry[] {
   return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
-}
-
-export function useAgentLaunchPickerInventory(
-  worktreeId: string | undefined,
-  model: NewTabAgentMenuModel,
-  open: boolean,
-  selected?: AgentPickerEntry['agent']
-): AgentPickerEntry[] {
-  const source = useAgentLaunchPickerInventorySource(worktreeId, model, open, selected)
-  const [entries, setEntries] = useState(source.getSnapshot)
-  useEffect(() => {
-    setEntries(source.getSnapshot())
-    return source.subscribe(() => setEntries(source.getSnapshot()))
-  }, [source])
-  return entries
 }
 
 /** Owns acquisition for the menu without subscribing its caller to the entries it publishes. */

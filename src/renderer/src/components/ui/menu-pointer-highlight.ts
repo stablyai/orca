@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useComposedRefs } from 'radix-ui/internal'
 
 const ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
 const EDITABLE_SELECTOR = 'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
@@ -114,23 +115,42 @@ function clearRestTimer(state: MenuPointerHighlightState): void {
   state.restTimer = 0
 }
 
+function resetPointerTracking(state: MenuPointerHighlightState): void {
+  cancelAnimationFrame(state.frame)
+  clearRestTimer(state)
+  state.wheelArmed = false
+  state.pointer = null
+  state.frame = 0
+}
+
 /** Content-level handlers that keep the menu highlight on the row under the cursor. */
-export function useMenuPointerHighlight(props: Handlers): Required<Handlers> {
+export function useMenuPointerHighlight(
+  props: Handlers & { ref?: React.Ref<HTMLDivElement> }
+): Required<Handlers> & { ref: React.RefCallback<HTMLDivElement> } {
   const stateRef = React.useRef<MenuPointerHighlightState>({
     wheelArmed: false,
     pointer: null,
     frame: 0,
     restTimer: 0
   })
-  React.useEffect(() => {
+  const trackContent = React.useCallback((content: HTMLDivElement | null) => {
     const state = stateRef.current
+    resetPointerTracking(state)
+    if (!content) {
+      return
+    }
+    // A retained content node can reopen before its closing animation unmounts it.
+    const observer = new MutationObserver(() => resetPointerTracking(state))
+    observer.observe(content, { attributes: true, attributeFilter: ['data-state'] })
     return () => {
-      cancelAnimationFrame(state.frame)
-      clearRestTimer(state)
+      observer.disconnect()
+      resetPointerTracking(state)
     }
   }, [])
+  const ref = useComposedRefs(props.ref, trackContent)
 
   return {
+    ref,
     onWheel: (event) => {
       props.onWheel?.(event)
       stateRef.current.wheelArmed = true

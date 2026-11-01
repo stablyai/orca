@@ -28,12 +28,18 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-type MenuProps = Pick<React.HTMLAttributes<HTMLDivElement>, 'onKeyDown' | 'onKeyDownCapture'>
+type MenuProps = Pick<React.HTMLAttributes<HTMLDivElement>, 'onKeyDown' | 'onKeyDownCapture'> & {
+  open?: boolean
+  forceMount?: boolean
+}
 
-function Menu(props: MenuProps): React.JSX.Element {
+function Menu({ open = true, forceMount = false, ...props }: MenuProps): React.JSX.Element | null {
   const handlers = useMenuPointerHighlight(props)
+  if (!open && !forceMount) {
+    return null
+  }
   return (
-    <div role="menu" data-state="open" tabIndex={-1} id="menu" {...handlers}>
+    <div role="menu" data-state={open ? 'open' : 'closed'} tabIndex={-1} id="menu" {...handlers}>
       <div role="menuitem" tabIndex={-1} id="a">
         <span id="a-label">A</span>
       </div>
@@ -109,6 +115,43 @@ it('leaves keyboard-driven scrolling alone', () => {
   scroll(menu)
   expect(document.activeElement).toBe(a)
 })
+
+it.each([false, true])(
+  'resets wheel tracking when retained wrappers reopen their content (forceMount: %s)',
+  async (forceMount) => {
+    const { menu, a, b } = render({ forceMount })
+    a.focus()
+    wheelAt(menu, 10, 40)
+    hit = b
+    scroll(menu)
+    expect(document.activeElement).toBe(b)
+    act(() => menu.dispatchEvent(new Event('scroll')))
+    await act(async () => root!.render(<Menu open={false} forceMount={forceMount} />))
+    await act(async () => root!.render(<Menu forceMount={forceMount} />))
+
+    const first = document.getElementById('a')!
+    const next = document.getElementById('b')!
+    const reopened = document.getElementById('menu')!
+    first.focus()
+    hit = next
+    act(() => {
+      next.dispatchEvent(
+        new PointerEvent('pointerover', {
+          bubbles: true,
+          pointerType: 'mouse',
+          clientX: 10,
+          clientY: 40
+        })
+      )
+    })
+    scroll(reopened)
+    expect(document.activeElement).toBe(first)
+
+    wheelAt(reopened, 10, 40)
+    scroll(reopened)
+    expect(document.activeElement).toBe(next)
+  }
+)
 
 it.each([false, true])(
   'preserves keyboard focus when an input stops keydown propagation (queued frame: %s)',
