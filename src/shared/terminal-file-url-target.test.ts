@@ -14,6 +14,14 @@ describe('resolveTerminalFileUrlTarget', () => {
     })
   })
 
+  it('resolves a trailing line range to its starting line', () => {
+    expect(resolveTerminalFileUrlTarget(new URL('file:///tmp/app.ts:12-18'))).toEqual({
+      filePath: '/tmp/app.ts',
+      line: 12,
+      column: null
+    })
+  })
+
   it('returns null for malformed file URL escapes', () => {
     expect(resolveTerminalFileUrlTarget(new URL('file:///tmp/%E0%A4%A.txt'))).toBeNull()
   })
