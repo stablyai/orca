@@ -143,4 +143,47 @@ describe('RateLimitService Claude usage opt-out', () => {
 
     expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(1)
   })
+
+  it('excludes disabled Claude idle snapshot from active-window refresh planning', async () => {
+    const service = new RateLimitService()
+    service.setClaudeUsageEnabledResolver(() => false)
+
+    await service.refresh()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().claude?.status).toBe('idle')
+
+    // Calling refreshIfStale immediately after should not trigger full refresh because all enabled providers are fresh
+    await service.refreshIfStale()
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles Claude state without fetching marker when refreshForClaudeAccountChange runs while disabled', async () => {
+    const service = new RateLimitService()
+    service.setClaudeUsageEnabledResolver(() => false)
+
+    const state = await service.refreshForClaudeAccountChange(null, { accountId: 'acc-2' })
+    expect(state.claude?.status).toBe('idle')
+    expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+  })
+
+  it('stops inactive accounts loop and clears fetching markers if disabled mid-loop', async () => {
+    const service = new RateLimitService()
+    let enabled = true
+    service.setClaudeUsageEnabledResolver(() => enabled)
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'acc-1', managedAuthRuntime: 'host', wslDistro: null, wslLinuxAuthPath: null },
+      { id: 'acc-2', managedAuthRuntime: 'host', wslDistro: null, wslLinuxAuthPath: null }
+    ])
+
+    vi.mocked(fetchManagedAccountUsage).mockImplementation(async (account) => {
+      if (account.id === 'acc-1') {
+        enabled = false // Disable while processing first account
+      }
+      return okProvider('claude', 40)
+    })
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+    expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(1)
+    expect(service.getState().inactiveClaudeAccounts.every((row) => !row.isFetching)).toBe(true)
+  })
 })

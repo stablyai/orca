@@ -33,6 +33,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
 
     try {
       for (const account of accounts) {
+        if (!this.isClaudeUsageEnabled()) {
+          for (const remaining of accounts) {
+            this.inactiveClaudeFetching.delete(remaining.id)
+          }
+          this.pushToRenderer()
+          break
+        }
         if (
           signal.aborted ||
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -51,6 +58,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
+          if (!this.isClaudeUsageEnabled()) {
+            for (const remaining of accounts) {
+              this.inactiveClaudeFetching.delete(remaining.id)
+            }
+            this.pushToRenderer()
+            break
+          }
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||

@@ -1,5 +1,6 @@
 import { RateLimitServiceFullCycleApplication } from './service-full-cycle-application'
 import { fetchClaudeRateLimits } from '../claude-fetcher'
+import { claudeUsageDisabledSnapshot } from '../claude-usage-snapshot'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
@@ -94,6 +95,15 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
+      return
+    }
+    if (!this.isClaudeUsageEnabled()) {
+      if (this.state.claude?.status === 'fetching') {
+        this.updateState({
+          ...this.state,
+          claude: claudeUsageDisabledSnapshot()
+        })
+      }
       return
     }
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
