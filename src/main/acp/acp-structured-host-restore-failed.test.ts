@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
+import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleKey

@@ -1,6 +1,6 @@
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import { randomUUID } from 'node:crypto'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
   type StructuredAgentSessionStartReadiness

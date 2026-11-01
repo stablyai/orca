@@ -1,7 +1,7 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import { namesCliConversation } from '../../shared/structured-agent-cli-conversation-adoption'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
 
 export type CliWriterHost = {

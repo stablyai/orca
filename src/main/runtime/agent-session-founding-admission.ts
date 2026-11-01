@@ -2,7 +2,7 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalError,
   isAgentSessionRefusalError
-} from '../../shared/agent-session-wire-refusals'
+} from '../../shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {

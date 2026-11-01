@@ -1,8 +1,11 @@
 // What a Stop leaves owed to the agent: only messages Orca proves it never received, at most once.
 
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact, type SubmissionRejectionKind } from './agent-session-failure'
-import { agentSessionFailureWords } from './agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  type SubmissionRejectionKind
+} from './agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from './agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,

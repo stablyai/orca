@@ -35,6 +35,7 @@
     "tests/**/*.{ts,tsx,mjs}",
     "**/*.test.{ts,tsx,mjs}",
     "src/preload/doc-preview-link.ts",
+    "src/preload/plugin-frame-guest.ts",
     "src/main/ai-vault/session-scanner-service-entry.ts",
     "src/main/native-chat/wsl-transcript-fs-process-entry.ts",
     "src/main/usage/usage-scan-worker-entry.ts",

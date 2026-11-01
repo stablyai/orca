@@ -1,9 +1,7 @@
 // Parse recovery offers/failures, including legacy layouts, from files written by independently versioned hosts.
 
-import {
-  readAgentSessionRefusalReference,
-  type AgentSessionAnyRefusalDetails
-} from '../../shared/agent-session-wire-refusals'
+import { readAgentSessionRefusalReference } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionAnyRefusalDetails } from '../../shared/agent-session/failures/agent-session-refusal-details'
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,

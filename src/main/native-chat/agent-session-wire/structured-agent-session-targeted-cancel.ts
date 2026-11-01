@@ -2,8 +2,8 @@
 // Provider uncertainty becomes a note; retries answer the receipt without retargeting.
 
 import { agentChildWorkStopTargets } from '../../../shared/agent-child-work-stop-targets'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionCancelResult } from '../../../shared/agent-session-wire'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'

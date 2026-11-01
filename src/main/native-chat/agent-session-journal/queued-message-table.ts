@@ -1,7 +1,7 @@
 // Derive cards from journal rows; read the legacy table only for import. Handoff outcomes return
 // refusals, requeue proven non-delivery, and spend uncertain or accepted sends.
 
-import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
-import type { AgentSessionWireRefusal } from '../../agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from '../failures/agent-session-wire-refusals'
 import {
   structuredAgentSessionSendEvidence,
   type StructuredAgentSessionSendAnswer

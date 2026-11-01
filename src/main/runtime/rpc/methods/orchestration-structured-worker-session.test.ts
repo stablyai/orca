@@ -9,7 +9,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from '../../../codex/codex-structured-turn-end-settlement'
 
 type WorkerHost = Pick<

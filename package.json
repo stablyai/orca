@@ -77,6 +77,8 @@
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
     "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
+    "generate:plugin-declarative-runtime": "node config/scripts/build-plugin-declarative-runtime.mjs",
+    "generate:plugin-declarative-typings": "node config/scripts/generate-plugin-declarative-typings.mjs",
     "generate:plugin-schemas": "node config/scripts/generate-plugin-schemas.mjs",
     "validate:plugin": "node config/scripts/validate-plugin-files.mjs",
     "generate:rpc-params-catalog": "node config/scripts/generate-rpc-params-catalog.mjs",
@@ -406,6 +408,14 @@
   "reactDoctor": {
     "ignore": {
       "overrides": [
+        {
+          "files": [
+            "resources/plugins/declarative/orca-runtime.mjs"
+          ],
+          "rules": [
+            "eslint/max-lines"
+          ]
+        },
         {
           "files": [
             "src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts"

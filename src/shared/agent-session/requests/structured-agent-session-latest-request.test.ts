@@ -4,7 +4,10 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../journal/agent-session-journal-types'
-import { AGENT_SESSION_FAILURE_KINDS, isSubmissionRejectionKind } from '../../agent-session-failure'
+import {
+  AGENT_SESSION_FAILURE_KINDS,
+  isSubmissionRejectionKind
+} from '../failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import {
   DISPATCH_REJECTED_CANCELLED,

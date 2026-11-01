@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../agent-session-failure'
-import { agentSessionFailureWords } from '../../agent-session-failure-words'
+import { agentSessionFailureFact } from '../../agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../agent-session/failures/agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -21,7 +21,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../agent-session-restart-continuation'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../structured-agent-session-start-failure-row-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../agent-session/failures/structured-agent-session-start-failure-row-key'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 const NOTICE =

@@ -1,4 +1,4 @@
-import { readWholeAgentSessionFailureFact } from './agent-session-failure'
+import { readWholeAgentSessionFailureFact } from './agent-session/failures/agent-session-failure'
 import type { AgentJournalStatusItem } from './agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import { readAgentSessionOrcaStop } from './agent-session-orca-stop'
