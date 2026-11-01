@@ -23,6 +23,10 @@ const CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES = new Set([
   'timed_out'
 ])
 
+export function isClaudeTerminalBackgroundTaskStatus(status: string): boolean {
+  return CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(status)
+}
+
 /** Agent entries from Stop/SubagentStop background_tasks; non-agent tasks do not become rows. */
 export type ClaudeBackgroundAgentTask = {
   id: string
@@ -70,8 +74,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     const obj = item as Record<string, unknown>
     const taskType = typeof obj.type === 'string' ? obj.type.trim().toLowerCase() : ''
     const taskStatus = typeof obj.status === 'string' ? obj.status.trim().toLowerCase() : ''
-    const isTerminal =
-      taskStatus.length > 0 && CLAUDE_TERMINAL_BACKGROUND_TASK_STATUSES.has(taskStatus)
+    const isTerminal = taskStatus.length > 0 && isClaudeTerminalBackgroundTaskStatus(taskStatus)
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal

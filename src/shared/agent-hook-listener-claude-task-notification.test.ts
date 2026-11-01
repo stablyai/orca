@@ -41,9 +41,9 @@ function isTaskNotification(payload: Record<string, unknown>): boolean {
 }
 
 /** Pane state after each hook that published one, in capture order. */
-function replay(scenario: string): { t: number; index: number; state: string }[] {
+function replay(scenario: string): { t: number; index: number; state: string; outcome?: string }[] {
   const state = createHookListenerState()
-  const published: { t: number; index: number; state: string }[] = []
+  const published: { t: number; index: number; state: string; outcome?: string }[] = []
   records.forEach((record, index) => {
     if (record.scenario !== scenario || !record.payload) {
       return
@@ -55,7 +55,12 @@ function replay(scenario: string): { t: number; index: number; state: string }[]
       'production'
     )
     if (event && event.payload.sessionBoundary !== true) {
-      published.push({ t: record.t, index, state: event.payload.state })
+      published.push({
+        t: record.t,
+        index,
+        state: event.payload.state,
+        outcome: event.payload.mainAgent?.outcome
+      })
     }
   })
   return published
@@ -83,6 +88,13 @@ describe('Claude background task notifications', () => {
 
   it.each(scenarios)('%s: settles to done once everything is delivered', (scenario) => {
     expect(replay(scenario).at(-1)?.state).toBe('done')
+  })
+
+  it('settles a failed wake-up turn as a failure', () => {
+    expect(replay('shell-wake-turn-fails').at(-1)).toMatchObject({
+      state: 'done',
+      outcome: 'failure'
+    })
   })
 })
 
@@ -302,6 +314,50 @@ describe('Claude owed task notifications outside the captures', () => {
     })
 
     expect(post({ hook_event_name: 'Stop', background_tasks: [] })?.payload.state).toBe('working')
+  })
+
+  const notify = (id: string, status: string) => ({
+    hook_event_name: 'UserPromptSubmit',
+    prompt: `<task-notification>\n<task-id>${id}</task-id>\n<status>${status}</status>`
+  })
+
+  it('holds a failed wake-up turn for a shell it launched after the inventory', () => {
+    const post = listener()
+    post({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_response: { backgroundTaskId: 'b1' }
+    })
+    post({ hook_event_name: 'Stop', background_tasks: [shell('b1')] })
+    post(notify('b1', 'completed'))
+    post({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_response: { backgroundTaskId: 'b2' }
+    })
+
+    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
+      'working'
+    )
+    post(notify('b2', 'completed'))
+    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
+      'done'
+    )
+  })
+
+  it('does not end a shell on a notification whose status is not final', () => {
+    const post = listener()
+    post({
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Bash',
+      tool_response: { backgroundTaskId: 'b1' }
+    })
+    post({ hook_event_name: 'Stop', background_tasks: [shell('b1')] })
+    post(notify('b1', 'running'))
+
+    expect(post({ hook_event_name: 'StopFailure', error: 'server_error' })?.payload.state).toBe(
+      'working'
+    )
   })
 
   it('does not wait on a teammate the roster parks idle, whose turn end is not a finish', () => {

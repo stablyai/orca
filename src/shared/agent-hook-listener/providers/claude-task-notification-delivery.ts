@@ -1,4 +1,7 @@
-import type { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
+import {
+  isClaudeTerminalBackgroundTaskStatus,
+  type readClaudeBackgroundAgentTasks
+} from '../../claude-background-task-inventory'
 import {
   forgetStoppedClaudeShellTask,
   oweClaudeShellTaskNotifications,
@@ -9,7 +12,10 @@ import {
 } from '../../claude-owed-task-notifications'
 import { readClaudeTaskNotification } from '../../claude-task-notification-text'
 import type { HookListenerState } from '../listener-state'
-import { retireClaudeNotifiedNonAgentTask } from './claude-roster-state'
+import {
+  recordClaudeLaunchedNonAgentTask,
+  retireClaudeNonAgentTask
+} from './claude-running-non-agent-tasks'
 import { readString } from '../tool-input-preview'
 
 /** Track main-agent launches only: child-launched task notifications wake that child, not this pane. */
@@ -29,10 +35,16 @@ export function trackClaudeTaskNotificationDelivery(
       const launched = tasks ?? new Map()
       state.claudeLaunchedBackgroundTasksByPaneKey.set(paneKey, launched)
       recordClaudeBackgroundTaskLaunch(launched, launch)
-    } else if (tasks && toolName === 'TaskStop' && typeof response === 'object' && response) {
+      if (launch.kind === 'shell') {
+        recordClaudeLaunchedNonAgentTask(state, paneKey, launch.id)
+      }
+    } else if (toolName === 'TaskStop' && typeof response === 'object' && response) {
       const stoppedId = readString({ ...response }, 'task_id')
       if (stoppedId) {
-        forgetStoppedClaudeShellTask(tasks, stoppedId)
+        retireClaudeNonAgentTask(state, paneKey, stoppedId)
+        if (tasks) {
+          forgetStoppedClaudeShellTask(tasks, stoppedId)
+        }
       }
     }
     return false
@@ -55,8 +67,10 @@ export function trackClaudeTaskNotificationDelivery(
     const continuesWakeupTurn =
       notification !== null && own?.state !== 'done' && own?.taskWakeupTurn === true
     if (notification?.status) {
-      // Why: a failed wake turn's StopFailure has no inventory, so only this can end the shell.
-      retireClaudeNotifiedNonAgentTask(state, paneKey, notification.taskId)
+      // Why: StopFailure carries no inventory, so after a failed wake turn only this can end the shell.
+      if (isClaudeTerminalBackgroundTaskStatus(notification.status)) {
+        retireClaudeNonAgentTask(state, paneKey, notification.taskId)
+      }
       if (tasks) {
         settleClaudeTaskNotification(tasks, notification.taskId)
       }

@@ -147,6 +147,13 @@ export type AgentPromptSentDedupeEntry = {
   promptInteractionKey?: string
 }
 
+/** A pane's Claude background-work gate, snapshotted so a rejected hook can be undone whole. */
+export type ClaudeBackgroundEvidence = {
+  hasRunningTask: boolean
+  runningTaskIds: ReadonlySet<string> | undefined
+  hasActiveCron: boolean
+}
+
 export type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void

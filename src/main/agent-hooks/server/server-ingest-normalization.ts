@@ -7,7 +7,11 @@ import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
-import type { EnrichedAgentHookEventPayload, NormalizedLocalHook } from './server-types'
+import type {
+  ClaudeBackgroundEvidence,
+  EnrichedAgentHookEventPayload,
+  NormalizedLocalHook
+} from './server-types'
 import { AgentHookServerTmuxStatus } from './server-tmux-status'
 import { getClaudeObservedConfigDirs } from '../../claude-accounts/claude-profile-installed-router'
 
@@ -29,15 +33,27 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     return applied
   }
 
+  protected readClaudeBackgroundEvidence(paneKey: string): ClaudeBackgroundEvidence {
+    return {
+      hasRunningTask: this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey),
+      runningTaskIds: this.state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey),
+      hasActiveCron: this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    }
+  }
+
   protected setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
-    hasActiveCron: boolean
+    { hasRunningTask, runningTaskIds, hasActiveCron }: ClaudeBackgroundEvidence
   ): void {
     if (hasRunningTask) {
       this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
     } else {
       this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    }
+    if (runningTaskIds) {
+      this.state.claudeRunningNonAgentTaskIdsByPaneKey.set(paneKey, runningTaskIds)
+    } else {
+      this.state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
     }
     if (hasActiveCron) {
       this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
@@ -84,24 +100,22 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const previous = this.readClaudeBackgroundEvidence(paneKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
       getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
     }
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    const next = this.readClaudeBackgroundEvidence(paneKey)
+    this.setClaudeBackgroundEvidence(paneKey, previous)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
     // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, next)
     }
   }
 

@@ -2,6 +2,7 @@ import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import { isAgentStatusHeldOpenByChildWork } from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
+import { updateClaudeRunningNonAgentTask } from './claude-running-non-agent-tasks'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
@@ -22,7 +23,6 @@ import {
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
   setClaudeMainAgentTurnState,
-  updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
 import {

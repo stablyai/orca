@@ -35,6 +35,7 @@ import type {
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
   AgentPromptSentDedupeEntry,
+  ClaudeBackgroundEvidence,
   EnrichedAgentHookEventPayload,
   NormalizedLocalHook,
   PaneKeyAliasEntry,
@@ -273,8 +274,7 @@ export abstract class AgentHookServerState {
   ): NormalizedLocalHook
   protected abstract setClaudeBackgroundEvidence(
     paneKey: string,
-    hasRunningTask: boolean,
-    hasActiveCron: boolean
+    evidence: ClaudeBackgroundEvidence
   ): void
   protected abstract toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
