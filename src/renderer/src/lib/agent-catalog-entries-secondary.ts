@@ -153,6 +153,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'open-interpreter',
+      label: translate('auto.lib.agent.catalog.open_interpreter_label', 'OpenInterpreter'),
+      cmd: 'interpreter',
+      homepageUrl: 'https://openinterpreter.com'
     }
   ]
 }

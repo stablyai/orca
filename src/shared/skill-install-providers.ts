@@ -268,6 +268,12 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     displayName: 'DeepSeek Harness',
     globalSegments: null,
     workspaceSegments: null
+  },
+  {
+    id: 'open-interpreter',
+    displayName: 'OpenInterpreter',
+    globalSegments: null,
+    workspaceSegments: null
   }
 ] satisfies SkillInstallProviderEntry[])
 
