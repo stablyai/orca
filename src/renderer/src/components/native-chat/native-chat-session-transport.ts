@@ -11,6 +11,7 @@ import {
 } from './native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
 import { readNativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
+import { readNativeChatSubagentActivities } from '../../../../shared/native-chat/input/native-chat-tool-subagents'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
@@ -132,11 +133,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   lifecycle?: unknown
                   pending?: boolean
                   taskList?: unknown
+                  subagents?: unknown
                 }
                 if (frame?.type === 'task-list') {
                   onFrame({
                     type: 'task-list',
-                    taskList: readNativeChatTaskSeedList(frame.taskList)
+                    taskList: readNativeChatTaskSeedList(frame.taskList),
+                    subagents: readNativeChatSubagentActivities(frame.subagents)
                   })
                   return
                 }

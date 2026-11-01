@@ -186,6 +186,7 @@ export function MobileNativeChatOverlay({
                     messages={session.messages}
                     folded={folded}
                     taskList={session.taskList}
+                    subagentSeed={session.subagentSeed}
                     status={session.status}
                     error={session.error}
                     readFailedFinally={session.readFailedFinally === true}

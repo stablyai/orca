@@ -19,6 +19,8 @@ export type MobileNativeChatStreamFrame = {
   lifecycle?: NativeChatTurnLifecycle
   // Whole-file task list. Older clients ignore this frame type.
   taskList?: unknown
+  // Whole-file subagent roster carried on the same frame.
+  subagents?: unknown
 }
 
 export type AppliedMobileNativeChatFrame =

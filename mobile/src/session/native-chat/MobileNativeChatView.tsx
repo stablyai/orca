@@ -46,6 +46,7 @@ export function MobileNativeChatView({
   messages,
   folded,
   taskList = null,
+  subagentSeed = null,
   status,
   error,
   readFailedFinally = false,
@@ -128,7 +129,8 @@ export function MobileNativeChatView({
     pending,
     agent,
     sendSurfaceId,
-    taskList
+    taskList,
+    subagentSeed
   })
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.

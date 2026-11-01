@@ -130,10 +130,14 @@ export async function handleSubscribe(
       sessionId,
       filePath: opened.transcriptPath,
       stillCurrent: canPublish,
-      emit: (taskList) => {
+      emit: (seed) => {
         sender.send('nativeChat:appended', {
           subscriptionId,
-          frame: { type: 'task-list', taskList }
+          frame: {
+            type: 'task-list',
+            taskList: seed.taskList,
+            ...(seed.subagents ? { subagents: seed.subagents } : {})
+          }
         })
       }
     })

@@ -167,7 +167,12 @@ export const NATIVE_CHAT_METHODS = [
           sessionId: params.sessionId,
           filePath: transcriptPath,
           stillCurrent: () => !closed,
-          emit: (taskList) => emit({ type: 'task-list', taskList })
+          emit: (seed) =>
+            emit({
+              type: 'task-list',
+              taskList: seed.taskList,
+              ...(seed.subagents ? { subagents: seed.subagents } : {})
+            })
         })
       }
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {

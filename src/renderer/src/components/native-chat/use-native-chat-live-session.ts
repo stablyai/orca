@@ -22,7 +22,7 @@ import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-l
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
-import { applyNativeChatLiveFrame } from './native-chat-live-frame'
+import { applyNativeChatLiveFrame, type NativeChatSubagentSeed } from './native-chat-live-frame'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 import { takeNativeChatOpenWake } from './native-chat-open-wake'
 
@@ -70,6 +70,7 @@ export function useNativeChatLiveSession(
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [taskList, setTaskList] = useState<NativeChatTaskSeedList | null>(null)
+  const [subagentSeed, setSubagents] = useState<NativeChatSubagentSeed>(null)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
   const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
@@ -148,6 +149,7 @@ export function useNativeChatLiveSession(
     setAppended([])
     setHasMore(false)
     setTaskList(null)
+    setSubagents(null)
     const wake = { wakeWslDistro: takeNativeChatOpenWake(latestPaneKey.current, sourceKey) }
 
     // Seed independently for silent streams, but never overwrite an authoritative frame.
@@ -207,6 +209,7 @@ export function useNativeChatLiveSession(
         }
         applyNativeChatLiveFrame(frame, {
           setTaskList,
+          setSubagents,
           epochRef: transcriptEpochRef,
           setOlderHistoryGeneration,
           setLoadingEarlier,
@@ -317,7 +320,8 @@ export function useNativeChatLiveSession(
       olderHistoryGeneration,
       loadEarlier,
       readPhase: read.phase,
-      taskList
+      taskList,
+      subagentSeed
     }
   }, [
     normalizedMessages,
@@ -334,6 +338,7 @@ export function useNativeChatLiveSession(
     olderHistoryGeneration,
     loadEarlier,
     appended,
-    taskList
+    taskList,
+    subagentSeed
   ])
 }

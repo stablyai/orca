@@ -49,13 +49,15 @@ export function NativeChatActivityBar({
   subagentRows,
   focusedSubagentId,
   onFocusSubagent,
-  taskList: sessionTaskList = null
+  taskList: sessionTaskList = null,
+  subagentSeed = null
 }: {
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   focusedSubagentId: string | null
   onFocusSubagent: (agentId: string | null) => void
   taskList?: NativeChatTaskSeedList | null
+  subagentSeed?: readonly NativeChatSubagentActivity[] | null
 }): React.JSX.Element | null {
   const list = useMemo(() => {
     const focusedMessages = focusedSubagentId
@@ -64,8 +66,8 @@ export function NativeChatActivityBar({
     return nativeChatVisibleTaskList(messages, focusedMessages, sessionTaskList)
   }, [focusedSubagentId, messages, sessionTaskList, subagentRows])
   const subagents = useMemo(
-    () => nativeChatSubagentActivities(messages, subagentRows),
-    [messages, subagentRows]
+    () => nativeChatSubagentActivities(messages, subagentRows, subagentSeed),
+    [messages, subagentRows, subagentSeed]
   )
   const [tasksOpen, setTasksOpen] = useState(false)
   const [subagentsOpen, setSubagentsOpen] = useState(false)

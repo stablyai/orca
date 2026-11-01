@@ -3,6 +3,7 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../shared/native-chat/input/native-chat-claude-task-updates'
 
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
@@ -39,6 +40,7 @@ export type NativeChatSubscriptionFrame =
   | {
       type: 'task-list'
       taskList: NativeChatTaskSeedList | null
+      subagents?: readonly NativeChatSubagentActivity[] | null
     }
 
 export type NativeChatAppendedPayload = {

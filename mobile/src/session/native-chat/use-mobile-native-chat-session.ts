@@ -11,10 +11,12 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatSubagentActivity } from '../../../../src/shared/native-chat/input/native-chat-activity'
 import {
   readNativeChatTaskSeedList,
   type NativeChatTaskSeedList
 } from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
+import { readNativeChatSubagentActivities } from '../../../../src/shared/native-chat/input/native-chat-tool-subagents'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../../transport/rpc-client'
 import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
@@ -52,6 +54,8 @@ export type MobileNativeChatSession = {
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Tasks from history outside the loaded tail. */
   taskList?: NativeChatTaskSeedList | null
+  /** Children from history outside the loaded tail. */
+  subagentSeed?: readonly NativeChatSubagentActivity[] | null
 }
 
 const INITIAL_LIMIT = 40
@@ -115,6 +119,7 @@ export function useMobileNativeChatSession(args: {
   const [taskSeed, setTaskSeed] = useState<{
     identity: string
     taskList: NativeChatTaskSeedList | null
+    subagents: readonly NativeChatSubagentActivity[] | null
   } | null>(null)
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
@@ -172,7 +177,11 @@ export function useMobileNativeChatSession(args: {
         }
         const frame = raw as MobileNativeChatStreamFrame
         if (frame.type === 'task-list') {
-          setTaskSeed({ identity, taskList: readNativeChatTaskSeedList(frame.taskList) })
+          setTaskSeed({
+            identity,
+            taskList: readNativeChatTaskSeedList(frame.taskList),
+            subagents: readNativeChatSubagentActivities(frame.subagents)
+          })
           return
         }
         if (frame.type === 'replacement') {
@@ -321,6 +330,7 @@ export function useMobileNativeChatSession(args: {
     olderPages,
     loadEarlier,
     transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined,
-    taskList: taskSeed?.identity === identity ? taskSeed.taskList : undefined
+    taskList: taskSeed?.identity === identity ? taskSeed.taskList : undefined,
+    subagentSeed: taskSeed?.identity === identity ? taskSeed.subagents : undefined
   }
 }

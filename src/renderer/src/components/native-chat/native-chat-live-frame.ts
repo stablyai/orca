@@ -3,6 +3,7 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatSubagentActivity } from '../../../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import {
   applyAppend,
@@ -12,8 +13,11 @@ import {
 import type { ReadState } from './native-chat-live-session-contract'
 import type { NativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 
+export type NativeChatSubagentSeed = readonly NativeChatSubagentActivity[] | null
+
 export type NativeChatLiveFrameSink = {
   setTaskList: (list: NativeChatTaskSeedList | null) => void
+  setSubagents: (agents: NativeChatSubagentSeed) => void
   epochRef: { current: number }
   setOlderHistoryGeneration: (generation: number) => void
   setLoadingEarlier: (loading: boolean) => void
@@ -37,6 +41,7 @@ export function applyNativeChatLiveFrame(
 ): void {
   if (frame.type === 'task-list') {
     sink.setTaskList(frame.taskList)
+    sink.setSubagents(frame.subagents ?? null)
     return
   }
   if (frame.type === 'snapshot' || frame.type === 'replacement') {
@@ -46,6 +51,7 @@ export function applyNativeChatLiveFrame(
     sink.setLoadingEarlier(false)
     if (frame.type === 'replacement') {
       sink.setTaskList(null)
+      sink.setSubagents(null)
     }
     if ('error' in frame && frame.error) {
       // Error frames carry no transcript; leave the independent seed eligible to repair the pane.
