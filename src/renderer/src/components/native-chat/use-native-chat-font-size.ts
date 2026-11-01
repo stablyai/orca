@@ -29,7 +29,13 @@ export function useNativeChatFontSize(
     let accumulated = 0
     let lastWheelAt = 0
     const onWheel = (event: WheelEvent): void => {
-      if (!event.ctrlKey || event.metaKey || event.altKey || event.deltaY === 0) {
+      if (
+        !event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        !Number.isFinite(event.deltaY) ||
+        event.deltaY === 0
+      ) {
         return
       }
       if (!(event.target instanceof Node) || !root.contains(event.target)) {
@@ -50,8 +56,11 @@ export function useNativeChatFontSize(
         return
       }
       const action = accumulated < 0 ? 'increase' : 'decrease'
-      accumulated = 0
-      void writeNativeChatFontSize(action)
+      const steps = Math.floor(Math.abs(accumulated) / PINCH_STEP_DELTA)
+      accumulated %= PINCH_STEP_DELTA
+      for (let step = 0; step < Math.min(steps, 8); step++) {
+        void writeNativeChatFontSize(action)
+      }
     }
     root.addEventListener('wheel', onWheel, { capture: true, passive: false })
     return () => root.removeEventListener('wheel', onWheel, { capture: true })

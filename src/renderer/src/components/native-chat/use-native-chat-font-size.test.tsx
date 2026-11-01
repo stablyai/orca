@@ -143,4 +143,20 @@ describe('persisted chat font-size shortcuts', () => {
     expect(outside.defaultPrevented).toBe(false)
     root.remove()
   })
+
+  it('keeps pinch travel regardless of wheel event grouping', async () => {
+    const root = document.createElement('div')
+    document.body.append(root)
+    renderHook(() => useNativeChatFontSize(false, { current: root }))
+    const event = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -24
+    })
+    Object.defineProperty(event, 'ctrlKey', { value: true })
+    root.dispatchEvent(event)
+    await waitFor(() => expect(mocks.settings.nativeChatAppearance).toEqual({ fontSize: 16 }))
+    expect(mocks.updateSettings).toHaveBeenCalledTimes(2)
+    root.remove()
+  })
 })
