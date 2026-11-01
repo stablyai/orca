@@ -6,6 +6,11 @@ export class TerminalIdleCursorReset {
   private escapeState = ''
   private pending = false
 
+  /** Whether bytes written so far leave xterm's parser inside an unfinished escape. */
+  get insideEscape(): boolean {
+    return this.escapeState !== ''
+  }
+
   request(): string {
     this.pending = true
     return this.takeReadyReset()

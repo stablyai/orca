@@ -121,6 +121,7 @@ export function connectPanePty(
   }
   // Idle callbacks precede deferred setup; switch from the shared scheduler to the PTY writer to preserve hidden-byte ordering and recovery.
   session.idleCursorReset = new TerminalIdleCursorReset()
+  session.gapEscapeContinuation = ''
   session.queueAgentIdleTerminalModeReset = (): void => {
     if (session.disposed) {
       return
