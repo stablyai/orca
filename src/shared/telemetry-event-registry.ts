@@ -50,6 +50,8 @@ import {
 } from './telemetry-feature-education-event-schemas'
 import {
   chatUiFeatureTipActionSchema,
+  chatUiFeatureTipExposureSchema,
+  agentDefaultSurfaceChangedSchema,
   chatUiFeatureTipShownSchema,
   cmdJPaletteFeatureTipAcknowledgedSchema,
   cmdJPaletteFeatureTipShownSchema,
@@ -185,6 +187,8 @@ export const eventSchemas = {
   cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
   chat_ui_feature_tip_shown: chatUiFeatureTipShownSchema,
   chat_ui_feature_tip_action: chatUiFeatureTipActionSchema,
+  chat_ui_feature_tip_exposure: chatUiFeatureTipExposureSchema,
+  agent_default_surface_changed: agentDefaultSurfaceChangedSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,

@@ -81,6 +81,8 @@ export function makeFakeSettings(telemetry: GlobalSettings['telemetry']): Global
 export function makeFakeStore(settings: GlobalSettings): Store {
   return {
     getSettings: vi.fn(() => settings),
+    getUI: vi.fn(() => ({ featureTipsSeenIds: [] })),
+    getChatUiLaunchTipVariant: vi.fn(() => 'none'),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       if (updates.telemetry) {
         settings.telemetry = {

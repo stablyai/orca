@@ -7,6 +7,8 @@ import {
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
 import {
+  isChatUiLaunchTipHeldOut,
+  trackChatUiFeatureTipExposure,
   trackChatUiFeatureTipShown,
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipShown
@@ -138,6 +140,15 @@ export function useOnboardingAndFeatureTips() {
 
     if (featureTipsDecision.kind !== 'open') {
       return
+    }
+
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
+      if (isChatUiLaunchTipHeldOut(settings ?? null)) {
+        // Control behaves as if the tip never existed, so the next pending tip may take this launch.
+        actions.markFeatureTipsSeen(['chat-ui-here'])
+        return
+      }
     }
 
     promptedThisSessionRef.current = true
