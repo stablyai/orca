@@ -289,6 +289,12 @@ describe('Claude accounts section', () => {
     expect(markup.match(/>Remove<\/button>/g)).toHaveLength(2)
   })
 
+  it('names System default with no managed Claude accounts', () => {
+    const markup = render({ accounts: [], systemDefaultEmail: 'me@example.test' })
+    expect(markup).toContain('System default: me@example.test')
+    expect(markup).toContain('No managed Claude accounts')
+  })
+
   it("names System default's login and warns only when an older Orca may have copied it there", () => {
     const saved = {
       accounts: [account('a', 'A@example.test')],
