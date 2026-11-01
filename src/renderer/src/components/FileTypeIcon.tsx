@@ -1,6 +1,10 @@
 import { createElement, type CSSProperties } from 'react'
 import { Folder, FolderOpen } from 'lucide-react'
-import { getFileTypeIcon, getPluginFileTypeIconIndex } from '@/lib/file-type-icons'
+import {
+  getFileTypeIcon,
+  getPluginFileTypeIconIndex,
+  getPluginFolderIconIndex
+} from '@/lib/file-type-icons'
 import { PLUGIN_ICON_ATTRIBUTE, useActivePluginIconTheme } from '@/store/plugin-icon-themes'
 
 type IconProps = { className?: string; style?: CSSProperties }
@@ -33,14 +37,19 @@ export function FileTypeIcon({
   )
 }
 
+/** A folder's icon; `folderPath` lets an icon theme pick one for its name, such as `src`. */
 export function FolderIcon({
+  folderPath,
   open,
   className,
   style
-}: IconProps & { open: boolean }): React.JSX.Element {
-  const theme = useActivePluginIconTheme((s) => s.theme)
-  const index = open ? theme?.icons['folder-open'] : theme?.icons.folder
-  return index === undefined ? (
+}: IconProps & { folderPath?: string; open: boolean }): React.JSX.Element {
+  const index = getPluginFolderIconIndex(
+    useActivePluginIconTheme((s) => s.theme),
+    folderPath,
+    open
+  )
+  return index === null ? (
     createElement(open ? FolderOpen : Folder, { 'aria-hidden': true, className, style })
   ) : (
     <PluginIcon index={index} className={className} style={style} />

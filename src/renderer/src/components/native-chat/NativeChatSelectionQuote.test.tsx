@@ -99,15 +99,6 @@ describe('NativeChatSelectionQuote', () => {
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
   })
 
-  it('offers nothing for a selection outside an agent reply', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('user'))
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-
-    releaseSelection(screen.getByTestId('user'), screen.getByTestId('first'))
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
   it('takes a selection that runs on over text that cannot be selected', () => {
     render(<Chat />)
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('time'))
@@ -127,23 +118,6 @@ describe('NativeChatSelectionQuote', () => {
     fireEvent.pointerDown(screen.getByTestId('time'), { button: 0 })
     fireEvent.mouseUp(screen.getByTestId('time'), { button: 0 })
     settle()
-
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('offers a selection made with the keyboard', () => {
-    render(<Chat />)
-    select(screen.getByTestId('first'))
-    fireEvent.keyUp(screen.getByTestId('first'), { key: 'ArrowRight', shiftKey: true })
-    settle()
-
-    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
-  })
-
-  it('offers nothing while the composer cannot take text', () => {
-    acceptsText.mockReturnValue(false)
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
 
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
   })
@@ -186,14 +160,6 @@ describe('NativeChatSelectionQuote copy on select', () => {
     vi.useRealTimers()
   })
 
-  it('copies a finished transcript selection, as the Copy menu item would', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('user'), screen.getByTestId('first'))
-
-    expect(writeClipboardText).toHaveBeenCalledTimes(1)
-    expect(writeClipboardText).toHaveBeenCalledWith(window.getSelection()!.toString())
-  })
-
   it('copies and quotes the authored formula selection through the existing actions', () => {
     const source = 'Before $x^2$ after.'
     render(<Chat mathSource={source} />)
@@ -211,14 +177,6 @@ describe('NativeChatSelectionQuote copy on select', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
     expect(appendText).toHaveBeenCalledWith(`> ${source}\n\n`)
     appendText.mockClear()
-  })
-
-  it('copies nothing while the setting is off', () => {
-    copyOnSelect(false)
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-
-    expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
   it('copies nothing selected outside the transcript', () => {

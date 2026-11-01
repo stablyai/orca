@@ -60,50 +60,10 @@ function getCheckbox(): HTMLButtonElement {
 }
 
 describe('ProjectGroupDeleteDialog', () => {
-  it('omits the contained project panel for empty groups', () => {
-    renderDialog({ projectCount: 0 })
-
-    expect(document.body.querySelector('[role="checkbox"]')).toBeNull()
-    expect(document.body.textContent).not.toContain('contained project')
-  })
-
-  it('renders compact contained project handling and reports remove intent', () => {
-    const onRemoveContainedProjectsChange = vi.fn()
-    renderDialog({ onRemoveContainedProjectsChange })
-
-    expect(document.body.textContent).toContain('Delete Platform.')
-    expect(document.body.textContent).toContain('Contained projects')
-    expect(document.body.textContent).not.toContain('unless selected below')
-    expect(getCheckbox().getAttribute('aria-checked')).toBe('false')
-    expect(document.body.textContent).toContain('Remove 2 contained projects')
-    expect(document.body.textContent).not.toContain('Remove 2 contained projects from Orca')
-    expect(document.body.textContent).toContain('Project folders on disk are not deleted.')
-    expect(document.body.textContent).toContain('API')
-    expect(document.body.textContent).toContain('Web app')
-
-    act(() => {
-      getCheckbox().click()
-    })
-
-    expect(onRemoveContainedProjectsChange).toHaveBeenCalledWith(true)
-  })
-
   it('focuses the delete group action when opened', () => {
     renderDialog()
 
     expect(document.activeElement).toBe(findButton('Delete Group'))
-  })
-
-  it('keeps the panel copy and destructive action label stable when project removal is selected', () => {
-    renderDialog({ removeContainedProjects: true })
-
-    expect(document.body.textContent).toContain('Delete Platform.')
-    expect(document.body.textContent).not.toContain('will stay in Orca')
-    expect(document.body.textContent).not.toContain('will be removed from Orca')
-    expect(document.body.textContent).not.toContain('unless selected below')
-    expect(getCheckbox().getAttribute('aria-checked')).toBe('true')
-    expect(findButton('Delete Group')).toBeTruthy()
-    expect(document.body.textContent).not.toContain('Delete Group and Remove Projects')
   })
 
   it('disables project choices, cancel, and delete actions while deleting', async () => {

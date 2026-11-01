@@ -2,7 +2,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import { readAgentMessageSource } from './agent-session/agent-session-message-source'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from './structured-agent-session-projection'
 
 /** Display-only creation facts are opt-in; canonical transcript readers keep their existing meaning. */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
@@ -51,7 +51,10 @@ export default function PairRedirectScreen() {
       {missingCode ? (
         <>
           <Text style={styles.errorText}>{t('app.pair.missingCode', 'Missing pairing code')}</Text>
-          <Pressable style={styles.primaryButton} onPress={goHome}>
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+            onPress={goHome}
+          >
             <Text style={styles.primaryButtonText}>{t('app.pair.backToHome', 'Back to home')}</Text>
           </Pressable>
         </>

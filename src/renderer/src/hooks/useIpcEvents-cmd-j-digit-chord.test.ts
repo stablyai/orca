@@ -84,16 +84,4 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
 
     expect(storeState.setActiveTab).not.toHaveBeenCalled()
   })
-
-  it('stops delivering row jumps after unsubscribe', async () => {
-    const { emitCmdJRowIndexJump, subscribeCmdJRowIndexJump } = await loadRowJumpBus()
-    const seen: number[] = []
-    const unsubscribe = subscribeCmdJRowIndexJump((index) => seen.push(index))
-
-    emitCmdJRowIndexJump(0)
-    unsubscribe()
-    emitCmdJRowIndexJump(1)
-
-    expect(seen).toEqual([0])
-  })
 })

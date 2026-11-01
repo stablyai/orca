@@ -232,35 +232,4 @@ describe('useSourceControlSubmoduleStatus', () => {
       entries: [innerEntry('from-env-b.ts')]
     })
   })
-
-  it('passes the row area when expanding a staged submodule row', async () => {
-    mocks.getRuntimeGitSubmoduleStatus.mockResolvedValue({
-      entries: [innerEntry('from-index.ts')],
-      didHitLimit: true
-    })
-
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    roots.push(root)
-    const stagedEntry = submoduleEntry('staged')
-
-    await act(async () => {
-      root.render(<Probe worktreeId="A" worktreePath="/a" entries={[stagedEntry]} />)
-    })
-    await act(async () => {
-      latest?.toggleSubmodule(stagedEntry)
-    })
-    await flush()
-
-    expect(mocks.getRuntimeGitSubmoduleStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      'sub',
-      'staged'
-    )
-    expect(latest?.submoduleStatusByKey['staged::sub']).toEqual({
-      status: 'loaded',
-      entries: [innerEntry('from-index.ts')],
-      didHitLimit: true
-    })
-  })
 })

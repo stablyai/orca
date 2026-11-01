@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
+import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
 
@@ -22,9 +23,6 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
-// Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
-const SCRCPY_PREFIX = 'scrcpy://'
-
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -36,10 +34,7 @@ export function EmulatorScreenStreamContent({
   streamKey,
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
-  const androidDeviceId =
-    previewUrl && previewUrl.startsWith(SCRCPY_PREFIX)
-      ? previewUrl.slice(SCRCPY_PREFIX.length)
-      : null
+  const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,

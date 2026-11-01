@@ -3,7 +3,7 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalMessageItem
 } from '../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 export type ClaudeMessageEnvelope = {

@@ -1,25 +1,20 @@
+import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
-import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import { createStartupRecovery } from './structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
-import * as providerSupport from './structured-agent-session-provider-support'
-import * as reveal from './structured-agent-session-reveal'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { structuredAgentSessionEntryDelegates } from './structured-agent-session-create'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import * as agentStart from './structured-agent-session-agent-start'
-import { createStructuredAgentSessionHostMutationContext } from './structured-agent-session-host-mutation-wiring'
+import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
 import * as lifetime from './structured-agent-session-conversation-lifetime'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
-import { structuredAgentSessionMutationDelegates } from './structured-agent-session-host-mutations'
 import { flushStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
@@ -145,10 +140,21 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  loadedSessionIds = (): string[] =>
-    [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+  loadedSessionIds = this.sessions.loadedSessionIds
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
-  sessionAgent = (sessionId: string) => this.deps.store.getConversation(sessionId)?.provider ?? null
+  private readonly reads = createStructuredAgentSessionConversationReads(() => ({
+    deps: this.deps,
+    sessions: this.sessions,
+    serialize: this.serialize,
+    readCommands: (id, commandsOnRequest) =>
+      this.clientDelivery.readCommandsSettled(id, commandsOnRequest),
+    conversation: (id) => this.lifetime.conversation(id),
+    adoptOpened: this.conversationDelivery.adoptOpened
+  }))
+  sessionAgent = this.reads.sessionAgent
+  readModelCatalog = this.reads.readModelCatalog
+  childAccountHome = this.reads.childAccountHome
+  prospectiveAccountHome = this.reads.prospectiveAccountHome
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)
@@ -193,12 +199,9 @@ export class StructuredAgentSessionHost {
     clientDelivery: this.clientDelivery
   }))
 
-  supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
-    providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
-
-  agentDefinitions = () => this.deps.agents.definitions()
-
-  knownAgentIds = (): readonly string[] => providerSupport.knownAgentIds(this.deps)
+  supportsCreate = this.reads.supportsCreate
+  agentDefinitions = this.reads.agentDefinitions
+  knownAgentIds = this.reads.knownAgentIds
 
   private readonly tabs = createTabs(
     this,
@@ -215,15 +218,14 @@ export class StructuredAgentSessionHost {
   setSessionTabVisibility = this.tabs.setSessionTabVisibility
   notifySessionTabHidden = this.tabs.notifySessionTabHidden
   /** Includes unreadable chat records. */
-  holdsSessions = (): boolean => this.deps.store.holdsRecords()
-  onSessionsHeld = (listener: () => void): (() => void) => this.deps.store.onFirstRecord(listener)
+  holdsSessions = this.reads.holdsSessions
+  onSessionsHeld = this.reads.onSessionsHeld
 
   seedSessionTabs = this.tabs.seedSessionTabs
 
   drainStatusWrites = (): Promise<void> => this.clientDelivery.drainStatusWrites()
 
-  revealSession = (sessionId: string): Promise<HostTypes.StructuredAgentSessionReveal> =>
-    reveal.revealStructuredAgentSession(this.deps, sessionId, this.lifetime.conversation)
+  revealSession = this.reads.revealSession
 
   private serialize = this.tasks.serialize.bind(this.tasks)
 
@@ -253,7 +255,7 @@ export class StructuredAgentSessionHost {
   }
 
   private mutationContext = () =>
-    createStructuredAgentSessionHostMutationContext({
+    mutationWiring.createStructuredAgentSessionHostMutationContext({
       deps: this.deps,
       sessions: this.sessions,
       subscribers: this.subscribers,
@@ -279,20 +281,21 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
+  private mutations = mutationWiring.structuredAgentSessionMutationDelegates(
+    () => this.mutationContext(),
+    () => this.attachContext()
+  )
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
 
-  rewind = (caller: HostTypes.StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
-    rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
+  rewind = this.mutations.rewind
 
   conversationCommand = this.conversationCommands.run
   /** Undefined means unavailable; an empty array is an authoritative catalog. */
-  readCommands = (sessionId: string, commandsOnRequest = false) =>
-    this.clientDelivery.readCommandsSettled(sessionId, commandsOnRequest)
+  readCommands = this.reads.readCommands
 
   /** Read the store; idle-released chats have no session-map entry. */
   handoffStatus = (sessionId: string) => this.backgroundTasks.handoffStatus(sessionId)

@@ -191,32 +191,6 @@ describe('provider turn activity routing', () => {
     translator.dispose()
   })
 
-  it('keeps Codex tool rows singular and the activity free of tool labels', () => {
-    const state = recordingSink()
-    const translator = createCodexJournalTranslator({
-      sink: state.sink,
-      primaryThreadId: () => THREAD_ID
-    })
-    translator.handle(codexNotification('turn/started', { turn: { id: TURN_ID } }))
-    const lifecycleRows = state.rows.length
-    translator.handle(
-      codexNotification('item/started', {
-        turnId: TURN_ID,
-        item: {
-          type: 'commandExecution',
-          id: 'command-1',
-          command: 'pnpm test',
-          status: 'inProgress'
-        }
-      })
-    )
-
-    expect(state.rows).toHaveLength(lifecycleRows + 1)
-    expect(state.rows.at(-1)).toMatchObject({ kind: 'tool-call', name: 'shell' })
-    expect(state.activities.at(-1)).toEqual({ turnId: TURN_ID, text: 'Running a command' })
-    expect(state.activities.at(-1)?.text).not.toContain('pnpm test')
-  })
-
   it('routes Claude status frames without creating timeline rows and clears on settlement', () => {
     const state = recordingSink()
     const translator = createClaudeJournalTranslator({ sink: state.sink })

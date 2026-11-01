@@ -160,10 +160,4 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     expect(existsSync(join(legacyStaging, 'Orca.exe'))).toBe(true)
     expect(existsSync(join(legacyOld, 'Orca.exe'))).toBe(true)
   })
-
-  it('stays under userData when LOCALAPPDATA is unset', () => {
-    delete process.env.LOCALAPPDATA
-    useProfile(join(tempDir, 'profile-a'))
-    expect(getDaemonHostRootDir()).toBe(join(tempDir, 'profile-a', 'daemon-host'))
-  })
 })

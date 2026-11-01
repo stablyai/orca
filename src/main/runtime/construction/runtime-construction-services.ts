@@ -126,6 +126,7 @@ export abstract class RuntimeConstructionServices {
     leaf: RuntimeLeafRecord
   }
   protected abstract getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
+  protected abstract getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
   protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
   protected abstract getOrchestrationMailboxTerminal(
     ptyId: string

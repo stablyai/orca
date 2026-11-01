@@ -1,7 +1,9 @@
+import { pressedStyle } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Platform, Pressable, Text, View } from 'react-native'
-import type { NativeChatImageRefBlock } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileNativeChatRowOverlaysContext } from '../transcript/mobile-native-chat-row-overlays'
 import { isRenderableImageUri, readHostChatImage } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from '../transcript/mobile-native-chat-message-styles'
@@ -15,6 +17,7 @@ export function MobileNativeChatImageAttachment({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
+  useMobileColorScheme()
   const t = useMobileTranslation()
   const { openImage, imageSource } = useContext(MobileNativeChatRowOverlaysContext)
   const client = imageSource?.client
@@ -79,6 +82,7 @@ export function MobileNativeChatImageAttachment({
   if (uri && failedOwner !== owner) {
     return (
       <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
         onPress={() => openImage({ uri, label })}
         onLongPress={onLongPress}
         accessibilityRole={Platform.OS === 'web' ? 'button' : 'imagebutton'}

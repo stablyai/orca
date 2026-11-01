@@ -14,7 +14,8 @@ type Props = ComponentProps<typeof FileExplorerFilesTreePane>
 function emptyPane(
   error?: string,
   wslHostUnavailable: Props['wslHostUnavailable'] = null,
-  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void> = vi.fn()
+  refreshDir: (dirPath: string, options?: { wakeWslDistro?: boolean }) => Promise<void> = vi.fn(),
+  stoppedWslHost: Props['stoppedWslHost'] = null
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This element-tree fixture supplies every field read by the empty pane; child components and event handlers are not executed.
   return FileExplorerFilesTreePane({
@@ -24,6 +25,7 @@ function emptyPane(
     visibleRowCount: 0,
     hasNameFilter: false,
     wslHostUnavailable,
+    stoppedWslHost,
     tree: {
       loadingDirPaths: new Set(),
       rootError: 'Full root unavailable',
@@ -227,4 +229,37 @@ it('Retry is a user act, so it may start a stopped WSL distro', () => {
     onClick()
   }
   expect(refreshDir).toHaveBeenCalledWith('/repo/src', { wakeWslDistro: true })
+})
+
+const STOPPED = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
+
+it('swaps Retry for Start when the WSL host is stopped, and refreshes without waking after it starts', () => {
+  const refreshDir = vi.fn(async () => {})
+  const elements: ReactElementLike[] = []
+  visit(emptyPane('WSL distro is not running', null, refreshDir, STOPPED), (element) =>
+    elements.push(element)
+  )
+  const status = elements.find((element) => element.type === FileExplorerTreeStatus)
+  expect(status?.props).toMatchObject({ stoppedWslHost: STOPPED })
+  expect(elements.some((element) => element.props?.role === 'status')).toBe(false)
+  const onStarted = status?.props.onWslHostStarted
+  expect(onStarted).toBeTypeOf('function')
+  if (typeof onStarted === 'function') {
+    onStarted()
+  }
+  expect(refreshDir).toHaveBeenCalledWith('/repo/src')
+})
+
+it('offers Start for a stopped WSL host instead of a read error', () => {
+  const markup = renderToStaticMarkup(
+    <FileExplorerTreeStatus
+      isLoading={false}
+      error="unreachable"
+      isEmpty
+      stoppedWslHost={STOPPED}
+    />
+  )
+  expect(markup).toContain('Ubuntu is stopped')
+  expect(markup).toContain('Start')
+  expect(markup).not.toContain('Could not load files for this workspace')
 })

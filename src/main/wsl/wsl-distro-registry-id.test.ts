@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  isWslDistroRegistered,
+  parseDefaultWslDistroId,
   parseWslDistroRegistrations,
   readWslDistroRegistryId,
   readWslDistroRegistryIdShared,
@@ -88,32 +88,6 @@ describe('readWslDistroRegistryIdShared', () => {
   })
 })
 
-describe('isWslDistroRegistered', () => {
-  const query = async () => ({ code: 0, stdout: REG_OUTPUT })
-
-  it('finds the distro by name, case-insensitively', async () => {
-    await expect(isWslDistroRegistered('UBUNTU-24.04', undefined, query)).resolves.toBe(true)
-  })
-
-  it('still finds a renamed distro by its recorded GUID, braced or not', async () => {
-    await expect(
-      isWslDistroRegistered('Ubuntu', '{0283592D-BE56-40D4-B935-3DC18C3AA007}', query)
-    ).resolves.toBe(true)
-  })
-
-  it('reports a distro gone only when neither its name nor its GUID is registered', async () => {
-    await expect(
-      isWslDistroRegistered('Ubuntu', '99999999-0000-4000-8000-000000000000', query)
-    ).resolves.toBe(false)
-  })
-
-  it('never reports gone when the registrations cannot be read', async () => {
-    await expect(
-      isWslDistroRegistered('Ubuntu', undefined, async () => ({ code: 1, stdout: '' }))
-    ).resolves.toBeNull()
-  })
-})
-
 describe('resolveWslDistroName', () => {
   const query = async () => ({ code: 0, stdout: REG_OUTPUT })
 
@@ -139,5 +113,17 @@ describe('resolveWslDistroName', () => {
     await expect(
       resolveWslDistroName('Ubuntu', undefined, async () => ({ code: 1, stdout: '' }))
     ).resolves.toBeNull()
+  })
+})
+
+describe('the default distro registration', () => {
+  it('reads DefaultDistribution from the Lxss root as a lowercase unbraced GUID', () => {
+    const output = [
+      LXSS,
+      '    DefaultDistribution    REG_SZ    {0283592D-BE56-40D4-B935-3DC18C3AA007}',
+      '    DefaultVersion    REG_DWORD    0x2',
+      REG_OUTPUT
+    ].join('\r\n')
+    expect(parseDefaultWslDistroId(output)).toBe('0283592d-be56-40d4-b935-3dc18c3aa007')
   })
 })

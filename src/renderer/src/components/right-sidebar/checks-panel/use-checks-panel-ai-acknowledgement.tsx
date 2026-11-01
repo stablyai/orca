@@ -76,7 +76,7 @@ export function useChecksPanelAiAcknowledgement(model: ChecksPanelAiAcknowledgem
         await fetchGitLabDetails({ commitAsCurrent: true })
         return
       }
-      await fetchComments({ force: true })
+      await fetchComments({ force: true, userRefresh: true })
     },
     [fetchComments, fetchGitLabDetails]
   )

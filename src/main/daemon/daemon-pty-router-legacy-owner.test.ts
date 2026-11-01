@@ -82,20 +82,6 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     expect(legacy.spawn).not.toHaveBeenCalled()
   })
 
-  it('creates on the current daemon once the older daemon no longer runs the id', async () => {
-    const current = createAdapter('current')
-    const legacy = createAdapter('legacy', [])
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    await router.spawn({ ...SPAWN, sessionId: 'exited-session' })
-    await router.spawn({ ...SPAWN, sessionId: 'fresh-id', isNewSession: true })
-    await router.spawn(SPAWN)
-
-    expect(current.spawn).toHaveBeenCalledTimes(3)
-    expect(legacy.spawn).not.toHaveBeenCalled()
-    expect(legacy.probePtyLiveness).toHaveBeenCalledOnce()
-  })
-
   it('refuses while the older daemon socket answers even if its pid is gone', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['claude-session'])

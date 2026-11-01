@@ -4,7 +4,7 @@ import {
   nativeChatSubagentGroupHeader,
   sayNativeChatSubagentGroupEnglish as say
 } from './native-chat-subagent-group-header'
-import type { NativeChatSubagentEntry, NativeChatSubagentState } from '../../native-chat-types'
+import type { NativeChatSubagentEntry, NativeChatSubagentState } from '../native-chat-types'
 
 function child(
   id: string,

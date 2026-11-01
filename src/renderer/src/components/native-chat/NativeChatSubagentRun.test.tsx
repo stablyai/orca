@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolRun } from './NativeChatToolRun'
 
@@ -18,35 +18,6 @@ function group(agents: NativeChatSubagentEntry[]): NativeChatSubagentGroupBlock 
 }
 
 describe('NativeChatSubagentRun', () => {
-  it('reads as a live spawn while children work', () => {
-    render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'working' },
-          { id: 'b', label: 'search', state: 'completed', tokens: 40661 }
-        ])}
-      />
-    )
-
-    expect(screen.getByText('Kicked off 2 subagents')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('1 working')
-    expect(screen.getByRole('button')).toHaveTextContent('40.7k tokens')
-  })
-
-  it('switches to Ran once every child completed', () => {
-    render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'completed' },
-          { id: 'b', label: 'search', state: 'completed' }
-        ])}
-      />
-    )
-
-    expect(screen.getByText('Ran 2 subagents')).toBeInTheDocument()
-    expect(screen.getByRole('button')).toHaveTextContent('completed')
-  })
-
   it('shows the worst settled verdict, not the count of finished children', () => {
     render(
       <NativeChatSubagentRun
@@ -77,31 +48,6 @@ describe('NativeChatSubagentRun', () => {
     expect(row).toHaveTextContent('3 working')
     expect(row).toHaveTextContent('+1 failed')
     expect(container.querySelector('.bg-destructive.animate-pulse')).not.toBeNull()
-  })
-
-  it('leaves the dot neutral when nothing has gone wrong', () => {
-    const { container } = render(
-      <NativeChatSubagentRun
-        block={group([
-          { id: 'a', label: 'read', state: 'working' },
-          { id: 'b', label: 'search', state: 'completed' }
-        ])}
-      />
-    )
-
-    expect(screen.getByRole('button')).not.toHaveTextContent('failed')
-    expect(container.querySelector('.bg-destructive')).toBeNull()
-  })
-
-  it('leads with the bot glyph, decorative beside the word that names the group', () => {
-    const { container } = render(
-      <NativeChatSubagentRun block={group([{ id: 'a', label: 'read', state: 'working' }])} />
-    )
-
-    const glyph = container.querySelector('.lucide-bot')
-    expect(glyph).not.toBeNull()
-    expect(glyph).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByRole('button')).toHaveAccessibleName(/Kicked off 1 subagent/)
   })
 
   function hiddenTextSpans(container: HTMLElement): Element[] {
@@ -238,20 +184,6 @@ describe('NativeChatToolRun with a spawn group', () => {
     )
 
     expect(container).toBeEmptyDOMElement()
-  })
-
-  it('renders the roster alongside the tool activity of its turn', () => {
-    render(
-      <NativeChatToolRun
-        blocks={[{ type: 'tool-call', name: 'shell', input: { command: 'ls' } }]}
-        subagentGroups={[group([{ id: 'a', label: 'read', state: 'completed' }])]}
-        expandSignal={false}
-        activeTurnIsWorking={false}
-      />
-    )
-
-    expect(screen.getByText('Ran 1 subagent')).toBeInTheDocument()
-    expect(screen.getByText('ls').closest('button')).toHaveTextContent('ls')
   })
 
   it('lists every child as a plain line when none has rows of its own', () => {

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
 import { foldMobileNativeChatMessages } from '../../mobile-native-chat-render-data'
 import { useMobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'

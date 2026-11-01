@@ -35,8 +35,7 @@ import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
 import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
-import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
-import { wslHostsServing } from './wsl/wsl-host-gate'
+import { deleteLegacyWslHostWakeList } from './wsl/wsl-host-early-wake'
 import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
 import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
 import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
@@ -133,9 +132,9 @@ if (preflightReady) {
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
   configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
-  // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
-  if (process.platform === 'win32' && wslHostsServing()) {
-    wakeRememberedWslHosts(app.getPath('userData'))
+  // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
+  if (process.platform === 'win32') {
+    deleteLegacyWslHostWakeList(app.getPath('userData'))
   }
   app.on('open-url', (event, url) => {
     if (!isRoutedOrcaDeepLink(url)) {

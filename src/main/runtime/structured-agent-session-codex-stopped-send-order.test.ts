@@ -19,12 +19,12 @@ import type { AgentJournalSubmission } from '../../shared/agent-session-journal-
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../shared/native-chat/native-chat-stopped-before-start'
-import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from '../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnMembership,
   structuredAgentTurnAnchors
-} from '../../shared/native-chat-turn-membership'
+} from '../../shared/native-chat/transcript/native-chat-turn-membership'
 import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import {
