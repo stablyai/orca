@@ -321,3 +321,12 @@ it.each([
   ])
   expect(r.place).toHaveBeenCalledTimes(2)
 })
+
+// Scaling contract: a switch's ownership preparation and its create each list owners once, by
+// panel R138's design, however many other conversations' owners the host holds.
+it.each([10, 100])('lists owners twice per switch with %i other owners', async (others) => {
+  const r = await switchRig({ seed: (claim) => fill(r, claim, others) })
+  const before = r.fullListings()
+  expect(await r.run('to-terminal-scaling')).toMatchObject({ status: 'completed' })
+  expect(r.fullListings() - before).toBe(2)
+})

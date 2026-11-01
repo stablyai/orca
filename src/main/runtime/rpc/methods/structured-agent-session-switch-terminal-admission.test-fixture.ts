@@ -64,6 +64,7 @@ export function executionOwnerRig(
   const pendingSpawns: ((error: Error) => void)[] = []
   let started = 0
   let listingFails = false
+  let fullListings = 0
   const unused = async (): Promise<never> => {
     throw new Error('Unexpected PTY effect')
   }
@@ -74,6 +75,9 @@ export function executionOwnerRig(
     listProcesses: async (args) => {
       if (listingFails) {
         throw new Error('listing failed')
+      }
+      if (!args?.ptyIds?.length) {
+        fullListings++
       }
       return [...sessions.values()].filter(
         (session) => !args?.ptyIds?.length || args.ptyIds.includes(session.id)
@@ -185,6 +189,8 @@ export function executionOwnerRig(
     place: vi.spyOn(runtime, 'placeSwitchTerminal'),
     stop: vi.spyOn(chat.host, 'stopForSwitch'),
     started: () => started,
+    /** Owner listings that read every session (a liveness probe names its PTYs). */
+    fullListings: () => fullListings,
     owners: () => agentSessionOwners.list(),
     run: (invocationId: string) =>
       executeStructuredSessionSwitch(

@@ -14,7 +14,7 @@ export function TerminalProcessExitOverlay({
   onClose: () => void
 }): React.JSX.Element {
   const capacityError = processExit.reason === 'git-bash-console-capacity'
-  // A switch stopped the agent; a full-screen agent leaves no output here to keep.
+  // A switch stopped the agent; the screen it held at the stop stays behind this notice.
   const switchStopped = processExit.reason === 'switch-stopped'
   const agent = processExit.agent ? agentLabel(processExit.agent) : null
   const title = capacityError

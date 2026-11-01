@@ -15,6 +15,11 @@ import { withTimeout } from '../runtime-async-boundaries'
 const HELD_SCREEN_TIMEOUT_MS = 1_000
 const HELD_SCREEN_MAX_BYTES = 256 * 1024
 
+/** Whether a held screen fits the wire bound, counted as JSON carries it. */
+export function heldSwitchScreenFits(data: string, scrollbackAnsi = ''): boolean {
+  return Buffer.byteLength(JSON.stringify([data, scrollbackAnsi])) <= HELD_SCREEN_MAX_BYTES
+}
+
 export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRuntimeWithExplicitTerminalTabClose {
   /** Whether a handle names a process a switch stopped and left: an attach is answered exited. */
   isStoppedSwitchSourceHandle(handle: string): boolean {
@@ -42,7 +47,7 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
     if (!data || !cols || !rows || !same()) {
       return undefined
     }
-    if (Buffer.byteLength(JSON.stringify([data, scrollbackAnsi ?? ''])) > HELD_SCREEN_MAX_BYTES) {
+    if (!heldSwitchScreenFits(data, scrollbackAnsi)) {
       return undefined
     }
     return {
