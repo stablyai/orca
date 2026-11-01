@@ -118,7 +118,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
             // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
-            ...(clientKind === 'runtime' ? { opensWorkspace: true as const } : {}),
+            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
           }),
         { wslUserAct: true }

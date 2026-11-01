@@ -50,14 +50,16 @@ describe('terminal activity with no window attached', () => {
     expect(activityWrites()).toHaveLength(2)
   })
 
-  it('skips a closed terminal and a restored saved pane', async () => {
+  it('skips a closed terminal, its replayed exit, and a pane started again', async () => {
     const { runtime, activityWrites } = createRuntime('headless')
 
-    await runtime.createTerminal(`path:${WORKTREE_PATH}`, { opensWorkspace: true })
+    await runtime.createTerminal(`path:${WORKTREE_PATH}`, { reopensPane: true })
     expect(activityWrites()).toEqual([])
 
     const closed = await runtime.createTerminal(`path:${WORKTREE_PATH}`)
     runtime.markPtyStopRequested(closed.ptyId!)
+    await runtime.onPtyExit(closed.ptyId!, 0)
+    // The stop's cleanup reports the same exit again once the request is spent.
     await runtime.onPtyExit(closed.ptyId!, 0)
     expect(activityWrites()).toHaveLength(1)
   })

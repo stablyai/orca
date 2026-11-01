@@ -32,8 +32,8 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     ...args: Parameters<Runtime['createTerminal']>
   ): ReturnType<Runtime['createTerminal']> {
     const created = await super.createTerminal(...args)
-    // A reattach, or a start that opening the workspace caused, is no new work there.
-    if (!created.isReattach && !args[1]?.opensWorkspace) {
+    // A reattach, or a pane started again, is no new work in the workspace.
+    if (!created.isReattach && !args[1]?.reopensPane) {
       this.stampWindowlessTerminalActivity(created.worktreeId, created.executionHostId)
     }
     return created
@@ -58,14 +58,15 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     // The base ignores an exit of any incarnation but the one registering or registered.
     const currentIncarnationId =
       this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId ?? pty?.incarnationId
+    const incarnationId = exitIncarnationId ?? pty?.incarnationId ?? undefined
+    const priorExit = this.getPtyLivenessVerdict(ptyId)
     const endedOnItsOwn =
       !(exitIncarnationId && currentIncarnationId && exitIncarnationId !== currentIncarnationId) &&
+      // A stop's cleanup can report the exit again, after its stop request is spent.
+      !(priorExit?.status === 'exited' && priorExit.incarnationId === incarnationId) &&
       // A close, kill, sleep or restart is the user's or Orca's own stop, as the window skips it.
       !this.isPtyStopRequested(ptyId) &&
-      !this.intentionalPtyStops.endsIntentionalStop(
-        ptyId,
-        exitIncarnationId ?? pty?.incarnationId
-      ) &&
+      !this.intentionalPtyStops.endsIntentionalStop(ptyId, incarnationId) &&
       // A lost host or dropped connection reports exits that are no work in the workspace.
       options.hostLost !== true &&
       (exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true)
