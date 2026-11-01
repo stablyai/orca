@@ -5,6 +5,7 @@ import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
 import type { HoveredTabInsertion } from './useTabDragSplit'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { setGroupRatioThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/webview-drag-passthrough'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
@@ -51,6 +52,8 @@ export function ResizeHandle({
       onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
+      // Why: a release over a browser webview never reaches window without passthrough.
+      const releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
       // Why: measure outside pointermove so pane writes never force a readback.
       let rect = container.getBoundingClientRect()
       const resizeObserver = new ResizeObserver(() => {
@@ -60,7 +63,13 @@ export function ResizeHandle({
       let draggedRatio: number | null = null
 
       const onPointerMove = (moveEvent: PointerEvent): void => {
-        if (moveEvent.pointerId !== event.pointerId || !handle.hasPointerCapture(event.pointerId)) {
+        // Why: Linux Chromium delivers pointermove while hasPointerCapture() reports false; own by pointerId only.
+        if (moveEvent.pointerId !== event.pointerId) {
+          return
+        }
+        // Why: a release outside the window can arrive as a buttonless move instead of pointerup.
+        if (moveEvent.buttons === 0) {
+          cleanup()
           return
         }
         const ratio = isHorizontal
@@ -80,6 +89,7 @@ export function ResizeHandle({
         }
         cleaned = true
         resizeObserver.disconnect()
+        releaseWebviewDragPassthrough()
         onResizeEnd?.()
         if (draggedRatio !== null) {
           onRatioChange(draggedRatio)
@@ -94,9 +104,9 @@ export function ResizeHandle({
         } catch {
           // Best effort: unmount cleanup can run after Chromium has already dropped capture.
         }
-        handle.removeEventListener('pointermove', onPointerMove)
-        handle.removeEventListener('pointerup', onPointerUp)
-        handle.removeEventListener('pointercancel', onPointerCancel)
+        window.removeEventListener('pointermove', onPointerMove)
+        window.removeEventListener('pointerup', onPointerUp)
+        window.removeEventListener('pointercancel', onPointerCancel)
         handle.removeEventListener('lostpointercapture', onLostPointerCapture)
         if (activeResizeCleanupRef.current === cleanup) {
           activeResizeCleanupRef.current = null
@@ -121,9 +131,9 @@ export function ResizeHandle({
         }
       }
 
-      handle.addEventListener('pointermove', onPointerMove)
-      handle.addEventListener('pointerup', onPointerUp)
-      handle.addEventListener('pointercancel', onPointerCancel)
+      window.addEventListener('pointermove', onPointerMove)
+      window.addEventListener('pointerup', onPointerUp)
+      window.addEventListener('pointercancel', onPointerCancel)
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
       activeResizeCleanupRef.current = cleanup
     },
