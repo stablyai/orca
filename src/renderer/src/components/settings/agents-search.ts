@@ -145,7 +145,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       'The default for agents on this computer.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat'),
+      ...translateSearchKeyword('settings.appearance.chat.title', 'Chat UI'),
       ...translateSearchKeyword('settings.chat.providers.searchTerminal', 'terminal'),
       ...translateSearchKeyword('settings.chat.providers.searchCli', 'CLI')
     ]
