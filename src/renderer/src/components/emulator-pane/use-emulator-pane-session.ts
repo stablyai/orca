@@ -196,7 +196,6 @@ export function useEmulatorPaneSession({
           throw noEmulatorDevicesError()
         }
         requestedTarget = target
-        setSelectedUdid(target)
         if (target !== liveTargetRef.current) {
           // Clear the old device’s frame so switching shows a connecting state.
           setSession(null)
@@ -204,8 +203,10 @@ export function useEmulatorPaneSession({
           liveTargetRef.current = null
           resetVisualOrientation()
         }
+        const device = await emulatorAttachDevice(list, target, refreshDevices)
+        setSelectedUdid(device)
         const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
-          device: await emulatorAttachDevice(list, target, refreshDevices),
+          device,
           worktree: worktreeId,
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }

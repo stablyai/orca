@@ -20,7 +20,7 @@ export function resolveEmulatorAttachTarget({
 }
 
 // An emulator's adb serial dies with it; once it is gone, its AVD name boots it again.
-// A live serial wins: read-only instances can share one AVD name.
+// A live serial wins while it is still that AVD: read-only instances can share one AVD name.
 export async function emulatorAttachDevice(
   devices: SimulatorDeviceRow[],
   target: string,
@@ -31,5 +31,5 @@ export async function emulatorAttachDevice(
     return target
   }
   const current = await refreshDevices()
-  return current.some((d) => d.udid === target) ? target : avdName
+  return current.some((d) => d.udid === target && d.name === avdName) ? target : avdName
 }
