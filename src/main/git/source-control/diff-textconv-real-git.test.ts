@@ -97,7 +97,7 @@ describe('diff drivers with textconv', () => {
     await writeFile(path.join(repo, 'notes.txt'), 'two\n')
     git('add', 'notes.txt')
     // Age the stamped inputs so the first result is old enough to settle.
-    const old = new Date(Date.now() - 10_000)
+    const old = new Date('2020-01-01T00:00:00Z')
     await utimes(path.join(repo, '.git', 'index'), old, old)
 
     expect(await getDiff(repo, 'notes.txt', true)).toMatchObject({ originalContent: 'one\n' })
