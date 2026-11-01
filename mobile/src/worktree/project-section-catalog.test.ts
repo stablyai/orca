@@ -42,4 +42,34 @@ describe('buildProjectSectionCatalog', () => {
     )
     expect(catalog.repos.map((entry) => entry.repoIcon)).toEqual([uploaded, undefined])
   })
+
+  it('supplements unrepresented repos from desktop repos when served omits them', () => {
+    const served: ServedProjectSections = {
+      repos: [repo('r1')],
+      projects: [{ id: 'repo:r1', displayName: 'orca' }],
+      setups: [
+        {
+          id: 'r1',
+          projectId: 'repo:r1',
+          hostId: 'local',
+          repoId: 'r1',
+          path: '/repos/r1',
+          displayName: 'orca',
+          setupMethod: 'legacy-repo'
+        }
+      ],
+      projectOrderBy: 'manual',
+      projectGroups: undefined
+    }
+    const newLocalRepo = repo('slides-benchmark')
+    const catalog = buildProjectSectionCatalog(served, [repo('r1'), newLocalRepo], null, 'manual')
+
+    expect(catalog.grouping?.projectHostSetups).toHaveLength(2)
+    expect(catalog.grouping?.projectHostSetups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ repoId: 'r1' }),
+        expect.objectContaining({ repoId: 'slides-benchmark', projectId: 'repo:slides-benchmark' })
+      ])
+    )
+  })
 })

@@ -86,13 +86,14 @@ function makeSection(
   key: string,
   title: string,
   data: readonly Worktree[],
-  decoration: { icon?: 'pin'; repo?: SectionRepo } = {}
+  decoration: { icon?: 'pin'; repo?: SectionRepo; collapseKey?: string } = {}
 ): Section {
   return {
     key,
     title,
     ...(decoration.icon ? { icon: decoration.icon } : {}),
     ...(decoration.repo ? { repo: decoration.repo } : {}),
+    ...(decoration.collapseKey ? { collapseKey: decoration.collapseKey } : {}),
     data: [...data]
   }
 }
@@ -234,9 +235,11 @@ export function buildMobileWorkspacePlan(
           })
         )
         for (const [key, section] of projectSections) {
+          const collapseKey = (section as { collapseKey?: string }).collapseKey
           sections.push(
             makeSection(key, section.label, orderMainWorktreeFirst(section.items), {
-              repo: section.repo
+              repo: section.repo,
+              ...(collapseKey && collapseKey !== key ? { collapseKey } : {})
             })
           )
         }
@@ -302,6 +305,9 @@ export function buildMobileWorkspacePlan(
       occurrencePlan.sections.map((section) => ({
         key: section.key,
         title: section.title,
+        ...(section.collapseKey && section.collapseKey !== section.key
+          ? { collapseKey: section.collapseKey }
+          : {}),
         ...(section.icon ? { icon: section.icon } : {}),
         ...(section.repo ? { repo: section.repo } : {}),
         data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed)
