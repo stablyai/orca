@@ -9,6 +9,7 @@ import {
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { decodeTranscriptStream, splitTranscriptStreamLines } from './transcript-stream-lines'
 import { openTranscriptReadStream, wslGatedReaddir } from './wsl-transcript-fs-access'
 
@@ -44,6 +45,10 @@ export async function appendNativeChatChildTranscripts(
   messages: readonly NativeChatMessage[],
   signal?: AbortSignal
 ): Promise<NativeChatMessage[]> {
+  // A second WSL gate task holds the recovered snapshot until the helper deadline.
+  if (isWslUncPath(filePath)) {
+    return messages.slice()
+  }
   const children =
     decode === decodeClaudeTranscriptLine
       ? await claudeChildren(filePath, decode, signal)
