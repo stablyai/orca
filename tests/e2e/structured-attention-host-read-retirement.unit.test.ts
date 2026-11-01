@@ -95,6 +95,7 @@ function attentionPath(directory: string) {
     }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42

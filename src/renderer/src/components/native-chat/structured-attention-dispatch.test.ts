@@ -7,7 +7,10 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { agentSessionAttentionKey } from '../../../../shared/agent-session/agent-session-attention'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   createTestStore,
   makeTabGroup,
@@ -117,6 +120,7 @@ function seed(overrides?: {
     unreadTerminalTabs: {},
     unreadTerminalPanes: {},
     unreadAgentCompletionPanes: {},
+    runtimeAgentOrchestrationByPaneKey: {},
     settings: settingsWith(overrides?.groupAttention ?? true),
     floatingWorkspacePanelOpen: overrides?.floatingPanelOpen ?? false,
     // Persistence is not what this test is about; the folder path would otherwise call out to IPC.
@@ -330,6 +334,25 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     seed()
     dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
     expect(onlyDispatch()).toMatchObject({ agentState: 'done' })
+  })
+
+  it('leaves a dispatched chat worker’s finished turn to its coordinator, but still calls the user to its prompt', () => {
+    store.setState({
+      runtimeAgentOrchestrationByPaneKey: {
+        [structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)]: {
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          parentPaneKey: 'tab-c:leaf-c'
+        }
+      }
+    })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toEqual(NOTHING_LIT)
+    expect(dispatched).toEqual([])
+
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked' })
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {

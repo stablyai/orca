@@ -185,6 +185,7 @@ describe('Explicit desktop read acknowledgements', () => {
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
       isWorkspaceMuted: () => false,
+      readOrchestration: () => undefined,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42
