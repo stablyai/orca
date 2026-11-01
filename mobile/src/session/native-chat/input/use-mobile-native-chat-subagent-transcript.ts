@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { agentJournalItemSubagentId } from '../../../../../src/shared/agent-session-journal-producer'
+import { agentJournalItemSubagentId } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import {
   nativeChatSubagentActivities,
   nativeChatVisibleTaskList,

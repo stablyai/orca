@@ -3,8 +3,8 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
+} from '../../agent-session/journal/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
 import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-summary'
 import { projectStructuredItemsToNativeChat } from '../../structured-agent-session-projection'
 import { latestNativeChatTaskSeed } from './native-chat-activity'

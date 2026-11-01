@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import { historyPageTaskList, nativeChatTaskSeedFromJournal } from './native-chat-journal-task-list'
 
 const SUBJECT = 'Refuse to serve /api/* without explicit no-auth (U22)'
