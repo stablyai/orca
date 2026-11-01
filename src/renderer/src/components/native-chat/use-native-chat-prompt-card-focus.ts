@@ -5,9 +5,10 @@ const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
 const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
   '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
 
-function focusPromptCard(card: HTMLElement): void {
+export function focusPromptCard(card: HTMLElement): HTMLElement {
   const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR) ?? card
   target.focus()
+  return target
 }
 
 /** Focus the shown card requesting it unless keep already names a control inside it; return false when ineligible. */
@@ -58,6 +59,14 @@ export function useNativeChatPromptCardFocus(
       focusPromptCard(card)
       if (revealStart) {
         card.scrollTop = 0
+        const cardBounds = card.getBoundingClientRect()
+        const focusedBounds = document.activeElement?.getBoundingClientRect()
+        if (
+          focusedBounds &&
+          (focusedBounds.top < cardBounds.top || focusedBounds.bottom > cardBounds.bottom)
+        ) {
+          card.focus({ preventScroll: true })
+        }
       }
     }
   }, [cardRef, shouldFocus, step, revealStart])

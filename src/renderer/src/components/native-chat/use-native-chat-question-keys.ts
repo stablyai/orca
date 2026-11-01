@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, type RefObject } from 'react'
 import { isEditableTarget } from '@/lib/editable-target'
-import { isInNativeChatPaneOf } from './use-native-chat-prompt-card-focus'
+import { focusPromptCard, isInNativeChatPaneOf } from './use-native-chat-prompt-card-focus'
 
 /** Keep question shortcuts scoped to its pane, including when a replaced row drops focus. */
 export function useNativeChatQuestionKeys(
@@ -47,6 +47,9 @@ export function useNativeChatQuestionKeys(
       onPick(optionIndex)
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       if (rows.length === 0) {
+        if (card && focusPromptCard(card) !== card) {
+          event.preventDefault()
+        }
         return
       }
       const nextIndex =

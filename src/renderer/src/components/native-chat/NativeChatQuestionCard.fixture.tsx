@@ -62,6 +62,7 @@ export const multiline = defineFixture({
       style={nativeChatAppearanceStyle({})}
     >
       <NativeChatQuestionCard
+        shouldFocus
         prompt={{
           questions: [
             {
@@ -80,6 +81,9 @@ export const multiline = defineFixture({
     </div>
   ),
   interact: (frame) => {
+    if (document.activeElement !== frame.querySelector('button[aria-pressed]')) {
+      throw new Error('A fitting question lost first-option focus')
+    }
     for (const text of [multilineQuestion, multilineDescription]) {
       const element = [...frame.querySelectorAll<HTMLElement>('p, span')].find(
         (node) => node.textContent === text && node.childNodes.length === 1
@@ -123,17 +127,21 @@ export const shortPane = defineFixture({
       <div className="min-h-0 flex-1" />
       <NativeChatQuestionCard
         shouldFocus
+        freeTextInputs={[undefined, undefined, { multiline: true }]}
         prompt={{
-          questions: Array.from({ length: 2 }, (_, step) => ({
+          questions: Array.from({ length: 3 }, (_, step) => ({
             question: Array.from(
               { length: 24 },
               (_, i) => `Question ${step + 1} line ${i + 1}`
             ).join('\n'),
             multiSelect: true,
-            options: Array.from({ length: 12 }, (_, option) => ({
-              label: `Target ${step + 1}.${option + 1}`,
-              description: multilineDescription
-            }))
+            options:
+              step === 2
+                ? []
+                : Array.from({ length: 12 }, (_, option) => ({
+                    label: `Target ${step + 1}.${option + 1}`,
+                    description: multilineDescription
+                  }))
           }))
         }}
         onAnswer={() => {}}
@@ -153,9 +161,23 @@ export const shortPane = defineFixture({
     if (cardBounds.top < paneBounds.top || cardBounds.bottom > paneBounds.bottom + 1) {
       throw new Error('Question card overflows the short pane')
     }
-    const firstOption = card.querySelector('button[aria-pressed]')
-    if (document.activeElement !== firstOption || card.scrollTop !== 0) {
-      throw new Error('Initial focus hides the start of the question')
+    const firstOption = card.querySelector<HTMLButtonElement>('button[aria-pressed]')
+    if (document.activeElement !== card || card.scrollTop !== 0) {
+      throw new Error('Tall question must keep focus on the visible card')
+    }
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    if (firstOption?.getAttribute('aria-pressed') !== 'false') {
+      throw new Error('Enter selected an offscreen option')
+    }
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    const optionBounds = firstOption.getBoundingClientRect()
+    if (
+      document.activeElement !== firstOption ||
+      optionBounds.top < cardBounds.top ||
+      optionBounds.bottom > cardBounds.bottom + 1
+    ) {
+      throw new Error('ArrowDown did not reveal and focus the first option')
     }
     const optionList = firstOption?.parentElement
     if (!optionList) {
@@ -197,11 +219,24 @@ export const shortPane = defineFixture({
     if (optionList.scrollTop !== 0) {
       throw new Error('First option remains hidden in the scrolled option list')
     }
+    if (card.scrollTop !== 0 || document.activeElement !== card) {
+      throw new Error('Next tall question must restore scroll and visible card focus')
+    }
+    submit.focus()
+    submit.click()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const field = card.querySelector('textarea')
+    if (!field || document.activeElement !== card || card.scrollTop !== 0) {
+      throw new Error('Missing visible focus for the text-only question')
+    }
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    const fieldBounds = field.getBoundingClientRect()
     if (
-      card.scrollTop !== 0 ||
-      document.activeElement !== card.querySelector('button[aria-pressed]')
+      document.activeElement !== field ||
+      fieldBounds.top < cardBounds.top ||
+      fieldBounds.bottom > cardBounds.bottom + 1
     ) {
-      throw new Error('Question step retained stale scroll or lost option focus')
+      throw new Error('ArrowDown did not reveal and focus the answer field')
     }
   }
 })

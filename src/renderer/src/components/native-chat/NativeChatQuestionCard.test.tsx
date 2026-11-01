@@ -490,6 +490,26 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0, 1], other: 'Other' }])
   })
 
+  it.each(['ArrowDown', 'ArrowUp'])('reaches a text-only answer from the card with %s', (key) => {
+    const onAnswer = vi.fn()
+    container.setAttribute('data-native-chat-root', 'true')
+    render(
+      { questions: [{ question: 'Describe the task', multiSelect: false, options: [] }] },
+      onAnswer,
+      true,
+      true
+    )
+    const card = container.querySelector<HTMLElement>('[role="group"]')!
+    const input = container.querySelector('input')!
+    act(() => card.focus())
+
+    expect(pressKey({ key }, card).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(input)
+    typeAnswer('Keep the workspace')
+    pressKey({ key: 'Enter' }, input)
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [], other: 'Keep the workspace' }])
+  })
+
   it('picks the numbered option including a Shift-produced digit', () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()
