@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../shared/agent-session/agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,

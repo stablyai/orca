@@ -4,7 +4,7 @@ import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../../src/shared/agent-session-journal-types'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 it.each([10, 100])(
   'reads turn ownership linearly for %i queued openers and earlier-turn rows',

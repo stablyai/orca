@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyDispatchRejection,
   DISPATCH_REJECTED_QUEUE_FULL
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   applyJournalRow,
   createJournalReducerState,

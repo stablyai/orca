@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { noteArmsHibernatedPaneWake } from './pty-exit-hibernate'
 
 function note(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgentSessionRecord {

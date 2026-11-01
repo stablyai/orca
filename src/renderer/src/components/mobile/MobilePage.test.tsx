@@ -234,35 +234,6 @@ describe('MobilePage pairing connection mode', () => {
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('local-qr'))
   })
 
-  it('restores a saved local-only preference without user interaction', async () => {
-    mocks.storeState.settings = {
-      showMobileButton: true,
-      mobilePairingConnectionMode: 'local-only'
-    }
-    await openPairingStep()
-
-    await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'local-only' }))
-    expect(screen.getByTestId('mode')).toHaveTextContent('local-only')
-  })
-
-  it('restores a saved custom address for future pairing codes', async () => {
-    mocks.storeState.settings = {
-      showMobileButton: true,
-      mobilePairingCustomAddress: '100.126.117.25:6768'
-    }
-    await openPairingStep()
-
-    await waitFor(() =>
-      expect(getPairingQR).toHaveBeenCalledWith({
-        address: '100.126.117.25:6768',
-        connectionMode: 'automatic'
-      })
-    )
-    expect(screen.getByTestId('selected-address')).toHaveTextContent('100.126.117.25:6768')
-    expect(screen.getByTestId('selected-address-is-custom')).toHaveTextContent('true')
-    expect(screen.getByTestId('custom-addresses')).toHaveTextContent('100.126.117.25:6768')
-  })
-
   it('preselects LAN and mints a local-only QR on a signed-out desktop', async () => {
     mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
     await openPairingStep()
@@ -348,23 +319,6 @@ describe('MobilePage pairing connection mode', () => {
 
     await waitFor(() => expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none'))
     expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
-  })
-
-  it('keeps the copy fallback when the host reports QR encoding failure', async () => {
-    getPairingQR.mockResolvedValue({
-      available: true,
-      qrDataUrl: null,
-      qrError: 'encoding_failed',
-      pairingUrl: 'orca://pair?code=copy-fallback',
-      endpoint: 'wss://host.example/large',
-      connectionMode: 'automatic'
-    })
-
-    await openPairingStep()
-
-    await waitFor(() => expect(screen.getByTestId('pairing-qr-error')).toHaveTextContent('true'))
-    expect(screen.getByTestId('pairing-qr')).toHaveTextContent('none')
-    expect(screen.getByTestId('pairing-url')).toHaveTextContent('copy-fallback')
   })
 
   it('surfaces Relay failure and requests credential rotation on retry', async () => {

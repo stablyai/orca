@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from './agent-session-wire'
+import type { AgentSessionModelOption } from './agent-session/agent-session-wire'
 
 /** Unknown metadata admits a scalar; an explicit empty menu admits none. */
 export function agentSessionEffortLevels(

@@ -1,12 +1,12 @@
 /** Centralize store fixtures in the host chat-journal DB; closeTestJournalHostDatabases owns their cleanup. */
 
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import type { AgentSessionOperationRow } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { PersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import {
   encodePersistedAgentSessionProviderHandle,
   isAgentSessionProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
   closeTestJournalHostDatabase,

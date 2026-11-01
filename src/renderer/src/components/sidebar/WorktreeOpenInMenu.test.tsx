@@ -173,6 +173,30 @@ describe('WorktreeOpenInMenu', () => {
     })
   })
 
+  it('words a failed file row open as a path, not the workspace', async () => {
+    openInExternalEditorMock.mockResolvedValueOnce({ ok: false, reason: 'not-absolute' })
+    openInExternalEditorMock.mockResolvedValueOnce({ ok: false, reason: 'not-found' })
+    openInExternalEditorMock.mockResolvedValueOnce({ ok: false, reason: 'launch-failed' })
+    const args = {
+      target: 'external-editor',
+      worktreePath: '/tmp/workspace/a.txt',
+      subject: 'path'
+    } as const
+
+    await openWorktreePath(args)
+    await openWorktreePath(args)
+    await openWorktreePath(args)
+
+    expect(toastErrorMock.mock.calls).toEqual([
+      ['Path is not a valid local path.', undefined],
+      ['File or folder not found. It may have been moved or deleted.'],
+      [
+        'Could not open the path in the editor.',
+        { description: 'Check the editor command configured on this machine.' }
+      ]
+    ])
+  })
+
   it('opens a local workspace while a server is focused', async () => {
     mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
     const fileManager = { id: 'file-manager', label: 'Finder', target: 'file-manager' } as const

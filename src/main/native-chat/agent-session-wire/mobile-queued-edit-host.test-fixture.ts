@@ -73,7 +73,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { acpStructuredAgentDefinition } =
       await import('../../acp/acp-structured-agent-definitions')
     const { CLAUDE_STRUCTURED_AGENT } =
-      await import('../../claude/claude-structured-agent-definition')
+      await import('../../claude/structured/claude-structured-agent-definition')
     const { structuredAgentsDeclaringNothing } =
       await import('./structured-agent-session-adapter-router-test-support')
     const { StructuredAgentRegistry } = await import('./structured-agent-registry')

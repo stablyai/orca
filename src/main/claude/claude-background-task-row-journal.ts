@@ -1,7 +1,5 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { backgroundTaskJournalBody } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../shared/native-chat/native-chat-types'
 import type {
@@ -10,7 +8,7 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 const MAX_RESOLVED_TASK_IDENTITIES = 512
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }

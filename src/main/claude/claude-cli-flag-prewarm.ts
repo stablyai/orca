@@ -6,7 +6,7 @@ import {
   claudeProbeEnv,
   resolveClaudeChildEnvSources,
   type ClaudeEnvDeps
-} from './claude-structured-child-env'
+} from './structured/launch/claude-structured-child-env'
 
 const MAX_PREWARMED_FOLDERS = 4
 

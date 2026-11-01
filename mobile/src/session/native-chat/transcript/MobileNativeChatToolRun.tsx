@@ -33,7 +33,7 @@ import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
-import { MobileNativeChatDiffCard } from '../../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
 import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
@@ -43,7 +43,7 @@ import {
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
   MobileNativeChatToolRunProps
@@ -175,7 +175,8 @@ export function ToolRun({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile
+  onOpenFile,
+  viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -247,6 +248,8 @@ export function ToolRun({
           </Text>
         ) : null}
       </Pressable>
+      {/* A read's result is the image the agent saw, so it shows without opening the run. */}
+      {viewedImages ? <View style={styles.viewedImages}>{viewedImages}</View> : null}
       {open ? (
         <ToolRunMembers
           followKey={blocks.length + asideCount}

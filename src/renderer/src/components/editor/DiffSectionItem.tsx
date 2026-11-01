@@ -27,7 +27,6 @@ export function DiffSectionItem({
   isBranchMode,
   sideBySide,
   isDark,
-  settings,
   sectionHeight,
   worktreeId,
   loadSection,
@@ -49,6 +48,8 @@ export function DiffSectionItem({
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
   const diffTypography = useEditorTypography('diff')
+  const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -321,8 +322,8 @@ export function DiffSectionItem({
           modelPathBase={modelPathBase}
           isEditable={isEditable}
           typography={diffTypography}
-          diffWordWrap={settings?.diffWordWrap}
-          diffShowWhitespace={settings?.diffShowWhitespace}
+          diffWordWrap={diffWordWrap}
+          diffShowWhitespace={diffShowWhitespace}
           onRetrySection={retrySection}
           onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}

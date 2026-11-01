@@ -132,6 +132,7 @@ function toolRunProps(
     activeTurnIsWorking: props.activeTurnIsWorking,
     trailing: props.trailingRun,
     disclosureId: props.message.id,
-    asides: run?.asides
+    asides: run?.asides,
+    runtimeContext: props.runtimeContext
   }
 }

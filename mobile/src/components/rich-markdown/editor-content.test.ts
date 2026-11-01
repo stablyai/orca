@@ -9,13 +9,14 @@ import type { RichMarkdownEditorDocument } from './document-host-seams'
 // Round-trip host generation unchanged so pre-replacement changes can be discarded; suppress document’s own rewrites to avoid echo.
 const started: RichMarkdownEditorDocument[] = []
 
-function editorDocument() {
+function editorDocument(loadImageSource?: (path: string) => Promise<string>) {
   document.body.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const posted: MobileRichMarkdownEditorMessage[] = []
   const document_ = createRichMarkdownEditorDocument(
     quietRichMarkdownEditorHost({
       postToHost: (message) => posted.push(message),
-      keyboardInsetSource: () => null
+      keyboardInsetSource: () => null,
+      loadImageSource
     })
   )
   started.push(document_)
@@ -36,6 +37,36 @@ afterEach(() => {
 })
 
 describe('the editor document content', () => {
+  it('shows workspace images from the host and saves their markdown paths', async () => {
+    const loadImageSource = vi.fn(async (path: string) => `data:image/png;base64,${btoa(path)}`)
+    const editor = editorDocument(loadImageSource)
+    const markdown = '![Diagram](images/diagram.png)\n\n![Remote](https://example.com/remote.png)'
+    editor.handle.setMarkdown(markdown, 1)
+    await vi.waitFor(() =>
+      expect(editor.editor.querySelector('img')?.getAttribute('src')).toBe(
+        `data:image/png;base64,${btoa('images/diagram.png')}`
+      )
+    )
+    expect(loadImageSource).toHaveBeenCalledExactlyOnceWith('images/diagram.png')
+    expect(editor.editor.querySelectorAll('img')[1]?.getAttribute('src')).toBe(
+      'https://example.com/remote.png'
+    )
+    editor.type()
+    expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
+  })
+
+  it('shows an image an edit brings back without loading it again', async () => {
+    const loadImageSource = vi.fn(async () => 'data:image/png;base64,AAAA')
+    const editor = editorDocument(loadImageSource)
+    editor.handle.setMarkdown('![Diagram](images/diagram.png)', 1)
+    const pasted = document.createElement('img')
+    pasted.setAttribute('data-workspace-path', 'images/diagram.png')
+    editor.editor.append(pasted)
+    editor.type()
+    await vi.waitFor(() => expect(pasted.getAttribute('src')).toBe('data:image/png;base64,AAAA'))
+    expect(loadImageSource).toHaveBeenCalledOnce()
+  })
+
   it('carries the generation it was set under into every change', () => {
     const editor = editorDocument()
     editor.handle.setMarkdown('first', 4)

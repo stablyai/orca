@@ -3,7 +3,7 @@
 import {
   readAgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 
 export type ContinuationSubmission = {

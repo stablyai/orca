@@ -6,14 +6,11 @@ import type {
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { chatTabId } from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  mobileChatTabId,
-  newReopenedChatTabId,
-  isReopenedChatTabId
-} from '../agent-session/agent-session-tab-identity'
+import { mobileChatTabId, newReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export type StructuredSessionTabPublicationInput = {
   workspaceId: string
