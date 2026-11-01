@@ -37,3 +37,10 @@ it('resolves local entry paths against the requested tree and selects browser si
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it('keeps plugin validation tables out of mobile translation imports', async () => {
+  const { local } = await mobileWebAppModuleClosure(['src/i18n/mobile-i18n.ts'])
+  expect(local).toContain('src/i18n/mobile-i18n.ts')
+  expect(local).not.toContain('../src/shared/plugins/artifacts/plugin-language-pack-artifact.ts')
+  expect(local).not.toContain('../src/shared/plugins/languages/protected-copy-keys.json')
+})
