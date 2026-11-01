@@ -53,7 +53,7 @@ describe('terminal activity with no window attached', () => {
   it('skips a closed terminal and a restored saved pane', async () => {
     const { runtime, activityWrites } = createRuntime('headless')
 
-    await runtime.createTerminal(`path:${WORKTREE_PATH}`, { restoresSavedPane: true })
+    await runtime.createTerminal(`path:${WORKTREE_PATH}`, { opensWorkspace: true })
     expect(activityWrites()).toEqual([])
 
     const closed = await runtime.createTerminal(`path:${WORKTREE_PATH}`)

@@ -69,7 +69,7 @@ export type OwnedMobileTerminalCreateOptions = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true
-  restoresSavedPane?: true
+  opensWorkspace?: true
   /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
   onPtySpawnDispatched?: () => void
   /** The PTY this create produced, reported before publication can fail. */

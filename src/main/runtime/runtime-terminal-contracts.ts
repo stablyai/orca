@@ -93,8 +93,9 @@ export type TerminalCreateOptions = {
   startFailure?: Error
   /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
-  /** Starts a saved pane on open or wake: a reopening, not new work in the workspace. */
-  restoresSavedPane?: true
+  /** Opening or waking the workspace may have caused this start (a saved pane's restore, a paired
+   *  window mounting its panes), so it is no new work there. */
+  opensWorkspace?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string

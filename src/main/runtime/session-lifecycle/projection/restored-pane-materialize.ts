@@ -302,7 +302,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
               }
             : {}),
           ...(automatic ? { refuseSleptWorktree: true } : {}),
-          restoresSavedPane: true,
+          opensWorkspace: true,
           // Only resumes from this pane's record show the window banner.
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }
