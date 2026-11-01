@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { useAppStore } from '../../store'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
 
@@ -14,63 +13,26 @@ const TITLES = [
   "You're the president agent coordinating this review"
 ]
 const noop = (): void => {}
-const enableFitTitles = (): void => {
-  useAppStore.setState((state) => ({
-    settings: state.settings && { ...state.settings, experimentalFitTabsToTitles: true }
-  }))
-}
-
 function TabWidthFixture({
   count,
   titles = TITLES,
-  renamedTitles,
-  workingAfterMount,
   browserTabs,
+  clientHostedBrowserRows,
   editorFiles,
   tabBarOrder
 }: {
   count: number
   titles?: string[]
-  /** Titles an agent applies after mount; with no pointer over the strip, widths follow them. */
-  renamedTitles?: string[]
-  /** Tabs whose agent starts working after mount, adding a status glyph beside the agent icon. */
-  workingAfterMount?: string[]
-} & Pick<TabBarProps, 'browserTabs' | 'editorFiles' | 'tabBarOrder'>): React.JSX.Element {
+} & Pick<
+  TabBarProps,
+  'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
+>): React.JSX.Element {
   const [activeTabId, setActiveTabId] = useState('tab-0')
-  const [liveTitles, setLiveTitles] = useState(titles)
-  useEffect(() => {
-    if (renamedTitles) {
-      setLiveTitles(renamedTitles)
-    }
-  }, [renamedTitles])
-  useEffect(() => {
-    if (!workingAfterMount) {
-      return
-    }
-    const now = Date.now()
-    const entries = workingAfterMount.map((tabId) => {
-      const paneKey = `${tabId}:00000000-0000-4000-8000-000000000001`
-      const entry = {
-        paneKey,
-        worktreeId: WORKSPACE_ID,
-        agentType: 'codex' as const,
-        state: 'working' as const,
-        prompt: '',
-        updatedAt: now,
-        stateStartedAt: now,
-        stateHistory: []
-      }
-      return [paneKey, entry] as const
-    })
-    useAppStore.setState((state) => ({
-      agentStatusByPaneKey: { ...state.agentStatusByPaneKey, ...Object.fromEntries(entries) }
-    }))
-  }, [workingAfterMount])
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
     ptyId: null,
-    title: liveTitles[index % liveTitles.length],
+    title: titles[index % titles.length],
     customTitle: null,
     color: null,
     sortOrder: index,
@@ -86,9 +48,9 @@ function TabWidthFixture({
           activeTabId={activeTabId}
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
-          stripShown
           groupId="tab-width-group"
           browserTabs={browserTabs}
+          clientHostedBrowserRows={clientHostedBrowserRows}
           editorFiles={editorFiles}
           tabBarOrder={tabBarOrder}
           expandedPaneByTabId={{}}
@@ -114,64 +76,27 @@ export const fixedWidth = defineFixture({
   render: () => <TabWidthFixture count={4} />
 })
 
-export const spacious = defineFixture({
-  setup: enableFitTitles,
-  width: 1280,
-  render: () => <TabWidthFixture count={4} />
-})
-
 export const single = defineFixture({
-  setup: enableFitTitles,
   width: 1280,
   render: () => <TabWidthFixture count={1} titles={['Terminal 1']} />
 })
 
 export const long = defineFixture({
-  setup: enableFitTitles,
   width: 1280,
   render: () => <TabWidthFixture count={1} titles={['A very long conversation title '.repeat(8)]} />
 })
 
-export const contentFit = defineFixture({
-  setup: enableFitTitles,
-  width: 1280,
-  render: () => (
-    <TabWidthFixture
-      count={3}
-      titles={[
-        'Measure the effect of the new tab layout on conversation navigation',
-        'PR implementation approach',
-        'Review the implementation for layout and interaction regressions'
-      ]}
-    />
-  )
-})
-
 export const narrow = defineFixture({
-  setup: enableFitTitles,
   width: 420,
   render: () => <TabWidthFixture count={4} />
 })
 
-export const mixed = defineFixture({
-  setup: enableFitTitles,
-  width: 620,
-  render: () => (
-    <TabWidthFixture
-      count={3}
-      titles={['A very long conversation title '.repeat(8), 'Go', 'Notes']}
-    />
-  )
-})
-
 export const overflowing = defineFixture({
-  setup: enableFitTitles,
   width: 420,
   render: () => <TabWidthFixture count={12} />
 })
 
 export const mixedTypes = defineFixture({
-  setup: enableFitTitles,
   width: 620,
   render: () => (
     <TabWidthFixture
@@ -207,59 +132,66 @@ export const mixedTypes = defineFixture({
   )
 })
 
-export const competingTitles = defineFixture({
-  setup: enableFitTitles,
-  width: 620,
+export const singleBrowser = defineFixture({
+  width: 1000,
   render: () => (
     <TabWidthFixture
-      count={3}
-      titles={[
-        'A very long conversation title '.repeat(12),
-        'Go',
-        'Another long conversation title '.repeat(3)
+      count={0}
+      browserTabs={[
+        {
+          id: 'browser-0',
+          worktreeId: WORKSPACE_ID,
+          url: 'https://example.com',
+          title: 'A browser page with a long descriptive title',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          createdAt: 0
+        }
       ]}
     />
   )
 })
 
-export const agentRename = defineFixture({
-  setup: enableFitTitles,
-  width: 1280,
+export const singleFile = defineFixture({
+  width: 1000,
   render: () => (
     <TabWidthFixture
-      count={3}
-      titles={['claude', 'Review the implementation for layout regressions', 'Notes']}
-      renamedTitles={['Investigate why tab widths shift after agent renames', 'Done', 'Notes']}
+      count={0}
+      editorFiles={[
+        {
+          id: 'file-0',
+          worktreeId: WORKSPACE_ID,
+          filePath: '/tmp/notes.md',
+          relativePath: 'notes.md',
+          language: 'markdown',
+          isDirty: true,
+          mode: 'edit'
+        }
+      ]}
     />
-  ),
-  interact: () =>
-    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  )
 })
 
-export const agentRenameCrowded = defineFixture({
-  setup: enableFitTitles,
-  width: 420,
+export const singleHostedPage = defineFixture({
+  width: 1000,
   render: () => (
     <TabWidthFixture
-      count={4}
-      titles={['A very long conversation title '.repeat(4), 'Notes', 'Codex Chat', 'Review']}
-      renamedTitles={['Done', 'Notes', 'Investigate why tab widths shift', 'Review']}
+      count={0}
+      clientHostedBrowserRows={[
+        {
+          browserPageId: 'hosted-0',
+          worktreeId: WORKSPACE_ID,
+          url: 'https://example.com',
+          title: 'A page hosted on a paired device',
+          loading: false,
+          browserHostClientId: 'client-0',
+          hostDeviceName: 'Phone',
+          hostAbsent: false
+        }
+      ]}
     />
-  ),
-  interact: () =>
-    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-})
-
-export const agentStartsWorking = defineFixture({
-  setup: enableFitTitles,
-  width: 1280,
-  render: () => (
-    <TabWidthFixture
-      count={3}
-      titles={['Review the implementation', 'Notes', 'Codex Chat']}
-      workingAfterMount={['tab-0']}
-    />
-  ),
-  interact: () =>
-    new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  )
 })

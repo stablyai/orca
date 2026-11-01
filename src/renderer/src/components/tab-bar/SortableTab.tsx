@@ -5,6 +5,7 @@ import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { basename } from '@/lib/path'
+import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
@@ -23,12 +24,11 @@ import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
 import { translate } from '@/i18n/i18n'
-import { TAB_ROOT_WIDTH_CLASSES, TabTitleLabel } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
-import { SortableTabRenameInput } from './SortableTabRenameInput'
 import {
   isTerminalTabActivityLive,
   terminalTabHasUnreadActivity
@@ -127,8 +127,8 @@ export default function SortableTab({
   const shellForIcon = tab.shellOverride
 
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
-  const liveTitle = tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title
-  const displayTitle = tab.customTitle ?? liveTitle
+  const displayTitle =
+    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -150,8 +150,7 @@ export default function SortableTab({
     handleRenameOpen,
     commitRename,
     cancelRename,
-    setRenameInputElement,
-    committedRename
+    setRenameInputElement
   } = useSortableTabRename({
     tabId: tab.id,
     title: tab.title,
@@ -198,12 +197,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive, {
-    ref: renameOwnerRef,
-    savedName: tab.customTitle ?? null,
-    rename: committedRename,
-    editing: isEditing
-  })
+  const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -217,7 +211,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`${TAB_ROOT_WIDTH_CLASSES} group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -265,16 +259,35 @@ export default function SortableTab({
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
       {isEditing ? (
-        <SortableTabRenameInput
-          inputRef={setRenameInputElement}
+        <Input
+          ref={setRenameInputElement}
+          data-tab-rename-input="true"
           value={renameValue}
-          tabTitle={tabTitle}
-          onValueChange={setRenameValue}
-          onCommit={commitRename}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.ab19f603eb',
+            'Rename tab {{value0}}',
+            { value0: tabTitle }
+          )}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onBlur={commitRename}
           onKeyDown={onRenameKeyDown}
+          // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
+            event.stopPropagation()
+            if (event.button === 1) {
+              event.preventDefault()
+            }
+          }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onAuxClick={(event) => event.stopPropagation()}
+          className="mr-1 h-5 min-w-0 flex-1 px-1 py-0 text-xs"
+          spellCheck={false}
         />
       ) : (
-        <TabTitleLabel title={displayTitle} />
+        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
       )}
       {tab.color && !isEditing && (
         <span
@@ -341,6 +354,7 @@ export default function SortableTab({
     <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
+          ref={renameOwnerRef}
           {...slotProps}
           onContextMenu={(event) => {
             // The hover card is portalled: React still routes its events through this slot.

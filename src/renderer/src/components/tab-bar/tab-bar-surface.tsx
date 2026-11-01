@@ -25,7 +25,6 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
-import { TabTitleWidthProvider } from './tab-width-rules'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
@@ -101,6 +100,7 @@ export function renderTabBarSurface({
     scrollTabStrip,
     subscribeToStripResize
   } = tabStripNavigation
+  const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
@@ -146,7 +146,8 @@ export function renderTabBarSurface({
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
-          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
+          data-single-tab={singleTab ? '' : undefined}
+          className={`group/tab-strip relative flex min-h-0 min-w-0 max-w-full ${singleTab ? 'flex-1' : 'flex-[0_1_auto]'}`}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -154,31 +155,25 @@ export function renderTabBarSurface({
             data-active-tab-docked={activeTabDockSide ?? undefined}
             // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
-              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden border-r border-border/70',
+              'terminal-tab-strip flex h-full min-w-0 max-w-full flex-1 items-stretch overflow-x-auto overflow-y-hidden',
+              !singleTab && 'border-r border-border/70',
               getTabStripScrollMaskClassName(tabStripOverflowState, activeTabDockSide)
             ]
               .filter(Boolean)
               .join(' ')}
           >
-            <TabTitleWidthProvider
-              key={worktreeId}
-              tabIds={[...sortableIds, ...clientHostedBrowserRows.map((row) => row.browserPageId)]}
-              worktreeId={worktreeId}
-              shown={props.stripShown}
-            >
-              <TabStripTooltipProvider>
-                {renderedItems}
-                {clientHostedBrowserRows.length > 0 ? (
-                  <ClientHostedBrowserTabRows
-                    rows={clientHostedBrowserRows}
-                    worktreeId={worktreeId}
-                    groupId={resolvedGroupId}
-                    groupActiveTabId={props.groupActiveTabId ?? null}
-                    includeTopTabBorder={includeTopTabBorder}
-                  />
-                ) : null}
-              </TabStripTooltipProvider>
-            </TabTitleWidthProvider>
+            <TabStripTooltipProvider>
+              {renderedItems}
+              {clientHostedBrowserRows.length > 0 ? (
+                <ClientHostedBrowserTabRows
+                  rows={clientHostedBrowserRows}
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  groupActiveTabId={props.groupActiveTabId ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
+                />
+              ) : null}
+            </TabStripTooltipProvider>
           </div>
           <TabStripScrollIndicator
             hasOverflow={tabStripOverflowState.hasOverflow}

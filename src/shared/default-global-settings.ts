@@ -267,7 +267,6 @@ export function buildDefaultSettings(args: {
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
     experimentalNewWorktreeCardStyle: false,
-    experimentalFitTabsToTitles: false,
     experimentalEphemeralVms: false,
     experimentalConnectors: false,
     experimentalWslHosts: false,

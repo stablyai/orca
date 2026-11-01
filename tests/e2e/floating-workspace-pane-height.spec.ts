@@ -148,7 +148,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })
 
-test('tabs use spare room for titles, share crowded space, and scroll at the minimum', async ({
+test('single floating title fills the header and multiple tabs stay bounded before overflowing', async ({
   orcaPage
 }) => {
   const titles = [
@@ -163,8 +163,7 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
         store.setState((state) => ({
           settings: {
             ...state.settings!,
-            floatingTerminalEnabled: true,
-            experimentalFitTabsToTitles: true
+            floatingTerminalEnabled: true
           }
         }))
         const tabs = [...(store.getState().tabsByWorktree[worktreeId] ?? [])]
@@ -198,7 +197,8 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
 
   const [, second] = await seedFloatingTerminalTabs(2)
   await expect(panel.locator(`[data-tab-strip-slot="${second}"]`)).toContainText('Go')
-  await expect.poll(width).toBeCloseTo(singleWidth - 100, 0)
+  await expect.poll(width).toBeLessThanOrEqual(220)
+  expect(await width()).toBeLessThan(singleWidth)
 
   const [, , third] = await seedFloatingTerminalTabs(3)
   await expect(panel.locator(`[data-tab-strip-slot="${third}"]`)).toContainText(
@@ -212,33 +212,23 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
       .locator('[data-tab-strip-slot]')
       .evaluateAll((slots) => slots.map((element) => element.getBoundingClientRect().width))
   const crowdedWidths = await widths()
-  expect(crowdedWidths.every((value) => value >= 100)).toBe(true)
+  expect(crowdedWidths.every((value) => value >= 144 && value <= 220)).toBe(true)
   expect(crowdedWidths[0]).toBeCloseTo(crowdedWidths[2], 0)
-  expect(crowdedWidths[1]).toBe(100)
+  expect(crowdedWidths[1]).toBeCloseTo(crowdedWidths[0], 0)
 
-  await seedFloatingTerminalTabs(6)
-  await expect(panel.locator('[data-tab-strip-slot]')).toHaveCount(6)
+  await seedFloatingTerminalTabs(12)
+  await expect(panel.locator('[data-tab-strip-slot]')).toHaveCount(12)
   await expect
     .poll(() => strip.evaluate((element) => element.scrollWidth > element.clientWidth))
     .toBe(true)
-  expect(await widths()).toEqual([100, 100, 100, 100, 100, 100])
+  expect(await widths()).toEqual(Array(12).fill(144))
 })
 
 // Real pointer capture requires the isolated visible-window project.
 test('@headful floating header keeps a drag and maximize target with expanded and overflowing tabs', async ({
   orcaPage
 }) => {
-  // Cover the shipped fixed widths and the title-fit experiment once the strip overflows.
-  for (const { count, fitTitles } of [
-    { count: 1, fitTitles: true },
-    { count: 16, fitTitles: false },
-    { count: 16, fitTitles: true }
-  ]) {
-    await orcaPage.evaluate((fitTitles) => {
-      window.__store!.setState((state) => ({
-        settings: { ...state.settings!, experimentalFitTabsToTitles: fitTitles }
-      }))
-    }, fitTitles)
+  for (const count of [1, 16]) {
     await seedFloatingSimulatorTabs(orcaPage, count)
     await openFloatingPanel(orcaPage)
 

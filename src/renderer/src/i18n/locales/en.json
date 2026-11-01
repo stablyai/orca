@@ -8038,12 +8038,6 @@
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
-          },
-          "fitTabsToTitles": {
-            "title": "Fit tabs to titles",
-            "description": "Size tabs to their titles instead of a fixed width.",
-            "copy": "Short titles take less room and long titles get more. Widths stay stable while you work and refit when you return to a workspace or rename a tab.",
-            "toggleLabel": "Toggle fit tabs to titles"
           }
         },
         "FloatingWorkspacePane": {
@@ -10250,14 +10244,6 @@
               "extension": "extension",
               "chrome": "chrome",
               "password": "password manager"
-            },
-            "fitTabsToTitles": {
-              "title": "Fit tabs to titles",
-              "description": "Size tabs to their titles instead of a fixed width.",
-              "tab": "tab",
-              "tabs": "tabs",
-              "width": "width",
-              "titleKeyword": "title"
             }
           }
         },

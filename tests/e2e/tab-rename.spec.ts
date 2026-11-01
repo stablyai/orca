@@ -302,11 +302,11 @@ test.describe('Tab Rename (Inline)', () => {
     const before = await Promise.all(
       tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
     )
-    // Require width above the 88px shrink floor; otherwise stable widths can mask a failed definite tab width.
+    // Require width above the 144px shrink floor; otherwise stable widths can mask a failed definite tab width.
     expect(
       Math.min(...before),
-      'tabs must be above the 88px shrink floor for the stability check to mean anything'
-    ).toBeGreaterThan(88)
+      'tabs must be above the 144px shrink floor for the stability check to mean anything'
+    ).toBeGreaterThan(144)
 
     await orcaPage.evaluate(
       ({ tabId }) => {
@@ -335,7 +335,7 @@ test.describe('Tab Rename (Inline)', () => {
     expect(targetTabId).not.toBeNull()
     const targetTitle = 'Width Target Tab'
 
-    // Saturate flex space with 15 tabs and require ≥60px input width around the 72px target, rejecting collapse toward zero.
+    // Saturate the strip and require enough input space to edit a title.
     await orcaPage.evaluate(
       ({ targetWorktreeId, targetTabId, targetTitle }) => {
         const store = window.__store
@@ -389,8 +389,39 @@ test.describe('Tab Rename (Inline)', () => {
     })
     await expect(renameInput).toBeVisible()
 
-    const width = await renameInput.evaluate((element) => element.getBoundingClientRect().width)
-    expect(width).toBeGreaterThanOrEqual(60)
+    const inputWidth = () =>
+      renameInput.evaluate((element) => element.getBoundingClientRect().width)
+    expect(await inputWidth()).toBeGreaterThanOrEqual(60)
+    const slot = orcaPage.locator(`[data-tab-strip-slot="${targetTabId}"]`)
+    const slotWidth = await slot.evaluate((element) => element.getBoundingClientRect().width)
+
+    await orcaPage.evaluate(
+      ({ tabId, worktreeId }) => {
+        const paneKey = `${tabId}:00000000-0000-4000-8000-000000000001`
+        window.__store!.setState((state) => ({
+          agentStatusByPaneKey: {
+            ...state.agentStatusByPaneKey,
+            [paneKey]: {
+              paneKey,
+              worktreeId,
+              agentType: 'codex',
+              state: 'working',
+              prompt: '',
+              updatedAt: Date.now(),
+              stateStartedAt: Date.now(),
+              stateHistory: []
+            }
+          }
+        }))
+      },
+      { tabId: targetTabId!, worktreeId }
+    )
+    await expect(tabLocator.locator('[data-testid="tab-agent-activity-indicator"]')).toBeVisible()
+    expect(await inputWidth()).toBeGreaterThanOrEqual(60)
+    expect(await slot.evaluate((element) => element.getBoundingClientRect().width)).toBe(slotWidth)
+    await renameInput.fill('Readable renamed tab')
+    await renameInput.press('Enter')
+    await expect.poll(() => getActiveCustomTitle(orcaPage, worktreeId)).toBe('Readable renamed tab')
   })
 
   test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {
