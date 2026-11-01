@@ -20,8 +20,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { createClaudeStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import {

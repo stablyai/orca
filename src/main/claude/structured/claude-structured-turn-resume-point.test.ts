@@ -12,7 +12,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import { reviseAgentSessionProviderResumePoint } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 import type {

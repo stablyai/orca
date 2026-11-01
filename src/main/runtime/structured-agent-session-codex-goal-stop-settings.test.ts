@@ -19,7 +19,7 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import {
   closeProviderProcess,
   rootOnlyProviderClosePolicy

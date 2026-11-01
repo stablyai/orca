@@ -1,6 +1,6 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   adapterAtPublishFor,
   fakeClaude,

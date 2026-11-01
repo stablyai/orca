@@ -13,8 +13,8 @@ import {
   type NativeChatVisualsLaunch,
   type PrepareNativeChatVisuals
 } from '../native-chat/native-chat-visuals-delivery'
-import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-directory'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { resolveAgentSessionLaunchDirectory } from './agent-session/agent-session-launch-directory'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentAdapterContext } from './structured-agent-runtime-registrations'
 import { sealStructuredSessionChild } from './structured-session-child-env'
 

@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
   AgentSessionRecoveryCapsule
-} from '../../agent-session-recovery-capsule'
+} from '../../agent-session/records/agent-session-recovery-capsule'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'

@@ -1,4 +1,4 @@
-import { foundAgentSessionRecord } from '../../runtime/agent-session-record-founding'
+import { foundAgentSessionRecord } from '../../runtime/agent-session/records/agent-session-record-founding'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
