@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 1,
+  "id": "project-hub",
+  "publisher": "bcuyul",
+  "name": "Project Hub — 10 Fases",
+  "version": "0.1.0",
+  "description": "Project planning and supervised agent handoff inside Orca",
+  "engines": {
+    "orca": ">=1.4.0"
+  },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "panels": [
+      {
+        "id": "project-hub",
+        "title": "Project Hub",
+        "icon": "layout-dashboard",
+        "entry": "panel.html"
+      }
+    ],
+    "commands": [
+      {
+        "id": "project-hub-info",
+        "title": "Project Hub: Information"
+      }
+    ],
+    "events": [
+      {
+        "on": "worktree.created"
+      },
+      {
+        "on": "worktree.removed"
+      },
+      {
+        "on": "agent.status.changed"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "workspace:read"
+    },
+    {
+      "kind": "terminal:send"
+    },
+    {
+      "kind": "storage"
+    },
+    {
+      "kind": "events:subscribe"
+    }
+  ]
+}
