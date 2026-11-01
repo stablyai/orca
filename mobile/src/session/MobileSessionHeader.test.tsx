@@ -26,7 +26,10 @@ vi.mock('lucide-react-native', () => ({
   SquareChevronRight: 'Icon',
   ListChecks: 'Icon'
 }))
-vi.mock('../components/nav-bar/NavBarButton', () => ({ NavBarButton: 'HeaderButton' }))
+vi.mock('../components/nav-bar/NavBarButton', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/nav-bar/NavBarButton')>()),
+  NavBarButton: 'HeaderButton'
+}))
 vi.mock('../components/nav-bar/PullDownMenu', () => ({ PullDownMenu: 'PullDownMenu' }))
 vi.mock('../agent-history/MobileAgentSessionHistoryIcon', () => ({
   MobileAgentSessionHistoryIcon: () => null

@@ -105,7 +105,8 @@ vi.mock('../components/MobileAgentIcon', () => ({
 vi.mock('../components/AgentStateDot', () => ({
   AgentStateDot: (props: Parameters<typeof AgentStateDot>[0]) => createElement('StateDot', props)
 }))
-vi.mock('../components/nav-bar/NavBarButton', () => ({
+vi.mock('../components/nav-bar/NavBarButton', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/nav-bar/NavBarButton')>()),
   NavBarButton: (props: Parameters<typeof NavBarButton>[0]) => createElement('HeaderButton', props)
 }))
 vi.mock('./mobile-session-styles', async () => {
