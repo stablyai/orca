@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
 import { z } from 'zod'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
+import { selectPluginTestNode } from './plugin-test-node'
 import { pluginTestingFiles } from './plugin-test-runner'
 
 export type PluginPanelCheckIssue = {
@@ -101,8 +102,9 @@ export async function checkPluginPanels(
     return []
   }
   const testing = pluginTestingFiles(appRoot)
+  const node = await selectPluginTestNode()
   const result = await runProcess({
-    program: process.execPath,
+    program: node.program,
     args: [
       '--enable-source-maps',
       '--import',
@@ -114,7 +116,7 @@ export async function checkPluginPanels(
     cwd: dir,
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
+      ...node.env,
       ORCA_PLUGIN_TEST_ROOT: dir,
       ORCA_PLUGIN_CHECK_PANELS: JSON.stringify(panels)
     },

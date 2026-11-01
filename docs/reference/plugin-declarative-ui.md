@@ -199,8 +199,10 @@ test('adds a task', async () => {
 
 `orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
 components panel once against `mockHost()` and reports what the panel threw (with `file:line`),
-layouts Orca would refuse, and props it would drop. Both commands run the plugin's code in a plain
-Node process on your machine, without Orca's sandbox.
+layouts Orca would refuse, and props it would drop. Both commands run the plugin's code on your
+machine with your full access, outside Orca's sandbox, so run them only on code you trust. They use
+the `node` on PATH when it is 20.6 or newer (the first with `module.register`), else the Node built
+into Orca, so authors need no Node install.
 
 ## Catalog
 

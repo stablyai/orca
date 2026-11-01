@@ -21,14 +21,22 @@ async function componentsPlugin(): Promise<string> {
 
 describe('orca plugin test', () => {
   it(
-    "runs the components template's own test with node:test and passes",
+    "runs the components template's own test with node:test on Orca's runtime and passes",
     async () => {
       const dir = await componentsPlugin()
       const files = await findPluginTestFiles(dir)
       expect(files).toEqual(['src/panel.test.tsx'])
-      expect(await runPluginTests({ dir, files, quietStdout: true })).toEqual({
+      // Orca's own runtime, as on a machine with no system Node.
+      const orca = {
+        program: process.execPath,
+        env: { ELECTRON_RUN_AS_NODE: '1' },
+        source: 'orca' as const,
+        version: process.version
+      }
+      expect(await runPluginTests({ dir, files, quietStdout: true, node: orca })).toEqual({
         runner: 'node',
-        code: 0
+        code: 0,
+        node: 'orca'
       })
     },
     // Each run starts its own Node (or vitest) process and transpiles the plugin.
@@ -76,7 +84,7 @@ describe('orca plugin test', () => {
         ].join('\n')
       )
       const files = await findPluginTestFiles(dir)
-      expect(await runPluginTests({ dir, files, quietStdout: true })).toEqual({
+      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({
         runner: 'vitest',
         code: 0
       })

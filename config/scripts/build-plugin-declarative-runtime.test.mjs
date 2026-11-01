@@ -5,7 +5,10 @@ import { bundleDeclarativeFiles } from './build-plugin-declarative-runtime.mjs'
 it('keeps the checked-in runtime, testing kit and test hooks in sync with their sources', async () => {
   const bundles = await bundleDeclarativeFiles()
   for (const { output, text } of bundles) {
-    expect({ output, fresh: readFileSync(output, 'utf8') === text }).toEqual({ output, fresh: true })
+    expect({ output, fresh: readFileSync(output, 'utf8') === text }).toEqual({
+      output,
+      fresh: true
+    })
   }
   const runtime = bundles.find(({ output }) => output.endsWith('orca-runtime.mjs'))?.text ?? ''
   // A bare import would fail in the guest: it has no module resolver beyond the import map.

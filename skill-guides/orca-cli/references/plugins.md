@@ -38,7 +38,7 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    panels, `plugin check` also renders each panel once in Node and reports runtime errors with
    file:line, and `plugin test` runs the plugin's `*.test.ts(x)` files with `orca/testing`
    (see `docs/reference/plugin-declarative-ui.md`, "Testing"). Both run the plugin's code
-   unsandboxed on this machine.
+   unsandboxed on this machine: use them only on code you trust.
 4. `plugin dev load <dir>` adds the folder to Settings → Plugins → Development folders on the
    Orca host and loads it. Orca reloads it, and restarts its worker, when its files change; run
    `plugin dev reload <dir>` if a change was missed. `plugin restart <plugin-key>` stops a

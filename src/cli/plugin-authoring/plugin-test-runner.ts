@@ -3,6 +3,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runProcess } from '@orca/process-host'
+import { selectPluginTestNode, type PluginTestNode } from './plugin-test-node'
 
 /** Plugin test files `orca plugin test` runs. */
 export const PLUGIN_TEST_FILE = /\.test\.(?:tsx?|mts|jsx?|mjs)$/i
@@ -95,11 +96,12 @@ export async function runPluginTests(options: {
   files: readonly string[]
   appRoot?: string
   quietStdout?: boolean
-}): Promise<{ runner: PluginTestRunner; code: number }> {
+  node?: PluginTestNode
+}): Promise<{ runner: PluginTestRunner; code: number; node: PluginTestNode['source'] }> {
   const testing = pluginTestingFiles(options.appRoot)
   const selected = pluginTestRunner(options.dir)
-  // Why ELECTRON_RUN_AS_NODE: the packaged CLI's own executable is Electron.
-  const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', ORCA_PLUGIN_TEST_ROOT: options.dir }
+  const node = options.node ?? (await selectPluginTestNode())
+  const env = { ...process.env, ...node.env, ORCA_PLUGIN_TEST_ROOT: options.dir }
   let args: string[]
   if (selected.runner === 'vitest' && selected.entry) {
     const configDir = join(options.dir, '.orca', 'test')
@@ -121,12 +123,12 @@ export async function runPluginTests(options: {
     ]
   }
   const result = await runProcess({
-    program: process.execPath,
+    program: node.program,
     args,
     cwd: options.dir,
     env,
     timeoutMs: null,
     stdio: ['ignore', options.quietStdout ? 2 : 'inherit', 'inherit']
   })
-  return { runner: selected.runner, code: result.code ?? 1 }
+  return { runner: selected.runner, code: result.code ?? 1, node: node.source }
 }
