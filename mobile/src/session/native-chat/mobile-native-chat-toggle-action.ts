@@ -2,7 +2,7 @@ import { MessageSquare, SquareTerminal } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { translate } from '../../i18n/mobile-i18n'
 import { formatAgentTypeLabel } from '../../../../src/shared/agent-type-label'
-import { isNativeChatSupportedAgent } from '../../../../src/shared/native-chat-agent-support'
+import { isNativeChatSupportedAgent } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 
 type ToggleTab = MobileNativeChatTab & {
