@@ -37,7 +37,7 @@ export function TerminalTabHoverCard({
       programName={programName}
       icon={icon}
       alert={alert}
-      showWhenTitleFits={pinned}
+      showWhenTitleFits={pinned && agent !== null}
       onOpenChange={onTooltipOpenChange}
     >
       {children}
