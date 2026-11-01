@@ -41,14 +41,32 @@ function toRendererPrimaryAction(
   decision: SourceControlPrimaryActionDecision,
   inputs: PrimaryActionInputs
 ): PrimaryAction {
+  const waitingAction = resolveCrossWorktreeWaitingAction(inputs, decision.kind)
+  if (waitingAction) {
+    return waitingAction
+  }
+  return {
+    kind: decision.kind,
+    label: resolvePrimaryActionLabel(decision, inputs),
+    title: resolvePrimaryActionTitle(decision, inputs),
+    disabled: decision.disabled
+  }
+}
+
+export function resolveCrossWorktreeWaitingAction(
+  inputs: Pick<
+    PrimaryActionInputs,
+    'isCommitting' | 'isRemoteOperationActive' | 'isRemoteOperationInAnotherWorktree'
+  >,
+  kind: PrimaryAction['kind']
+): PrimaryAction | null {
   if (
     inputs.isRemoteOperationActive &&
     inputs.isRemoteOperationInAnotherWorktree &&
-    !inputs.isCommitting &&
-    !(inputs.isPrIntentInFlight && decision.kind === 'create_pr_intent')
+    !inputs.isCommitting
   ) {
     return {
-      kind: decision.kind,
+      kind,
       label: translate(
         'settings.sourceControl.gitOperationInAnotherWorkspace',
         'Git operation running elsewhere'
@@ -61,12 +79,7 @@ function toRendererPrimaryAction(
       isWaitingForRemoteOperation: true
     }
   }
-  return {
-    kind: decision.kind,
-    label: resolvePrimaryActionLabel(decision, inputs),
-    title: resolvePrimaryActionTitle(decision, inputs),
-    disabled: decision.disabled
-  }
+  return null
 }
 
 function resolvePrimaryActionLabel(
