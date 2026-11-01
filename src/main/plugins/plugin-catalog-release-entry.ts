@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { parseGitRepositoryIdentity } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogReleaseEntry } from '../../shared/plugins/catalog/plugin-catalog-release'
@@ -96,40 +96,38 @@ async function committedReleaseEntry(
       return { note: `no catalog release entry: HEAD has no valid ${PLUGIN_MANIFEST_FILENAME}` }
     }
     const parsed = parsePluginManifest(rawManifest)
-    // Why: install refuses a commit whose declared files are missing, e.g. a manifest committed alone.
-    const files = parsed.ok
-      ? await validatePluginInstallTree(tree, parsed.manifest)
-      : { ok: true as const }
-    const release =
-      hashed.ok && parsed.ok && files.ok
-        ? pluginCatalogReleaseEntry(parsed.manifest, { commit, contentHash: hashed.hash })
-        : null
-    // Why here: a new release entry must carry the manifest's images, or listings lose their covers.
-    const images = release
-      ? await catalogImagesFromManifest({
-          manifest: rawManifest,
-          prefix: sourcePath,
-          read: (repositoryPath, maxBytes) =>
-            readTreeFile(
-              join(
-                tree,
-                ...repositoryPath.slice(sourcePath ? sourcePath.length + 1 : 0).split('/')
-              ),
-              maxBytes
-            ),
-          sha256: (bytes) => createHash('sha256').update(bytes).digest('hex')
-        })
-      : null
-    if (!release) {
-      const reason = !hashed.ok
-        ? hashed.error
-        : !parsed.ok
-          ? parsed.error
-          : !files.ok
-            ? files.error
-            : 'catalogs need manifest format 2'
-      return { note: `no catalog release entry: committed plugin is not installable (${reason})` }
+    const notInstallable = (reason: string) => ({
+      note: `no catalog release entry: committed plugin is not installable (${reason})`
+    })
+    if (!hashed.ok) {
+      return notInstallable(hashed.error)
     }
+    if (!parsed.ok) {
+      return notInstallable(parsed.error)
+    }
+    // Why: install refuses a commit whose declared files are missing, e.g. a manifest committed alone.
+    const files = await validatePluginInstallTree(tree, parsed.manifest)
+    if (!files.ok) {
+      return notInstallable(files.error.replaceAll(`${tree}${sep}`, ''))
+    }
+    const release = pluginCatalogReleaseEntry(parsed.manifest, {
+      commit,
+      contentHash: hashed.hash
+    })
+    if (!release) {
+      return notInstallable('catalogs need manifest format 2')
+    }
+    // Why here: a new release entry must carry the manifest's images, or listings lose their covers.
+    const images = await catalogImagesFromManifest({
+      manifest: rawManifest,
+      prefix: sourcePath,
+      read: (repositoryPath, maxBytes) =>
+        readTreeFile(
+          join(tree, ...repositoryPath.slice(sourcePath ? sourcePath.length + 1 : 0).split('/')),
+          maxBytes
+        ),
+      sha256: (bytes) => createHash('sha256').update(bytes).digest('hex')
+    })
     return { entry: images ? { ...release, images } : release }
   } finally {
     await rm(tree, { recursive: true, force: true })
