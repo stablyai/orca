@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { claimMobileComposerImagePaste } from './native-chat/composer/mobile-native-chat-composer-image-paste-claim.web'
 
@@ -13,12 +13,31 @@ function textareaFrom(node: TextInput | null): HTMLTextAreaElement | HTMLInputEl
 export function useMobileTerminalComposerImagePaste(args: {
   readonly enabled: boolean
   readonly fieldRefs: readonly RefObject<TextInput | null>[]
-  readonly onImagePaste: () => void
+  readonly onImagePaste: () => void | Promise<void>
   readonly readClipboardImage: () => Promise<{ base64: string } | null>
-}): void {
+}): boolean {
   const argsRef = useRef(args)
   argsRef.current = args
   const { enabled, fieldRefs } = args
+  const [pastePending, setPastePending] = useState(false)
+  const pendingCount = useRef(0)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const startPaste = (): void => {
+    pendingCount.current += 1
+    setPastePending(true)
+  }
+  const finishPaste = (): void => {
+    pendingCount.current = Math.max(0, pendingCount.current - 1)
+    if (mounted.current && pendingCount.current === 0) {
+      setPastePending(false)
+    }
+  }
   useEffect(() => {
     if (!enabled) {
       return
@@ -43,21 +62,24 @@ export function useMobileTerminalComposerImagePaste(args: {
         return
       }
       event.preventDefault()
+      startPaste()
       if (claimed.kind === 'files') {
-        argsRef.current.onImagePaste()
+        void Promise.resolve(argsRef.current.onImagePaste()).finally(finishPaste)
         return
       }
       // An empty textarea paste is how iOS hides a pasteboard image. No image means a no-op.
-      void argsRef.current.readClipboardImage().then(
-        (image) => {
+      void argsRef.current
+        .readClipboardImage()
+        .then((image) => {
           if (image) {
-            argsRef.current.onImagePaste()
+            return argsRef.current.onImagePaste()
           }
-        },
-        () => undefined
-      )
+          return undefined
+        })
+        .finally(finishPaste)
     }
     document.addEventListener('paste', onPaste, true)
     return () => document.removeEventListener('paste', onPaste, true)
   }, [enabled, fieldRefs])
+  return pastePending
 }

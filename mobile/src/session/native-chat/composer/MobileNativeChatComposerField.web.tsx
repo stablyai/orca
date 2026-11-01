@@ -85,21 +85,12 @@ export function MobileNativeChatComposerField({
       queueMicrotask(() => node.setSelectionRange(next.caret, next.caret))
     }
     const deliverPasted = (incoming: Promise<readonly MobileComposerPastedImage[]>): void => {
-      if (!onPasteImagesRef.current) {
+      const deliver = onPasteImagesRef.current
+      if (!deliver) {
         return
       }
-      void pasteDeliveryRef.current.take(incoming).then(
-        (images) => {
-          if (images.length > 0) {
-            void onPasteImagesRef.current?.(images)
-          }
-        },
-        (error: unknown) => {
-          void onPasteImagesRef.current?.(
-            Promise.reject(error instanceof Error ? error : new Error(String(error)))
-          )
-        }
-      )
+      // The draft pending count starts when this handler runs, so send must see the unsettled read.
+      void deliver(pasteDeliveryRef.current.take(incoming))
     }
     const attachNativeImage = (): void => {
       const read = readClipboardImageRef.current

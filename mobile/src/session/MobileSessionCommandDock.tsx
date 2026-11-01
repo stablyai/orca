@@ -80,12 +80,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   } = controller
   const dockShown = sessionCommandDockShown(controller)
   const clipboardImage = useMobileComposerClipboardImageReader()
-  useMobileTerminalComposerImagePaste({
+  const imagePastePending = useMobileTerminalComposerImagePaste({
     enabled: dockShown,
     fieldRefs: [liveInputRef, commandInputRef],
-    onImagePaste: () => {
-      void controller.handlePaste()
-    },
+    onImagePaste: () => controller.handlePaste(),
     readClipboardImage: clipboardImage.read
   })
   if (!dockShown) {
@@ -270,8 +268,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   />
                 ) : (
                   <ComposerSendButton
-                    onPress={() => void handleSend()}
-                    canSend={canSend && draft.trim().length > 0}
+                    onPress={() => {
+                      if (!imagePastePending) {
+                        void handleSend()
+                      }
+                    }}
+                    canSend={canSend && !imagePastePending && draft.trim().length > 0}
                     label={t('session.commandDock.sendCommand', 'Send command')}
                   />
                 )}
