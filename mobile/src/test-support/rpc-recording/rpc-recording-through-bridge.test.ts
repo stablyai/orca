@@ -378,7 +378,9 @@ async function probeCase(
     const fresh = active.client.sendRequest('status.get')
     await clock.flush()
     const freshChild = active.requests.at(-1)!.bridge!.posts[0]!.children[0]!
-    active.complete(freshChild.name, undefined, declaration.reply)
+    // A deadline or late-replied probe stays an uncompleted status.get, so the fresh one is bound by its actual child.
+    active.bind('fresh-status', freshChild.name, undefined)
+    active.complete('fresh-status', undefined, declaration.reply)
     await clock.flush()
     await expect(fresh).resolves.toMatchObject({
       ok: true,
