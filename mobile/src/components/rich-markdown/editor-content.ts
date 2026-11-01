@@ -1,5 +1,6 @@
 import { blockMarkdown } from './html-block-markdown'
 import { markdownToHtml } from './markdown-to-html'
+import { WORKSPACE_IMAGE_PATH_ATTRIBUTE } from './markdown-inline-render'
 import { post } from './host-bridge'
 import { editorElement } from './editor-surface'
 import type { RichMarkdownEditorScope } from './document-scope'
@@ -65,6 +66,27 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
   editorElement(scope).innerHTML = markdownToHtml(scope, scope.lastMarkdown)
   syncTaskCheckboxes(scope)
   scope.suppressInput = false
+  loadWorkspaceImages(scope)
+}
+
+// A failed load leaves the image without a source; a replaced document or stopped mount drops late answers.
+function loadWorkspaceImages(scope: RichMarkdownEditorScope) {
+  const load = scope.loadImageSource
+  if (!load) {
+    return
+  }
+  editorElement(scope)
+    .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]`)
+    .forEach((image) => {
+      load(image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? '').then(
+        (source) => {
+          if (!scope.stopped && image.isConnected) {
+            image.src = source
+          }
+        },
+        () => {}
+      )
+    })
 }
 
 // Cancel pending callback to release scope and prevent change after unmount/content replacement; currently nothing schedules timer, but cancellation must accompany future use.

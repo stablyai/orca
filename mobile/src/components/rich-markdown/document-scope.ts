@@ -70,6 +70,7 @@ export function createRichMarkdownEditorScope(
     getSelection: host.getSelection ?? windowSelection,
     getDocument: host.getDocument ?? windowDocument,
     root: host.root ?? null,
+    loadImageSource: host.loadImageSource ?? null,
     postToHost: host.postToHost,
     promptForUrl: host.promptForUrl,
     keyboardInsetSource: host.keyboardInsetSource
