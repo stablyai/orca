@@ -21,7 +21,11 @@ function selectEditorTypography(
   surface: EditorTypographySurface
 ): EditorTypography {
   const cached = resolvedBySurface.get(surface)
-  if (cached?.settings === state.settings && cached.zoomLevel === state.editorFontZoomLevel) {
+  if (
+    cached &&
+    cached.settings === state.settings &&
+    cached.zoomLevel === state.editorFontZoomLevel
+  ) {
     return cached.typography
   }
   const typography = resolveEditorTypography(state.settings, state.editorFontZoomLevel, surface)
