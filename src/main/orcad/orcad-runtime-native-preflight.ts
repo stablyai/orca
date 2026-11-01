@@ -1,17 +1,25 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runPtySpawnHealthProbe } from '../daemon/pty-subprocess/spawn-preflight'
-import { WatcherProcessSupervisor } from '../ipc/parcel-watcher-process-supervisor'
-import { resolveWatcherProcessEntryPath } from '../ipc/parcel-watcher-entry-path'
+import {
+  PtySpawnHealthTimeoutError,
+  PTY_SPAWN_HEALTH_TIMEOUT_MS,
+  runPtySpawnHealthProbe
+} from '../daemon/pty-subprocess/spawn-preflight'
+import { WatcherProcessSupervisor } from '../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor'
+import { resolveWatcherProcessEntryPath } from '../ipc/filesystem/watcher-process/parcel-watcher-entry-path'
 import { resolveOrcadInstallRoot } from './orcad-app-paths'
 import {
   isWindowsProcessTableAvailable,
   isWindowsProcessStartTimeAvailable,
+  readWindowsProcessCreationTime,
   readWindowsProcessIdentityTableFresh
 } from '../windows/windows-process-table'
+import { WindowsProcessTableTimeoutError } from '../windows/windows-process-table-timeout-error'
 
-/** The candidate process owns disposable PTY and watcher probes before it touches user state. */
+// Antivirus and cold arm64 conpty startup can exceed the steady-state budget.
+const WINDOWS_FIRST_PTY_PROBE_TIMEOUT_MS = 15_000
+
 export async function preflightOrcadNativeRuntime(
   options: { nativeFeatures?: boolean } = {}
 ): Promise<void> {
@@ -22,7 +30,7 @@ export async function preflightOrcadNativeRuntime(
   if (options.nativeFeatures === false) {
     return
   }
-  await runPtySpawnHealthProbe()
+  await probePtySpawn()
   const directory = await mkdtemp(join(tmpdir(), 'orca-native-ready-'))
   const supervisor = new WatcherProcessSupervisor({
     entryPath: resolveWatcherProcessEntryPath(resolveOrcadInstallRoot(), false),
@@ -38,7 +46,7 @@ export async function preflightOrcadNativeRuntime(
       resolveDelivery = resolve
       rejectDelivery = reject
     })
-    // A native callback can fail while subscribe is pending.
+    // Observe early rejection while subscribe is still pending.
     void delivered.catch(() => {})
     timer = setTimeout(() => {
       const error = new Error('Bundled file watcher readiness timed out')
@@ -70,14 +78,44 @@ export async function preflightOrcadNativeRuntime(
   }
 }
 
+async function probePtySpawn(): Promise<void> {
+  const firstTimeoutMs =
+    process.platform === 'win32' ? WINDOWS_FIRST_PTY_PROBE_TIMEOUT_MS : PTY_SPAWN_HEALTH_TIMEOUT_MS
+  try {
+    await runPtySpawnHealthProbe(firstTimeoutMs)
+  } catch (error) {
+    if (!(error instanceof PtySpawnHealthTimeoutError)) {
+      throw error
+    }
+    await runPtySpawnHealthProbe(PTY_SPAWN_HEALTH_TIMEOUT_MS)
+  }
+}
+
 async function preflightWindowsProcessIdentity(): Promise<void> {
   if (!isWindowsProcessTableAvailable() || !isWindowsProcessStartTimeAvailable()) {
     throw new Error('The bundled Windows process table must support process creation times')
   }
-  const rows = await readWindowsProcessIdentityTableFresh()
-  const self = rows.find((row) => row.pid === process.pid)
-  const created = self?.creationTimeMs
-  if (created === undefined || !Number.isFinite(created) || created <= 0 || created > Date.now()) {
+  let created: number | null | undefined
+  try {
+    const rows = await readWindowsProcessIdentityTableFresh()
+    created = rows.find((row) => row.pid === process.pid)?.creationTimeMs
+  } catch (error) {
+    // Only timeouts may fall back; permission failures would invalidate later liveness checks.
+    if (!(error instanceof WindowsProcessTableTimeoutError)) {
+      throw error
+    }
+    created = readWindowsProcessCreationTime(process.pid)
+    if (created === null) {
+      throw error
+    }
+  }
+  if (
+    created === undefined ||
+    created === null ||
+    !Number.isFinite(created) ||
+    created <= 0 ||
+    created > Date.now()
+  ) {
     throw new Error('The bundled Windows process table could not identify this process')
   }
 }

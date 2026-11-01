@@ -267,7 +267,7 @@ describe('locale-translation-policy', () => {
         localeValue: '未已检测代理',
         locale: 'zh'
       })
-    ).toBe('未检测到代理')
+    ).toBe('未检测到智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.skills.SkillsPage.38e0951c3a',
@@ -275,7 +275,7 @@ describe('locale-translation-policy', () => {
         localeValue: '代理技巧',
         locale: 'zh'
       })
-    ).toBe('代理技能')
+    ).toBe('智能体技能')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.appearance.search.9ae151b26b',

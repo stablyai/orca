@@ -1,19 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
+import { quietRichMarkdownEditorHost } from './rich-markdown-editor-host.test-support'
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
 import type { RichMarkdownEditorDocument } from './document-host-seams'
 
-/**
- * The caret across a keyboard dismissal, which is the document's hardest piece of state.
- *
- * WebKit discards the DOM selection on blur, so the document saves the caret before it blurs
- * itself and restores it the next time a command needs one. Without that, every toolbar press
- * after the keyboard closed would insert at the end of the document instead of where the user was.
- *
- * The blur below drops the ranges, which is the whole point: a case over a browser that keeps them
- * would pass whatever the document did.
- */
+// Simulate WebKit dropping DOM ranges on blur; restore saved caret for toolbar command instead of inserting at document end. A preserving browser would hide failure.
 const started: RichMarkdownEditorDocument[] = []
 
 function runtime(
@@ -47,11 +39,13 @@ function runtime(
   // happy-dom implements no `execCommand`; what these cases read is the caret it would act on.
   Object.defineProperty(document, 'execCommand', { value: () => true, configurable: true })
 
-  const document_ = createRichMarkdownEditorDocument({
-    postToHost: () => {},
-    keyboardInsetSource: () => null,
-    ...(options.promptForUrl ? { promptForUrl: options.promptForUrl } : {})
-  })
+  const document_ = createRichMarkdownEditorDocument(
+    quietRichMarkdownEditorHost({
+      postToHost: () => {},
+      keyboardInsetSource: () => null,
+      ...(options.promptForUrl ? { promptForUrl: options.promptForUrl } : {})
+    })
+  )
   started.push(document_)
 
   if (options.caret) {
@@ -116,8 +110,7 @@ describe('the editor document caret, across a keyboard dismissal', () => {
   })
 
   it('leaves an uneditable label tap to the checkbox instead of refocusing', () => {
-    // A task-list label forwards its click to the checkbox, so refocusing here would steal it and
-    // re-open the keyboard the user just dismissed.
+    // Task label forwards click to checkbox; refocus would steal it and reopen dismissed keyboard.
     const editor = runtime({ caret: 'paragraph-3' })
     editor.handle.dismissKeyboard()
     editor.tapAt('task-label')
@@ -160,8 +153,7 @@ describe('the editor document caret, across the host’s URL dialog', () => {
   }
 
   it('puts the caret back where the dialog found it, so the command has one to act on', async () => {
-    // The page's modal focuses its own field, and `execCommand` on a document that does not hold
-    // the selection inserts nothing: measured in both engines, Link and Image did nothing at all.
+    // Page modal owns focus; restore selection or execCommand inserts nothing (Link/Image measured on both engines).
     const editor = runtime({ caret: 'paragraph-3', promptForUrl: modalThatTakesTheFocus })
     await editor.handle.runCommand('link')
     expect(editor.focused()).toBe(true)
@@ -169,8 +161,7 @@ describe('the editor document caret, across the host’s URL dialog', () => {
   })
 
   it('falls back to the end when the dialog outlived the content it was opened over', async () => {
-    // The host can replace the content while its dialog is open, which detaches the nodes the
-    // remembered caret was in.
+    // Host replacement during dialog detaches nodes holding saved caret.
     let replaceContent = () => {}
     const editor = runtime({
       caret: 'paragraph-3',
@@ -193,8 +184,7 @@ describe('the editor document caret, across the host’s URL dialog', () => {
       }
     })
     await editor.handle.runCommand('link')
-    // Nothing restored, because nothing is going to run: the restore is the command's, not the
-    // dialog's.
+    // No command runs, so no selection restore; command owns restore, not dialog.
     expect(editor.selectedContainer()).toBe(null)
   })
 })

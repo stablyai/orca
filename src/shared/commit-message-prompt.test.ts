@@ -51,7 +51,6 @@ describe('truncateDiffForPrompt', () => {
     const diff = `${'keep this line\n'.repeat(40)}`
     const result = truncateDiffForPrompt(diff, 95)
     const body = result.split('\n...(diff truncated')[0]
-    // Every retained line is whole.
     for (const line of body.split('\n').filter(Boolean)) {
       expect(line).toBe('keep this line')
     }
@@ -72,10 +71,8 @@ describe('truncateDiffForPrompt', () => {
     const smallFile = 'diff --git a/src/app.ts b/src/app.ts\n+const meaningful = true\n'
     const result = truncateDiffForPrompt(`${hugeFile}${smallFile}`, 1_000)
 
-    // The small, human-authored change survives instead of being cut off.
     expect(result).toContain('a/src/app.ts')
     expect(result).toContain('const meaningful = true')
-    // The huge file is clipped, not the small one.
     expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 })
@@ -98,6 +95,16 @@ describe('cleanGeneratedCommitMessage', () => {
   it('drops a leading "Generating…" preamble line', () => {
     const raw = 'Generating…\nfeat: hello world'
     expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello world')
+  })
+
+  it('strips the trailing jcode [Tokens] usage line', () => {
+    const raw = 'feat: hello\n[Tokens] upload: 14926 download: 17 cache_read: 14720 cache_write: 0'
+    expect(cleanGeneratedCommitMessage(raw)).toBe('feat: hello')
+  })
+
+  it('extracts the answer from a jcode --json envelope', () => {
+    const raw = JSON.stringify({ session_id: 's1', model: 'm', text: 'fix-login-crash', usage: {} })
+    expect(cleanGeneratedCommitMessage(raw)).toBe('fix-login-crash')
   })
 
   it('normalizes CRLF line endings', () => {

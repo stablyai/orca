@@ -21,8 +21,7 @@ type PluginModule = { OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<Plugi
 
 const ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN'] as const
 
-// OpenCode 1 `run` loads the plugin in-process; the host already shows the run as Working from the
-// process, so a session-start idle row there would only blink the pane.
+// The host already marks OpenCode 1 run processes Working; a plugin start-idle event would flicker.
 describe('OpenCode plugin session start inside a `run` process', () => {
   let tempDir: string
   let events: string[]

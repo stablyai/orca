@@ -1,35 +1,6 @@
-/**
- * STA-2854 live validation: a HOST pane that cold-parks while a paired client
- * is actively viewing it must keep serving that client.
- *
- * Topology: headed Orca desktop host (remote server) + a separate paired Orca
- * desktop client. The reported shape is the inverse of every existing paired
- * parking spec: those park on the CLIENT, this parks on the HOST while the
- * client watches. The host user never touches the tab again after parking it.
- *
- * Two independent signals, as required for an end-to-end claim:
- *   1. host-side: the fixture process's own sink file records the typed line —
- *      the bytes reached the authoritative host PTY;
- *   2. client-side: the client's xterm paints the echo — output crossed back.
- * Plus PTY identity: the sink must still hold exactly one READY line, so the
- * park never respawned or replaced the process.
- *
- * Before the fix, `H±` = host pane mounted, phase = client transport, 2s samples:
- *   H-/recovering x8  ->  H-/connected x37,  input-reached=false
- * The host park dropped the paired client into the "Reconnecting to remote
- * runtime" state for ~16s; it reconnected on its own, but the line typed at
- * park time was silently discarded forever by recoveryBlocksIo(). Reproduced
- * identically at the production 30s cold-park hysteresis, so the shortened test
- * override was not the cause.
- *
- * After the fix (parked panes keep publishing their runtime-graph leaf):
- *   H-/connected x45,  the typed line reaches the host PTY AND its echo paints
- *   back in the client's own xterm within one 2s sample.
- *
- * Run:
- *   pnpm exec playwright test tests/e2e/host-parked-pane-remote-viewer.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// STA-2854: park a desktop host’s pane while its paired desktop keeps viewing it.
+// Require typed bytes in the host sink, echoed output in the client’s xterm, and one READY line proving no PTY replacement.
+// The old graph leaf loss caused ~16s recovery and discarded park-time input; retaining the leaf keeps the stream connected.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
@@ -46,6 +17,7 @@ import {
 } from './helpers/paired-electron-client'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
+import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
 
 const PARK_DELAY_MS = 30_000
 const PAINT_BUDGET_MS = 20_000
@@ -81,15 +53,11 @@ test.afterAll(() => {
 // Why: the HOST must park quickly too, so its launch env carries the override.
 test.use({ orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) } })
 
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
-    : command.map(shellQuote).join(' ')
+    : command.map(quotePosixShell).join(' ')
 }
 
 function readSink(sinkPath: string): string {
@@ -179,7 +147,6 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       )
       .toBe(true)
 
-    // Host-owned terminal, created through the host runtime.
     const created = await callEnvironment<{ tab: { id: string; terminal: string | null } }>(
       client.page,
       client.environmentId,
@@ -199,7 +166,6 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     const hostTabId = created.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
     const webTabId = toWebTerminalSurfaceTabId(hostTabId)
 
-    // 1. Host mounts the pane (the ordinary "someone looked at it" state).
     await orcaPage.evaluate(
       ({ worktreeId, tabId }) => {
         const state = window.__store?.getState()
@@ -217,7 +183,6 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       })
       .toBe(true)
 
-    // 2. Client subscribes and is actively viewing it.
     await expect
       .poll(
         () =>
@@ -243,8 +208,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       'client never painted the host terminal before the host parked it'
     ).toBe(true)
 
-    // 2b. CONTROL: the same typed path must work BEFORE the host parks. Without
-    //     this, a focus/keyboard artifact would masquerade as the park bug.
+    // Prove typing works before parking so focus artifacts cannot masquerade as the regression.
     const controlToken = `sta2854-control-${randomUUID().slice(0, 8)}`
     await focusActiveTerminalInput(client.page)
     await client.page.keyboard.type(controlToken)
@@ -267,8 +231,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       'control: client input did not reach the host PTY even before any park'
     ).toBe(true)
 
-    // 3. The host cold-parks the pane the client is watching. Nobody touches
-    //    it on the host again.
+    // Park the host pane and leave it untouched while the client drives it.
     const readClientState = async (): Promise<unknown> =>
       client.page.evaluate((id) => {
         const manager = window.__paneManagers?.get(id)
@@ -285,8 +248,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     })
     console.log(`[sta2854] post-park client=${JSON.stringify(await readClientState())}`)
 
-    // Direct probe: is the host-minted terminal handle still resolvable once
-    // its pane is parked? (It is — so the boundary is not handle liveness.)
+    // Check that the parked pane’s host-minted handle remains resolvable.
     const handleProbe = await client.page.evaluate(
       async ({ environmentId, terminal }) => {
         const response = await window.api.runtimeEnvironments.call({
@@ -302,15 +264,13 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     )
     console.log(`[sta2854] handle-probe=${JSON.stringify(handleProbe)}`)
 
-    // Type the moment the host parks — a user driving the pane does not wait
-    // for a banner. Input accepted here must reach the host PTY.
+    // Type immediately at park time; accepted input must survive any recovery.
     const token = `sta2854-${randomUUID().slice(0, 8)}`
     await focusActiveTerminalInput(client.page)
     await client.page.keyboard.type(token)
     await client.page.keyboard.press('Enter')
 
-    // Timeline: host pane mount state vs client transport phase. Long enough to
-    // catch a second park cycle if the recovery remounts the host pane.
+    // Observe long enough to catch a second park cycle caused by recovery remount.
     const timeline: string[] = []
     const timelineDeadline = Date.now() + 90_000
     let inputReached = false
@@ -326,8 +286,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         return pane?.container?.dataset?.ptyRecoveryState ?? 'unmounted'
       }, webTabId)
       inputReached ||= readSink(sinkPath).includes(`LINE:${token}`)
-      // Signal 2, and the reason this is not merely a host-side test: the echo
-      // has to come back out to the client's own xterm.
+      // Require the host echo in the client’s xterm as an independent return-path signal.
       clientEchoed ||= (await readPaneContent(client.page, webTabId)).includes(`LINE:${token}`)
       timeline.push(
         `${hostMounted ? 'H+' : 'H-'}/${clientPhase}${inputReached ? '/in' : ''}${clientEchoed ? '/echo' : ''}`
@@ -349,14 +308,11 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       'the parked host pane did not carry a full round trip for its remote viewer'
     ).toEqual({ inputReached: true, clientEchoed: true })
 
-    // 5. PTY identity: one process, never respawned across the park.
     const readyLines = readSink(sinkPath)
       .split('\n')
       .filter((line) => line.startsWith('READY:'))
     expect(readyLines, 'host PTY was replaced across the park').toHaveLength(1)
-    // Intentionally not asserted: whether the host pane stays parked is part of
-    // what the timeline above reports (a recovery-driven remount would show as
-    // H+ samples), not a precondition of the invariant.
+    // Report recovery-driven host remounts in the timeline; continued parking is not itself an invariant.
   } finally {
     if (previousParkDelay === undefined) {
       delete process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS

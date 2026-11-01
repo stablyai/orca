@@ -1,9 +1,7 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { useAppStore } from '@/store'
-import {
-  collectLeafIdsInOrder,
-  resolveRootlessTerminalLayoutLeafId
-} from './terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import {
   capturedPanesByTabId,
   type ParkedTerminalPaneCapture
@@ -66,6 +64,9 @@ export function resolveParkedTerminalPaneCandidates(
       ? {
           ...pane,
           paneId: prior.paneId,
+          ...(prior.ptyId === pane.ptyId && prior.workspaceOwner
+            ? { workspaceOwner: prior.workspaceOwner }
+            : {}),
           drivesTabTitle: prior.drivesTabTitle,
           // Why: the fact belongs to the captured PTY; a re-minted id on this leaf is a different shell.
           ...(prior.ptyId === pane.ptyId && prior.untouchedFreshSpawn

@@ -1,9 +1,4 @@
-/**
- * Timeout-boundary behavior of the cleanup removal batch: renderer IPC cannot be
- * cancelled, so a row past its deadline stays provisional and its authoritative
- * settlement — success or failure — must still reconcile the batch's row state,
- * its ancestor skips, and its toasts. Split from the batch-behavior suite.
- */
+/** IPC timeouts remain provisional; late settlement must reconcile rows, ancestor skips and toasts. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup'
@@ -221,7 +216,6 @@ describe('workspace cleanup removal timeout recovery', () => {
         }
       ]
     })
-    // The still-pending row is reported as still removing, not as a failure.
     expect(toast.info).toHaveBeenCalledWith('Still removing workspaces: 1')
     expect(toast.error).toHaveBeenCalledWith(
       'Workspaces not removed: 1',
@@ -237,8 +231,7 @@ describe('workspace cleanup removal timeout recovery', () => {
     })
     await settleBackgroundRemoval()
 
-    // Why: post-batch child success must reclassify the provisional parent skip
-    // and retry the parent so rowFailures do not keep the stale skip message.
+    // Post-batch child success must retry its provisionally skipped parent and clear stale failure text.
     expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {
       approvedCandidates: [parent]
     })
@@ -367,8 +360,7 @@ describe('workspace cleanup removal timeout recovery', () => {
       removalSettlementGraceMs: 5
     })
 
-    // Child times out, the parent is provisionally skipped, and the loop is
-    // held open by the unrelated row when the child's success reconciles.
+    // Hold the batch open on another row while a timed-out child settles and unblocks its parent.
     await vi.advanceTimersByTimeAsync(10)
     expect(removeCandidates).toHaveBeenCalledTimes(2)
     resolveChild({

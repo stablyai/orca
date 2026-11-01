@@ -8,8 +8,19 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
   ptySpawnMock: vi.fn()
 }))
 
+// Keep child-process assertions in this suite; worker transport is covered separately.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// Mock recovery so its process-table import does not require real execFile.
+vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
+  startCodexStateDbBackfillRecoveryInBackground: vi.fn()
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -24,7 +35,6 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
-// Auth gate is covered by codex-auth-presence.test.ts; these tests assume a signed-in Codex.
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(() => 'present')
 }))
@@ -42,8 +52,7 @@ function makeRpcChild() {
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
-  // the graceful shutdown path resolves only once the child reports exit.
+  // Graceful shutdown must wait for EOF/signal to produce exit, as real app-server does.
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
@@ -102,8 +111,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
       if (msg.method === 'initialize') {
-        // Why: cold starts (auth refresh included) are documented at 10-25s;
-        // the old 10s deadline killed them mid-auth.
+        // Cold auth startup takes 10–25s; the old 10s cap interrupted refresh.
         setTimeout(() => {
           rpcChild.stdout.emit(
             'data',
@@ -145,7 +153,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     const rpcChild = makeRpcChild()
-    // Stubborn child: it ignores stdin EOF, survives SIGTERM, dies on SIGKILL.
+    // Force escalation: ignore EOF/SIGTERM, exit only on SIGKILL.
     rpcChild.stdin.end = vi.fn()
     rpcChild.kill = vi.fn((signal?: string) => {
       if (signal === 'SIGKILL') {
@@ -165,7 +173,6 @@ describe('fetchCodexRateLimits probe shutdown', () => {
           )
         }, 0)
       }
-      // The rate-limits read never answers, so the request deadline expires.
     })
 
     try {

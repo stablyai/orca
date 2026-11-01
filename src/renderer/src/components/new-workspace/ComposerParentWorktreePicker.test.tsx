@@ -51,8 +51,7 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: FakeStoreState) => unknown) => selector(storeState)
 }))
 
-// Spies wrap the real projections, so exclusion rules stay under test while call
-// counts prove when enumeration happens.
+// Wrap real projections to preserve exclusion coverage while counting enumeration calls.
 vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
   const actual = await importOriginal<typeof WorktreeRepoIndex>()
   indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
@@ -87,56 +86,6 @@ vi.mock('@/components/ui/popover', async () => {
       popoverMock.open ? <div>{children}</div> : null
   }
 })
-
-vi.mock('@/components/ui/command', () => ({
-  Command: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div className={className}>{children}</div>
-  ),
-  CommandInput: ({
-    ref,
-    value,
-    placeholder,
-    onValueChange,
-    onKeyDown,
-    onKeyUp,
-    onCompositionStart,
-    onCompositionEnd
-  }: {
-    ref?: React.Ref<HTMLInputElement>
-    value?: string
-    placeholder?: string
-    onValueChange?: (value: string) => void
-    onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
-    onKeyUp?: React.KeyboardEventHandler<HTMLInputElement>
-    onCompositionStart?: React.CompositionEventHandler<HTMLInputElement>
-    onCompositionEnd?: React.CompositionEventHandler<HTMLInputElement>
-  }) => (
-    <input
-      ref={ref}
-      data-slot="command-input"
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onValueChange?.(event.target.value)}
-      onKeyDown={onKeyDown}
-      onKeyUp={onKeyUp}
-      onCompositionStart={onCompositionStart}
-      onCompositionEnd={onCompositionEnd}
-    />
-  ),
-  CommandList: ({
-    ref,
-    children,
-    className
-  }: {
-    ref?: React.Ref<HTMLDivElement>
-    children: React.ReactNode
-    className?: string
-  }) => (
-    <div ref={ref} className={className}>
-      {children}
-    </div>
-  )
-}))
 
 // The virtual window needs real layout the test DOM has none of; render every row.
 vi.mock('@tanstack/react-virtual', () => ({
@@ -253,7 +202,6 @@ describe('ComposerParentWorktreePicker', () => {
 
     render(<ComposerParentWorktreePicker repoId={REPO_ID} value="alpha" onChange={vi.fn()} />)
 
-    // The closed trigger resolves one name from the shared index; it never enumerates.
     expect(indexSpies.getIndexedWorktreeById).toHaveBeenCalled()
     expect(indexSpies.getIndexedAllWorktrees).not.toHaveBeenCalled()
     expect(indexSpies.getIndexedWorktreeMap).not.toHaveBeenCalled()
@@ -305,7 +253,7 @@ describe('ComposerParentWorktreePicker', () => {
     expect(rows()).toHaveLength(0)
   })
 
-  it('excludes archived worktrees and worktrees from another repo', () => {
+  it('offers parents from another repo while excluding archived worktrees', () => {
     seed(
       [
         makeWorktree({ id: 'alpha', displayName: 'Alpha' }),
@@ -320,10 +268,10 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Alpha')
     expect(candidateLabels().join(' ')).not.toContain('Archived')
-    expect(candidateLabels().join(' ')).not.toContain('Other repo')
+    expect(candidateLabels().join(' ')).toContain('Other repo')
   })
 
-  it('excludes candidates on another execution host or project', () => {
+  it('offers another project on the same host and excludes another host', () => {
     seed([
       makeWorktree({ id: 'same', displayName: 'Same host', hostId: 'local', projectId: 'proj1' }),
       makeWorktree({
@@ -353,10 +301,9 @@ describe('ComposerParentWorktreePicker', () => {
 
     expect(candidateLabels().join(' ')).toContain('Same host')
     expect(candidateLabels().join(' ')).not.toContain('Other host')
-    expect(candidateLabels().join(' ')).not.toContain('Other project')
+    expect(candidateLabels().join(' ')).toContain('Other project')
   })
 
-  // A worktree with no recorded hostId inherits its repo's host, which is the child's host too.
   it('keeps candidates whose host or project is unrecorded', () => {
     seed([makeWorktree({ id: 'unscoped', displayName: 'Unscoped' })])
 
@@ -450,8 +397,7 @@ describe('ComposerParentWorktreePicker', () => {
     fireEvent.change(searchInput(), { target: { value: 'Beta' } })
     fireEvent.keyDown(searchInput(), { key: 'Enter', keyCode: 13 })
 
-    // Regression: the highlight used to reset onto the pinned "No parent" row, so the
-    // standard type-then-Enter flow cleared the parent instead of picking the match.
+    // Typing/Enter must pick the top match instead of clearing via No parent.
     expect(onChange).toHaveBeenCalledWith('beta')
   })
 

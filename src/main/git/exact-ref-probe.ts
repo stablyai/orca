@@ -86,6 +86,35 @@ export async function probeExactRefs(
   }
 }
 
+/** Answer every candidate from one stdin-free child; any failure falls back to per-ref probes. */
+export async function probeExactRefsViaForEachRef(
+  runGit: ExactRefProbeExec,
+  refs: readonly string[],
+  options: ExactRefProbeExecOptions = {}
+): Promise<ExactRefProbeSetResult> {
+  const uniqueRefs = [...new Set(refs)]
+  const safeRefs = uniqueRefs.filter((ref) => isSafeGitRefName(ref))
+  if (safeRefs.length === 0) {
+    return probeExactRefs(runGit, uniqueRefs, options)
+  }
+  let stdout: string
+  try {
+    const argv = ['for-each-ref', '--format=%(refname)', '--', ...safeRefs]
+    const forwardedOptions = commandOptions(options)
+    ;({ stdout } = await (forwardedOptions ? runGit(argv, forwardedOptions) : runGit(argv)))
+  } catch {
+    return probeExactRefs(runGit, uniqueRefs, options)
+  }
+  // Patterns also match descendants (refs/x/main/sub), so only exact lines count.
+  const listed = new Set(stdout.split('\n').map((line) => line.trim()))
+  const safe = new Set(safeRefs)
+  return {
+    presentRefs: safeRefs.filter((ref) => listed.has(ref)),
+    absentRefs: safeRefs.filter((ref) => !listed.has(ref)),
+    unknownRefs: uniqueRefs.filter((ref) => !safe.has(ref))
+  }
+}
+
 /** Stop scheduling exact lookups once any requested ref is present. */
 export async function probeAnyExactRef(
   runGit: ExactRefProbeExec,
@@ -121,9 +150,7 @@ export type ExactRefProbeStdinExec = (
   options: ExactRefProbeExecOptions & { stdin: string }
 ) => Promise<{ stdout: string }>
 
-/** `cat-file --batch-check` reports every ref from one child, and reports a missing ref as data
- *  rather than a failed exit — so a batch stays as decidable as a per-ref `show-ref --verify`.
- *  A repo with many remotes otherwise pays one subprocess per remote on every conflict check. */
+/** Batch exact probes in one child; missing refs remain data rather than aborting the batch. */
 export async function probeAnyExactRefBatched(
   runGit: ExactRefProbeStdinExec,
   refs: readonly string[],
@@ -143,7 +170,7 @@ export async function probeAnyExactRefBatched(
   } catch {
     return { found: false, unknown: true }
   }
-  // Trim per line so a CRLF-translating host's `\r` does not become part of the type.
+  // Trim CRLF so carriage returns cannot become part of the type.
   const lines = stdout
     .split('\n')
     .map((line) => line.trim())

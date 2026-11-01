@@ -40,17 +40,38 @@ describe('virtual preview document search scope', () => {
     clearMarkdownPreviewSearchHighlights(instance)
   })
 
-  it('ignores whitespace-only text in both worker and mounted ranges', async () => {
+  it('maps matches across syntax spans without expanding offscreen code', async () => {
     const engine = new MarkdownPreviewDocumentEngine()
-    engine.load('<span> </span>word space')
-    const result = await engine.search(' ')
+    engine.load('```javascript\nconst needle = 42\n```')
+    const result = await engine.search('const needle')
     const body = document.createElement('div')
-    body.innerHTML = '<span> </span>word space'
+    body.innerHTML =
+      '<pre><code><span class="hljs-keyword">const</span> needle = <span class="hljs-number">42</span>\n</code><button class="code-block-copy-btn">Copy</button></pre>'
     const instance = {}
-    const ranges = applyMarkdownPreviewSearchHighlights(instance, body, ' ', { documentOnly: true })
-    expect(result?.matches).toHaveLength(1)
-    expect(ranges).toHaveLength(1)
-    expect(ranges[0].startContainer.textContent).toBe('word space')
+    const ranges = applyMarkdownPreviewSearchHighlights(instance, body, 'const needle', {
+      documentOnly: true
+    })
+    expect(result?.matches).toEqual([{ block: 0, occurrence: 0 }])
+    expect(ranges.map((range) => range.toString())).toEqual(['const needle'])
+    expect(
+      applyMarkdownPreviewSearchHighlights(instance, body, 'needle = 42', {
+        documentOnly: true
+      }).map((range) => range.toString())
+    ).toEqual(['needle = 42'])
+    clearMarkdownPreviewSearchHighlights(instance)
+  })
+
+  it('uses the same outer code group for nested raw HTML code', async () => {
+    const engine = new MarkdownPreviewDocumentEngine()
+    engine.load('<code><code>needle</code> suffix</code>')
+    const body = document.createElement('div')
+    body.innerHTML = '<code><code>needle</code> suffix</code>'
+    const instance = {}
+    const ranges = applyMarkdownPreviewSearchHighlights(instance, body, 'needle suffix', {
+      documentOnly: true
+    })
+    expect((await engine.search('needle suffix'))?.matches).toEqual([{ block: 0, occurrence: 0 }])
+    expect(ranges.map((range) => range.toString())).toEqual(['needle suffix'])
     clearMarkdownPreviewSearchHighlights(instance)
   })
 })

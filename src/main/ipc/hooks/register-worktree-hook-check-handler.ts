@@ -1,12 +1,9 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../../runtime/runtime-relative-paths'
-import { parseOrcaYaml, hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
-import { isENOENT } from '../filesystem-path-containment'
+import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
+import { blockedWslDistroForPath } from '../../wsl/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
@@ -14,11 +11,11 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'hooks:check',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId; background?: boolean }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
-        // Why: callers treat inspection errors as "skip", so a requested/ambiguous host must report error (fail closed), not hook-free.
+        // Ambiguous/requested hosts must report error, not hook-free success, so callers cannot skip inspection.
         return {
           status: args.hostId || repoIdExists ? 'error' : 'ok',
           hasHooks: false,
@@ -30,33 +27,34 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
-      const connectionId = getStoredRepoSshConnectionId(repo)
-      if (connectionId) {
-        const fsProvider = getSshFilesystemProvider(connectionId)
-        if (!fsProvider) {
-          return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
+      if (getRepoDialableSshTargetId(repo)) {
+        return {
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false
         }
-        try {
-          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-          return {
-            status: 'ok',
-            hasHooks: !result.isBinary,
-            hooks: result.isBinary ? null : parseOrcaYaml(result.content),
-            mayNeedUpdate: false
-          }
-        } catch (error) {
-          return {
-            status: isENOENT(error) ? 'ok' : 'error',
-            hasHooks: false,
-            hooks: null,
-            mayNeedUpdate: false
-          }
+      }
+
+      // A render-driven check must not open a stopped distro's `\\wsl.localhost` paths (E9).
+      const blocked = args.background ? await blockedWslDistroForPath(repo.path) : null
+      if (blocked) {
+        return {
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
+          unavailable:
+            blocked.state === 'stopped'
+              ? ('wsl-distro-stopped' as const)
+              : ('wsl-distro-unverifiable' as const)
         }
       }
 
       const has = hasHooksFile(repo.path)
       const hooks = has ? loadHooks(repo.path) : null
-      // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
+      // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {
         status: 'ok',

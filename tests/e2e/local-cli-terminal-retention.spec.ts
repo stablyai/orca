@@ -1,32 +1,16 @@
-/**
- * TOPOLOGY (c): ONE real Orca desktop app, isolated profile, window ATTACHED,
- * NO paired client — `orca terminal create` over the local runtime socket,
- * which is the transport the shipped CLI uses.
- *
- * Pairing is not what made the paired arm reproduce: `shouldCreateInBackground`
- * is true for ANY create with a worktree selector, no focus request and
- * `rendererBacked !== true`, so a plain local dispatch lands on the same seam.
- * The target is created before any other host terminal, making it the repo's
- * FIRST host-admitted tab — the shape the old `currentRevision <= 0` fence
- * missed. A renderer-owned publication is a precondition, not scenery, and is
- * asserted: a host-only workspace carries a headless epoch and is already safe.
- *
- * Losing the tab is only half the incident. The sleeping-agent record outlives
- * it, so `recordPaneIsOwnedByPreservedPane` reads "no such tab" and the next
- * activation sweep forks the session into a ghost tab. Two records are seeded
- * before the reload; the one on a pane that genuinely does not exist MUST be
- * replayed, which is what makes the CLI pane's silence evidence rather than a
- * sweep that never ran.
- *
- * Run:
- *   npx playwright test tests/e2e/local-cli-terminal-retention.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */ import { randomUUID } from 'node:crypto'
-import { rmSync } from 'node:fs'
+// Use the shipped local CLI socket with one attached desktop and no paired client.
+// Create the first host-admitted tab under a proven renderer publication epoch; graph sync must retain its original PTY.
+// On relaunch, a genuinely absent pane’s disk-seeded resume record proves the sweep runs while the retained CLI pane must not gain a ghost tab.
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
 import { expect, test } from './helpers/orca-app'
+import { TEST_REPO_PATH_FILE } from './global-setup'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
 import { waitForSessionReady } from './helpers/store'
 import {
   createHostCliTerminal,
@@ -49,8 +33,7 @@ test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-/** The runtime's worktree scan lands after first paint, so the renderer knows a
- *  workspace before any selector resolves against it. */
+// First paint can precede runtime worktree discovery; wait until selectors resolve the seeded workspace.
 async function waitForLocalRuntimeWorktree(
   call: RuntimeRpcCall,
   worktreeId: string
@@ -73,43 +56,90 @@ async function waitForLocalRuntimeWorktree(
 type WorktreeTabSnapshot = {
   tabIds: string[]
   resumeTabIds: string[]
-  cliTabPtyId: string | null
 }
 
-test('keeps a locally created CLI terminal, and never resumes it as a ghost', async ({
-  electronApp,
-  orcaPage
-}) => {
-  test.setTimeout(600_000)
-  const pageErrors: string[] = []
-  orcaPage.on('pageerror', (error) => pageErrors.push(String(error)))
-  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** The stopped profile's resume records, as the live object a mutation writes through. */
+function sleepingRecordsOf(state: Record<string, unknown>): Record<string, unknown> {
+  const session = state.workspaceSession
+  if (!isObject(session)) {
+    throw new Error('The stopped profile has no workspace session')
+  }
+  const existing = session.sleepingAgentSessionsByPaneKey
+  const records = isObject(existing) ? existing : {}
+  session.sleepingAgentSessionsByPaneKey = records
+  return records
+}
+
+/** The fixture's external worktree is hidden on a new repo; the unrelated-workspace control needs it. */
+async function showSeededWorktrees(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const store = window.__store
+          const repo = store?.getState().repos[0]
+          if (!store || !repo) {
+            return 0
+          }
+          await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+          await store.getState().fetchWorktrees(repo.id)
+          return store.getState().allWorktrees().length
+        }),
+      { timeout: 30_000, message: 'seeded e2e worktrees did not load' }
+    )
+    .toBeGreaterThan(1)
+}
+
+function runtimeCall(userDataDir: string): RuntimeRpcCall {
   // The shipped CLI's own transport, against this app's profile: no pairing.
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
-  const call: RuntimeRpcCall = async <TResult>(method: string, params: unknown) =>
+  return async <TResult>(method: string, params: unknown) =>
     (await client.call<TResult>(method, params)).result
+}
+
+test('keeps a locally created CLI terminal, and never resumes it as a ghost', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  test.setTimeout(600_000)
+  const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+  if (!repoPath || !existsSync(repoPath)) {
+    test.skip(true, 'Global setup did not produce a seeded test repo')
+    return
+  }
+  const pageErrors: string[] = []
+  const session = createRestartSession(testInfo)
+  let app: ElectronApplication | null = null
+  let call: RuntimeRpcCall | null = null
   const createdHandles: string[] = []
 
   try {
-    const { worktreeId, unrelatedWorktreeId } = await orcaPage.evaluate(() => {
-      const state = window.__store?.getState()
-      const active = state?.activeWorktreeId
-      if (!state || !active) {
-        throw new Error('Host has no active worktree')
-      }
-      const unrelated = state.allWorktrees().find((worktree) => worktree.id !== active)
+    const firstLaunch = await session.launch()
+    app = firstLaunch.app
+    const firstPage = firstLaunch.page
+    firstPage.on('pageerror', (error) => pageErrors.push(String(error)))
+    const worktreeId = await attachRepoAndOpenTerminal(firstPage, repoPath)
+    await waitForSessionReady(firstPage)
+    await showSeededWorktrees(firstPage)
+    const unrelatedWorktreeId = await firstPage.evaluate((active) => {
+      const unrelated = window.__store
+        ?.getState()
+        .allWorktrees()
+        .find((worktree) => worktree.id !== active)
       if (!unrelated) {
         throw new Error('Host fixture needs a second worktree for the unrelated-workspace control')
       }
-      return { worktreeId: active, unrelatedWorktreeId: unrelated.id }
-    })
+      return unrelated.id
+    }, worktreeId)
+    call = runtimeCall(session.userDataDir)
 
     await waitForLocalRuntimeWorktree(call, worktreeId)
     await waitForLocalRuntimeWorktree(call, unrelatedWorktreeId)
 
-    // PRECONDITION: the RENDERER owns this workspace's publication, so the CLI
-    // tab created next inherits the renderer epoch instead of a headless one.
-    const rendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
+    // Require renderer publication so the CLI tab cannot inherit the already-safe headless epoch.
+    const rendererTabId = await createHostRendererTerminalTab(firstPage, worktreeId)
     const rendererOwned = await readHostInventoryWhenTabAppears(
       call,
       worktreeId,
@@ -137,11 +167,9 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     )
     createdHandles.push(unrelated.handle)
 
-    // The graph sync a following CLI dispatch drives.
-    const secondRendererTabId = await createHostRendererTerminalTab(orcaPage, worktreeId)
+    const secondRendererTabId = await createHostRendererTerminalTab(firstPage, worktreeId)
 
-    // SIGNAL 1 — the frame carrying the new renderer tab is the same merge that
-    // would drop the CLI tab, so judge on that one inventory.
+    // Judge the inventory frame that introduces the renderer tab and could prune the CLI tab.
     const afterSync = await readHostInventoryWhenTabAppears(
       call,
       worktreeId,
@@ -157,11 +185,9 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
       'the surviving tab must still name the original PTY, not a replacement'
     ).toBe(cli.ptyId)
 
-    // SIGNAL 2 — independent of the inventory: the original process answers.
     await proveSameLivePty(call, cli, 'after-sync')
 
-    // Nothing was appended either: a replacement or resume tab would also
-    // satisfy "the CLI tab is present".
+    // Require exactly the original tabs so replacement/resume tabs cannot hide behind CLI presence.
     expect(
       [...afterSync.tabIds].sort(),
       'the workspace gained or lost a terminal tab across the graph sync'
@@ -176,84 +202,79 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     await proveSameLivePty(call, unrelated, 'unrelated-alive')
 
     const cliPaneKey = makePaneKey(cli.tabId, cli.leafId)
-    // The control: a record whose pane is gone, i.e. what the pruned CLI tab
-    // would leave behind. Its replay is the proof the sweep ran at all.
-    const absentPaneKey = makePaneKey(randomUUID(), randomUUID())
-
-    // Why: a real agent reports its provider session over the hook server;
-    // writing the same store entry keeps this hermetic on the identical path.
-    await orcaPage.evaluate(
-      ({ panes, worktreeId }) => {
-        for (const { paneKey, sessionId } of panes) {
-          window.__store?.getState().setAgentStatus(
-            paneKey,
-            {
-              state: 'working',
-              prompt: 'local cli retention',
-              agentType: 'claude'
-            },
-            'Claude',
-            undefined,
-            { worktreeId },
-            { providerSession: { key: 'session_id', id: sessionId } }
-          )
-        }
+    // Seed the same status-store entry a real agent hook reports, keeping this fixture hermetic.
+    await firstPage.evaluate(
+      ({ paneKey, sessionId, worktreeId }) => {
+        window.__store?.getState().setAgentStatus(
+          paneKey,
+          {
+            state: 'working',
+            prompt: 'local cli retention',
+            agentType: 'claude'
+          },
+          'Claude',
+          undefined,
+          { worktreeId },
+          { providerSession: { key: 'session_id', id: sessionId } }
+        )
       },
-      {
-        panes: [
-          { paneKey: cliPaneKey, sessionId: CLI_PANE_SESSION_ID },
-          { paneKey: absentPaneKey, sessionId: ABSENT_PANE_SESSION_ID }
-        ],
-        worktreeId
-      }
+      { paneKey: cliPaneKey, sessionId: CLI_PANE_SESSION_ID, worktreeId }
     )
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(
-            (paneKeys) =>
-              paneKeys.filter(
-                (paneKey) =>
-                  window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey] !== undefined
-              ).length,
-            [cliPaneKey, absentPaneKey]
+          firstPage.evaluate(
+            (paneKey) =>
+              window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey] !== undefined,
+            cliPaneKey
           ),
-        {
-          timeout: 30_000,
-          message: 'seeded provider sessions never became sleeping records'
-        }
+        { timeout: 30_000, message: 'the seeded provider session never became a sleeping record' }
       )
-      .toBe(2)
-    await orcaPage.evaluate(() => {
-      window.dispatchEvent(new Event('beforeunload'))
-      return window.api.session.flush()
+      .toBe(true)
+
+    // Relaunch reruns the resume sweep with the retained pane; its daemon PTY stays alive.
+    await session.close(app)
+    app = null
+
+    // Seed an absent pane’s resume record as the positive control for sweep execution.
+    const absentTabId = randomUUID()
+    const absentPaneKey = makePaneKey(absentTabId, randomUUID())
+    mutateStoppedProfileState(session.userDataDir, (state) => {
+      const records = sleepingRecordsOf(state)
+      const cliRecord = records[cliPaneKey]
+      if (!isObject(cliRecord)) {
+        throw new Error('the CLI pane reported a session, so quit must save its record')
+      }
+      records[absentPaneKey] = {
+        ...cliRecord,
+        paneKey: absentPaneKey,
+        tabId: absentTabId,
+        providerSession: { key: 'session_id', id: ABSENT_PANE_SESSION_ID }
+      }
     })
 
-    // The resume sweep runs once per worktree per Terminal mount, so a reload is
-    // what puts the retained pane in front of it.
-    await orcaPage.reload()
+    const secondLaunch = await session.launch()
+    app = secondLaunch.app
+    const orcaPage = secondLaunch.page
+    orcaPage.on('pageerror', (error) => pageErrors.push(String(error)))
+    call = runtimeCall(session.userDataDir)
     await waitForSessionReady(orcaPage)
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId), {
         timeout: 60_000,
-        message: 'reloaded renderer never reactivated the measured worktree'
+        message: 'relaunched renderer never reactivated the measured worktree'
       })
       .toBe(worktreeId)
 
     const readWorktreeTabs = async (): Promise<WorktreeTabSnapshot> =>
-      orcaPage.evaluate(
-        ({ worktreeId, cliTabId }) => {
-          const tabs = window.__store?.getState().tabsByWorktree[worktreeId] ?? []
-          return {
-            tabIds: tabs.map((tab) => tab.id),
-            resumeTabIds: tabs.filter((tab) => tab.launchAgent === 'claude').map((tab) => tab.id),
-            cliTabPtyId: tabs.find((tab) => tab.id === cliTabId)?.ptyId ?? null
-          }
-        },
-        { worktreeId, cliTabId: cli.tabId }
-      )
-    // CONTROL: the absent pane's record must be replayed, which is what makes
-    // the CLI pane's silence below evidence instead of a sweep that never ran.
+      orcaPage.evaluate((worktreeId) => {
+        const tabs = window.__store?.getState().tabsByWorktree[worktreeId] ?? []
+        return {
+          tabIds: tabs.map((tab) => tab.id),
+          resumeTabIds: tabs.filter((tab) => tab.launchAgent === 'claude').map((tab) => tab.id)
+        }
+      }, worktreeId)
+    // Require the absent record’s replay before interpreting CLI silence as no ghost.
     await expect
       .poll(async () => (await readWorktreeTabs()).resumeTabIds.length > 0, {
         timeout: 60_000,
@@ -267,12 +288,14 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     ).toHaveLength(1)
     expect(
       resumed.tabIds,
-      'the retained CLI tab did not survive the reload the resume sweep runs on'
+      'the retained CLI tab did not survive the relaunch the resume sweep runs on'
     ).toContain(cli.tabId)
+    // Main's inventory, not the window's tab: a layout-owner window names a hidden tab's PTY on mount.
     expect(
-      resumed.cliTabPtyId,
-      'the reloaded CLI tab must still name the original PTY, not a replacement'
+      (await readHostTerminalInventory(call, worktreeId)).ptyIdByTabId[cli.tabId],
+      'the relaunched CLI tab must still name the original PTY, not a replacement'
     ).toBe(cli.ptyId)
+    await proveSameLivePty(call, cli, 'after-relaunch')
     expect(
       await orcaPage.evaluate(
         (paneKey) =>
@@ -283,13 +306,17 @@ test('keeps a locally created CLI terminal, and never resumes it as a ghost', as
     ).toBe(true)
     expect(
       resumed.tabIds.filter((tabId) => !baselineTabIds.includes(tabId)).sort(),
-      'the reloaded workspace carries a tab no step of this journey created'
+      'the relaunched workspace carries a tab no step of this journey created'
     ).toEqual([cli.tabId, secondRendererTabId, resumed.resumeTabIds[0]!].sort())
 
     expect(pageErrors, 'host renderer raised an uncaught error').toEqual([])
   } finally {
     for (const handle of createdHandles) {
-      await call('terminal.closeTab', { terminal: handle }).catch(() => undefined)
+      await call?.('terminal.closeTab', { terminal: handle }).catch(() => undefined)
     }
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
   }
 })

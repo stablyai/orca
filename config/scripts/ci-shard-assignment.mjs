@@ -4,13 +4,7 @@ import { dirname } from 'node:path'
 
 export const compareIds = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
-export function balanceFiles(files, count, timings, overheadMs = 0) {
-  if (!Number.isInteger(count) || count < 1) {
-    throw new Error('Invalid shard count')
-  }
-  if (new Set(files).size !== files.length) {
-    throw new Error('Duplicate discovered file')
-  }
+export function rankFilesByDuration(files, timings, overheadMs = 0) {
   const known = Object.values(timings).filter((value) => Number.isFinite(value) && value > 0)
   known.sort((a, b) => a - b)
   const fallbackMs = known[Math.floor(known.length / 2)] ?? 1000
@@ -21,6 +15,17 @@ export function balanceFiles(files, count, timings, overheadMs = 0) {
       overheadMs
   }))
   weighted.sort((a, b) => b.durationMs - a.durationMs || compareIds(a.file, b.file))
+  return { weighted, fallbackMs }
+}
+
+export function balanceFiles(files, count, timings, overheadMs = 0) {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('Invalid shard count')
+  }
+  if (new Set(files).size !== files.length) {
+    throw new Error('Duplicate discovered file')
+  }
+  const { weighted, fallbackMs } = rankFilesByDuration(files, timings, overheadMs)
   const shards = Array.from({ length: count }, () => ({ files: [], durationMs: 0 }))
   for (const entry of weighted) {
     const target = shards.reduce((best, shard) =>

@@ -2,7 +2,7 @@ import {
   boundPayload,
   digestPayload
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
 
 export const CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES = 256
 export const CODEX_JOURNAL_PROMPT_OPTION_ID_MAX_BYTES = 1024
@@ -25,6 +25,7 @@ type CodexPromptRegistryEntryBounds = {
   questionIds: readonly string[]
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: ReadonlyMap<string, string>
+  offeredDecisions?: readonly string[]
 }
 
 export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBounds): number {
@@ -42,6 +43,9 @@ export function codexPromptRegistryEntryBytes(prompt: CodexPromptRegistryEntryBo
   }
   for (const value of prompt.answers.values()) {
     bytes += Buffer.byteLength(value, 'utf8')
+  }
+  for (const decision of prompt.offeredDecisions ?? []) {
+    bytes += Buffer.byteLength(decision, 'utf8')
   }
   return bytes
 }

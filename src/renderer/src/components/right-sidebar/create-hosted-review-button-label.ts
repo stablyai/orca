@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
 
-/** Resolves the composer's primary-action label for the current submit shape. */
 export function getCreateButtonLabel({
   isCreating,
   pushBeforeCreate,

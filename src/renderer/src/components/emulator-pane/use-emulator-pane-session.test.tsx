@@ -39,7 +39,6 @@ const devices: SimulatorDeviceRow[] = [
   { name: 'iPhone B', udid: 'device-b', state: 'Shutdown', isAvailable: true }
 ]
 
-// emulator.listDevices returns the unified EmulatorDevice shape.
 const deviceList = devices.map((device) => ({
   backend: 'ios' as const,
   id: device.udid,

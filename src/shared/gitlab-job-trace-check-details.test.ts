@@ -32,11 +32,18 @@ describe('gitLabJobTraceToCheckRunDetails', () => {
     expect(details.summary).toBeNull()
   })
 
-  it('copies status and conclusion from the row so the poll cache is not evicted', () => {
-    const details = gitLabJobTraceToCheckRunDetails(failedJob, 'boom', STRINGS)
+  it('copies a running row status and conclusion into both detail levels', () => {
+    const runningJob: PRCheckDetail = {
+      ...failedJob,
+      status: 'in_progress',
+      conclusion: 'pending'
+    }
+    const details = gitLabJobTraceToCheckRunDetails(runningJob, 'boom', STRINGS)
 
-    expect(details.status).toBe(failedJob.status)
-    expect(details.conclusion).toBe(failedJob.conclusion)
+    expect(details.status).toBe('in_progress')
+    expect(details.conclusion).toBe('pending')
+    expect(details.jobs[0]?.status).toBe('in_progress')
+    expect(details.jobs[0]?.conclusion).toBe('pending')
   })
 
   it('explains an empty trace instead of falling back to "no inline details"', () => {
@@ -65,8 +72,7 @@ describe('gitLabJobTraceToCheckRunDetails', () => {
 })
 
 describe('gitLabJobCanHaveTrace', () => {
-  // Why: GitLab answers 404 for a job that never ran, so skip the round trip. Jobs that
-  // may have run are still asked; main turns a missing log into an empty trace.
+  // Never-started jobs have no trace; skip those requests. Main maps other missing-log 404s to empty traces.
   const cases: { status: string; expected: boolean }[] = [
     { status: 'failed', expected: true },
     { status: 'success', expected: true },
@@ -88,7 +94,7 @@ describe('gitLabJobCanHaveTrace', () => {
         status,
         webUrl: '',
         duration: null
-      } as unknown as GitLabPipelineJob
+      } satisfies GitLabPipelineJob
       const [check] = gitLabPipelineJobsToPRChecks([job])
 
       expect(gitLabJobCanHaveTrace(check)).toBe(expected)

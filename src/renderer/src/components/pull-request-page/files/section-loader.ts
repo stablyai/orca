@@ -19,9 +19,7 @@ import type {
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { evictPRFileContentRequest, loadPRFileContents } from '../cache/file-content'
 
-// Why: the local IPC path carries no timeout, so a wedged host would leave the section spinning
-// forever with no error and therefore no retry button. Above the 30s remote RPC timeout so a
-// remote failure still surfaces its own message.
+// Bound timeout-free local loads above the remote 30s deadline so wedged sections offer Retry while remote errors keep their own messages.
 const PR_FILE_DIFF_LOAD_TIMEOUT_MS = 45_000
 
 function rejectAfterLoadTimeout<T>(promise: Promise<T>, onTimeout: () => void): Promise<T> {

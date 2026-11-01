@@ -3,14 +3,7 @@ import {
   type BrowserNetworkExecutionRouteResolver
 } from './browser-network-execution-route'
 
-/**
- * Dispatches an execution-host descriptor to its transport-specific route
- * resolver. Shared by the runtime tunnel RPC (paired remote clients) and the
- * local direct-SSH browser route, which dials the same resolvers in-process.
- * Imports stay dynamic so the SSH stack loads only when an SSH host is used, and the
- * connection manager comes from the registry rather than `ipc/ssh` — the runtime bundles
- * this module, and `ipc/ssh` would drag Electron into a graph that must boot on plain Node.
- */
+// Keep SSH imports lazy and use the registry: ipc/ssh would pull Electron into the plain-Node runtime.
 export const resolveBrowserNetworkExecutionRoute: BrowserNetworkExecutionRouteResolver = async (
   context
 ) => {
@@ -22,7 +15,7 @@ export const resolveBrowserNetworkExecutionRoute: BrowserNetworkExecutionRouteRe
     return wslRoute.resolveWslBrowserNetworkExecutionRoute(context)
   }
   const [{ getSshConnectionManager }, authority, sshRoute] = await Promise.all([
-    import('../ssh/ssh-target-registry'),
+    import('../ssh/targets/ssh-target-registry'),
     import('../ssh/ssh-provider-authority'),
     import('./ssh-browser-network-execution-route')
   ])

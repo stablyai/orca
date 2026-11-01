@@ -5,8 +5,7 @@ import { useAppStore } from '../../store'
 import type { SettingsSearchEntry } from './settings-search'
 import { matchesSettingsSearch } from './settings-search'
 
-// Why: avoids threading `activeSectionId` through every <SettingsSection /> call
-// site in Settings.tsx — the page wraps its content tree in this provider.
+// Share active section through context to avoid threading it through every section call.
 const ActiveSettingsSectionContext = createContext<string | null>(null)
 
 export const ActiveSettingsSectionProvider = ActiveSettingsSectionContext.Provider
@@ -14,7 +13,7 @@ export const ActiveSettingsSectionProvider = ActiveSettingsSectionContext.Provid
 type SettingsSectionProps = {
   id: string
   title: string
-  description: string
+  description: React.ReactNode
   searchEntries?: SettingsSearchEntry[]
   children?: React.ReactNode
   className?: string
@@ -22,15 +21,12 @@ type SettingsSectionProps = {
   badge?: string
   badgeAccessory?: React.ReactNode
   forceVisible?: boolean
-  /** When true, this section is the one currently selected in the sidebar.
-   *  Sections render only when active. During search, the sidebar lists every
-   *  match while the content pane stays focused on the selected match instead
-   *  of mounting every matching settings surface at once. */
+  /** Mount only the selected section, even when search lists several matches. */
   isActive?: boolean
-  /** Rendered in the section header's upper-right corner — intended for
-   *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
-   *  crowd the settings list as their own row. */
+  /** Header-scoped actions, such as Import from Ghostty. */
   headerAction?: React.ReactNode
+  /** Drops the title block while the body shows its own page header (a plugin's page). */
+  hideHeader?: boolean
   /** Click handler on the section title — the hook for hidden staff
    *  affordances (Option-click reveals), mirroring the Updates header. */
   onTitleClick?: (event: React.MouseEvent<HTMLHeadingElement>) => void
@@ -49,6 +45,7 @@ export function SettingsSection({
   forceVisible = false,
   isActive,
   headerAction,
+  hideHeader = false,
   onTitleClick
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
@@ -68,8 +65,11 @@ export function SettingsSection({
 
   return (
     <section id={id} data-settings-section={id} className={cn('scroll-mt-8 space-y-6', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-5">
-        <div className="min-w-0 space-y-2">
+      <div
+        hidden={hideHeader}
+        className="flex items-start justify-between gap-4 border-b border-border/60 pb-5"
+      >
+        <div className="min-w-0 flex-1 space-y-2">
           <h2
             className="flex flex-wrap items-center gap-2 text-2xl font-semibold leading-tight text-foreground"
             onClick={onTitleClick}
@@ -86,9 +86,7 @@ export function SettingsSection({
         </div>
         {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      {/* Why: body content sits in a visually distinct band — a soft card with
-          rounded corners and tight inner padding — so each row group reads as
-          contained inside the section, not as a continuation of the sidebar. */}
+      {/* Contain row groups in a distinct band so they cannot read as sidebar continuations. */}
       <div
         className={cn(
           'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',

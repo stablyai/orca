@@ -1,7 +1,6 @@
 import { MODEL_PRICING, normalizeModelForPricing } from './codex-model-pricing'
 
-/** Token counts to price. The long-context fields are the subset of each total that came from
- *  requests whose prompt exceeded the long-context threshold. */
+/** Long-context counts are subsets of the corresponding token totals. */
 export type CodexBillableTokens = {
   inputTokens: number
   cachedInputTokens: number
@@ -18,9 +17,7 @@ function priceTokens(
   outputTokens: number
 ): number {
   const clampedCached = Math.min(Math.max(cachedInputTokens, 0), Math.max(inputTokens, 0))
-  // Why: Codex cached tokens are part of the input bucket. Charge uncached
-  // input on (input-cached) so cached tokens are not billed once at full input
-  // price and again at cache-read price.
+  // Cached tokens are included in input; subtract them to avoid charging both rates.
   const nonCachedInputTokens = Math.max(inputTokens - clampedCached, 0)
   return (
     nonCachedInputTokens * rates.input +

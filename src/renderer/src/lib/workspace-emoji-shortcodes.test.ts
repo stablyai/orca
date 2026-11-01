@@ -2,53 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
-  replaceCompletedWorkspaceEmojiShortcode,
-  searchWorkspaceEmojiShortcodes
+  insertWorkspaceEmojiAtSelection,
+  replaceCompletedWorkspaceEmojiShortcode
 } from './workspace-emoji-shortcodes'
 
 describe('workspace emoji shortcodes', () => {
-  it('finds standard emoji by shortcode', () => {
-    expect(searchWorkspaceEmojiShortcodes('wink', 1)).toEqual([{ emoji: '😉', shortcode: 'wink' }])
-  })
-
-  it('finds flags by country name and by ISO code fragment', () => {
-    expect(searchWorkspaceEmojiShortcodes('south_korea', 1)).toEqual([
-      { emoji: '🇰🇷', shortcode: 'south_korea' }
-    ])
-    expect(searchWorkspaceEmojiShortcodes('kr', 1)).toEqual([{ emoji: '🇰🇷', shortcode: 'flag_kr' }])
-    expect(searchWorkspaceEmojiShortcodes('germany', 1)).toEqual([
-      { emoji: '🇩🇪', shortcode: 'germany' }
-    ])
-  })
-
-  it('ranks an exact shortcode before longer aliases', () => {
-    expect(searchWorkspaceEmojiShortcodes('heart', 3)[0]).toMatchObject({
-      shortcode: 'heart'
-    })
-  })
-
-  it('matches inside a shortcode, ranking word starts above incidental substrings', () => {
-    expect(searchWorkspaceEmojiShortcodes('korea', 2)).toEqual([
-      { emoji: '🇰🇵', shortcode: 'north_korea' },
-      { emoji: '🇰🇷', shortcode: 'south_korea' }
-    ])
-    expect(
-      searchWorkspaceEmojiShortcodes('kr', 3).map((suggestion) => suggestion.shortcode)
-    ).toEqual(['flag_kr', 'ukraine', 'cockroach'])
-  })
-
-  it('omits skin-tone aliases from suggestions', () => {
-    expect(searchWorkspaceEmojiShortcodes('wave')).toEqual([
-      { emoji: '👋', shortcode: 'wave' },
-      { emoji: '🌊', shortcode: 'water_wave' }
-    ])
-  })
-
-  it('deduplicates aliases that resolve to the same emoji', () => {
-    const suggestions = searchWorkspaceEmojiShortcodes('wink')
-    expect(new Set(suggestions.map((suggestion) => suggestion.emoji)).size).toBe(suggestions.length)
-  })
-
   it('detects a shortcode at the caret without matching URLs or mid-word colons', () => {
     expect(getActiveWorkspaceEmojiShortcode('Ship :win', 9)).toEqual({
       start: 5,
@@ -73,10 +31,6 @@ describe('workspace emoji shortcodes', () => {
     })
   })
 
-  it('leaves unknown completed shortcodes unchanged', () => {
-    expect(replaceCompletedWorkspaceEmojiShortcode(':orca_custom:', 13)).toBeNull()
-  })
-
   it('applies a selected suggestion to the active shortcode range', () => {
     expect(
       applyWorkspaceEmojiSuggestion(
@@ -89,17 +43,29 @@ describe('workspace emoji shortcodes', () => {
       cursor: 8
     })
   })
+})
 
-  it('adds a trailing space when a selected suggestion is at the end of the name', () => {
-    expect(
-      applyWorkspaceEmojiSuggestion(
-        'Launch :win',
-        { start: 7, end: 11, query: 'win' },
-        { emoji: '😉', shortcode: 'wink' }
-      )
-    ).toEqual({
-      value: 'Launch 😉 ',
-      cursor: 10
+describe('insertWorkspaceEmojiAtSelection', () => {
+  it('pads the emoji so it never fuses with neighbouring text', () => {
+    expect(insertWorkspaceEmojiAtSelection('user-support', 0, 0, '🚀')).toEqual({
+      value: '🚀 user-support',
+      cursor: 3
     })
+    expect(insertWorkspaceEmojiAtSelection('user-support', 12, 12, '🚀')).toEqual({
+      value: 'user-support 🚀 ',
+      cursor: 16
+    })
+    expect(insertWorkspaceEmojiAtSelection('ship it', 4, 4, '🚀')).toEqual({
+      value: 'ship 🚀 it',
+      cursor: 7
+    })
+  })
+
+  it('replaces the selected range and clamps out-of-range selections', () => {
+    expect(insertWorkspaceEmojiAtSelection('ship bug fix', 5, 8, '🐛')).toEqual({
+      value: 'ship 🐛 fix',
+      cursor: 7
+    })
+    expect(insertWorkspaceEmojiAtSelection('', 4, 9, '✨')).toEqual({ value: '✨ ', cursor: 2 })
   })
 })

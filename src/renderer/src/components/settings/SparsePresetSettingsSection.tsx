@@ -162,8 +162,7 @@ export function SparsePresetSettingsSection({
     setDeletingPresetId(preset.id)
     setOperationError(null)
     try {
-      // Why: SSH-backed settings can fail after confirmation; keep local edit
-      // state intact until persistence actually reports success.
+      // SSH persistence can fail after confirmation; retain edit state until removal succeeds.
       await removeSparsePreset({ repoId, presetId: preset.id })
       if (mountedRef.current) {
         setConfirmingDeleteId(null)

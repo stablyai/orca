@@ -16,7 +16,10 @@ import { basename, dirname, join } from 'node:path'
 import type * as NodeFs from 'node:fs'
 import type * as Win32Utils from '../win32-utils'
 import { setAppEnvironment } from '../../shared/app-environment'
-import { openCodeTuiPluginDirName } from '../../shared/opencode-tui-plugin-install'
+import {
+  openCodeTuiPluginDirName,
+  writeOpenCodeTuiPlugin
+} from '../../shared/opencode-tui-plugin-install'
 import {
   OpenCodeHookService,
   openCode2HookService,
@@ -88,6 +91,7 @@ function installedPlugin(variant: (typeof variants)[number]): {
   server: string
   tui: string
   source: string
+  tuiSource: string
 } {
   const plugins = join(root, variant.hooks, 'shared', 'plugins')
   const server = join(plugins, variant.file)
@@ -95,10 +99,11 @@ function installedPlugin(variant: (typeof variants)[number]): {
   const source = variant.source()
   mkdirSync(dirname(tui), { recursive: true })
   writeFileSync(server, '// stale server')
-  writeFileSync(tui, source)
+  writeOpenCodeTuiPlugin(plugins, variant.file, source)
+  const tuiSource = readFileSync(tui, 'utf8')
   fsMock.writeFileSync.mockClear()
   fsMock.mkdirSync.mockClear()
-  return { server, tui, source }
+  return { server, tui, source, tuiSource }
 }
 
 function tempWritesFor(target: string): string[] {
@@ -109,13 +114,13 @@ function tempWritesFor(target: string): string[] {
 
 describe.each(variants)('$hooks legacy plugin ACL recovery', (variant) => {
   it.each(['EPERM', 'EACCES'])('retries one denied server generation after %s', async (code) => {
-    const { server, tui, source } = installedPlugin(variant)
+    const { server, tui, source, tuiSource } = installedPlugin(variant)
     const actual = await vi.importActual<typeof NodeFs>('node:fs')
     const denial = Object.assign(new Error('protected directory DACL'), { code })
     let attempts = 0
     fsMock.writeFileSync.mockImplementation((...args) => {
       expect(readFileSync(server, 'utf8')).toBe('// stale server')
-      expect(readFileSync(tui, 'utf8')).toBe(source)
+      expect(readFileSync(tui, 'utf8')).toBe(tuiSource)
       actual.writeFileSync(...args)
       if (++attempts === 1) {
         throw denial
@@ -156,7 +161,7 @@ describe.each(variants)('$hooks legacy plugin ACL recovery', (variant) => {
   })
 
   it('grants the existing parent when creation of the TUI directory is denied', async () => {
-    const { server, tui, source } = installedPlugin(variant)
+    const { server, tui, source, tuiSource } = installedPlugin(variant)
     rmSync(dirname(tui), { recursive: true })
     const actual = await vi.importActual<typeof NodeFs>('node:fs')
     fsMock.mkdirSync
@@ -166,7 +171,7 @@ describe.each(variants)('$hooks legacy plugin ACL recovery', (variant) => {
       .mockImplementation(actual.mkdirSync)
     fsMock.writeFileSync.mockImplementation((...args) => {
       if (dirname(String(args[0])) === dirname(server)) {
-        expect(readFileSync(tui, 'utf8')).toBe(source)
+        expect(readFileSync(tui, 'utf8')).toBe(tuiSource)
       }
       return actual.writeFileSync(...args)
     })
@@ -174,12 +179,12 @@ describe.each(variants)('$hooks legacy plugin ACL recovery', (variant) => {
     variant.service.refreshLegacySharedPlugin()
 
     expect(fsMock.grantDirAcl).toHaveBeenCalledExactlyOnceWith(dirname(server))
-    expect(readFileSync(tui, 'utf8')).toBe(source)
+    expect(readFileSync(tui, 'utf8')).toBe(tuiSource)
     expect(readFileSync(server, 'utf8')).toBe(source)
   })
 
   it('recovers a denied TUI write before replacing the server plugin', async () => {
-    const { server, tui, source } = installedPlugin(variant)
+    const { server, tui, source, tuiSource } = installedPlugin(variant)
     writeFileSync(tui, '// stale TUI')
     fsMock.writeFileSync.mockClear()
     const actual = await vi.importActual<typeof NodeFs>('node:fs')
@@ -190,7 +195,7 @@ describe.each(variants)('$hooks legacy plugin ACL recovery', (variant) => {
         throw Object.assign(new Error('TUI write denied'), { code: 'EPERM' })
       }
       if (dirname(String(args[0])) === dirname(server)) {
-        expect(readFileSync(tui, 'utf8')).toBe(source)
+        expect(readFileSync(tui, 'utf8')).toBe(tuiSource)
       }
       return actual.writeFileSync(...args)
     })

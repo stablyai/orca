@@ -20,7 +20,10 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Likewise terminal.resetInputModes.
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
+    killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
     ackColdRestore: () => {},
+    // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
+    ackHiddenOutputRestoreApplied: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
     respondDeliveryResync: () => {},
@@ -44,12 +47,19 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     isCodexOnSharedServer: () => Promise.resolve({ joined: false }),
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
+    openedBeforeClaudeAccounts: () => Promise.resolve(false),
+    claudeDiffPanelMayAutoOpen: () => Promise.resolve(false),
+    // Why: the paired host owns its daemons; this client has none to stop.
+    readNewerDaemonHeldScreen: () => Promise.resolve(null),
+    reopenNewerDaemonTerminals: () => Promise.resolve({ reopened: false }),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     getAuthoritativeBufferSnapshotCapabilities: (ids) =>
       Promise.resolve(ids.map((id) => ({ id, authoritative: false }))),
     hasPty: () => Promise.resolve(null),
+    // Why: no local main owns a paired client's session, so the move stays in this window.
+    moveLeafToNewTab: () => Promise.resolve({ status: 'not_held' }),
     getMainBufferSnapshot: () => Promise.resolve(null),
     // Why: remote-runtime PTYs skip local main (no side-effect source); renderer byte parsing stays authoritative.
     onSideEffect: () => noopUnsubscribe,
@@ -97,6 +107,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearPendingPaneSerializer: () => Promise.resolve(),
     reportRendererSerializerReady: () => Promise.resolve(),
     management: {
+      asyncIoHealth: () => Promise.resolve({ state: 'unsupported' as const }),
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
@@ -105,14 +116,18 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
       macTccAttribution: () =>
         Promise.resolve({ health: 'unknown' as const, folderAccessMismatch: null }),
       // Why: the TCC row belongs to the host's app bundle, which a web client cannot reach.
-      resetFolderAccess: () => Promise.resolve({ outcome: 'unsupported' as const })
+      resetFolderAccess: () => Promise.resolve({ outcome: 'unsupported' as const }),
+      // Why: the host daemon's /proc evidence is not reachable from a web client.
+      severedDaemon: () => Promise.resolve({ severed: null }),
+      restartSeveredDaemon: () =>
+        Promise.resolve({ status: 'refused' as const, reason: 'not-severed' as const })
     }
   }
 }
 
 export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
+    // Paired host owns SSH; route state/reconnect through runtime RPC, leaving target management to desktop (STA-1468).
     listTargets: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
@@ -149,13 +164,11 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
     connect: async (args) => {
       const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
         'ssh.connect',
-        { targetId: args.targetId }
+        { targetId: args.targetId, automatic: args.automatic }
       )
       return state
     },
     disconnect: () => Promise.resolve(),
-    terminateSessions: () => Promise.resolve({ terminated: 0, unverifiable: 0 }),
-    resetRelay: () => Promise.resolve(),
     getState: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
         return null
@@ -179,6 +192,8 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     removePortForward: () => Promise.resolve(null),
     listPortForwards: () => Promise.resolve([]),
+    listUnrestoredPortForwards: () => Promise.resolve([]),
+    removeSavedPortForward: () => Promise.resolve(),
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,

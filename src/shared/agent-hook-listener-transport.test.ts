@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -68,7 +68,7 @@ describe('shared agent-hook-listener', () => {
     expectRequestParserListenersReleased(req)
   })
 
-  it('normalizes a raw JSON hook body with metadata headers', async () => {
+  it('normalizes a routed raw JSON hook body with metadata headers', async () => {
     const req = createReadableRequest({
       'content-type': 'application/json',
       'x-orca-pane-key': paneKey,
@@ -80,13 +80,17 @@ describe('shared agent-hook-listener', () => {
     req.emit('data', Buffer.from('{"hook_event_name":"UserPromptSubmit","prompt":"hello"}'))
     req.emit('end')
 
+    const source = resolveHookSource('/hook/claude')
+    if (source === null) {
+      throw new Error('Expected the Claude hook route to resolve')
+    }
     const merged = mergeAgentHookRequestHeaders(await body, req.headers)
     expect(
-      normalizeHookPayload(createHookListenerState(), 'claude', merged, 'production')
+      normalizeHookPayload(createHookListenerState(), source, merged, 'production')
     ).toMatchObject({
       paneKey,
       worktreeId: 'repo::/tmp/work',
-      payload: { state: 'working', prompt: 'hello' }
+      payload: { state: 'working', prompt: 'hello', agentType: 'claude' }
     })
   })
 
@@ -261,18 +265,7 @@ describe('shared agent-hook-listener', () => {
     expectRequestParserListenersReleased(req)
   })
 
-  it('routes pathnames to a known source or null', () => {
-    expect(resolveHookSource('/hook/claude')).toBe('claude')
-    expect(resolveHookSource('/hook/cursor')).toBe('cursor')
-    expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
-    expect(resolveHookSource('/hook/grok')).toBe('grok')
-    expect(resolveHookSource('/hook/hermes')).toBe('hermes')
-    expect(resolveHookSource('/hook/pi')).toBe('pi')
-    expect(resolveHookSource('/hook/omp')).toBe('omp')
-    expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
-    expect(resolveHookSource('/hook/command-code')).toBe('command-code')
-    expect(resolveHookSource('/hook/opencode2')).toBe('opencode2')
-    expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
+  it('rejects root and unknown hook routes', () => {
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -295,7 +288,7 @@ describe('shared agent-hook-listener', () => {
       rmSync(dir, { recursive: true, force: true })
     })
 
-    it('writes the endpoint file atomically with the right contents and mode', () => {
+    it('writes endpoint fields with owner-only POSIX permissions', () => {
       const finalPath = join(dir, getEndpointFileName())
       const ok = writeEndpointFile(dir, finalPath, {
         port: 12345,
@@ -326,6 +319,21 @@ describe('shared agent-hook-listener', () => {
         version: '1'
       })
       expect(ok).toBe(false)
+      expect(readdirSync(dir)).toEqual([])
     })
+  })
+
+  it('preserves a large JSON body across repeated buffer growth from one-byte chunks', async () => {
+    const req = createReadableRequest({ 'content-type': 'application/json' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The request harness supplies the headers and stream events consumed by the reader.
+    const reading = readRequestBody(req as unknown as IncomingMessage)
+    const value = 'x'.repeat(100_000)
+    const bytes = Buffer.from(JSON.stringify({ value }))
+    for (let index = 0; index < bytes.length; index += 1) {
+      req.emit('data', bytes.subarray(index, index + 1))
+    }
+    req.emit('end')
+    await expect(reading).resolves.toEqual({ value })
+    expectRequestParserListenersReleased(req)
   })
 })

@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { isTerminalTabPresent } from './terminal-tab-retirement'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { createStoreSessionMockApi } from './store-session-test-harness'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
+
+beforeEach(() => {
+  // Track the original global before the shared fixture installs the renderer API.
+  vi.stubGlobal('window', undefined)
+  createStoreSessionMockApi()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function seedWorktreeWithTab(store: ReturnType<typeof createTestStore>): string {
   seedStore(store, {
@@ -68,9 +79,7 @@ describe('remountTerminalTabForRecovery', () => {
   })
 })
 
-// Crash b5cfc6ca: recovery released its per-tab remount budget from getTab, which
-// reads unifiedTabsByWorktree. That index can drop a tab this one still holds, and
-// the release then erased the budget each remount had just consumed.
+// Recovery budget must follow the terminal-row index; temporary unified-index absence previously released the budget on every remount (b5cfc6ca).
 describe('isTerminalTabPresent as the recovery existence check', () => {
   it('answers true for a tab remountTerminalTabForRecovery can still remount', () => {
     const store = createTestStore()
@@ -110,12 +119,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
   })
 })
 
-// Not every workspace is a repository checkout. The ledger is keyed to the tab
-// ROW and resolved through locateTerminalTab, which scans every bucket in
-// tabsByWorktree — so a folder workspace and the floating-terminal bucket must
-// behave identically without a single branch for them. The predecessor kept the
-// budget in a module map keyed by tabId, and its row patcher made the caller
-// name the bucket, which is where a non-worktree key could go wrong.
+// Recovery ledger follows tab rows across worktree, folder and floating buckets; no repository-only lookup may strand it.
 describe.each([
   ['a repository worktree', WORKTREE_ID],
   ['a folder workspace', folderWorkspaceKey('fw-1')],
@@ -140,7 +144,6 @@ describe.each([
 
     const first = store.getState().remountTerminalTabForRecovery(tabId, AUTOMATIC)
     expect(first.remounted).toBe(true)
-    // The ledger landed on the row in this bucket, not in a worktree-keyed map.
     expect(row()?.recovery).toMatchObject({ outcome: 'pending', reason: 'write-stalled' })
 
     // Unsettled blocks the next automatic ask, even past the cooldown.
@@ -175,5 +178,65 @@ describe.each([
 
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
     expect(store.getState().tabsByWorktree[bucketId]?.some((tab) => tab.id === tabId)).toBeFalsy()
+  })
+})
+
+// Pane mount snapshots startup commands once; recovery must retain queued commands until owning-pane spawn or leave quick commands at a bare prompt (STA-4876).
+describe('queued startup command retention', () => {
+  it('survives a recovery remount so the next mount can still deliver it', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, { command: 'echo hi' })
+
+    store.getState().remountTerminalTabForRecovery(tabId)
+
+    expect(store.getState().pendingStartupByTabId[tabId]).toEqual({ command: 'echo hi' })
+  })
+
+  // Commands are tab-scoped but binds are pane-scoped; a sibling’s earlier bind must not consume the owner’s remount command.
+  it('is not spent by a sibling pane binding a pty to the same tab', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, { command: 'echo hi' })
+
+    store.getState().updateTabPtyId(tabId, 'pty-sibling')
+
+    expect(store.getState().pendingStartupByTabId[tabId]).toEqual({ command: 'echo hi' })
+  })
+
+  // Only the owning pane spends it, via this action, once its own fresh spawn exists.
+  it('is spent through consumeTabStartupCommand and does not replay afterwards', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, { command: 'echo hi' })
+
+    expect(store.getState().consumeTabStartupCommand(tabId)).toEqual({ command: 'echo hi' })
+
+    store.getState().remountTerminalTabForRecovery(tabId)
+    expect(store.getState().pendingStartupByTabId[tabId]).toBeUndefined()
+    expect(store.getState().consumeTabStartupCommand(tabId)).toBeNull()
+  })
+
+  // Why: retention is bounded by tab lifetime, so a spawn that never binds cannot leak forever.
+  it('is dropped when the tab closes without ever spawning', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    store.getState().queueTabStartupCommand(tabId, { command: 'echo hi' })
+
+    store.getState().closeTab(tabId)
+
+    expect(store.getState().pendingStartupByTabId[tabId]).toBeUndefined()
+  })
+
+  it('leaves a sibling tab’s queued command alone', () => {
+    const store = createTestStore()
+    const tabId = seedWorktreeWithTab(store)
+    const siblingId = store.getState().createTab(WORKTREE_ID).id
+    store.getState().queueTabStartupCommand(tabId, { command: 'echo mine' })
+    store.getState().queueTabStartupCommand(siblingId, { command: 'echo theirs' })
+
+    store.getState().consumeTabStartupCommand(tabId)
+
+    expect(store.getState().pendingStartupByTabId[siblingId]).toEqual({ command: 'echo theirs' })
   })
 })

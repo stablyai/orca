@@ -1,10 +1,6 @@
-/**
- * Resolve a short-lived gh token for a bound account and prepare child env.
- *
- * Why: Part A injects tokens only into the gh child — never process-wide —
- * via `gh auth token --user --hostname`. Tokens are never logged.
- */
+// Resolve bound credentials into child environments only; never mutate process-wide auth or log tokens.
 import { ghExecFileAsync } from '../git/runner'
+import type { GhCaptureLifetimeHooks } from '../git/command-runner/gh-capture-lifetime'
 import { addWslEnvKeys } from '../../shared/wsl-env'
 import {
   ghTokenEnvVarForHost,
@@ -114,7 +110,8 @@ export function createGhBoundAccountHostMismatchError(
 export async function resolveGhAccountToken(
   bindingInput: GhAccountBinding,
   target: GhCapabilityTarget = {},
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  hooks?: GhCaptureLifetimeHooks
 ): Promise<string> {
   const binding = normalizeGhAccountBinding(bindingInput)
   if (!binding) {
@@ -122,7 +119,7 @@ export async function resolveGhAccountToken(
   }
 
   const normalizedTarget = normalizeGhCapabilityTarget(target)
-  const capability = await getGhMultiAccountCapability(normalizedTarget, nowMs)
+  const capability = await getGhMultiAccountCapability(normalizedTarget, nowMs, hooks)
   if (capability === 'unsupported') {
     throw createGhMultiAccountUnsupportedError()
   }
@@ -143,8 +140,7 @@ export async function resolveGhAccountToken(
   try {
     const resolveEnv = stripAmbientGhTokenEnv(process.env)
     resolveEnv.GH_PROMPT_DISABLED = resolveEnv.GH_PROMPT_DISABLED ?? '1'
-    // Why: the command runner is the only sanctioned gh spawn (deadline, tree kill);
-    // `auth` argv is exempt from binding, so this cannot recurse.
+    // Auth commands bypass binding, preventing recursion through the bounded runner.
     const { stdout } = await ghExecFileAsync(
       ['auth', 'token', '--user', binding.user, '--hostname', binding.host],
       {
@@ -152,11 +148,12 @@ export async function resolveGhAccountToken(
         wslDistro: normalizedTarget.wslDistro,
         timeout: TOKEN_RESOLVE_TIMEOUT_MS,
         env: resolveEnv
-      }
+      },
+      hooks
     )
     const token = stdout.replace(/\r?\n/g, '').trim()
     if (!token) {
-      // Why: empty token is a stable auth miss — negative-cache to avoid hammering keyring.
+      // Cache stable empty-token misses to avoid hammering the keyring.
       tokenCache.set(key, { kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
       pruneTokenCache(nowMs)
       throw createGhBoundAccountUnavailableError(binding)
@@ -175,11 +172,19 @@ export async function resolveGhAccountToken(
       throw error
     }
     const unavailable = createGhBoundAccountUnavailableError(binding)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'outputTruncated' in error &&
+      typeof error.outputTruncated === 'boolean'
+    ) {
+      Object.assign(unavailable, { outputTruncated: error.outputTruncated })
+    }
     const stderr = stderrFromUnknown(error)
     if (stderr) {
       unavailable.stderr = stderr
     }
-    // Why: timeouts / missing gh / spawn blips must not poison the cache for 30s.
+    // Transient spawn and timeout failures must remain retryable.
     if (!isTransientTokenResolveFailure(error)) {
       tokenCache.set(key, { kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
       pruneTokenCache(nowMs)

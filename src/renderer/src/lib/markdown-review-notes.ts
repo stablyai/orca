@@ -124,8 +124,7 @@ export function formatMarkdownReviewCardQuote(text: string | null | undefined): 
   return formatBoundedMarkdownReviewCardQuote(text)
 }
 
-// Why: selected review text can come from large pasted markdown; card quotes
-// only need a short preview, not a fully normalized copy of the selection.
+// Bound whitespace normalization to the card preview, not a potentially huge markdown selection.
 function formatBoundedMarkdownReviewCardQuote(text: string): string | undefined {
   let normalized = ''
   let pendingWhitespace = false

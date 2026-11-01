@@ -19,10 +19,7 @@ import {
 import { nodeTerminalCommand } from './terminal-node-command'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-// A Codex-like agent: pre-fills scrollback, then keeps streaming — commits a
-// row and redraws a synchronized-output "Working…" status frame every tick.
-// The stream continues while the pane is hidden, which is what routes the
-// return through the hidden-output snapshot restore.
+// Stream inline synchronized Working… frames after filling scrollback, continuing while hidden to force snapshot restore on return.
 function streamingAgentFixtureScript(runId: string): string {
   return `
 async function writeStdout(chunk) {
@@ -103,8 +100,7 @@ async function readSettledViewport(
   page: Page,
   tabId: string
 ): Promise<{ viewportY: number; baseY: number }> {
-  // Wait until the replay has actually parsed (scrollback regrew) and the
-  // viewport stopped moving, then report where it settled.
+  // Wait for parsed replay (regrown scrollback) and stable viewport before reading its position.
   let last: { viewportY: number; baseY: number } | null = null
   let stableCount = 0
   await expect
@@ -179,8 +175,7 @@ test.describe('Terminal pinned viewport with streaming agent across worktree swi
       expect(pinned.baseY).toBeGreaterThan(100)
       await orcaPage.waitForTimeout(150)
 
-      // Stream continues while hidden; hidden byte drops mark the pane for a
-      // snapshot restore on return.
+      // Hidden drops force snapshot restore while the agent continues streaming.
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(3_000)
@@ -191,8 +186,7 @@ test.describe('Terminal pinned viewport with streaming agent across worktree swi
 
       const settled = await readSettledViewport(orcaPage, pinned.tabId)
       const bottomDistance = settled.baseY - settled.viewportY
-      // The user pinned six rows above the bottom. A faithful restore keeps
-      // them near the pin; the bug clamps to the very top of the scrollback.
+      // Require the six-row user pin; the bug clamped to scrollback’s top.
       expect(
         settled.viewportY,
         `settled at viewportY=${settled.viewportY} baseY=${settled.baseY} (pinned ${JSON.stringify(pinned)})`

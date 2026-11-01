@@ -1,6 +1,6 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import type { ChildProcessHandle, ProcessSpec } from '../../shared/child-process/process-spec'
-import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
+import { spawnProcess } from '@orca/process-host'
+import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
+import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
 export type CodexAppServerSpawn = (
@@ -26,14 +26,12 @@ export function killCodexAppServerProcessTree(
         scope: 'win-taskkill-tree'
       })
     ) {
-      // Refusal blocks the tree walk, not the termination: the root kill is
-      // handle-addressed, so it cannot reach the recycled pid we refused.
+      // A handle-addressed root kill cannot target the recycled PID refused by the tree gate.
       child.kill('SIGKILL')
       return
     }
     try {
-      // Why: npm-installed Codex runs behind a launcher (node, or cmd.exe for an unresolved shim);
-      // killing only that wrapper leaves the app-server child alive after a timeout.
+      // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
       const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         stdio: 'ignore',
         windowsHide: true
@@ -59,13 +57,11 @@ export function killCodexAppServerProcessTree(
   }
   if (child.pid) {
     try {
-      // npm/package-manager launchers insert a shim child on POSIX. Reap its
-      // direct descendants before signalling the wrapper itself.
+      // Reap package-manager shim descendants before signalling their wrapper.
       const descendants = spawnImpl('pkill', ['-KILL', '-P', String(child.pid)], {
         stdio: 'ignore'
       })
-      // A missing pkill surfaces as an async 'error' event, and an unhandled one
-      // takes down the main process.
+      // Missing pkill emits an async error that must not crash the main process.
       descendants.on('error', () => undefined)
       descendants.unref()
     } catch {

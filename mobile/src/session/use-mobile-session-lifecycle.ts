@@ -1,4 +1,7 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useShellStorage } from '../platform/shell-storage'
+import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
+import { settleSessionPreferenceRead } from './session-preference-read'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { loadHosts } from '../transport/host-store'
@@ -7,25 +10,33 @@ import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from '../terminal/terminal-foreground-recovery'
-import { loadCustomKeys } from '../components/CustomKeyModal'
+import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
 import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
+  const shellStorage = useShellStorage()
+  const padAvailable = useDirectionPadAvailable()
+  const [customKeysLoaded, setCustomKeysLoaded] = useState(false)
+  const [accessoryLayoutLoaded, setAccessoryLayoutLoaded] = useState(false)
   const {
     hostId,
     connState,
+    customKeys,
     setCustomKeys,
     setVisibleBuiltInIds,
+    setDirectionPadEnabled,
     setHostEndpoint,
+    setHostName,
     connStateRef,
     terminalRefs,
     initializedHandlesRef,
     activeHandleRef,
+    visibleTerminalHandlesRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
-  // Why: the shared client owns authenticated identity; this host read only supplies connection-hint metadata.
+  // Shared-client authentication owns identity; this host read supplies only connection hints.
   useEffect(() => {
     if (!hostId) {
       return
@@ -38,6 +49,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       const host = hosts.find((h) => h.id === hostId)
       if (host) {
         setHostEndpoint(host.endpoint)
+        setHostName(host.name)
       }
     })
     return () => {
@@ -45,43 +57,84 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [hostId])
 
+  const customKeysRef = useRef(customKeys)
   useEffect(() => {
-    void loadCustomKeys().then(setCustomKeys)
-  }, [])
-
-  useFocusEffect(
-    useCallback(() => {
-      let stale = false
-      void loadTerminalAccessoryLayout().then((layout) => {
-        if (!stale) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+    customKeysRef.current = customKeys
+  }, [customKeys])
+  const customKeysReadRevisionRef = useRef(0)
+  const refreshCustomKeys = useCallback(() => {
+    const revision = ++customKeysReadRevisionRef.current
+    const keysAtStart = customKeysRef.current
+    void settleSessionPreferenceRead(loadCustomKeys(keysAtStart)).then((keys) => {
+      if (customKeysReadRevisionRef.current === revision) {
+        if (keys && customKeysRef.current === keysAtStart) {
+          setCustomKeys(keys)
         }
-      })
-      return () => {
-        stale = true
-      }
-    }, [])
-  )
-
-  useEffect(() => {
-    let mounted = true
-    const refresh = () => {
-      void loadTerminalAccessoryLayout().then((layout) => {
-        if (mounted) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
-        }
-      })
-    }
-    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
-      if (s === 'active') {
-        refresh()
+        setCustomKeysLoaded(true)
       }
     })
     return () => {
-      mounted = false
+      if (customKeysReadRevisionRef.current === revision) {
+        customKeysReadRevisionRef.current += 1
+      }
+    }
+  }, [shellStorage])
+
+  useEffect(
+    () =>
+      subscribeStoredCustomKeys((keys) => {
+        // An accepted write is at least as new as any read still in flight.
+        customKeysReadRevisionRef.current += 1
+        customKeysRef.current = keys
+        setCustomKeys(keys)
+        setCustomKeysLoaded(true)
+      }),
+    []
+  )
+
+  const layoutReadRevisionRef = useRef(0)
+  const refreshAccessoryLayout = useCallback(() => {
+    const revision = ++layoutReadRevisionRef.current
+    void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then((layout) => {
+      if (layoutReadRevisionRef.current === revision) {
+        if (layout) {
+          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+          setDirectionPadEnabled(layout.directionPadEnabled !== false)
+        }
+        setAccessoryLayoutLoaded(true)
+      }
+    })
+    return () => {
+      if (layoutReadRevisionRef.current === revision) {
+        layoutReadRevisionRef.current += 1
+      }
+    }
+  }, [padAvailable, shellStorage])
+
+  useFocusEffect(
+    useCallback(() => {
+      const releaseKeys = refreshCustomKeys()
+      const releaseLayout = refreshAccessoryLayout()
+      return () => {
+        releaseKeys()
+        releaseLayout()
+      }
+    }, [refreshAccessoryLayout, refreshCustomKeys])
+  )
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') {
+        refreshCustomKeys()
+        refreshAccessoryLayout()
+      }
+    })
+    return () => {
+      customKeysReadRevisionRef.current += 1
+      layoutReadRevisionRef.current += 1
       sub.remove()
     }
-  }, [])
+  }, [refreshAccessoryLayout, refreshCustomKeys])
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
@@ -99,9 +152,10 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       for (const terminalRef of terminalRefs.current.values()) {
         terminalRef.prepareForForegroundRecovery()
       }
-      // Why: iOS can resume a WKWebView with a blank xterm store and no web-ready; invalidate the latch so init waits for the pong.
+      // WKWebView can resume blank without ready; clear the latch so init waits for a fresh pong.
       const outcome = recoverActiveTerminalAfterForeground({
         activeHandleRef,
+        visibleTerminalHandlesRef,
         terminalRefs,
         initializedHandlesRef,
         connStateRef,
@@ -116,7 +170,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
 
-  // Why: resume lands mid-reconnect (socket dies in bg); re-run recovery once connected or a blanked WKWebView stays stale.
+  // Repeat resume recovery after reconnect or an iOS-blanked WebView can remain stale.
   useEffect(() => {
     if (connState !== 'connected' || !pendingForegroundRecoveryRef.current) {
       return
@@ -127,6 +181,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
     recoverActiveTerminalAfterForeground({
       activeHandleRef,
+      visibleTerminalHandlesRef,
       terminalRefs,
       initializedHandlesRef,
       connStateRef,
@@ -136,6 +191,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     })
   }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
   return {
+    accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
     pendingForegroundRecoveryRef
   }
 }

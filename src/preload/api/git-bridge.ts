@@ -1,7 +1,9 @@
 import { ipcRenderer } from 'electron'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
+import type { ConflictResolution } from '../../shared/source-control-entry-actions'
 import type { GitPushTarget } from '../../shared/worktree/types'
+import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { PreloadApi } from '../api-types'
 
@@ -14,6 +16,7 @@ export const gitApi = {
     reuseLineStats?: boolean
     branchLineTotalMergeBase?: string
     requestToken?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:status', args),
   cancelStatus: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('git:cancelStatus', args),
@@ -41,10 +44,16 @@ export const gitApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:appendGitignore', args),
   history: (
-    args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    args: {
+      worktreePath: string
+      connectionId?: string
+      wakeWslDistro?: boolean
+    } & GitHistoryOptions
   ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
   conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:conflictOperation', args),
+  mutationInFlight: (args: { worktreePath: string; connectionId?: string }) =>
+    ipcRenderer.invoke('git:mutationInFlight', args),
   abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:abortMerge', args),
   abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
@@ -54,7 +63,9 @@ export const gitApi = {
     filePath: string
     staged: boolean
     compareAgainstHead?: boolean
+    oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:diff', args),
   branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:branchCompare', args),
@@ -107,6 +118,7 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:branchDiff', args),
   commitDiff: (args: {
     worktreePath: string
@@ -115,12 +127,18 @@ export const gitApi = {
     filePath: string
     oldPath?: string
     connectionId?: string
+    wakeWslDistro?: boolean
   }) => ipcRenderer.invoke('git:commitDiff', args),
   commit: (args: {
     worktreePath: string
     message: string
     connectionId?: string
   }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+  completeMerge: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('git:completeMerge', args),
   generateCommitMessage: (args: {
     worktreePath: string
     worktreeId?: string
@@ -160,10 +178,17 @@ export const gitApi = {
   }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:stage', args),
+  resolveConflict: (args: {
+    worktreePath: string
+    filePath: string
+    resolution: ConflictResolution
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:resolveConflict', args),
   bulkStage: (args: {
     worktreePath: string
     filePaths: string[]
     connectionId?: string
+    scope?: GitStageWorktreeScope
   }): Promise<void> => ipcRenderer.invoke('git:bulkStage', args),
   unstage: (args: {
     worktreePath: string
@@ -189,6 +214,7 @@ export const gitApi = {
     worktreePath: string
     relativePath: string
     line: number
+    endLine?: number
     connectionId?: string
   }): Promise<string | null> => ipcRenderer.invoke('git:remoteFileUrl', args),
   remoteCommitUrl: (args: {

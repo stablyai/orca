@@ -22,7 +22,7 @@ describe('undelivered orchestration mailboxes', () => {
     })
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'first' })
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'second' })
-    db.markAsDelivered([delivered.id])
+    db.markAsDelivered([delivered.id], 'delivered')
     db.markAsRead([read.id])
 
     expect(db.getUndeliveredUnreadMailboxHandles()).toEqual(['pending'])

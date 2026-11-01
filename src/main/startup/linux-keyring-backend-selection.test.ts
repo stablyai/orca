@@ -34,8 +34,7 @@ describe('identifiesResolvedDesktop', () => {
     'UKUI',
     'Deepin',
     'unity',
-    // Chromium identifies LXQt and then picks basic_text for it. That is still a
-    // resolved desktop, and overriding a deliberate choice is not this fix's job.
+    // LXQt is recognized even though Chromium deliberately chooses basic_text; preserve that choice.
     'LXQt'
   ])('treats %s as a desktop Chromium resolves', (desktop) => {
     expect(identifiesResolvedDesktop({ XDG_CURRENT_DESKTOP: desktop })).toBe(true)
@@ -54,9 +53,7 @@ describe('identifiesResolvedDesktop', () => {
     ).toBe(true)
   })
 
-  // Why this case has its own test: missing it is what would strand sealed credentials.
-  // A KDE session identified only by KDE_FULL_SESSION gets kwallet from Chromium, and
-  // overriding that with libsecret makes every existing secret unreadable.
+  // KDE presence vars can select kwallet alone; overriding with libsecret would strand sealed credentials.
   it.each(['GNOME_DESKTOP_SESSION_ID', 'KDE_FULL_SESSION', 'KDE_SESSION_VERSION'])(
     'treats a bare %s as identifying a desktop',
     (variable) => {
@@ -84,9 +81,7 @@ describe('resolveLinuxPasswordStore', () => {
     expect(probeCollection).not.toHaveBeenCalled()
   })
 
-  // Why this is the whole point of the design: selecting libsecret against a locked
-  // collection with no prompter is what made isEncryptionAvailable() block for 76s to
-  // first window (STA-5765). Plaintext plus an accurate warning beats a frozen app.
+  // Locked libsecret without a prompter caused a 76s startup stall (STA-5765); preserve plaintext behavior instead.
   it('declines to select a locked secret service rather than risk a startup stall', () => {
     const { store, reason } = resolve({ XDG_CURRENT_DESKTOP: 'sway' }, 'locked')
     expect(store).toBeNull()

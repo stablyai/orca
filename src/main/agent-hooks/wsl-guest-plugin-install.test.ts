@@ -26,8 +26,7 @@ describe('requestGuestOpenCodeOverlayDir', () => {
     })
   })
 
-  // Why: each OpenCode major gets its own guest overlay. Collapsing them here would
-  // point an OpenCode 2 pane at the v1 overlay, whose plugin gates itself off.
+  // OpenCode major versions need separate overlays because each plugin gates on its version.
   it('carries the per-major guest overlay dirs independently', async () => {
     const { mux } = fakeMux(async () => ({
       overlayDirs: {
@@ -53,8 +52,7 @@ describe('requestGuestOpenCodeOverlayDir', () => {
   })
 
   it("reports 'none' when the guest answered but materialization produced no dir", async () => {
-    // Why: distinct from 'unavailable' — the caller must CLEAR a previously recorded
-    // dir here, since a rebuild that failed after wiping leaves it plugin-less.
+    // A failed rebuild invalidates the previously recorded overlay, unlike an unavailable guest.
     const { mux } = fakeMux(async () => ({ installed: { opencode: true }, overlayDirs: {} }))
     await expect(requestGuestOpenCodeOverlayDir(mux, deps(), 'Ubuntu')).resolves.toEqual({
       kind: 'none'

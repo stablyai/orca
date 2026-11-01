@@ -16,10 +16,10 @@ import type {
 } from '../../../../shared/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
-import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'
+import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
 import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 
 export function useAddRepoNestedImportFlow({
   nestedAttemptId,
@@ -45,7 +45,7 @@ export function useAddRepoNestedImportFlow({
   nestedConnectionId: string | null
   nestedGroupName: string
   nestedImportScanId: string | null
-  nestedRuntimeEnvironmentId?: CapturedRuntimeOwner
+  nestedRuntimeEnvironmentId: string | null
   activeRuntimeEnvironmentId: string | null | undefined
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
@@ -55,15 +55,11 @@ export function useAddRepoNestedImportFlow({
     projectPaths: string[]
     connectionId?: string
     scanId?: string
-    runtimeEnvironmentId?: string | null
+    runtimeEnvironmentId: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   getNestedRepoRuntimeKind: (connectionId: string | null) => NestedRepoTelemetryRuntimeKind
-  onGitRepoReady: (
-    repoId: string,
-    source: AddRepoExistingWorkspaceSource,
-    executionHostId?: ExecutionHostId
-  ) => Promise<void>
+  onGitRepoReady: CompleteGitRepoAdd
   setIsAdding: (isAdding: boolean) => void
 }): {
   handleImportNestedRepos: (mode: 'group' | 'separate') => Promise<void>
@@ -208,7 +204,14 @@ export function useAddRepoNestedImportFlow({
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
-          await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
+          await onGitRepoReady(
+            repo.id,
+            source,
+            completionOwnerOptions.executionHostId,
+            mode === 'group' && result.group
+              ? { importedProjectGroupId: result.group.id }
+              : undefined
+          )
         }
       } catch (err) {
         if (gen === nestedImportGenRef.current) {
@@ -256,8 +259,7 @@ export function useAddRepoNestedImportFlow({
       return Promise.resolve()
     }
     const generation = ++nestedImportGenRef.current
-    // Why: only an edited name overrides host naming, so an untouched prefill still lets the host
-    // pick (e.g. the SSH target label for `~`).
+    // Only edited names override host defaults, such as an SSH label for its home directory.
     const enteredName = nestedGroupName.trim()
     const displayName =
       enteredName && enteredName !== defaultProjectGroupNameForPath(nestedScan.selectedPath)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   formatMarkdownReviewNotes,
   sortMarkdownReviewNotes,
@@ -34,6 +35,7 @@ export function useMarkdownPreviewFoundation({
   largePreview?: boolean
   markdownAnnotationsEnabled: boolean
 }) {
+  const languageRevision = useUiLanguageRevision()
   const source = useMarkdownPreviewSourceFoundation({
     content,
     filePath,
@@ -90,6 +92,9 @@ export function useMarkdownPreviewFoundation({
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
+  const pendingReviewActionFrameIdsRef = useRef<number[]>([])
+  const pendingReviewActionTimeoutIdsRef = useRef<number[]>([])
+  const reviewActionFrameGenerationRef = useRef(0)
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
     [markdownComments]
@@ -98,20 +103,17 @@ export function useMarkdownPreviewFoundation({
     () => markdownReviewNotes.filter((note) => !note.sentAt),
     [markdownReviewNotes]
   )
-  const unsentMarkdownReviewPrompt = useMemo(
-    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
-    [renderedContent, unsentMarkdownReviewNotes]
-  )
   const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(
     () => [
       {
         id: 'all',
         label: translate('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
         notes: unsentMarkdownReviewNotes,
-        prompt: unsentMarkdownReviewPrompt
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, renderedContent)
       }
     ],
-    [unsentMarkdownReviewNotes, unsentMarkdownReviewPrompt]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [renderedContent, unsentMarkdownReviewNotes, languageRevision]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
@@ -137,6 +139,9 @@ export function useMarkdownPreviewFoundation({
     attentionReviewCommentId,
     setAttentionReviewCommentId,
     attentionReviewCommentTimeoutRef,
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef,
     markdownReviewNotes,
     unsentMarkdownReviewScope,
     canShowReviewTools

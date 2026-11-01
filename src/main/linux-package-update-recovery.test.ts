@@ -20,7 +20,6 @@ vi.mock('./linux-package-install-command', () => ({
   buildLinuxPackageInstallCommand: buildCommandMock
 }))
 
-// Counts hash passes without changing read behavior.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   return {
@@ -32,7 +31,7 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
-// Real symlinks, POSIX modes, and the XDG cache layout make these cases meaningless on Windows.
+// These fixtures require POSIX modes, symlinks, and XDG cache paths.
 const describePosix = describe.skipIf(process.platform === 'win32')
 
 const VERSION = '1.2.3'
@@ -62,7 +61,6 @@ async function writePackage(name: string, contents = PAYLOAD): Promise<string> {
   return filePath
 }
 
-/** Captures a well-formed downloaded event unless a field is overridden. */
 function capture(overrides: Record<string, unknown> = {}): LinuxPackageArtifact | null {
   const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'orca.deb')) as string
   return recovery.captureLinuxPackageArtifact({
@@ -81,7 +79,6 @@ beforeEach(async () => {
   tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'orca-recovery-'))
   cacheRoot = path.join(tempRoot, 'cache')
   updaterDir = path.join(cacheRoot, 'orca-updater')
-  // The only shape electron-updater downloads into: <cacheRoot>/<updaterCacheDirName>/pending.
   downloadDir = path.join(updaterDir, 'pending')
   outsideDir = path.join(tempRoot, 'outside')
   await fsp.mkdir(downloadDir, { recursive: true })
@@ -197,7 +194,7 @@ describe('captureLinuxPackageArtifact', () => {
   })
 
   it('refuses a digest that cannot decode to 64 bytes', () => {
-    // Why: an undecodable digest is a metadata problem — arming here would blame the user's file.
+    // Invalid release metadata must not arm recovery that blames the downloaded file.
     capture({
       files: [{ url: 'orca.deb', sha512: createHash('sha256').update(PAYLOAD).digest('base64') }]
     })
@@ -205,7 +202,7 @@ describe('captureLinuxPackageArtifact', () => {
   })
 
   it('refuses a digest with characters outside the base64 alphabet', () => {
-    // Buffer.from would silently drop the '!', so the round-trip check must reject this.
+    // Buffer.from silently drops invalid characters unless checked by a round trip.
     capture({ files: [{ url: 'orca.deb', sha512: `${SHA512.slice(0, 4)}!${SHA512.slice(4)}` }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
@@ -491,7 +488,6 @@ describePosix('cache containment', () => {
   })
 
   it('uses the home cache when XDG_CACHE_HOME is unset', async () => {
-    // Why: the fallback is the only reason an unset XDG_CACHE_HOME still finds the real download.
     const homeCache = path.join(tempRoot, 'home')
     const homeDownloadDir = path.join(homeCache, '.cache', 'orca-updater', 'pending')
     await fsp.mkdir(homeDownloadDir, { recursive: true })
@@ -508,11 +504,7 @@ describePosix('cache containment', () => {
   })
 })
 
-// electron-updater builds `downloadedFile` from the cache's own writable update-info.json without
-// calling basename, so these pin the accepted shape to the one directory it actually downloads into.
-// Defence in depth only — a same-uid process can create its own `pending` directory, and per the
-// design's trust model it can already overwrite the real cached package. The load-bearing check is the
-// cache-root anchor covered by the `cache containment` describe above.
+// Pending-directory shape is defense in depth; cache-root containment excludes other users’ swap locations.
 describePosix('pending-directory anchoring', () => {
   it('rejects a package in an attacker-owned directory under the cache root', async () => {
     const evilDir = path.join(cacheRoot, 'evil')
@@ -561,7 +553,6 @@ describePosix('pending-directory anchoring', () => {
   })
 
   it('accepts any updater directory name that holds the pending directory', async () => {
-    // The cache directory name comes from the app, so only its position is fixed.
     const otherPending = path.join(cacheRoot, 'orca-updater-next', 'pending')
     await fsp.mkdir(otherPending, { recursive: true })
     const filePath = path.join(otherPending, 'orca.deb')

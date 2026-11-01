@@ -1,7 +1,11 @@
 import type { MarkdownToken } from '@tiptap/core'
+import {
+  getMarkdownFenceRanges,
+  isInsideMarkdownFenceRange,
+  type MarkdownFenceRanges
+} from './markdown-fence-scanner'
 
-// Toggle summaries can render at heading scales 1–5, mirroring the plain
-// heading levels the slash menu / toolbar dropdown offer (h1–h5).
+// Match the slash menu and toolbar’s heading scales.
 export type ToggleHeadingVariant =
   | 'heading-1'
   | 'heading-2'
@@ -36,10 +40,6 @@ export type DetailsHtmlBlock = {
   inner: string
 }
 
-// Fence ranges depend only on the scanned string, so callers scanning one body
-// repeatedly compute them once and share them across sibling matches.
-export type MarkdownFenceRanges = readonly (readonly [number, number])[]
-
 export type DetailsSummaryHtml = {
   attributes: string
   content: string
@@ -55,8 +55,7 @@ export function escapeDetailsHtml(value: string): string {
 }
 
 export function parseDetailsAttributes(rawAttributes: string): Record<string, unknown> {
-  // Why: validation accepts normal HTML whitespace around `=`, so parsing
-  // must accept it too or an editable toggle loses its heading variant.
+  // Match validation’s whitespace rules around = or editable toggles lose heading variants.
   const variantMatch = rawAttributes.match(
     /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
   )
@@ -91,48 +90,12 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
   return attributes.join(' ')
 }
 
-function markdownFenceRanges(content: string): MarkdownFenceRanges {
-  const ranges: [number, number][] = []
-  let offset = 0
-  let openFence: { closingPattern: RegExp; start: number } | null = null
-
-  for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
-    const line = lineMatch[0]
-    if (line === '') {
-      break
-    }
-
-    const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
-    if (openFence) {
-      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
-      if (openFence.closingPattern.test(lineText)) {
-        ranges.push([openFence.start, offset + line.length])
-        openFence = null
-      }
-    } else {
-      const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
-      if (openingFenceMatch?.[1]) {
-        openFence = {
-          closingPattern: new RegExp(
-            `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}\\s*$`
-          ),
-          start: offset
-        }
-      }
-    }
-
-    offset += line.length
-  }
-
-  if (openFence) {
-    ranges.push([openFence.start, content.length])
-  }
-
-  return ranges
-}
-
-function isInsideRange(index: number, ranges: MarkdownFenceRanges): boolean {
-  return ranges.some(([start, end]) => index >= start && index < end)
+export function createDetailsMatcher(content: string): (start: number) => DetailsHtmlBlock | null {
+  let fenceRanges: MarkdownFenceRanges | undefined
+  return (start) =>
+    /^<details\b[^>]*>/i.test(content.slice(start))
+      ? matchDetailsHtmlBlock(content, start, (fenceRanges ??= getMarkdownFenceRanges(content)))
+      : null
 }
 
 export function matchDetailsHtmlBlock(
@@ -147,7 +110,7 @@ export function matchDetailsHtmlBlock(
 
   const detailsTagPattern = /<\/?details\b[^>]*>/gi
   detailsTagPattern.lastIndex = start
-  const fenceRanges = precomputedFenceRanges ?? markdownFenceRanges(content)
+  const fenceRanges = precomputedFenceRanges ?? getMarkdownFenceRanges(content)
 
   let depth = 0
 
@@ -158,7 +121,7 @@ export function matchDetailsHtmlBlock(
     }
 
     const tag = tagMatch[0]
-    if (tagMatch.index !== start && isInsideRange(tagMatch.index, fenceRanges)) {
+    if (tagMatch.index !== start && isInsideMarkdownFenceRange(tagMatch.index, fenceRanges)) {
       continue
     }
 
@@ -280,16 +243,14 @@ function isHtmlTagNamePart(code: number): boolean {
   )
 }
 
-// Why: nested toggles validate recursively and each level rescans its own body,
-// so a pathological file would otherwise blow the stack or go quadratic.
+// Bound recursive rescanning to avoid stack exhaustion and quadratic work on pathological nesting.
 const MAX_DETAILS_NESTING_LEVELS = 16
 
-// Removes nested toggles that are themselves editable, so the caller's raw-tag
-// scan sees only the body's own markup. Null when a nested toggle can't be one.
+// Remove editable nested toggles before scanning this body’s raw tags; null means a nested toggle is unsupported.
 function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): string | null {
   let result = ''
   let index = 0
-  // Why: without sharing this, N sibling toggles rescan the whole body N times.
+  // Share fence ranges so sibling toggles cannot rescan the entire body per sibling.
   let fenceRanges: MarkdownFenceRanges | null = null
 
   for (;;) {
@@ -302,7 +263,7 @@ function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): str
       return null
     }
 
-    fenceRanges ??= markdownFenceRanges(bodyHtml)
+    fenceRanges ??= getMarkdownFenceRanges(bodyHtml)
     const nested = matchDetailsHtmlBlock(bodyHtml, nestedStart, fenceRanges)
     if (!nested || !isEditableDetailsHtmlBlock(nested, nestingLevel + 1)) {
       return null

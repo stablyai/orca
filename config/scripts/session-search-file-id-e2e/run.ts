@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises'
 import { resolve, join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { build } from 'esbuild'
-import { runProcess } from '../../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const root = process.cwd()
 const evidence = resolve('notes/search-ipc')
@@ -53,7 +53,7 @@ export { resetAiVaultScannerServiceForTests, reconcileSessionSearchInService } f
 export { setAppEnvironment } from ${source('shared/app-environment.ts')};
 export { isolatedScanRoots } from ${source('main/ai-vault/session-scanner-test-fixtures.ts')};
 export { claudeLines } from ${source('main/ai-vault-search/session-search-indexer-test-fixture.ts')};
-export { runProcess } from ${source('shared/child-process/run-process.ts')};
+export { runProcess } from '@orca/process-host';
 export { UnixSocketTransport } from ${source('main/runtime/rpc/unix-socket-transport.ts')};
 export { RpcDispatcher } from ${source('main/runtime/rpc/dispatcher.ts')};
 export { AI_VAULT_METHODS } from ${source('main/runtime/rpc/methods/ai-vault.ts')};

@@ -63,7 +63,6 @@ describe('terminal input connection gate', () => {
 
 describe('terminal send request shape', () => {
   it('keeps every keystroke-grade terminal send now-or-never so nothing replays after reconnect', () => {
-    // A parked send replays stale bytes into the PTY once the socket comes back.
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })
   })
 

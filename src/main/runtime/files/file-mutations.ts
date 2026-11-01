@@ -1,0 +1,281 @@
+import { assertRuntimeFileMutationExpectation } from './file-mutation-expectation'
+import {
+  requireLocalRuntimeFileRoute,
+  requireRuntimeFileProvider,
+  resolveFileExplorerPath,
+  resolveFileExplorerPaths
+} from './file-target'
+import type { RuntimeFileCommandHost } from './file-command-host'
+import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
+import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-write'
+import { replaceLocalFileBytesIfUnchanged } from '../../ipc/filesystem/local-disk-bytes-replace'
+import type {
+  FileWriteDiskPrecondition,
+  FileWriteResult
+} from '../../../shared/file-write-disk-precondition'
+
+type RuntimeFileMutationHost = Pick<
+  RuntimeFileCommandHost,
+  'requireStore' | 'resolveRuntimeFileTarget'
+>
+
+export class RuntimeFileMutations {
+  constructor(private readonly host: RuntimeFileMutationHost) {}
+
+  async writeFileExplorerFile(
+    worktreeSelector: string,
+    relativePath: string,
+    content: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string,
+    diskPrecondition?: FileWriteDiskPrecondition
+  ): Promise<FileWriteResult> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    return requireRuntimeFileProvider(target, this.host).writeFileWithDiskPrecondition(
+      target.path,
+      content,
+      diskPrecondition
+    )
+  }
+
+  async writeFileExplorerFileBase64(
+    worktreeSelector: string,
+    relativePath: string,
+    contentBase64: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(target, this.host).writeFileBase64(target.path, contentBase64)
+    return { ok: true }
+  }
+
+  async writeFileExplorerFileBase64Chunk(
+    worktreeSelector: string,
+    relativePath: string,
+    contentBase64: string,
+    append: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
+      target.path,
+      contentBase64,
+      append
+    )
+    return { ok: true }
+  }
+
+  async createFileExplorerFile(
+    worktreeSelector: string,
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(target, this.host).createFile(target.path)
+    return { ok: true }
+  }
+
+  async createFileExplorerDir(
+    worktreeSelector: string,
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(target, this.host).createDir(target.path)
+    return { ok: true }
+  }
+
+  async createFileExplorerDirNoClobber(
+    worktreeSelector: string,
+    relativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(target, this.host).createDirNoClobber(target.path)
+    return { ok: true }
+  }
+
+  async commitFileExplorerUpload(
+    worktreeSelector: string,
+    tempRelativePath: string,
+    finalRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const [tempTarget, finalTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
+      tempRelativePath,
+      finalRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      tempTarget.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    requireLocalRuntimeFileRoute(tempTarget)
+    // Commit resolved temp/final paths, not symlink-preserving spellings.
+    const store = this.host.requireStore()
+    const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
+    const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
+    await mkdir(dirname(finalPath), { recursive: true })
+    await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
+    await rm(tempPath, { force: true })
+    return { ok: true }
+  }
+
+  /** Atomically replaces a file with an uploaded temp file unless its bytes changed meanwhile. */
+  async replaceFileExplorerFileWithUpload(
+    worktreeSelector: string,
+    tempRelativePath: string,
+    finalRelativePath: string,
+    precondition: FileBytesWritePrecondition,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<FileWriteResult> {
+    const [tempTarget, finalTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
+      tempRelativePath,
+      finalRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      tempTarget.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    requireLocalRuntimeFileRoute(tempTarget)
+    const store = this.host.requireStore()
+    const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
+    const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
+    try {
+      return await replaceLocalFileBytesIfUnchanged(
+        finalPath,
+        (replacement) => copyFile(tempPath, replacement),
+        precondition
+      )
+    } finally {
+      await rm(tempPath, { force: true })
+    }
+  }
+
+  async renameFileExplorerPath(
+    worktreeSelector: string,
+    oldRelativePath: string,
+    newRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const [oldTarget, newTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
+      oldRelativePath,
+      newRelativePath
+    ])
+    assertRuntimeFileMutationExpectation(
+      oldTarget.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(oldTarget, this.host).renameNoClobber(
+      oldTarget.path,
+      newTarget.path
+    )
+    return { ok: true }
+  }
+
+  async copyFileExplorerPath(
+    worktreeSelector: string,
+    sourceRelativePath: string,
+    destinationRelativePath: string,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const [sourceTarget, destinationTarget] = await resolveFileExplorerPaths(
+      this.host,
+      worktreeSelector,
+      [sourceRelativePath, destinationRelativePath]
+    )
+    assertRuntimeFileMutationExpectation(
+      sourceTarget.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    await requireRuntimeFileProvider(sourceTarget, this.host).copy(
+      sourceTarget.path,
+      destinationTarget.path
+    )
+    return { ok: true }
+  }
+
+  async deleteFileExplorerPath(
+    worktreeSelector: string,
+    relativePath: string,
+    recursive?: boolean,
+    expectedSshConnectionGeneration?: number,
+    expectedSshTargetId?: string,
+    expectedExecutionHostId?: string
+  ): Promise<{ ok: true }> {
+    const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
+    assertRuntimeFileMutationExpectation(
+      target.executionHostId,
+      expectedExecutionHostId,
+      expectedSshTargetId,
+      expectedSshConnectionGeneration
+    )
+    // Remote runtimes have no client Trash; callers confirm this permanent delete.
+    await requireRuntimeFileProvider(target, this.host).deletePath(target.path, recursive)
+    return { ok: true }
+  }
+}

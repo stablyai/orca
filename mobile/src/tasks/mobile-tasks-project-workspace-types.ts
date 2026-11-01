@@ -7,6 +7,7 @@ import type {
 } from './mobile-tasks-provider-detail-types'
 import type { WorkspaceAgentChoice, SparsePreset } from './mobile-tasks-dependencies'
 import type { GitHubProjectRow } from './mobile-tasks-view-state-types'
+import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 
 export type TaskItem =
   | {
@@ -44,6 +45,15 @@ export type TaskItem =
       status: string
       updatedAt: string
       source: LinearIssue
+    }
+  | {
+      key: string
+      provider: 'jira'
+      title: string
+      subtitle: string
+      status: string
+      updatedAt: string
+      source: JiraIssue
     }
 
 export type ActionableTaskItem = Exclude<TaskItem, { provider: 'gitlabTodo' }>
@@ -87,7 +97,6 @@ export type SetupPrompt = {
   sparseCheckoutOverride?: { directories: string[]; presetId?: string }
   repoName: string
   command: string
-  /** Absent as well as null: `repo.hooks` need not report where the setup script came from. */
   source: string | null | undefined
 }
 

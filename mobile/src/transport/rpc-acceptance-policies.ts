@@ -1,9 +1,6 @@
 import type { RpcResponse, RpcSuccess } from './types'
 
-// Named acceptance policies for RPC replies. Call sites used to hand-roll these
-// predicates and did not agree with each other; each policy here preserves one
-// call site's existing acceptance exactly. Do not merge two policies without
-// proving every caller of both tolerates the wider or narrower set.
+// Keep acceptance policies distinct until every caller is proven compatible with any widened/narrowed reply set.
 
 /** Throws `code: message` on refusal. Diagnostic text; not user-facing. */
 export function requireRpcResultOrThrowCodedError(response: RpcResponse): unknown {

@@ -1,23 +1,5 @@
-/**
- * Real-ConPTY reproduction for #15192: wide characters arrive doubled in the
- * terminal buffer on Windows (`안녕하세요` -> `안안녕녕하하세세요요`), while
- * Latin is never affected.
- *
- * Why at this layer and not in the renderer: every renderer-side duplication
- * path (delivery replay, snapshot restore, output-queue chunking) is
- * script-blind and would double ASCII too. The one component in the stack that
- * represents a character as TWO cells is the Windows console text buffer, where
- * a DBCS glyph occupies a leading and a trailing cell that both carry the same
- * wchar. Emitting the trailing cell as text produces exactly the reported
- * signature. So the assertion is on the bytes node-pty hands us, BEFORE xterm.
- *
- * Orca pins the ConPTY implementation with `useConptyDll: true`
- * (local-pty-utils.ts, pty-subprocess.ts, windows-conpty-warmup.ts), so the
- * bundled OpenConsole build is a variable we control and the system one is the
- * A/B. Both are exercised here.
- *
- * Runs only on win32; skipped elsewhere (macOS/Linux have no ConPTY).
- */
+/** #15192: test bundled/system ConPTY bytes for duplicate wide glyphs before xterm replay.
+ * Wide cells carry two copies of a wchar; script-blind renderer duplication would also affect Latin controls. */
 import { describe, expect, it } from 'vitest'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import { isWideGlyph } from '../daemon/__fixtures__/terminal-wide-cell-grid'
@@ -42,9 +24,7 @@ function doubledWideRuns(text: string): string[] {
 
 async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string> {
   const nodePty = await import('node-pty')
-  // Why node and not `echo`: cmd.exe's output codepage depends on the machine's
-  // ANSI codepage, which would make the fixture bytes untrustworthy. Node always
-  // writes UTF-8 here.
+  // Node writes deterministic UTF-8; cmd.exe codepage would make fixture bytes machine-dependent.
   const script = [
     `const ko=${JSON.stringify(KOREAN_LINE)};`,
     `const la=${JSON.stringify(LATIN_LINE)};`,
@@ -55,8 +35,7 @@ async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string
 
   const proc = nodePty.spawn(process.execPath, ['-e', script], {
     name: 'xterm-256color',
-    // Why narrow: the reporter's doubling shows on wrapped rows, and a wide glyph
-    // straddling the wrap boundary is where the leading/trailing cell pair matters.
+    // Narrow rows force wide glyphs across wrap boundaries where leading/trailing cells matter.
     cols: 40,
     rows: 10,
     cwd: process.cwd(),
@@ -68,9 +47,7 @@ async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string
   proc.onData((chunk) => {
     out += chunk
   })
-  // Why a resize mid-stream: ConPTY repaints its viewport on a size change, and
-  // the report is intermittent in a way that tracks repaints (the reporter's own
-  // workaround is resizing the window).
+  // Resize triggers the repaint implicated by the intermittent report and its workaround.
   const resizes = [38, 44, 36, 46]
   const timers = resizes.map((cols, index) =>
     setTimeout(
@@ -90,7 +67,7 @@ async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string
       proc.onExit(() => resolve())
     })
   } finally {
-    // Why: a child that never exits would otherwise outlive the run and leak into the rest of the job.
+    // Always stop the fixture child so a hang cannot leak into later jobs.
     for (const timer of timers) {
       clearTimeout(timer)
     }
@@ -103,8 +80,7 @@ async function runThroughConpty(opts: { useConptyDll: boolean }): Promise<string
   return out
 }
 
-// Why a self-test: the ConPTY cases only run on Windows, so without this the
-// detector could rot into a vacuous pass on every other platform's CI.
+// Run detector assertions on all hosts so Windows-only cases cannot hide a broken detector.
 describe('doubled-wide-character detector', () => {
   it('flags the text the reporter pasted into Notepad and clears the correct text', () => {
     const reported = '시시각각적적 피피로로도도 | 빨빨강강/파파랑랑/초초록록 원원색색 배배지지'
@@ -127,10 +103,9 @@ describe('Windows ConPTY wide-character fidelity (#15192)', () => {
     'does not double wide characters with the bundled ConPTY (useConptyDll)',
     async () => {
       const text = stripAnsiEscapeSequences(await runThroughConpty({ useConptyDll: true }))
-      // Guard against a vacuous pass: the fixture must actually have reached us.
       expect(text).toContain(KOREAN_LINE.slice(0, 5))
       expect(doubledWideRuns(text)).toEqual([])
-      // Control: the Latin line survives intact, so a failure above is script-selective.
+      // Latin is the control for script-specific corruption.
       expect(text).toContain(LATIN_LINE)
     },
     60_000

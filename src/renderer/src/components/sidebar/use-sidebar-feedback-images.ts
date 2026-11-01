@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
+  maxFeedbackImageBatchBytes,
   readFeedbackImageFiles,
   releaseFeedbackImageDraft,
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
+
+function sumImageBytes(images: readonly FeedbackImageDraft[]): number {
+  return images.reduce((total, image) => total + image.bytes, 0)
+}
 
 export function useSidebarFeedbackImages(params: {
   open: boolean
@@ -22,15 +27,16 @@ export function useSidebarFeedbackImages(params: {
   handleRemoveImage: (id: string) => void
   clearImages: () => void
   hasPendingImageReads: () => boolean
-  /** Live committed+pending count and bytes, for the paste and attach gates. */
+  /** Live committed+pending count and bytes, for the synchronous paste gate. */
   getReservedImageCapacity: () => { count: number; bytes: number }
 } {
   const [images, setImages] = useState<FeedbackImageDraft[]>([])
   const [pendingImageReadCount, setPendingImageReadCount] = useState(0)
   const liveImageDraftsRef = useRef<FeedbackImageDraft[]>([])
-  // Why: committed state lags in-flight reads, so batches still being read count
-  // against capacity — otherwise two quick pastes both see room for four.
+  // Reserve queued reads synchronously so rapid pastes cannot each claim the same free capacity.
   const pendingImageReadsRef = useRef({ count: 0, bytes: 0 })
+  // Read batches serially because compression sizes are unknown until earlier batches commit.
+  const readQueueRef = useRef<Promise<void> | null>(null)
 
   const clearImages = useCallback(() => {
     liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
@@ -38,7 +44,6 @@ export function useSidebarFeedbackImages(params: {
     setImages([])
   }, [])
 
-  // Why: object URLs for the thumbnails leak until revoked.
   useEffect(
     () => () => {
       liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
@@ -47,14 +52,13 @@ export function useSidebarFeedbackImages(params: {
     []
   )
 
-  // Why: a read's callback moves its batch from pending to the live ref in one
-  // step, but rendered state lags a render, so only the ref covers that gap.
+  // Rendered state lags read completion; the live ref closes that reservation-count gap.
   const getReservedImageCapacity = useCallback((): { count: number; bytes: number } => {
     const liveDrafts = liveImageDraftsRef.current
     const pendingReads = pendingImageReadsRef.current
     return {
       count: liveDrafts.length + pendingReads.count,
-      bytes: liveDrafts.reduce((total, image) => total + image.bytes, 0) + pendingReads.bytes
+      bytes: sumImageBytes(liveDrafts) + pendingReads.bytes
     }
   }, [])
 
@@ -72,14 +76,22 @@ export function useSidebarFeedbackImages(params: {
         )
         return
       }
-      const { count: existingCount, bytes: existingBytes } = getReservedImageCapacity()
       const pendingReads = pendingImageReadsRef.current
-      const batchBytes = files.reduce((total, file) => total + file.size, 0)
+      // Why: earlier reads can fail and attached images can be removed before this reads.
+      const batchBytes = maxFeedbackImageBatchBytes(files, 0, 0)
       pendingReads.count += files.length
       pendingReads.bytes += batchBytes
       setPendingImageReadCount((current) => current + files.length)
-      void readFeedbackImageFiles(files, existingCount, existingBytes).then(
-        ({ images: added, errors }) => {
+      const read = (readQueueRef.current ?? Promise.resolve()).then(() => {
+        // Why: an unmounted dialog discards whatever this reads, so skip the decode and re-encodes.
+        if (!params.mountedRef.current) {
+          return { images: [], errors: [], notices: [] }
+        }
+        const committed = liveImageDraftsRef.current
+        return readFeedbackImageFiles(files, committed.length, sumImageBytes(committed))
+      })
+      const settled = read.then(
+        ({ images: added, errors, notices }) => {
           pendingReads.count -= files.length
           pendingReads.bytes -= batchBytes
           if (!params.mountedRef.current) {
@@ -91,7 +103,8 @@ export function useSidebarFeedbackImages(params: {
             liveImageDraftsRef.current = [...liveImageDraftsRef.current, ...added]
             setImages((existing) => [...existing, ...added])
           }
-          // Why: never drop an attachment without telling the user.
+          // Why: never drop or degrade an attachment without telling the user.
+          notices.forEach((notice) => toast.info(notice))
           errors.forEach((error) => toast.warning(error))
         },
         (error: unknown) => {
@@ -109,8 +122,12 @@ export function useSidebarFeedbackImages(params: {
           }
         }
       )
+      // Recover the queue tail after callback errors so later attachments are not poisoned by a rejected promise.
+      readQueueRef.current = settled.catch((error: unknown) => {
+        console.error('Failed to settle a feedback image batch:', error)
+      })
     },
-    [getReservedImageCapacity, params.isSubmitting, params.mountedRef]
+    [params.isSubmitting, params.mountedRef]
   )
 
   const handleRemoveImage = useCallback((id: string) => {

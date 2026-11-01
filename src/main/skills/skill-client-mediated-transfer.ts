@@ -7,7 +7,7 @@ import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   SkillUploadBeginResultSchema
 } from '../../shared/skill-upload-session-contract'
-import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { downloadSkillPackageGrant } from './skill-package-download'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-transfer-rpc-retry'

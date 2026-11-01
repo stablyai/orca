@@ -1,3 +1,9 @@
+import {
+  makeRuntimeOrchestrationDb,
+  dispatchContextRow,
+  taskLineageRow,
+  coordinatorRunRow
+} from '../runtime-orchestration-db.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -15,6 +21,10 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it.each(['failed', 'circuit_broken'] as const)(
@@ -24,21 +34,28 @@ describe('OrcaRuntimeService', () => {
       const workerLeafId = '66666666-6666-4666-8666-666666666666'
       const workerPaneKey = makePaneKey('tab-worker', workerLeafId)
       const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-      const getActiveCoordinatorRun = vi.fn(() => ({
-        id: 'run-unrelated',
-        coordinator_handle: 'term_unrelated'
-      }))
-      runtime.setOrchestrationDb({
-        getActiveDispatchForTerminal: vi.fn(() => undefined),
-        getLatestDispatchForTerminal: vi.fn(() => ({
+      const getActiveCoordinatorRun = vi.fn(() =>
+        coordinatorRunRow({
+          id: 'run-unrelated',
+          coordinator_handle: 'term_unrelated'
+        })
+      )
+      const orchestrationDb = makeRuntimeOrchestrationDb()
+      vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+      vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+      vi.spyOn(orchestrationDb, 'getLatestDispatchForTerminal').mockImplementation(() =>
+        dispatchContextRow({
           id: 'ctx-settled',
           task_id: 'task-settled',
           assignee_handle: workerHandle,
           status: dispatchStatus,
           completed_at: new Date(Date.now()).toISOString()
-        })),
+        })
+      )
+      vi.spyOn(orchestrationDb, 'getActiveCoordinatorRun').mockImplementation(
         getActiveCoordinatorRun
-      } as never)
+      )
+      runtime.setOrchestrationDb(orchestrationDb)
       runtime.attachWindow(1)
 
       const result = runtime.syncWindowGraph(1, {
@@ -76,20 +93,24 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const workerLeafId = '77777777-7777-4777-8777-777777777777'
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-    runtime.setOrchestrationDb({
-      getActiveDispatchForTerminal: vi.fn(() => undefined),
-      getLatestDispatchForTerminal: vi.fn((handle: string) =>
+    // Fixed before the sync so its `now` is never older than this timestamp.
+    const staleCompletedAt = new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'getLatestDispatchForTerminal').mockImplementation(
+      (handle: string) =>
         handle === workerHandle
-          ? {
+          ? dispatchContextRow({
               id: 'ctx-stale',
               task_id: 'task-stale',
               assignee_handle: workerHandle,
               status: 'completed',
-              completed_at: new Date(Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1).toISOString()
-            }
+              completed_at: staleCompletedAt
+            })
           : undefined
-      )
-    } as never)
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
 
     const result = runtime.syncWindowGraph(1, {
@@ -125,12 +146,12 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -181,7 +202,10 @@ describe('OrcaRuntimeService', () => {
       childWorktreeIds: [],
       lineage: result.lineage
     })
-    expect(setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
+      expect.any(Object)
+    )
   })
 
   it('keeps cwd-inferred lineage best-effort when the cwd parent cannot be resolved', async () => {
@@ -235,12 +259,12 @@ describe('OrcaRuntimeService', () => {
         displayName: 'worker'
       })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -250,13 +274,16 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
-    runtime.setOrchestrationDb({
-      getDispatchContext: vi.fn(() => ({
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getDispatchContext').mockImplementation(() =>
+      dispatchContextRow({
         task_id: 'task_abc123',
         assignee_handle: workerHandle,
         status: 'completed'
-      }))
-    } as never)
+      })
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -315,7 +342,7 @@ describe('OrcaRuntimeService', () => {
       taskId: 'task_abc123'
     })
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         parentWorktreeInstanceId: 'worker-instance'
       })
@@ -333,12 +360,12 @@ describe('OrcaRuntimeService', () => {
         displayName: 'parent'
       })
     }
-    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const setWorktreeLineage = vi.fn((_target: HostWorktreeTarget, lineage) => lineage)
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         const existing = metaById[worktreeId] ?? makeWorktreeMeta()
         metaById[worktreeId] = { ...existing, ...meta }
         return metaById[worktreeId]
@@ -348,13 +375,16 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const parentHandle = runtime.preAllocateHandleForPty('pty-parent')
-    runtime.setOrchestrationDb({
-      getDispatchContext: vi.fn(() => undefined),
-      getTask: vi.fn(() => ({
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'getDispatchContext').mockImplementation(() => undefined)
+    vi.spyOn(orchestrationDb, 'getTask').mockImplementation(() =>
+      taskLineageRow({
         id: 'task_creator123',
         created_by_terminal_handle: parentHandle
-      }))
-    } as never)
+      })
+    )
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -413,7 +443,7 @@ describe('OrcaRuntimeService', () => {
       taskId: 'task_creator123'
     })
     expect(setWorktreeLineage).toHaveBeenCalledWith(
-      childId,
+      hostWorktreeTarget({ id: childId, hostId: 'local' }),
       expect.objectContaining({
         parentWorktreeInstanceId: 'parent-instance'
       })

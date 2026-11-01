@@ -1,4 +1,5 @@
 import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-request-types'
+import type { CoalescedProbes } from '../../../git/coalesced-probe'
 export const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 
 export const MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS = 60 * 1000
@@ -14,6 +15,29 @@ export type GitHubRepositoryMergeMetadata = {
 export const repositoryMergeMetadataCache = new Map<
   string,
   { value: GitHubRepositoryMergeMetadata; expiresAt: number }
+>()
+
+const repositoryMergeMetadataReads: CoalescedProbes<GitHubRepositoryMergeMetadata> = new Map()
+
+let signaledReads = new WeakMap<AbortSignal, CoalescedProbes<GitHubRepositoryMergeMetadata>>()
+
+export function repositoryMergeMetadataReadProbes(
+  signal?: AbortSignal
+): CoalescedProbes<GitHubRepositoryMergeMetadata> {
+  if (!signal) {
+    return repositoryMergeMetadataReads
+  }
+  let probes = signaledReads.get(signal)
+  if (!probes) {
+    probes = new Map()
+    signaledReads.set(signal, probes)
+  }
+  return probes
+}
+
+export const repositoryMergeMetadataWriters = new Map<
+  string,
+  { activeReads: number; nextRead: number; publishedRead: number }
 >()
 
 export function pruneRepositoryMergeMetadataCache(now = Date.now()): void {
@@ -38,7 +62,7 @@ export function cacheRepositoryMergeMetadata(
 ): void {
   const now = Date.now()
   pruneRepositoryMergeMetadataCache(now)
-  // Why: merge metadata is keyed by user-controlled branch names; keep the cache bounded across many short-lived branches.
+  // User-controlled branch names require a bound independent of expiry.
   repositoryMergeMetadataCache.delete(cacheKey)
   repositoryMergeMetadataCache.set(cacheKey, {
     value,
@@ -49,6 +73,9 @@ export function cacheRepositoryMergeMetadata(
 
 export function _resetMergeQueueCacheForTests(): void {
   repositoryMergeMetadataCache.clear()
+  repositoryMergeMetadataReads.clear()
+  signaledReads = new WeakMap()
+  repositoryMergeMetadataWriters.clear()
 }
 
 export function _getMergeQueueCacheSizeForTests(): number {

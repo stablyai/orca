@@ -1,22 +1,5 @@
-/**
- * Benchmark + repro suite for issue #8013: repos with ~10,000+ files make the
- * renderer's memory grow and the UI unresponsive.
- *
- * Each scenario builds an isolated on-disk repo at a controlled scale, drives
- * the real status pipeline (git scan → line stats → IPC → store → Source
- * Control rows), and measures:
- *   - scanMs           main-process `git status` + line-stat duration
- *   - payloadBytes     serialized status payload size crossing IPC
- *   - renderMs         time from setGitStatus until rows are in the DOM
- *   - maxLagMs/p95     event-loop lag while loading (UI responsiveness)
- *   - domNodeCount     total DOM nodes after render
- *   - heap growth      JS heap across repeated poll cycles (leak signal)
- *
- * Run a single scenario at a custom scale:
- *   ORCA_LARGE_FILE_COUNT=9500 npx playwright test \
- *     tests/e2e/source-control-large-file-count.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless
- */
+// #8013: build isolated large repos and measure real git scan → line stats → IPC → store → rendered rows.
+// Record scan/render time, payload size, lag, DOM count and repeated-poll heap growth; ORCA_LARGE_FILE_COUNT selects scale.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -33,15 +16,12 @@ import {
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
 import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/right-sidebar-width'
 
-// Matches the large-diff freeze budget: a blocking stall past 1s is the
-// "UI becomes unresponsive" symptom reported in #8013.
+// A blocking stall over 1s matches the reported unresponsive UI.
 const MAX_EVENT_LOOP_LAG_MS = 1_000
-// A second full status→store→render cycle with identical data must not leak
-// unbounded memory; allow generous headroom for GC timing noise.
+// Repeat identical status cycles to catch unbounded growth, allowing GC timing headroom.
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 
-// A virtualized list mounts viewport + overscan rows only; anything past this
-// bound means the panel is mounting rows proportional to the change set again.
+// Virtualization must bound mounts to viewport plus overscan, independent of change count.
 const MAX_MOUNTED_ROWS = 200
 const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
 
@@ -74,8 +54,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     return addedRepo.id
   }, repoPath)
 
-  // Why: fetchWorktrees() resolves before Zustand always reflects the async
-  // worktree scan, so poll the same public store path real repo setup uses.
+  // Poll async worktree scan state even after fetchWorktrees resolves.
   await expect
     .poll(
       () =>
@@ -112,10 +91,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     { targetRepoId: repoId, pathToRepo: repoPath }
   )
 
-  // Why: repo activation can finish sidebar routing after the store mutation;
-  // assert the user-visible panel before timing its render. Clicking the
-  // already-active activity button races the first cold status scan and tests
-  // Playwright's two-frame actionability window instead of panel readiness.
+  // Wait for the visible panel after async repo routing; clicking an already-active button measures Playwright stability instead.
   const sourceControlButton = orcaPage.getByRole('button', { name: /^Source Control/ })
   await expect(sourceControlButton).toBeVisible()
   await expect
@@ -130,25 +106,19 @@ async function unregisterLargeFileCountRepos(
   orcaPage: Page,
   repoPaths: readonly string[]
 ): Promise<void> {
-  // Why: remove disposable projects through the product so their terminals
-  // and watcher subscriptions begin shutting down before Electron teardown.
+  // Remove projects through product actions so PTYs/watchers start shutting down before Electron.
   for (const repoPath of repoPaths) {
     await orcaPage.evaluate(async (pathToRepo) => {
       const store = window.__store
       const repo = store?.getState().repos.find((entry) => entry.path === pathToRepo)
       if (repo) {
-        await store?.getState().removeProject(repo.id)
+        await store?.getState().removeProject(repo.id, { hostId: 'local' })
       }
     }, repoPath)
   }
 }
 
-/**
- * Drives the exact pipeline the panel's poll uses (api.git.status →
- * setGitStatus) so results are deterministic even while the built-in 3s poll
- * runs concurrently — the poll produces identical entries, which the store
- * dedupes.
- */
+// Run the poll’s exact status→store path; concurrent built-in polls produce identical entries that dedupe.
 async function measureSourceControlLoad(
   orcaPage: Page,
   args: { worktreeId: string; repoPath: string; expectedRows: number; pollCycles: number }
@@ -179,9 +149,7 @@ async function measureSourceControlLoad(
       const scanMs = performance.now() - scanStart
       const payloadBytes = JSON.stringify(status).length
 
-      // Why: a virtualized panel mounts only viewport rows, so "all rows in
-      // the DOM" would never happen post-fix. First rows appearing is the
-      // user-visible "list loaded" moment either way.
+      // Time first rows, not all rows: virtualization intentionally leaves most unmounted.
       const firstRowsTarget = Math.min(expectedRows, 30)
       const renderStart = performance.now()
       store.getState().setGitStatus(worktreeId, status)
@@ -199,8 +167,7 @@ async function measureSourceControlLoad(
       renderedRows = document.querySelectorAll('[data-testid="source-control-entry"]').length
       const heapUsedMbAfterRender = readHeapMb()
 
-      // Why: #8013 reports memory that keeps growing — replay the poll cycle
-      // (fresh scan, fresh entry array, store update) and track heap + lag.
+      // Repeat real scans/store arrays to expose ongoing memory growth, not just first-load allocation.
       const heapUsedMbPerCycle: number[] = []
       const cycleMaxLagMs: number[] = []
       let rescanMs = 0
@@ -209,8 +176,7 @@ async function measureSourceControlLoad(
         const cycleScanStart = performance.now()
         const cycleStatus = await window.api.git.status({ worktreePath: repoPath })
         if (cycle === 0) {
-          // First rescan isolates warm-cache scan cost (untracked line-stat
-          // reads are mtime-cached after the initial scan).
+          // The first rescan isolates warm mtime-cache cost.
           rescanMs = performance.now() - cycleScanStart
         }
         store.getState().setGitStatus(worktreeId, cycleStatus)
@@ -248,11 +214,7 @@ function logMeasurement(
   console.log(`[large-file-count] ${label} ${JSON.stringify(measurement)}`)
 }
 
-/**
- * OS-level working set of all renderer processes, in MB. The #8013 report is
- * about renderer memory; JS heap alone misses DOM/native memory, which
- * dominates when hundreds of thousands of nodes mount.
- */
+// Measure all renderers’ OS working set too; JS heap misses native/DOM memory from excessive mounts.
 async function readRendererWorkingSetMb(electronApp: ElectronApplication): Promise<number> {
   return await electronApp.evaluate(({ app }) => {
     let totalKb = 0
@@ -266,8 +228,7 @@ async function readRendererWorkingSetMb(electronApp: ElectronApplication): Promi
 }
 
 test.describe('Source Control large file count (#8013)', () => {
-  // Why: each scenario gets its own Electron app + isolated fixture repo, so a
-  // failing scale must not skip the others — every scenario is a data point.
+  // Keep scales independent because every isolated app/repo failure is a useful data point.
   test.use({ seedTestRepo: false })
 
   test('a large untracked set under the status cap stays responsive', async ({
@@ -277,9 +238,7 @@ test.describe('Source Control large file count (#8013)', () => {
   }) => {
     test.setTimeout(600_000)
     const untrackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '950')
-    // Why: ORCA_LARGE_FILE_BYTES gives untracked files realistic sizes so the
-    // per-poll line-stat reads (cache-capped at 2,048 entries) become visible
-    // in rescanMs instead of hiding behind ~30-byte fixture files.
+    // ORCA_LARGE_FILE_BYTES exposes uncached line-stat I/O beyond the 2048-entry cache with realistic file sizes.
     const untrackedFileBytes = Number(process.env.ORCA_LARGE_FILE_BYTES ?? '0')
     const fixture = createLargeFileCountRepo({
       trackedFiles: 100,
@@ -306,8 +265,7 @@ test.describe('Source Control large file count (#8013)', () => {
       expect(measurement.didHitLimit).toBe(false)
       expect(measurement.entryCount).toBeGreaterThanOrEqual(untrackedFiles)
       expect(measurement.renderedRows).toBeGreaterThan(0)
-      // Why: mounting rows proportional to the change set is the #8013 bug;
-      // a virtualized panel mounts viewport + overscan only.
+      // Reject mounts proportional to change count; keep only viewport plus overscan.
       expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
       if (measurement.heapUsedMbPerCycle.length > 1) {
@@ -437,8 +395,7 @@ test.describe('Source Control large file count (#8013)', () => {
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
       expect(activationMaxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
 
-      // Why: didHitLimit must park the worktree in the huge-status state so
-      // background polling stops re-running tens-of-seconds git scans.
+      // didHitLimit must stop background polling from repeating huge scans.
       const hugeState = await orcaPage.evaluate(
         (wId) => window.__store?.getState().gitStatusHugeByWorktree?.[wId] ?? null,
         worktreeId
@@ -475,8 +432,7 @@ test.describe('Source Control large file count (#8013)', () => {
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(600_000)
-    // Why: compare warm rescan cost at two sub-cap scales on the same machine;
-    // a cache sized below one complete status result makes the ratio balloon.
+    // Compare warm sub-cap scales on this machine; a too-small full-result cache makes their ratio grow.
     const fileBytes = 65_536
     const smallRepo = createLargeFileCountRepo({
       trackedFiles: 10,

@@ -9,14 +9,12 @@ export async function copySessionFileWithoutOverwrite(
   targetPath: string
 ): Promise<void> {
   const temporaryPath = join(dirname(targetPath), `.orca-backfill-${randomUUID()}.tmp`)
-  // Why: stage cross-volume copies away from the rollout filename so a failed
-  // copy cannot strand a truncated session that a later retry would skip.
+  // Stage away from the rollout name so retries cannot mistake a partial copy for a complete session.
   await writeFile(temporaryPath, '', { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
   try {
     await copyFile(sourcePath, temporaryPath)
     try {
-      // Why: this same-volume hardlink atomically installs the staged copy
-      // without risking a collision overwrite after an EXDEV fallback.
+      // A same-volume hardlink publishes atomically without replacing a concurrent target.
       await link(temporaryPath, targetPath)
     } catch (installLinkError) {
       if (isExistsError(installLinkError)) {
@@ -25,16 +23,14 @@ export async function copySessionFileWithoutOverwrite(
       if (!isHardlinkUnsupportedError(installLinkError)) {
         throw installLinkError
       }
-      // Why: Node has no portable atomic rename-if-absent. Fail closed on a
-      // hardlink-less target instead of risking replacement of a concurrent file.
+      // Node has no portable atomic rename-if-absent; refuse filesystems without hardlinks.
       throw makeAtomicNoReplaceUnsupportedError(targetPath, installLinkError)
     }
   } finally {
     try {
       await rm(temporaryPath, { force: true })
     } catch (error) {
-      // Why: cleanup trouble must not misreport a successfully installed
-      // rollout as a copy failure; the .tmp file is ignored by Codex.
+      // Codex ignores .tmp files; cleanup failure must not invalidate a successful publication.
       console.warn('[codex-session-backfill] Failed to remove staged copy:', temporaryPath, error)
     }
   }

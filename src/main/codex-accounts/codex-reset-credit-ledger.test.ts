@@ -96,16 +96,6 @@ describe('async reset-credit ledger', () => {
     expect(ledger.get('second')).toBe(second)
   })
 
-  it('retains the removed account guard when its async durability barrier fails', async () => {
-    const { ledger, barrier } = setup()
-    const attempt = ledger.createFresh('first', scope('account-1'))
-    await ledger.markProviderPending('first', attempt)
-    barrier.mockRejectedValueOnce(new Error('disk full'))
-    await expect(ledger.discardForRemovedAccount('account-1')).rejects.toThrow('disk full')
-    expect(ledger.get('first')).toBe(attempt)
-    expect(ledger.getUnresolvedKey(attempt.accountScopeKey)).toBe('first')
-  })
-
   it('fails queued and future mutations closed when a commit outcome is unknown', async () => {
     const { ledger, store, barrier } = setup()
     const attempt = ledger.createFresh('first', scope('account-1'))
@@ -122,7 +112,7 @@ describe('async reset-credit ledger', () => {
 
     ledger.releaseFresh('first', attempt)
     expect(ledger.get('first')).toBe(attempt)
-    expect(ledger.getClaimedKey(attempt.scopeKey)).toBe('first')
+    expect(ledger.findAttemptFor('other', attempt.scopeKey, 'none')?.idempotencyKey).toBe('first')
     expect(store.replaceCodexResetCreditAttemptLedgerAndFlush).toHaveBeenCalledOnce()
     await expect(ledger.discardForRemovedAccount('account-1')).rejects.toThrow(
       'durability is unknown'

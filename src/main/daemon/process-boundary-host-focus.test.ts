@@ -3,8 +3,7 @@ import { PtyShellOwnershipMirror } from '../runtime/pty-shell-ownership-mirror'
 import { HeadlessEmulator } from './headless-emulator'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 
-// Why this suite: the recovery ground must turn off only what the dead program
-// armed, and inject no enables, since every consumer scans the injected bytes for ownership.
+// Recovery must not re-enable input modes that downstream scanners would attribute to a new program.
 
 const PROMPT = '\x1b]133;A\x07$ '
 const COMMAND_START = '\x1b]133;C\x07'
@@ -20,7 +19,6 @@ afterEach(() => {
   }
 })
 
-/** Feeds `data` through a confirming barrier into a daemon emulator and a runtime mirror. */
 async function recover(data: string) {
   const live = new HeadlessEmulator({ cols: 80, rows: 24, scrollback: 100 })
   emulators.push(live)

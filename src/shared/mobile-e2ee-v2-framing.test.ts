@@ -51,6 +51,7 @@ describe('mobile E2EE v2 framing', () => {
         ...overrides
       })
 
+    expect(attempt({})).toEqual(payload)
     expect(attempt({ expectedCounter: 3n })).toBeNull()
     expect(attempt({ expectedCounter: 5n })).toBeNull()
     expect(attempt({ direction: 'desktop-to-mobile' })).toBeNull()
@@ -58,7 +59,7 @@ describe('mobile E2EE v2 framing', () => {
     expect(attempt({ sessionId: new Uint8Array(32).fill(9) })).toBeNull()
   })
 
-  it('uses one exact-next counter sequence across text and binary kinds', () => {
+  it('round-trips text and binary frames with successive counters', () => {
     const kinds = ['text', 'binary', 'text'] as const
     const frames = kinds.map((payloadKind, counter) =>
       sealMobileE2EEV2Frame({

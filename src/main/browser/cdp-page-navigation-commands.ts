@@ -6,10 +6,7 @@ import type { CdpDebuggerChannel } from './cdp-debugger-channel'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 
-/**
- * Page.navigate and Page.reload for Electron webview guests: CDP subscriptions
- * silently lapse across process swaps, so both are primed first (#7031).
- */
+/** Re-prime lifecycle subscriptions lost during Electron process swaps (#7031). */
 export class CdpPageNavigationCommands {
   constructor(
     private readonly webContents: WebContents,
@@ -78,7 +75,7 @@ export class CdpPageNavigationCommands {
   private async primePageLifecycle(sessionId?: string): Promise<void> {
     let timeout: ReturnType<typeof setTimeout> | null = null
     const priming = (async (): Promise<void> => {
-      // Why: without Network.enable, agent-browser never sees network idle → goto times out.
+      // agent-browser needs Network.enable to observe network idle and finish navigation.
       await this.debuggerChannel.sendDebuggerCommand('Network.enable', {}, sessionId)
       await this.debuggerChannel.sendDebuggerCommand('Page.enable', {}, sessionId)
       await this.debuggerChannel.sendDebuggerCommand(

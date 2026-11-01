@@ -11,13 +11,6 @@ import type {
   TeamPane
 } from './claude-agent-teams-types'
 
-export type {
-  AgentTeamsLaunchEnv,
-  AgentTeamsTerminalApi,
-  AgentTeamsTmuxCompatRequest,
-  AgentTeamsTmuxCompatResponse
-} from './claude-agent-teams-types'
-
 export class ClaudeAgentTeamsService {
   private readonly teams = new Map<string, AgentTeam>()
   private readonly dispatcher = new ClaudeAgentTeamsTmuxDispatcher()
@@ -32,7 +25,7 @@ export class ClaudeAgentTeamsService {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
     const leaderPane = '%1'
-    // Why: Windows callers pass an env spelt `Path`; reading `PATH` there truncated the launch PATH to just the shim dir.
+    // Preserve Windows Path casing or the shim would replace the launch PATH.
     const pathKey = resolvePathEnvKey(args.baseEnv, process.platform)
     const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
@@ -77,6 +70,10 @@ export class ClaudeAgentTeamsService {
       previouslyFocusedPane: null
     })
     return { teamId, token, leaderPane, env }
+  }
+
+  releaseTeam(teamId: string): void {
+    this.teams.delete(teamId)
   }
 
   removeTeamForLeaderHandle(handle: string): void {

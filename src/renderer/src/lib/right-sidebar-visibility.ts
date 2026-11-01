@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ActiveView = AppState['activeView']
 
@@ -39,7 +40,7 @@ export function rightSidebarShowsPullRequestData(
   }
 
   const activeWorktree = state.activeWorktreeId
-    ? getIndexedWorktreeMap(state.worktreesByRepo).get(state.activeWorktreeId)
+    ? getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(state.activeWorktreeId)
     : undefined
   const activeRepo = activeWorktree
     ? getIndexedRepoMap(state.repos).get(activeWorktree.repoId)

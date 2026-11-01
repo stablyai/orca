@@ -9,8 +9,9 @@ import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
-import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
+import type { ProjectRuntimeSessionSummary } from './repository/execution/repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
+import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'
 
 type ProjectRuntimeSegment = LocalWindowsRuntimePreference['kind']
 
@@ -75,9 +76,7 @@ export function ProjectWindowsRuntimeSetting({
       })
       return
     }
-    void updateProject(project.id, {
-      localWindowsRuntimePreference: { kind: 'wsl', distro: nextPreference.distro }
-    })
+    void updateProject(project.id, { localWindowsRuntimePreference: nextPreference })
   }
   const requestRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     if (sameRuntimePreference(nextPreference, preference)) {
@@ -104,7 +103,12 @@ export function ProjectWindowsRuntimeSetting({
     }
   }
   const handleDistroChange = (distro: string): void => {
-    requestRuntimePreference({ kind: 'wsl', distro })
+    // A project already on Git for Windows keeps it; only the terminals' distro changes.
+    requestRuntimePreference(
+      preference.kind === 'wsl' && preference.git
+        ? { kind: 'wsl', distro, git: preference.git }
+        : { kind: 'wsl', distro }
+    )
   }
 
   return (
@@ -331,23 +335,7 @@ function getProjectRuntimeDescription(
   resolution: ReturnType<typeof resolveProjectExecutionRuntime>
 ): string {
   if (resolution.status === 'repair-required') {
-    if (resolution.repair.reason === 'wsl-unavailable') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.wslUnavailable',
-        'WSL is not available. Switch this project to Windows or repair WSL.'
-      )
-    }
-    if (resolution.repair.reason === 'wsl-distro-missing') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing',
-        '{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.',
-        { value0: resolution.repair.preferredRuntime.distro ?? 'WSL' }
-      )
-    }
-    return translate(
-      'auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired',
-      'Choose a WSL distro or switch this project to Windows.'
-    )
+    return projectRuntimeRepairSentence(resolution.repair, translate)
   }
 
   if (resolution.runtime.kind === 'wsl') {

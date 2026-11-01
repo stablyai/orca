@@ -1,0 +1,44 @@
+name: Prepare the orcad Windows CLI launcher
+description: Compiles native/windows-cli-launcher for each requested arch into .build/windows-cli-launcher/<arch>/orca.exe.
+
+inputs:
+  arches:
+    description: Space-separated Windows architectures (x64, arm64).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the Windows Rust build scope
+      id: rust-scope
+      if: runner.os == 'Windows'
+      shell: bash
+      run: node config/scripts/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+    # Source globs, not crate/**: target/ and .build/ can already exist when this key is computed.
+    # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
+    - name: Cache the Windows CLI launcher builds
+      if: runner.os == 'Windows'
+      uses: actions/cache@v5
+      with:
+        path: |
+          .build/windows-cli-launcher
+          native/windows-cli-launcher/target
+          ~/.cargo/registry
+        key: orcad-windows-cli-launcher-v2-${{ runner.arch }}-${{ inputs.arches }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'config/scripts/build-windows-cli-launcher.mjs', 'config/scripts/windows-rust-executable-build.mjs', 'config/scripts/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+        restore-keys: |
+          orcad-windows-cli-launcher-v2-${{ runner.arch }}-${{ inputs.arches }}-${{ steps.rust-scope.outputs.toolchain }}-
+
+    - name: Build the launcher for each architecture
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        ARCHES: ${{ inputs.arches }}
+      run: |
+        $triples = @{ x64 = 'x86_64-pc-windows-msvc'; arm64 = 'aarch64-pc-windows-msvc' }
+        foreach ($arch in ($env:ARCHES -split ' ' | Where-Object { $_ })) {
+          rustup target add $triples[$arch]
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node config/scripts/build-windows-cli-launcher.mjs --arch $arch --output ".build/windows-cli-launcher/$arch/orca.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }

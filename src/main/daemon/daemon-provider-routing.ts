@@ -1,7 +1,7 @@
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider } from '../providers/pty-provider-contract'
 
 export type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
@@ -27,4 +27,21 @@ export function disposeProviderSubscriptionsOnly(provider: DaemonProvider): void
   if (provider instanceof DegradedDaemonPtyProvider) {
     provider.disposeProviderOnly()
   }
+}
+
+export function getAllDaemonAdapters(provider: DaemonProvider): readonly DaemonPtyAdapter[] {
+  return provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
+    ? provider.getAllAdapters()
+    : [provider]
+}
+
+// Partial generation inventories cannot authorize cleanup.
+export async function listEveryDaemonGeneration<T>(
+  provider: DaemonProvider,
+  list: (adapter: DaemonPtyAdapter) => Promise<T[]>
+): Promise<T[] | null> {
+  const results = await Promise.allSettled(getAllDaemonAdapters(provider).map(list))
+  return results.every((r) => r.status === 'fulfilled')
+    ? results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+    : null
 }

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { parse as parseToml } from 'smol-toml'
 import {
   codexTrustSourcePathsEqual,
   computeCodexTrustedHash,
@@ -11,9 +12,13 @@ import {
   parseCodexTrustKey
 } from './codex-trust-identity'
 import { writeTomlConfigAtomically } from './config-toml-atomic-write'
+import { findAllHookTrustBlocks } from './config-toml-hook-trust-blocks'
 import {
+  getTrustKeyWriteVariants,
   moveHookTrustContent,
+  readHookTrustBlockTexts,
   removeHookTrustContent,
+  restoreHookTrustBlockContent,
   upsertHookTrustContent
 } from './config-toml-hook-trust-edit'
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
@@ -37,7 +42,6 @@ export type CodexEventLabel =
 export type CodexTrustEntry = {
   /** Path on disk to the hooks.json that declares the hook (the "key_source"). */
   sourcePath: string
-  /** Codex event label (snake_case). */
   eventLabel: CodexEventLabel
   /** 0-based index of the matcher group within the event array. */
   groupIndex: number
@@ -45,13 +49,12 @@ export type CodexTrustEntry = {
   handlerIndex: number
   /** The exact `command` string written to hooks.json. */
   command: string
-  /** Effective timeout in seconds; defaults to 600 when undefined, explicit values clamped to a minimum of 1. */
+  /** Seconds: Interrupt defaults to 1 and clamps to 1–3; other events default to 600, minimum 1. */
   timeoutSec?: number
   /** Whether the handler is async. Defaults to false. */
   async?: boolean
   /** Optional matcher pattern (only meaningful for events that support it). */
   matcher?: string
-  /** Optional statusMessage field. */
   statusMessage?: string
   /** Verbatim hash to write instead of computing one. Never fed into hashing. */
   trustedHash?: string
@@ -103,7 +106,7 @@ export function parseTrustKey(key: string): {
   return parseCodexTrustKey(key)
 }
 
-// Why: trust edits preserve unrelated bytes instead of reserializing the user's config.
+/** Preserve unrelated config bytes and refuse edits that would break previously loadable TOML. */
 export function upsertHookTrustEntries(
   configPath: string,
   entries: readonly CodexTrustEntry[]
@@ -111,11 +114,76 @@ export function upsertHookTrustEntries(
   const existing = readTomlForMutation(configPath)
   const updated = upsertHookTrustEntriesInContent(existing, entries)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
   }
 }
 
-/** Moves hook trust blocks to new keys verbatim; see moveHookTrustContent. */
+export class CodexConfigTomlRefusedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexConfigTomlRefusedError'
+  }
+}
+
+export function isCodexConfigTomlRefusedError(
+  error: unknown
+): error is CodexConfigTomlRefusedError {
+  return error instanceof Error && error.name === 'CodexConfigTomlRefusedError'
+}
+
+/** Inline or dotted approvals can conflict with appended tables; reject newly invalid TOML. */
+export function writeLoadableHookTrustConfig(
+  configPath: string,
+  previous: string,
+  contents: string
+): void {
+  assertLoadableHookTrustConfig(configPath, previous, contents)
+  writeConfigAtomically(configPath, contents)
+}
+
+export function assertLoadableHookTrustConfig(
+  configPath: string,
+  previous: string,
+  contents: string
+): void {
+  if (isLoadableToml(previous) && !isLoadableToml(contents)) {
+    throw new CodexConfigTomlRefusedError(
+      `${configPath} defines hook approvals in a form Orca cannot add to without breaking it`
+    )
+  }
+}
+
+export function readHookTrustBlocks(
+  configPath: string,
+  keys: readonly string[]
+): Map<string, string[]> {
+  const content = existsSync(configPath) ? readTomlFile(configPath) : ''
+  return new Map(keys.map((key) => [key, readHookTrustBlockTexts(content, key)]))
+}
+
+export function restoreHookTrustBlocks(
+  configPath: string,
+  restores: readonly { key: string; blocks: readonly string[] }[]
+): void {
+  if (restores.length === 0 || !existsSync(configPath)) {
+    return
+  }
+  const existing = readTomlFile(configPath)
+  const updated = restoreHookTrustBlockContent(existing, restores)
+  if (updated !== existing) {
+    writeLoadableHookTrustConfig(configPath, existing, updated)
+  }
+}
+
+function isLoadableToml(content: string): boolean {
+  try {
+    parseToml(stripLeadingBom(content))
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function moveHookTrustEntries(
   configPath: string,
   moves: readonly { oldKey: string; newKey: string }[]
@@ -126,7 +194,7 @@ export function moveHookTrustEntries(
   const existing = readTomlForMutation(configPath)
   const updated = moveHookTrustContent(existing, moves)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
   }
 }
 
@@ -181,7 +249,7 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
   const existing = readTomlFile(configPath)
   const updated = removeHookTrustEntriesFromContent(existing, keys)
   if (updated !== existing) {
-    writeConfigAtomically(configPath, updated)
+    writeLoadableHookTrustConfig(configPath, existing, updated)
   }
 }
 
@@ -198,12 +266,22 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
     : new CodexHookTrustEntryMap()
 }
 
+/** Check exact spellings: separator-folded lookups could hide a missing Windows approval table. */
+export function readHookTrustKeySpellings(configPath: string): (key: string) => boolean {
+  const written = new Set(
+    existsSync(configPath)
+      ? findAllHookTrustBlocks(readTomlFile(configPath)).map(({ key }) => key)
+      : []
+  )
+  return (key) => getTrustKeyWriteVariants(key).every((spelling) => written.has(spelling))
+}
+
 export function readHookTrustEntriesFromContent(content: string): Map<string, CodexHookTrustState> {
   return readHookTrustContent(content)
 }
 
 function readTomlForMutation(configPath: string): string {
-  // Why: only definitive absence may seed empty; an indeterminate read must preserve the existing file.
+  // Only confirmed absence permits seeding an empty config.
   const observation = observe(() => readTomlFile(configPath))
   if (observation.kind === 'indeterminate') {
     throw observation.error
@@ -212,6 +290,9 @@ function readTomlForMutation(configPath: string): string {
 }
 
 function readTomlFile(configPath: string): string {
-  const raw = readFileSync(configPath, 'utf-8')
-  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
+  return stripLeadingBom(readFileSync(configPath, 'utf-8'))
+}
+
+function stripLeadingBom(content: string): string {
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
 }

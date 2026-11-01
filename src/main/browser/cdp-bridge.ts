@@ -38,8 +38,7 @@ import type { CdpAuxiliaryCommands, CdpTabState } from './cdp-auxiliary-commands
 import { CdpBridgeCommandSet } from './cdp-bridge-command-set'
 import { CdpBridgeState, type CdpQueuedCommand } from './cdp-bridge-state'
 
-// Why re-exported: moved to ./browser-error so the runtime can catch it without
-// pulling Chromium in. Existing importers of this path keep working.
+// Preserve existing imports; runtime code uses browser-error without loading Chromium.
 export { BrowserError } from './browser-error'
 
 export class CdpBridge {
@@ -161,8 +160,6 @@ export class CdpBridge {
     return this.commands.page.fullPageScreenshot(format)
   }
 
-  // ── Cookie management ──
-
   cookieGet(url?: string): Promise<BrowserCookieGetResult> {
     return this.auxiliaryCommands.cookieGet(url)
   }
@@ -184,8 +181,6 @@ export class CdpBridge {
     return this.auxiliaryCommands.cookieDelete(name, domain, url)
   }
 
-  // ── Viewport emulation ──
-
   setViewport(
     width: number,
     height: number,
@@ -195,8 +190,6 @@ export class CdpBridge {
     return this.auxiliaryCommands.setViewport(width, height, deviceScaleFactor, mobile)
   }
 
-  // ── Geolocation ──
-
   setGeolocation(
     latitude: number,
     longitude: number,
@@ -204,8 +197,6 @@ export class CdpBridge {
   ): Promise<BrowserGeolocationResult> {
     return this.auxiliaryCommands.setGeolocation(latitude, longitude, accuracy)
   }
-
-  // ── Request interception ──
 
   interceptEnable(patterns: string[] = ['*']): Promise<BrowserInterceptEnableResult> {
     return this.auxiliaryCommands.interceptEnable(patterns)
@@ -218,10 +209,6 @@ export class CdpBridge {
   interceptList(): { requests: BrowserInterceptedRequest[] } {
     return this.auxiliaryCommands.interceptList()
   }
-
-  // TODO: Add interceptContinue/interceptBlock once agent-browser supports per-request decisions (CLI is URL-pattern-only).
-
-  // ── Console/network capture ──
 
   captureStart(): Promise<BrowserCaptureStartResult> {
     return this.auxiliaryCommands.captureStart()
@@ -272,7 +259,7 @@ export class CdpBridge {
   }
 
   private getRegisteredTabs(): Map<string, number> {
-    // Why: reach into BrowserManager's private tab map since it exposes no public listTabs().
+    // BrowserManager exposes no public tab enumeration.
     return (this.browserManager as unknown as { webContentsIdByTabId: Map<string, number> })
       .webContentsIdByTabId
   }

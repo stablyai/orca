@@ -34,7 +34,6 @@ import {
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
-import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 import { extractCodexSessionMetadataTitle } from './session-scanner-codex-session-meta'
 import {
@@ -65,40 +64,14 @@ export async function parseCodexSessionFile(
   })
 }
 
-export async function parseCodexSessionContent(args: {
-  file: FileWithMtime
-  content: string | AsyncIterable<string>
-  platform?: NodeJS.Platform
-  codexHome?: string | null
-  executionHostId?: ExecutionHostId
-  executionHostPlatform?: NodeJS.Platform | null
-  readIndexedTitle?: (sessionId: string) => Promise<string | null>
-  signal?: AbortSignal
-}): Promise<AiVaultSession | null> {
-  return parseCodexSessionLines({
-    file: args.file,
-    lines: remoteSessionContentLines(args.content, args.signal),
-    platform: args.platform ?? process.platform,
-    codexHome: args.codexHome ?? null,
-    executionHostId: args.executionHostId,
-    executionHostPlatform: args.executionHostPlatform,
-    titleReader: args.readIndexedTitle
-  })
-}
-
 type CodexSessionParseState = {
   accumulator: SessionAccumulator
   previousTotals: CodexUsageSnapshot | null
-  // Codex's own classification of this thread as something other than the
-  // user's own — a spawned agent, a review pass, a compaction, a guardian. Codex
-  // writes all of those into the same history tree and AI Vault shows
-  // user-started sessions only, so the parse is rejected on this record's
-  // presence rather than on a separate flag beside it.
+  // Non-user origin excludes worker and internal transcripts stored alongside user sessions.
   nonUserOrigin: CodexNonUserOrigin | null
   sawSessionMeta: boolean
   historyMode: string | null
-  // Which source set the current title; an index-file title outranks the raw
-  // first user prompt, so finalize must know whether 'meta' already won.
+  // Metadata titles outrank indexed titles, which outrank raw user prompts.
   titleSource: 'meta' | 'user' | null
 }
 
@@ -142,7 +115,8 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
-  if (record.type === 'session_meta' && payload) {
+  // Forks may copy parent metadata later; the first session_meta defines this thread.
+  if (record.type === 'session_meta' && payload && !state.sawSessionMeta) {
     state.nonUserOrigin = readCodexNonUserOrigin(payload)
     if (state.nonUserOrigin) {
       return
@@ -248,9 +222,7 @@ async function finalizeCodexParseState(
   }
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
-  // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
-  // per finalize (the index read is signature-cached) — a title that appears
-  // after the transcript was first parsed must still replace the raw prompt.
+  // Recheck the signature-cached index: a title can arrive after the transcript stops growing.
   if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
     if (indexedTitle) {
@@ -320,7 +292,6 @@ async function parseCodexSessionLines(args: {
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
     if (state.nonUserOrigin) {
-      // Worker transcripts are excluded outright; stop reading early.
       return null
     }
   }

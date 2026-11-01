@@ -5,17 +5,7 @@ import {
 } from './connection-diagnostics-analysis'
 import type { ConnectionLogEntry } from '../transport/types'
 
-// Provenance: the last two resume windows of a real diagnostics export (Orca
-// Mobile 0.0.50 against host 1.4.203, 2026-09-18), which read "No single failure
-// cause can be determined". Every relay dial ended in 4404 and the LAN dial
-// timed out, then the app resumed and the export was cut before the next outcome:
-//
-//   [info]  [app-resumed]              App returned to foreground
-//   [info]  [lan]                      Opening WebSocket — 192.168.1.2:55927
-//   [error] [relay-dial-failed relay]  Relay: relay dial failed — Error: relay_outer_4404
-//   [error] [connect-timeout lan]      WebSocket connect timeout — No TCP/WS handshake within 12s
-//   [warn]  [socket-closed lan]        WebSocket closed — Close code unavailable
-//   [info]  [retry-scheduled lan]      Reconnect scheduled in 500ms — Attempt 1
+// Reproduce a 0.0.50 phone / 1.4.203 host export (2026-09-18): relay dials failed 4404, LAN timed out, and a resume before export erased the reported cause.
 
 const ENDPOINT = 'ws://192.168.1.2:55927'
 let sequence = 0
@@ -67,7 +57,6 @@ const retryScheduled = () =>
 const authenticated = () =>
   entry({ level: 'success', code: 'direct-connected', path: 'lan', message: 'Authenticated' })
 
-// One resume window exactly as the export recorded it.
 function resumeWindow(closeCode: number): ConnectionLogEntry[] {
   return [
     appResumed(),
@@ -94,7 +83,7 @@ const HOST_OFFLINE_STEP =
   'Check the desktop is awake, Orca is running, and it is signed in to Orca Cloud.'
 
 describe('diagnoseConnection on the relay-4404 export', () => {
-  // The export is cut mid-window, so the newest evidence predates the last resume.
+  // The export ends before a new outcome, so the latest evidence predates resume.
   const CUT_MID_WINDOW = [...resumeWindow(4404), ...resumeWindow(4404), appResumed(), lanOpening()]
 
   it('names the offline host from the evidence before the last resume', () => {
@@ -113,8 +102,7 @@ describe('diagnoseConnection on the relay-4404 export', () => {
     })
   })
 
-  // The LAN dial times out after the relay dial in every window; that timeout is
-  // the phone being off the LAN, and must not outrank the cell's verdict.
+  // The later LAN timeout only means the phone is off LAN; it must not outrank the relay verdict.
   it('prefers the relay verdict over a newer direct timeout in the same window', () => {
     expect(diagnose(resumeWindow(4404)).likelyCause).toBe(HOST_OFFLINE_CAUSE)
   })
@@ -168,7 +156,6 @@ describe('diagnoseConnection on the other relay close codes', () => {
     )
   })
 
-  // A dial that never reached the cell carries no close code at all.
   it('falls back to a pre-cell dial failure when the code is missing', () => {
     const noCode = { ...relayDialFailed(4404), relayCloseCode: undefined, detail: undefined }
     expect(diagnose([appResumed(), lanOpening(), noCode])).toEqual({
@@ -216,8 +203,7 @@ describe('diagnoseConnection ordering among relay failures', () => {
       detail: 'RelayDirectorHttpError: relay director resolve failed (401)'
     })
 
-  // A make-before-break replacement dial fails 4404, then the still-live session
-  // drops: the newer close is the incident, and it stays sendable.
+  // A replacement dial’s 4404 must not hide the newer, reportable close of the still-live session.
   it('never hides a newer relay session close behind an older verdict', () => {
     const entries = [relayConnected(), relayDialFailed(4404), relaySessionFailed()]
     expect(diagnose(entries).likelyCause).toBe('The active Relay session closed unexpectedly.')

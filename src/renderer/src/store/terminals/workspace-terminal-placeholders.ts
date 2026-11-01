@@ -1,7 +1,12 @@
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/constants'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { repoRowOwnerStamp } from './workspace-terminal-ssh-placeholders'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
@@ -9,6 +14,15 @@ export function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
   const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
   return basename || fallback
+}
+
+function runtimePlaceholderOwner(
+  repos: readonly Repo[],
+  repoId: string,
+  hostId: ExecutionHostId
+): Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'> {
+  const row = repos.find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
+  return row ? repoRowOwnerStamp(row) : { hostId }
 }
 
 export function buildRuntimeSessionPlaceholders({
@@ -23,8 +37,7 @@ export function buildRuntimeSessionPlaceholders({
   repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
 } {
-  // Why copy-on-write: hydration writes both straight to the store, and an unconditional copy
-  // rerendered every whole-array/map selector on every hydration with no data change.
+  // Hydration writes these directly; copy only on change to avoid rerendering every whole-array/map selector.
   let nextRepos: readonly Repo[] = repos
   let nextWorktreesByRepo = worktreesByRepo
   for (const workspaceSessionKey of Object.keys(runtimeHostIdByWorkspaceSessionKey)) {
@@ -38,7 +51,7 @@ export function buildRuntimeSessionPlaceholders({
     }
     const worktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : workspaceSessionKey
-    // Why: strip the synthetic `::workspace:<uuid>` suffix so path is the real folder — Git callers must not spawn against a nonexistent cwd.
+    // Strip ::workspace:<uuid> so Git receives a real cwd.
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
     if (!parsed) {
       continue
@@ -66,7 +79,7 @@ export function buildRuntimeSessionPlaceholders({
     const placeholder: Worktree = {
       id: worktreeId,
       repoId: parsed.repoId,
-      hostId,
+      ...runtimePlaceholderOwner(nextRepos, parsed.repoId, hostId),
       displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
       comment: '',
       linkedIssue: null,

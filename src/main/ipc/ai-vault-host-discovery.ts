@@ -6,11 +6,7 @@ export type AiVaultHostDiscoveryResult<T> = {
   issue?: AiVaultListResult
 }
 
-/**
- * Why: enumerating runtime/SSH hosts reads live session state and can throw. In
- * 'all' scope that rejection would take down the whole Promise.all and drop the
- * local sessions too, so a broken enumerator degrades to one issue row instead.
- */
+/** Degrade throwing host enumeration to an issue so all-hosts reads retain healthy local sessions. */
 export function discoverAiVaultHosts<T>(
   enumerate: () => readonly T[],
   args: { path: string; fallbackMessage: string }

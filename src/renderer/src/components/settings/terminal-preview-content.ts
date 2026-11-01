@@ -1,4 +1,3 @@
-// SGR escape helpers — keep tiny and local; xterm interprets these as ANSI.
 const RESET = '\x1b[0m'
 const DIM = '\x1b[2m'
 const ITALIC = '\x1b[3m'
@@ -12,14 +11,10 @@ const BG_GREEN = '\x1b[42m'
 const FG_BLACK = '\x1b[30m'
 
 function prompt(): string {
-  // Why: short two-segment prompt — cwd + branch — so the preview reads as a
-  // real shell line without using too many columns.
   return `${BLUE}~/orca${RESET} ${MAGENTA}main${RESET} ${YELLOW}*${RESET} $ `
 }
 
-// Why: every line must fit in PREVIEW_COLS (see TerminalSettingsPreview) so
-// xterm doesn't wrap mid-content at the default 14px font. Longest visible
-// line below is the def total signature at 32 chars.
+// Fit PREVIEW_COLS at the default font so xterm does not wrap preview lines.
 const lines: string[] = [
   `${prompt()}npm test`,
   ` ${BG_GREEN}${FG_BLACK} PASS ${RESET} src/preview.test.ts`,
@@ -38,8 +33,5 @@ const lines: string[] = [
   `${prompt()}`
 ]
 
-// Why: xterm interprets `\n` as line-feed only (no carriage return) by default
-// for `term.write`. We need `\r\n` between visual lines so the cursor returns
-// to column 0; otherwise each subsequent line starts where the previous one
-// ended.
+// term.write treats LF without carriage return as vertical-only movement; use CRLF to reset each line.
 export const PREVIEW_BUFFER = lines.join('\r\n')

@@ -9,22 +9,23 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { isAbsolute, join, parse } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_MAX_OUTPUT_BYTES,
-  runProcessSync
-} from '../../src/shared/child-process/run-process.ts'
+import { runProcessSync } from '@orca/process-host'
+import { DEFAULT_MAX_OUTPUT_BYTES } from '@orca/process-host/process-spec'
 import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
-import { nodeGypRebuildInvocation } from './windows-process-tree-gyp-rebuild.mjs'
+import {
+  nodeGypRebuildInvocation,
+  nodeGypRebuildTimeoutMs
+} from './windows-process-tree-gyp-rebuild.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
-// The import walk sees `from './x.mjs'` only, so the createRequire'd CJS
-// siblings have to be named. Without them the temp project cannot even load.
+// Fixture import walk misses createRequire CJS edges; name siblings explicitly or temp project cannot load.
 const REQUIRED_CJS_SIBLINGS = [
   'node-pty-job-ownership.cjs',
   'windows-process-tree-creation-time.cjs'
@@ -60,6 +61,8 @@ describe('ensure-native-runtime', () => {
       expect(result.stderr).toContain('node-gyp stderr complete\n')
       const log = readFileSync(logPath, 'utf8')
       expect(log).toContain(`node-gyp rebuild --arch=${process.arch}\n`)
+      expect(log).toContain(`node-gyp timeout=${nodeGypRebuildTimeoutMs('node-pty')}\n`)
+      expect(log).toContain(`trackFileAccess=${process.platform === 'win32' ? 'false' : ''}\n`)
       expect(log).toContain(join('node_modules', 'node-pty'))
       if (process.platform === 'linux') {
         expect(log).toMatch(/^cxxflags=(?:.*\s)?-std=gnu\+\+2a$/m)
@@ -73,9 +76,14 @@ describe('ensure-native-runtime', () => {
     }
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'rebuilds other failed Windows addons with patched node-pty',
-    () => {
+  it.skipIf(process.platform !== 'win32').each([
+    { trackingEnv: {}, tracking: 'false' },
+    { trackingEnv: { TrackFileAccess: 'true' }, tracking: 'true' },
+    { trackingEnv: { trackfileaccess: 'true' }, tracking: 'true' },
+    { trackingEnv: { tRaCkFiLeAcCeSs: 'false' }, tracking: 'false' }
+  ])(
+    'rebuilds other failed Windows addons with patched node-pty and tracking=$tracking',
+    ({ trackingEnv, tracking }) => {
       const projectDir = mkTempProject()
 
       try {
@@ -90,6 +98,7 @@ describe('ensure-native-runtime', () => {
           cwd: projectDir,
           encoding: 'utf8',
           env: envForNativeFixture(projectDir, {
+            ...trackingEnv,
             ORCA_NATIVE_TEST_LOG: logPath,
             ORCA_NATIVE_TEST_MARKER: markerPath
           })
@@ -99,6 +108,9 @@ describe('ensure-native-runtime', () => {
         const log = readFileSync(logPath, 'utf8')
         expect(
           log.split('\n').filter((line) => line === `node-gyp rebuild --arch=${process.arch}`)
+        ).toHaveLength(2)
+        expect(
+          log.split('\n').filter((line) => line === `trackFileAccess=${tracking}`)
         ).toHaveLength(2)
         expect(log).toContain(join('node_modules', 'node-pty'))
         expect(log).toContain(join('node_modules', '@orca', 'windows-registry'))
@@ -260,12 +272,23 @@ describe('ensure-native-runtime', () => {
 
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-native-runtime-'))
-  // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
-  // missing it fails every case with a module-resolution error instead of the defect under test.
+  // Copy walked windows-process-tree-gyp-rebuild dependency or every case fails before its intended check.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
+  const processPackage = join(projectDir, 'node_modules', '@orca', 'process-host')
+  mkdirSync(processPackage, { recursive: true })
   writeFileSync(
-    join(projectDir, 'config', 'scripts', 'script-child-process.mjs'),
-    `export { describeProcessFailure, runProcessSync } from ${JSON.stringify(new URL('./script-child-process.mjs', import.meta.url).href)}\n`
+    join(processPackage, 'package.json'),
+    JSON.stringify({ name: '@orca/process-host', type: 'module', exports: './index.mjs' })
+  )
+  writeFileSync(
+    join(processPackage, 'index.mjs'),
+    `import { appendFileSync } from 'node:fs'
+import { runProcessSync as run } from ${JSON.stringify(pathToFileURL(createRequire(import.meta.url).resolve('@orca/process-host')).href)}
+export function runProcessSync(options) {
+  appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-gyp timeout=\${options.timeoutMs}\\n\`)
+  return run(options)
+}
+`
   )
   for (const name of REQUIRED_CJS_SIBLINGS) {
     copyFileSync(
@@ -277,8 +300,12 @@ function mkTempProject() {
 }
 
 function envForNativeFixture(projectDir, extraEnv) {
+  // An inherited tracking preference would mask the Windows default under test.
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'trackfileaccess')
+  )
   return {
-    ...process.env,
+    ...inherited,
     ...extraEnv,
     npm_config_node_gyp: join(projectDir, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js')
   }
@@ -314,7 +341,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds() {},
       terminateJob() {},
-      assignCurrentProcessToJob() {}
+      assignCurrentProcessToJob() {},
+      assignCurrentProcessToStrictJob() {}
     }
   }
 }
@@ -323,8 +351,14 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   writeFakeWindowsRegistry(projectDir, { requiresMarker: windowsRegistryRequiresMarker })
   if (process.platform === 'win32') {
     const buildDir = join(nodePtyDir, 'build', 'Release')
-    mkdirSync(buildDir, { recursive: true })
-    writeFileSync(join(buildDir, 'conpty.node'), Buffer.from('msys-2.0.dll', 'utf16le'))
+    writePatchedNodePtyBuildArtifacts(projectDir)
+    writeFileSync(
+      join(buildDir, 'conpty.node'),
+      Buffer.concat([
+        Buffer.from('msys-2.0.dll', 'utf16le'),
+        Buffer.from('assignCurrentProcessToStrictJob')
+      ])
+    )
   }
 }
 
@@ -354,7 +388,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
     module: {
       listJobProcessIds: () => [],
       terminateJob: () => true,
-      assignCurrentProcessToJob: () => true
+      assignCurrentProcessToJob: () => true,
+      assignCurrentProcessToStrictJob: () => true
     }
   }
 }
@@ -385,6 +420,12 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   writeFileSync(
     join(processTreeDir, 'index.js'),
     'exports.supportedProcessDataFlags = 4; exports.getProcessCreationTime = () => 1\n'
+  )
+  const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
+  mkdirSync(securityDir, { recursive: true })
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
   )
 }
 
@@ -419,6 +460,7 @@ const { appendFileSync, writeFileSync, writeSync } = require('node:fs')
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-gyp \${process.argv.slice(2).join(' ')}\\n\`)
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cwd=\${process.cwd()}\\n\`)
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`)
+appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`trackFileAccess=\${process.env.TrackFileAccess ?? ''}\\n\`)
 if (process.env.ORCA_NATIVE_TEST_VERBOSE_OUTPUT_BYTES) {
   const output = Buffer.alloc(Number(process.env.ORCA_NATIVE_TEST_VERBOSE_OUTPUT_BYTES), 'x')
   for (let offset = 0; offset < output.length;) {

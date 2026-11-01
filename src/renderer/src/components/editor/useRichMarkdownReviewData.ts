@@ -9,6 +9,7 @@ import {
 import type { NotesSendMenuScope } from './NotesSendMenu'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type UseRichMarkdownReviewDataOptions = {
   allDiffComments: DiffComment[] | undefined
@@ -33,6 +34,7 @@ export function useRichMarkdownReviewData({
   sourceRelativePath: string | null
   unsentMarkdownReviewScope: NotesSendMenuScope<MarkdownReviewNote>[]
 } {
+  const languageRevision = useUiLanguageRevision()
   const sourceRelativePath = useMemo(
     () =>
       markdownAnnotationFilePath
@@ -65,10 +67,11 @@ export function useRichMarkdownReviewData({
           'All unsent notes'
         ),
         notes: unsentNotes,
-        prompt: formatMarkdownReviewNotes(unsentNotes, markdownReviewContent)
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, markdownReviewContent)
       }
     ]
-  }, [markdownReviewContent, markdownReviewNotes])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [markdownReviewContent, markdownReviewNotes, languageRevision])
 
   return {
     canAnnotateRichMarkdown,

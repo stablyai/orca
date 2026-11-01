@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-04T05:18:50.064162Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 120,
+  "rows": 40,
+  "note": "opencode v2.0.14 (Homebrew opencode-v2) on a macOS laptop, 120x40, alternate screen; a cross-version check for the agent-row signal. Recorded on the laptop with a Python PTY recorder that stamps each read with its ms since spawn; --standalone private server (cold), model opencode/muse-spark-1.3-contributor-free via OPENCODE_CONFIG_CONTENT, every ORCA_* variable stripped, no input. Box cursor at 1366 ms, agent/model row at 1408 ms. The footer path was replaced on the laptop with the same-length ~/projects/demo-01/... . <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs (the last read; the recorder stopped there).",
+  "exitCode": null
+}

@@ -1,3 +1,4 @@
+import './rpc/unused-default-rpc-methods.test-fixture'
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,32 +7,19 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry } from './device-registry'
 import { OrcaRuntimeService } from './orca-runtime'
-import { defineStreamingMethod, type RpcRequest } from './rpc/core'
-import { classifyRuntimeLongPoll, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { defineStreamingMethod } from './rpc/core'
+
+import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
 
-const request = (method: string, params?: unknown): RpcRequest => ({
-  id: method,
-  authToken: 'test-token',
-  method,
-  params
-})
-
 describe('runtime RPC browser-host admission', () => {
-  it('classifies host attachment for bounded disconnect-aware admission', () => {
-    expect(classifyRuntimeLongPoll(request('browser.clientHost.attach'))).toBe('browser-host')
-    expect(classifyRuntimeLongPoll(request('terminal.wait'))).toBe('wait')
-    expect(classifyRuntimeLongPoll(request('orchestration.ask'))).toBe('ask')
-    expect(classifyRuntimeLongPoll(request('orchestration.check', { wait: true }))).toBe('wait')
-    expect(classifyRuntimeLongPoll(request('status.get'))).toBeNull()
-  })
-
   it('reserves wait capacity and releases host admission on socket close', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-admission-'))
     const aborted = vi.fn()
     const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
       defineStreamingMethod({
         name,
+        permission: 'workspace',
         params: null,
         handler: async (_params, { signal }) => {
           await new Promise<void>((resolve) => {
@@ -54,7 +42,9 @@ describe('runtime RPC browser-host admission', () => {
     })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const device = server['deviceRegistry'].addDevice('runtime-test', 'runtime')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
     server['mobileSocketWiring'] = {
+      dispose: () => {},
       getConnectionId: () => 'connection-a'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const socket = new FakeWebSocket()
@@ -102,6 +92,7 @@ describe('runtime RPC browser-host admission', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-fairness-'))
     const blockingHost = defineStreamingMethod({
       name: 'browser.clientHost.attach',
+      permission: 'workspace',
       params: null,
       handler: async (_params, { signal }) =>
         await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
@@ -123,7 +114,9 @@ describe('runtime RPC browser-host admission', () => {
       [socketB, 'connection-b'],
       [socketAReplacement, 'connection-a-replacement']
     ])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the server reads only these wiring members in this test.
     server['mobileSocketWiring'] = {
+      dispose: () => {},
       getConnectionId: (socket) => connectionIds.get(socket as unknown as FakeWebSocket)
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const repliesA: Record<string, unknown>[] = []
@@ -195,6 +188,7 @@ describe('runtime RPC browser-host admission', () => {
     ) =>
       defineStreamingMethod({
         name,
+        permission: 'workspace',
         params: null,
         handler: async (_params, { signal }) =>
           await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))

@@ -3,8 +3,7 @@ import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
 } from './ssh-connect-attempt-cancellation'
-import { isAuthError } from './ssh-connection-utils'
-import { isTransientReconnectError } from './ssh-reconnect-error-classification'
+import { isAuthError, isTransientReconnectError } from './ssh-reconnect-error-classification'
 
 describe('createCancelledConnectAttemptError', () => {
   it('is recognisable by identity, not just by message text', () => {

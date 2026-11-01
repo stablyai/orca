@@ -321,8 +321,7 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
     })
     await settleBackgroundRemoval()
 
-    // Child fails at removal (per-row result), then parent is skipped as its
-    // ancestor — both reported incrementally, not only in the final result.
+    // Report child failure and ancestor skip incrementally, before final batch settlement.
     expect(onRowFailed.mock.calls.map(([failure]) => failure.worktreeId)).toEqual([
       child.worktreeId,
       parent.worktreeId

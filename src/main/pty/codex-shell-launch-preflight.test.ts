@@ -15,17 +15,18 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 import {
+  CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
   getPowerShellCodexShellLaunchPreflight
 } from '../../shared/codex-shell-function'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import { getPowerShellAgentWrappers } from '../../shared/powershell-agent-wrappers'
 
 const roots: string[] = []
 const zshAvailable = existsSync('/bin/zsh')
 const bashAvailable = existsSync('/bin/bash')
-// Why the shared lookup: it also finds a Homebrew fish that is off PATH, and it
-// carries the ORCA_REQUIRE_FISH contract asserted below.
+// Shared lookup finds off-PATH Homebrew fish and enforces ORCA_REQUIRE_FISH.
 const fishLookup = resolveFishBinary()
 const fishAvailable = fishLookup.available
 const pwshAvailable =
@@ -37,7 +38,6 @@ const fishBinary = fishLookup.available
     : resolveOnPath(fishLookup.path)
   : null
 
-/** Absolute path of an executable file on the host PATH, or null. */
 function resolveOnPath(name: string): string | null {
   for (const dir of (process.env.PATH ?? '').split(delimiter)) {
     if (!dir) {
@@ -48,18 +48,12 @@ function resolveOnPath(name: string): string | null {
       if (statSync(candidate).isFile()) {
         return candidate
       }
-    } catch {
-      // Not in this directory.
-    }
+    } catch {}
   }
   return null
 }
 
-/** Sandbox whose bin is the *entire* PATH, so codex provably cannot resolve.
- *
- *  Why symlink fish in rather than append its directory: fish routinely ships
- *  alongside a real codex (both land in Homebrew's bin), which would silently
- *  turn the absent-codex regression below into a no-op on a normal dev machine. */
+/** Make sandbox bin the whole PATH; adding fish's install directory could also expose real Codex. */
 function createFishSandbox(prefix: string): { bin: string; preflight: string; marker: string } {
   if (!fishBinary) {
     throw new Error('fish ran but could not be resolved to a file to symlink')
@@ -137,8 +131,6 @@ function runAliasLaunch(
   ).trim()
 }
 
-/** Launches a startup file that aliases the very name Orca wraps, then asserts the
- *  wrapper installed, the preflight ran, and the user's alias still applies. */
 function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-named-alias-'))
   roots.push(root)
@@ -153,8 +145,7 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
     join(bin, 'orca-test'),
     `#!/bin/sh\nprintf '%s' "$*" > ${JSON.stringify(preflightMarker)}\n`
   )
-  // Why nested in `if true`: the shell parses a whole compound command before
-  // running any of it, so the alias expands into the wrapper's own header.
+  // Compound commands parse before execution, so the existing alias can expand into the wrapper header.
   const startup = join(root, 'startup.sh')
   writeFileSync(
     startup,
@@ -177,13 +168,14 @@ function expectNamedAliasSurvives(shell: string, enableAliases: string): void {
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test'),
+        // Nested Orca tests must not forward the host pane's identity.
+        ...Object.fromEntries(CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => [key, '']))
       }
     }
   )
 
   expect(result.status, result.stderr).toBe(0)
-  // The alias's own flags and env prefix must still reach the binary.
   expect(result.stdout).toBe('parsed\nlaunched args=[--alias-flag] author=[Codex]\n')
   expect(readFileSync(preflightMarker, 'utf-8')).toBe('agent hooks prepare-codex')
 }
@@ -252,8 +244,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expect(existsSync(marker)).toBe(false)
   })
 
-  // Why a loop over it.each: an early `return` reported green on hosts without the
-  // shell, so the zsh half silently never ran on Linux. skipIf reports it as a skip.
+  // skipIf exposes missing shells; an early return would report an unexercised test as passing.
   for (const [shell, strict] of [
     ['/bin/bash', 'set -e'],
     ['/bin/zsh', 'setopt ERR_EXIT']
@@ -301,16 +292,12 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expect(output.trim()).toBe('custom-codex')
   })
 
-  // Always runs, so the fish lane cannot report green with the #16893 regression
-  // unexercised — the skips below would otherwise hide a missing binary.
+  // Fail explicitly when CI requires fish; skipped regression cases cannot establish coverage.
   it('has fish when CI demanded it', () => {
     expect(fishRequirementViolation(fishLookup)).toBeNull()
   })
 
-  // Regression for #16893: an unquoted `(type -t codex)` expands to zero words when
-  // codex is absent, so `test` saw `= file` (2 args) and printed "Missing argument
-  // at index 3" on every fish pane launch. Uses the real `-l -C` launch shape both
-  // shell-ready call sites use.
+  // #16893: absent Codex made unquoted (type -t codex) vanish and test complain; exercise real -l -C startup.
   it.skipIf(!fishAvailable)('stays silent and installs no wrapper when codex is absent', () => {
     const { bin, preflight } = createFishSandbox('orca-codex-fish-absent-')
 
@@ -392,7 +379,7 @@ describe('PowerShell Codex shell launch preflight', () => {
         [
           '$ErrorActionPreference = "Stop"',
           '$PSNativeCommandUseErrorActionPreference = $true',
-          getPowerShellCodexShellLaunchPreflight(),
+          getPowerShellAgentWrappers(),
           'codex'
         ].join('\n')
       ],
@@ -494,8 +481,7 @@ describe('Codex shell launch preflight command', () => {
   )
 })
 
-// Why: the resolved value is now an absolute path, and app bundles (macOS) and
-// Program Files (Windows) both put spaces in it.
+// Verified launcher paths may contain spaces in app bundles or Program Files.
 describe.skipIf(process.platform === 'win32')('Codex preflight paths containing spaces', () => {
   function writeSpacedPreflight(root: string): { preflightPath: string; markerPath: string } {
     const dir = join(root, 'Orca Dev.app', 'Contents', 'Resources', 'bin')
@@ -563,7 +549,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
 
       const result = spawnSync(
         'pwsh',
-        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellCodexShellLaunchPreflight()}\ncodex`],
+        ['-NoLogo', '-NoProfile', '-Command', `${getPowerShellAgentWrappers()}\ncodex`],
         {
           encoding: 'utf-8',
           env: {

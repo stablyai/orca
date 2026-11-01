@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -25,9 +26,10 @@ vi.mock('electron', () => ({
     getPath: () => testState.userDataDir
   }
 }))
+beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -143,7 +145,7 @@ describe('copying a login made inside Orca into an empty ~/.codex on Windows', (
     const ownLogin = createCodexAuthJson('other@example.com', 'acct-other', 'own')
     writeFileSync(getSystemCodexAuthPath(), ownLogin, 'utf-8')
     await launchOnRealHome()
-    // Retained panes on the mirror follow ~/.codex, as on old mirror launches.
+
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(ownLogin)
     rmSync(getSystemCodexAuthPath())
 

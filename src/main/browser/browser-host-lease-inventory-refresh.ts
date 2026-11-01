@@ -1,4 +1,4 @@
-import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 
 type InventoryRefreshState = {
   closed: boolean
@@ -7,10 +7,7 @@ type InventoryRefreshState = {
   connection: { active: boolean; fail(error: Error): void } | null
 }
 
-/**
- * Forces a reattach so the client republishes its page inventory. The refresh is expressed as a
- * deliberate connection failure because inventory only rides the attach handshake.
- */
+/** Force reattach because page inventory is published only in the attach handshake. */
 export function requestBrowserHostLeaseInventoryRefresh(
   state: InventoryRefreshState,
   reconnectPromise: () => Promise<void> | null

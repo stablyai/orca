@@ -1,6 +1,8 @@
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import { callRuntimeRpc, type getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
@@ -10,26 +12,22 @@ import {
 } from './host-worktree-removal-state'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 
-/**
- * Sends the destructive removal over whichever transport owns this workspace.
- *
- * `hostId` rides every branch: local main resolves the owner from it, and the
- * runtime RPC needs it because a `repoId::path` selector alone repeats across
- * hosts (STA-4343).
- */
+/** Carry hostId across every removal transport: repoId::path alone repeats across hosts and cannot identify the confirmed copy (STA-4343). */
 export async function dispatchWorktreeRemoval(args: {
   worktreeId: string
   hostId: ExecutionHostId | undefined
   force: boolean | undefined
   skipArchive: boolean
   get: WorktreeSliceGet
-  target: ReturnType<typeof getActiveRuntimeTarget>
+  target: RuntimeClientTarget
   options: RemoveWorktreeOptions | undefined
   /** Re-checks mid-flight ownership immediately before the destructive call. */
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
   try {
-    return await requestWorktreeRemoval(args)
+    const result = await requestWorktreeRemoval(args)
+    showNestedWorktreePreservedBranchesToast(result?.nestedPreservedBranches)
+    return result
   } catch (error) {
     if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
       throw error
@@ -55,17 +53,29 @@ async function requestWorktreeRemoval(
   if (forgetLocalOnly) {
     return window.api.worktrees.forgetLocal({ worktreeId, hostId, ...snapshotPruneBatch })
   }
-  args.assertCurrent()
+  const beforeSend = () => {
+    args.assertCurrent()
+    options?.assertBeforeDispatch?.()
+  }
   if (target.kind === 'local') {
+    beforeSend()
     return window.api.worktrees.remove({
       worktreeId,
       hostId,
       force,
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
+  }
+  if (options?.approvedNestedWorktrees) {
+    throw new Error(
+      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
+    )
   }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)
@@ -77,21 +87,21 @@ async function requestWorktreeRemoval(
       ...(effectiveHostId ? { hostId: effectiveHostId } : {}),
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
-      // Why only when set, unlike the IPC branch: this crosses a version boundary, and a host
-      // that predates the gate drops unknown params silently. Send it when it means something.
+      // Send waiver only when true; older hosts silently strip unknown params at this version boundary.
       ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
       runHooks: !skipArchive
     },
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive)
+      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      beforeSend
     }
   )
 }
 
 function qualifyRuntimeCallHost(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
+  target: RuntimeClientTarget,
   hostId: ExecutionHostId | undefined
 ): ExecutionHostId | undefined {
   const parsedHost = parseExecutionHostId(hostId)

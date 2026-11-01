@@ -3,7 +3,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { searchWorktrees } from '@/lib/worktree-palette-search'
@@ -407,8 +407,7 @@ describe('buildWorktreeChecksReviewIndex', () => {
   })
 
   it('skips a branch-less worktree instead of throwing', () => {
-    // Why: Cmd+J builds this index for every worktree before any query is typed,
-    // so a folder workspace (empty branch) or a partially hydrated row reaches it.
+    // The index includes branch-less folder workspaces and partially hydrated rows before any query.
     const branchless: Worktree = {
       ...worktree,
       id: 'worktree-folder',

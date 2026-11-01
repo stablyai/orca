@@ -14,8 +14,7 @@ afterEach(() => {
 })
 
 describe('closeClientHostedBrowserRow', () => {
-  // Why: the local target is the whole point — the page lives in THIS runtime's registry even
-  // though a paired client renders it, so routing to an environment would close nothing.
+  // The host’s own registry owns this page despite paired-client rendering; environment routing would close nothing.
   it('closes the page through the local runtime by worktree and page id', async () => {
     await closeClientHostedBrowserRow({
       worktreeId: 'repo-1::/tmp/worktree-a',

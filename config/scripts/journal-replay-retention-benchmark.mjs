@@ -7,8 +7,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
-// Pass the root of a checkout (or `git archive <base> src` extract) of the base commit: each arm is
-// bundled whole from its own tree and writes its own fixture, since the two store history differently.
+// Pass base checkout/git-archive root: bundle each arm’s tree and create its fixture, since storage formats differ.
 const baselineDir = process.argv[2]
 assert.ok(
   baselineDir,
@@ -27,8 +26,10 @@ const identity = {
   workspaceId: 'fixture',
   hostId: 'local',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread' }
+  providerHandle: { transport: 'codex-app-server', agent: 'codex', nativeId: 'thread' }
 }
+// The baseline predates the neutral handle and takes its journal identity in the typed form.
+const baselineIdentity = { ...identity, providerHandle: { kind: 'codex', threadId: 'thread' } }
 const fixture = await mkdtemp(join(tmpdir(), 'orca-journal-replay-bench-'))
 // Released in `finally`, newest first: an open SQLite handle blocks the fixture's removal on Windows.
 const releases = []
@@ -75,7 +76,10 @@ async function openArm(arm) {
   let journal
   let database
   if (arm === 'baseline') {
-    journal = await implementation.openAgentSessionJournal({ identity, journalDir: stateDirectory })
+    journal = await implementation.openAgentSessionJournal({
+      identity: baselineIdentity,
+      journalDir: stateDirectory
+    })
   } else {
     database = implementation.JournalHostDatabase.open(stateDirectory)
     releases.push(() => database.close())

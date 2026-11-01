@@ -16,15 +16,12 @@ import {
   agentChildWorkHandleAliases,
   currentAgentChildWorkAliases,
   isPreviousAgentChildWorkRun,
-  ownedStructuredChildWork,
   resolveAgentChildWorkHandle,
   resolveAgentChildWorkOwner,
   STRUCTURED_CHILD_WORK_PROVENANCE,
   type AgentChildWorkEvidenceScope
 } from './agent-status-child-work-evidence-resolution'
 
-/** Live children admitted per session, sized to the provider trackers' own retention. */
-export const STRUCTURED_CHILD_WORK_MAX_LIVE = 256
 /** A child's first run, matching the provider roster's first attempt. */
 const FIRST_GENERATION = 1
 
@@ -68,8 +65,7 @@ function nextOperation(
   return reported
 }
 
-/** Which run a run handle names: the current one (or one the record has no handle for yet), a
- *  run that is already over, or a new one the provider started. */
+/** Resolve a handle as the current run (including no stored handle), an ended run or a new provider run. */
 export function agentChildWorkRunVerdict(
   ctx: AgentChildWorkEvidenceContext,
   existing: AgentChildWorkRecord,
@@ -85,9 +81,7 @@ export function agentChildWorkRunVerdict(
   return current === undefined ? 'current' : 'new'
 }
 
-/** `prior` is the record when this evidence continues its current run; a new run starts bare.
- *  Admission folds provider text and keeps what an edge leaves unsaid (labels and tokens always,
- *  owner and last message within a run), so only this edge's own raw facts go in. */
+/** Pass only this edge's facts: admission retains labels/tokens and same-run owner/message. prior names the current run only; new runs start bare. */
 function liveFields(
   ctx: AgentChildWorkEvidenceContext,
   child: AgentChildWorkLiveObservation,
@@ -134,13 +128,7 @@ export function applyAgentChildWorkLive(
   const request = { parent: ctx.parent, provider: ctx.provider }
   const aliases = agentChildWorkHandleAliases(handle)
   if (!existing) {
-    const live = ownedStructuredChildWork(ctx).filter((record) => record.membership === 'live')
-    if (live.length >= STRUCTURED_CHILD_WORK_MAX_LIVE) {
-      ctx.outcome.rejected.push({ handleId: handle.id, reason: 'ingestion-limit' })
-      return
-    }
-    // Bindings with no record left are retired lifetimes: a forgotten session took its children
-    // with it. The id is free again, under a generation past the retired one.
+    // Retired bindings outlive removed records and fence late evidence; reuse IDs only at a later generation.
     const retired = resolution.highestGeneration
     const fence = {
       invocationId: handle.runId ?? handle.id,
@@ -160,8 +148,7 @@ export function applyAgentChildWorkLive(
   if (run === 'previous') {
     return
   }
-  // A different spawn call for the same child is the provider starting it again, and so is a
-  // start the producer reports for a child that had ended.
+  // A different spawn call or an explicit start after settlement proves a new run.
   if (run === 'new' || (existing.membership === 'settled' && restart)) {
     const result = ctx.admission.resume({
       // A reclassification lands on the next edge: resume keeps the kind its bindings carry.

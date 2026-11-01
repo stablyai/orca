@@ -2,10 +2,10 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { buildNativeChatPickerItems } from './native-chat-picker-items'
-import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
-import type { ComposerAutocomplete } from './native-chat-composer-state'
+import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { buildNativeChatPickerItems } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { ComposerAutocomplete } from '../../../../shared/native-chat-composer-autocomplete'
 
 function autocomplete(
   overrides: Partial<Extract<ComposerAutocomplete, { mode: 'slash' }>> = {}
@@ -127,7 +127,7 @@ describe('NativeChatPickerMenu', () => {
       />
     )
 
-    expect(screen.getAllByText("Skills aren't available in SSH chats")).toHaveLength(2)
+    expect(screen.getAllByText("Skills can't be listed in SSH chats")).toHaveLength(2)
     expect(screen.queryByText("Couldn't load skills")).toBeNull()
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   })
@@ -179,11 +179,9 @@ describe('NativeChatPickerMenu', () => {
     const goal = screen.getByRole('option', { name: /goal/i })
     expect(goal.textContent).toContain('<objective>')
     expect(goal.textContent).toContain('Set a goal and keep working until it is met')
-    // A command the report left hintless renders its row unchanged.
     expect(screen.getByRole('option', { name: /clear/i }).textContent).toBe(
       '/clearClear conversation history'
     )
-    // A hint long enough to swamp the row is capped before it reaches the DOM.
     expect(screen.getByRole('option', { name: /wordy/i }).textContent).toBe(
       `/wordy<${'a'.repeat(79)}`
     )
@@ -204,5 +202,46 @@ describe('NativeChatPickerMenu', () => {
       />
     )
     expect(screen.getAllByText('No matching skills')).toHaveLength(2)
+  })
+})
+
+describe('NativeChatMentionMenu', () => {
+  afterEach(cleanup)
+
+  const NO_ROWS = { files: [], loading: false, failed: false }
+
+  it('lists files by name with their folder and inserts the one pressed', () => {
+    const onChoose = vi.fn()
+    render(
+      <NativeChatMentionMenu
+        mention={{ ...NO_ROWS, files: ['src/app.ts', 'README.md'] }}
+        activeIndex={1}
+        listboxId="files"
+        onChoose={onChoose}
+      />
+    )
+    const options = screen.getAllByRole('option')
+    expect(options.map((option) => option.textContent)).toEqual(['app.tssrc/', 'README.md'])
+    expect(options[1].getAttribute('aria-selected')).toBe('true')
+    fireEvent.pointerDown(options[1], { button: 2 })
+    expect(onChoose).not.toHaveBeenCalled()
+    fireEvent.pointerDown(options[0])
+    expect(onChoose).toHaveBeenCalledWith('src/app.ts')
+  })
+
+  it.each([
+    [NO_ROWS, 'No matching files'],
+    [{ ...NO_ROWS, loading: true, failed: true }, 'Loading files...'],
+    [{ ...NO_ROWS, failed: true }, "Couldn't load files"]
+  ])('explains an empty list: %#', (mention, text) => {
+    render(
+      <NativeChatMentionMenu
+        mention={mention}
+        activeIndex={0}
+        listboxId="files"
+        onChoose={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText(text).length).toBeGreaterThan(0)
   })
 })

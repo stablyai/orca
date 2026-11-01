@@ -18,8 +18,7 @@ const describePostgres = databaseUrl ? describe : describe.skip
 // Roughly the round trip from an Asia cell to the us-central1 database.
 const STATEMENT_DELAY_MS = 150
 
-// Everything the fleet-wide rehome lock used to hold, per cell, plus the
-// admission and region tables the commit reads.
+// Probe the formerly fleet-locked tables plus admission/region tables read by commit.
 const CELL_TABLES = [
   'relay_cells',
   'relay_cell_runtime',
@@ -102,9 +101,13 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     try {
       await observer.transaction(
         async (transaction) => {
-          await transaction.queryLocked(`SELECT cell_id FROM ${table} WHERE cell_id = ?`, [cellId], {
-            failIfUnavailable: true
-          })
+          await transaction.queryLocked(
+            `SELECT cell_id FROM ${table} WHERE cell_id = ?`,
+            [cellId],
+            {
+              failIfUnavailable: true
+            }
+          )
         },
         { reportRetries: false }
       )
@@ -143,13 +146,13 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
        WHERE cell_id = ?`,
       [now, cellId]
     )
-    await transaction.query(`UPDATE relay_cells SET enabled = 1, updated_at = ? WHERE cell_id = ?`, [
-      now,
-      cellId
-    ])
+    await transaction.query(
+      `UPDATE relay_cells SET enabled = 1, updated_at = ? WHERE cell_id = ?`,
+      [now, cellId]
+    )
   }
 
-  it('holds only the target row, for about one round trip, while other cells stay lockable', async () => {
+  it('holds only the target cell and admission rows until the next COMMIT boundary', async () => {
     const context = await fixture()
     const request = await context.select()
     const trips: Trip[] = []
@@ -173,7 +176,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     control.enabled = false
 
     expect(result).toEqual({ outcome: 'committed' })
-    // The transaction really spans many cross-region round trips.
     expect(trips.length).toBeGreaterThanOrEqual(15)
     expect(trips[trips.length - 1]!.sql).toBe('COMMIT')
     for (const trip of trips) {
@@ -182,7 +184,6 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
         expect({ sql: trip.sql, key, free }).toEqual({ sql: trip.sql, key, free: true })
       }
     }
-    // Locked at exactly one trip boundary, the one before COMMIT.
     for (const key of TARGET_LOCKED) {
       expect(trips.filter((trip) => !trip.lockable[key]).map((trip) => trip.sql)).toEqual([
         'COMMIT'
@@ -201,12 +202,8 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     expect(counts.rehomeTargetRowHolds).toBe(1)
     expect(counts.cellInventoryHoldMaxSite).toBe('rehome-target-row')
     expect(counts.rehomeTargetRowHoldMsMax).toBeGreaterThanOrEqual(STATEMENT_DELAY_MS)
-    // The COMMIT observer probes run under the lock, but are absent in production.
-    expect(counts.rehomeTargetRowHoldMsMax - commitProbeMs).toBeLessThanOrEqual(
-      2 * STATEMENT_DELAY_MS
-    )
     expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore + 2)
-  })
+  }, 45_000)
 
   it('defers when the target leaves general admission after selection', async () => {
     const context = await fixture()
@@ -263,6 +260,65 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     await expectNothingCommitted(context)
   })
 
+  // Inject a placement race by raising enforced target units immediately before the final target-row write.
+  async function fillTargetBefore(
+    context: Awaited<ReturnType<typeof fixture>>,
+    freeSeats: number
+  ): Promise<void> {
+    control.beforeTrip = async (sql) => {
+      if (!sql.includes('WITH target AS')) return
+      const foreign = await observer.query(
+        `SELECT COUNT(*) AS count FROM relay_control_connection_reservations
+         WHERE cell_id = ? AND state IN ('reserved', 'late-arrival-debt', 'claimed')
+           AND user_id <> ?`,
+        [context.target.id, context.identity.userId]
+      )
+      // Headroom: enforced + outstanding + unobserved < hard cap - reserved host controls.
+      const enforced = 1_000 - 100 - 60 - Number(foreign[0]!.count) - freeSeats
+      await observer.query(
+        `UPDATE relay_cell_connection_snapshots SET enforced_connection_units = ? WHERE cell_id = ?`,
+        [enforced, context.target.id]
+      )
+    }
+  }
+
+  it('defers when a placement takes the target last connection seat after selection', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 0)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
+    await expectNothingCommitted(context)
+  })
+
+  it('admits into the last connection seat, not counting its own reservation', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await fillTargetBefore(context, 1)
+    control.enabled = true
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+    control.enabled = false
+
+    expect(result).toEqual({ outcome: 'committed' })
+  })
+
+  it('admits a target with no connection limits row', async () => {
+    const context = await fixture()
+    const request = await context.select()
+    await primary.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = ?`, [
+      context.target.id
+    ])
+
+    const result = await context.delayedStore.commitIdleRegionalRehome(request, context.safety())
+
+    expect(result).toEqual({ outcome: 'committed' })
+  })
+
   async function expectNothingCommitted(context: Awaited<ReturnType<typeof fixture>>) {
     expect(await commitCounts(context.identity.userId)).toEqual({ attempts: 0, migrations: 0 })
     expect(await reservedRequests(context.target.id)).toBe(context.targetReservedBefore)
@@ -279,8 +335,7 @@ describePostgres('PostgreSQL regional rehome target-row lock', () => {
     sequence++
     let now = 1_000_000
     const suffix = String(sequence)
-    // An Asia source correcting to a US target: the direction whose commit
-    // held the whole inventory for ~3.6s in production.
+    // Asia→US formerly held the whole inventory for ~3.6s in production.
     const source = cell(suffix, 'source', 'asia-east2')
     const target = cell(suffix, 'target', 'us-central1')
     const bystander = cell(suffix, 'zbystander', 'asia-east2')

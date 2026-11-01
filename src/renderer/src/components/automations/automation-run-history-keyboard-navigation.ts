@@ -1,4 +1,5 @@
 import type { AutomationRun } from '../../../../shared/automations-types'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
 export type AutomationRunHistoryArrowKey = 'ArrowUp' | 'ArrowDown'
 
@@ -12,12 +13,15 @@ export function shouldHandleAutomationRunHistoryKey(event: {
   ctrlKey: boolean
   metaKey: boolean
   shiftKey: boolean
-  nativeEvent?: { isComposing?: boolean }
+  isComposing?: boolean
+  keyCode?: number
+  nativeEvent?: { isComposing?: boolean; keyCode?: number }
   target?: EventTarget | null
 }): boolean {
   if (
     (!isAutomationRunHistoryArrowKey(event.key) && event.key !== 'Enter') ||
-    Boolean(event.nativeEvent?.isComposing) ||
+    // The window listener receives native events, which carry no nativeEvent wrapper.
+    isImeOwnedKeyboardEvent(event) ||
     event.altKey ||
     event.ctrlKey ||
     event.metaKey ||

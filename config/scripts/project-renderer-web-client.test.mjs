@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = resolve('config/scripts/project-renderer-web-client.mjs')
@@ -74,10 +74,22 @@ afterEach(() => {
 })
 
 describe('renderer web client projection', () => {
-  it('keeps the build-only manifest out of packaged apps', () => {
-    const builderConfig = readFileSync(resolve('config/electron-builder.config.cjs'), 'utf8')
-
-    expect(builderConfig).toContain("'!out/renderer/.vite{,/**/*}'")
+  it('preserves existing minified bindings while producing runnable compact code', async () => {
+    const root = createRendererFixture()
+    writeFixtureFile(
+      root,
+      'out/renderer/assets/web-shared.js',
+      'const Zq = [1, 2, 3]; export function nM() { return Zq.length; }'
+    )
+    const result = await projectFixture(root)
+    expect(result.code, result.stderr).toBe(0)
+    const code = readFileSync(join(root, 'out/web/assets/web-shared.js'), 'utf8')
+    expect(code).toContain('function nM(')
+    expect(code).not.toContain('[1, 2, 3]')
+    const output = await import(
+      `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    )
+    expect(output.nM()).toBe(3)
   })
 
   it('copies and minifies only the web dependency closure', async () => {
@@ -91,6 +103,23 @@ describe('renderer web client projection', () => {
     expect(existsSync(join(root, 'out/web/assets/logo.png'))).toBe(true)
     expect(existsSync(join(root, 'out/web/assets/desktop-entry.js'))).toBe(false)
     expect(existsSync(join(root, 'out/web/stale.js'))).toBe(false)
+    const sharedFiles = JSON.parse(
+      readFileSync(join(root, 'out/renderer/.orca-web-client-files.json'), 'utf8')
+    )
+    expect(sharedFiles).toEqual(
+      expect.arrayContaining([
+        'web-index.html',
+        'assets/web-entry.js',
+        'assets/web-shared.js',
+        'assets/editor.worker-fixture.js',
+        'assets/web.css',
+        'assets/lazy.js',
+        'assets/logo.png'
+      ])
+    )
+    expect(sharedFiles).not.toContain('assets/desktop-entry.js')
+    expect(sharedFiles).not.toContain('.vite/manifest.json')
+    expect(sharedFiles).not.toContain('index.html')
     expect(readFileSync(join(root, 'out/web/assets/web.css'), 'utf8')).toBe('.root{color:red}\n')
   })
 

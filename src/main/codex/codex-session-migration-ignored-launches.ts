@@ -5,7 +5,7 @@ import {
 
 type IgnoredLaunch = { recordedAt: number }
 
-/** Lease ids whose reattach was proven away from the shared home, so their exit owes no scan. */
+/** Reattached leases outside the shared home need no exit scan. */
 export class CodexSessionMigrationIgnoredLaunches {
   private readonly launches = new Map<string, IgnoredLaunch>()
 
@@ -21,7 +21,7 @@ export class CodexSessionMigrationIgnoredLaunches {
     if (!launch) {
       return false
     }
-    // Why: an entry whose exit never arrived must age out, or it absorbs a later exit and strands that launch active.
+    // Expire missing exits so a reused lease ID cannot swallow a later launch's exit.
     if (Date.now() - launch.recordedAt > CODEX_SESSION_MIGRATION_LEASE_RETENTION_MS) {
       this.launches.delete(leaseId)
       return false

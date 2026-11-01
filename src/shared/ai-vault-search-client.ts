@@ -13,6 +13,8 @@ import {
   redactStatusForTransport,
   type SessionSearchTransport
 } from './ai-vault-search-transport'
+import { compatibleSearchAgents } from './ai-vault-search-agent-compatibility'
+import { AI_VAULT_AGENTS } from './ai-vault-types'
 
 export function unavailableSessionSearchStatus(): AiVaultSearchStatus {
   return {
@@ -50,17 +52,20 @@ export function createSessionSearchClient(
       let raw: unknown
       try {
         // IPC and its all-hosts merge are this build; each remote leg negotiates its own host.
-        if (transport !== 'ipc' && parsed.filters?.agents?.includes('qoder')) {
-          const status = AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {}))
-          if (status.supportsQoderHistory !== true) {
-            const agents = parsed.filters.agents.filter((agent) => agent !== 'qoder')
-            if (agents.length === 0) {
-              return { kind: 'unavailable', reason: 'unsupported-agent' }
-            }
-            hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
+        if (transport !== 'ipc' && parsed.filters?.agents?.length) {
+          const status = await readSessionSearchStatus(call)
+          const agents = compatibleSearchAgents(parsed.filters.agents, status)
+          if (agents.length === 0) {
+            return { kind: 'unavailable', reason: 'unsupported-agent' }
           }
+          hostRequest = { ...parsed, filters: { ...parsed.filters, agents } }
         }
-        raw = await call('aiVault.searchSessions', { ...hostRequest, supportsQoderHistory: true })
+        raw = await call('aiVault.searchSessions', {
+          ...hostRequest,
+          supportedAgents: [...AI_VAULT_AGENTS],
+          supportsQoderHistory: true,
+          supportsJcodeHistory: true
+        })
       } catch (error) {
         if (isUnknownSessionSearchMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }
@@ -78,18 +83,20 @@ export function createSessionSearchClient(
         ...(parsed.debug && debug ? { debug } : {})
       }
     },
-    searchStatus: async () => {
-      try {
-        return redactStatusForTransport(
-          AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {})),
-          transport
-        )
-      } catch (error) {
-        if (isUnknownSessionSearchMethod(error)) {
-          return unavailableSessionSearchStatus()
-        }
-        throw error
-      }
+    searchStatus: async () =>
+      redactStatusForTransport(await readSessionSearchStatus(call), transport)
+  }
+}
+
+async function readSessionSearchStatus(
+  call: (method: string, params: Record<string, unknown>) => Promise<unknown>
+): Promise<AiVaultSearchStatus> {
+  try {
+    return AiVaultSearchStatusSchema.parse(await call('aiVault.searchStatus', {}))
+  } catch (error) {
+    if (isUnknownSessionSearchMethod(error)) {
+      return unavailableSessionSearchStatus()
     }
+    throw error
   }
 }

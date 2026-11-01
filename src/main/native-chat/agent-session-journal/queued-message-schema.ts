@@ -1,8 +1,5 @@
-// The draft table's shape, created and healed at every writable open.
-
 import type Database from '../../sqlite/sync-database'
 
-/** Columns a later build added, so an older draft table can gain them in place. */
 const NULLABLE_COLUMNS: readonly (readonly [name: string, type: string])[] = [
   ['hold_reason', 'TEXT'],
   ['returned_reason', 'TEXT'],
@@ -12,17 +9,11 @@ const NULLABLE_COLUMNS: readonly (readonly [name: string, type: string])[] = [
   ['consumed_as', 'TEXT'],
   ['carried_from', 'TEXT'],
   ['queued_epoch', 'TEXT'],
-  ['queued_sequence', 'INTEGER']
+  ['queued_sequence', 'INTEGER'],
+  ['options_json', 'TEXT']
 ]
 
-/**
- * Created idempotently at EVERY writable open, never lazily at first insert, so
- * no reader hits "no such table". Deliberately no `user_version` bump: an old
- * build sees stored == supported and stays writable, ignoring the table; a bump
- * would latch every opened db read-only after a downgrade (`journal-database.ts`).
- * For the same reason a missing column is added here rather than versioned:
- * `CREATE TABLE IF NOT EXISTS` never reshapes a table an earlier build created.
- */
+/** Add tables/columns on every writable open without version bumps, preserving writable downgrades. */
 export function ensureQueuedMessagesTable(db: Database.Database): void {
   db.exec(`
 CREATE TABLE IF NOT EXISTS queued_messages (
@@ -43,6 +34,7 @@ CREATE TABLE IF NOT EXISTS queued_messages (
   carried_from    TEXT,
   queued_epoch    TEXT,
   queued_sequence INTEGER,
+  options_json    TEXT,
   PRIMARY KEY (session_id, message_id)
 );
 `)

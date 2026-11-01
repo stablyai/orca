@@ -4,14 +4,7 @@ import type { MountAdapter } from '../recording-scenario'
 
 const HOST = 'host-1'
 
-/**
- * The repository list the new-workspace dialog opens on: a `repo.list` refresh, and the last
- * visited worktree the scenario declares in its device store, which is what picks the initial
- * selection out of the refreshed list.
- *
- * Mounted through `hookScreenMount` rather than `hookMount` for its crash boundary — several reply
- * partitions take this hook's effect down, and the message is the recording.
- */
+// Use the screen crash boundary because malformed reply effects can throw; preserve that diagnostic as recording output.
 export function newWorkspaceRepositoryMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -46,8 +39,7 @@ export function newWorkspaceRepositoryMountAdapters(
         state: () => {
           const repos = state?.repos
           return {
-            // Not only the ids: a reply partition can leave a non-array here, and that is the
-            // observation rather than something to normalise away.
+            // Observe malformed non-array replies too; normalizing to ids would erase the failure under test.
             repos: Array.isArray(repos) ? repos.map((repo) => repo?.id) : repos,
             selected: state?.selectedRepo?.id ?? null,
             loading: state?.loading ?? null,

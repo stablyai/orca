@@ -1,6 +1,7 @@
 import { useId, type RefObject } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { translate } from '@/i18n/i18n'
@@ -35,27 +36,36 @@ export function WorktreeDisplayNameField({
       <Label htmlFor={inputId} className="text-[11px] font-medium text-muted-foreground">
         {translate('auto.components.sidebar.WorktreeMetaDialog.ad5e4e514f', 'Display Name')}
       </Label>
-      <Input
-        id={inputId}
-        ref={inputRef}
-        value={value}
-        onChange={(event) =>
-          emojiInput.handleValueChange(event.target.value, event.target.selectionStart)
-        }
-        onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
-        onKeyDown={(event) => {
-          if (emojiInput.handleKeyDown(event) || event.key !== 'Enter') {
-            return
+      <div className="relative">
+        <Input
+          id={inputId}
+          ref={inputRef}
+          value={value}
+          onChange={(event) =>
+            emojiInput.handleValueChange(event.target.value, event.target.selectionStart)
           }
-          event.preventDefault()
-          void onEnter()
-        }}
-        placeholder={translate(
-          'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
-          'Custom display name...'
-        )}
-        className="h-8 text-xs"
-      />
+          onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
+          onKeyDown={(event) => {
+            if (emojiInput.handleKeyDown(event) || event.key !== 'Enter') {
+              return
+            }
+            event.preventDefault()
+            void onEnter()
+          }}
+          placeholder={translate(
+            'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
+            'Custom display name...'
+          )}
+          adornment="trailing"
+          className="h-8 text-xs"
+        />
+        <WorkspaceEmojiPickerButton
+          className="absolute top-1/2 right-1 -translate-y-1/2"
+          disabled={disabled}
+          inputRef={inputRef}
+          onValueChange={onValueChange}
+        />
+      </div>
       <WorkspaceEmojiSuggestionPopover
         anchorRef={inputRef}
         open={emojiInput.open}
@@ -68,10 +78,10 @@ export function WorktreeDisplayNameField({
         portalContainer={portalContainer}
         side="bottom"
       />
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {translate(
-          'auto.components.sidebar.WorktreeMetaDialog.459ad7f650',
-          'Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.'
+          'workspace.links.nameHelp',
+          'Shown in the sidebar. The folder name stays the same.'
         )}
       </p>
     </div>

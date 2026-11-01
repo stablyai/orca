@@ -138,7 +138,6 @@ describe('LocalSshBrowserRoute', () => {
     const socket = await socksConnect(address.port, 'internal.only.host', 8443)
     const reply = await readExact(socket, 10)
     expect(reply[1]).toBe(0)
-    // Why: the hostname must reach the SSH dial verbatim — remote DNS is the contract.
     expect(executionRoute.dials).toEqual([{ host: 'internal.only.host', port: 8443 }])
 
     socket.write(Buffer.from('ping'))
@@ -170,7 +169,6 @@ describe('LocalSshBrowserRoute', () => {
     expect((await readExact(first, 10))[1]).toBe(0)
     first.destroy()
 
-    // A real SSH drop: the authority rotates and the old route is aborted.
     generation = 2
     executionRoutes[0].invalidate()
     await new Promise((resolve) => setImmediate(resolve))
@@ -206,7 +204,6 @@ describe('LocalSshBrowserRoute', () => {
 
     const refused = await socksConnect(address.port, 'example.test', 443)
     const failure = await readExact(refused, 2)
-    // Why: fail closed — never a direct local dial when the SSH path is down.
     expect(failure[1]).not.toBe(0)
     refused.destroy()
 
@@ -234,7 +231,6 @@ describe('LocalSshBrowserRoute', () => {
     const first = await retainLocalSshBrowserRoute('target-cycled', dependencies)
     await closeLocalSshBrowserRouteForTarget('target-cycled')
     const second = await retainLocalSshBrowserRoute('target-cycled', dependencies)
-    // Why: the closed listener is unusable; a fresh retain must produce a live one.
     const socket = await socksConnect(second.port, 'after-readd', 80)
     expect((await readExact(socket, 10))[1]).toBe(0)
     socket.destroy()
@@ -273,14 +269,11 @@ describe('LocalSshBrowserRoute', () => {
       return error
     }
 
-    // RFC 4254 reason 1 = ADMINISTRATIVELY_PROHIBITED, regardless of wording.
     failure = withReason('(SSH) Channel open failure: open failed', 1)
     expect(await route.probeForwarding(500)).toBe('forwarding-blocked')
-    // Why (false-positive pin): CONNECT_FAILED with hostile wording must read
-    // as ok — a firewall's "denied" text proves the CHANNEL was allowed.
+    // CONNECT_FAILED means forwarding was permitted even if the destination firewall says "denied".
     failure = withReason('(SSH) Channel open failure: connection denied by firewall', 2)
     expect(await route.probeForwarding(500)).toBe('ok')
-    // No wire code: only the canonical OpenSSH phrase classifies as blocked.
     failure = withReason('administratively prohibited: open failed')
     expect(await route.probeForwarding(500)).toBe('forwarding-blocked')
     failure = withReason('open forbidden: access denied, not allowed')

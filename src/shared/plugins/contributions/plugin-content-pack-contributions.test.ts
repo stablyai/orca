@@ -1,0 +1,199 @@
+import { describe, expect, it } from 'vitest'
+import { parsePluginManifest, pluginManifestSchema } from '../manifest/plugin-manifest'
+
+function manifest(contributes: Record<string, unknown>): Record<string, unknown> {
+  return {
+    manifestVersion: 1,
+    id: 'content-pack',
+    publisher: 'samples',
+    name: 'Content pack',
+    version: '1.0.0',
+    engines: { orca: '>=1.0.0' },
+    pluginApi: 1,
+    contributes,
+    capabilities: []
+  }
+}
+
+describe('content-pack manifest contributions', () => {
+  it('accepts the documented P1 contribution set without a worker', () => {
+    const parsed = pluginManifestSchema.parse(
+      manifest({
+        languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
+        commands: [
+          {
+            id: 'workspace.openTasks',
+            title: 'Open tasks',
+            context: 'workspace',
+            action: 'view.tasks'
+          }
+        ],
+        keybindings: [{ command: 'workspace.openTasks', key: 'Mod+Alt+T' }],
+        vmRecipes: [{ path: 'recipes/fly.json' }]
+      })
+    )
+
+    expect(parsed.main).toBeUndefined()
+    expect(parsed.contributes.languagePacks[0]?.locale).toBe('pt-BR')
+    expect(parsed.contributes.keybindings[0]?.key).toBe('Mod+Alt+T')
+  })
+
+  it('accepts an optional native displayName on language packs', () => {
+    const parsed = pluginManifestSchema.parse(
+      manifest({
+        languagePacks: [
+          {
+            locale: 'zh-TW',
+            path: 'locales/zh-TW.json',
+            displayName: '中文（繁體）'
+          }
+        ]
+      })
+    )
+
+    expect(parsed.contributes.languagePacks[0]).toEqual({
+      locale: 'zh-TW',
+      path: 'locales/zh-TW.json',
+      displayName: '中文（繁體）'
+    })
+  })
+
+  it('rejects blank language-pack displayName', () => {
+    expect(
+      parsePluginManifest(
+        manifest({
+          languagePacks: [{ locale: 'zh-TW', path: 'locales/zh-TW.json', displayName: '   ' }]
+        })
+      ).ok
+    ).toBe(false)
+  })
+
+  it('defaults every contribution registry to an empty array', () => {
+    const parsed = pluginManifestSchema.parse(manifest({}))
+
+    expect(parsed.contributes).toEqual({
+      panels: [],
+      commands: [],
+      events: [],
+      languagePacks: [],
+      keybindings: [],
+      vmRecipes: [],
+      themes: [],
+      terminalThemes: [],
+      iconThemes: [],
+      syntaxes: [],
+      customEditors: [],
+      newFiles: []
+    })
+  })
+
+  it('refuses items in the reserved skills contribution', () => {
+    expect(parsePluginManifest(manifest({ skills: [{ path: 'skills' }] }))).toMatchObject({
+      ok: false,
+      error: 'contributes.skills: is reserved for agent skills and must be empty for now'
+    })
+  })
+
+  it('still requires a worker entry for non-alias commands', () => {
+    expect(
+      parsePluginManifest(
+        manifest({ commands: [{ id: 'content-pack.run', title: 'Run content pack' }] })
+      )
+    ).toMatchObject({ ok: false, error: expect.stringContaining('worker command') })
+  })
+
+  it.each([
+    [
+      'unknown alias target',
+      {
+        commands: [{ id: 'open', title: 'Open', action: 'missing.action' }]
+      },
+      'unknown built-in action'
+    ],
+    [
+      'unknown command reference',
+      { keybindings: [{ command: 'missing', key: 'Mod+K' }] },
+      'unknown contributed command'
+    ],
+    [
+      'invalid chord',
+      {
+        commands: [{ id: 'open', title: 'Open', action: 'view.tasks' }],
+        keybindings: [{ command: 'open', key: 'Mod+NotAKey' }]
+      },
+      'key'
+    ],
+    [
+      'global binding for a worktree command',
+      {
+        commands: [{ id: 'open', title: 'Open', context: 'workspace', action: 'view.tasks' }],
+        keybindings: [{ command: 'open', key: 'Mod+K', when: 'global' }]
+      },
+      "command's when"
+    ],
+    [
+      'platform-equivalent duplicate chords',
+      {
+        commands: [
+          { id: 'first', title: 'First', action: 'view.tasks' },
+          { id: 'second', title: 'Second', action: 'sidebar.left.toggle' }
+        ],
+        keybindings: [
+          { command: 'first', key: 'Mod+K' },
+          { command: 'second', key: 'Ctrl+K' }
+        ]
+      },
+      'duplicate keybinding'
+    ]
+  ])('rejects %s', (_label, contributes, error) => {
+    expect(parsePluginManifest(manifest(contributes))).toMatchObject({
+      ok: false,
+      error: expect.stringContaining(error)
+    })
+  })
+
+  it.each([
+    ['language pack', { languagePacks: [{ locale: 'en_US', path: 'locale.json' }] }],
+    // Shape-legal but ill-formed: the regex alone let these load with dates falling back to English.
+    ['duplicate region', { languagePacks: [{ locale: 'en-US-US', path: 'locale.json' }] }],
+    ['unknown subtag', { languagePacks: [{ locale: 'en-aaa', path: 'locale.json' }] }],
+    ['language pack path', { languagePacks: [{ locale: 'pt-BR', path: '../outside.json' }] }],
+    ['VM recipe', { vmRecipes: [{ path: '\\\\server\\recipe.json' }] }]
+  ])('rejects unsafe or malformed %s contributions', (_label, contributes) => {
+    expect(parsePluginManifest(manifest(contributes)).ok).toBe(false)
+  })
+
+  it.each(['ru', 'pt-BR', 'zh-Hans-CN', 'en-US'])('accepts the well-formed locale %s', (locale) => {
+    expect(
+      parsePluginManifest(manifest({ languagePacks: [{ locale, path: 'locale.json' }] }))
+    ).toMatchObject({
+      ok: true
+    })
+  })
+
+  it('rejects duplicate ids, locales, paths, and bindings', () => {
+    const parsed = pluginManifestSchema.safeParse(
+      manifest({
+        languagePacks: [
+          { locale: 'pt-BR', path: 'pt-br.json' },
+          { locale: 'pt-br', path: 'other.json' }
+        ],
+        commands: [{ id: 'open', title: 'Open', action: 'view.tasks' }],
+        keybindings: [
+          { command: 'open', key: 'Mod+T' },
+          { command: 'open', key: 'mod+t' }
+        ]
+      })
+    )
+
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
+        expect.arrayContaining([
+          'duplicate language pack locale: pt-br',
+          'duplicate keybinding: mod+t'
+        ])
+      )
+    }
+  })
+})

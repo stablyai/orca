@@ -105,6 +105,39 @@ describe('LinkActionPopover', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
+  it('lists secondary rows after the shortcut rows, without a shortcut, and runs them', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    const onClose = vi.fn()
+    const restoreFocus = vi.fn()
+    const reveal = vi.fn()
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      alternate: { label: 'Open with default app', run: vi.fn() },
+      secondaryActions: [{ label: 'Reveal in Finder', run: reveal }],
+      restoreFocus
+    }
+
+    render(<LinkActionPopover request={request} onClose={onClose} />)
+
+    const labels = screen.getAllByRole('button').map((button) => button.textContent ?? '')
+    expect(labels.findIndex((label) => label.startsWith('Reveal in Finder'))).toBeGreaterThan(
+      labels.findIndex((label) => label.startsWith('Open with default app'))
+    )
+    expect(screen.getAllByText('Click')).toHaveLength(2)
+    expect(screen.getByText('Reveal in Finder').closest('button')?.textContent).toBe(
+      'Reveal in Finder'
+    )
+
+    fireEvent.click(screen.getByText('Reveal in Finder'))
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(restoreFocus).toHaveBeenCalledOnce()
+    expect(reveal).toHaveBeenCalledOnce()
+  })
+
   it('identifies the dismissed request so a newer request can survive', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
@@ -221,13 +254,13 @@ describe('LinkActionPopover', () => {
     await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledTimes(2))
   })
 
-  it('does not offer copy link for non-URL destinations', () => {
+  it('does not offer copy actions for non-copyable destinations', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: '/tmp/example.ts',
-      kind: 'file',
+      kind: 'workspace',
       primary: { label: 'Open file', run: vi.fn() },
       restoreFocus: vi.fn()
     }
@@ -235,6 +268,31 @@ describe('LinkActionPopover', () => {
     render(<LinkActionPopover request={request} onClose={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Copy file path' })).toBeNull()
+  })
+
+  it('copies the resolved file path without closing the popover', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    mocks.writeClipboardText.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    const request: LinkActionRequest = {
+      anchorX: 100,
+      anchorY: 200,
+      destination: 'file:///repo/src/main.ts',
+      copyValue: '/repo/src/main.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      restoreFocus: vi.fn()
+    }
+
+    render(<LinkActionPopover request={request} onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy file path' }))
+
+    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledWith('/repo/src/main.ts'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied file path')
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('opens the terminal link setting from the compact settings button', () => {

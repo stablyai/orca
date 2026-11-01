@@ -70,7 +70,7 @@ export function normalizeWorkspaceSessionPaneIdentities(
         normalizedLayout: normalized.snapshot,
         leafIdByInputLeafId: normalized.leafIdByInputLeafId
       })
-      // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
+      // Split layouts can exceed V8's argument limit if aliases are spread into push.
       for (const entry of tabAliasEntries) {
         if (options.registerAliases !== false) {
           agentHookServer.registerPaneKeyAlias(
@@ -107,7 +107,7 @@ export function normalizeWorkspaceSessionPaneIdentities(
     changed,
     leafIdByInputLeafIdByTabId,
     leafIdByPtyIdByTabId,
-    // Aliases replace old restart-required rows; callers still clear that legacy field.
+    // Alias replacement still requires callers to clear the legacy restart-required field.
     migrationUnsupportedEntries: [],
     legacyPaneKeyAliasEntries
   }
@@ -129,7 +129,7 @@ export function remapSshRemotePtyLeaseLeafIds(
       return lease
     }
     const hostId = toSshExecutionHostId(lease.targetId)
-    // Legacy unpartitioned state kept SSH panes in local; only fall back when this host has no partition.
+    // Legacy SSH panes spill into local only when their host partition is absent.
     const remap =
       remapsByHostId.get(hostId) ??
       (hostIdsWithWorkspaceSessions.has(hostId)
@@ -154,14 +154,14 @@ export function remapSshRemotePtyLeaseLeafIds(
     }
     changed = true
     const next = { ...lease }
-    // Why: unmatched legacy leaf ids are ambiguous after migration; don't re-persist them as durable pane identity.
+    // Unmatched legacy leaf IDs cannot safely become durable pane identities.
     delete next.leafId
     return next
   })
   return { leases: nextLeases, changed }
 }
 
-/** Acknowledgement keys lack host metadata, so an already-mapped tab keeps its mapping. */
+/** Hostless acknowledgement keys must keep their first tab mapping. */
 function mergeAcknowledgementLeafIdMapsByTabId(
   target: Map<string, Map<string, string>>,
   source: Map<string, Map<string, string>>
@@ -197,8 +197,7 @@ export function normalizePersistedPaneIdentityState(
     [LOCAL_EXECUTION_HOST_ID, normalizedSession]
   ])
   const hostSessionLegacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
-  // Why: SSH/runtime hosts keep their own session blob, and their legacy leaves need the same UUID
-  // rewrite — otherwise their leases and read markers still point at `pane:1` after migration.
+  // Remote partitions need UUID migration too or leases/read markers keep legacy pane IDs.
   const normalizedHostSessions = state.workspaceSessionsByHostId
     ? { ...state.workspaceSessionsByHostId }
     : undefined
@@ -241,7 +240,7 @@ export function normalizePersistedPaneIdentityState(
     ...legacyMigrationUnsupportedRowsToAliasEntries(state.migrationUnsupportedPtyEntries ?? []),
     ...normalizedSession.legacyPaneKeyAliasEntries,
     ...hostSessionLegacyPaneKeyAliasEntries
-    // Rows an older build wrote for a now-colliding tab id would keep the ambiguous routing alive.
+    // Filter old aliases too so preexisting cross-host tab collisions cannot preserve ambiguous routes.
   ]).filter((entry) => !crossHostTabIds.has(parsePaneKey(entry.stablePaneKey)?.tabId ?? ''))
   const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
     state.ui?.acknowledgedAgentsByPaneKey,

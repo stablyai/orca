@@ -1,16 +1,9 @@
-/* Classifies what, if anything, is serving the daemon's endpoint. Kept in its own module so
-   both the publishing daemon and the launcher can ask, without the ownership rules having to
-   depend on the health checker that also uses them. */
 import { connect } from 'node:net'
 import { lstatSync } from 'node:fs'
 
 const ENDPOINT_PROBE_TIMEOUT_MS = 500
 
-/**
- * 'connected' — something is listening. 'missing'/'refused' — nothing is, and the endpoint
- * name is safe to replace. 'unknown' — the probe itself failed (timeout on a loaded host,
- * EPERM); the endpoint must be left alone because absence of proof is not proof of death.
- */
+/** Connected proves a listener; missing/refused prove death; unknown must leave the endpoint alone. */
 export type SocketProbeOutcome = 'connected' | 'missing' | 'refused' | 'unknown'
 
 /** Positive proof that nothing is serving the endpoint. A timed-out probe proves nothing. */
@@ -27,8 +20,7 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
     let occupiedUnixEntry = false
     if (process.platform !== 'win32') {
       try {
-        // Why lstat: existsSync follows symlinks, so a dangling one reads as absent while it
-        // still occupies the name — an endpoint nothing can serve and no publish can take.
+        // lstat sees dangling symlinks that still occupy the endpoint name.
         lstatSync(socketPath)
         occupiedUnixEntry = true
       } catch (error) {
@@ -57,13 +49,11 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
     }
     const onError = (error: NodeJS.ErrnoException): void => {
       settle(
-        // Why both: a non-socket occupying the name reports ENOTSOCK on macOS but
-        // ECONNREFUSED on Linux. Either way nothing can ever serve it.
+        // Non-sockets report ENOTSOCK on macOS and ECONNREFUSED on Linux.
         error.code === 'ECONNREFUSED' || error.code === 'ENOTSOCK'
           ? 'refused'
           : error.code === 'ENOENT'
-            ? // An entry we just saw that now refuses to resolve is a dangling symlink:
-              // occupied, unservable, and replaceable — not an absent name.
+            ? // A dangling symlink occupies the name but cannot serve it.
               occupiedUnixEntry
               ? 'refused'
               : 'missing'

@@ -6,7 +6,6 @@ import {
   getSharedManagedScriptPath,
   readHooksJson,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -16,6 +15,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 import {
   restoreManagedScript,
@@ -27,7 +27,7 @@ import {
   ANTIGRAVITY_PRE_TOOL_USE_DECISION,
   type AntigravityEvent
 } from './hook-events'
-import { quotePosixShellString } from '../agent-hooks/posix-hook-command'
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,
@@ -39,8 +39,6 @@ import {
 } from './hooks-json-bundle'
 
 function getConfigPath(): string {
-  // Why: Antigravity's hook docs define global hooks in ~/.gemini/config/hooks.json,
-  // not in the CLI settings file used by Gemini CLI.
   return join(homedir(), '.gemini', 'config', 'hooks.json')
 }
 
@@ -60,16 +58,16 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
   const command = wrapPosixHookCommand(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
-    // Why: a missing managed script must not brick tools; the guard answers PreToolUse itself instead of staying silent.
+    // Keep tools usable if the managed script disappears: silence denies PreToolUse.
     event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
-  return `/bin/sh -c ${quotePosixShellString(command)}`
+  return `/bin/sh -c ${quotePosixShell(command)}`
 }
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
+    return wrapWindowsBatchHookCommand(getWindowsWrapperScriptPath(event))
   }
   return getPosixManagedCommand(scriptPath, event)
 }
@@ -185,8 +183,7 @@ export class AntigravityHookService {
     }
     writeManagedScript(scriptPath, getManagedScript('local', runtimePath))
     if (process.platform === 'win32') {
-      // Why: Antigravity wraps hook commands in cmd.exe. Keeping event env
-      // setup inside event-specific .cmd files avoids nested hooks.json quotes.
+      // Event wrappers avoid nested quoting in cmd.exe hook commands.
       for (const event of ANTIGRAVITY_EVENTS) {
         writeManagedScript(
           getWindowsWrapperScriptPath(event),

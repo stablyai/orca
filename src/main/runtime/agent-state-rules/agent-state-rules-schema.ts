@@ -4,13 +4,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { findUnsafePatternReason } from './agent-state-rule-pattern-safety'
 
-/**
- * One file per agent (`<agent>.json` beside this schema), plus `unknown-pane.json` for panes whose
- * agent Orca does not know. Every object is strict, so a misspelled field rejects the file instead
- * of silently dropping a condition. Every rule and anchor is `when` (a region and what it must
- * show) plus `answer`. Once a version ships, adding a region, predicate or answer bumps
- * `engineVersion`; until then version 1 is still being defined.
- */
+/** Shipped engine versions must bump when regions, predicates or answers expand. */
 export const AGENT_STATE_RULES_ENGINE_VERSION = 1
 
 const MAX_PATTERN_LENGTH = 200
@@ -20,7 +14,6 @@ const MAX_TERMS = 8
 
 const Literal = z.string().min(1).max(MAX_PATTERN_LENGTH)
 
-// Why: these are matched against the lowercased text tail, so an uppercase letter never matches.
 const TailLiteral = Literal.refine(
   (text) => text === text.toLowerCase(),
   'must be lowercase: the text tail is lowercased'
@@ -33,7 +26,6 @@ const SafeRegex = Literal.superRefine((pattern, ctx) => {
   }
 })
 
-/** A test on one row or one text segment: a single term, or every `all`, some `any`, no `none`. */
 function textTestSchema(containsLiteral: typeof Literal) {
   const term = z.union([
     z.object({ regex: SafeRegex, ignoreCase: z.boolean().optional() }).strict(),
@@ -54,17 +46,13 @@ const TailTextTestSchema = textTestSchema(TailLiteral)
 
 const RowSchema = z.union([TextTestSchema, z.object({ optional: TextTestSchema }).strict()])
 
-/** The evidence behind a rule, since JSON carries no comments; it ships beside the pattern it explains. */
+// JSON carries rule rationale as data.
 const Why = z.string().min(1).max(600)
 
 const NAMED_SCREEN_PREDICATES = ['codex-header-ready', 'codex-composer-ready'] as const
 
-/**
- * The screen `profile.screenSource` names. `rows` are consecutive trimmed rows, top-down; the
- * block ends at the bottom-most row, among the last `endsWithinBottom`, that passes the final
- * test, and a row above the screen reads as empty. Or `predicate`: a named engine scan over the
- * lowercased screen, for a shape rows cannot state. With neither, it holds whenever readable.
- */
+/** Rows match consecutive trimmed lines, ending at the bottom-most match within endsWithinBottom.
+ * Offscreen rows read empty; named predicates scan lowercased screens; no condition means readable. */
 const ScreenConditionSchema = z
   .object({
     region: z.literal('screen'),
@@ -84,15 +72,11 @@ const ScreenConditionSchema = z
   )
   .refine((screen) => !(screen.rows && screen.predicate), 'rows or a predicate, not both')
 
-/** The pane title's status, as the shared title classifier read it (`lastAgentStatus`). */
 const TitleConditionSchema = z
   .object({ region: z.literal('title'), status: z.enum(['idle']) })
   .strict()
 
-/**
- * The text tail: this file's `anchor` (an idle text anchor) is found and settled, meaning no
- * blocker was painted after it and no hold anchor shows anywhere.
- */
+/** An idle text anchor settles only without a later blocker or any hold anchor. */
 const TextConditionSchema = z.object({ region: z.literal('text'), anchor: Literal }).strict()
 
 const RuleConditionSchema = z.discriminatedUnion('region', [
@@ -109,8 +93,7 @@ const RuleAnswerSchema = z.discriminatedUnion('state', [
       strength: z.enum(['strong', 'weak']),
       /** Believed only after the output clock has been quiet (agents paint this mid-turn too). */
       requiresQuiet: z.boolean(),
-      /** On a pane with no output clock (restored or adopted), quiet cannot be measured: a strong
-       *  quiet rule is believed at once there, unless it says `skip` (then it does not apply). */
+      /** Clockless panes accept strong quiet rules immediately unless explicitly skipped. */
       withoutClock: z.literal('skip').optional()
     })
     .strict()
@@ -118,12 +101,11 @@ const RuleAnswerSchema = z.discriminatedUnion('state', [
       (answer) => !answer.withoutClock || (answer.requiresQuiet && answer.strength === 'strong'),
       'withoutClock is for strong rules that require quiet'
     ),
-  // Why hold: the agent's own evidence was readable and said "not ready", which must also shut
-  // the weak lanes (a name-only title or quiet process cannot see what the screen refused).
+  // A readable refusal must also block weak title/process readiness.
   z.object({ state: z.literal('hold') }).strict()
 ])
 
-/** One entry in the agent's priority list: highest `priority` first, ties in file order. */
+/** Highest priority first; ties retain file order. */
 const AgentStateRuleSchema = z
   .object({
     id: Literal,
@@ -146,13 +128,8 @@ const AGENT_BLOCKED_REASONS = [
   'agent-approval-prompt'
 ] as const satisfies readonly RuntimeTerminalWaitBlockedReason[]
 
-/**
- * A position in the lowercased text tail. Text anchors read every pane whatever agent it runs (a
- * tail can show another agent's dialog, and an adopted pane has no known agent), and the latest one
- * in the text wins. A blocked anchor reads the blocked layer's live window. An idle or live one is
- * a live prompt, which cancels an earlier blocker; only an idle one settles a wait. A hold anchor,
- * found anywhere, stops every text anchor from settling one (the agent is up, not ready).
- */
+/** Anchors read all panes: launch identity may be absent or differ from the running agent.
+ * Latest live/idle cancels earlier blockers; only idle settles. Blockers use the live window; any hold prevents settling. */
 const TextAnchorConditionSchema = z
   .object({
     region: z.literal('text'),
@@ -161,12 +138,10 @@ const TextAnchorConditionSchema = z
       z.object({ lastOf: TailLiteral }).strict(),
       z.object({ predicate: z.enum(NAMED_TEXT_ANCHORS) }).strict()
     ]),
-    /** Reads only the last N lines of its input. */
     withinLastLines: z.number().int().min(1).max(64).optional(),
     /** The text from the anchor to the end must pass this. */
     after: TailTextTestSchema.optional(),
-    /** Over the lines read, trailing blanks dropped: at least `atLeast` pass, the last one too
-     *  when `includingLast`. */
+    /** Ignore trailing blanks; includingLast also requires the final line to pass. */
     lines: z
       .object({
         atLeast: z.number().int().min(1).max(MAX_ROWS),
@@ -178,12 +153,7 @@ const TextAnchorConditionSchema = z
   })
   .strict()
 
-/**
- * A title the shared classifier already calls idle, marked as an agent's own rest title. Like a
- * text anchor it is read whatever agent the pane runs: an adopted pane has no known agent, and a
- * pane can run another agent than it launched. `match` is a test, or a named engine predicate
- * shared with other title readers.
- */
+/** Mark an idle-classified title as agent-owned, regardless of launch identity. */
 const TitleAnchorConditionSchema = z
   .object({
     region: z.literal('title'),
@@ -218,29 +188,21 @@ const AnchorSchema = z
     'a title anchor answers idle'
   )
 
-/**
- * How far readiness may trust the agent's hooks. `authoritative`: they report every way the main
- * agent's turn ends (done, cancelled, an approval granted or denied), so a fresh hook row decides
- * ahead of the rules. `turn-end`: a hook `done` is always a real turn end, but some ends may send
- * nothing (Codex before its `Interrupt` hook), so only a `done` decides and a `working` or
- * permission row leaves the rules to decide. `identity-only` (the default): hooks only name the
- * agent and the rules decide (Claude sends no event when an approval is denied or Esc stops a tool).
- */
+/** Authoritative hooks cover all turn endings and outrank rules.
+ * Turn-end trusts only done (older Codex interrupts and DSH approvals may emit nothing).
+ * Identity-only (default) leaves readiness to rules: Claude denial/Esc may emit nothing. */
 const HOOK_AUTHORITIES = ['authoritative', 'turn-end', 'identity-only'] as const
 
-/** Facts about the agent that are not detection rules. */
 const ProfileSchema = z
   .object({
     hooks: z.enum(HOOK_AUTHORITIES).optional(),
     /** Text whose presence in a pane's tail makes a tui-idle wait read its visible screen once. */
     screenProbeBanner: TailLiteral.optional(),
-    /** The screen the rules read: the PTY's own grid, trusted only while the PTY still has that
-     *  size, or the live emulator's. Rules keep the source they were recorded against. */
+    /** Preserve the recorded screen source; the PTY grid is trusted only at its current size. */
     screenSource: z.enum(['trusted', 'live']).optional()
   })
   .strict()
 
-/** The panes no agent file covers: no launch record, and no recognised foreground process. */
 export const UNKNOWN_PANE_RULES_ID = 'unknown-pane'
 
 function hasUniqueIds(entries: readonly { id: string }[]): boolean {

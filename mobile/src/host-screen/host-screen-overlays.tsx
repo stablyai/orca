@@ -1,234 +1,237 @@
 import { openExternalLink } from '../platform/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Check, Moon } from 'lucide-react-native'
+import { Moon, Pin, PinOff } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
+import { workspaceRouteHref } from '../navigation/workspace-execution-host'
+import { useWorkspaceServer } from '../transport/workspace-server'
 import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { BottomDrawerModalHost } from '../components/bottom-drawer-modal-host'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
-import { PickerModal } from '../components/PickerModal'
-import { colors } from '../theme/mobile-theme'
-import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
-import {
-  WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
-  WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
-} from '../worktree/workspace-list-picker-options'
+import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
+import { WorkspaceOptionsSheet } from './workspace-options-sheet'
+import { WorkspaceDetailsSheet } from './workspace-details-sheet'
 import type { HostScreenController } from './use-host-screen-controller'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const {
     actions,
     catalog,
     client,
+    connState,
     existingWorktreePaths,
     hostCapabilities,
     hostId,
-    settings,
-    showNewWorktree,
     state
   } = controller
   const actionTarget = state.actionTarget
+  // A server row's screens are offered by what that server supports, not the desktop.
+  const actionServer = useWorkspaceServer({
+    client,
+    connState,
+    desktopCapabilities: hostCapabilities,
+    executionHost: actionTarget?.hostId
+  })
 
   return (
     <>
-      <PickerModal
-        visible={state.showSortPicker}
-        title="Sort By"
-        options={SORT_OPTIONS}
-        selected={state.sortMode}
-        onSelect={settings.handleSortChange}
-        onClose={() => state.setShowSortPicker(false)}
-      />
+      <WorkspaceOptionsSheet controller={controller} />
 
-      <PickerModal
-        visible={state.showGroupPicker}
-        title="Group By"
-        options={GROUP_OPTIONS}
-        selected={state.groupMode}
-        onSelect={settings.handleGroupChange}
-        onClose={() => state.setShowGroupPicker(false)}
-      />
-
-      <BottomDrawer visible={state.showFilterModal} onClose={() => state.setShowFilterModal(false)}>
-        <View style={styles.filterModalHeader}>
-          <Text style={styles.filterModalTitle}>Filter</Text>
-          {settings.activeFilterCount > 0 && (
-            <Pressable onPress={settings.clearFilters}>
-              <Text style={styles.clearFiltersText}>Clear filters</Text>
-            </Pressable>
-          )}
-        </View>
-
-        <Text style={styles.filterSectionLabel}>Workspaces</Text>
-        <View style={styles.filterGroup}>
-          <Pressable style={styles.filterRow} onPress={settings.toggleHideSleeping}>
-            <Text style={styles.filterRowText}>Hide sleeping</Text>
-            {state.filters.hideSleeping && <Check size={14} color={colors.textPrimary} />}
-          </Pressable>
-          <View style={styles.filterSeparator} />
-          <Pressable style={styles.filterRow} onPress={settings.toggleHideDefaultBranch}>
-            <Text style={styles.filterRowText}>Hide default branch</Text>
-            {state.filters.hideDefaultBranch && <Check size={14} color={colors.textPrimary} />}
-          </Pressable>
-        </View>
-
-        {controller.sectionsResult.uniqueRepos.length > 1 && (
-          <>
-            <Text style={styles.filterSectionLabel}>Repositories</Text>
-            <View style={styles.filterGroup}>
-              {controller.sectionsResult.uniqueRepos.map((repo, i) => (
-                <View key={repo.id}>
-                  {i > 0 && <View style={styles.filterSeparator} />}
-                  <Pressable
-                    style={styles.filterRow}
-                    onPress={() => settings.toggleRepoFilter(repo.id)}
-                  >
-                    <View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />
-                    <Text style={styles.filterRowText} numberOfLines={1}>
-                      {repo.name}
-                    </Text>
-                    {state.filters.filterRepoIds.has(repo.id) && (
-                      <Check size={14} color={colors.textPrimary} />
-                    )}
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-      </BottomDrawer>
-
-      {/* Worktree long-press action sheet (inline confirm to avoid double-Modal lag) */}
-      <BottomDrawer
-        visible={actionTarget != null}
-        onClose={() => {
-          state.setConfirmDelete(null)
-          state.setActionTarget(null)
-        }}
-      >
-        {state.confirmDelete ? (
-          <View>
-            <View style={styles.confirmContent}>
-              <Text style={styles.confirmTitle}>Delete Worktree</Text>
-              <Text style={styles.confirmMessage}>
-                Delete "{state.confirmDelete.displayName || state.confirmDelete.repo}" (
-                {state.confirmDelete.branch})?
-              </Text>
-            </View>
-            <View style={styles.confirmButtons}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnCancel,
-                  pressed && styles.confirmBtnPressed
-                ]}
-                onPress={() => state.setConfirmDelete(null)}
-              >
-                <Text style={styles.confirmBtnCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  styles.confirmBtnDestructive,
-                  pressed && styles.confirmBtnPressed
-                ]}
-                onPress={() => {
-                  if (state.confirmDelete) {
-                    void actions.handleDeleteWorktree(state.confirmDelete)
-                  }
-                  state.setConfirmDelete(null)
-                  state.setActionTarget(null)
-                }}
-              >
-                <Text style={styles.confirmBtnDestructiveText}>Delete</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <ActionSheetContent
-            title={actionTarget ? actionTarget.displayName || actionTarget.repo : undefined}
-            message={actionTarget?.branch}
-            actions={
-              actionTarget
-                ? [
-                    ...buildWorktreeNavigationActions({
-                      hostId,
-                      worktreeId: actionTarget.worktreeId,
-                      worktreeName: actionTarget.displayName || actionTarget.repo,
-                      hostCapabilities,
-                      navigate: actions.navigateFromHostList,
-                      onDone: () => state.setActionTarget(null)
-                    }),
+      {/* iOS cannot present over a closing sibling Modal; delete's confirm, trust prompt and failure share one. */}
+      <BottomDrawerModalHost>
+        <BottomDrawer
+          visible={actionTarget != null}
+          onClose={() => {
+            state.setConfirmDelete(null)
+            state.setActionTarget(null)
+          }}
+        >
+          {state.confirmDelete ? (
+            <View>
+              <View style={styles.confirmContent}>
+                <Text style={styles.confirmTitle}>
+                  {t('hostScreen.hostScreenOverlays.deleteWorktree', 'Delete Worktree')}
+                </Text>
+                <Text style={styles.confirmMessage}>
+                  {t(
+                    'hostScreen.hostScreenOverlays.deleteConfirmMessage',
+                    'Delete "{{name}}" ({{branch}})?',
                     {
-                      label: 'Sleep',
-                      icon: Moon,
-                      onPress: () => {
-                        if (client) {
-                          state.setSleptIds((prev) =>
-                            new Set(prev).add(getWorktreeRowIdentity(actionTarget))
-                          )
-                          void client
-                            .sendRequest('worktree.sleep', {
-                              worktree: `id:${actionTarget.worktreeId}`
-                            })
-                            .catch(() => null)
-                        }
-                        state.setActionTarget(null)
-                      }
-                    },
-                    {
-                      label: isWorktreePinned(actionTarget, state.pinnedIds) ? 'Unpin' : 'Pin',
-                      onPress: () => {
-                        actions.togglePin(actionTarget.worktreeId)
-                        state.setActionTarget(null)
-                      }
-                    },
-                    {
-                      label: 'Delete',
-                      destructive: true,
-                      onPress: () => state.setConfirmDelete(actionTarget)
+                      name: state.confirmDelete.displayName || state.confirmDelete.repo,
+                      branch: state.confirmDelete.branch
                     }
-                  ]
-                : []
-            }
-          />
-        )}
-      </BottomDrawer>
+                  )}
+                </Text>
+              </View>
+              <View style={styles.confirmButtons}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    styles.confirmBtnCancel,
+                    pressed && styles.confirmBtnPressed
+                  ]}
+                  onPress={() => state.setConfirmDelete(null)}
+                >
+                  <Text style={styles.confirmBtnCancelText}>{t('common.cancel', 'Cancel')}</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.confirmBtn,
+                    styles.confirmBtnDestructive,
+                    pressed && styles.confirmBtnPressed
+                  ]}
+                  onPress={() => {
+                    if (state.confirmDelete) {
+                      void actions.handleDeleteWorktree(state.confirmDelete)
+                    }
+                    state.setConfirmDelete(null)
+                    state.setActionTarget(null)
+                  }}
+                >
+                  <Text style={styles.confirmBtnDestructiveText}>
+                    {t('common.delete', 'Delete')}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <ActionSheetContent
+              actions={
+                actionTarget
+                  ? [
+                      ...buildWorktreeNavigationActions({
+                        hostId,
+                        worktreeId: actionTarget.worktreeId,
+                        worktreeName: actionTarget.displayName || actionTarget.repo,
+                        executionHost: actionServer.routeHost,
+                        hostCapabilities:
+                          actionServer.server?.gates.hostCapabilities ?? hostCapabilities,
+                        navigate: actions.navigateFromHostList,
+                        onDone: () => state.setActionTarget(null)
+                      }),
+                      // Server sleep is not offered yet; the desktop would sleep its own id.
+                      ...(actionServer.server
+                        ? []
+                        : [
+                            {
+                              id: 'sleep',
+                              label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
+                              icon: Moon,
+                              onPress: () => {
+                                actions.putWorktreeToSleep(actionTarget)
+                                state.setActionTarget(null)
+                              }
+                            }
+                          ]),
+                      {
+                        id: 'togglePin',
+                        label: isWorktreePinned(actionTarget, state.pinnedIds)
+                          ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
+                          : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
+                        icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
+                        onPress: () => {
+                          actions.togglePin(actionTarget)
+                          state.setActionTarget(null)
+                        }
+                      },
+                      {
+                        id: 'delete',
+                        label: t('common.delete', 'Delete'),
+                        destructive: true,
+                        onPress: () => state.setConfirmDelete(actionTarget),
+                        // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
+                        ...(actionTarget.isMainWorktree === true
+                          ? {
+                              disabled: true,
+                              hint: t(
+                                'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
+                                "Primary worktree — can't be deleted. Remove the project instead."
+                              )
+                            }
+                          : {})
+                      }
+                    ]
+                  : []
+              }
+            >
+              {actionTarget ? (
+                <WorkspaceDetailsSheet
+                  row={actionTarget}
+                  onOpenLink={(url) => {
+                    openExternalLink(url)
+                    state.setActionTarget(null)
+                  }}
+                />
+              ) : null}
+            </ActionSheetContent>
+          )}
+        </BottomDrawer>
 
-      {/* Host remove confirmation */}
+        <OrcaHookTrustDrawer
+          visible={actions.archiveTrustRequest != null}
+          prompt={actions.archiveTrustRequest?.prompt ?? null}
+          onRunOnce={() => void actions.approveArchiveTrust(false)}
+          onAlwaysTrust={() => void actions.approveArchiveTrust(true)}
+          onDontRun={actions.skipArchiveHook}
+          onClose={actions.cancelArchiveTrust}
+        />
+
+        <ConfirmModal
+          visible={actions.archiveHookFailure != null}
+          title={t('hostScreen.hostScreenOverlays.deleteFailed', 'Failed to delete "{{name}}"', {
+            name:
+              actions.archiveHookFailure?.item.displayName || actions.archiveHookFailure?.item.repo
+          })}
+          message={actions.archiveHookFailure?.message}
+          confirmLabel={t('hostScreen.hostScreenOverlays.deleteAnyway', 'Delete Anyway')}
+          destructive
+          onConfirm={actions.deleteDespiteArchiveHookFailure}
+          onCancel={actions.dismissArchiveHookFailure}
+        />
+      </BottomDrawerModalHost>
+
       <ConfirmModal
         visible={state.confirmRemoveHost}
-        title="Remove Host"
-        message={`Remove "${state.hostName}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('hostScreen.hostScreenOverlays.removeHost', 'Remove Host')}
+        message={t(
+          'hostScreen.hostScreenOverlays.removeHostMessage',
+          'Remove "{{name}}"? You can re-pair later.',
+          { name: state.hostName }
+        )}
+        confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void actions.handleRemoveHost()}
         onCancel={() => state.setConfirmRemoveHost(false)}
       />
 
       <NewWorktreeModalController
-        ref={state.newWorktreeModalRef}
-        routeVisible={showNewWorktree}
+        visible={state.showNewWorktree}
         client={client}
+        hostCapabilities={hostCapabilities}
         hostId={hostId}
+        hostLabelById={state.hostLabelById}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
-        // The seam, not react-native's `Linking`: this screen is in the tasks page closure, and
-        // inside the shell's WebView `openURL` resolves without opening anything.
+        // Use the platform opener: React Native Linking.openURL resolves without opening anything inside the shell’s WebView.
         openExternalUrl={openExternalLink}
-        onVisibleChange={(visible) => {
-          state.newWorktreeModalVisibleRef.current = visible
-        }}
-        onCreated={(worktreeId, worktreeName, warning) => {
+        onCreated={(worktreeId, worktreeName, warning, executionHost) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
-            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning)
+            workspaceRouteHref(
+              hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning),
+              executionHost
+            )
           )
         }}
-        onRouteVisibleChange={actions.setShowNewWorktreeVisible}
+        onClose={actions.closeNewWorktreeModal}
       />
     </>
   )

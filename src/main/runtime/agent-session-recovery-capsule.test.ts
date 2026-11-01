@@ -11,9 +11,9 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
 import {
   AgentSessionRecoveryCapsule,
-  AGENT_SESSION_RECOVERY_CAPSULE_FILE,
-  type AgentSessionResumeFailureInput
+  AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from './agent-session-recovery-capsule'
+import type { AgentSessionResumeFailureInput } from './agent-session-recovery-capsule-entries'
 
 let directory: string
 let filePath: string
@@ -93,8 +93,7 @@ describe('durable restart offers', () => {
       result.status === 'fulfilled' ? result.value : []
     )
 
-    // Bounded lock retries serialize the two mutations; one owner wins and the other observes an
-    // empty selection after the winner publishes its reservation.
+    // File locking serializes admission; the second action sees the first reservation.
     expect(selected).toHaveLength(1)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'second' })])
   })
@@ -125,7 +124,6 @@ describe('durable restart offers', () => {
       NOW + 5
     )
 
-    // No longer an offer, but still on record with what went wrong.
     expect(await capsule.list(NOW + 5)).toEqual([marker({ sessionId: 'second' })])
     expect(await capsule.listFailed(NOW + 5)).toEqual([
       {
@@ -137,7 +135,6 @@ describe('durable restart offers', () => {
         latestUserItemId: 'user-after-failure'
       }
     ])
-    // Still there after the operation's own rollback: a failure is settled, not reopened.
     await capsule.rollbackResume('operation-a', NOW + 5)
     expect(await capsule.list(NOW + 5)).toEqual([marker({ sessionId: 'second' })])
     expect(await capsule.listFailed(NOW + 5)).toHaveLength(1)
@@ -156,12 +153,11 @@ describe('durable restart offers', () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     await fileFailure()
 
-    // Resume-all must not silently re-run what already failed.
     expect(await capsule.beginResume(undefined, 'operation-b', NOW)).toEqual([
       marker({ sessionId: 'second' })
     ])
     await capsule.rollbackResume('operation-b', NOW)
-    // Naming it is a retry. The failure stays on record until the retry settles.
+    // Explicit selection retries failures without removing their guidance until settlement.
     expect(await capsule.beginResume([SESSION], 'operation-c', NOW)).toEqual([marker()])
     expect(await capsule.listFailed(NOW)).toHaveLength(1)
     await capsule.completeResume('operation-c', [SESSION], NOW)
@@ -204,7 +200,6 @@ describe('durable restart offers', () => {
   it('lets a newer teardown of the same chat supersede its recorded failure', async () => {
     await capsule.record([marker()], NOW)
     await fileFailure({ outcome: 'unconfirmed', reason: 'pending' })
-    // A late writer of an older or the same witness does not.
     await capsule.record([marker()], NOW)
     expect(await capsule.list(NOW)).toEqual([])
     expect(await capsule.listFailed(NOW)).toHaveLength(1)
@@ -229,8 +224,7 @@ describe('durable restart offers', () => {
     expect(await capsule.listFailed(NOW)).toEqual([])
   })
 
-  // The user's own send ends a pending offer the same way it ends a failure record — the record
-  // is deleted, witness-keyed so a marker a newer teardown wrote meanwhile survives.
+  // New user messages invalidate only the observed witness; preserve later teardown records.
   it('forgets a superseded pending offer only for the witness that was read', async () => {
     await capsule.record([marker()], NOW)
 
@@ -240,7 +234,6 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([])
   })
 
-  // A reserved row belongs to its action, which settles it itself.
   it('does not forget an in-progress reservation as superseded', async () => {
     await capsule.record([marker()], NOW)
     await capsule.beginResume([SESSION], 'operation-a', NOW)
@@ -257,28 +250,40 @@ describe('durable restart offers', () => {
       NOW
     )
     await fileFailure()
-    const before = await readFile(filePath)
-
     expect(await capsule.dismiss([SESSION, 'second', 'missing'], NOW)).toBe(2)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' })])
     expect(await capsule.listFailed(NOW)).toEqual([])
-    // Nothing named, nothing rewritten.
+    const publish = vi.spyOn(durable, 'renameDurable')
     expect(await capsule.dismiss(['missing'], NOW)).toBe(0)
-    expect(await readFile(filePath)).not.toEqual(before)
-    // Not a fence: the same chat may be offered again by a later teardown.
+    expect(publish).not.toHaveBeenCalled()
     await capsule.record([marker()], NOW)
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])
   })
 
-  // A failure record has no expiry either; it ends only with the user's own actions.
+  it('forgets every record of any state except the ones kept, without a fence', async () => {
+    await capsule.record(
+      [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'kept' })],
+      NOW
+    )
+    await fileFailure()
+    expect(await capsule.listFailed(NOW)).toHaveLength(1)
+    await capsule.beginResume(['second'], 'operation-b', NOW)
+
+    const keep = (stored: { sessionId: string }) => stored.sessionId === 'kept'
+    expect(await capsule.dismiss('all', NOW, keep)).toBe(2)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' })])
+    expect(await capsule.listFailed(NOW)).toEqual([])
+    await capsule.record([marker()], NOW)
+    expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'kept' }), marker()])
+  })
+
   it('keeps a months-old failure on record', async () => {
     await capsule.record([marker()], NOW)
     await fileFailure()
     expect(await capsule.listFailed(NOW + 90 * 24 * 60 * 60 * 1000)).toHaveLength(1)
   })
 
-  // An older build parses entries with a two-state enum and throws on anything else, which would
-  // cost it every offer. Its schema ignores unknown top-level keys, so failures live under one.
+  // Older parsers reject new entry states but ignore unknown top-level keys; store failures separately.
   it('writes failures in a file an older build still reads its offers from', async () => {
     const olderEntry = z.object({
       state: z.enum(['pending', 'in-progress']),
@@ -307,8 +312,7 @@ describe('durable restart offers', () => {
     })
   })
 
-  // A newer build may file a failure shape this one cannot parse; after a downgrade that must not
-  // cost the offers or block recording new teardowns.
+  // Downgrade must skip unknown failures without losing offers or blocking newer teardowns.
   it('skips a failure record it cannot read instead of rejecting the whole file', async () => {
     const readable = {
       marker: marker(),
@@ -358,9 +362,8 @@ describe('durable restart offers', () => {
         entries: [],
         failed: [
           { ...readable, details: { reason: 'claimConflicted', note: 'dropped' } },
-          // An unreleased build wrote a cause here; it still parses, naming nothing.
+          // Retired cause fields supply no current details.
           { ...readable, marker: marker({ sessionId: 'older' }), cause: 'claimConflicted' },
-          // A reason the code does not list is not this code's.
           {
             ...readable,
             marker: marker({ sessionId: 'foreign' }),
@@ -461,7 +464,7 @@ describe('durable restart offers', () => {
     await capsule.beginResume([SESSION], 'operation-a', NOW)
     const later = NOW + 10 * 60 * 1000 + 1
 
-    // A read remains read-only, but the expired reservation is visible as a pending offer.
+    // Read without writing; expired action leases appear pending.
     expect(await capsule.list(later)).toEqual([marker()])
     const reserved = await capsule.beginResume([SESSION], 'operation-b', later)
     expect(reserved).toEqual([marker()])
@@ -476,7 +479,6 @@ describe('durable restart offers', () => {
     expect(await capsule.clearAll(NOW)).toBe(1)
     expect(await capsule.list(NOW)).toEqual([])
 
-    // A later failed action cannot resurrect a record the user explicitly dismissed.
     await capsule.rollbackResume('operation-a', NOW)
     expect(await capsule.list(NOW)).toEqual([])
   })
@@ -485,7 +487,7 @@ describe('durable restart offers', () => {
     await capsule.record([marker()], NOW)
     await capsule.clearAll(NOW + 1)
 
-    // This is the stale callback that can outlive a timed teardown phase in another host.
+    // Model a teardown callback outliving another host's timed phase.
     await capsule.record([marker()], NOW + 1)
     expect(await capsule.list(NOW + 1)).toEqual([])
 
@@ -493,7 +495,7 @@ describe('durable restart offers', () => {
     await capsule.record([newer], NOW + 2)
     expect(await capsule.list(NOW + 2)).toEqual([newer])
 
-    // A new interruption must not remove the fence before the old callback has finished.
+    // New interruptions must preserve the fence against older delayed callbacks.
     await capsule.record([marker()], NOW + 2)
     expect(await capsule.list(NOW + 2)).toEqual([newer])
   })
@@ -582,7 +584,7 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker()])
   })
 
-  // No TTL: an offer ends only by the user's own actions, however long the app was closed.
+  // Offers expire only by user action, never TTL or clock drift.
   it.each([NOW - 90 * 24 * 60 * 60 * 1000, NOW + 1])(
     'still lists a months-old or clock-skewed marker (%s)',
     async (recordedAt) => {

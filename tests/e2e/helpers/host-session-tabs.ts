@@ -1,11 +1,7 @@
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-types'
 
-/**
- * The host's own view of a worktree's session tabs. Asking the host directly is what makes a close
- * test a real oracle: a client-side re-derivation of who owns the tab stops guarding the moment the
- * ownership policy it copied changes.
- */
+// Read authoritative host tabs directly so a copied client ownership policy cannot weaken close assertions.
 export async function readHostTabs(
   hostClient: RuntimeClient,
   repoPath: string
@@ -18,15 +14,7 @@ export async function readHostTabs(
 
 type HostBrowserPageRow = { browserPageId: string; url: string }
 
-/**
- * The host's own browser page registry for a workspace, addressed by worktree selector.
- *
- * Why not readHostTabs: a headless paired host does not project browser pages into
- * session.tabs.list — that snapshot carries only terminals, and it additionally hides client-placed
- * pages from any peer that does not advertise `BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY`, which the
- * CLI socket deliberately does not. `browser.tabList` has neither limitation, so it is the only
- * oracle that answers "does the host still hold this page" for both placements.
- */
+// Use browser.tabList: headless session snapshots omit browsers and CLI capabilities hide client-placed pages.
 async function readHostBrowserPages(
   hostClient: RuntimeClient,
   worktreeSelector: string,
@@ -49,13 +37,7 @@ export async function readHostBrowserPageIds(
   return tabs.map((tab) => tab.browserPageId).sort()
 }
 
-/**
- * Where the host believes one of its browser pages is.
- *
- * For a client-hosted page this is the record the client keeps current by publishing metadata, and
- * it is the URL page recovery navigates a restored page back to — so it is the difference between
- * restoring a tab and restoring it where the user actually was.
- */
+// Read the host’s current page URL, which is the recovery destination for client-hosted tabs.
 export async function readHostBrowserPageUrl(
   hostClient: RuntimeClient,
   repoPath: string,
@@ -65,13 +47,7 @@ export async function readHostBrowserPageUrl(
   return tabs.find((tab) => tab.browserPageId === browserPageId)?.url ?? null
 }
 
-/**
- * Every browser page URL the host holds, for callers that address the workspace by selector
- * (`id:`/`path:`) rather than repo path — a folder workspace has no repo path.
- *
- * Why the explicit ceiling: a paired host's client is constructed with a 5s default, which the
- * first tabList can outrun while the host brings its browser session up.
- */
+// Accept workspace selectors for folder workspaces; allow initial browser startup beyond the paired client’s default 5s timeout.
 export async function readHostBrowserPageUrls(
   hostClient: RuntimeClient,
   worktreeSelector: string

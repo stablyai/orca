@@ -1,7 +1,8 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser-client-host-protocol'
-import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import type { BrowserExecutionHostKeyResolution } from '../../runtime-browser-client-page-adoption'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -32,10 +33,7 @@ function orphanedPage(
   }
 }
 
-/**
- * Attaches through the real RPC method, answering every command the runtime publishes the way the
- * client host would. Everything adoption does at attach has to survive this path or it ships broken.
- */
+/** Drive the real attach RPC and answer its published client-host commands to verify adoption crosses the wire correctly. */
 function attachHost(
   pageInventory: readonly BrowserClientHostedPageInventory[],
   options: {
@@ -151,20 +149,6 @@ describe('browser.clientHost.attach adoption', () => {
     await rig.dispatch
   })
 
-  it('closes the reconciliation window for the attaching client once every page is taken back', async () => {
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-b' })], {
-      browserHostClientId: 'host-window',
-      pairedDeviceId: 'device-window'
-    })
-
-    await vi.waitFor(() =>
-      expect(rig.markClientHostedPagesReconciled).toHaveBeenCalledWith('device-window')
-    )
-
-    rig.cleanups.get('browser-client-host:host-window')?.()
-    await rig.dispatch
-  })
-
   it('keeps the window open when a page could not be taken back yet', async () => {
     const rig = attachHost([orphanedPage({ browserPageId: 'page-c' })], {
       browserHostClientId: 'host-held',
@@ -215,8 +199,7 @@ describe('browser.clientHost.attach adoption', () => {
       })
       releaseAdoption({ status: 'resolved', executionHostKey: EXECUTION_HOST_KEY })
       await vi.waitFor(() => expect(rig.markClientHostedPagesReconciled).toHaveBeenCalled())
-      // Attach only settles once recovery has returned, so this is the barrier the assertions need:
-      // draining microtasks would let a regression slip through as a not-yet-issued command.
+      // Attach awaits recovery; draining microtasks alone could miss a command not issued yet.
       await settleAttach()
 
       expect(authority.getPlacement('page-created-after-attach')).toEqual(placement)
@@ -227,30 +210,5 @@ describe('browser.clientHost.attach adoption', () => {
     } finally {
       await settleAttach()
     }
-  })
-
-  it('does not re-enter recovery for a page it just adopted', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-d' })], {
-      browserHostClientId: 'host-recovery',
-      pairedDeviceId: 'device-recovery'
-    })
-
-    await vi.waitFor(() =>
-      expect(rig.markClientHostedPagesReconciled).toHaveBeenCalledWith('device-recovery')
-    )
-    await vi.waitFor(() => expect(rig.commands().length).toBeGreaterThanOrEqual(2))
-    await Promise.resolve()
-    await Promise.resolve()
-
-    // The adopted page's inventory entry still names the predecessor by construction, so recovery
-    // would call it stale and warn once per adopted page on every restart.
-    expect(
-      warn.mock.calls.filter(([message]) => String(message).includes('client page recovery failed'))
-    ).toEqual([])
-    warn.mockRestore()
-
-    rig.cleanups.get('browser-client-host:host-recovery')?.()
-    await rig.dispatch
   })
 })

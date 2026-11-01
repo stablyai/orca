@@ -1,4 +1,8 @@
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'
 
 // Why: an SSH per-workspace-env project's host is the runtime-owned SSH target; once that runtime is destroyed, remove the project or it lingers as a dead, never-connectable one.
@@ -15,13 +19,13 @@ export async function purgeOrphanedRuntimeSshProjects(
   const destroyedHostIds = new Set<ExecutionHostId>(
     purgeableSshTargetIds.map((id) => toSshExecutionHostId(id))
   )
-  const orphanedSetupIds = get()
+  const orphanedSetups = get()
     .projectHostSetups.filter((setup) => destroyedHostIds.has(setup.hostId))
-    .map((setup) => setup.id)
+    .map((setup) => ({ setupId: setup.id, hostId: setup.hostId }))
   const purgedRepoIds = new Set<string>()
-  for (const setupId of orphanedSetupIds) {
+  for (const target of orphanedSetups) {
     try {
-      const result = await get().deleteProjectHostSetup({ setupId })
+      const result = await get().deleteProjectHostSetup(target)
       if (result?.repo) {
         purgedRepoIds.add(result.repo.id)
       }
@@ -30,14 +34,15 @@ export async function purgeOrphanedRuntimeSshProjects(
     }
   }
   // A repo whose only host was the destroyed runtime can outlive its setup (pruned first by a projection refresh); remove it directly so no dead project lingers.
-  const orphanedRepoIds = get()
-    .repos.filter(
-      (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
-    )
-    .map((repo) => repo.id)
-  for (const repoId of orphanedRepoIds) {
+  const orphanedRepos = get().repos.filter(
+    (repo) => destroyedTargetIds.has(repo.connectionId ?? '') && !purgedRepoIds.has(repo.id)
+  )
+  for (const repo of orphanedRepos) {
     try {
-      await get().removeProject(repoId)
+      await get().removeProject(repo.id, {
+        hostId: getRepoExecutionHostId(repo),
+        automaticCleanup: true
+      })
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env repo:', error)
     }

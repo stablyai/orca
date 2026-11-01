@@ -1,24 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createAzureDevOpsPullRequest,
-  isAzureDevOpsReviewCreationAuthenticated
-} from './pull-request-creation'
-import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
+import { createAzureDevOpsPullRequest } from './pull-request-creation'
+import { _resetAzureDevOpsApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  getSshGitProviderGeneration: () => 0
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -32,24 +23,18 @@ describe('Azure DevOps pull request creation', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n',
       stderr: ''
     })
     _resetAzureDevOpsRepoRefCache()
-    _resetAzureDevOpsPreviewApiVersionCache()
+    _resetAzureDevOpsApiVersionCache()
   })
 
   afterEach(() => {
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
-  })
-
-  it('treats token-only auth as sufficient for repo-scoped creation', () => {
-    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
-    expect(isAzureDevOpsReviewCreationAuthenticated()).toBe(true)
   })
 
   it('posts a pull request create body to the repository REST endpoint', async () => {
@@ -159,6 +144,42 @@ describe('Azure DevOps pull request creation', () => {
     expect(versions).toEqual(['7.1', '7.1-preview'])
   })
 
+  it('creates a PR only after negotiating a 6.1 preview version', async () => {
+    const versions: (string | null)[] = []
+    let creations = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const version = new URL(String(input)).searchParams.get('api-version')
+        versions.push(version)
+        expect(init?.method).toBe('POST')
+        if (version === '7.1') {
+          return Response.json({ typeKey: 'VssVersionOutOfRangeException' }, { status: 400 })
+        }
+        if (version === '6.1') {
+          return Response.json({ typeKey: 'VssInvalidPreviewVersionException' }, { status: 400 })
+        }
+        expect(version).toBe('6.1-preview')
+        creations++
+        return Response.json({ pullRequestId: 51, title: 'Server create', status: 'active' })
+      })
+    )
+    await expect(
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/server',
+          title: 'Server create'
+        },
+        'local'
+      )
+    ).resolves.toMatchObject({ ok: true, number: 51 })
+    expect(versions).toEqual(['7.1', '6.1', '6.1-preview'])
+    expect(creations).toBe(1)
+  })
+
   it('does not retry PR creation when only the error message names the preview exception', async () => {
     const fetchMock = vi.fn(async () =>
       Response.json(
@@ -183,44 +204,6 @@ describe('Azure DevOps pull request creation', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it('resolves Azure DevOps remotes through the SSH git provider', async () => {
-    const remoteGit = {
-      exec: vi.fn(async () => ({
-        stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo.git\n',
-        stderr: ''
-      }))
-    }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({
-        pullRequestId: 38,
-        title: 'Remote Azure create',
-        status: 'active',
-        creationDate: '2026-06-01T00:00:00Z'
-      })
-    ) as never
-
-    await expect(
-      createAzureDevOpsPullRequest(
-        '/remote/repo',
-        {
-          provider: 'azure-devops',
-          base: 'main',
-          head: 'feature/azure',
-          title: 'Remote Azure create'
-        },
-        'ssh:ssh-1'
-      )
-    ).resolves.toMatchObject({
-      ok: true,
-      number: 38
-    })
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo', {
-      signal: expect.any(AbortSignal)
-    })
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('classifies auth failures without retrying shell commands', async () => {
     globalThis.fetch = vi.fn(async () =>
       Response.json({ message: 'Unauthorized' }, { status: 401 })
@@ -239,7 +222,8 @@ describe('Azure DevOps pull request creation', () => {
       )
     ).resolves.toMatchObject({
       ok: false,
-      code: 'auth_required'
+      code: 'auth_required',
+      reason: 'auth_required'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo',

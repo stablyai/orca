@@ -1,9 +1,4 @@
-/**
- * Wire shape for the local document-preview scheme. The main process answers
- * `orca-preview://<grantId>/<relative-path>` by reading the owning workspace's
- * disk over the same channels the editor uses, so remote HTML docs render in a
- * local webview instead of being routed through the remote-browsing machinery.
- */
+/** Read workspace-owned local/remote disk over editor channels for orca-preview://grant/path; render remote HTML in local webviews without remote-browsing routing. */
 export const DOC_PREVIEW_SCHEME = 'orca-preview'
 
 /** Why: non-persistent and its own partition — preview bytes never share storage with user browsing or workspace browser profiles. */
@@ -13,16 +8,24 @@ export const DOC_PREVIEW_MINT_GRANT_CHANNEL = 'docPreview:mintGrant'
 export const DOC_PREVIEW_REVOKE_GRANT_CHANNEL = 'docPreview:revokeGrant'
 export const DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL = 'docPreview:authorizeDirectory'
 export const DOC_PREVIEW_EXTERNAL_LINK_CHANNEL = 'docPreview:externalLink'
-/**
- * The preview guest's preload reports a trusted anchor click here. Renderer↔main only — no paired
- * client ever sees it, and main gates every report on the sender being a live, grant-bound preview guest.
- */
+/** Renderer/main only: accept trusted anchor reports exclusively from live grant-bound preview guests; never expose this channel to paired clients. */
 export const DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
+
+export type DocPreviewLinkModifiers = {
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+}
+
+export type DocPreviewExternalLink = {
+  url: string
+  grantId?: string
+  modifiers?: DocPreviewLinkModifiers
+}
 /** The one out-of-band route from the preview's main-side fences to the shell hosting it. */
 export const DOC_PREVIEW_LOAD_FAILURE_CHANNEL = 'docPreview:loadFailure'
 
-/** Why: an unreadable document still answers with a real HTTP status, so the guest paints the
- *  handler's plain-text body instead of failing to load. The shell needs the reason out-of-band. */
+/** Unreadable files still return HTTP bodies that the guest paints; deliver failure reasons out-of-band to the shell. */
 export type DocPreviewFileFailureReason =
   | 'authorization-required'
   | 'too-large'
@@ -35,12 +38,7 @@ export type DocPreviewFileFailure = {
   reason: DocPreviewFileFailureReason
 }
 
-/**
- * A download the preview partition refused. Why it carries no path: the document names the file it
- * offers, and the notice this becomes is Orca's chrome — a payload with a path invites rendering
- * page-authored text in the app's own UI, and a path equal to the entry document's would route a
- * refused download into the panel that hides the page.
- */
+/** Omit page-authored download paths from app chrome; a forged entry-document path could otherwise hide the page behind its error panel. */
 export type DocPreviewDownloadBlocked = {
   grantId: string
   reason: 'download-blocked'
@@ -70,11 +68,7 @@ export type DocPreviewUrlTarget = {
   relativePath: string
 }
 
-/**
- * Whether a string is, or is trying to look like, a preview URL. Deliberately a prefix test rather
- * than a parse: this answers for text a document chose — a title Chromium fell back to, most of
- * all — where anything carrying a grant must be refused even when it would not parse.
- */
+/** Prefix-test even malformed document-authored URLs/titles so grant-bearing text cannot escape simply by failing URL parsing. */
 export function isDocPreviewUrl(candidate: string): boolean {
   return candidate.trimStart().toLowerCase().startsWith(`${DOC_PREVIEW_SCHEME}://`)
 }

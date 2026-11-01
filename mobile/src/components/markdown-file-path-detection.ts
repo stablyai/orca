@@ -1,7 +1,4 @@
-// Conservative detection of file-path-like tokens inside an inline markdown text
-// run, so the chat view can render them as tappable (opening the mobile file
-// viewer). We deliberately favor precision over recall: a missed path is a minor
-// annoyance, but a false positive on prose or a version number is a broken tap.
+// Prefer precise chat file paths over recall: missed link is tolerable, false prose/version tap is broken navigation.
 
 import { parseFileLinkLocation } from '../../../src/shared/file-link-location'
 
@@ -9,9 +6,7 @@ export type FilePathSegment =
   | { type: 'text'; value: string }
   | { type: 'file'; value: string; path: string }
 
-// Common source/code/config extensions we treat as openable file paths. Kept
-// explicit (rather than "any extension") so prose like "etc." or "e.g." and
-// domain-ish tokens like "example.com" don't get matched.
+// Allow explicit source/config extensions, not arbitrary suffixes that match prose abbreviations or domains.
 const FILE_EXTENSIONS = [
   'ts',
   'tsx',
@@ -84,29 +79,19 @@ const FILE_EXTENSIONS = [
 
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)
 
-// Accept the host's native separator because transcript paths originate on the
-// connected runtime, which may be Windows even when the phone is not. Leading
-// alternatives cover Windows drives, UNC, and POSIX absolute roots; the optional
-// tail captures only bounded agent-style :line(:col) citations.
+// Accept host-native Windows drives/UNC/POSIX paths regardless of phone OS, plus bounded trailing :line(:col).
 const CANDIDATE_PATTERN =
   /(?:(?:[A-Za-z]:[\\/]|\\\\|[\\/]|\.{1,2}[\\/])(?:[\w.@~+-]+[\\/])*|(?:[\w.@~+-]+[\\/])+)[\w.@+-]+\.[A-Za-z0-9]+(?::[1-9]\d*(?::[1-9]\d*)?(?![\w@%]))?/g
 
-// A path candidate in chat prose is short; a much longer run can't hold one worth
-// linkifying but can push CANDIDATE_PATTERN into super-linear backtracking, so we
-// skip detection entirely above this cap.
+// Skip overlong inline runs to bound candidate regex’s super-linear backtracking.
 const MAX_DETECTION_LENGTH = 2000
 
-// A mid-token '@' (one preceded by a non-separator) marks an email or git URL such
-// as git@github.com; a segment-leading '@' is a scoped package dir (@scope/…) and
-// stays eligible.
+// Mid-token @ marks email/git URL; segment-leading @scope remains eligible package path.
 function hasMidTokenAt(candidate: string): boolean {
   return /[^\\/]@/.test(candidate)
 }
 
-/**
- * Split an agent-style `path:line(:col)` citation into its parts. Windows drive
- * colons are safe: only a trailing all-digit suffix is treated as a line ref.
- */
+// Split trailing numeric :line(:col); preserve Windows drive colon.
 export function splitFilePathLineSuffix(pathText: string): {
   path: string
   line: number | null
@@ -124,21 +109,17 @@ export function splitFilePathLineSuffix(pathText: string): {
 }
 
 function isOpenablePath(pathText: string): boolean {
-  // A :line(:col) tail is part of the citation, not the file name.
   const { path: candidate } = splitFilePathLineSuffix(pathText)
-  // Reject anything URL-ish or scheme-bearing — those are handled as web links.
   if (candidate.includes('://') || hasMidTokenAt(candidate)) {
     return false
   }
-  // Must contain a separator (a bare "file.ts" is too ambiguous in prose).
   if (!/[\\/]/.test(candidate)) {
     return false
   }
   const lastSeparator = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'))
   const lastSegment = candidate.slice(lastSeparator + 1)
   const dot = lastSegment.lastIndexOf('.')
-  // A leading-dot dotfile in the final segment (e.g. ".env") has no extension to
-  // anchor on; require a real name.ext shape.
+  // Require real name.ext in final segment; bare dotfiles lack reliable extension signal.
   if (dot <= 0) {
     return false
   }
@@ -146,29 +127,21 @@ function isOpenablePath(pathText: string): boolean {
   if (!EXTENSION_SET.has(ext)) {
     return false
   }
-  // Guard against version-number-ish tails ("1.2.3" style) where the "extension"
-  // is purely numeric — those aren't files.
+  // Reject purely numeric extension so version tails do not become file links.
   if (/^\d+$/.test(ext)) {
     return false
   }
   return true
 }
 
-// Strip the leading ./ marker so callers receive a clean worktree-relative path,
-// while keeping ../ (which is meaningful) intact.
+// Remove ./ for clean worktree-relative path; preserve meaningful ../.
 export function normalizeFilePath(path: string): string {
   return path.replace(/^\.[\\/]/, '')
 }
 
-/**
- * Given a plain inline text run, return ordered segments marking which substrings
- * are openable file paths. Non-path text is preserved verbatim so the renderer can
- * reassemble the run exactly. Returns a single text segment when nothing matches.
- */
+// Return ordered path/plain-text segments preserving every input character, or one plain segment on no match.
 export function detectFilePathSegments(text: string): FilePathSegment[] {
-  // Every real match ends in a name.ext, so a dot is mandatory; skip the regex when
-  // there is none, or when the run is too long to hold a chat path but long enough
-  // to drive CANDIDATE_PATTERN into super-linear backtracking.
+  // Skip regex without dot or above length cap; all valid names need dot and long runs risk super-linear backtracking.
   if (text.length > MAX_DETECTION_LENGTH || !text.includes('.')) {
     return [{ type: 'text', value: text }]
   }
@@ -179,9 +152,7 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
 
   while ((match = CANDIDATE_PATTERN.exec(text))) {
     const candidate = match[0]
-    // Skip candidates that are part of a URL: a scheme colon, a domain tail, or
-    // a preceding slash (the leading slash of an absolute path is part of the
-    // match itself, so prev '/' means a '://' or '//' remainder, not a path).
+    // Exclude scheme/domain/preceding-slash URL remnants; genuine absolute path’s leading slash is already in match.
     const prev = match.index > 0 ? text[match.index - 1]! : ''
     if (prev === ':' || prev === '/' || prev === '\\' || /[\w.@]/.test(prev)) {
       continue
@@ -199,18 +170,13 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
   if (lastIndex < text.length) {
     segments.push({ type: 'text', value: text.slice(lastIndex) })
   }
-  // Collapse to a single text segment for the common no-match case.
   if (segments.length === 0) {
     return [{ type: 'text', value: text }]
   }
   return segments
 }
 
-/**
- * True when an inline-code span's entire content is a single openable file path
- * (e.g. `src/app/Main.tsx`). Code spans are a strong signal, so we also accept a
- * bare `file.ts` here even without a slash.
- */
+// Inline-code context permits bare known-extension file.ts (with optional line/column), unlike ambiguous prose.
 export function isFilePathCodeSpan(code: string): boolean {
   const trimmed = code.trim()
   if (!trimmed || /\s/.test(trimmed)) {
@@ -222,8 +188,7 @@ export function isFilePathCodeSpan(code: string): boolean {
   if (isOpenablePath(trimmed)) {
     return true
   }
-  // Separator-less code span: accept a clean name.ext (with an optional
-  // :line(:col) citation tail) and a known extension.
+  // Accept clean name.ext with known extension and optional citation tail in separator-less code spans.
   const { path } = splitFilePathLineSuffix(trimmed)
   if (/[\\/]/.test(path)) {
     return false

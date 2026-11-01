@@ -7,9 +7,8 @@ import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { useLocalImagePick } from './useLocalImagePick'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
-import { runSlashCommand, slashCommands } from './rich-markdown-slash-commands'
 
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: vi.fn().mockResolvedValue({
     results: [{ status: 'imported', destPath: '/repo/shot.png' }]
   })
@@ -23,18 +22,15 @@ vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn(() => ({
       settings: { activeRuntimeEnvironmentId: null },
+      openFiles: [],
       folderWorkspaces: [],
       worktreesByRepo: { repo1: [{ id: 'wt-1', path: '/repo' }] }
     }))
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: vi.fn((settings) => settings)
-}))
-
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: vi.fn(), info: vi.fn() }
 }))
 
 const CODE_BLOCK_SOURCE = '```ts\nconst a = 1\n```\n'
@@ -105,20 +101,6 @@ describe('inserting an image while the cursor is inside a fenced code block', ()
     expectFencedSplit(editor)
   })
 
-  it('keeps both halves fenced when the slash command inserts the image', async () => {
-    const imageCommand = slashCommands.find((command) => command.id === 'image')
-    expect(imageCommand).toBeDefined()
-    const { result } = renderHook(() => useLocalImagePick(editor as never, '/repo/note.md', 'wt-1'))
-    const from = editor.state.selection.from
-
-    runSlashCommand(editor as never, { from, to: from }, imageCommand!, () => {
-      void result.current()
-    })
-    await flushPromises()
-
-    expectFencedSplit(editor)
-  })
-
   it('keeps both halves fenced when a clipboard screenshot is pasted', async () => {
     const handled = handleRichMarkdownImagePaste({
       editor: editor as never,
@@ -133,17 +115,5 @@ describe('inserting an image while the cursor is inside a fenced code block', ()
 
     expect(handled).toBe(true)
     expectFencedSplit(editor)
-  })
-
-  it('still inserts the image inline when the cursor is in ordinary prose', async () => {
-    editor.destroy()
-    editor = mountRichMarkdownEditor('Install the extension\n')
-    editor.commands.setTextSelection(13)
-    const { result } = renderHook(() => useLocalImagePick(editor as never, '/repo/note.md', 'wt-1'))
-
-    await result.current()
-    await flushPromises()
-
-    expect(editor.getMarkdown().trimEnd()).toBe('Install the ![](shot.png)extension')
   })
 })

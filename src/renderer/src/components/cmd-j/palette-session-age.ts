@@ -9,8 +9,7 @@ export function formatPaletteSessionAge(
     return undefined
   }
   const deltaMs = now - lastActiveAt
-  // Why not "now": the badge feeds `aria-label="Last active {{value}} ago"`, and
-  // "Last active now ago" reads wrong — keep the token numeric like the other buckets.
+  // The accessible label appends “ago”; use a numeric token to avoid “Last active now ago”.
   if (deltaMs < 60_000) {
     return translate('components.cmd-j.paletteSessionAge.underOneMinute', '<1m')
   }

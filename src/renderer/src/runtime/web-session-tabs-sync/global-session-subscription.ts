@@ -1,10 +1,10 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
 import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
 import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
 import {
   installWindowVisibilitySubscriptionParking,
+  type WindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
 } from '../window-visibility-subscription-parking'
 import { shouldSyncAllRuntimeSessionTabs } from './tracking-decisions'
@@ -16,8 +16,12 @@ import { loadInitialWebSessionTabs } from './load-initial'
 import { handleGlobalSessionEvent } from './global-session-events'
 import { VisibilityResumeCoordinator } from './visibility-resume-coordinator'
 import type { VisibilityResumeOmission, SessionTabsStreamEvent } from './state'
-import type { MirroredRuntimeEnvironment } from './visibility-resume-types'
-import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
+import type {
+  MirroredRuntimeEnvironment,
+  SessionTabsSnapshotHandler
+} from './visibility-resume-types'
+import { isSessionTabsStreamEnd, WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
+import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 
@@ -25,30 +29,9 @@ export type GlobalSubscriptionRefs = {
   activeRuntimeEnvironmentId: Ref<string | null>
   activeRuntimeWorktreeKey: Ref<string | null>
   visibilityResumeOmissions: Ref<Map<string, VisibilityResumeOmission>>
-  snapshotReceipt: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
-  snapshotApply: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => boolean
-  >
-  snapshotAccepted: Ref<
-    (
-      environmentId: string,
-      snapshot: RuntimeMobileSessionTabsResult,
-      receivedFrame: number,
-      runtimeId?: string
-    ) => void
-  >
+  snapshotReceipt: Ref<SessionTabsSnapshotHandler<void>>
+  snapshotApply: Ref<SessionTabsSnapshotHandler<boolean>>
+  snapshotAccepted: Ref<SessionTabsSnapshotHandler<void>>
   ownerRevisions: Ref<Map<string, number | undefined>>
 }
 
@@ -75,12 +58,11 @@ function parseEnvironments(value: string | null): MirroredRuntimeEnvironment[] {
     .filter(({ environmentId }) => environmentId.trim())
 }
 
-/** Install all-worktree subscriptions and their visibility-resume coordinator. */
 export function installGlobalSessionTabsSubscriptions({
   runtimeSessionMirrorEnvironmentKey,
   workspaceSessionReady,
   refs
-}: GlobalSubscriptionInstallArgs): (() => void) | undefined {
+}: GlobalSubscriptionInstallArgs): WindowVisibilitySubscriptionParking | undefined {
   const environments = parseEnvironments(runtimeSessionMirrorEnvironmentKey)
   const ownerRevisions = new Map(
     (workspaceSessionReady ? environments : []).map(
@@ -142,7 +124,7 @@ export function installGlobalSessionTabsSubscriptions({
     const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
     environmentIdBySpec.push(environmentId)
     subscriptionSpecs.push({
-      subscribe: (isCurrent, { visibilityGeneration }) => {
+      subscribe: (isCurrent, { visibilityGeneration, ended }) => {
         const awaitingVisibilityResumeInventory = { value: visibilityGeneration > 0 }
         if (!requestedInitialLoad) {
           requestedInitialLoad = true
@@ -154,7 +136,7 @@ export function installGlobalSessionTabsSubscriptions({
             isCurrent
           })
         }
-        return window.api.runtimeEnvironments.subscribe(
+        return subscribeRuntimeEnvironment(
           {
             selector: environmentId,
             method: 'session.tabs.subscribeAll',
@@ -169,6 +151,10 @@ export function installGlobalSessionTabsSubscriptions({
                 getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
               ) {
                 return
+              }
+              // Why: an end frame never reaches onClose, and an error response leaves the stream dead.
+              if (!response.ok || isSessionTabsStreamEnd(response.result)) {
+                ended()
               }
               handleGlobalSessionEvent({
                 environmentId,
@@ -188,6 +174,11 @@ export function installGlobalSessionTabsSubscriptions({
             onError: (error) => {
               if (isCurrent()) {
                 console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+              }
+            },
+            onClose: () => {
+              if (isCurrent()) {
+                ended()
               }
             }
           }
@@ -212,16 +203,19 @@ export function installGlobalSessionTabsSubscriptions({
     onVisibilityResume: ({ visibilityGeneration, restartingSpecIndexes }) =>
       coordinator.beginVisibilityResume(visibilityGeneration, restartingSpecIndexes)
   })
-  return () => {
-    refs.snapshotReceipt.current = () => {}
-    refs.snapshotApply.current = () => true
-    refs.snapshotAccepted.current = () => {}
-    dispose()
-    for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
-      const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
-      clearWebSessionCloseIntentsForOwner(owner)
-      clearWebSessionFocusIntentsForOwner(owner)
-      clearWebSessionReorderIntentsForOwner(owner)
-    }
-  }
+  return Object.assign(
+    () => {
+      refs.snapshotReceipt.current = () => {}
+      refs.snapshotApply.current = () => true
+      refs.snapshotAccepted.current = () => {}
+      dispose()
+      for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
+        const owner = { environmentId, pairingRevision: expectedEnvironmentPairingRevision }
+        clearWebSessionCloseIntentsForOwner(owner)
+        clearWebSessionFocusIntentsForOwner(owner)
+        clearWebSessionReorderIntentsForOwner(owner)
+      }
+    },
+    { restartEnded: dispose.restartEnded }
+  )
 }

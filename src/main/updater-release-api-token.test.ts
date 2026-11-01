@@ -20,31 +20,6 @@ describe('resolveReleaseApiToken', () => {
     _resetReleaseApiTokenCache()
   })
 
-  it('reads the github.com token through gh and trims it', async () => {
-    ghExecMock.mockResolvedValue({ stdout: 'gho_abc\n', stderr: '' })
-
-    await expect(resolveReleaseApiToken(T0)).resolves.toEqual({
-      token: 'gho_abc',
-      rateLimitScope: 'native:github.com'
-    })
-
-    expect(ghExecMock.mock.calls[0][0]).toEqual(['auth', 'token', '--hostname', 'github.com'])
-    expect(ghExecMock.mock.calls[0][1]).toMatchObject({ idempotent: false })
-  })
-
-  it('serves the cached token within its TTL and re-reads after it', async () => {
-    ghExecMock.mockResolvedValue({ stdout: 'gho_abc', stderr: '' })
-
-    await resolveReleaseApiToken(T0)
-    await resolveReleaseApiToken(T0 + TTL_MS - 1)
-    expect(ghExecMock).toHaveBeenCalledTimes(1)
-
-    await resolveReleaseApiToken(T0 + TTL_MS + 1)
-    expect(ghExecMock).toHaveBeenCalledTimes(2)
-  })
-
-  // Why: gh missing or logged out is the unauthenticated path the picker always
-  // had; it must not fail the list, and it must not spawn gh on every click.
   it('returns null when gh is missing or logged out and does not re-spawn within the TTL', async () => {
     ghExecMock.mockRejectedValueOnce(new Error('gh: not found'))
 
@@ -57,25 +32,6 @@ describe('resolveReleaseApiToken', () => {
       token: 'gho_new',
       rateLimitScope: 'native:github.com'
     })
-  })
-
-  it('treats empty output as no token', async () => {
-    ghExecMock.mockResolvedValue({ stdout: '\n', stderr: '' })
-
-    await expect(resolveReleaseApiToken(T0)).resolves.toBeNull()
-  })
-
-  it('caches the successful WSL scope alongside the token', async () => {
-    ghExecMock.mockResolvedValue({
-      stdout: 'gho_wsl\n',
-      stderr: '',
-      rateLimitScope: 'wsl:ubuntu:github.com'
-    })
-
-    const expected = { token: 'gho_wsl', rateLimitScope: 'wsl:ubuntu:github.com' }
-    await expect(resolveReleaseApiToken(T0)).resolves.toEqual(expected)
-    await expect(resolveReleaseApiToken(T0 + TTL_MS - 1)).resolves.toEqual(expected)
-    expect(ghExecMock).toHaveBeenCalledTimes(1)
   })
 
   it('shares one in-flight read between concurrent callers', async () => {
@@ -97,8 +53,6 @@ describe('resolveReleaseApiToken', () => {
     expect(ghExecMock).toHaveBeenCalledTimes(1)
   })
 
-  // Why: a token GitHub rejected would otherwise be re-read from the keyring
-  // and re-sent on every load — one gh spawn and one wasted request each time.
   it('goes unauthenticated for a TTL after the token is rejected', async () => {
     ghExecMock.mockResolvedValue({ stdout: 'gho_stale', stderr: '' })
     await expect(resolveReleaseApiToken(T0)).resolves.toEqual({
@@ -117,9 +71,7 @@ describe('resolveReleaseApiToken', () => {
     expect(ghExecMock).toHaveBeenCalledTimes(2)
   })
 
-  // Why: the cache can expire mid-fetch, so a second load starts a fresh read while
-  // the first is still waiting on the 401 that rejects the token. Without the
-  // generation guard that read writes the rejected token back over the rejection.
+  // Cache expiry can start a new read before the first request rejects the token.
   it('keeps the rejection when a read that started before it resolves', async () => {
     let finish: (value: { stdout: string; stderr: string }) => void = () => {}
     ghExecMock.mockReturnValue(

@@ -2,6 +2,7 @@ import type { AppState } from '../../../types'
 import { assertEditorFileOperationCurrent } from '@/lib/editor-file-operation-owner'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
 import type { OpenFile } from '../types/open-file'
+import { writeEditorBuffer } from '../buffers/editor-buffer-record'
 import type {
   RestoredEditorOwnerMigration,
   RestoredEditorOwnerResult
@@ -10,7 +11,7 @@ import type {
 export type RestoredEditorOwnerFail = {
   ok: false
   reason: Extract<RestoredEditorOwnerResult, { ok: false }>['reason']
-  patch: Pick<AppState, 'openFiles'>
+  patch: Pick<AppState, 'openFiles'> & Partial<Pick<AppState, 'editorBuffers'>>
 }
 
 export type RestoredEditorOwnerReady = {
@@ -46,11 +47,7 @@ export function resolveRestoredEditorOwnerDestination(
     return {
       ok: false,
       reason: 'owner-changed',
-      patch: {
-        openFiles: s.openFiles.map((file) =>
-          file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
-        )
-      }
+      patch: writeEditorBuffer(s, args.fileId, { pendingOwnerMigration: undefined })
     }
   }
   const operationProvenance = args.targetOperationProvenance
@@ -84,11 +81,7 @@ export function resolveRestoredEditorOwnerDestination(
     return {
       ok: false,
       reason: 'collision',
-      patch: {
-        openFiles: s.openFiles.map((file) =>
-          file.id === args.fileId ? { ...file, pendingOwnerMigration: undefined } : file
-        )
-      }
+      patch: writeEditorBuffer(s, args.fileId, { pendingOwnerMigration: undefined })
     }
   }
 

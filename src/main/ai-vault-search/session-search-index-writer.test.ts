@@ -10,9 +10,7 @@ import {
 } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
 
-// The store is driven directly here. Every guard below is also shadowed by the
-// consumer's own check, so a test that goes through the consumer proves nothing
-// about which of the two is holding.
+// Exercise writer guards directly so consumer checks cannot mask a missing writer check.
 
 let index: SessionSearchIndexFile
 let store: SessionSearchStore
@@ -107,7 +105,6 @@ it('refuses an append whose predecessor offset is not the committed cursor', () 
 
   expect(store.beginWrite(syntheticCandidate(), 'append', 900)).toBeNull()
   expect(store.beginWrite(syntheticCandidate(), 'append', 99)).toBeNull()
-  // The one offset that does continue the committed span is accepted.
   expect(store.beginWrite(syntheticCandidate(), 'append', 100)).not.toBeNull()
 })
 
@@ -116,8 +113,6 @@ it('refuses to commit a write whose cursor moved underneath it', () => {
   for (const message of userMessages('stalegeneration', 40)) {
     stale.add(message)
   }
-  // A second read of the same path finishes first. Without the parse file lane
-  // this is the overlap that would otherwise resurrect the stale rows.
   expect(indexRead(0, 200, 'winninggeneration')).toBe(true)
 
   expect(
@@ -141,7 +136,6 @@ it('refuses to commit a write whose file was removed mid-read', () => {
   }
   store.removeFile(SYNTHETIC_TRANSCRIPT)
 
-  // Committing here would put a source back that its owner proved was deleted.
   expect(
     write.commit({
       session: syntheticSession(),
@@ -172,7 +166,6 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
       previousByteOffset: 900
     })
   ).toBeNull()
-  // The store was never asked, so the writer's own guard cannot be what refused.
   expect(attempted).toEqual([])
   expect(
     consumer.beginRead({
@@ -203,13 +196,10 @@ it("hands the read's identity accessor to the store", () => {
     identity
   })
 
-  // Dropped here, a chunked read writes rows under a session with no id and no
-  // cwd for as long as the read lasts, and for ever if it crashes first.
   expect(captured).toEqual([identity])
 })
 
 it('treats half a recorded identity as no identity at all', () => {
-  // New partial observations are not stored as identities.
   const partial = {
     ...syntheticCandidate({ dev: 7 }),
     agent: 'claude' as const
@@ -227,11 +217,9 @@ it('treats half a recorded identity as no identity at all', () => {
     dev: null,
     ino: null
   })
-  // Older indexes may still carry a half-pair.
   index.db.exec('UPDATE files SET dev = 7')
 
-  // One matching number is not proof of sameness, and one mismatching number is
-  // not proof of replacement. Neither compares, so neither declines.
+  // A partial legacy identity can prove neither sameness nor replacement.
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 7, ino: 99 })?.byteOffset).toBe(100)
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 8, ino: 99 })?.byteOffset).toBe(100)
   expect(store.beginWrite(syntheticCandidate({ dev: 8, ino: 99 }), 'append', 100)).not.toBeNull()

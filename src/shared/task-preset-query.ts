@@ -1,9 +1,6 @@
 import type { TaskViewPresetId } from './ui-chrome-types'
 
-/**
- * Why: TaskPage presets, blank-search fallbacks, and openTaskPage prefetch must
- * share one preset→query map so cache keys stay aligned across entry points.
- */
+/** Share preset queries across TaskPage fallbacks and openTaskPage prefetch so cache keys agree. */
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
     case 'all':

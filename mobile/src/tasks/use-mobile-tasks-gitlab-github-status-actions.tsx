@@ -32,8 +32,6 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
       try {
-        // An issue edit and a merge-request state change are different methods, so each arm sends
-        // its own operation rather than one call picking a method string.
         const updated =
           item.source.type === 'issue'
             ? gitlabIssueUpdate.interpret(

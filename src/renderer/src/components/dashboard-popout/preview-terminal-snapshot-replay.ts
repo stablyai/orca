@@ -6,11 +6,7 @@ import type {
   TerminalPreviewSnapshot
 } from '../../../../shared/terminal-preview'
 
-/**
- * Apply snapshot + buffered replay, restoring proven kitty flags after the
- * snapshot bytes (snapshot ANSI omits kitty pushes). Synchronous so no browser
- * event observes the temporary reset.
- */
+/** Restore proven kitty flags after kitty-free snapshot ANSI; remain synchronous so events cannot observe the temporary reset. */
 export function replayPreviewConnectionSnapshot(args: {
   snapshot: TerminalPreviewSnapshot
   replay: TerminalPreviewReplayChunk[]

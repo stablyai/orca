@@ -1,6 +1,8 @@
 import { useCallback, useEffect } from 'react'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 
@@ -20,8 +22,9 @@ type ChecksPanelReviewDataInput = Pick<
     | 'gitLabProjectRefRef'
     | 'isPanelVisible'
     | 'repo'
-    | 'settings'
+    | 'activeWorktree'
     | 'setComments'
+    | 'setCommentsError'
     | 'setCommentsLoading'
   > &
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>
@@ -39,20 +42,23 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
     prCacheKey,
     prNumber,
     repo,
-    settings,
+    activeWorktree,
     setComments,
+    setCommentsError,
     setCommentsLoading
   } = model
-  // Fetch comments once when PR changes (no polling — comments change infrequently).
   const fetchComments = useCallback(
     async ({
       force = false,
       prNumberOverride,
-      prRepoOverride
+      prRepoOverride,
+      userRefresh = false
     }: {
       force?: boolean
       prNumberOverride?: number | null
       prRepoOverride?: PRInfo['prRepo'] | null
+      /** A follow-up to a write: it must not be answered by a read begun before the write. */
+      userRefresh?: boolean
     } = {}) => {
       const targetPRNumber = prNumberOverride ?? prNumber
       const targetPRRepo = prRepoOverride ?? pr?.prRepo
@@ -71,7 +77,8 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
-          prRepo: targetPRRepo
+          prRepo: targetPRRepo,
+          ...(userRefresh ? { userRefresh: true } : {})
         })
         if (!isCurrentAsyncResult(requestKey)) {
           return
@@ -87,6 +94,9 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         }
         console.warn('Failed to fetch PR comments:', err)
         setComments([])
+        setCommentsError(
+          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
+        )
       } finally {
         if (
           isCurrentAsyncResult(
@@ -107,7 +117,9 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       branch,
       isCurrentAsyncResult,
       setCommentsLoading,
-      setComments
+      setComments,
+      setCommentsError,
+      activeWorktree
     ]
   )
 
@@ -117,12 +129,10 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         return Promise.resolve(null)
       }
       if (check.gitlabJobId) {
-        // Why: `settings` (not ownerSettings) is what fetched the job list, so the
-        // job id and its trace always resolve against the same host.
         return loadGitLabJobLogDetails({
           repoPath: repo.path,
           repoId: repo.id,
-          settings,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
           check,
           projectRef: gitLabProjectRefRef.current
         })
@@ -139,10 +149,10 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         { repoId: repo.id }
       )
     },
-    [fetchPRCheckDetails, pr?.prRepo, repo, settings, gitLabProjectRefRef]
+    [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef]
   )
 
-  // Why: read at call time — the ref is filled by an async MR fetch, so a value prop would be stale.
+  // Read the ref at call time because async MR fetches can fill it after render.
   const getGitLabProjectRef = useCallback(() => gitLabProjectRefRef.current, [gitLabProjectRefRef])
 
   useEffect(() => {
@@ -204,7 +214,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
         return
       }
-      void fetchComments({ force: true })
+      void fetchComments({ force: true, userRefresh: true })
     })
   }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
   return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }

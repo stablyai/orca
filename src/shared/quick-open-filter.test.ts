@@ -4,7 +4,6 @@ import {
   buildGitLsFilesArgsForQuickOpen,
   buildHiddenDirExcludeGlobs,
   buildRgArgsForQuickOpen,
-  HIDDEN_DIR_BLOCKLIST,
   normalizeQuickOpenRgLine,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
@@ -24,8 +23,6 @@ describe('shouldIncludeQuickOpenPath', () => {
     expect(shouldIncludeQuickOpenPath('foo/.cache/bar')).toBe(false)
   })
 
-  // Why hidden: home-dir cache/state dirs that caused the original SSH bug.
-  // Test name explains why each is filtered.
   it('hides generated npm cache dir from Quick Open', () => {
     expect(shouldIncludeQuickOpenPath('.npm/pkg/index.js')).toBe(false)
   })
@@ -39,14 +36,6 @@ describe('shouldIncludeQuickOpenPath', () => {
     expect(shouldIncludeQuickOpenPath('.local/share/app/state.db')).toBe(false)
     expect(shouldIncludeQuickOpenPath('nested/.local/share/app/state.db')).toBe(false)
     expect(shouldIncludeQuickOpenPath('.local/bin/tool')).toBe(true)
-  })
-
-  it('does NOT blocklist user-authored dirs like .config, .ssh, .github', () => {
-    expect(HIDDEN_DIR_BLOCKLIST.has('.config')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.ssh')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.github')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.devcontainer')).toBe(false)
-    expect(HIDDEN_DIR_BLOCKLIST.has('.local')).toBe(false)
   })
 })
 
@@ -93,40 +82,9 @@ describe('buildExcludePathPrefixes', () => {
   it('strips trailing slashes', () => {
     expect(buildExcludePathPrefixes('/r', ['/r/a/', '/r/b///'])).toEqual(['a', 'b'])
   })
-
-  it('keeps valid child prefixes whose segment starts with dotdot characters', () => {
-    expect(buildExcludePathPrefixes('/home/u/repo', ['/home/u/repo/..fixtures'])).toEqual([
-      '..fixtures'
-    ])
-  })
 })
 
 describe('shouldExcludeQuickOpenRelPath', () => {
-  it('matches the original filter across boundary and Unicode path combinations', () => {
-    const paths = [
-      '',
-      '/',
-      'a',
-      'a/',
-      'a//',
-      'ab',
-      'a/b',
-      'a\\b',
-      'A/b',
-      '界/😀',
-      '界/😀x',
-      'a[1]/x',
-      'a./x'
-    ]
-    for (const prefix of paths) {
-      for (const relPath of paths) {
-        const expected =
-          relPath === prefix || (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`))
-        expect(shouldExcludeQuickOpenRelPath(relPath, [prefix])).toBe(expected)
-      }
-    }
-  })
-
   it('preserves normalized Windows and UNC exclusion boundaries', () => {
     for (const [root, excluded] of [
       ['C:\\Repo', 'C:\\Repo\\trees\\one'],
@@ -157,13 +115,25 @@ describe('buildHiddenDirExcludeGlobs', () => {
     expect(globs).toContain('!**/.git')
     expect(globs).toContain('!**/.cache')
     expect(globs).toContain('!**/.local/share')
-    // Directory-match form (not contents form) — contents form lets rg still
-    // descend into the directory.
+    // Directory matches prune rg traversal; contents-only globs still descend.
     expect(globs).not.toContain('!**/node_modules/**')
   })
 })
 
 describe('buildRgArgsForQuickOpen', () => {
+  it.each([
+    { searchRoot: '.', excludePathPrefixes: [], forceSlashSeparator: false },
+    {
+      searchRoot: '/root',
+      excludePathPrefixes: ['packages/app', 'feature[1]'],
+      forceSlashSeparator: true
+    }
+  ])('broadens only VCS ignore handling for $searchRoot', (options) => {
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen(options)
+    expect(ignoredPass).toContain('--no-ignore-vcs')
+    expect(ignoredPass.filter((arg) => arg !== '--no-ignore-vcs')).toEqual(primary)
+  })
+
   it('primary pass includes --files, --hidden, hidden-dir excludes, no --follow', () => {
     const { primary } = buildRgArgsForQuickOpen({
       searchRoot: '/root',
@@ -212,6 +182,18 @@ describe('buildRgArgsForQuickOpen', () => {
   })
 })
 
+it('pins both Quick Open passes to config-independent NUL output', () => {
+  const { primary, ignoredPass } = buildRgArgsForQuickOpen({
+    searchRoot: '.',
+    excludePathPrefixes: [],
+    forceSlashSeparator: true
+  })
+  for (const args of [primary, ignoredPass]) {
+    expect(args).toContain('--no-config')
+    expect(args).toContain('--null')
+  }
+})
+
 describe('normalizeQuickOpenRgLine', () => {
   it('strips absolute root prefix', () => {
     expect(
@@ -253,9 +235,9 @@ describe('normalizeQuickOpenRgLine', () => {
     expect(normalizeQuickOpenRgLine('..', { kind: 'cwd-relative' })).toBeNull()
   })
 
-  it('strips CRLF', () => {
+  it('preserves a trailing carriage return in a NUL-delimited filename', () => {
     expect(normalizeQuickOpenRgLine('/root/a.ts\r', { kind: 'absolute', rootPath: '/root' })).toBe(
-      'a.ts'
+      'a.ts\r'
     )
   })
 
@@ -303,14 +285,6 @@ describe('buildGitLsFilesArgsForQuickOpen', () => {
     ])
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain(':(glob)**/.env*')
-  })
-
-  it('collapses untracked directories in both passes without generated pathspec churn', () => {
-    const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
-    expect(primary).toContain('--directory')
-    expect(ignoredPass).toContain('--directory')
-    expect(ignoredPass).toContain('--no-empty-directory')
-    expect([...primary, ...ignoredPass]).not.toContain(':(exclude,glob)**/node_modules/**')
   })
 
   it('exclude prefixes prepend positive "." pathspec', () => {

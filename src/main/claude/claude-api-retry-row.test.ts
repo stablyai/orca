@@ -2,27 +2,28 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session-failure'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import { MAX_PROVIDER_DIAGNOSTIC_CHARS } from '../../shared/agent-session/failures/agent-session-failure'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: 'leaf-1' }
+  providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
-/** A frame as Claude Code sends it while it retries a refused request. */
 function apiRetry(attempt: number, fields: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     type: 'system',
@@ -45,6 +46,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -76,24 +78,23 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toHaveLength(1)
     const [row] = rows
     expect(row).toMatchObject({
-      text: 'Claude is rate-limited and retrying.',
+      text: 'Claude is rate-limited and retrying. Retry 3 of 10.\nLast error: HTTP 429 rate limit.',
       tone: 'warning',
       failure: {
         kind: 'providerRetrying',
-        retry: { error: 'rate_limit', status: 429 },
+        retry: { error: 'rate_limit', status: 429, attempt: 3, maxRetries: 10 },
         detail: { audience: 'log' }
       }
     })
     expect(row).not.toHaveProperty('providerFrame')
-    // The latest attempt's frame, as the log detail.
     expect(row.failure?.detail?.text).toContain('"attempt":3')
   })
 
   it('starts a new row when a later run starts over', async () => {
     const rows = await statusRowsFor([apiRetry(1), apiRetry(2), apiRetry(1)])
-    expect(rows.map((row) => row.text)).toEqual([
-      'Claude is rate-limited and retrying.',
-      'Claude is rate-limited and retrying.'
+    expect(rows.map((row) => row.text.split('\n')[0])).toEqual([
+      'Claude is rate-limited and retrying. Retry 2 of 10.',
+      'Claude is rate-limited and retrying. Retry 1 of 10.'
     ])
   })
 
@@ -105,10 +106,10 @@ describe('a Claude api_retry frame', () => {
       apiRetry(1, { error: 'something_new', error_status: 429 })
     ])
     expect(rows.map((row) => row.text)).toEqual([
-      'Claude hit a temporary problem and is retrying.',
-      'Claude hit a temporary problem and is retrying.',
-      'Claude hit a temporary problem and is retrying.',
-      'Claude is rate-limited and retrying.'
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 529 overloaded.',
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.\nLast error: HTTP 500 server error.',
+      'Claude hit a temporary problem and is retrying. Retry 1 of 10.',
+      'Claude is rate-limited and retrying. Retry 1 of 10.\nLast error: HTTP 429 something new.'
     ])
     expect(rows[0]?.failure).toMatchObject({ retry: { error: 'overloaded', status: 529 } })
   })
@@ -130,6 +131,7 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toEqual([
       unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
     ])
-    expect(rows[0]).toMatchObject({ text: 'rate_limit', tone: 'error' })
+    expect(rows[0]).toMatchObject({ text: 'rate_limit' })
+    expect(rows[0]).not.toHaveProperty('tone')
   })
 })

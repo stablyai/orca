@@ -1,6 +1,12 @@
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
-import { isInTable, moveCellForward, nextCell, selectionCell } from '@tiptap/pm/tables'
+import {
+  CellSelection,
+  isInTable,
+  moveCellForward,
+  nextCell,
+  selectionCell
+} from '@tiptap/pm/tables'
 
 function moveToVerticalNeighbor(editor: Editor, direction: 1 | -1): boolean {
   const { state, view } = editor
@@ -17,13 +23,21 @@ function moveToVerticalNeighbor(editor: Editor, direction: 1 | -1): boolean {
   return true
 }
 
-/**
- * Table Enter: move to the cell below instead of inserting an in-cell
- * paragraph (GFM cannot keep multi-line table cells). On the last row,
- * insert a row and move into it. Returns true when consumed inside a table.
- */
-export function handleRichMarkdownTableEnter(editor: Editor): boolean {
-  if (!isInTable(editor.state)) {
+// Tiptap HardBreak binds exactly Shift-Enter and Mod-Enter; a multi-cell selection cannot take a break.
+function leavesEnterToHardBreak(event: KeyboardEvent, mod: boolean, editor: Editor): boolean {
+  if (event.altKey || editor.state.selection instanceof CellSelection) {
+    return false
+  }
+  return event.shiftKey ? !event.ctrlKey && !event.metaKey : mod
+}
+
+/** Move down or append a row on Enter; GFM cannot preserve additional in-cell paragraphs. */
+export function handleRichMarkdownTableEnter(
+  editor: Editor,
+  event?: KeyboardEvent,
+  mod = false
+): boolean {
+  if (!isInTable(editor.state) || (event && leavesEnterToHardBreak(event, mod, editor))) {
     return false
   }
 
@@ -31,14 +45,11 @@ export function handleRichMarkdownTableEnter(editor: Editor): boolean {
     return true
   }
 
-  // Why: last-row Enter grows the table rather than inserting an in-cell hard
-  // break that GFM serialization cannot keep.
   if (!editor.can().addRowAfter()) {
     return true
   }
 
   editor.commands.addRowAfter()
-  // Selection stays in the original row; step down into the new one.
   moveToVerticalNeighbor(editor, 1)
   return true
 }

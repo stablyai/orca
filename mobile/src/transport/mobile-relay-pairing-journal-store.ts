@@ -16,6 +16,10 @@ import {
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'
 let journalMutation: Promise<void> = Promise.resolve()
+// Protect only attempts still running in this process; new scans may supersede ended or previous-launch recovery journals.
+const inFlightJournalIds = new Set<string>()
+// Journals recovery is publishing right now; a superseding save waits for them.
+const publications = new Map<string, Promise<void>>()
 
 export async function saveMobileRelayPairingJournal(
   journal: MobileRelayPairingJournal
@@ -26,25 +30,73 @@ export async function saveMobileRelayPairingJournal(
   if (metadata.journalId !== secrets.journalId) {
     throw new Error('mobile relay pairing journal identity mismatch')
   }
+  for (;;) {
+    const blocked = await replaceJournal(metadata, secrets)
+    if (!blocked) {
+      return
+    }
+    // Why: waiting outside the mutation chain lets the publication clear its journal.
+    await blocked.publication
+  }
+}
+
+function replaceJournal(
+  metadata: MobileRelayPairingJournalMetadata,
+  secrets: MobileRelayPairingJournal['secrets']
+): Promise<{ publication: Promise<void> } | null> {
   const mutation = journalMutation.then(async () => {
     const existingRaw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
     const existing = existingRaw ? parseMetadata(existingRaw) : null
+    const publication = existing ? publications.get(existing.journalId) : undefined
+    if (publication && existing?.journalId !== metadata.journalId) {
+      return { publication }
+    }
     if (
       existing &&
       existing.journalId !== metadata.journalId &&
+      inFlightJournalIds.has(existing.journalId) &&
       (existing.winner !== undefined || existing.authorizationMode !== undefined)
     ) {
-      throw new Error('mobile relay pairing recovery pending')
+      // Why: an authorized attempt may have its install RPC in flight right now.
+      throw new Error('mobile relay pairing in progress')
     }
-    // Why: no install RPC can run before winner+authorization are durable, so
-    // a new user-initiated scan may safely supersede a pre-authorization attempt.
-    // Why: metadata-first makes a crash before the keychain write recover as
-    // an incomplete journal, never as an untracked bearer secret.
+    // Write discoverable metadata before secrets so a crash cannot leave an untracked bearer.
     await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(metadata))
     await writePairingKeychainItem(JOURNAL_SECRET_KEY, JSON.stringify(secrets))
+    if (existing) {
+      inFlightJournalIds.delete(existing.journalId)
+    }
+    inFlightJournalIds.add(metadata.journalId)
+    return null
   })
-  journalMutation = mutation.catch(() => {})
+  journalMutation = mutation.then(
+    () => undefined,
+    () => undefined
+  )
   return mutation
+}
+
+// Claim the current journal while publishing; superseding scans wait so late recovery cannot overwrite newer pairing credentials.
+export async function claimMobileRelayPairingJournalPublication(
+  journalId: string
+): Promise<() => void> {
+  let release = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const claim = journalMutation.then(async () => {
+    const raw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
+    if ((raw ? parseMetadata(raw) : null)?.journalId !== journalId) {
+      throw new Error('stale mobile relay pairing journal')
+    }
+    publications.set(journalId, done)
+  })
+  journalMutation = claim.catch(() => {})
+  await claim
+  return () => {
+    publications.delete(journalId)
+    release()
+  }
 }
 
 export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairingJournal | null> {
@@ -72,8 +124,7 @@ export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairin
     }
     return { metadata, secrets }
   })
-  // Why: recovery may load while a new scan saves; serialize the complete
-  // metadata/secret snapshot and any cleanup so it cannot delete the new journal.
+  // Serialize reads and cleanup with saves so recovery cannot delete a new scan’s journal.
   journalMutation = load.then(
     () => undefined,
     () => undefined
@@ -82,8 +133,7 @@ export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairin
 }
 
 async function removeIncompleteJournal(): Promise<void> {
-  // Why: metadata is the discoverable cleanup pointer; remove it before the
-  // native secret so a second crash can only leave a self-cleaning orphan.
+  // Remove metadata before secrets so a second crash leaves only a self-cleaning orphan.
   await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
   await deletePairingKeychainItem(JOURNAL_SECRET_KEY).catch(() => {})
 }
@@ -117,9 +167,15 @@ export async function clearMobileRelayPairingJournal(journalId: string): Promise
     }
     await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
     await deletePairingKeychainItem(JOURNAL_SECRET_KEY)
+    inFlightJournalIds.delete(journalId)
   })
   journalMutation = mutation.catch(() => {})
   return mutation
+}
+
+// Leave the released journal for recovery; later scans may replace it.
+export function releaseMobileRelayPairingJournal(journalId: string): void {
+  inFlightJournalIds.delete(journalId)
 }
 
 function parseMetadata(raw: string): MobileRelayPairingJournalMetadata | null {
@@ -146,8 +202,9 @@ function requireNativeSecretStore(): void {
   }
 }
 
-/** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayPairingJournalStoreForTests(): void {
   journalMutation = Promise.resolve()
+  inFlightJournalIds.clear()
+  publications.clear()
   resetPairingKeychainForTests()
 }

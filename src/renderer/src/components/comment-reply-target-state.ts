@@ -7,8 +7,7 @@ export function getCommentReplyTargetCandidates(
   comments: readonly CommentReplyTargetComment[],
   visibleComments: readonly CommentReplyTargetComment[]
 ): readonly CommentReplyTargetComment[] {
-  // Why: the PR audience filter is hidden on issues, so stale PR filter state
-  // should not constrain issue reply targets after switching items.
+  // Issue views hide PR audience filters; ignore stale PR filter state when choosing issue reply targets.
   return itemType === 'issue' ? comments : visibleComments
 }
 

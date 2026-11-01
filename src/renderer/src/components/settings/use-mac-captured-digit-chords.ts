@@ -59,7 +59,7 @@ export function useMacCapturedDigitChords({
 }: UseMacCapturedDigitChordsOptions): readonly MacCapturedDigitChord[] {
   const [chords, setChords] = useState<readonly MacCapturedDigitChord[]>(EMPTY_CHORDS)
 
-  // Probe OS-owned chords that never reach the renderer.
+  // Probe OS-owned chords because they never reach the renderer.
   useEffect(() => {
     if (!enabled) {
       return

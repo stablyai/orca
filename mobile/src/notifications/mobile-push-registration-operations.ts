@@ -5,11 +5,7 @@ import {
   pushRouteRegistrationSchema
 } from './notification-reply-schema'
 
-// The two sends that keep this device's push route on a host current.
-//
-// Both are skips rather than throws: each runs under `catch(() => null)` inside a reconciliation
-// chain whose answer is only ever "did this land", and a refusal means the stored records stay as
-// they are until the next reconcile. Neither has a screen to show a host message on.
+// Skip reconciliation refusals under catch(() => null): preserve stored route state until retry, with no screen requiring a host error.
 
 export const pushRouteRegister = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -21,7 +17,6 @@ export const pushRouteRegister = bindDeferredRpcOperation(
   })
 )
 
-/** The reply body is unread: a fulfilled unregister is the whole answer. */
 export const pushRouteUnregister = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'notifications.unregister-push-or-skip',

@@ -1,14 +1,10 @@
-// scrcpy server video protocol v2.4 (send_codec_meta + send_frame_meta enabled).
-// Pure parsing of the H.264 byte stream the scrcpy server writes to the video
-// socket. The socket reader (scrcpy-stream-session) feeds chunks here; this file
-// has no I/O so the framing is unit-testable.
+// scrcpy v2.4 with send_codec_meta and send_frame_meta enabled.
 
 import type { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
 
 const FRAME_HEADER_SIZE = 12
 const CODEC_META_SIZE = 12
-// scrcpy frames are well under this at the configured max_size; a larger
-// size means a desynced stream — fail fast instead of buffering toward OOM.
+// Reject implausible frame sizes before buffering toward OOM.
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
 // Caps per-object overhead when a socket delivers one frame as many tiny chunks.
 export const MAX_PENDING_CHUNKS = 1024
@@ -19,7 +15,6 @@ const PTS_MASK = (1n << 62n) - 1n
 
 export type ScrcpyVideoMeta = { codecId: string; width: number; height: number }
 
-// The codec id is a 4-byte ascii tag, null-padded when shorter than 4 chars.
 function parseCodecId(bytes: Buffer): string {
   let id = ''
   for (const byte of bytes) {
@@ -30,8 +25,7 @@ function parseCodecId(bytes: Buffer): string {
   return id
 }
 
-// Leading 12-byte codec metadata sent once before the frame stream: a 4-char
-// codec id (e.g. "h264") followed by the initial width and height.
+// Wire layout: 4-byte codec ID, 32-bit width, 32-bit height.
 export function parseScrcpyVideoMeta(buffer: Buffer): ScrcpyVideoMeta | null {
   if (buffer.length < CODEC_META_SIZE) {
     return null
@@ -76,7 +70,6 @@ export function parseScrcpyVideoFrames(buffer: RelayFrameBuffer): ScrcpyVideoFra
 
   if (frames.length > 0 && buffer.length > 0) {
     const pendingHead = buffer.peek(1)
-    // Compact only mostly consumed allocations larger than the reusable Buffer slab.
     if (pendingHead.buffer.byteLength > Math.max(Buffer.poolSize, pendingHead.length * 2)) {
       buffer.append(Buffer.from(buffer.drain()))
     }

@@ -5,6 +5,7 @@ import { Switch } from '../ui/switch'
 import { GeminiIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import { OpenCodeGoCredentials } from './accounts-pane-opencode-credentials'
 import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 
 export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
@@ -95,58 +96,7 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
         </p>
       </div>
 
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.AccountsPane.opencodeGo.apiKey.title',
-          'OpenCode Go API Key'
-        )}
-        description={translate(
-          'auto.components.settings.AccountsPane.opencodeGo.apiKey.description',
-          'Optional override. Orca otherwise uses the key OpenCode saved when you ran /connect, then OPENCODE_API_KEY.'
-        )}
-        keywords={['opencode', 'go', 'api', 'key', 'connect', 'rate limit', 'status bar']}
-        className="space-y-2"
-      >
-        <Label>
-          {translate(
-            'auto.components.settings.AccountsPane.opencodeGo.apiKey.label',
-            'OpenCode Go API key'
-          )}
-        </Label>
-        <div className="flex gap-2">
-          <DebouncedSettingsTextInput
-            type="password"
-            value={settings.opencodeGoApiKey}
-            onEdit={() => recordOpenCodeSettingEdit('apiKey')}
-            commit={(opencodeGoApiKey) => updateSettings({ opencodeGoApiKey })}
-            placeholder={translate(
-              'auto.components.settings.AccountsPane.opencodeGo.apiKey.placeholder',
-              'Leave blank to use the key saved by /connect or OPENCODE_API_KEY'
-            )}
-            spellCheck={false}
-            className="flex-1 text-xs"
-          />
-          {settings.opencodeGoApiKey && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => {
-                recordFeatureInteraction('usage-tracking')
-                updateSettings({ opencodeGoApiKey: '' })
-              }}
-              className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-            >
-              {translate('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
-            </Button>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.AccountsPane.opencodeGo.apiKey.help',
-            'Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts.'
-          )}
-        </p>
-      </SearchableSetting>
+      <OpenCodeGoCredentials onSaved={() => recordOpenCodeSettingEdit('apiKey')} />
 
       <SearchableSetting
         title={translate(

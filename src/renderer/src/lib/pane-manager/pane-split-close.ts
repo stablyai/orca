@@ -21,6 +21,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { findClosedPaneSuccessor } from './pane-close-focus-successor'
 import { releaseTerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 
 type MovedPaneSplitState = {
@@ -34,6 +35,8 @@ type SplitManagedPaneArgs = {
   direction: 'vertical' | 'horizontal'
   opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
+  /** Before publishing, so the pane-created tree already has the final order. */
+  newPaneFirst?: boolean
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
   styleOptions: PaneStyleOptions
@@ -65,9 +68,12 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
 
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
-  wrapInSplit(existingContainer, newPane.container, isVertical, divider, args.opts)
+  wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
+    ratio: args.opts?.ratio,
+    newPaneFirst: args.newPaneFirst
+  })
   args.setActivePaneId(newPane.id)
-  openSplitPane(args, newPane, args.opts?.cwd)
+  openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -94,14 +100,12 @@ function prepareMovedPanesForSplit(
 
   return movedPanes.map((pane) => {
     clearPendingSplitScrollRestore(pane)
-    // Why: wrapInSplit reparents moved containers, resetting browser scrollTop.
+    // DOM reparenting clears scrollTop; preserve it across wrapInSplit.
     const scrollState = captureScrollState(pane.terminal)
-    // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the
-    // async settle window; scheduleSplitScrollRestore owns the restore.
+    // The split scroll lock owns async settling; ordinary fits must not restore concurrently.
     pane.pendingSplitScrollState = scrollState
 
-    // Why: DOM reparenting can silently invalidate a WebGL context without
-    // firing contextlost, so dispose before the move and reattach after settle.
+    // Reparenting can silently invalidate WebGL; dispose before moving and reattach after settle.
     const hadWebgl = !!pane.webglAddon
     disposeWebgl(pane)
     return { pane, scrollState, hadWebgl }
@@ -139,6 +143,7 @@ function findManagedPanesInContainer(
 function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
+  parentLeafId: string,
   cwd?: string
 ): void {
   openTerminal(newPane, {
@@ -149,14 +154,18 @@ function openSplitPane(
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
-  // Why: forward one-shot spawn/adoption hints so the new pane inherits the
-  // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
-  const spawnHints = {
+  // Forward creation hints to inherit local cwd or adopt the runtime-spawned PTY in web splits.
+  args.publishPaneCreated(newPane, {
     ...(cwd ? { cwd } : {}),
     ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
-    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
-  }
-  args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
+    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {}),
+    placement: {
+      kind: 'split',
+      parentLeafId,
+      direction: args.direction,
+      ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
+    }
+  })
   args.managerOptions.onLayoutChanged?.()
 }
 
@@ -181,15 +190,15 @@ function teardownManagedPane(
     return
   }
   const closedLeafId = pane.leafId
+  const successor =
+    args.activePaneId === args.paneId ? findClosedPaneSuccessor(pane.container, args.panes) : null
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
   if (reason === 'close') {
-    // Leaf ids are minted UUIDs and never reused, so a closed leaf's scroll
-    // intent is unreachable. Detach/retire hand the leaf to a new host, which
-    // must still be able to restore it.
+    // Closed UUID leaves never recur; detach/retire transfers ownership and must preserve scroll intent.
     releaseTerminalScrollIntentKey(closedLeafId)
   }
-  const nextActivePaneId = activateReplacementPane(args)
+  const nextActivePaneId = activateReplacementPane(args, successor)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {
     safeFit(p)
@@ -208,13 +217,10 @@ export function closeManagedPane(args: CloseManagedPaneArgs): void {
 }
 
 export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): boolean {
-  // Why: refuse to detach the last pane — there is no other pane to fall back to.
   if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
     return false
   }
-  // Why: pane-to-tab detach tears down only this renderer pane; the PTY is
-  // adopted by the new tab, so the 'detach' reason tells TerminalPane to skip
-  // process-close cleanup.
+  // Detach destroys only the renderer pane; the new tab adopts its PTY, so skip process-close cleanup.
   teardownManagedPane(args, 'detach')
   return true
 }
@@ -245,11 +251,15 @@ function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneIntern
   }
 }
 
-function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
+function activateReplacementPane(
+  args: CloseManagedPaneArgs,
+  successor: ManagedPaneInternal | null
+): number | null {
   if (args.activePaneId !== args.paneId) {
     return args.activePaneId
   }
-  const next = args.panes.values().next().value as ManagedPaneInternal | undefined
+  const next =
+    successor && args.panes.has(successor.id) ? successor : args.panes.values().next().value
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
   next?.terminal.focus()

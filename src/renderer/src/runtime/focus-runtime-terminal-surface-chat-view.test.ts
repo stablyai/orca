@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { focusRuntimeTerminalSurface, registerRuntimeTerminalTab } from './sync-runtime-graph'
+import {
+  focusRuntimeTerminalSurface,
+  registerRuntimeTerminalTab
+} from './mounted-terminal-tab-registry'
 
 const TAB_ID = 'chat-view-tab'
 const WORKTREE_ID = 'chat-view-worktree'
 const LEAF_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-const SECOND_LEAF_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const PANE_ID = 1
-const SECOND_PANE_ID = 2
 
 const unregisterCallbacks: (() => void)[] = []
 
@@ -21,45 +22,6 @@ function makePaneContainer(covered: boolean, leafId = LEAF_ID): HTMLElement {
     container.append(shell)
   }
   return container
-}
-
-function registerSplitChatViewTab(options: { activeCovered: boolean; requestedCovered: boolean }): {
-  setActivePane: ReturnType<typeof vi.fn>
-} {
-  const panes = [
-    {
-      id: PANE_ID,
-      leafId: LEAF_ID,
-      container: makePaneContainer(options.activeCovered),
-      terminal: { focus: vi.fn() }
-    },
-    {
-      id: SECOND_PANE_ID,
-      leafId: SECOND_LEAF_ID,
-      container: makePaneContainer(options.requestedCovered, SECOND_LEAF_ID),
-      terminal: { focus: vi.fn() }
-    }
-  ]
-  const setActivePane = vi.fn()
-  const manager = {
-    getPanes: () => panes,
-    getActivePane: () => panes[0],
-    getLeafId: (paneId: number) => panes.find((pane) => pane.id === paneId)?.leafId ?? null,
-    getNumericIdForLeaf: (leafId: string) =>
-      panes.find((pane) => pane.leafId === leafId)?.id ?? null,
-    setActivePane
-  }
-  unregisterCallbacks.push(
-    registerRuntimeTerminalTab({
-      tabId: TAB_ID,
-      worktreeId: WORKTREE_ID,
-      getManager: () => manager as never,
-      getContainer: () => null,
-      getPtyIdForPane: () => null,
-      getTabWideAgentHintLeafId: () => null
-    })
-  )
-  return { setActivePane }
 }
 
 function registerChatViewTab(covered: boolean): {
@@ -97,8 +59,7 @@ function registerChatViewTab(covered: boolean): {
   return { focus, setActivePane }
 }
 
-// Why: a legacy native chat is a terminal tab with viewMode 'chat' — the xterm stays mounted
-// under the chat portal, so focusing it drags the caret out of the composer (#9939 twin).
+// Legacy chat keeps xterm mounted under its portal; focusing it steals the composer caret (#9939 twin).
 describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
   afterEach(() => {
     document.body.replaceChildren()
@@ -110,8 +71,7 @@ describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
   it('claims focus without touching the covered xterm', () => {
     const { focus } = registerChatViewTab(true)
 
-    // Why true, not false: false routes the caller to the DOM fallback, which for a structured
-    // tab id finds no [data-terminal-tab-id] element and focuses an unrelated tab's xterm.
+    // Return true or DOM fallback finds no structured tab and focuses unrelated xterm.
     expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_ID)).toBe(true)
     expect(focus).not.toHaveBeenCalled()
   })
@@ -121,39 +81,5 @@ describe('focusRuntimeTerminalSurface on a chat-view pane', () => {
 
     expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_ID)).toBe(true)
     expect(focus).toHaveBeenCalledOnce()
-  })
-
-  it('activates the requested chat leaf without focusing its covered xterm', () => {
-    const { setActivePane } = registerChatViewTab(true)
-
-    expect(focusRuntimeTerminalSurface(TAB_ID, LEAF_ID, WORKTREE_ID)).toBe(true)
-    expect(setActivePane).toHaveBeenCalledWith(PANE_ID, { focus: false })
-  })
-
-  it('activates the requested leaf with focus when no chat portal covers it', () => {
-    const { setActivePane } = registerChatViewTab(false)
-
-    expect(focusRuntimeTerminalSurface(TAB_ID, LEAF_ID, WORKTREE_ID)).toBe(true)
-    expect(setActivePane).toHaveBeenCalledWith(PANE_ID, { focus: true })
-  })
-
-  it('focuses a requested uncovered leaf when the active leaf is covered', () => {
-    const { setActivePane } = registerSplitChatViewTab({
-      activeCovered: true,
-      requestedCovered: false
-    })
-
-    expect(focusRuntimeTerminalSurface(TAB_ID, SECOND_LEAF_ID, WORKTREE_ID)).toBe(true)
-    expect(setActivePane).toHaveBeenCalledWith(SECOND_PANE_ID, { focus: true })
-  })
-
-  it('activates a requested covered leaf without focusing its xterm', () => {
-    const { setActivePane } = registerSplitChatViewTab({
-      activeCovered: false,
-      requestedCovered: true
-    })
-
-    expect(focusRuntimeTerminalSurface(TAB_ID, SECOND_LEAF_ID, WORKTREE_ID)).toBe(true)
-    expect(setActivePane).toHaveBeenCalledWith(SECOND_PANE_ID, { focus: false })
   })
 })

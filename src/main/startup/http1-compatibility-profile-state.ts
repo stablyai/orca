@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
 
@@ -40,7 +41,6 @@ export function readActiveProfileId(userDataPath: string): string | null | undef
 export function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
   const activeProfileId = readActiveProfileId(userDataPath)
   if (activeProfileId === null) {
-    // A malformed profile index leaves the active profile unknowable.
     return false
   }
 
@@ -62,15 +62,16 @@ export function readPersistedHttp1CompatibilityMode(userDataPath: string): boole
     activeProfileId !== DEFAULT_LOCAL_PROFILE_ID &&
     (profileDataFile === undefined || !existsSync(profileDataFile))
   ) {
-    // A known but unseeded non-default profile has default settings. The
-    // install-level legacy file belongs to another profile and must not leak.
+    // Unseeded non-default profiles use defaults; install-level JSON belongs to another profile.
     return false
   }
   const dataFile = profileDataFile ?? join(userDataPath, 'orca-data.json')
-  // A retained migration export proves SQLite was established. Do not let the
-  // pre-ready path read a stale JSON mirror while recovery is required.
+  // Lost SQLite authority must not revive stale JSON in the pre-ready path.
   try {
     if (
+      hasProfileStateAuthorityMarker(
+        profileDatabaseFile ?? join(dirname(dataFile), 'profile-state.db')
+      ) ||
       profileStateJsonExportPaths(dataFile).length > 0 ||
       profileStateDatabaseBackups(
         profileDatabaseFile ?? join(dirname(dataFile), 'profile-state.db')
@@ -96,8 +97,8 @@ export function readPersistedHttp1CompatibilityMode(userDataPath: string): boole
   }
 }
 
-/** Return whether a retained SQLite export makes pre-ready JSON/marker state untrusted. */
-export function hasMissingProfileStateDatabaseWithRetainedExport(
+/** Refuse pre-ready settings when evidence of a missing SQLite authority remains. */
+export function hasMissingProfileStateDatabaseWithRetainedAuthority(
   userDataPath: string,
   profileId: string
 ): boolean {
@@ -109,6 +110,7 @@ export function hasMissingProfileStateDatabaseWithRetainedExport(
   const dataFile = join(profileDirectory, 'orca-data.json')
   try {
     return (
+      hasProfileStateAuthorityMarker(databaseFile) ||
       profileStateJsonExportPaths(dataFile).length > 0 ||
       profileStateDatabaseBackups(databaseFile).length > 0
     )

@@ -15,7 +15,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../usage/usage-scan-worker-spawn', () => ({
-  scanCodexUsageFilesViaWorker: vi.fn()
+  scanCodexUsageFilesViaWorker: vi.fn(),
+  splitUsageCacheFileViaWorker: vi.fn()
 }))
 
 import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
@@ -58,7 +59,6 @@ function createContext(): CodexUsageParseContext {
   }
 }
 
-/** Replays `requests` as last_token_usage records with a running total, like Codex writes them. */
 function requestLines(requests: { timestamp: string; usage: Usage }[]): string[] {
   const total: Usage = { input: 0, cached: 0, output: 0 }
   return requests.map(({ timestamp, usage }) => {

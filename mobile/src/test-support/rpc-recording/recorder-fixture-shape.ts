@@ -1,23 +1,5 @@
-/**
- * The shape a recorder fixture may take for the product value it stands in for: every member
- * optional at every depth, but no member the real type does not have, and no member with the wrong
- * type. That is what a mount fixture actually is — deliberately partial, because it carries only
- * what the mounted hook reads, yet still a subset of the real thing.
- *
- * Here rather than outside the recorder because `mobile/scripts/rpc-recording.mts` fences every
- * path under `mobile/src` except this directory, so a file outside it fails recording as an unpinned
- * product source. In the engine rather than under `adapters/` because the seam forbids one adapter
- * importing another, and every adapter may import the engine.
- *
- * Functions pass through whole: a fixture stub like `async () => 0` stands in for a callback, and
- * making its parameters optional would accept a stub the hook cannot call. That branch is also what
- * refuses a structural stand-in for a `Date`, whose members are all methods. A set or a map has
- * members that are not, so those two pass through whole as well.
- *
- * A member may also be `null` even where the product type says only optional, because these
- * fixtures stand in for JSON the host sent and JSON spells an absent object `null`. Rejecting it
- * would push the fixtures away from what a host actually sends, not towards it.
- */
+// Fixtures allow deep partial domain values and host JSON nulls; preserve callback signatures and Set/Map types.
+// Keep this in the engine: recording fences exclude other mobile paths, and adapters cannot import one another.
 export type PartialRecorderFixture<T> = T extends (...args: never[]) => unknown
   ? T
   : T extends ReadonlySet<unknown> | ReadonlyMap<unknown, unknown>
@@ -28,25 +10,13 @@ export type PartialRecorderFixture<T> = T extends (...args: never[]) => unknown
         ? { readonly [Key in keyof T]?: PartialRecorderFixture<T[Key]> | null }
         : T
 
-/**
- * The recorder supplies only the members the mounted action reads; completing the fixture into a
- * full domain object would invent data no scenario observes. `NoInfer` makes the target the
- * parameter's type rather than the fixture's, so a member the real type does not have is an error
- * here instead of a silently wrong recording.
- */
+// NoInfer checks against the action’s target type; partial fixtures must not invent unknown or mistyped members.
 export function mountFixture<T>(value: PartialRecorderFixture<NoInfer<T>>): T {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checked as a deep subset of T above; the recorder supplies every member the action reads.
   return value as T
 }
 
-/**
- * What the type above accepts and refuses, as compile errors rather than as a claim. It lives in
- * this file rather than its own because `mutant-seam.test.ts` refuses a file no recording driver
- * can reach, and a compile fence on its own reaches nothing.
- * `pnpm --dir mobile typecheck` covers this file and excludes every `.test.ts`, so these cases are
- * the only thing holding the branches up — without them the type records zero errors either way,
- * because no fixture in the tree happens to carry a callback, a set or a map.
- */
+// Keep compile fences on a reachable recorder path; mobile typechecking excludes test files and mutant-seam rejects orphan modules.
 type Fixture = {
   readonly onPick: (id: string) => void
   readonly at: Date

@@ -29,14 +29,20 @@ import {
   pinnedNodeRuntimeAsset
 } from '../../src/shared/node-runtime-pin.ts'
 import { ORCAD_PREBUILDS_DIR } from './build-orcad-prebuilds.mjs'
-import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import {
+  COMPAT_SLOT_ADDONS,
+  findCompatAddonGaps,
+  findSlotProblems,
+  readManifest
+} from './orcad-prebuild-slot-contents.mjs'
+import { runProcessSync } from '@orca/process-host'
 import { verifyPackagedOrcadTemplate } from './verify-packaged-orcad-template.cjs'
+import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
+import { assertNotDarkBuild, darkBuildMarkers } from '../dark-build-switches.cjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const outputDir = join(root, 'out', 'orcad-template')
 const buildDir = join(root, 'out', '.orcad-template-build')
-const commonArtifacts = orcadTemplateCommonFilenames()
 
 function isExecutable(filename) {
   return /(?:^|\/)(?:rg|spawn-helper)$/.test(filename)
@@ -67,9 +73,9 @@ function buildTargetPackage(target) {
       packageDir
     ],
     cwd: root,
-    // Why no agent-browser: the template ships inside every desktop build (design D2), and seven
-    // ~10 MB browsers would outweigh everything else in it; a slot without one reports no browser.
-    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: '1' },
+    // Desktop template omits optional ~10MB browsers per target; packaging references the app's own copy instead.
+    // A checkout has no app copy, so ORCAD_OMIT_AGENT_BROWSER=0 keeps drivers for local Chromium serve.
+    env: { ...process.env, ORCAD_OMIT_AGENT_BROWSER: process.env.ORCAD_OMIT_AGENT_BROWSER ?? '1' },
     stdio: 'inherit',
     timeoutMs: null
   })
@@ -101,10 +107,7 @@ function stageTarget(target, packageDir) {
   return { files, browserName, browserSha256: sha256(browserDestination) }
 }
 
-/**
- * `--targets a,b` builds a partial template for CI jobs that can fill only some prebuild slots
- * (the SSH hostile-host matrix). A shipped template always carries every target.
- */
+// Allow partial CI --targets only; shipped templates require every target.
 export function requestedTemplateTargets(argv = process.argv) {
   const index = argv.indexOf('--targets')
   if (index === -1) {
@@ -120,11 +123,7 @@ export function requestedTemplateTargets(argv = process.argv) {
   return [...new Set(targets)]
 }
 
-/**
- * A compat target (design D6 rung B) is its base target's package with the compat node-pty
- * slot and runtime marker swapped in; everything else is target-independent or libc-static.
- * Omitted, not failed, when this build has no compat slot: rung B then refuses as unavailable.
- */
+// Compat target reuses base package with slot addons/runtime marker swapped; omit missing slots so rung B reports unavailable.
 function stageCompatTarget(compat, basePackageDir) {
   const problems = findSlotProblems(readManifest(ORCAD_PREBUILDS_DIR), ORCAD_PREBUILDS_DIR, [
     compat
@@ -136,12 +135,21 @@ function stageCompatTarget(compat, basePackageDir) {
     return null
   }
   const destination = join(outputDir, ORCAD_TEMPLATE_TARGETS_DIR, compat)
-  const slotFiles = new Map(
-    orcadNodePtySlotFiles(compat).map((file) => [
+  const slotFiles = new Map([
+    ...orcadNodePtySlotFiles(compat).map((file) => [
       `${ORCAD_NODE_PTY_DIR}/build/Release/${file}`,
       join(ORCAD_PREBUILDS_DIR, compat, ...file.split('/'))
+    ]),
+    ...Object.entries(COMPAT_SLOT_ADDONS).map(([file, shipped]) => [
+      shipped,
+      join(ORCAD_PREBUILDS_DIR, compat, ...file.split('/'))
     ])
-  )
+  ])
+  // Why fatal: the base binary would pass every check here and fail only on a compat host.
+  const gaps = findCompatAddonGaps(orcadTemplateTargetFilenames(compat), slotFiles)
+  if (gaps.length > 0) {
+    throw new Error(`compat target ${compat} would ship base-target addons: ${gaps.join(', ')}`)
+  }
   const files = {}
   for (const filename of orcadTemplateTargetFilenames(compat)) {
     const staged = join(destination, ...filename.split('/'))
@@ -160,11 +168,23 @@ function stageCompatTarget(compat, basePackageDir) {
   return { files }
 }
 
+/**
+ * `--dark-test-template` lets a dark switch through for test servers only; the template then
+ * carries the switch's marker, which packaging refuses.
+ */
+export function assertTemplateBuildAllowed(argv = process.argv, env = process.env) {
+  if (!argv.includes('--dark-test-template')) {
+    // The template is what releases ship as the server; a dark build must never become one.
+    assertNotDarkBuild([], env)
+  }
+}
+
 function sameBytes(left, right) {
   return sha256(left) === sha256(right)
 }
 
 async function main() {
+  assertTemplateBuildAllowed()
   const templateTargets = requestedTemplateTargets()
   rmSync(buildDir, { recursive: true, force: true })
   const packages = Object.fromEntries(
@@ -173,6 +193,10 @@ async function main() {
   rmSync(outputDir, { recursive: true, force: true })
   mkdirSync(outputDir, { recursive: true })
   const [firstTarget] = templateTargets
+  // Every package carries the same page: its manifest is a common file, checked byte for byte below.
+  const commonArtifacts = orcadTemplateCommonFilenames(
+    readOrcadMobileWebAssetFilenames(packages[firstTarget])
+  )
   for (const filename of commonArtifacts) {
     const source = join(packages[firstTarget], ...filename.split('/'))
     // Why check every target: the template keeps one copy, so a per-target difference would ship wrong bytes.
@@ -203,6 +227,10 @@ async function main() {
     `${JSON.stringify({ schemaVersion: 3, commonSha256, targets }, null, 2)}\n`
   )
   verifyPackagedOrcadTemplate(join(root, 'out'), templateTargets)
+  // Outside the manifest, so deploys never copy it; it marks the whole template as test-only.
+  for (const marker of darkBuildMarkers()) {
+    writeFileSync(join(outputDir, marker.fileName), marker.text)
+  }
   rmSync(buildDir, { recursive: true, force: true })
   process.stdout.write(`[build-orcad-template] ok — ${Object.keys(targets).length} targets\n`)
 }

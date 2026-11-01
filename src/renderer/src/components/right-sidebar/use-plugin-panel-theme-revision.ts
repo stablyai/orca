@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
+import type { PluginFrameWindow } from './plugin-frame-host'
+import {
+  buildPanelDesignTokenCss,
+  currentPanelColorScheme,
+  postPluginFrameTheme
+} from './plugin-panel-design-token-css'
 
-/** The exact shell inputs; anything else on the root must not rebuild the frame. */
 function readPanelThemeSnapshot(): string {
   return `${currentPanelColorScheme()}|${buildPanelDesignTokenCss()}`
 }
 
-/** Changes only when the values baked into the panel shell actually change. */
 export function usePluginPanelThemeRevision(): number {
   const [revision, setRevision] = useState(0)
-  // Why: the revision keys the panel iframe, so remounting it destroys in-panel
-  // state. Root style writes fire at rAF cadence during a sidebar drag, so
-  // compare the baked values instead of counting mutations.
+  // Compare baked shell values: unrelated root-style writes must not remount iframes and destroy panel state.
   const snapshotRef = useRef<string | null>(null)
   useEffect(() => {
     snapshotRef.current ??= readPanelThemeSnapshot()
@@ -30,4 +31,14 @@ export function usePluginPanelThemeRevision(): number {
     return () => observer.disconnect()
   }, [])
   return revision
+}
+
+/** Pushes theme changes into a plugin frame without remounting it. */
+export function usePluginFrameThemeSync(getFrameWindow: () => PluginFrameWindow | null): void {
+  const revision = usePluginPanelThemeRevision()
+  useEffect(() => {
+    if (revision > 0) {
+      postPluginFrameTheme(getFrameWindow())
+    }
+  }, [revision, getFrameWindow])
 }

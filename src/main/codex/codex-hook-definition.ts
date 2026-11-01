@@ -1,3 +1,4 @@
+import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
@@ -13,9 +14,10 @@ import { buildCodexHookCommand } from './codex-hook-command-form'
 import { CODEX_HOOK_EVENT_LABEL, getCodexManagedScriptFileName } from './codex-hook-identity'
 import { getManagedScript } from './codex-hook-script'
 import type { CodexEventLabel } from './config-toml-trust'
-import { normalizeCodexHookTimeoutSec } from './codex-trust-identity'
+import type { CodexHookHashes } from './codex-hook-trust-derivation'
+import { computeCodexTrustedHash, normalizeCodexHookTimeoutSec } from './codex-trust-identity'
 
-// Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Pre/PostToolUse track in-flight tools; PermissionRequest marks waiting without deciding approval.
 // Interrupt (Codex 0.150+) is the only hook an Esc-cancelled turn fires; older Codex ignores the unknown key.
 export const CODEX_EVENTS = [
   'SessionStart',
@@ -37,7 +39,7 @@ export function writeCodexHooksJson(
   configPath: string,
   hooks: Record<string, HookDefinition[]>
 ): void {
-  // Why: Codex rejects unknown top-level hooks.json fields, so plugin bookkeeping like `_managed` must not survive Orca's rewrite.
+  // Codex rejects unknown top-level fields such as plugin bookkeeping's _managed.
   writeHooksJson(configPath, { hooks })
 }
 
@@ -47,7 +49,7 @@ export function getCodexConfigTomlPath(
   return join(runtimeHomePath, 'config.toml')
 }
 
-// Why: managed-event subset of the shared label map; full mapping lives in codex-hook-identity.ts so promotion can't drift.
+// Share labels with promotion to prevent event-map drift.
 export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> = {
   SessionStart: CODEX_HOOK_EVENT_LABEL.SessionStart!,
   UserPromptSubmit: CODEX_HOOK_EVENT_LABEL.UserPromptSubmit!,
@@ -60,7 +62,7 @@ export const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEvent
   Interrupt: CODEX_HOOK_EVENT_LABEL.Interrupt!
 }
 
-// Why: pre-clamped to Codex's per-event cap (Interrupt: 3s), which Codex warns about at every startup.
+// Clamp to Codex's per-event timeout caps (Interrupt: 3s) to avoid startup warnings.
 export function buildCodexManagedHook(
   command: string,
   eventName: (typeof CODEX_EVENTS)[number]
@@ -74,6 +76,28 @@ export function buildCodexManagedHook(
 export const CODEX_MANAGED_EVENT_LABELS = new Set<CodexEventLabel>(
   CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName])
 )
+
+/** Local hashes stand in until Codex returns its own. */
+export function computeOrcaCodexHookHashes(
+  command: string = getManagedCommand(getManagedScriptPath())
+): CodexHookHashes {
+  return Object.fromEntries(
+    CODEX_EVENTS.map((eventName) => {
+      const eventLabel = CODEX_EVENT_LABEL[eventName]
+      return [
+        eventLabel,
+        computeCodexTrustedHash({
+          sourcePath: '',
+          eventLabel,
+          groupIndex: 0,
+          handlerIndex: 0,
+          command,
+          timeoutSec: buildCodexManagedHook(command, eventName).timeout
+        })
+      ]
+    })
+  )
+}
 
 export const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
   '${CLAUDE_PLUGIN_ROOT}',
@@ -98,8 +122,7 @@ export type CodexManagedHookInstallMaterial = {
   script: string
 }
 
-// Why: the real-home installer must byte-match the managed lane's events,
-// command, and script, or trust signatures diverge between the two homes.
+// Real and managed homes must use identical hook material to keep trust signatures equal.
 export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMaterial {
   const scriptPath = getManagedScriptPath()
   return {
@@ -112,8 +135,8 @@ export function getCodexManagedHookInstallMaterial(): CodexManagedHookInstallMat
 }
 
 export function wrapReadablePosixHookCommand(scriptPath: string): string {
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
-  // Why: WSL hooks are written from Windows over UNC where the exec bit is unreliable; a missing script must still own stdin.
+  const quoted = quotePosixShell(scriptPath)
+  // /bin/sh avoids unreliable WSL/UNC exec bits; missing scripts must still drain stdin.
   return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 

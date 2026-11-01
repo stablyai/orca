@@ -21,17 +21,18 @@ import {
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getGitHubMutationRoutingSettings } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { WorkItemStateBadge } from '../presentation/state-badge'
 import { changePullRequestState, mergePullRequest, setPullRequestAutoMerge } from './merge-actions'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function PRActionsPanel({
   item,
@@ -60,12 +61,9 @@ export function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = useAppStore(
-    useShallow((s) =>
-      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
-    )
+  const mergeTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
-  const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const prRepo = resolvePullRequestRepo(item, projectOrigin)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -126,7 +124,7 @@ export function PRActionsPanel({
                   )}
                   {mergePresentation.autoMergeAction?.label ??
                     (mergePresentation.directMergeAvailable
-                      ? mergeMethods.defaultLabel
+                      ? getPullRequestMergeMethodLabel(mergeMethods.defaultMethod)
                       : mergePresentation.label)}
                   <ChevronDown className="size-3 opacity-60" />
                 </Button>
@@ -166,7 +164,7 @@ export function PRActionsPanel({
               </DropdownMenuItem>
             )}
             {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-            {mergeMethods.methods.map(({ method, label }) => (
+            {mergeMethods.methods.map((method) => (
               <DropdownMenuItem
                 key={method}
                 disabled={mergeDisabled}
@@ -188,10 +186,10 @@ export function PRActionsPanel({
                 }
               >
                 <GitMerge className="size-4" />
-                {label}
+                {getPullRequestMergeMethodLabel(method)}
               </DropdownMenuItem>
             ))}
-            <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+            <DropdownMenuItem onSelect={() => openAppHttpLink(item.url)}>
               <ExternalLink className="size-4" />
               {translate('auto.components.PullRequestPage.7df8d5fc60', 'Open GitHub merge box')}
             </DropdownMenuItem>

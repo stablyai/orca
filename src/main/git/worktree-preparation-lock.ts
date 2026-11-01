@@ -44,24 +44,27 @@ async function readPreparationLockPath(
   worktreePath: string,
   options: GitWorktreeExecOptions
 ): Promise<string> {
-  const results = await Promise.allSettled([
-    gitExecFileAsync(['rev-parse', '--git-path', 'locked'], gitExecOptions(worktreePath, options)),
-    gitExecFileAsync(['rev-parse', '--git-common-dir'], gitExecOptions(worktreePath, options))
-  ])
-  const [lock, common] = results
-  if (lock.status === 'rejected') {
-    throw lock.reason
-  }
-  if (common.status === 'rejected') {
-    throw common.reason
-  }
+  const { stdout } = await gitExecFileAsync(
+    ['rev-parse', '--git-path', 'locked', '--git-common-dir'],
+    gitExecOptions(worktreePath, options)
+  )
+  options.signal?.throwIfAborted()
+  const [lock, common, end, ...extra] = stdout.split('\n')
+  // Newlines in a path make the combined response ambiguous; read each pointer separately.
+  const [rawLock, rawCommon] =
+    lock && common && end === '' && extra.length === 0
+      ? [lock, common]
+      : await Promise.all(
+          [
+            ['rev-parse', '--git-path', 'locked'],
+            ['rev-parse', '--git-common-dir']
+          ].map(async (args) => {
+            const result = await gitExecFileAsync(args, gitExecOptions(worktreePath, options))
+            return result.stdout
+          })
+        )
   return toHostFilesystemPath(
-    resolveWorktreePreparationLockPath(
-      worktreePath,
-      lock.value.stdout,
-      common.value.stdout,
-      options
-    )
+    resolveWorktreePreparationLockPath(worktreePath, rawLock, rawCommon, options)
   )
 }
 

@@ -1,0 +1,132 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
+}))
+vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
+vi.mock('../cache/worktree-cache', () => ({
+  getCachedWorktrees: () => null,
+  setCachedWorktrees: () => {}
+}))
+vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
+vi.mock('../transport/use-worktree-resync', () => ({
+  useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
+}))
+
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import type { ConnectionState, RpcResponse } from '../transport/types'
+import { useHostScreenState } from './use-host-screen-state'
+import { useHostViewSettings } from './use-host-view-settings'
+import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+
+function reply(result: unknown): RpcResponse {
+  return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
+}
+
+// Lose the first attempt of each write to exercise replay against the desktop’s recent sort and expanded state.
+function desktop() {
+  const client = new FakeSession('connected')
+  const lost = new Set<string>()
+  const writes: { method: string; params: unknown }[] = []
+  client.sendRequest.mockImplementation(async (method: string, params: unknown) => {
+    if (method === 'ui.set' || method === 'ui.setCollapsed') {
+      writes.push({ method, params })
+      if (!lost.has(method)) {
+        lost.add(method)
+        throw new Error('client_disconnected')
+      }
+      return reply(method === 'ui.set' ? { ui: {} } : { collapsed: true, applied: true })
+    }
+    if (method === 'ui.get') {
+      return reply({ ui: { sortBy: 'recent', collapsedGroups: [] } })
+    }
+    if (method === 'worktree.ps') {
+      return reply({ worktrees: [], snapshotId: 's1' })
+    }
+    return reply({})
+  })
+  return { client, writes }
+}
+
+const SIDEBAR_FEED = { refresh: () => {}, changed: () => {}, onInstalled: () => () => {} }
+// Keep callbacks stable as in the screen; refresh lifecycle depends on their identities.
+const NO_CAPABILITIES: string[] = []
+const fetchRepoMetadata = async (): Promise<void> => {}
+
+let renderer: ReactTestRenderer | null = null
+
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+})
+
+async function mountScreen(client: FakeSession) {
+  const held: {
+    view?: ReturnType<typeof useHostViewSettings>
+    state?: ReturnType<typeof useHostScreenState>
+  } = {}
+  function Probe({ connState }: { connState: ConnectionState }): null {
+    const state = useHostScreenState('host-1')
+    held.state = state
+    state.clientRef.current = client
+    const view = useHostViewSettings({ client, connState, state })
+    held.view = view
+    useHostWorktreeCatalog({
+      client,
+      connState,
+      embedded: true,
+      fetchRepoMetadata,
+      hostCapabilities: NO_CAPABILITIES,
+      hostId: 'host-1',
+      sidebarFeed: SIDEBAR_FEED,
+      state,
+      syncViewSettingsFromDesktop: view.syncViewSettingsFromDesktop
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Probe, { connState: 'connected' }))
+  })
+  return {
+    view: () => held.view!,
+    state: () => held.state!,
+    connect: async (connState: ConnectionState) => {
+      await act(async () => {
+        renderer!.update(createElement(Probe, { connState }))
+      })
+    }
+  }
+}
+
+describe('Workspace options changed while the connection drops', () => {
+  it('resends a sort and a collapse the desktop never got once the phone reconnects', async () => {
+    const { client, writes } = desktop()
+    const screen = await mountScreen(client)
+    await act(async () => {
+      screen.view().handleSortChange('name')
+      screen.view().toggleCollapsed('repo:orca')
+    })
+    expect(screen.view().pendingViewChanges.pending).toHaveLength(2)
+
+    await screen.connect('reconnecting')
+    await screen.connect('connected')
+
+    expect(writes).toEqual([
+      { method: 'ui.set', params: expect.objectContaining({ sortBy: 'name' }) },
+      {
+        method: 'ui.setCollapsed',
+        params: expect.objectContaining({ key: 'repo:orca', collapsed: true })
+      },
+      { method: 'ui.set', params: expect.objectContaining({ sortBy: 'name' }) },
+      {
+        method: 'ui.setCollapsed',
+        params: expect.objectContaining({ key: 'repo:orca', collapsed: true })
+      }
+    ])
+    expect(screen.state().view).toMatchObject({ sortBy: 'name', collapsedGroups: ['repo:orca'] })
+    expect(screen.view().pendingViewChanges.pending).toEqual([])
+  })
+})

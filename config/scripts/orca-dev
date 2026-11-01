@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Dev CLI wrapper — uses a separate userData path to avoid clobbering production Orca data.
+# Keep development CLI data separate from production.
 set -euo pipefail
 
-# Resolve through symlinks so this works when called via /usr/local/bin/orca-dev
 SOURCE="$0"
 while [ -L "$SOURCE" ]; do
   DIR="$(cd "$(dirname "$SOURCE")" && pwd)"

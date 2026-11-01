@@ -1,10 +1,16 @@
+import { trimActionArgumentDocument } from './source-control-action-argument-choices'
+import {
+  selectSourceControlActionRecipe,
+  type CurrentActionSelection,
+  type SelectedSourceControlActionRecipe
+} from './source-control-action-selection'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 import {
   readSourceControlActionDefault,
   resolveSourceControlActionCommandTemplate,
-  type SourceControlActionId,
-  type SourceControlActionRecipe
+  type AiActionId,
+  type SourceControlTextActionId
 } from './source-control-ai-actions'
 import { commandTemplateFromOperationInstruction } from './source-control-ai-command-template'
 import { normalizeRepoSourceControlAiOverrides } from './source-control-ai-repo-settings'
@@ -14,7 +20,7 @@ import {
 } from './source-control-ai-settings'
 import type {
   RepoSourceControlAiOverrides,
-  SourceControlAiOperation,
+  AiTextOperation,
   SourceControlAiPrCreationDefaults,
   SourceControlAiSettings
 } from './source-control-ai-types'
@@ -23,7 +29,7 @@ import type { TuiAgent } from './tui-agent'
 
 function readRepoInstructionOverride(
   instructions: RepoSourceControlAiOverrides['instructionsByOperation'],
-  operation: SourceControlAiOperation
+  operation: SourceControlTextActionId
 ): string | undefined {
   if (!Object.hasOwn(instructions ?? {}, operation)) {
     return undefined
@@ -35,13 +41,13 @@ function readRepoInstructionOverride(
 export function resolveInstructionsFromNormalized(
   source: SourceControlAiSettings,
   repoOverrides: RepoSourceControlAiOverrides | null | undefined,
-  operation: SourceControlAiOperation,
+  operation: AiTextOperation,
   legacyCustomPrompt: string | undefined
 ): string {
-  const repoInstruction = readRepoInstructionOverride(
-    repoOverrides?.instructionsByOperation,
-    operation
-  )
+  const repoInstruction =
+    operation === 'conversationName'
+      ? undefined
+      : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
   if (repoInstruction !== undefined) {
     return repoInstruction.trim()
   }
@@ -55,7 +61,7 @@ export function resolveInstructionsFromNormalized(
 export function resolveSourceControlAiInstructions(args: {
   settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>
   repo?: Pick<Repo, 'sourceControlAi'> | null
-  operation: SourceControlAiOperation
+  operation: AiTextOperation
 }): string {
   const source = normalizeSourceControlAiSettings(
     args.settings.sourceControlAi,
@@ -72,12 +78,16 @@ export function resolveSourceControlAiInstructions(args: {
 export function hasConfiguredSourceControlAiInstructions(args: {
   settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>
   repo?: Pick<Repo, 'sourceControlAi'> | null
-  operation: SourceControlAiOperation
+  operation: AiTextOperation
 }): boolean {
-  const repoInstruction = readRepoInstructionOverride(
-    normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)?.instructionsByOperation,
-    args.operation
-  )
+  const repoInstruction =
+    args.operation === 'conversationName'
+      ? undefined
+      : readRepoInstructionOverride(
+          normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)
+            ?.instructionsByOperation,
+          args.operation
+        )
   return repoInstruction !== undefined || resolveSourceControlAiInstructions(args).length > 0
 }
 
@@ -105,14 +115,15 @@ export function resolvePrCreationDefaults(
 export function resolveActionRecipeForTextOperation(
   source: SourceControlAiSettings,
   repoOverrides: RepoSourceControlAiOverrides | null | undefined,
-  operation: SourceControlAiOperation
+  operation: AiTextOperation
 ): { agentId?: TuiAgent | CustomAgentId | null; commandInputTemplate: string; agentArgs?: string } {
   const globalRecipe = readSourceControlActionDefault(source.actions, operation)
-  const repoRecipe = repoOverrides?.actionOverrides?.[operation]
-  const repoInstruction = readRepoInstructionOverride(
-    repoOverrides?.instructionsByOperation,
-    operation
-  )
+  const repoRecipe =
+    operation === 'conversationName' ? undefined : repoOverrides?.actionOverrides?.[operation]
+  const repoInstruction =
+    operation === 'conversationName'
+      ? undefined
+      : readRepoInstructionOverride(repoOverrides?.instructionsByOperation, operation)
   const fallbackTemplate =
     repoInstruction !== undefined
       ? commandTemplateFromOperationInstruction(operation, repoInstruction)
@@ -176,35 +187,68 @@ export function resolveSourceControlAiEnabled(input: {
   )
 }
 
-export function resolveSourceControlActionRecipe(input: {
+export function captureSourceControlActionSelection(input: {
   settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
   repo?: Pick<Repo, 'sourceControlAi'> | null
-  actionId: SourceControlActionId
-}): SourceControlActionRecipe {
+  actionId: AiActionId
+}): CurrentActionSelection {
   const source = normalizeSourceControlAiSettings(
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
   )
   const globalRecipe = readSourceControlActionDefault(source.actions, input.actionId)
-  const repoRecipe = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
-    ?.actionOverrides?.[input.actionId]
+  const repoRecipe =
+    input.actionId === 'conversationName'
+      ? undefined
+      : normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.actionOverrides?.[
+          input.actionId
+        ]
   const commandInputTemplate = resolveSourceControlActionCommandTemplate(
     source.actions,
     input.actionId
   )
-  return repoRecipe
-    ? {
-        ...globalRecipe,
-        commandInputTemplate,
-        ...(repoRecipe.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
-        ...(typeof repoRecipe.commandInputTemplate === 'string'
-          ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
-          : {}),
-        ...(typeof repoRecipe.agentArgs === 'string'
-          ? { agentArgs: repoRecipe.agentArgs.trim() }
-          : repoRecipe.agentArgs === null
-            ? { agentArgs: '' }
-            : {})
-      }
-    : { ...globalRecipe, commandInputTemplate }
+  const ownsRaw = repoRecipe?.agentArgs !== undefined
+  const raw = ownsRaw ? repoRecipe : globalRecipe
+  const {
+    launchPreferences: _globalPreferences,
+    argumentChoices: _globalDocument,
+    agentArgs: _globalArgs,
+    surface: globalSurface,
+    ...globalBase
+  } = globalRecipe
+  const current = trimActionArgumentDocument({
+    ...globalBase,
+    commandInputTemplate,
+    ...(raw?.agentArgs !== undefined ? { agentArgs: raw.agentArgs ?? '' } : {}),
+    ...(raw?.argumentChoices ? { argumentChoices: raw.argumentChoices } : {}),
+    ...((repoRecipe?.surface ?? (repoRecipe?.agentId === undefined ? globalSurface : undefined))
+      ? { surface: repoRecipe?.surface ?? globalSurface }
+      : {}),
+    ...(repoRecipe?.agentId !== undefined ? { agentId: repoRecipe.agentId } : {}),
+    ...(typeof repoRecipe?.commandInputTemplate === 'string'
+      ? { commandInputTemplate: repoRecipe.commandInputTemplate.trim() }
+      : {})
+  })
+  return {
+    current,
+    source: repoRecipe
+      ? {
+          scope: 'repo',
+          authoredAgentId: repoRecipe.agentId,
+          authoredPreferences: repoRecipe.launchPreferences,
+          parentPreferences: globalRecipe.launchPreferences,
+          ownsArgs: ownsRaw
+        }
+      : {
+          scope: 'global',
+          authoredAgentId: globalRecipe.agentId,
+          authoredPreferences: globalRecipe.launchPreferences
+        }
+  }
+}
+
+export function resolveSourceControlActionRecipe(
+  input: Parameters<typeof captureSourceControlActionSelection>[0]
+): SelectedSourceControlActionRecipe {
+  return selectSourceControlActionRecipe(captureSourceControlActionSelection(input))
 }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-agy-json-post-'))
@@ -41,40 +41,61 @@ it('delivers exact split UTF-8 JSON without EOF and bounds empty or partial inpu
     transcript: 'x'.repeat(100_000)
   })
   try {
-    for (const input of [payload, '', '{"partial":', '{} trailing-data']) {
-      const child = spawnProcess({ program: process.execPath, args: [script], env })
-      child.stdin.on('error', () => {})
-      let stdout = ''
-      let stderr = ''
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString()
+    const results = await Promise.allSettled(
+      [payload, '', '{"partial":', '{} trailing-data'].map(async (input, caseIndex) => {
+        const version = String(caseIndex)
+        const child = spawnProcess({
+          program: process.execPath,
+          args: [script],
+          env: { ...env, ORCA_AGENT_HOOK_VERSION: version }
+        })
+        child.stdin.on('error', () => {})
+        let stdout = ''
+        let stderr = ''
+        child.stdout.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString()
+        })
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString()
+        })
+        const timer = setTimeout(() => child.kill(), 9000)
+        const closed = new Promise<number | null>((resolve, reject) => {
+          child.once('close', resolve)
+          child.once('error', reject)
+        })
+        try {
+          if (input) {
+            const bytes = Buffer.from(input)
+            const cut = bytes.indexOf(Buffer.from('日本語')) + 1
+            child.stdin.write(bytes.subarray(0, Math.max(1, cut)))
+            await new Promise((resolve) => setTimeout(resolve, 25))
+            child.stdin.write(bytes.subarray(Math.max(1, cut)))
+          }
+          expect(await closed).toBe(0)
+          expect(stdout).toBe('')
+          expect(stderr).toBe('')
+          const matching = posts.filter((post) => post.get('version') === version)
+          expect(matching).toHaveLength(1)
+          expect(matching[0].get('payload')).toBe(input || '{}')
+          expect(matching[0].get('paneKey')).toBe('proof!pane')
+          expect(matching[0].get('hook_event_name')).toBe('PreInvocation')
+          expect(matching[0].get('version')).toBe(version)
+        } finally {
+          child.stdin.destroy()
+          if (child.exitCode === null && child.signalCode === null) {
+            child.kill()
+          }
+          await closed.catch(() => {})
+          clearTimeout(timer)
+        }
       })
-      child.stderr.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString()
-      })
-      const timer = setTimeout(() => child.kill(), 9000)
-      const closed = new Promise<number | null>((resolve, reject) => {
-        child.once('close', resolve)
-        child.once('error', reject)
-      })
-      const before = posts.length
-      if (input) {
-        const bytes = Buffer.from(input)
-        const cut = bytes.indexOf(Buffer.from('日本語')) + 1
-        child.stdin.write(bytes.subarray(0, Math.max(1, cut)))
-        await new Promise((resolve) => setTimeout(resolve, 25))
-        child.stdin.write(bytes.subarray(Math.max(1, cut)))
+    )
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        throw result.reason
       }
-      expect(await closed).toBe(0)
-      clearTimeout(timer)
-      child.stdin.destroy()
-      expect(stdout).toBe('')
-      expect(stderr).toBe('')
-      expect(posts.slice(before)).toHaveLength(1)
-      expect(posts[before].get('payload')).toBe(input || '{}')
-      expect(posts[before].get('paneKey')).toBe('proof!pane')
-      expect(posts[before].get('hook_event_name')).toBe('PreInvocation')
     }
+    expect(posts).toHaveLength(4)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }

@@ -1,3 +1,4 @@
+import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -5,6 +6,7 @@ import type { GitLabPipelineJob, GitLabWorkItem } from '../../../../shared/gitla
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabPipelineActions(
   item: GitLabWorkItem | null,
@@ -37,7 +39,7 @@ export function useGitLabPipelineActions(
         [job.id]: { loading: true }
       }))
       try {
-        const result = await window.api.gl.jobTrace({
+        const result = await gitLabApiFor(repoSelector).jobTrace({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -49,7 +51,7 @@ export function useGitLabPipelineActions(
           ...current,
           [job.id]: result.ok
             ? { loading: false, trace: result.trace }
-            : { loading: false, error: result.error }
+            : { loading: false, error: codeHostErrorText(result) }
         }))
       } catch (error) {
         if (mountedRef.current) {
@@ -82,7 +84,7 @@ export function useGitLabPipelineActions(
       }
       setRetryingJobId(job.id)
       try {
-        const result = await window.api.gl.retryJob({
+        const result = await gitLabApiFor(repoSelector).retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -110,7 +112,7 @@ export function useGitLabPipelineActions(
           }
           handleRefresh()
         } else {
-          toast.error(result.error)
+          toast.error(codeHostErrorText(result))
         }
       } catch (error) {
         if (mountedRef.current) {

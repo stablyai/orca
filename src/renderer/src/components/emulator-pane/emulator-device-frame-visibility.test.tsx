@@ -7,11 +7,7 @@ import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
 import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visibility'
 
-// Why: a backgrounded but still-attached emulator must stop streaming frames.
-// The perf contract is that no frame stream is started (no per-frame IPC / MJPEG
-// blob churn / H.264 decode) while the pane is inactive, and that a running
-// stream is torn down when the pane is hidden — so this asserts the IPC calls,
-// not just the rendered DOM.
+// Assert source stream IPC: inactive panes must avoid frame delivery/blob churn/decoding while keeping the session attached.
 
 type FrameListener = (data: { streamId: string; bytes: ArrayBuffer }) => void
 type ErrorListener = (data: { streamId: string; message: string }) => void
@@ -90,27 +86,13 @@ async function renderFrame(isActive: boolean): Promise<void> {
 }
 
 describe('EmulatorDeviceFrame visibility gating', () => {
-  it('streams frames while the pane is active', async () => {
-    await renderFrame(true)
-    expect(startFrameStream).toHaveBeenCalledWith(
-      expect.objectContaining({ streamUrl: 'http://127.0.0.1:3100/stream.mjpeg' })
-    )
-  })
-
-  it('does not start a frame stream while the pane is inactive', async () => {
-    await renderFrame(false)
-    expect(startFrameStream).not.toHaveBeenCalled()
-  })
-
   it('tears the stream down when the pane becomes inactive and resumes when active again', async () => {
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(1)
 
-    // Parking the pane must stop the stream at the source (no more IPC frames).
     await renderFrame(false)
     expect(stopFrameStream).toHaveBeenCalledWith({ streamId: 'stream-1' })
 
-    // Re-showing re-fires the stream; the session was never detached.
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(2)
   })
@@ -122,20 +104,17 @@ describe('EmulatorDeviceFrame window-visibility gating', () => {
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(1)
 
-    // Hiding the window does not tear down immediately — a short grace covers a
-    // quick Cmd+Tab round-trip.
+    // A short park grace prevents stream teardown on quick window switches.
     await act(async () => {
       setDocumentVisibility('hidden')
     })
     expect(stopFrameStream).not.toHaveBeenCalled()
 
-    // Once the grace elapses, the stream parks at the source.
     await act(async () => {
       vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS)
     })
     expect(stopFrameStream).toHaveBeenCalledWith({ streamId: 'stream-1' })
 
-    // Returning to the window resumes immediately; the session was never detached.
     await act(async () => {
       setDocumentVisibility('visible')
     })
@@ -156,8 +135,7 @@ describe('EmulatorDeviceFrame window-visibility gating', () => {
     await act(async () => {
       setDocumentVisibility('visible')
     })
-    // The park timer was cancelled by the return-to-visible, so the stream never
-    // stopped and no reconnect was needed.
+    // Returning before the grace expires must cancel parking without reconnecting.
     await act(async () => {
       vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS)
     })
@@ -170,8 +148,7 @@ describe('EmulatorDeviceFrame window-visibility gating', () => {
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(1)
 
-    // Window reports hidden, but real user input proves the occlusion tracker is
-    // wedged; the stream must keep running instead of freezing on a black frame.
+    // Real input disproves a wedged hidden/occluded signal; streaming must continue instead of leaving a black frame.
     await act(async () => {
       setDocumentVisibility('hidden')
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))

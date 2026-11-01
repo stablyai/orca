@@ -1,11 +1,9 @@
-// Why: the desktop host, the push gateway, and the phone must agree on these
-// exact strings. See cloud/packages/push-contract/src.
+// Keep strings aligned across desktop, gateway and phone: cloud/packages/push-contract/src.
 
 export const MOBILE_PUSH_SOURCES = ['agent-task-complete', 'terminal-bell', 'plugin'] as const
 export type MobilePushSource = (typeof MOBILE_PUSH_SOURCES)[number]
 
-// The only two states a phone can be told about; the host maps its richer
-// agent status onto them before it ever reaches the gateway.
+// Host maps richer agent status onto these phone states before gateway submission.
 export const MOBILE_PUSH_AGENT_STATES = ['needs-input', 'finished'] as const
 export type MobilePushAgentState = (typeof MOBILE_PUSH_AGENT_STATES)[number]
 
@@ -67,11 +65,7 @@ function parseFilter(value: unknown): MobilePushFilter | null {
   }
 }
 
-/**
- * Reads a persisted registration back. Returns undefined for invalid data,
- * so a bad row degrades to "this device has no push"
- * instead of failing the whole registry load.
- */
+/** Invalid persisted registration means no push for this device, without failing the registry load. */
 export function parseMobilePushRegistration(value: unknown): MobilePushRegistration | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined

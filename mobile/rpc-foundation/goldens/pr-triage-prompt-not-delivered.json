@@ -153,7 +153,17 @@
         "prompt": "Fix the failing checks"
       }
     },
-    "9c16efc31903": {
+    "742db574bda3": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-9::/w\"}}"
+    },
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "e5392ac00e18": {
       "name": "preflight.detectAgents#1",
       "ordinal": 5,
       "args": [
@@ -164,7 +174,7 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "worktreeId": "repo-9::/w"
           }
         },
         {
@@ -185,11 +195,6 @@
         }
       }
     },
-    "e0eef7c9fafe": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -197,11 +202,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f49d184679d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     }
   },
   "recording": {
@@ -210,8 +210,8 @@
       {
         "id": "prompt-not-sent",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "29436402d701"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "e5392ac00e18", "29436402d701"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "742db574bda3", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },

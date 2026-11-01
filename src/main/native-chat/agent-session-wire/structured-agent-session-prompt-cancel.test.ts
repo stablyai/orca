@@ -1,9 +1,12 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalApprovalSubject
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -14,13 +17,15 @@ import { performCancel, type AgentSessionTurnContext } from './structured-agent-
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import type { AgentSessionPromptCancelRoute } from './structured-agent-session-adapter-stop'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 const PROMPT_IDENTITY = {
   provider: 'codex' as const,
@@ -42,8 +47,8 @@ afterEach(async () => {
 
 async function pendingPrompt(
   options = [{ id: 'allow', label: 'Allow' }],
-  /** Raise the card in a turn that is still running, rather than on the conversation. */
-  inLiveTurn = false
+  inLiveTurn = false,
+  subject?: AgentJournalApprovalSubject
 ): Promise<{ journal: AgentSessionJournal; itemId: string }> {
   root = await mkdtemp(join(tmpdir(), 'orca-prompt-cancel-'))
   const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
@@ -60,6 +65,7 @@ async function pendingPrompt(
       kind: 'approval',
       title: 'Approve?',
       detail: null,
+      ...(subject ? { subject } : {}),
       options,
       resolution: {
         state: 'pending',
@@ -85,6 +91,8 @@ function context(
     sessionId: 'session-1',
     journal,
     fence: 1,
+    agents: NO_STRUCTURED_AGENTS,
+    agent: 'codex',
     adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
     persistOptions: async () => undefined,
     resolvedBy: 'client-1',
@@ -120,7 +128,7 @@ describe('performCancel for a pending prompt', () => {
       if (current.body.kind !== 'approval') {
         throw new Error('expected approval prompt')
       }
-      // The provider's frame, issued during the interrupt and not yet landed when it answers.
+      // Emit during interrupt without awaiting journal persistence.
       void journal
         .appendItem(
           PROMPT_IDENTITY,
@@ -160,13 +168,11 @@ describe('performCancel for a pending prompt', () => {
       expect.objectContaining({ resolution: expect.objectContaining({ state: 'cancelled' }) }),
       { kind: 'status', text: 'Cancellation requested.' }
     ])
-    // Issued after the prompt's terminal row, so it lands after it.
     expect(items[1]!.sequence).toBeGreaterThan(items[0]!.sequence)
   })
 
   it('answers another Cancel of the prompt it cancelled quietly, without reaching the provider', async () => {
     const { journal, itemId } = await pendingPrompt()
-    // The provider's own cancel of the card, issued while it takes the interrupt.
     const cancelTurn = vi.fn(async () => {
       const current = journal.snapshot().items.find((item) => item.itemId === itemId)!
       if (current.body.kind !== 'approval') {
@@ -198,7 +204,7 @@ describe('performCancel for a pending prompt', () => {
     await cancel('cancel-1')
     const rows = journal.snapshot().items.length
 
-    // The second press names the revision it saw, which the first moved on.
+    // The first press advanced the revision seen by this press.
     await expect(cancel('cancel-2')).resolves.toEqual({
       ok: true,
       value: { turnId: 'turn-1', cancelled: false }
@@ -282,14 +288,16 @@ describe("a card's own Cancel, as its provider answers it", () => {
     answer: AgentSessionPromptCancelRoute | undefined,
     revision = 1,
     endsSession = true,
-    inLiveTurn = true
+    inLiveTurn = true,
+    subject?: AgentJournalApprovalSubject
   ) {
     const { journal, itemId } = await pendingPrompt(
       [
         { id: 'allow', label: 'Allow' },
         { id: 'deny', label: 'Deny' }
       ],
-      inLiveTurn
+      inLiveTurn,
+      subject
     )
     const ctx = context(
       journal,
@@ -410,5 +418,37 @@ describe("a card's own Cancel, as its provider answers it", () => {
       refusal: { code: 'agent_session_item_revision_stale' }
     })
     expect(routes.stop).not.toHaveBeenCalled()
+  })
+
+  it('leaves no Stop request row when the provider declines a live card Cancel', async () => {
+    const { journal, itemId } = await pendingPrompt(undefined, true)
+    await expect(
+      performCancel(
+        context(journal, async () => ({ cancelled: false })),
+        {
+          clientOperationId: 'cancel-1',
+          turnId: 'turn-1',
+          prompt: { itemId, expectedRevision: 1 }
+        }
+      )
+    ).resolves.toEqual({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
+    expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toEqual([])
+  })
+
+  it('leaves no Stop request row when a live card Cancel throws', async () => {
+    const { journal, itemId } = await pendingPrompt(undefined, true)
+    await expect(
+      performCancel(
+        context(journal, async () => {
+          throw new Error('lost')
+        }),
+        {
+          clientOperationId: 'cancel-1',
+          turnId: 'turn-1',
+          prompt: { itemId, expectedRevision: 1 }
+        }
+      )
+    ).rejects.toThrow('lost')
+    expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toEqual([])
   })
 })

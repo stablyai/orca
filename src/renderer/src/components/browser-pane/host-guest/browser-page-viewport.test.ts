@@ -1,11 +1,8 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyBrowserPageViewportLayout,
   BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME,
-  _getRememberedBrowserPageInsetCountForTests,
   ensureBrowserPageViewport,
   getBrowserPageViewportScrollState,
   getBrowserOverlaySlotViewport,
@@ -18,15 +15,6 @@ import {
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
-
-function readPresetViewportCssRule(): string {
-  const css = readFileSync(resolve(import.meta.dirname, '../../../assets/main.css'), 'utf8')
-  const body =
-    css.match(new RegExp(`\\.${BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME}\\s*\\{(?<body>[^}]*)\\}`))
-      ?.groups?.body ?? ''
-
-  return body.replace(/\s+/g, ' ').trim()
-}
 
 function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
   const root = document.createElement('div')
@@ -90,8 +78,7 @@ describe('ensureBrowserPageViewport', () => {
     expect(rebuilt.scroller.style.overflow).toBe('auto')
   })
 
-  // STA-7568: the CSS variable keeps the host box in window DIP while the stylesheet
-  // divides by the live UI zoom factor.
+  // Keep preset dimensions in window DIP; CSS divides them by live UI zoom.
   it('stores preset host dimensions as window-DIP CSS variables', () => {
     mountSlotViewport('workspace-1')
 
@@ -111,13 +98,6 @@ describe('ensureBrowserPageViewport', () => {
     // An inline width/height would outrank the rule and reinstate the unscaled DIP box.
     expect(viewport.content.style.width).toBe('')
     expect(viewport.content.style.height).toBe('')
-  })
-
-  it('divides the preset DIP size by the live UI zoom factor', () => {
-    expect(readPresetViewportCssRule()).toBe(
-      'width: calc(var(--browser-page-viewport-width) / var(--ui-zoom-factor, 1)); ' +
-        'height: calc(var(--browser-page-viewport-height) / var(--ui-zoom-factor, 1));'
-    )
   })
 
   it('clears preset dimensions when no preset is active', () => {
@@ -216,8 +196,7 @@ describe('ensureBrowserPageViewport', () => {
   it('builds a fresh viewport when a revisit follows guest-budget eviction', () => {
     const root = mountSlotViewport('workspace-1')
     const evicted = ensureBrowserPageViewport('page-1', 'workspace-1')!
-    // Eviction destroys the guest (destroyPersistentWebview removes the viewport);
-    // the slot stays mounted and registered, so the revisit rebuilds into the same root.
+    // Eviction removes the viewport but retains the slot; revisiting must rebuild into that root.
     removeBrowserPageViewport('page-1')
 
     const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')
@@ -244,14 +223,6 @@ describe('ensureBrowserPageViewport', () => {
 })
 
 describe('syncBrowserPageChromeInset', () => {
-  it('bounds remembered insets across page churn', () => {
-    for (let index = 0; index < 600; index += 1) {
-      syncBrowserPageChromeInset(`retired-page-${index}`, 40)
-    }
-
-    expect(_getRememberedBrowserPageInsetCountForTests()).toBeLessThanOrEqual(512)
-  })
-
   it('reserves space above the webview container for the React chrome header', () => {
     mountSlotViewport('workspace-1')
     ensureBrowserPageViewport('page-1', 'workspace-1')

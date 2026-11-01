@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Drives the real partition context the hook builds, not a stand-in for it.
- *
- * The legacy path is where an old runtime's unscoped list is classified on this
- * client, so the evidence that classifies it has to be the answering authority's
- * own project table. A test that supplied its own context would pass while the
- * hook kept handing the desktop's table to every authority, so the only mocks
- * here are the transports.
- */
+/** Drive the real authority-specific legacy partition context; mock transports only so colliding desktop repo IDs cannot stand in for runtime evidence. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -33,9 +25,9 @@ vi.mock('@/store', () => {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
-  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args),
-  hasRuntimeRpcErrorCode: () => false
+  getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
+vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 
@@ -114,6 +106,10 @@ function Harness(): null {
 
 async function renderCatalog(repos: readonly Repo[]): Promise<void> {
   mocks.state = storeState(repos)
+  await renderCatalogWithState()
+}
+
+async function renderCatalogWithState(): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -163,6 +159,7 @@ afterEach(async () => {
   await act(async () => {
     roots.splice(0).forEach((root) => root.unmount())
   })
+  Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
   document.body.innerHTML = ''
 })
 
@@ -172,9 +169,48 @@ describe('useAutomationHostCatalog orphan bootstrap', () => {
 
     await renderCatalog([])
 
-    // Only a committed answer can report it, so the catalog has to re-derive on
-    // the cache; nothing in the store changes when an orphan count arrives.
+    // Committed orphan counts arrive only through cache changes; rederive the catalog without requiring a store write.
     expect(view?.catalog.entries.map((entry) => entry.stableKey)).toContain('host:desktop:orphan')
+  })
+})
+
+describe('useAutomationHostCatalog on a paired web client', () => {
+  const runtimeSelf = {
+    authority: { kind: 'runtime', environmentId: ENVIRONMENT_ID },
+    selector: { kind: 'self' }
+  }
+
+  beforeEach(() => {
+    Object.assign(globalThis, { __ORCA_WEB_CLIENT__: true })
+  })
+
+  // #32415: the browser's local transport is its server's, so Desktop listed the same records again.
+  it('lists the paired server once instead of again as Desktop', async () => {
+    await renderCatalog([repo({ id: PROJECT_ID, executionHostId: `runtime:${ENVIRONMENT_ID}` })])
+
+    expect(view?.catalog.entries.map((entry) => entry.stableRef)).toEqual([runtimeSelf])
+    expect(view?.rows.groups.flatMap((group) => group.hosts.flatMap((host) => host.rows))).toEqual([
+      expect.objectContaining({ automation: expect.objectContaining({ id: 'a-legacy' }) })
+    ])
+    expect(desktopListScoped).not.toHaveBeenCalled()
+  })
+
+  it('moves a saved Desktop filter to the server instead of waiting forever for Desktop', async () => {
+    mocks.state = {
+      ...storeState([]),
+      automationHostFilter: {
+        kind: 'host',
+        host: { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
+      }
+    }
+
+    await renderCatalogWithState()
+
+    expect(view?.resolution).toMatchObject({
+      status: 'ready',
+      announceFallback: false,
+      effective: { kind: 'host', host: runtimeSelf }
+    })
   })
 })
 

@@ -31,20 +31,7 @@ export async function listCleanupGitWorktrees(
     return { route, gitWorktrees: [createFolderWorktree(repo)] }
   }
   if (route.kind === 'ssh') {
-    if (!route.provider) {
-      // Why: cleanup should reflect only workspaces Orca can currently inspect.
-      return { route, gitWorktrees: [] }
-    }
-    const provider = route.provider
-    return {
-      route,
-      gitWorktrees: await withWorkspaceCleanupTimeout(
-        (signal) => provider.listWorktrees(repo.path, { signal }),
-        WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
-        'Timed out listing SSH worktrees.',
-        signal
-      )
-    }
+    return { route, gitWorktrees: [] }
   }
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {
@@ -73,8 +60,7 @@ export function handleRepoWorktreeListError(args: {
     console.error('Workspace cleanup repo scan failed', error)
   }
   if (isRemoteWorkspaceCleanupHost(repo) && !targeted) {
-    // Why: broad cleanup only shows remote workspaces Orca can inspect now.
-    // A remote repo that fails mid-scan is omitted, not bannered.
+    // Broad scans silently omit remote hosts that become unreachable mid-scan.
     return { scannedAt, candidates: [], errors: [] }
   }
   const errors = [createWorkspaceCleanupScanError(repo, toSafeWorkspaceCleanupRepoScanError(error))]

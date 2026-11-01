@@ -1,5 +1,4 @@
-// Why: the pure preview/search-text core now lives in /shared so mobile can
-// reuse it (Metro can't import renderer). Re-export for renderer import parity.
+// Keep renderer imports stable while mobile reuses the shared core; Metro cannot import renderer code.
 export type {
   AiVaultSessionDisplayTurn,
   AiVaultSessionPromptPreview

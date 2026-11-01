@@ -5,11 +5,14 @@ import { tmpdir } from 'node:os'
 import { makePaneKey } from '../shared/stable-pane-id'
 import { resolvePersistedStablePaneOwner } from './ipc/pty/pane/stable-owner'
 import { adoptStablePane } from './ipc/pty/pane/adopt-stable'
-import { sshProviders } from './ipc/pty/provider/registry'
-import type { IPtyProvider } from './providers/types'
-import { SSH_SESSION_EXPIRED_ERROR, SshPtyAbsentFromRelayError } from './providers/ssh-pty-errors'
-import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
-import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { PtyHostNotDispatchableError } from './ipc/pty/provider/registry'
+import {
+  testState,
+  createStoreWithSshRemotePtyLeases
+} from './persistence/persistence-test-harness'
+import { makeTerminalTab, TEST_LEAF_1 } from './persistence/persistence-session-fixtures'
+
+import { PtyExitProof } from './pty-exit-proof'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -23,16 +26,19 @@ const WORKTREE = 'repo1::/worktree'
 const TAB = 'tab-1'
 const APP_PTY_ID = 'ssh:ssh-1@@remote-pty'
 
-function storeWithBoundRemotePane(): ReturnType<typeof createStore> {
-  const store = createStore()
-  store.upsertSshRemotePtyLease({
-    targetId: TARGET,
-    ptyId: 'remote-pty',
-    worktreeId: WORKTREE,
-    tabId: TAB,
-    leafId: TEST_LEAF_1,
-    state: 'attached'
-  })
+function storeWithBoundRemotePane(
+  state: 'attached' | 'expired' = 'attached'
+): ReturnType<typeof createStoreWithSshRemotePtyLeases> {
+  const store = createStoreWithSshRemotePtyLeases([
+    {
+      targetId: TARGET,
+      ptyId: 'remote-pty',
+      worktreeId: WORKTREE,
+      tabId: TAB,
+      leafId: TEST_LEAF_1,
+      state
+    }
+  ])
   store.setWorkspaceSession(
     {
       activeRepoId: 'repo1',
@@ -55,11 +61,7 @@ function storeWithBoundRemotePane(): ReturnType<typeof createStore> {
   return store
 }
 
-/**
- * `adoptStablePane` re-adopts a pane only while `resolvePersistedStablePaneOwner` can still name
- * its PTY. A null owner is what routes `createTerminal` to a fresh spawn — over a remote shell that
- * `expired` never claimed had died.
- */
+// An expired lease does not prove the remote shell died; retain its owner for re-adoption.
 describe('a pane whose SSH lease expired can still be re-adopted', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -69,22 +71,18 @@ describe('a pane whose SSH lease expired can still be re-adopted', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps the persisted owner after the lease expires, so adoption reattaches', () => {
-    const store = storeWithBoundRemotePane()
-
-    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
+  it('keeps the persisted owner of an expired lease, so adoption reattaches', () => {
+    const store = storeWithBoundRemotePane('expired')
 
     expect(
       resolvePersistedStablePaneOwner(store, makePaneKey(TAB, TEST_LEAF_1), WORKTREE, TARGET)
     ).toMatchObject({ tabId: TAB, leafId: TEST_LEAF_1, ptyId: APP_PTY_ID })
   })
 
-  // Negative control for #17957: an operator close leaves `terminated`, and that must still unbind
-  // the pane rather than re-adopting a shell the user deliberately stopped.
   it('drops the persisted owner after the lease is terminated', () => {
     const store = storeWithBoundRemotePane()
 
-    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'terminated')
+    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, PtyExitProof.from('exit-observed', undefined))
 
     expect(
       resolvePersistedStablePaneOwner(store, makePaneKey(TAB, TEST_LEAF_1), WORKTREE, TARGET)
@@ -92,13 +90,8 @@ describe('a pane whose SSH lease expired can still be re-adopted', () => {
   })
 })
 
-/**
- * The other half of #17958: once `recoverTerminalPane` can find its lease it calls `createTerminal`,
- * whose FIRST act is `adoptStablePane`. These pin that this is a re-adopt entry point — an
- * attach-only reattach for a surviving orphan, and a fresh spawn only once the host itself answers
- * that the PTY is absent.
- */
-describe('recovery through createTerminal reattaches before it respawns', () => {
+// An unserved SSH host makes the PTY unverifiable; preserve its binding.
+describe('recovery through createTerminal on an SSH host this process cannot reach', () => {
   const PANE_KEY = makePaneKey(TAB, TEST_LEAF_1)
   const ADOPT_ARGS = {
     cols: 120,
@@ -117,44 +110,16 @@ describe('recovery through createTerminal reattaches before it respawns', () => 
 
   afterEach(() => {
     rmSync(testState.dir, { recursive: true, force: true })
-    sshProviders.delete(TARGET)
   })
 
-  it('reattaches the surviving orphan instead of spawning a second shell', async () => {
-    const store = storeWithBoundRemotePane()
-    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
-    const spawn = vi.fn(async (options: { sessionId?: string; attachOnly?: boolean }) => {
-      void options
-      return { id: APP_PTY_ID, isReattach: true as const, pid: 4242 }
+  it('fails the adoption with a typed error and keeps the binding', async () => {
+    const store = storeWithBoundRemotePane('expired')
+
+    await expect(adoptStablePane(undefined, store, ADOPT_ARGS)).rejects.toBeInstanceOf(
+      PtyHostNotDispatchableError
+    )
+    expect(resolvePersistedStablePaneOwner(store, PANE_KEY, WORKTREE, TARGET)).toMatchObject({
+      ptyId: APP_PTY_ID
     })
-    sshProviders.set(TARGET, { spawn } as unknown as IPtyProvider)
-
-    const adopted = await adoptStablePane(undefined, store, ADOPT_ARGS)
-
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
-      sessionId: APP_PTY_ID,
-      attachOnly: true,
-      command: undefined,
-      launchAgent: undefined
-    })
-    expect(adopted?.result).toMatchObject({ id: APP_PTY_ID, isReattach: true })
-    expect(adopted?.owner).toMatchObject({ ptyId: APP_PTY_ID, hasPersistedBinding: true })
-  })
-
-  // The typed refusal is what the SSH reattach path raises; the raw `PTY "…" not found` wire text
-  // never reaches a pane untyped, and an untyped one no longer authorises abandoning the binding.
-  it('falls through to a fresh spawn once the host answers that the PTY is absent', async () => {
-    const store = storeWithBoundRemotePane()
-    store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
-    const spawn = vi.fn(async () => {
-      throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: remote-pty`)
-    })
-    sshProviders.set(TARGET, { spawn } as unknown as IPtyProvider)
-
-    // A null adoption is exactly what routes createTerminal to a fresh shell, so a pane whose
-    // shell genuinely died still gets a working terminal.
-    await expect(adoptStablePane(undefined, store, ADOPT_ARGS)).resolves.toBeNull()
-    expect(resolvePersistedStablePaneOwner(store, PANE_KEY, WORKTREE, TARGET)).toBeNull()
   })
 })

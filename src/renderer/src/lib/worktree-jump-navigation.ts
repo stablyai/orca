@@ -7,11 +7,12 @@ import { worktreePassesSidebarFilters } from '@/components/sidebar/worktree-filt
 import { sidebarHasActiveFilters } from '@/components/sidebar/sidebar-filter-actions'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: ExecutionHostId): boolean {
   const state = useAppStore.getState()
   // Some lightweight callers/tests provide only the activation slice of state.
-  if (!state.worktreesByRepo || !sidebarHasActiveFilters(state)) {
+  if (!selectWorktreesByRepo(state) || !sidebarHasActiveFilters(state)) {
     return false
   }
 
@@ -22,8 +23,7 @@ function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: Executi
     if (!executionHostId) {
       return true
     }
-    // Why strict: legacy rows publish without a host, and a hostless twin must not vouch for a
-    // filtered ssh:*/runtime:* target — that would clear the user's filters instead of warning.
+    // Legacy hostless rows cannot vouch for remote twins or navigation clears filters instead of warning.
     if (!target.executionHostId) {
       return false
     }
@@ -34,15 +34,11 @@ function wasHiddenBySidebarFilters(worktreeId: string, executionHostId?: Executi
   if (inRenderedTargets) {
     return false
   }
-  // Why: a retained agent can outlive its worktree; a deleted worktree fails every filter
-  // pass, so without this check any active filter would blame itself for the missing row.
+  // Deleted worktrees fail every filter; verify existence before blaming active filters.
   if (!state.getKnownWorktreeById?.(worktreeId, executionHostId)) {
     return false
   }
-  // Absent from the rendered list can mean a collapsed group, not a filter:
-  // collapsed-but-unfiltered targets should be revealed, not toasted. The host
-  // matters: an id-only check would pass on a filtered target's same-id twin
-  // from another execution host.
+  // Collapsed unfiltered targets need reveal, not a toast. Require host identity so an unfiltered twin cannot vouch for a filtered target.
   return !worktreePassesSidebarFilters(worktreeId, executionHostId)
 }
 
@@ -51,16 +47,15 @@ export function jumpToWorktreeFromSidebar(
   worktreeId: string,
   options?: { executionHostId?: ExecutionHostId }
 ): boolean {
-  const state = useAppStore.getState()
-
   // Folder workspaces aren't in the worktree filter pipeline; only git worktrees can be filter-hidden.
   const hiddenBeforeActivation =
     parseWorkspaceKey(worktreeId)?.type !== 'folder' &&
     wasHiddenBySidebarFilters(worktreeId, options?.executionHostId)
 
-  // Why the workspace dispatcher: it owns the folder-vs-worktree split and the folder path-status gate.
+  // Workspace dispatch owns folder/worktree routing and folder path-status guards.
   const activated = activateAndRevealWorkspace(worktreeId, {
     navigationIntent: 'user-open',
+    showWorkspaceList: true,
     ...(hiddenBeforeActivation ? { revealInSidebar: false, clearSidebarFilters: false } : {}),
     ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {})
   })
@@ -68,14 +63,10 @@ export function jumpToWorktreeFromSidebar(
     return false
   }
 
-  // The worktree list is the Spaces/Projects sidebar body; jump actions should always expose it.
-  state.setSidebarBody?.('workspaces')
-
   const hiddenAfterActivation =
     hiddenBeforeActivation && wasHiddenBySidebarFilters(worktreeId, options?.executionHostId)
   if (hiddenBeforeActivation && !hiddenAfterActivation) {
-    // Activation can seed a terminal, making a workspace excluded only by Hide sleeping visible.
-    // Queue the reveal after that state transition instead of reporting a filter conflict.
+    // Activation can make Hide sleeping targets visible; reveal after that transition before blaming filters.
     useAppStore
       .getState()
       .revealWorktreeInSidebar(

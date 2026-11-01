@@ -1,16 +1,32 @@
-// Why: installs node-backed sha256sum/mv/rm shims on PATH so the real guest script can be
-// interfered with at exact points - a hash read, an install rename, a source removal.
-import { chmodSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
+import type { DrainApplyInterference } from './legacy-wsl-runtime-auth-drain-script-run-types'
 
 export function installDrainInterferenceShims(
   binDir: string,
-  options: { killAfterDestinationInstall?: boolean; killAfterSourceRemoval?: boolean }
+  options: Pick<
+    DrainApplyInterference,
+    | 'killAfterDestinationInstall'
+    | 'killAfterSourceRemoval'
+    | 'rewriteAfterHashCall'
+    | 'replaceTargetOnHashOf'
+  >
 ): void {
   const shimPath = join(binDir, 'sha256sum')
-  writeFileSync(
-    shimPath,
-    `#!/usr/bin/env node
+  const nativeHash = '/usr/bin/sha256sum'
+  // Count hashes only for interference that targets a hash boundary.
+  if (
+    process.platform === 'linux' &&
+    !options.rewriteAfterHashCall &&
+    !options.replaceTargetOnHashOf &&
+    existsSync(nativeHash)
+  ) {
+    symlinkSync(nativeHash, shimPath)
+  } else {
+    writeFileSync(
+      shimPath,
+      `#!/usr/bin/env node
   const { createHash } = require('node:crypto')
   const fs = require('node:fs')
   const file = process.argv[process.argv.length - 1]
@@ -22,16 +38,16 @@ export function installDrainInterferenceShims(
   if (process.env.REWRITE_AFTER && calls === Number(process.env.REWRITE_AFTER)) {
   fs.writeFileSync(process.env.REWRITE_TARGET, process.env.REWRITE_BYTES)
   }
-  // Why: an atomic rename leaves the pinned hard link on the OLD inode, so its hash still
-  // matches while the path now resolves elsewhere. Only an inode identity check sees that.
+  // Renames preserve the pinned inode's hash, so detecting replacement requires an identity check.
   if (process.env.REPLACE_ON_HASH_OF && file.includes(process.env.REPLACE_ON_HASH_OF)) {
   const staged = process.env.REPLACE_PATH + '.intruder'
   fs.writeFileSync(staged, process.env.REPLACE_BYTES)
   fs.renameSync(staged, process.env.REPLACE_PATH)
   }
   `
-  )
-  chmodSync(shimPath, 0o755)
+    )
+    chmodSync(shimPath, 0o755)
+  }
   if (options.killAfterDestinationInstall || options.killAfterSourceRemoval) {
     const mvShimPath = join(binDir, 'mv')
     writeFileSync(
@@ -39,6 +55,7 @@ export function installDrainInterferenceShims(
       `#!/usr/bin/env node
   const { spawnSync } = require('node:child_process')
   const fs = require('node:fs')
+  ${DRAIN_APPLY_INTERRUPTION_JS}
   const args = process.argv.slice(2)
   const result = spawnSync('/bin/mv', args, { stdio: 'inherit' })
   const from = args.at(-2) ?? ''
@@ -52,7 +69,7 @@ export function installDrainInterferenceShims(
   from.includes('/account/auth.json.orca-drain-snapshot-') &&
   to.endsWith('/account/auth.json')
   if (result.status === 0 && (sourceInstalled || destinationInstalled)) {
-  process.kill(process.ppid, 'SIGKILL')
+  interruptDrainApply(1)
   }
   process.exit(result.status ?? 1)
   `

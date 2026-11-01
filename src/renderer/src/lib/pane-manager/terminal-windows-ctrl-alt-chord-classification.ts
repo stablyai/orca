@@ -1,8 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 
-// Why: xterm misclassifies Windows Ctrl+Alt chords as AltGr and drops the ones
-// that never compose a keypress (#8734); repairing the classification lets
-// xterm's own protocol-aware key encoders emit the bytes.
+// Repair Windows Ctrl+Alt misclassification as AltGr (#8734), leaving byte encoding to xterm’s protocol-aware service.
 type ThirdLevelShiftBrowserInfo = { isWindows?: boolean }
 
 type ThirdLevelShiftKeyboardEvent = Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey'> & {
@@ -18,15 +16,7 @@ type TerminalWithThirdLevelShift = {
   }
 }
 
-/**
- * Returns whether a Windows Ctrl+Alt chord is genuine keyboard input rather
- * than AltGr composition, and must therefore reach xterm's key encoders.
- *
- * When a Ctrl+Alt keydown composes a printable character on the active
- * layout, Chromium replaces the Control+Alt modifiers with AltGraph
- * (crbug 762557), so a chord still reporting Ctrl+Alt without AltGraph
- * cannot compose text.
- */
+/** Genuine Windows Ctrl+Alt must reach xterm encoders. Chromium rewrites printable composing Ctrl+Alt to AltGraph (crbug 762557), so retained Ctrl+Alt without AltGraph cannot compose text. */
 export function isGenuineWindowsCtrlAltChord(event: ThirdLevelShiftKeyboardEvent): boolean {
   return (
     event.ctrlKey && event.altKey && !event.metaKey && event.getModifierState?.('AltGraph') !== true
@@ -35,21 +25,11 @@ export function isGenuineWindowsCtrlAltChord(event: ThirdLevelShiftKeyboardEvent
 
 /** Returns whether this client's AltGraph modifier state is trustworthy. */
 export function shouldRepairWindowsCtrlAltChords(userAgent: string): boolean {
-  // Why: only Chromium rewrites composing Ctrl+Alt presses to AltGraph. Paired
-  // web clients on Firefox keep stock classification so Ctrl+Alt-alias AltGr
-  // typing there is never misread as a chord.
+  // Only Chromium rewrites composing Ctrl+Alt to AltGraph; keep stock classification on Firefox paired clients to protect AltGr typing.
   return userAgent.includes('Windows') && userAgent.includes('Chrome/')
 }
 
-/**
- * Narrow xterm's Windows third-level-shift classification so genuine
- * Ctrl+Alt chords flow into its protocol-aware key encoders instead of
- * being dropped. Only ever flips a third-level verdict to false — AltGr,
- * macOS option handling, and every non-Windows path are untouched.
- *
- * Returns false when the internal seam is unavailable (e.g. after an xterm
- * upgrade), degrading to the historical drop-the-chord behavior.
- */
+/** Only narrow Windows third-level-shift verdicts so genuine Ctrl+Alt reaches xterm encoders; preserve AltGr/macOS/non-Windows behavior. Missing private seams return false and retain historical chord drops. */
 export function installWindowsCtrlAltChordRepair(
   terminal: Terminal,
   userAgent: string = navigator.userAgent

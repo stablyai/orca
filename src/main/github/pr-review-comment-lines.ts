@@ -21,9 +21,7 @@ export function getPRReviewCommentLineNumbersFromPatch(patch: string | undefined
       continue
     }
 
-    // Inside a hunk every `+` line is added content. GitHub's per-file patch keeps the
-    // `+++ b/file` header before the first @@, so a `+++…` line here is `++…` content,
-    // not a header, and must stay comment-eligible.
+    // Per-file headers precede the hunk; +++ inside a hunk is added content.
     if (line.startsWith('+')) {
       lineNumbers.push(nextModifiedLine)
       nextModifiedLine++

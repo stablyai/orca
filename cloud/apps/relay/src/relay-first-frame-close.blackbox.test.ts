@@ -128,8 +128,7 @@ function relayAuthFrame(): Buffer {
   )
 }
 
-// The close frame is the last unmasked frame a rejected peer receives: 0x88, length,
-// then a big-endian status code followed by the UTF-8 reason.
+// Rejected peer’s last unmasked frame: 0x88, length, big-endian status, then UTF-8 reason.
 function readCloseFrame(received: Buffer): { code: number; reason: string } | null {
   const start = received.lastIndexOf(0x88)
   if (start < 0 || received.length < start + 4) return null
@@ -210,14 +209,7 @@ it('releases admission after a director move redirect when the peer ignores clos
   expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
 })
 
-// A peer that keeps draining its socket does get the rejection: the close frame is written
-// before the force-close timer can fire, and TCP delivers those bytes ahead of the FIN.
-//
-// Scope, deliberately narrow: this peer reads every byte as it arrives, so the assertion below
-// speaks only for a responsive peer. It is not evidence that delivery survives backpressure —
-// `terminate()` destroys the socket a second later, and a frame still queued in the kernel or in
-// `ws`'s own buffer goes unsent. Treat the rejection as best effort; the bound on the close is
-// what the trade-off actually buys.
+// This responsive peer proves close bytes precede FIN, not delivery under backpressure: terminate can drop queued frames after 1s.
 it('delivers the rejection code and a graceful FIN to a peer that keeps reading', async () => {
   const { relay, port } = await fixture()
   const peer = await silentUpgrade(port, PHONE_TARGET)
@@ -233,7 +225,6 @@ it('delivers the rejection code and a graceful FIN to a peer that keeps reading'
 })
 
 const BINARY_FIRST_FRAME = Buffer.from([0x82, 0x80, 0, 0, 0, 0])
-// maxPreAuthPerSource caps how many unauthenticated sockets one source may hold at once.
 const CONCURRENT_PEERS_PER_SOURCE = 4
 
 it('returns capacity to its exact baseline after repeated bursts of rejections', async () => {
@@ -253,8 +244,7 @@ it('returns capacity to its exact baseline after repeated bursts of rejections',
   }
 })
 
-// A rejection racing the peer's own disconnect must release once, not twice: the ledger
-// does not clamp at zero, so a double release shows up as a negative count here.
+// Ledger does not clamp at zero, so a disconnect racing rejection exposes double release as a negative count.
 it('releases exactly once when a rejected peer disconnects at the same moment', async () => {
   const { relay, port } = await fixture({ hardCap: 2 * CONCURRENT_PEERS_PER_SOURCE + 1 })
   const peers = await Promise.all(

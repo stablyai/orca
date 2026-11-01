@@ -1,27 +1,27 @@
 import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 export type ClipboardFileResult = { ok: boolean; reason?: string }
 
-// Injected so the platform branching is unit-testable without the real OS
-// clipboard or spawning processes.
+// Inject OS clipboard/process boundaries for platform tests.
 export type ClipboardFileDeps = {
   platform: NodeJS.Platform
-  // Linux only: the active desktop ($XDG_CURRENT_DESKTOP). KDE and GNOME-family
-  // file managers disagree on the clipboard format, so it picks the payload.
+  // Linux XDG_CURRENT_DESKTOP selects KDE URI lists versus GNOME copied-files payloads.
   desktop?: string
   resolveFilePath: (
     path: string
   ) => Promise<{ ok: true; path: string } | { ok: false; reason: string }>
   writeBuffer: (format: string, buffer: Buffer) => void
-  runCommand: (command: string, args: string[], stdin?: string) => Promise<void>
+  runProcess: (spec: ProcessSpec) => Promise<ProcessResult>
 }
 
-// Put a real OS-level file reference on the clipboard so pasting in Finder /
-// Explorer / a file manager drops the actual file (not its path as text). Only
-// local files work — remote/SSH files don't exist on this machine. Always
-// resolves a result and never throws, so the renderer can report failures.
+const WINDOWS_CLIPBOARD_FILE_ENV = 'ORCA_CLIPBOARD_FILE'
+export const CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS = 5_000
+
+// Publish local OS file references for file-manager paste; remote files are unavailable here. Return clipboard failures to the renderer.
 export async function writeFileToClipboard(
   filePath: string,
   deps: ClipboardFileDeps
@@ -29,15 +29,19 @@ export async function writeFileToClipboard(
   if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
     return { ok: false, reason: 'invalid-path' }
   }
-  const resolvedFile = await deps.resolveFilePath(filePath)
+  // Copies share one ordered queue, so a hung mount must not block every later clipboard write.
+  const resolvedFile = await withTimeout(
+    deps.resolveFilePath(filePath),
+    CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS,
+    { ok: false, reason: 'clipboard-write-failed' }
+  )
   if (!resolvedFile.ok) {
     return { ok: false, reason: resolvedFile.reason }
   }
   const clipboardPath = resolvedFile.path
 
   if (deps.platform === 'darwin') {
-    // macOS reads `public.file-url` and synthesizes the legacy file types Finder
-    // needs, so a single buffer is enough.
+    // macOS synthesizes Finder's legacy types from public.file-url.
     try {
       deps.writeBuffer('public.file-url', Buffer.from(pathToFileURL(clipboardPath).href, 'utf8'))
       return { ok: true }
@@ -47,39 +51,49 @@ export async function writeFileToClipboard(
   }
 
   if (deps.platform === 'win32') {
-    // Set-Clipboard -LiteralPath populates CF_HDROP, which Explorer pastes as a
-    // file. Guard the spawn so a missing/erroring PowerShell surfaces as a
-    // result, not a throw.
-    try {
-      await deps.runCommand('powershell.exe', [
+    // Set-Clipboard publishes CF_HDROP, unlike Electron's custom formats; pass the literal path via environment to avoid script parsing.
+    const copied = await runClipboardHelper(deps.runProcess, {
+      program: windowsPowerShellPath(),
+      args: [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `Set-Clipboard -LiteralPath ${quotePowerShellLiteral(clipboardPath)}`
-      ])
-      return { ok: true }
-    } catch {
-      return { ok: false, reason: 'clipboard-command-failed' }
-    }
+        `Set-Clipboard -LiteralPath $env:${WINDOWS_CLIPBOARD_FILE_ENV}`
+      ],
+      env: { ...process.env, [WINDOWS_CLIPBOARD_FILE_ENV]: clipboardPath }
+    })
+    return copied ? { ok: true } : { ok: false, reason: 'clipboard-command-failed' }
   }
 
-  // Linux: best-effort and desktop-dependent. GNOME-family managers
-  // (Nautilus/Nemo/Caja) read the "copied-files" payload that carries the
-  // explicit copy verb; KDE/Qt managers (Dolphin) read text/uri-list instead.
+  // KDE expects text/uri-list; GNOME-family file managers need copied-files with an explicit copy verb.
   const fileUrl = pathToFileURL(clipboardPath).href
   const [mime, payload] = /kde/i.test(deps.desktop ?? '')
     ? ['text/uri-list', `${fileUrl}\r\n`]
     : ['x-special/gnome-copied-files', `copy\n${fileUrl}`]
-  for (const [command, args] of [
+  for (const [program, args] of [
     ['wl-copy', ['--type', mime]],
     ['xclip', ['-selection', 'clipboard', '-t', mime]]
   ] as const) {
-    try {
-      await deps.runCommand(command, [...args], payload)
+    if (await runClipboardHelper(deps.runProcess, { program, args, input: payload })) {
       return { ok: true }
-    } catch {
-      // try the next tool
     }
   }
   return { ok: false, reason: 'unsupported-platform' }
+}
+
+// True only on a clean exit; a helper that cannot start, fails or times out is false.
+async function runClipboardHelper(
+  runProcess: ClipboardFileDeps['runProcess'],
+  spec: ProcessSpec
+): Promise<boolean> {
+  try {
+    const result = await runProcess({
+      ...spec,
+      // wl-copy/xclip fork selection owners; inherited output pipes would keep the request open until owner exit.
+      stdio: ['pipe', 'ignore', 'ignore']
+    })
+    return result.code === 0 && !result.timedOut
+  } catch {
+    return false
+  }
 }

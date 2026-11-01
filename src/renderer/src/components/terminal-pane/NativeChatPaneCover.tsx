@@ -18,7 +18,7 @@ export function NativeChatPaneCover({
     <div
       ref={coverRef}
       tabIndex={-1}
-      className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background focus:outline-none"
+      className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-chat-canvas focus:outline-none"
       onPaste={(event) => {
         // Chat inputs claim their pastes first; one that reaches here found no chat input.
         if (event.defaultPrevented || isEditableTarget(event.target)) {

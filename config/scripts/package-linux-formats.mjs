@@ -13,7 +13,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { copyPrivateTree } from './space-sharing-copy.mjs'
-import { spawnProcess } from './script-child-process.mjs'
+import { spawnProcess } from '@orca/process-host'
 import { preparePrAppImageTools } from './package-linux-formats-appimage.mjs'
 
 const require = createRequire(import.meta.url)

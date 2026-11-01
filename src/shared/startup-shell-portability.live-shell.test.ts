@@ -1,18 +1,5 @@
-/**
- * Proves the central claim of the POSIX startup dialect against real shells:
- * ONE emitted string is correct in sh, bash, zsh, dash and fish alike, so Orca
- * never has to detect which shell will parse a queued command line.
- *
- * The shells are the oracle. Each case is handed to a real shell, which echoes
- * the value back through `printf`, and the test compares bytes — a hand-written
- * expectation would only re-state the implementation's own assumptions.
- *
- * Two of the quoting cases are regression pins with teeth: `\\server\share` and
- * a trailing backslash are exactly what plain sh `'\''` quoting gets wrong when
- * fish reads it (silently dropped backslashes, and a hard syntax error), and
- * `command eval` is what zsh gets wrong — its `command` resolves external
- * binaries only, so it cannot run a builtin.
- */
+/** Real-shell byte round trips validate one POSIX startup string across sh/bash/zsh/dash/fish.
+ * Regression cases retain fish backslashes/apostrophes and zsh builtin eval, which command eval cannot run. */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -25,7 +12,6 @@ const FISH = resolveFishBinary(4)
 
 type LiveShell = { name: string; path: string }
 
-/** Every Unix shell on this machine a queued Orca command line could land in. */
 function discoverShells(): LiveShell[] {
   const shells: LiveShell[] = []
   for (const path of [
@@ -41,7 +27,7 @@ function discoverShells(): LiveShell[] {
     }
   }
   if (FISH.available) {
-    // Why absolute: runInShell scrubs PATH, so a bare `fish` would not resolve.
+    // Sandbox PATH cannot resolve bare fish.
     const path = FISH.path.includes('/')
       ? FISH.path
       : execFileSync('command', ['-v', FISH.path], { encoding: 'utf8', shell: true }).trim()
@@ -54,11 +40,9 @@ function basename(path: string): string {
   return path.split('/').pop() ?? path
 }
 
-// Why a real (empty) HOME rather than a bogus one: fish needs a writable config
-// dir to hold universal variables, and warns loudly on every launch without it.
+// Fish needs a writable HOME for universal variables or every launch warns.
 const SANDBOX_HOME = mkdtempSync(path.join(tmpdir(), 'orca-shell-portability-'))
 
-/** Env with no user shell config reachable, so only Orca's own text is exercised. */
 function sandboxEnv(): NodeJS.ProcessEnv {
   return {
     PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
@@ -68,7 +52,6 @@ function sandboxEnv(): NodeJS.ProcessEnv {
   }
 }
 
-/** Runs one line in a real shell with no user config reachable. */
 function runInShell(shell: LiveShell, script: string): string {
   return execFileSync(shell.path, ['-c', script], {
     encoding: 'utf8',
@@ -113,12 +96,11 @@ afterAll(() => {
   rmSync(SANDBOX_HOME, { recursive: true, force: true })
 })
 
-// Why skipIf: on Windows discoverShells() finds nothing, so the suite would
-// fail for want of a POSIX shell rather than for any defect it tests.
+// Windows has no discovered POSIX shells; skip instead of failing on missing tools.
 describe.skipIf(process.platform === 'win32')(
   'one POSIX startup dialect is correct in every Unix shell',
   () => {
-    // Always runs, so a CI lane cannot report green with the shell cases skipped.
+    // Keep CI’s required-fish check active even if shell cases skip.
     it('has the fish this suite needs when CI requires one', () => {
       expect(fishRequirementViolation(FISH)).toBeNull()
     })
@@ -135,18 +117,14 @@ describe.skipIf(process.platform === 'win32')(
       it('quotes a whole argv so every argument survives independently', () => {
         const argv = QUOTING_CASES.filter((value) => value !== '')
         const quoted = argv.map((value) => quoteStartupArg(value, 'posix')).join(' ')
-        // Why NUL: it is the one byte no case above can contain, so it cannot be
-        // forged by a value that was mis-split into two arguments.
+        // NUL cannot occur inside these argv fixtures, so accidental argument splits remain detectable.
         const output = runInShell(shell, `printf '%s\\0' ${quoted}`)
         expect(output.split('\0').slice(0, -1)).toEqual(argv)
       })
 
-      // Why `set -u` gets its own case: the copied resume command puts the clear
-      // BEFORE the agent, so an aborted line takes the launch down with it. That
-      // is the regression that reverted #14863 (#14975).
+      // The copied resume clears env before launching; a set -u abort here loses the agent (#14863/#14975).
       it('runs the agent under set -u, with the vars removed', () => {
-        // The child must read its own environment, the way the agent binary does;
-        // expanding it in the caller would just echo the caller's value back.
+        // Read env in the child, not the caller, to verify what the agent inherits.
         const launch = withoutEnvCommand(
           ['CODEX_HOME', 'ORCA_CODEX_HOME'],
           `sh -c 'printf "LAUNCHED:%s" "\${CODEX_HOME-unset}"'`,
@@ -178,9 +156,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
-      // Why this case: fish's `set -e` returns non-zero for a variable that is
-      // already unset. An `A && B || C` spelling would fall through to the sh
-      // branch and print `Unknown command: unset` — the exact bug being fixed.
+      // Fish erase returns nonzero for absent names; A && B || C would then run sh’s unset and fail.
       it.each([
         ['already set', true],
         ['already unset', false]
@@ -199,10 +175,7 @@ describe.skipIf(process.platform === 'win32')(
         expect(stderr).toBe('')
       })
 
-      // Why INTERACTIVE (-i, script on stdin): aliases are only expanded by an
-      // interactive shell, which is the mode Orca types into — a `-c` run cannot
-      // see this class of bug at all. A user with `alias test=…` would otherwise
-      // silently skip both branches and keep the prefill exported.
+      // Only interactive shells expand aliases; a -c test misses alias test preventing env cleanup.
       it.runIf(['bash', 'zsh'].includes(shell.name))(
         'clears even when `test` is aliased away in an interactive shell',
         () => {
@@ -224,29 +197,14 @@ describe.skipIf(process.platform === 'win32')(
         }
       )
 
-      // Why: `$fish_pid` is a heuristic — any non-empty value takes the fish
-      // branch. `set -e NAME` there would enable errexit, silently changing the
-      // semantics of every command after it for the rest of the session.
-      // `set --erase` cannot: `--` ends option parsing, so the worst a misfire
-      // costs is a usage message and the positional parameters (which an
-      // interactive shell does not meaningfully use).
-      // Scoped to bash/zsh because `set` is a POSIX special builtin: in sh, dash
-      // and ksh a misfire aborts a NON-interactive shell before anything can be
-      // observed. Interactively — the mode Orca types into — they survive without
-      // errexit too, but that is not scriptable here. bash and zsh report `$-`
-      // either way, and both DID silently enable errexit under the old `set -e`.
-      // Why `-g` is not optional: without it, a name that exists ONLY as a
-      // universal — `set -Ux CODEX_HOME …`, a normal thing for a fish user to
-      // have — is permanently deleted from every future session. Reachable from
-      // the clipboard command, which may run with no injected value at all.
+      // Keep -g: erasing a lone universal would permanently change future fish sessions, including clipboard launches without injected env.
       it.runIf(shell.name === 'fish')('never deletes a lone universal variable', () => {
         const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
         const probe = `set -Ux ORCA_PI_PREFILL persisted; ${clear}; set -q ORCA_PI_PREFILL; and echo "RESULT=$ORCA_PI_PREFILL"; or echo RESULT=DESTROYED; set -Ue ORCA_PI_PREFILL`
         expect(runInShell(shell, probe)).toContain('RESULT=persisted')
       })
 
-      // A universal shadowed by the injected global: the global goes, theirs
-      // comes back. That is the wanted outcome, not a missed erase.
+      // Erase the injected global so the user’s shadowed universal reappears.
       it.runIf(shell.name === 'fish')('reveals a shadowed universal instead of deleting it', () => {
         const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
         const probe = `set -Ux ORCA_PI_PREFILL mine; set -gx ORCA_PI_PREFILL injected; ${clear}; echo "RESULT=$ORCA_PI_PREFILL"; set -Ue ORCA_PI_PREFILL`

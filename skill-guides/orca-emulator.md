@@ -24,8 +24,8 @@ unvalidated with the active device injected.
 device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, and
 `exec` work on both backends.
 
-Emulator control is local to the Mac that owns the simulator; remote and SSH worktrees are
-out of scope.
+Commands drive devices on the host that runs the Orca runtime. Simulators need that host to
+be a Mac, so a Linux `orca serve` or SSH host can drive only Android devices.
 
 ## Prerequisites
 

@@ -1,4 +1,8 @@
 import { win32 as pathWin32 } from 'node:path'
+import {
+  CLAUDE_INJECTED_CONFIG_DIR_ENV,
+  CLAUDE_PROFILE_POINTER_ENV
+} from '../../shared/claude-profile-routing'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
@@ -9,7 +13,7 @@ import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from './windows-shell-args'
-import type { PtySpawnOptions } from './types'
+import type { PtySpawnOptions } from './pty-provider-contract'
 
 export function finalizeWindowsLocalPtySpawnEnvironment(args: {
   spawn: PtySpawnOptions
@@ -26,7 +30,7 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       } else {
         env.CODEX_HOME = codexHomeWslInfo.linuxPath
         env.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
-        // Why: wsl.exe only imports non-default env vars named in WSLENV.
+        // wsl.exe imports custom variables only through WSLENV.
         addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
         if (!plan.launchWslDistro) {
           const resolved = resolveWindowsShellLaunchArgs(
@@ -45,22 +49,25 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
         }
       }
     } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
-      // Why: Orca's Codex home is host-local; WSL Codex must use its Linux-side ~/.codex, not a Windows path.
+      // Host-local CODEX_HOME cannot address WSL Codex; use the guest home.
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
     } else if (env.CODEX_HOME) {
       addWslEnvKeys(env, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
     }
     if (env.CLAUDE_CONFIG_DIR) {
-      // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
+      // Managed Claude needs the guest config imported through WSLENV.
       addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
     }
+    if (env[CLAUDE_PROFILE_POINTER_ENV]) {
+      addWslEnvKeys(env, [CLAUDE_PROFILE_POINTER_ENV, CLAUDE_INJECTED_CONFIG_DIR_ENV])
+    }
     if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
-      // Why: wsl.exe drops custom Windows env vars; the startup wrapper needs this imported inside WSL.
+      // Import the custom query variable so the WSL startup wrapper can consume it.
       addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])
     }
   } else if (codexHomeWslInfo || isWslCodexHomeForHost(env.CODEX_HOME)) {
-    // Why: WSL Codex homes are Linux paths Windows can't use; also drop ORCA_CODEX_HOME (shell-ready restores CODEX_HOME from it).
+    // Windows cannot use guest Codex paths; clear the alias too or shell-ready would restore it.
     delete env.CODEX_HOME
     delete env.ORCA_CODEX_HOME
   }
@@ -72,7 +79,7 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(plan.shellPath))
   ) {
     if (shellBasename === 'cmd.exe') {
-      // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+      // node-pty escapes argv quotes; expand the preflight quote inside cmd.exe instead.
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
     const resolved = resolveWindowsShellLaunchArgs(

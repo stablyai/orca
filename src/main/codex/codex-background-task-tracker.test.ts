@@ -60,7 +60,7 @@ function command(
     threadId,
     params: {
       threadId,
-      turnId: PARENT_TURN,
+      turnId: threadId === PRIMARY ? PARENT_TURN : CHILD_TURN,
       item: {
         type: 'commandExecution',
         id: 'exec-1',
@@ -77,7 +77,7 @@ describe('readCodexBackgroundTaskFrame', () => {
   it('reads activity as child metadata without inferring execution state', () => {
     expect(readCodexBackgroundTaskFrame(activity('interacted'), PRIMARY)).toEqual({
       kind: 'subagents',
-      children: [{ agentThreadId: CHILD, label: 'count_a', parentTurnId: PARENT_TURN }]
+      children: [{ agentThreadId: CHILD, label: 'count_a' }]
     })
   })
 
@@ -113,10 +113,7 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
       supportsStopAll: false,
       tasks: [{ id: `codex-agent:${CHILD}`, kind: 'agent', description: 'count_a' }]
     }
-    // The strip is a live view: a fan-out is reported while it runs, not once
-    // the parent turn happens to end.
     expect(tracker.state).toEqual(running)
-    // Turn end reveals children, it never settles them; the child is unchanged.
     expect(tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))).toBe(false)
     expect(tracker.state).toEqual(running)
   })
@@ -227,16 +224,14 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
 })
 
 describe('CodexBackgroundTaskTracker command integration', () => {
-  it('keeps a primary shell visible from launch until its own completion', () => {
+  it('reveals a surviving primary shell after its own turn ends', () => {
     const tracker = new CodexBackgroundTaskTracker(PRIMARY)
     const shell = [{ id: 'codex-command:primary:exec-1', kind: 'command', description: 'sleep 90' }]
     tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
     tracker.observe(command())
-    // Visible while the turn that launched it is still running.
-    expect(tracker.state?.tasks).toEqual(shell)
+    expect(tracker.state).toBeNull()
     tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
     expect(tracker.state?.tasks).toEqual(shell)
-    // Only the shell's own completion retires the row.
     tracker.observe(command(PRIMARY, 'item/completed'))
     expect(tracker.state).toBeNull()
   })
@@ -296,9 +291,7 @@ describe('CodexBackgroundTaskTracker command integration', () => {
   })
 
   it('never cuts a qualified command mid surrogate pair', () => {
-    // The label is bounded, then the COMPOSED row is bounded again. That second
-    // cut lands inside the description, so clipping only the label side leaves a
-    // lone surrogate — lossy through any non-JSON UTF-8 hop.
+    // The second bound clips the composed row; bounding only the label leaves a lone surrogate.
     const tracker = new CodexBackgroundTaskTracker(PRIMARY)
     tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
     tracker.observe(turn('turn/started', CHILD, CHILD_TURN))

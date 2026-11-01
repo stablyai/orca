@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -149,8 +150,7 @@ export function DiffCommentDraftCard({
       )
       return
     }
-    // Chromium drops focus to <body> when the pressed button turns disabled, and the zone only
-    // hands focus back to Monaco while the card still holds it. Park it on the textarea first.
+    // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
     textareaRef.current?.focus()
     setSubmitting(true)
     try {
@@ -211,7 +211,7 @@ export function DiffCommentDraftCard({
         </div>
 
         {/* Textarea */}
-        <textarea
+        <ImeTextarea
           ref={focusTextareaRef}
           className="orca-diff-comment-popover-textarea"
           placeholder={

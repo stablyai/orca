@@ -1,7 +1,4 @@
 import type { DiffComment, DiffReviewScope } from '../../../src/shared/diff-comment-types'
-import { formatDiffComment, formatDiffComments } from '../../../src/shared/diff-comments-format'
-
-export { formatDiffComment, formatDiffComments }
 
 export type CreateMobileDiffCommentInput = {
   worktreeId: string
@@ -21,19 +18,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeScope(value: unknown): DiffReviewScope | undefined {
   return value === 'unstaged' || value === 'staged' || value === 'branch' ? value : undefined
-}
-
-export function formatMobileDiffReviewPrompt(comments: readonly DiffComment[]): string {
-  return [
-    'You are reviewing the current worktree. Address the following mobile review notes.',
-    '',
-    formatDiffComments(comments),
-    '',
-    'After applying fixes:',
-    '1. Summarize changed files.',
-    '2. Run relevant tests.',
-    '3. Tell me if anything remains risky.'
-  ].join('\n')
 }
 
 export function normalizeMobileDiffComments(value: unknown, worktreeId: string): DiffComment[] {
@@ -143,7 +127,6 @@ export function removeDeliveredMobileDiffComments(
   })
 }
 
-/** Unsent notes that no new-agent send is still carrying. */
 export function sendableMobileDiffComments(
   comments: readonly DiffComment[],
   sendingIds: ReadonlySet<string>

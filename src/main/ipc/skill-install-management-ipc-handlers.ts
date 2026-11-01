@@ -19,8 +19,9 @@ import {
   supportsSkillRuntimeManagement
 } from '../skills/skill-runtime-capability'
 import { listWslDistrosAsync } from '../wsl'
-import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 
 const environmentIdSchema = z.string().min(1).max(128)
 const skillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
@@ -74,7 +75,7 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
             destination: input.destination
           }
           const response = await callRuntimeEnvironment(
-            app.getPath('userData'),
+            getRuntimeEnvironmentRegistryRoot(),
             environmentId,
             'skills.previewInstall',
             request,
@@ -107,7 +108,7 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       return listWslDistrosAsync()
     }
     const response = await callRuntimeEnvironment(
-      app.getPath('userData'),
+      getRuntimeEnvironmentRegistryRoot(),
       environmentId,
       'host.wsl.listDistros',
       {},
@@ -154,8 +155,14 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       .parse(value)
     if (
       parsed.environmentId &&
-      (!(await supportsSkillRuntimeManagement(app.getPath('userData'), parsed.environmentId)) ||
-        !(await supportsSkillRuntimeBundleInstall(app.getPath('userData'), parsed.environmentId)))
+      (!(await supportsSkillRuntimeManagement(
+        getRuntimeEnvironmentRegistryRoot(),
+        parsed.environmentId
+      )) ||
+        !(await supportsSkillRuntimeBundleInstall(
+          getRuntimeEnvironmentRegistryRoot(),
+          parsed.environmentId
+        )))
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }

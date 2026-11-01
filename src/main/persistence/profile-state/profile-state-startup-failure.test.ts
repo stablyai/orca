@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ProfileStateAuthorityBootstrapError,
   ProfileStateRecoveryRequiredError
-} from './profile-state-authority-bootstrap'
+} from './profile-state-recovery-required'
 import {
   formatProfileStateStartupFailure,
   profileStateStartupFailureClass

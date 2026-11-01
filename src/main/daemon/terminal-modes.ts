@@ -6,6 +6,8 @@ export type TerminalModes = {
   sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
-  /** Kitty keyboard protocol flags used only to reseed a warm daemon emulator. */
+  /** Kitty flags are restored separately after snapshot screen switches. */
   kittyKeyboardFlags?: number
+  /** XTMODKEYS level; absent until first set, including an explicit disable. */
+  modifyOtherKeys?: number
 }

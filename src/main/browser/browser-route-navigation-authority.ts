@@ -43,7 +43,6 @@ export function revokeBrowserRouteGuestNavigation(input: {
     return false
   }
   input.state.navigationGranted = false
-  // A fenced page keeps no live child window; lease/authority loss reaches popups through here.
   input.state.popups?.closeAll()
   return true
 }

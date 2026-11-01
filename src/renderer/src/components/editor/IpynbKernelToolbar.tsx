@@ -90,7 +90,6 @@ async function browseForPython(filePath: string): Promise<void> {
   }
 }
 
-/** The notebook header's kernel pill (interpreter picker) and kernel actions. */
 export function IpynbKernelToolbar({
   filePath,
   rootPath,

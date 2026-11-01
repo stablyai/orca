@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 type ProjectAddedModalData = {
   repoId?: string
@@ -14,14 +15,13 @@ export default function ProjectAddedDialog(): null {
   const modalData = useAppStore((s) => s.modalData as ProjectAddedModalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const repos = useAppStore((s) => s.repos)
-  const fetchRepos = useAppStore((s) => s.fetchRepos)
+  const fetchReposForAllHosts = useAppStore((s) => s.fetchReposForAllHosts)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const handoffRunRef = useRef(0)
   const pendingRepoHydrationRef = useRef<string | null>(null)
 
-  // Why: older onboarding builds wrote `projectId`; accepting both prevents a
-  // stale project-added modal from blocking follow-up contextual tours.
+  // Accept legacy projectId so old onboarding modals cannot block contextual tours.
   const repoId =
     typeof modalData?.repoId === 'string'
       ? modalData.repoId
@@ -47,7 +47,8 @@ export default function ProjectAddedDialog(): null {
       pendingRepoHydrationRef.current = repoId
       let cancelled = false
       void (async () => {
-        await fetchRepos()
+        // The new repo’s host is not loaded yet; hydrate repositories across hosts.
+        await fetchReposForAllHosts()
         if (cancelled) {
           return
         }
@@ -73,13 +74,12 @@ export default function ProjectAddedDialog(): null {
         try {
           await fetchWorktrees(repoId)
         } catch {
-          // Why: folder compatibility exists to clear stale modal state; close
-          // even if the best-effort synthetic workspace refresh fails.
+          // This compatibility handoff must close even if synthetic folder refresh fails.
         }
         if (cancelled) {
           return
         }
-        const folderWorktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
+        const folderWorktree = selectWorktreesByRepo(useAppStore.getState())[repoId]?.[0]
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
@@ -94,8 +94,7 @@ export default function ProjectAddedDialog(): null {
       try {
         await fetchWorktrees(repoId)
       } catch {
-        // Why: this is a compatibility handoff; fall back to whatever worktree
-        // state is already loaded rather than leaving a stale modal active.
+        // Fall back to loaded worktree state so compatibility failures cannot strand stale modals.
       }
       if (!cancelled && handoffRunRef.current === runId) {
         await finishProjectAddWithDefaultCheckout({
@@ -112,7 +111,7 @@ export default function ProjectAddedDialog(): null {
   }, [
     activeModal,
     closeModal,
-    fetchRepos,
+    fetchReposForAllHosts,
     fetchWorktrees,
     repo,
     repoId,

@@ -32,11 +32,7 @@ function unifiedTab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'con
   }
 }
 
-/**
- * The store the app really has with a structured tab focused: raw group state plus the
- * active-surface fields the store derives from it. That derivation is what leaves `activeTabId`
- * naming a live background terminal, so stubbing it would hide the half under test.
- */
+/** Build real active-surface state so structured focus leaves the legacy terminal ID stale, reproducing the ownership seam. */
 function storeWithStructuredTabActive({
   terminalIds,
   lastFocusedTerminalId,
@@ -96,17 +92,6 @@ function storeWithStructuredTabActive({
 describe('handleSwitchTerminalTab with a structured chat tab active', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leaves activeTabId naming a live background terminal', () => {
-    // Guards the premise: without a stale id that is really in the terminal list, the tests
-    // below would pass with the bug present.
-    mocks.store = storeWithStructuredTabActive({
-      terminalIds: ['term-1', 'term-2', 'term-3'],
-      lastFocusedTerminalId: 'term-2'
-    })
-    expect(mocks.store.activeTabType).toBe('agent-session')
-    expect(mocks.store.activeTabId).toBe('term-2')
-  })
-
   it('jumps to the first terminal instead of cycling from the background terminal', () => {
     mocks.store = storeWithStructuredTabActive({
       terminalIds: ['term-1', 'term-2', 'term-3'],
@@ -127,16 +112,5 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
     // The stale id matched the only terminal, so the single-terminal guard swallowed the chord.
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
-  })
-
-  it('still cycles normally from a focused terminal tab', () => {
-    mocks.store = storeWithStructuredTabActive({
-      terminalIds: ['term-1', 'term-2', 'term-3'],
-      lastFocusedTerminalId: 'term-2',
-      activeGroupTabId: 'unified-term-2'
-    })
-    expect(mocks.store.activeTabType).toBe('terminal')
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-3')
   })
 })

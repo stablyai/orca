@@ -9,8 +9,7 @@ export const GROK_PROVIDED_HOOK_VARIABLES = [
 const providedVariables = new Set<string>(GROK_PROVIDED_HOOK_VARIABLES)
 
 export function findBareHookCommandVariables(command: string): string[] {
-  // Why: Grok scans dollar bytes without shell quoting state, even inside single quotes.
-  // These are the two runtime-home assertions from installer-utils.test.ts, shared across builders.
+  // Grok scans dollar bytes even inside single quotes.
   const references = [
     ...command.matchAll(/\$(?!\{)([A-Za-z_][A-Za-z0-9_]*)/g),
     ...command.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)

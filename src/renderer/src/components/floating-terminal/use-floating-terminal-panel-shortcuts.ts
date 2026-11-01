@@ -8,9 +8,15 @@ import {
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
+import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
+import { launchFloatingWorkspaceAgentShortcut } from '@/components/agent-tab-shortcut-launch'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { KeybindingContext, KeybindingMatchOptions } from '../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingContext,
+  type KeybindingMatchOptions
+} from '../../../../shared/keybindings'
 import type {
   FloatingPanelShortcutInput,
   FloatingPanelShortcutResolution,
@@ -18,17 +24,17 @@ import type {
 } from './floating-terminal-panel-types'
 import type { FloatingTerminalCloseActions } from './use-floating-terminal-close-actions'
 import type { FloatingTerminalCreateActions } from './use-floating-terminal-create-actions'
-import type { FloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
+import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelMaximize } from './use-floating-terminal-panel-maximize'
 
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 
 type FloatingTerminalPanelShortcutsInput = Pick<
-  FloatingTerminalPanelItems,
-  'activeTab' | 'activeTerminalId' | 'activeClosableTab' | 'visibleFloatingTabOrder'
+  FloatingWorkspaceChromeModel,
+  'activeTab' | 'activeClosableTab' | 'visibleFloatingTabOrder'
 > &
-  Pick<FloatingTerminalPanelLocalState, 'terminalPaneRegistry' | 'panelRef'> &
+  Pick<FloatingTerminalPanelLocalState, 'panelRef'> &
   Pick<FloatingTerminalCloseActions, 'closeFloatingItemConfirmed'> &
   FloatingTerminalCreateActions &
   FloatingTerminalPanelMaximize & {
@@ -38,10 +44,8 @@ type FloatingTerminalPanelShortcutsInput = Pick<
 
 export function useFloatingTerminalPanelShortcuts({
   activeTab,
-  activeTerminalId,
   activeClosableTab,
   visibleFloatingTabOrder,
-  terminalPaneRegistry,
   panelRef,
   closeFloatingItemConfirmed,
   activateFloatingItem,
@@ -53,16 +57,12 @@ export function useFloatingTerminalPanelShortcuts({
   open,
   onOpenChange
 }: FloatingTerminalPanelShortcutsInput) {
+  // Terminal focus delegates pane closing to terminal dispatch; other panel focus closes the whole tab.
   const closeActiveFloatingTerminalPane = useCallback(() => {
-    const handle = activeTerminalId ? terminalPaneRegistry.getHandle(activeTerminalId) : null
-    if (handle) {
-      handle.closeActivePane()
-      return
-    }
     if (activeClosableTab) {
       closeFloatingItemConfirmed(activeClosableTab.id)
     }
-  }, [activeClosableTab, activeTerminalId, closeFloatingItemConfirmed, terminalPaneRegistry])
+  }, [activeClosableTab, closeFloatingItemConfirmed])
 
   const resolveFloatingPanelShortcut = useCallback(
     (input: FloatingPanelShortcutInput): FloatingPanelShortcutResolution | null => {
@@ -97,6 +97,15 @@ export function useFloatingTerminalPanelShortcuts({
           isTerminalPaneCloseChord(input, platform, state.keybindings, matchOptions, matchOptions))
       ) {
         return { kind: 'close', focusedFloatingTerminal }
+      }
+      const agentShortcut = resolveTerminalAgentTabShortcut({
+        activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        keybindings: state.keybindings,
+        matchShortcut: (actionId) =>
+          keybindingMatchesAction(actionId, input, platform, state.keybindings, matchOptions)
+      })
+      if (agentShortcut.actionId) {
+        return { kind: 'agent', shortcut: agentShortcut }
       }
       const panelShortcut = matchFloatingWorkspacePanelShortcut(
         input,
@@ -154,6 +163,11 @@ export function useFloatingTerminalPanelShortcuts({
         } else {
           onOpenChange(false)
         }
+        return 'handled'
+      }
+      if (resolution.kind === 'agent') {
+        consume()
+        launchFloatingWorkspaceAgentShortcut(resolution.shortcut)
         return 'handled'
       }
       if (resolution.kind === 'index') {

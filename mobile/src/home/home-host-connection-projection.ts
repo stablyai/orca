@@ -11,7 +11,6 @@ export type HomeHostConnectionProjectionEntry = {
 
 export type HomeHostConnections = Record<string, HomeHostConnectionProjectionEntry>
 
-/** One lookup carrying every connection field, so a new one costs no plumbing. */
 export function projectHomeHostConnections(
   entries: readonly HomeHostConnectionProjectionEntry[]
 ): HomeHostConnections {

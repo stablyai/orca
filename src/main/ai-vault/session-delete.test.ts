@@ -24,16 +24,16 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock
 }))
 
-vi.mock('electron', () => ({
-  shell: { trashItem: trashItemMock }
-}))
-
 vi.mock('../wsl-unc-delete', () => ({
   tryDeleteWslUncPath: tryDeleteWslUncPathMock,
   WslDeleteValidationError: WslDeleteValidationErrorMock
 }))
 
-import { deleteAiVaultSessionFile } from './session-delete'
+import { deleteAiVaultSessionFile as deleteWithRemover } from './session-delete'
+
+// The desktop's Trash remover; the executor itself is remover-agnostic.
+const deleteAiVaultSessionFile = (args: Parameters<typeof deleteWithRemover>[0]) =>
+  deleteWithRemover(args, (removal) => trashItemMock(removal.path))
 
 const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
@@ -58,7 +58,6 @@ function baseArgs(filePath: string) {
 describe('deleteAiVaultSessionFile', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default: not a WSL UNC path, so the fs-guard branch runs.
     tryDeleteWslUncPathMock.mockResolvedValue(false)
   })
 
@@ -92,7 +91,6 @@ describe('deleteAiVaultSessionFile', () => {
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     const escaped = join(HOME, 'Documents', 'escaped.json')
     lstatMock.mockResolvedValue({ isFile: () => true })
-    // The file's realpath escapes; the root realpaths to itself (not symlinked).
     realpathMock.mockImplementation((p: string) => Promise.resolve(p === filePath ? escaped : p))
 
     const result = await deleteAiVaultSessionFile(baseArgs(filePath))
@@ -106,9 +104,6 @@ describe('deleteAiVaultSessionFile', () => {
   })
 
   it('accepts a session under a symlinked root by realpath-resolving the roots too', async () => {
-    // GEMINI_ROOT is a symlink to a real target; the file's realpath lands under
-    // the real target, which the text-only root would not match. Realpath-ing
-    // the root as well keeps this legit delete from a false rejection.
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     const realRoot = join('/real', '.gemini', 'tmp')
     const realFile = join(realRoot, 'project-a', 'session-1.json')
@@ -172,7 +167,7 @@ describe('deleteAiVaultSessionFile', () => {
     expect(tryDeleteWslUncPathMock).not.toHaveBeenCalled()
   })
 
-  it('delegates a WSL UNC file to tryDeleteWslUncPath (non-recursive) and never calls trashItem', async () => {
+  it('uses a successful WSL-helper result before local file trash', async () => {
     const filePath = join(GEMINI_ROOT, 'project-a', 'session-1.json')
     tryDeleteWslUncPathMock.mockResolvedValue(true)
 
@@ -187,11 +182,8 @@ describe('deleteAiVaultSessionFile', () => {
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
-  it('deletes a WSL UNC directory-shaped session recursively, never via trashItem', async () => {
-    // The bug this guards: a directory removal (rovo/grok/claude dir) on a WSL
-    // UNC path used to skip the WSL branch and hit shell.trashItem, which
-    // cannot trash a WSL volume item — so it failed on Windows or was silently
-    // stranded by the 9P filesystem's unreliable lstat.
+  it('requests recursive helper removal for a directory-shaped session', async () => {
+    // WSL UNC volumes cannot use Trash and may give unreliable 9P stats.
     tryDeleteWslUncPathMock.mockResolvedValue(true)
 
     const result = await deleteAiVaultSessionFile({
@@ -227,9 +219,6 @@ describe('deleteAiVaultSessionFile', () => {
     expect(trashItemMock).not.toHaveBeenCalled()
   })
 
-  // A session whose delete unit is a path set. What matters here is the
-  // order — the transcript is what puts the row on screen, so it must be the
-  // last thing removed.
   describe('directory-shaped agents', () => {
     const claudeArgs = {
       agent: 'claude' as const,
@@ -271,8 +260,6 @@ describe('deleteAiVaultSessionFile', () => {
     })
 
     it('leaves the transcript in place when a companion removal is rejected', async () => {
-      // A file where the plan expects the session directory: refuse rather
-      // than coerce, and stop before the transcript so the row stays to retry.
       lstatMock.mockImplementation((path: string) =>
         Promise.resolve(
           path === join(CLAUDE_ROOT, '-proj', 'sess-1')

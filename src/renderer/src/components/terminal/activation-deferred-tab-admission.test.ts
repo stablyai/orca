@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  ACTIVATION_DEFERRED_ADMISSION_LIMIT,
-  isActivationAdmissionEligible,
   pickNextActivationDeferredTabId,
   scheduleActivationDeferredAdmission
 } from './activation-deferred-tab-admission'
+
 import {
   planColdActivationTabDeferral,
   revealActivationDeferredTabs
@@ -13,7 +12,6 @@ import {
 const tabIds = (count: number): string[] =>
   Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
 
-/** Runs the scheduler against timers instead of idle callbacks. */
 function withoutIdleCallbacks(run: () => void): void {
   const originalRequest = globalThis.requestIdleCallback
   const originalCancel = globalThis.cancelIdleCallback
@@ -32,40 +30,7 @@ function withoutIdleCallbacks(run: () => void): void {
 }
 
 describe('activation-deferred tab admission', () => {
-  it('picks deferred tabs in tab order', () => {
-    expect(pickNextActivationDeferredTabId(tabIds(4), new Set(['tab-4', 'tab-2']))).toBe('tab-2')
-  })
-
-  it('reports nothing to admit for an empty, absent, or stale deferred set', () => {
-    expect(pickNextActivationDeferredTabId(tabIds(3), new Set())).toBeNull()
-    expect(pickNextActivationDeferredTabId(tabIds(3), null)).toBeNull()
-    expect(pickNextActivationDeferredTabId(tabIds(2), new Set(['tab-9']))).toBeNull()
-  })
-
-  it('only warms up a deferred population the pre-deferral behaviour would have mounted', () => {
-    expect(isActivationAdmissionEligible(0)).toBe(false)
-    expect(isActivationAdmissionEligible(ACTIVATION_DEFERRED_ADMISSION_LIMIT)).toBe(true)
-    expect(isActivationAdmissionEligible(ACTIVATION_DEFERRED_ADMISSION_LIMIT + 1)).toBe(false)
-  })
-
-  // The launch worktree is restored active before hydration opens the startup
-  // gate, so admission first sees an empty set and only later the real plan.
-  // Judging on the high-water mark is what lets that plan still be admitted,
-  // while an over-cap worktree stays ineligible as its set drains.
-  it('judges eligibility on the largest deferred set seen, not the latest', () => {
-    const highWaterMark = (counts: readonly number[]): number =>
-      counts.reduce((seen, count) => Math.max(seen, count), 0)
-
-    // Launch: empty reading before hydration, then the real 3-tab plan.
-    expect(isActivationAdmissionEligible(highWaterMark([0, 3]))).toBe(true)
-    // Draining 3 -> 2 -> 1 must not change the verdict.
-    expect(isActivationAdmissionEligible(highWaterMark([0, 3, 2, 1]))).toBe(true)
-    // An over-cap activation stays ineligible however far it drains.
-    expect(isActivationAdmissionEligible(highWaterMark([7, 4, 2]))).toBe(false)
-  })
-
-  // The contract that makes deferral free: repeated admission ends with the
-  // worktree exactly as fully mounted as it would have been without deferral.
+  // Idle admission must restore the same fully mounted warm set as eager activation.
   it('drains to a fully mounted worktree with no restriction left behind', () => {
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()

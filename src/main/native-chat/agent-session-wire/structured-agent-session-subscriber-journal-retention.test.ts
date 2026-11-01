@@ -1,7 +1,8 @@
+import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import { codexItemBody } from '../../codex/codex-structured-item-translation'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -219,7 +220,7 @@ describe('subscriber journal lifetime', () => {
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
     expect(rig.host.hasSession(SESSION)).toBe(false)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(subscriberCount()).toBe(1)
     expect(reader.state.types).not.toContain('end')
     vi.clearAllMocks()

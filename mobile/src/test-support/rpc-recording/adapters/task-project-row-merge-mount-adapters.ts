@@ -36,7 +36,6 @@ const GITHUB_ISSUE_ITEM = {
   }
 } as const
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -48,7 +47,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -131,10 +129,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -182,10 +176,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * A board row's file list and the merge it shares a screen with, plus the issue and pull-request
- * state writes that hook exposes alongside them.
- */
 export function taskProjectRowMergeMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -235,8 +225,7 @@ export function taskProjectRowMergeMountAdapters(
           ),
         merge: () =>
           actions().mergeProjectGitHubPullRequest(mountFixture(PR_ROW), mountFixture('squash')),
-        // The same hook also owns the item screen's open/close toggle, whose method is a local
-        // two-literal ternary over the item type rather than a project-board call.
+        // Drive item open/close too; the same hook selects its method by item type.
         'issue-state': () => actions().toggleGitHubStatus(mountFixture(GITHUB_ISSUE_ITEM)),
         'pr-state': () => actions().toggleGitHubStatus(mountFixture(GITHUB_PR_ITEM))
       }),

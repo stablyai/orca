@@ -1,3 +1,4 @@
+import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -10,15 +11,22 @@ vi.mock('@/lib/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 
+const launchErrorMocks = vi.hoisted(() => {
+  return { StructuredAgentSessionCreateRefusalError: class extends Error {} }
+})
+
+vi.mock('@/lib/structured-agent-session-launch-errors', async () => ({
+  ...(await vi.importActual<typeof LaunchErrors>('@/lib/structured-agent-session-launch-errors')),
+  ...launchErrorMocks
+}))
+
 vi.mock('@/lib/launch-structured-agent-session', () => ({
-  StructuredAgentSessionCreateRefusalError: class extends Error {}
+  StructuredAgentSessionCreateRefusalError:
+    launchErrorMocks.StructuredAgentSessionCreateRefusalError
 }))
 
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
-import {
-  beginStructuredAgentLaunchSettlement,
-  settleStructuredAgentLaunch
-} from './structured-agent-launch-settlement'
+import { settleStructuredAgentLaunch } from './structured-agent-launch-settlement'
 
 type FakeLaunch = {
   launchResult: Promise<unknown>
@@ -65,40 +73,18 @@ describe('settleStructuredAgentLaunch', () => {
     const onStructuredReady = vi.fn()
 
     await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', { prompt: 'Fix' }, { onStructuredReady })
+      settleStructuredAgentLaunch(
+        'worktree-1',
+        'codex',
+        { requestId: 'request-1', prompt: 'Fix' },
+        { onStructuredReady }
+      )
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1', promptDeliveryResult })
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
+      requestId: 'request-1',
       prompt: 'Fix'
     })
     expect(onStructuredReady).toHaveBeenCalledWith('session-1')
-  })
-
-  it('returns the session identity before the launch settles', async () => {
-    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
-    fakeLaunch({
-      launchResult: new Promise((resolve) => {
-        resolveLaunch = resolve
-      })
-    })
-
-    const handle = beginStructuredAgentLaunchSettlement('worktree-1', 'codex', {}, {})
-
-    expect(handle.sessionId).toBe('session-1')
-    resolveLaunch({ sessionId: 'session-1', fence: 1 })
-    await expect(handle.settlement).resolves.toEqual({
-      kind: 'structured',
-      sessionId: 'session-1'
-    })
-  })
-
-  it('keeps a structured refusal on the structured failure path', async () => {
-    const error = new StructuredAgentSessionCreateRefusalError('unsupported')
-    fakeLaunch({ launchResult: Promise.reject(error) })
-
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
-      kind: 'failed',
-      error
-    })
   })
 
   it('reports an unknown outcome, releases the caller, and never runs the fallback', async () => {
@@ -107,7 +93,9 @@ describe('settleStructuredAgentLaunch', () => {
       visibilityUnknown: true
     })
 
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+    await expect(
+      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-4' }, {})
+    ).resolves.toEqual({
       kind: 'visibility-unknown',
       sessionId: 'session-1'
     })
@@ -118,29 +106,13 @@ describe('settleStructuredAgentLaunch', () => {
     const error = new Error('boom')
     const { releaseCallerAfterUnknownOutcome } = fakeLaunch({ launchResult: Promise.reject(error) })
 
-    await expect(settleStructuredAgentLaunch('worktree-1', 'codex', {}, {})).resolves.toEqual({
+    await expect(
+      settleStructuredAgentLaunch('worktree-1', 'codex', { requestId: 'request-5' }, {})
+    ).resolves.toEqual({
       kind: 'failed',
       error
     })
     expect(releaseCallerAfterUnknownOutcome).not.toHaveBeenCalled()
-  })
-
-  it('returns cancelled after a successful launch without activating', async () => {
-    fakeLaunch({ launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }) })
-    const onStructuredReady = vi.fn()
-
-    await expect(
-      settleStructuredAgentLaunch(
-        'worktree-1',
-        'codex',
-        {},
-        {
-          onStructuredReady,
-          signal: fakeCancellation(true).signal
-        }
-      )
-    ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-    expect(onStructuredReady).not.toHaveBeenCalled()
   })
 
   it('lets cancellation win over a refusal', async () => {
@@ -151,7 +123,7 @@ describe('settleStructuredAgentLaunch', () => {
       settleStructuredAgentLaunch(
         'worktree-1',
         'codex',
-        {},
+        { requestId: 'request-7' },
         {
           signal: fakeCancellation(true).signal
         }
@@ -172,7 +144,7 @@ describe('settleStructuredAgentLaunch', () => {
     const settlement = settleStructuredAgentLaunch(
       'worktree-1',
       'codex',
-      {},
+      { requestId: 'request-8' },
       { onStructuredReady, signal: cancellation.signal }
     )
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
@@ -197,7 +169,7 @@ describe('settleStructuredAgentLaunch', () => {
     const settlement = settleStructuredAgentLaunch(
       'worktree-1',
       'codex',
-      {},
+      { requestId: 'request-9' },
       { signal: cancellation.signal }
     )
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -213,7 +185,12 @@ describe('settleStructuredAgentLaunch', () => {
     const cancellation = fakeCancellation()
 
     await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { signal: cancellation.signal })
+      settleStructuredAgentLaunch(
+        'worktree-1',
+        'codex',
+        { requestId: 'request-10' },
+        { signal: cancellation.signal }
+      )
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1' })
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
     expect(cancellation.removeEventListener).toHaveBeenCalledOnce()

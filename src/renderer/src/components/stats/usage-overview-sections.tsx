@@ -7,7 +7,7 @@ import type {
   UsageOverviewModel,
   UsageProviderOverview
 } from './usage-overview-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   0: 'border-border/60 bg-muted/40',
@@ -17,11 +17,48 @@ const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   4: 'border-border/60 bg-foreground/75'
 }
 
-function translateActivityLabel(label: UsageProviderOverview['activityLabel']): string {
-  if (label === 'turns') {
-    return translate('auto.components.stats.usage.overview.sections.c8f3a2d1e0b4', 'turns')
+function sessionCountLabel(sessions: number): string {
+  return translate(
+    'auto.components.stats.usage.overview.sections.sessionCount',
+    '{{formatted}} sessions',
+    {
+      count: sessions,
+      formatted: sessions.toLocaleString(getIntlLocale()),
+      defaultValue_one: '{{formatted}} session'
+    }
+  )
+}
+
+function activityCountLabel(provider: UsageProviderOverview): string {
+  const count = provider.activityCount
+  if (provider.activityLabel === 'turns') {
+    return translate(
+      'auto.components.stats.usage.overview.sections.turnCount',
+      '{{formatted}} turns',
+      {
+        count,
+        formatted: count.toLocaleString(getIntlLocale()),
+        defaultValue_one: '{{formatted}} turn'
+      }
+    )
   }
-  return translate('auto.components.stats.usage.overview.sections.d9a4b3e2f1c5', 'events')
+  return translate(
+    'auto.components.stats.usage.overview.sections.eventCount',
+    '{{formatted}} events',
+    {
+      count,
+      formatted: count.toLocaleString(getIntlLocale()),
+      defaultValue_one: '{{formatted}} event'
+    }
+  )
+}
+
+function providerSessionsSummary(provider: UsageProviderOverview): string {
+  return translate(
+    'auto.components.stats.usage.overview.sections.sessionsAndActivity',
+    '{{sessions}} - {{activity}}',
+    { sessions: sessionCountLabel(provider.sessions), activity: activityCountLabel(provider) }
+  )
 }
 
 function formatDayLabel(day: string): string {
@@ -29,7 +66,7 @@ function formatDayLabel(day: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
-  return parsed.toLocaleDateString(undefined, {
+  return parsed.toLocaleDateString(getIntlLocale(), {
     month: 'short',
     day: 'numeric'
   })
@@ -56,8 +93,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
       className: 'bg-border'
     }
   ]
-  // Why: Codex cached input is a subset of input. The overview model normalizes
-  // that into new/cache buckets so the visual mix does not double-count it.
+  // Codex cached input is already part of input; use normalized new/cache buckets to avoid double-counting.
   const mixTotal = segments.reduce((sum, segment) => sum + segment.value, 0)
 
   return (
@@ -101,7 +137,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
                   '{{value0}}: {{value1}} tokens',
                   {
                     value0: segment.label,
-                    value1: segment.value.toLocaleString()
+                    value1: segment.value.toLocaleString(getIntlLocale())
                   }
                 )}
               />
@@ -172,7 +208,7 @@ export function DailyIntensityGrid({
             aria-label={translate(
               'auto.components.stats.usage.overview.sections.32330a6e66',
               '{{value0}}: {{value1}} tokens',
-              { value0: day.day, value1: day.totalTokens.toLocaleString() }
+              { value0: day.day, value1: day.totalTokens.toLocaleString(getIntlLocale()) }
             )}
           />
         ))}
@@ -236,20 +272,15 @@ export function ProviderUsageRow({
 
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <span>
-          {formatUsageTokens(provider.totalTokens)}{' '}
-          {translate('auto.components.stats.usage.overview.sections.6762f6a682', 'tokens')}
-        </span>
-        <span>
           {translate(
-            'auto.components.stats.usage.overview.sections.a7f937fb29',
-            '{{value0}} sessions - {{value1}} {{value2}}',
+            'auto.components.stats.usage.overview.sections.tokenTotal',
+            '{{tokens}} tokens',
             {
-              value0: provider.sessions.toLocaleString(),
-              value1: provider.activityCount.toLocaleString(),
-              value2: translateActivityLabel(provider.activityLabel)
+              tokens: formatUsageTokens(provider.totalTokens)
             }
           )}
         </span>
+        <span>{providerSessionsSummary(provider)}</span>
         <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">

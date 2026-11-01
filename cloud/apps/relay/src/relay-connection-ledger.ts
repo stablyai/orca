@@ -146,6 +146,26 @@ export class RelayConnectionLedger {
     return this.reserveUpgrade(this.normalAdmissionLimit)
   }
 
+  // Bookings stop at the placement ceiling to preserve phone headroom below the socket ceiling.
+  tryReserveBooking(limit: number): { release(): void } | null {
+    if (!this.canReserveBooking(limit)) return null
+    this.advanceWatermark()
+    this.reservedConnectionUnits++
+    let released = false
+    return {
+      release: () => {
+        if (released) return
+        released = true
+        this.advanceWatermark()
+        this.reservedConnectionUnits--
+      }
+    }
+  }
+
+  canReserveBooking(limit: number): boolean {
+    return this.enforcedConnectionUnits + 1 <= Math.min(limit, this.normalAdmissionLimit)
+  }
+
   counts(): RelayConnectionLedgerCounts {
     return {
       physicalConnections: this.physicalConnections,

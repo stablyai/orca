@@ -1,27 +1,21 @@
 import type { ClassifiedError } from '../../shared/classified-error'
+import { classifiedCodeHostError as classified } from '../../shared/code-host-failure-copy'
 import { GlabNonListResponseError } from './glab-api-response'
 
-// Why: glab CLI surfaces API errors as unstructured stderr. Map known
-// patterns to typed errors so callers can show user-friendly messages.
 export function classifyGlabError(stderr: string): ClassifiedError {
   const s = stderr.toLowerCase()
+  const trimmed = stderr.trim()
   if (s.includes('http 403') || s.includes('forbidden') || s.includes('insufficient_scope')) {
-    return {
-      type: 'permission_denied',
-      message: "You don't have permission to edit this issue. Check your GitLab token scopes."
-    }
+    return classified('permission_denied', 'gitlab.issuePermissionDenied')
   }
   if (s.includes('http 404') || s.includes('project not found')) {
-    return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
+    return classified('not_found', 'issueNotFound')
   }
   if (s.includes('http 422') || s.includes('unprocessable')) {
-    return { type: 'validation_error', message: `Invalid update — ${stderr.trim()}` }
+    return classified('validation_error', 'invalidUpdate', trimmed)
   }
   if (s.includes('rate limit') || s.includes('http 429')) {
-    return {
-      type: 'rate_limited',
-      message: 'GitLab rate limit hit. Try again in a few minutes.'
-    }
+    return classified('rate_limited', 'gitlab.rateLimited')
   }
   if (
     s.includes('timeout') ||
@@ -29,15 +23,14 @@ export function classifyGlabError(stderr: string): ClassifiedError {
     s.includes('network') ||
     s.includes('could not resolve host')
   ) {
-    return { type: 'network_error', message: 'Network error — check your connection.' }
+    return classified('network_error', 'networkError')
   }
-  return { type: 'unknown', message: `Failed to update issue: ${stderr.trim()}` }
+  return classified('unknown', 'issueUpdateFailed', trimmed)
 }
 
 const LIST_READ_FAILURE = 'Failed to load issues'
 
-// Why: classifyGlabError's copy is phrased for edit/update operations; list
-// issues is a read op, so rewrite messages for read-context banners.
+// Reuse classification with read-specific copy for listing banners.
 export function classifyListIssuesError(stderr: string): ClassifiedError {
   const c = classifyGlabError(stderr)
   const trimmed = stderr.trim()
@@ -54,8 +47,7 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
   return { type: c.type, message: readMessages[c.type] }
 }
 
-// Why: an opaque response body is content, not a diagnostic — substring-matching it would render
-// an MR titled "fix network timeout" as "check your connection" and discard the body.
+// Opaque content is not diagnostic; a title mentioning network timeout must not replace its body.
 export function classifyListFetchError(err: unknown): ClassifiedError {
   if (err instanceof GlabNonListResponseError) {
     return { type: 'unknown', message: `${LIST_READ_FAILURE}: ${err.message}` }
@@ -63,37 +55,29 @@ export function classifyListFetchError(err: unknown): ClassifiedError {
   return classifyListIssuesError(err instanceof Error ? err.message : String(err))
 }
 
-// Why: a job trace is a read on a pipeline job, so classifyGlabError's issue-edit
-// copy ("permission to edit this issue") would land verbatim on a Checks row.
+// Job-trace errors need Checks copy rather than issue-edit wording.
 export function classifyJobLogError(stderr: string): ClassifiedError {
   const c = classifyGlabError(stderr)
   const trimmed = stderr.trim()
-  const logMessages: Record<ClassifiedError['type'], string> = {
-    permission_denied:
-      "You don't have permission to read this job's log. Check your GitLab token scopes.",
+  switch (c.type) {
+    case 'permission_denied':
+      return classified(c.type, 'gitlab.jobLogPermissionDenied')
     // A missing log is already reported as an empty log, so a 404 that reaches here
     // means the project itself is gone or invisible to this token.
-    not_found: "Could not find this job's GitLab project.",
-    issues_disabled: `Failed to load the job log: ${trimmed}`,
-    validation_error: `Invalid request — ${trimmed}`,
-    rate_limited: 'GitLab rate limit hit. Try again in a few minutes.',
-    network_error: 'Network error — check your connection.',
-    unknown: `Failed to load the job log: ${trimmed}`
+    case 'not_found':
+      return classified(c.type, 'gitlab.jobProjectNotFound')
+    case 'validation_error':
+      return classified(c.type, 'invalidRequest', trimmed)
+    case 'issues_disabled':
+    case 'unknown':
+      return classified(c.type, 'gitlab.jobLogFailed', trimmed)
+    case 'rate_limited':
+    case 'network_error':
+      return c
   }
-  return { type: c.type, message: logMessages[c.type] }
 }
 
-/**
- * Whether a failed trace fetch means "this job has no log", not "the fetch broke".
- *
- * GitLab 404s the trace endpoint for a job canceled before it started and for a log
- * that was erased or expired. A missing *project* is a real failure, and GitLab also
- * masks unauthorized projects as 404, so keep that one an error.
- *
- * Deliberately broad: GitLab returns the same bare 404 for an unknown job id, so a
- * stale/foreign id reads as an empty log rather than an error. Losing that diagnostic
- * beats pinning "not found" on every job that was canceled before it produced a log.
- */
+/** Missing/erased traces return empty logs, including ambiguous job 404s; explicit project failures remain errors. */
 export function isMissingJobLogError(stderr: string): boolean {
   return classifyGlabError(stderr).type === 'not_found' && !/project\s+not\s+found/i.test(stderr)
 }

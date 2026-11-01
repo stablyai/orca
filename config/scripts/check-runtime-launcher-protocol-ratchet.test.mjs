@@ -15,7 +15,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
 const repos = []
-const LAUNCHER = 'src/main/ssh/orcad-remote-runtime.ts'
+const LAUNCHER = 'src/main/managed-server/install/orcad-remote-runtime.ts'
 
 function git(repo, args) {
   return execFileSync('git', args, {
@@ -78,6 +78,7 @@ afterEach(() => {
 
 describe('RUNTIME_LAUNCHER_PATHS', () => {
   it('names only files that exist, so a rename cannot silently drop one from the gate', () => {
+    expect(RUNTIME_LAUNCHER_PATHS).toContain(LAUNCHER)
     expect(RUNTIME_LAUNCHER_PATHS.filter((path) => !existsSync(join(repoRoot, path)))).toEqual([])
   })
 })

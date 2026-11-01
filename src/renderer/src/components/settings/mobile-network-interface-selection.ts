@@ -12,13 +12,11 @@ export type MobileNetworkInterface = {
 export function selectRefreshedNetworkAddress(
   currentAddress: string | undefined,
   interfaces: readonly MobileNetworkInterface[],
-  // Why: callers that explicitly know the user picked a manual address
-  // (not an OS-enumerated one) pass this so the refresh path keeps their
-  // selection instead of snapping back to a tailnet/LAN fallback.
+  // Preserve explicitly manual addresses through refresh instead of snapping to discovered tailnet/LAN defaults.
   currentAddressIsManual: boolean = false,
   currentAddressWasExplicitlySelected: boolean = false
 ): string | undefined {
-  // Why: transient discovery failure must not clobber a deliberate user choice.
+  // Transient discovery failure must preserve deliberate user choices.
   if (interfaces.length === 0) {
     return currentAddressIsManual || currentAddressWasExplicitlySelected
       ? currentAddress
@@ -35,7 +33,6 @@ export function selectRefreshedNetworkAddress(
   ) {
     return currentAddress
   }
-  // Why: shared with main so the picker never shows a default the QR didn't advertise. Undefined on
-  // a bridge-only host: Relay pairs without a direct address rather than offering an unreachable one.
+  // Share main’s default so picker/QR agree; bridge-only hosts omit direct addresses and pair through Relay.
   return selectAutoAdvertisedPairingAddress(interfaces)
 }

@@ -1,9 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
-import { extractGrokContentText, parseGrokSessionFile } from './session-scanner-grok-parser'
+import { parseGrokSessionFile } from './session-scanner-grok-parser'
+import type { TranscriptMessage } from './session-transcript-consumers'
 
 let tempRoots: string[] = []
 
@@ -13,43 +14,99 @@ afterEach(async () => {
 })
 
 describe('AI Vault Grok session parser', () => {
-  it('extracts bounded user_query text without trimming the full body', () => {
-    const trimSpy = vi.spyOn(String.prototype, 'trim')
-    const result = extractGrokContentText(
-      `<USER_INFO>context</USER_INFO><USER_QUERY>\n${'Grok prompt '.repeat(400)}</USER_QUERY>`
-    )
-    const trimCalls = trimSpy.mock.calls.length
-    trimSpy.mockRestore()
+  it.each([false, true])(
+    'bounds preview scanning while preserving full turns with capture %s',
+    async (active) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-grok-preview-budget-'))
+      tempRoots.push(root)
+      const path = join(root, 'summary.json')
+      await writeFile(path, JSON.stringify({ info: { id: 'grok-preview-budget' } }))
+      const hidden = `<system-reminder>${'x'.repeat(4057)}</system-reminder>`
+      const text = `${hidden}ask😀tail`
+      const userText = `ask${' '.repeat(4093)}tail`
+      const turns = [
+        { type: 'user', content: `<user_query>${userText}</user_query>` },
+        { type: 'assistant', content: text },
+        {
+          type: 'assistant',
+          content: [
+            { type: 'text', text: ' '.repeat(2048) },
+            { type: 'text', text: `${' '.repeat(2048)}outside preview budget` }
+          ]
+        }
+      ]
+      await writeFile(
+        join(root, 'chat_history.jsonl'),
+        turns.map((turn) => JSON.stringify(turn)).join('\n')
+      )
+      const messages: TranscriptMessage[] = []
+      const session = await withFullFirstUserPromptCapture(() =>
+        parseGrokSessionFile(
+          { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
+          'linux',
+          { active, push: (message) => messages.push(message) }
+        )
+      )
 
-    // stripGrokUserQueryEnvelope trims the body once; the fold must never trim
-    // per character (the input here is 4800+ chars).
-    expect(trimCalls).toBeGreaterThan(0)
-    expect(trimCalls).toBeLessThan(20)
-    expect(result?.startsWith('Grok prompt Grok prompt')).toBe(true)
-    expect(result?.endsWith('...')).toBe(true)
-    expect(result).not.toContain('USER_QUERY')
-    expect(result).not.toContain('USER_INFO')
-  })
+      expect(session?.previewMessages.map((message) => message.text)).toEqual(['ask', 'ask'])
+      expect(session?.firstUserPrompt).toBe(userText)
+      expect(messages).toEqual(
+        active
+          ? [
+              { role: 'user', text: userText, timestamp: null },
+              { role: 'assistant', text, timestamp: null },
+              {
+                role: 'assistant',
+                text: `${' '.repeat(2048)}\n${' '.repeat(2048)}outside preview budget`,
+                timestamp: null
+              }
+            ]
+          : []
+      )
+    }
+  )
 
-  it('folds Grok array content without joining all text parts', () => {
-    const result = extractGrokContentText([
-      { type: 'text', text: 'Grok array '.repeat(80) },
-      { type: 'text', text: 'tail' }
-    ])
-
-    expect(result?.startsWith('Grok array Grok array')).toBe(true)
-    expect(result?.endsWith('...')).toBe(true)
-  })
-
-  it('drops an astral char straddling the preview scan cap instead of splitting it', () => {
-    // Hidden context is skipped by the fold, so the 4096-code-unit scan cap lands
-    // mid-emoji while the visible text stays well under the 220-char preview cap.
-    const hidden = `<system-reminder>${'x'.repeat(4057)}</system-reminder>`
-    const result = extractGrokContentText(`${hidden}ask😀tail`)
-
-    expect(hidden).toHaveLength(4092)
-    expect(result).toBe('ask')
-  })
+  it.each([5000, 256 * 1024 + 1])(
+    'publishes %i-character Grok turns before preview limits',
+    async (length) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-grok-transcript-'))
+      tempRoots.push(root)
+      const path = join(root, 'summary.json')
+      await writeFile(path, JSON.stringify({ info: { id: 'grok-transcript' } }))
+      const text = 'x'.repeat(length)
+      await writeFile(
+        join(root, 'chat_history.jsonl'),
+        [
+          { type: 'user', content: '<user_info>bootstrap</user_info>' },
+          {
+            type: 'user',
+            content: `<user_info>hidden</user_info><user_query>${text}</user_query>`
+          },
+          { type: 'assistant', content: text },
+          { type: 'assistant', content: [{ type: 'text', text }] }
+        ]
+          .map((line) => JSON.stringify(line))
+          .join('\n')
+      )
+      const messages: TranscriptMessage[] = []
+      const session = await parseGrokSessionFile(
+        { path, mtimeMs: 1, modifiedAt: '2026-05-01T00:00:00.000Z' },
+        'linux',
+        { active: true, push: (message) => messages.push(message) }
+      )
+      expect(messages).toEqual(
+        ['user', 'assistant', 'assistant'].map((role) => ({
+          role,
+          text: text.slice(0, 256 * 1024),
+          timestamp: null,
+          ...(length > 256 * 1024 ? { textTruncated: true } : {})
+        }))
+      )
+      expect(session?.previewMessages.map((message) => message.text.length)).toEqual([
+        220, 220, 220
+      ])
+    }
+  )
 
   it('stores the unwrapped user_query as firstUserPrompt under full capture', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-grok-first-'))

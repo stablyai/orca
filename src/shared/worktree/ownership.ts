@@ -73,8 +73,7 @@ function appendWorkspaceLayouts(
   target: OrcaWorkspaceLayout[],
   source: readonly OrcaWorkspaceLayout[]
 ): void {
-  // Why: workspace history is persisted user data and can grow large enough
-  // for `push(...source)` to exceed the JavaScript call argument limit.
+  // Persisted workspace history can exceed the argument limit of push(...source).
   for (const layout of source) {
     target.push(layout)
   }
@@ -121,9 +120,7 @@ export function classifyWorktreeOwnership(args: {
     return 'orca-managed'
   }
 
-  // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
-  // plumbing, not workspaces; classify before layout heuristics (#9388). Both
-  // matchers exempt a base this project explicitly configured (#15232).
+  // Classify tool scratch before layout heuristics; explicitly configured project bases remain exempt (#9388, #15232).
   if (
     args.worktreeVisibilitySourceMatcher?.(args.worktree.path)?.kind === 'built-in' ||
     (args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
@@ -150,8 +147,7 @@ export function classifyWorktreeOwnership(args: {
   }
 
   if (canClassifyAsExternal(args.worktree.path, args.knownOrcaLayouts)) {
-    // Why: a plain `git worktree add` can target Orca's nested workspace
-    // folder. Only metadata proves Orca created it.
+    // An Orca-shaped path alone cannot prove creation; users can git worktree add there.
     return 'external'
   }
 

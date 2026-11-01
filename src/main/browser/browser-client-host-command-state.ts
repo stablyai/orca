@@ -4,6 +4,11 @@ import type {
   BrowserClientHostLeaseAuthority
 } from '../../shared/browser-client-host-protocol'
 
+import {
+  BROWSER_COMMAND_CACHE_MAX_BYTES,
+  BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
+} from './browser-command-cache-bytes'
+
 export const DEFAULT_MAX_PAGES = 256
 export const DEFAULT_MAX_ACTIVE_COMMANDS = 256
 export const DEFAULT_MAX_CONCURRENT_HANDLERS = 8
@@ -52,6 +57,8 @@ export type DispatcherOptions = {
   maxQueuedCommandsPerPage?: number
   maxCachedResultsPerPage?: number
   maxCachedCommandResults?: number
+  maxCachedResultBytes?: number
+  maxCachedResultBytesPerPage?: number
   joinTimeoutMs?: number
 }
 
@@ -62,6 +69,8 @@ export type DispatcherLimits = {
   maxQueuedCommandsPerPage: number
   maxCachedResultsPerPage: number
   maxCachedCommandResults: number
+  maxCachedResultBytes: number
+  maxCachedResultBytesPerPage: number
   joinTimeoutMs: number
 }
 
@@ -84,6 +93,14 @@ export function resolveDispatcherLimits(options: DispatcherOptions): DispatcherL
     maxCachedCommandResults: positiveCommandLimit(
       options.maxCachedCommandResults,
       DEFAULT_MAX_CACHED_COMMAND_RESULTS
+    ),
+    maxCachedResultBytes: positiveCommandLimit(
+      options.maxCachedResultBytes,
+      BROWSER_COMMAND_CACHE_MAX_BYTES
+    ),
+    maxCachedResultBytesPerPage: positiveCommandLimit(
+      options.maxCachedResultBytesPerPage,
+      BROWSER_COMMAND_CACHE_MAX_BYTES_PER_PAGE
     ),
     joinTimeoutMs: positiveCommandLimit(options.joinTimeoutMs, DEFAULT_JOIN_TIMEOUT_MS)
   }
@@ -124,6 +141,9 @@ export function createPageState(browserPageId: string, generation: number): Page
 function snapshotPageCommand(
   command: BrowserClientHostCommandEvent['command']
 ): BrowserClientHostCommandEvent['command'] {
+  if (command.type === 'switchProfile') {
+    return Object.freeze({ ...command, profile: Object.freeze({ ...command.profile }) })
+  }
   if (command.type === 'reclaimPage') {
     return Object.freeze({
       ...command,

@@ -55,7 +55,6 @@ describe('useWorkspaceRevealBodyRedirect', () => {
     expect(mocks.setSidebarBody).toHaveBeenCalledWith('workspaces')
     expect(seen).toEqual([])
 
-    // The worktree list mounts (and registers its listener) when the body flips.
     window.addEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, listener)
     act(() => {
       root.render(<Host agentsBodyShowing={false} />)

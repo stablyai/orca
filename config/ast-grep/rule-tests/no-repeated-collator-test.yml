@@ -1,0 +1,18 @@
+id: no-repeated-collator
+valid:
+  - |
+    const collator = new Intl.Collator(locale, options)
+    rows.sort((a, b) => collator.compare(a.name, b.name) || a.id.localeCompare(b.id))
+  - rows.toSorted(collator.compare)
+  - "const equal = a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0"
+  - rows.map((a) => new Intl.Collator(a.locale))
+  - |
+    rows.sort((a, b) => {
+      function deferred() { return new Intl.Collator(locale) }
+      return a - b
+    })
+invalid:
+  - "rows.sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: 'base' }))"
+  - "rows.toSorted(function (a, b) { return new Intl.Collator('sv').compare(a, b) })"
+  - "rows['sort']((a, b) => Intl.Collator('en', { numeric: true }).compare(a, b))"
+  - "rows.sort((a, b) => a['localeCompare'](b, undefined, options))"

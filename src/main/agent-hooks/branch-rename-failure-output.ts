@@ -3,10 +3,7 @@ import {
   type AgentGenerationFailureOutput
 } from '../text-generation/agent-failure-output'
 
-// Why: the full CLI output is a diagnostic for the local user only. Keeping it
-// in memory (never in worktree metadata) means nothing environment-identifying
-// is persisted or synced to paired clients; a restart just loses the on-demand
-// view while the sanitized excerpt badge survives.
+// Keep full CLI diagnostics local and ephemeral; persist only the sanitized failure badge.
 const MAX_ENTRIES = 32
 const entriesByWorktreeId = new Map<string, AgentGenerationFailureOutput>()
 
@@ -14,8 +11,7 @@ export function rememberBranchRenameFailureOutput(
   worktreeId: string,
   output: AgentGenerationFailureOutput | null | undefined
 ): void {
-  // Delete-then-set keeps insertion order as recency so eviction drops the
-  // stalest worktree first.
+  // Refresh insertion order so eviction removes the least recently updated worktree.
   entriesByWorktreeId.delete(worktreeId)
   if (!output) {
     return

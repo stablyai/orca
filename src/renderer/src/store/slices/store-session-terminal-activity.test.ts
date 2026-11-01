@@ -3,10 +3,8 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, makeWorktree, makeTab } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -284,7 +282,7 @@ describe('terminal slice behaviors', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
-  // Why: a click's fresh spawn on dead-PTY tabs would bump activity and float the worktree up Recent; pendingActivationSpawn prevents it (PR 310e9daf).
+  // Activation-driven fresh spawns must not stamp activity and move Recent ordering (PR 310e9daf).
   it('does not bump lastActivityAt when a click-driven fresh spawn follows setActiveWorktree', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -332,10 +330,8 @@ describe('terminal slice behaviors', () => {
     })
 
     store.getState().setActiveWorktree(worktreeId)
-    // The allDead generation bump tagged the tab with pendingActivationSpawn.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
-    // Simulate the fresh spawn coming back from TerminalPane's remount.
     store.getState().updateTabPtyId('tab-1', 'pty-fresh')
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
@@ -400,7 +396,7 @@ describe('terminal slice behaviors', () => {
     expect(tab.pendingActivationSpawn).toBe(true)
   })
 
-  // Why: first activation tags every tab (even live-looking ptyIds, since reconnect may repopulate before mount); re-activation must not re-tag or it drops later spawns.
+  // First activation tags even live-looking PTYs restored before mount; reactivation must not suppress later real spawns.
   it('tags on first activation but not on re-activation', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -438,11 +434,9 @@ describe('terminal slice behaviors', () => {
       activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
     })
 
-    // First activation: tabs get tagged even though tab.ptyId is non-null.
     store.getState().setActiveWorktree(worktreeId)
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
-    // updateTabPtyId from the pane mount consumes the tag.
     store.getState().updateTabPtyId('tab-1', 'pty-live')
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
 
@@ -452,7 +446,7 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
-  // Why: re-activating dead-PTY worktrees triggers the allDead respawn (a click side-effect, not activity) that first-activation tagging misses, so tag it too.
+  // Reactivation can respawn dead PTYs too; tag these click-driven spawns to preserve Recent ordering.
   it('does not bump lastActivityAt when a re-activation respawns dead PTYs', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -501,7 +495,7 @@ describe('terminal slice behaviors', () => {
     })
 
     store.getState().setActiveWorktree(worktreeId)
-    // The allDead generation bump must tag the tab so the click-driven respawn is suppressed, even on a non-first activation.
+    // Reactivation’s allDead respawn must also suppress click-driven activity.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
     const sortEpochBeforeSpawn = store.getState().sortEpoch
@@ -510,7 +504,6 @@ describe('terminal slice behaviors', () => {
     store.getState().clearTabPtyId('tab-1', 'wake-hint-session')
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
-    // Simulate the fresh spawn coming back from TerminalPane's remount.
     store.getState().updateTabPtyId('tab-1', 'pty-fresh')
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
@@ -621,7 +614,6 @@ describe('terminal slice behaviors', () => {
           })
         ]
       },
-      // No tabs yet — a fresh worktree visited for the first time this session.
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       activeWorktreeId: worktreeId
@@ -634,7 +626,6 @@ describe('terminal slice behaviors', () => {
 
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBe(true)
 
-    // PTY comes back from the newly-mounted TerminalPane.
     store.getState().updateTabPtyId(newTab.id, 'pty-fresh')
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
@@ -644,7 +635,6 @@ describe('terminal slice behaviors', () => {
         updates: expect.objectContaining({ lastActivityAt: expect.any(Number) })
       })
     )
-    // Flag is consumed — later legitimate respawns still bump.
     expect(store.getState().tabsByWorktree[worktreeId][0].pendingActivationSpawn).toBeUndefined()
   })
 
@@ -685,7 +675,5 @@ describe('terminal slice behaviors', () => {
     )
   })
 })
-
-// ─── Reconnect persisted terminals ──────────────────────────────────
 
 // Mock pty-transport's eager buffer registration

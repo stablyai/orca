@@ -32,8 +32,7 @@ export function useWorkspaceKanbanAreaSelection({
   const dragRef = useRef<AreaSelectionDragState | null>(null)
   const updateSelectionForAreaRef = useRef(updateSelectionForArea)
 
-  // Why: pointer handlers are stable while selection commits must call the
-  // latest board-selection updater before the next event can fire.
+  // Stable pointer handlers must read the latest selection updater before the next event.
   updateSelectionForAreaRef.current = updateSelectionForArea
 
   const cancelAreaSelectionDrag = useCallback(() => {
@@ -66,8 +65,7 @@ export function useWorkspaceKanbanAreaSelection({
 
     state.started = true
 
-    // Why: deferred card mount can start a marquee against empty rects; pick up
-    // virtual layout once lanes register without waiting for a scroll event.
+    // Deferred card mounting needs fresh virtual layout before any scroll event occurs.
     if (state.cardRects.length === 0) {
       const board = boardRef.current
       if (board) {
@@ -142,8 +140,7 @@ export function useWorkspaceKanbanAreaSelection({
     if (!state || state.frameId !== null) {
       return
     }
-    // Why: the hot path stays imperative and frame-throttled so a Notion-like
-    // marquee drag does not re-render every workspace card on pointermove.
+    // Keep marquee movement imperative and frame-throttled to avoid rerendering every card per event.
     state.frameId = window.requestAnimationFrame(flushAreaSelectionDrag)
   }, [flushAreaSelectionDrag])
 
@@ -301,9 +298,7 @@ export function useWorkspaceKanbanAreaSelection({
       if (board && target instanceof Node && !board.contains(target)) {
         return
       }
-      // Why: lane scrolling changes every card's viewport rect while the drag
-      // is still active. Refresh before the next hit-test so selection follows
-      // the scrolled content instead of stale pointer-down measurements.
+      // Lane scrolling moves card viewport rects; refresh them before the next hit-test.
       refreshAreaSelectionMeasurements()
       scheduleAreaSelectionDragFlush()
     }

@@ -1,10 +1,11 @@
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { getBaseRefDefault, getRecentDriftSubjects, getRemoteDrift } from '../git/repo'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../project-runtime-git-options'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from './runtime-store-contract'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
@@ -12,7 +13,7 @@ const DRIFT_PROBE_SUBJECT_LIMIT = 5
 
 export async function probeRuntimeWorktreeDrift(args: {
   selector: string
-  store: Store | null
+  store: RuntimeStore | null
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
   resolveRemoteTrackingBase: (
     repoPath: string,
@@ -26,7 +27,7 @@ export async function probeRuntimeWorktreeDrift(args: {
     return null
   }
   const repo = args.store.getRepos().find((candidate: Repo) => candidate.id === worktree.repoId)
-  if (!repo || repo.connectionId) {
+  if (!repo || getRepoRoutingConnectionId(repo)) {
     return null
   }
   const gitExecOptions = getLocalProjectGitExecOptions(args.store, repo)

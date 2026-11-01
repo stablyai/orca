@@ -24,7 +24,7 @@ describe('buildCommitMessagePrompt', () => {
     expect(prompt).not.toContain('Additional user prompt:')
   })
 
-  it('keeps a custom prompt in a separate bounded section', () => {
+  it('keeps a custom prompt in a separate section', () => {
     const prompt = buildCommitMessagePrompt(
       {
         branch: null,

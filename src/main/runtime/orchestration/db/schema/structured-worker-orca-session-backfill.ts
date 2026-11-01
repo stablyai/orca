@@ -2,15 +2,17 @@ import type Database from '../../../../sqlite/sync-database'
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
+  isStructuredWorkerHandle
+} from '../../../../../shared/structured-worker-handle'
+import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
-  isStructuredWorkerHandle,
   sessionIdFromStructuredWorkerIncarnation
 } from '../../../structured-worker-identity'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../runs/run-coordinator-orca-session'
 
 const CURRENT_COORDINATOR_ORCA_SESSION_ID_SQL = currentRunCoordinatorOrcaSessionIdSql('runs')
 
-// GLOB is a case-sensitive prefix filter; the canonical predicates still decide every row.
+// GLOB narrows by case-sensitive prefix; canonical identity predicates still decide.
 const HANDLE_GLOB = `${STRUCTURED_WORKER_HANDLE_PREFIX}*`
 const INCARNATION_GLOB = `${STRUCTURED_WORKER_INCARNATION_PREFIX}*`
 
@@ -21,19 +23,8 @@ const RECORDED_WORKER_SESSIONS_SQL = `
   SELECT terminal_handle, process_incarnation FROM worker_terminal_resources
   WHERE terminal_handle GLOB ? AND process_incarnation GLOB ?`
 
-/**
- * Fills the Orca session id on rows that provably belong to a structured worker session and have
- * none: a `structured:<sessionId>` process incarnation, or a `structworker_` handle this host
- * recorded against such an incarnation. Every other row stays NULL, PTY rows included, and evidence
- * naming more than one session proves none. Pane keys are never read: a pane outlives the agent in it.
- *
- * Both markers are minted only for a local, non-WSL session (`structuredWorkerHostScope`), so the
- * rows carrying them were written by this host.
- *
- * Runs after migrate on every open, not only once at v42: a binary rolled back past v42 keeps
- * writing structured-worker rows without an Orca session id after user_version is already 42. It
- * fills only rows with no id that counts, so an id a writer recorded is never rewritten.
- */
+/** Backfill only unambiguous local non-WSL structured incarnation evidence, never pane identity or a current recorded id.
+ * Repeat on every open because rollback writers can omit these columns after the v42 stamp. */
 export function backfillStructuredWorkerOrcaSessionIds(db: Database.Database): void {
   let recordedSessions: Map<string, Set<string>> | undefined
   const orcaSessionIdFor = (handle: unknown, incarnation: unknown): string | null => {
@@ -94,7 +85,7 @@ export function backfillStructuredWorkerOrcaSessionIds(db: Database.Database): v
     }
   }
 
-  // A coordinator id left at an older generation counts as none, so the handle's session fills it.
+  // An old-generation coordinator id is stale; backfill from the handle's proven session.
   const coordinators = db
     .prepare(
       `SELECT id, coordinator_handle FROM runs

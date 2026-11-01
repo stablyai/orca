@@ -1,18 +1,6 @@
-/**
- * Decide whether a git invocation is a plain read that can run without a shell.
- *
- * Why: WSL-routed git otherwise goes through the distro user's interactive login
- * shell, purely to inherit their PATH. That shell also runs the distro's rc/motd
- * and writes it to the stdout callers parse. Reads need none of it -- the direct
- * route supplies PATH and HOME explicitly and starts no shell at all.
- *
- * Writes and network operations stay on the login shell: they can depend on
- * credential helpers, ssh-agent and other environment only the user's profile
- * sets up.
- */
+/** Run WSL Git reads directly with explicit PATH/HOME so login-shell rc/motd cannot corrupt parsed stdout.
+ * Writes/network retain the login shell for profile-provided credential helpers, ssh-agent and environment. */
 
-// Subcommands that only ever read. `status` is here for completeness; its
-// callers already opted in explicitly.
 const ALWAYS_READ_SUBCOMMANDS = new Set([
   'blame',
   'cat-file',
@@ -83,9 +71,7 @@ function hasBranchMutationFlag(args: readonly string[]): boolean {
   })
 }
 
-// Read markers that must be the *first non-flag* argument, i.e. the action.
-// Position matters here: matching them anywhere would read `worktree remove list`
-// as a listing, because a worktree may legitimately be named "list".
+// Match actions only at the first non-flag argument; worktree remove list may delete a worktree named list.
 const READ_ACTION_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   remote: new Set(['get-url']),
   submodule: new Set(['status']),
@@ -95,11 +81,22 @@ const READ_ACTION_SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
 // Subcommands whose action-less form only lists (`git remote`, `git submodule`).
 const BARE_FORM_IS_READ = new Set(['remote', 'submodule'])
 
-/** Leading `-c key=value` / `--git-dir=...` style options precede the subcommand. */
+export const GIT_GLOBAL_OPTIONS_WITH_VALUE: ReadonlySet<string> = new Set([
+  '-c',
+  '-C',
+  '--git-dir',
+  '--work-tree',
+  '--namespace',
+  '--super-prefix',
+  '--config-env',
+  '--exec-path'
+])
+
+/** Leading global options and their values precede the subcommand. */
 export function findGitSubcommandIndex(args: readonly string[]): number {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === '-c' || arg === '-C') {
+    if (GIT_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
       continue
     }
@@ -140,8 +137,7 @@ export function isWslDirectGitReadCommand(args: readonly string[]): boolean {
     if (!action) {
       return BARE_FORM_IS_READ.has(subcommand)
     }
-    // `remote show` queries the transport unless -n is given, so the queried
-    // form has to keep the profile's SSH and credential setup.
+    // remote show queries the transport without -n, requiring profile SSH/credential setup.
     if (subcommand === 'remote' && action === 'show') {
       return rest.includes('-n')
     }

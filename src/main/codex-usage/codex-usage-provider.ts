@@ -1,21 +1,14 @@
 import type { UsageProvider } from '../usage/usage-provider-contract'
 import { scanCodexUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
-import type { CodexUsageDailyAggregate, CodexUsagePersistedFile, CodexUsageSession } from './types'
+import type { CodexUsageDailyAggregate, CodexUsageSession } from './types'
 
-// Why: v5 keys Codex ownership on raw token_count identity without session id
-// so forks that rewrite session_meta still match. Older caches used session-
-// scoped keys and can double-count after fork/resume (#8006).
-// v6 adds per-request long-context token counts, which older rows cannot be backfilled with.
-export const CODEX_USAGE_SCHEMA_VERSION = 6
+// Rescan older caches: v5 deduplicates forks across sessions; v6 adds per-request long-context counts;
+// v7 keys fork copies on turn id because forks rewrite copied timestamps.
+export const CODEX_USAGE_SCHEMA_VERSION = 7
 
 export const codexUsageProvider = {
   id: 'codex',
   label: 'Codex',
   schemaVersion: CODEX_USAGE_SCHEMA_VERSION,
   scan: scanCodexUsageFilesViaWorker
-} satisfies UsageProvider<
-  'processedFiles',
-  CodexUsagePersistedFile,
-  CodexUsageSession,
-  CodexUsageDailyAggregate
->
+} satisfies UsageProvider<CodexUsageSession, CodexUsageDailyAggregate>

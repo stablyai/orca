@@ -61,8 +61,7 @@ export function useMobilePairingAddressPreference(args: {
       if (nextAddress === selectedAddressRef.current) {
         return
       }
-      // Why: the first resolution picks the same default main already minted
-      // with, so invalidating there would drop a QR that is still correct.
+      // The first default resolution matches main’s minted address; invalidating would discard a valid QR.
       const hadSelection = selectedAddressRef.current !== undefined
       selectedAddressRef.current = nextAddress
       selectedAddressIsManualRef.current = false

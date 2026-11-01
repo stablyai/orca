@@ -21,6 +21,7 @@ import type {
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import type { LocalAiVaultScanProgressHandle } from './ai-vault-local-scan-progress'
 
 // Let forced refreshes retry after a local service circuit opens.
 export function clearAiVaultBackgroundRestartCircuit(): void {
@@ -29,9 +30,10 @@ export function clearAiVaultBackgroundRestartCircuit(): void {
 
 export function scanAiVaultSessionsInBackground(
   options: AiVaultServiceScanOptions,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  progress?: LocalAiVaultScanProgressHandle
 ): Promise<AiVaultListResult> {
-  return scanAiVaultSessionsInService(options, signal)
+  return scanAiVaultSessionsInService(options, signal, progress)
 }
 
 export function resolveAiVaultSessionTitlesInBackground(

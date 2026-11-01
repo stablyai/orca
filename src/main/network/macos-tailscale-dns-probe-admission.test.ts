@@ -76,7 +76,6 @@ describe('macOS DNS probe admission', () => {
 
     vi.mocked(Date.now).mockReturnValue(301_000)
     expect(withMacTailscaleDnsHint('permission denied')).toBe('permission denied')
-    // The invariant is the resolver state the next relevant error reports, not the probe count.
     expect(withMacTailscaleDnsHint('ENOTFOUND')).toBe('ENOTFOUND')
   })
 
@@ -133,7 +132,6 @@ describe('macOS DNS probe admission', () => {
   it('does not append or re-probe for a message that already carries the hint', () => {
     const hinted = withMacTailscaleDnsHint('Codex failed.', 'ENOTFOUND')
     expect(execFileSync).toHaveBeenCalledOnce()
-    // Past the cache window, so a second probe would run if the hint were re-admitted.
     vi.mocked(Date.now).mockReturnValue(301_000)
 
     expect(withMacTailscaleDnsHint(hinted, 'ENOTFOUND')).toBe(hinted)

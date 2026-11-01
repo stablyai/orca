@@ -9,14 +9,7 @@ type SessionTabsRepublisher = {
 
 type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
 
-/**
- * Republish `session.tabs` whenever a pane's status row changes.
- *
- * Every producer — hook posts, the relay receivers, and main's own OSC parse — lands in the
- * store, so this is the one signal that a pane's published projection is out of date. Nothing
- * else republishes on a status-only transition, so a paired client would otherwise keep the
- * pane's last projection until an unrelated PTY touch came along (#7970).
- */
+/** Status-only changes need session.tabs republishing even without PTY activity. */
 export function installHookStatusSessionTabsRepublish(
   statusStore: StatusStore,
   getRuntime: () => SessionTabsRepublisher | null | undefined

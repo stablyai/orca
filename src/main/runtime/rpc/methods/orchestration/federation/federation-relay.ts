@@ -1,4 +1,5 @@
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
+import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
 import { importFederatedControlMessage } from '../../../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
@@ -16,6 +17,7 @@ import {
 export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   defineMethod({
     name: 'orchestration.federationPull',
+    permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -37,6 +39,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationAck',
+    permission: 'workspace',
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -75,6 +78,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
         dispatchId: params.dispatchId,
         direction: 'to_home',
         throughSequence: params.throughSequence,
+        armAutoRelease: params.autoRelease === true,
         ...(settlements.length === 0
           ? {}
           : {
@@ -101,6 +105,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.federationImport',
+    permission: 'workspace',
     params: FederationImportParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       const db = runtime.getOrchestrationDb()
@@ -140,7 +145,10 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             answerMessageId: reply.answerMessageId,
             body: reply.body
           })
-          runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, 'status')
+          deliverQuestionAnswer(runtime, {
+            message_id: reply.questionId,
+            dispatch_id: params.dispatchId
+          })
         } else if (item.kind === 'control_message') {
           if (
             currentAttachment.protocol_version <

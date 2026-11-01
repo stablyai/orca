@@ -4,12 +4,14 @@ import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web
 import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
 import { loadHosts } from '../transport/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { ListGroup, SectionHeader } from '../components/list/ListGroup'
 
 type Line = { readonly hostId: string; readonly text: string }
 
-/** The newest recorded failure of each host still paired, in the host list's order. A host removed
- *  in a build that could not clear its records has no name left to show them under. */
+// Ignore orphaned records from hosts no longer paired; they have no host name to display.
 export function updateFailureLines(
   failures: readonly MobileWebShellUpdateFailure[],
   hosts: readonly { id: string; name: string }[],
@@ -23,14 +25,10 @@ export function updateFailureLines(
   })
 }
 
-/**
- * Why the hybrid shell last failed to update from each host, read off what the shell recorded.
- *
- * The only place a release build shows it: console output never reaches logcat there. Renders
- * nothing until a failure has been recorded, and `app/troubleshoot.tsx` mounts it only in a build
- * that can run the shell.
- */
+// Release console output never reaches logcat; this row is the only update-failure evidence visible there. Mount only in shell-capable builds.
 export function MobileWebShellUpdateFailureRow() {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [lines, setLines] = useState<readonly Line[]>([])
 
   useEffect(() => {
@@ -46,16 +44,19 @@ export function MobileWebShellUpdateFailureRow() {
     return () => {
       stale = true
     }
-  }, [])
+  }, [t])
 
   if (lines.length === 0) {
     return null
   }
   return (
     <View testID="mobile-web-shell-update-failures">
-      <Text style={styles.sectionHeading}>Workspace updates</Text>
-      <View style={styles.section}>
-        <View style={styles.accordionBody}>
+      <SectionHeader
+        title={t('diagnostics.mobileWebShellUpdateFailureRow.title', 'Workspace updates')}
+        first
+      />
+      <ListGroup style={styles.group}>
+        <View key="lines" style={styles.noteBody}>
           {lines.map((line) => (
             <Text
               key={line.hostId}
@@ -66,7 +67,7 @@ export function MobileWebShellUpdateFailureRow() {
             </Text>
           ))}
         </View>
-      </View>
+      </ListGroup>
     </View>
   )
 }

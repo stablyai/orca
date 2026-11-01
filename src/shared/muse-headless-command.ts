@@ -1,9 +1,5 @@
-// Why: `muse exec` runs one prompt headlessly and exits, so a pane running it
-// must not classify as the interactive Muse TUI. `exec` matches past any position:
-// `muse exec …` dispatches headless while `muse <flags> exec …` fails fast with an
-// arg error — neither ever hosts the TUI. The match stays case-sensitive because
-// subcommand dispatch is (`muse 'EXEC'` is a TUI prompt), and a quoted TUI prompt
-// never splits into an `exec` token on its own.
+// Any exact exec token prevents the TUI: muse exec runs headlessly; flags before exec fail argument parsing.
+// Match case-sensitively (EXEC can be a TUI prompt); a longer quoted prompt stays one token.
 export function isMuseHeadlessOneShotCommand(tokens: readonly string[]): boolean {
   return tokens.slice(1).some((token) => token === 'exec')
 }

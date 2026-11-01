@@ -4,14 +4,12 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../../../shared/git-status-types'
+import type { BranchCompareLike, CommitCompareLike, OpenFile } from '../types/open-file'
 import type {
-  BranchCompareLike,
   BranchCompareSnapshot,
-  CommitCompareLike,
   CommitCompareSnapshot,
-  OpenConflictMetadata,
-  OpenFile
-} from '../types/open-file'
+  OpenConflictMetadata
+} from '../../../../../../shared/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
@@ -133,15 +131,36 @@ export function reconcileOpenFilesForStatus(
   statusIsComplete: boolean
 ): OpenFile[] {
   let entriesByPath: Map<string, GitStatusEntry> | undefined
+  let stagedEntriesByPath: Map<string, GitStatusEntry> | undefined
   let changed = false
 
-  const nextOpenFiles = openFiles.flatMap((file) => {
+  const nextOpenFiles = openFiles.flatMap((originalFile) => {
+    let file = originalFile
     if (file.worktreeId !== worktreeId) {
       return [file]
     }
 
     if (file.mode === 'conflict-review' || file.mode === 'check-details') {
       return [file]
+    }
+
+    if (file.mode === 'diff' && file.diffSource === 'staged') {
+      if (!stagedEntriesByPath) {
+        stagedEntriesByPath = new Map()
+        for (const entry of nextEntries) {
+          if (entry.area === 'staged') {
+            stagedEntriesByPath.set(entry.path, entry)
+          }
+        }
+      }
+      const entry = stagedEntriesByPath.get(file.relativePath)
+      if (entry) {
+        const oldPath = entry.status === 'renamed' ? entry.oldPath : undefined
+        if (file.branchOldPath !== oldPath) {
+          changed = true
+          file = { ...file, branchOldPath: oldPath }
+        }
+      }
     }
 
     if (!file.conflict) {

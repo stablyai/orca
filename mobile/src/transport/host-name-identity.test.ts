@@ -161,7 +161,6 @@ describe('host name identity', () => {
       await updateHostDescriptor(GENERATED_HOST.id, { machineName: null, platform: 'darwin' })
       const record = stored().find(({ id }) => id === GENERATED_HOST.id)
       expect(record?.lastKnownMachineName).toBeUndefined()
-      // The display name is kept: there is nothing better to fall back to.
       expect(record?.name).toBe('m4airs-Air')
     })
 
@@ -211,7 +210,7 @@ describe('host name identity', () => {
 
     it('does not roll back identity changed since a connection took its profile snapshot', async () => {
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'Studio', platform: 'darwin' })
-      // A connection holds this for its lifetime; a save built from it must not roll identity back.
+      // Use a connection-held snapshot to prove saves cannot roll back later identity changes.
       const snapshot = (await loadHosts()).find(({ id }) => id === TYPED_HOST.id)!
       await updateHostNameAndEndpoint(TYPED_HOST.id, { personalName: null })
       await updateHostDescriptor(TYPED_HOST.id, { machineName: 'Studio 2', platform: 'darwin' })
@@ -247,7 +246,6 @@ describe('host name identity', () => {
       await updateHostNameAndEndpoint(TYPED_HOST.id, { personalName: null })
       const record = stored().find(({ id }) => id === TYPED_HOST.id)
       expect(record?.personalName).toBeUndefined()
-      // "Host 2" is taken by nothing here but "Host 1" exists, so the counter lands on 2.
       expect(record?.name).toBe('Host 2')
     })
 

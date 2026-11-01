@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import * as openCodeCapabilities from '../../opencode/opencode-launch-capabilities'
 
 const applyAgentWorkspaceTrust = vi.hoisted(() =>
   vi.fn<(preset: string, path: string, context: unknown) => Promise<object>>(async () => ({}))
@@ -24,6 +25,7 @@ type BuildInput = {
   restored?: boolean
   claudeAuth?: ClaudeRuntimeAuthPreparation | null
   wslDistro?: string | null
+  selectedCodexHomePath?: string | null
 }
 
 const RESTORED_PANE: AdoptStablePaneResult = {
@@ -41,9 +43,8 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
     getLocalPtyStartupPromise: notReachedByOptionBuilding,
     getLocalPtyProviderStartupPromise: notReachedByOptionBuilding,
     adoptStablePane: notReachedByOptionBuilding,
-    assertFolderWorkspacePtyPathUsable: notReachedByOptionBuilding,
+    assertWorkspaceAcceptsNewPty: notReachedByOptionBuilding,
     resolvePtySpawnStartupCwd: notReachedByOptionBuilding,
-    localStartupCwdDirectoryExists: notReachedByOptionBuilding,
     prepareCodexResumeHome: notReachedByOptionBuilding,
     noCodexResumeLaunch: notReachedByOptionBuilding,
     resolveCodexResumeLaunch: notReachedByOptionBuilding,
@@ -64,11 +65,16 @@ function makeDeps(): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
   }
 }
 
-/** What preflight and env assembly leave for the option builders; both spawn states share it. */
 function seed(
   ctx: Pick<
     PtyIpcSpawnState,
-    'env' | 'cwd' | 'launchCommand' | 'claudeAuth' | 'expectedWslDistro' | 'preAdoptedStablePane'
+    | 'env'
+    | 'cwd'
+    | 'launchCommand'
+    | 'claudeAuth'
+    | 'expectedWslDistro'
+    | 'preAdoptedStablePane'
+    | 'selectedCodexHomePath'
   >,
   input: BuildInput
 ): void {
@@ -78,9 +84,10 @@ function seed(
   ctx.claudeAuth = input.claudeAuth ?? null
   ctx.expectedWslDistro = input.wslDistro ?? null
   ctx.preAdoptedStablePane = input.restored ? RESTORED_PANE : null
+  ctx.selectedCodexHomePath = input.selectedCodexHomePath ?? null
 }
 
-async function build(route: 'renderer' | 'runtime', input: BuildInput) {
+async function build(route: 'renderer' | 'runtime', input: BuildInput, deps = makeDeps()) {
   const args = {
     cols: 80,
     rows: 24,
@@ -90,13 +97,13 @@ async function build(route: 'renderer' | 'runtime', input: BuildInput) {
     command: input.command
   }
   if (route === 'renderer') {
-    const ctx = createPtyIpcSpawnState(makeDeps(), args)
+    const ctx = createPtyIpcSpawnState(deps, args)
     seed(ctx, input)
     await buildPtyIpcSpawnOptions(ctx)
     ctx.finishTerminalInstall()
     return ctx.spawnOptions
   }
-  const ctx = createRuntimePtySpawnState(makeDeps(), args)
+  const ctx = createRuntimePtySpawnState(deps, args)
   seed(ctx, input)
   await buildRuntimePtySpawnOptions(ctx)
   ctx.finishTerminalInstall()
@@ -108,18 +115,43 @@ beforeEach(() => {
   applyAgentWorkspaceTrust.mockResolvedValue({})
 })
 
+it('samples window history after OpenCode preparation while host history stays early', async () => {
+  const probe = vi.spyOn(openCodeCapabilities, 'probeOpenCodeLaunchCapabilities')
+  try {
+    for (const route of ['renderer', 'runtime'] as const) {
+      let settings = { ...getDefaultSettings('/tmp'), terminalScopeHistoryByWorktree: true }
+      probe.mockImplementationOnce(async () => {
+        await Promise.resolve()
+        settings = { ...settings, terminalScopeHistoryByWorktree: false }
+        return null
+      })
+      const options = await build(
+        route,
+        { launchAgent: 'opencode', command: 'opencode' },
+        { ...makeDeps(), getSettings: () => settings }
+      )
+      expect(options.historyIsolationEnabled).toBe(route === 'runtime')
+    }
+  } finally {
+    probe.mockRestore()
+  }
+})
+
 describe.each(['renderer', 'runtime'] as const)('%s spawn builder agent trust', (route) => {
   it('pre-trusts the workspace for a fresh agent launch with the final spawn context', async () => {
     await build(route, {
       launchAgent: 'codex',
       command: 'codex',
-      wslDistro: 'Ubuntu'
+      wslDistro: 'Ubuntu',
+      selectedCodexHomePath: '/orca/codex-accounts/acct-1/home'
     })
     expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith('codex', '/repo/wt', {
       env: expect.objectContaining({ CLAUDE_CONFIG_DIR: '/cfg' }),
       claudeAuth: null,
       wslDistro: 'Ubuntu',
-      connectionId: null
+      connectionId: null,
+      // The env lacks CODEX_HOME until the provider injects it (#27235).
+      codexHome: '/orca/codex-accounts/acct-1/home'
     })
   })
 

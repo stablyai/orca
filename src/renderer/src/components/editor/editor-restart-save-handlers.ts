@@ -1,8 +1,8 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
 import { canAutoSaveOpenFile } from './editor-autosave'
-import { flushPendingEditorChange } from './editor-pending-flush'
-import { getDuplicateDirtySavePaths } from './editor-autosave-state-projections'
+import { flushPendingEditorBuffer } from './editor-pending-flush'
+import { getDuplicateDirtySavePaths, restartSaveTargets } from './editor-autosave-state-projections'
 import type { AppStoreApi, EditorSaveQueue } from './editor-save-queue'
 import type {
   EditorPrepareHotExitDetail,
@@ -12,19 +12,18 @@ import type {
 type EditorRestartSaveHandlerOptions = {
   store: AppStoreApi
   queueSave: EditorSaveQueue['queueSave']
-  quiesceFileSave: EditorSaveQueue['quiesceFileSave']
+  settleFileSaves: EditorSaveQueue['settleFileSaves']
 }
 
 export function createEditorRestartSaveHandlers({
   store,
   queueSave,
-  quiesceFileSave
+  settleFileSaves
 }: EditorRestartSaveHandlerOptions): {
   handleSaveDirtyFiles: (event: Event) => Promise<void>
   handlePrepareHotExit: (event: Event) => Promise<void>
 } {
   const getLatestWritableContent = (file: OpenFile): string | null => {
-    // Why: headless controller reads editorDrafts rather than mounting the editor UI to read component-local buffers.
     return store.getState().editorDrafts[file.id] ?? null
   }
 
@@ -37,7 +36,7 @@ export function createEditorRestartSaveHandlers({
     try {
       detail.claim()
 
-      const dirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
+      const dirtyFiles = restartSaveTargets(store.getState())
       const unsupportedDirtyFiles = dirtyFiles.filter((file) => !canAutoSaveOpenFile(file))
       if (unsupportedDirtyFiles.length > 0) {
         detail.reject('Some unsaved editor changes cannot be auto-saved before restart.')
@@ -45,27 +44,31 @@ export function createEditorRestartSaveHandlers({
       }
 
       for (const file of dirtyFiles) {
-        flushPendingEditorChange(file.id)
+        flushPendingEditorBuffer(store.getState(), file.id)
       }
 
       const duplicateDirtySavePaths = getDuplicateDirtySavePaths(dirtyFiles)
       if (duplicateDirtySavePaths.length > 0) {
-        // Why: edit and diff tabs can share a path with different drafts; refuse rather than race an implicit winner.
+        // Different dirty records can share a path; refuse restart rather than choose an implicit save winner.
         detail.reject(
           'Some unsaved files are open in multiple dirty tabs. Save them manually before restarting.'
         )
         return
       }
 
-      await Promise.all(
+      const results = await Promise.all(
         dirtyFiles.map(async (file) => {
           const content = getLatestWritableContent(file)
           if (content === null) {
             throw new Error(`Missing editor buffer for ${file.relativePath}`)
           }
-          await queueSave(file, content)
+          return queueSave(file, content, 'restart')
         })
       )
+      if (results.some((result) => result !== 'written')) {
+        detail.reject('Some unsaved files were not saved. Review them before restarting.')
+        return
+      }
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))
@@ -82,7 +85,7 @@ export function createEditorRestartSaveHandlers({
       detail.claim()
 
       const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
-      await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+      await Promise.all(initiallyDirtyFiles.map((file) => settleFileSaves(file.id)))
 
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
@@ -105,8 +108,7 @@ export function createEditorRestartSaveHandlers({
         return
       }
 
-      // Why: preload dispatches beforeunload immediately after this resolves;
-      // App owns the one combined session/UI checkpoint for restart and update.
+      // Resolve only after saving; preload unloads immediately and App owns the combined restart/update checkpoint.
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

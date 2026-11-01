@@ -9,7 +9,7 @@ import { CLEAN_DISCONNECT_PROTOCOL_VERSION, type ListSessionsResult } from './ty
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 
 export type OrphanedDaemonCleanupResult = {
-  /** True when a live daemon socket was found and torn down; false when none was running. */
+  /** Reports shutdown or confirmed stale-process termination. */
   cleaned: boolean
   /** Number of live PTY sessions killed during cleanup (surfaced to the user). */
   killedCount: number
@@ -17,7 +17,9 @@ export type OrphanedDaemonCleanupResult = {
 
 export async function cleanupDaemonForProtocol(
   runtimeDir: string,
-  protocolVersion: number
+  protocolVersion: number,
+  /** When set, stop only if the authenticated endpoint owner is this pid; never fall back to a pid kill. */
+  expectedOwnerPid?: number
 ): Promise<OrphanedDaemonCleanupResult> {
   const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
   const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
@@ -26,13 +28,13 @@ export async function cleanupDaemonForProtocol(
   const alive = await probeSocket(socketPath)
   if (!alive) {
     if (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
-      // Endpoint absence doesn't prove the PID record belongs to the current protocol; leave artifact cleanup to the owning daemon.
+      // An unreachable endpoint does not identify the PID record's owner; leave cleanup to the daemon.
       return { cleaned: false, killedCount: 0 }
     }
     try {
       unlinkSync(pidPath)
     } catch {
-      // Best-effort
+      // Old-protocol PID cleanup is best-effort.
     }
     return { cleaned: false, killedCount: 0 }
   }
@@ -43,24 +45,35 @@ export async function cleanupDaemonForProtocol(
   let didKillStaleDaemon = false
   try {
     await client.ensureConnected()
+    if (expectedOwnerPid !== undefined && client.getDaemonIdentity()?.pid !== expectedOwnerPid) {
+      throw new DaemonEndpointOwnershipError(
+        'Daemon cleanup aborted: the endpoint is owned by a different daemon than expected'
+      )
+    }
     const sessions = await client
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
 
-    // Use the single-shot `shutdown` RPC (kills all sessions then exits) to avoid racing per-session `kill` calls against the daemon exiting.
+    // One shutdown RPC avoids racing per-session kills against daemon exit.
     await client.request('shutdown', { killSessions: true }).catch(() => {
-      // Daemon exits immediately after the RPC, so the socket may close before the reply arrives; treat as success.
+      // Shutdown may close the socket before replying.
     })
     didRequestShutdown = true
-  } catch {
-    // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
+  } catch (error) {
+    if (expectedOwnerPid !== undefined) {
+      // A targeted stop never kills by pid: the owner it would find may be a replacement.
+      throw error instanceof DaemonEndpointOwnershipError
+        ? error
+        : new DaemonEndpointOwnershipError(
+            'Daemon cleanup aborted: the expected daemon could not be verified'
+          )
+    }
+    // Wedged or older daemons may need PID cleanup when RPC fails; leave the endpoint to its publisher.
     const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
     didKillStaleDaemon = killOutcome.killed
     if (killOutcome.liveOwnerSurvived) {
-      // Why: something still owns the endpoint. Returning as if it were cleaned lets restart
-      // fork a replacement that cannot publish onto the held name, leaving the user with no
-      // daemon instead of the one still running.
+      // A surviving owner prevents a replacement from publishing; do not report successful cleanup.
       throw new DaemonEndpointOwnershipError(
         'Daemon cleanup aborted: the existing daemon could not be confirmed stopped'
       )
@@ -71,7 +84,7 @@ export async function cleanupDaemonForProtocol(
 
   if (didRequestShutdown && protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
     if (!(await waitForDaemonEndpointExit(socketPath))) {
-      // Never fork a replacement while the old incarnation may still own the endpoint or be disposing terminal children.
+      // Require endpoint shutdown before replacement; the old daemon may still be disposing terminals.
       throw new Error('Timed out waiting for daemon self-shutdown')
     }
     return { cleaned: true, killedCount }
@@ -80,7 +93,7 @@ export async function cleanupDaemonForProtocol(
   try {
     unlinkSync(pidPath)
   } catch {
-    // Best-effort
+    // PID cleanup must not turn successful shutdown into failure.
   }
 
   return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }

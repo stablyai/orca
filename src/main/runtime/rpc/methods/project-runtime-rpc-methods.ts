@@ -12,6 +12,7 @@ import {
 export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'project.list',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
@@ -20,6 +21,7 @@ export const PROJECT_RUNTIME_METHODS = [
   }),
   defineMethod({
     name: 'project.update',
+    permission: 'workspace',
     params: ProjectUpdate,
     handler: (params, { runtime }) => ({
       project: runtime.updateProject(params.projectId, params.updates)
@@ -27,14 +29,16 @@ export const PROJECT_RUNTIME_METHODS = [
   }),
   defineMethod({
     name: 'projectHostSetup.list',
+    permission: 'workspace',
     params: null,
     handler: (_params, { runtime }) => {
       runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return { setups: runtime.listProjectHostSetups() }
+      return { setups: runtime.listVisibleProjectHostSetups() }
     }
   }),
   defineMethod({
     name: 'projectHostSetup.create',
+    permission: 'workspace',
     params: ProjectHostSetupCreate,
     handler: (params, { runtime }) => ({
       result: runtime.createProjectHostSetup(params)
@@ -42,6 +46,7 @@ export const PROJECT_RUNTIME_METHODS = [
   }),
   defineMethod({
     name: 'projectHostSetup.setupExistingFolder',
+    permission: 'workspace',
     params: ProjectHostSetupExistingFolder,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
@@ -52,6 +57,7 @@ export const PROJECT_RUNTIME_METHODS = [
   }),
   defineMethod({
     name: 'projectHostSetup.clone',
+    permission: 'workspace',
     params: ProjectHostSetupClone,
     handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
@@ -62,16 +68,18 @@ export const PROJECT_RUNTIME_METHODS = [
   }),
   defineMethod({
     name: 'projectHostSetup.update',
+    permission: 'workspace',
     params: ProjectHostSetupUpdate,
-    handler: (params, context) => ({
+    handler: async (params, context) => ({
       result: projectRepoResultVisibilityForClient(
-        context.runtime.updateProjectHostSetup(params),
+        await context.runtime.updateProjectHostSetup(params),
         context
       )
     })
   }),
   defineMethod({
     name: 'projectHostSetup.delete',
+    permission: 'workspace',
     params: ProjectHostSetupDelete,
     handler: (params, context) => ({
       result: projectRepoResultVisibilityForClient(

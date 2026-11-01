@@ -197,8 +197,7 @@ async function resolveRemoteDefaultBranch(
       return branchName
     }
   } catch {
-    // Fall through to common branch names so offline/stale remote metadata can
-    // still support the conservative fast-forward check when refs exist.
+    // Offline/stale metadata may still leave common default refs usable for conservative fast-forward checks.
   }
 
   for (const branchName of DEFAULT_BRANCH_FALLBACKS) {
@@ -278,9 +277,13 @@ export async function syncForkDefaultBranch(
     return { ...resultWithBranch, status: 'blocked', reason: 'missing-origin-branch' }
   }
 
-  const counts = parseAheadBehind(
-    (await runGit(['rev-list', '--left-right', '--count', `${originOid}...${upstreamOid}`])).stdout
-  )
+  const counts =
+    originOid === upstreamOid && /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(originOid)
+      ? { ahead: 0, behind: 0 }
+      : parseAheadBehind(
+          (await runGit(['rev-list', '--left-right', '--count', `${originOid}...${upstreamOid}`]))
+            .stdout
+        )
 
   if (counts.ahead > 0 || !(await isAncestor(runGit, originOid, upstreamOid))) {
     return { ...resultWithBranch, ...counts, status: 'blocked', reason: 'diverged' }

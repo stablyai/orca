@@ -1,11 +1,18 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 
 let themeTarget: 'dark' | 'light' | undefined = 'dark'
 
+// Why: these tests drive hooks through a stubbed React, so the plugin theme store is stubbed too.
+vi.mock('@/store/plugin-themes', () => ({
+  usePluginTerminalThemes: () => [],
+  usePluginTerminalThemeStore: { getState: () => ({ entries: [] }) }
+}))
+
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useState: <T>(initial: T | (() => T)) => {
@@ -227,12 +234,13 @@ describe('TerminalThemeCatalogSection', () => {
     })
   })
 
-  it('clears imported color overrides when selecting a light theme', () => {
+  it('clears only the light slot overrides when selecting a light theme', () => {
     const updateSettings = vi.fn()
     const element = renderCatalog(
       makeSettings({
         terminalUseSeparateLightTheme: true,
-        terminalColorOverrides: { background: '#111111' }
+        terminalColorOverrides: { background: '#111111' },
+        terminalColorOverridesLight: { background: '#eeeeee' }
       }),
       updateSettings,
       'light'
@@ -244,7 +252,7 @@ describe('TerminalThemeCatalogSection', () => {
 
     expect(updateSettings.mock.calls[0]?.[0]).toStrictEqual({
       terminalThemeLight: 'GitHub Light',
-      terminalColorOverrides: undefined
+      terminalColorOverridesLight: undefined
     })
   })
 

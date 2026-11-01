@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
+import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   shouldClearChecksPanelGitStatusSnapshot,
@@ -24,7 +26,7 @@ type ChecksPanelGitStatusEffectsInput = Pick<
   | 'gitStatusSnapshotRetryTimerRef'
   | 'isPanelVisible'
   | 'localExecutionScope'
-  | 'ownerSettings'
+  | 'ownerTarget'
   | 'panelContextKey'
   | 'panelContextKeyRef'
   | 'remoteStatusInvalidation'
@@ -90,7 +92,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     linkedPR,
     fallbackGitHubPRNumber,
     localExecutionScope,
-    ownerSettings,
+    ownerTarget,
     panelContextKey,
     panelContextKeyRef,
     remoteStatus,
@@ -143,6 +145,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
       !isPanelVisible ||
       !activeWorktreeId ||
       !activeWorktreePath ||
+      !ownerTarget ||
       (!runtimeEnvironmentId && repoConnectionId && sshConnectionStatus !== 'connected')
     ) {
       if (gitStatusSnapshotRetryTimerRef.current) {
@@ -150,13 +153,12 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         gitStatusSnapshotRetryTimerRef.current = null
       }
       gitStatusRequestRef.current = null
-      // Why: hiding the panel or losing SSH should stop new work, not erase same-context Create PR eligibility that can still be retried.
+      // Hiding or losing SSH stops new work; retain retryable same-context create eligibility.
       return
     }
     let stale = false
     const requestContextKey = panelContextKey
-    const connectionId = activeConnectionId ?? undefined
-    // Why: global status maps are keyed only by worktree; use their changes as invalidation signals, then fetch a local snapshot.
+    // Worktree-keyed global maps only invalidate; fetch an owner-scoped local snapshot.
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
       gitStatusSnapshotRetryTimerRef.current = null
@@ -164,12 +166,18 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     setGitStatusSnapshot((snapshot) =>
       shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
     )
+    // Why one resolution: a same-path twin must not get this copy's transport, SSH target or answer.
+    const copy = resolveWorktreeGitCopyNow(activeWorktreeId)
+    if (!copy) {
+      return
+    }
     const context = {
-      settings: ownerSettings,
+      target: copy.transport,
       worktreeId: activeWorktreeId,
       worktreePath: activeWorktreePath,
-      connectionId
+      connectionId: copy.connectionId
     }
+    const ownerHostId = copy.hostId
     const runRequest = async (): Promise<void> => {
       try {
         const status = await getRuntimeGitStatus(context, { admissionTier: 'status' })
@@ -177,11 +185,15 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
           !stale &&
           shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
         ) {
-          // Why: the Checks tab can be the only visible git surface; commit branch identity before branch-scoped upstream refresh can fail.
-          updateWorktreeGitIdentity(activeWorktreeId, {
-            head: status.head,
-            branch: status.branch ?? (status.head ? null : undefined)
-          })
+          // Checks may be the sole Git surface; commit branch identity before upstream refresh can fail.
+          updateWorktreeGitIdentity(
+            activeWorktreeId,
+            {
+              head: status.head,
+              branch: status.branch ?? (status.head ? null : undefined)
+            },
+            ownerHostId
+          )
         }
         let freshRemoteStatus = status.upstreamStatus
         if (activeWorktreePushTarget) {
@@ -207,17 +219,16 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
               branch: status.branch ?? (status.head ? null : undefined)
             }
           })
-          // A fresh probe succeeded, so this context is no longer in the "could not check branch status" state.
           setGitStatusProbeErrorContextKey((key) => (key === requestContextKey ? null : key))
         }
       } catch (error) {
         console.warn('[ChecksPanel] git status refresh before eligibility failed', error)
         if (!stale) {
-          // Why: transient SSH/runtime flakes shouldn't hide an already-valid Create PR state for this branch; retry while visible.
+          // Retain valid same-branch creation state through transient host errors; retry while visible.
           setGitStatusSnapshot((snapshot) =>
             shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
           )
-          // Mark the probe failed so the empty state shows "Could not check branch status" instead of an indefinite "Checking branch status".
+          // Record probe failures instead of leaving Checking branch status indefinitely.
           if (
             shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
           ) {
@@ -259,7 +270,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     gitStatusRefreshNonce,
     isFolder,
     isPanelVisible,
-    ownerSettings,
+    ownerTarget,
     panelContextKey,
     repo,
     repoConnectionId,
@@ -329,7 +340,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         }
       })
       .catch(() => {
-        // Why: a transient GitHub outage rethrows here; don't tear down the last confirmed snapshot so a clean composer survives the outage.
+        // Keep the last confirmed snapshot so transient GitHub outages do not tear down a clean composer.
       })
     return () => {
       stale = true

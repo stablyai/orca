@@ -36,20 +36,8 @@ export function clearRuntimeMetadata(userDataPath: string): void {
   rmSync(getRuntimeMetadataPath(userDataPath), { force: true })
 }
 
-/**
- * Why: clearing metadata unconditionally on quit would race with a sibling
- * Orca process during auto-updater handoff (the new process may already
- * have written its own metadata before the old process finishes tearing
- * down). The ownership guard — pid + runtimeId must both match the values
- * the caller recorded at its own startup — keeps the clean-exit case honest
- * ('not_running' instead of 'stale_bootstrap') while refusing to erase the
- * replacement process's fresh bootstrap.
- *
- * Callers MUST capture `ownedPid` and `ownedRuntimeId` synchronously at
- * startup (or at least before any shutdown await) so the comparison below
- * reflects the process that actually wrote the file, not whatever state
- * globals happen to hold mid-teardown.
- */
+/** Clear only matching startup pid/runtimeId so old-process teardown cannot erase updater handoff metadata.
+ * Capture both synchronously before shutdown awaits; teardown globals may already describe a replacement. */
 export function clearRuntimeMetadataIfOwned(
   userDataPath: string,
   ownedPid: number,

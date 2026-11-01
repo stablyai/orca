@@ -1,11 +1,16 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { noteUserWorkspaceSwitch } from '@/lib/workspace-switch-user-act'
+import { useAppStore } from '@/store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
+import { withLayoutOwnerTabProps } from './tab-bar-layout-owner-props'
 
 type TabBarItemActionSource = {
   props: Pick<
     TabBarProps,
+    | 'worktreeId'
     | 'onActivate'
     | 'onActivateFile'
     | 'onActivateBrowserTab'
@@ -16,6 +21,7 @@ type TabBarItemActionSource = {
     | 'onCloseOthers'
     | 'onCloseToRight'
     | 'onCloseToLeft'
+    | 'onCloseSplitPane'
     | 'onCloseAllFiles'
     | 'onSetCustomTitle'
     | 'onSetTabColor'
@@ -38,6 +44,7 @@ export type TabBarItemActions = {
   closeOthers: (tabId: string) => void
   closeToRight: (tabId: string) => void
   closeToLeft: (tabId: string) => void
+  closeSplitPane: () => void
   closeAllFiles: () => void
   setCustomTitle: (tabId: string, title: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
@@ -56,14 +63,14 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
     latest.current = source
   })
   return useMemo(() => {
-    // Why: this is the strip's single activation fan-out, so retiring a client-hosted placeholder
-    // here covers every row kind — including re-clicking the tab that was already active, which the
-    // group's activeTabId never moves for.
+    // Clear client-hosted selection for every real-tab activation, including re-clicks that leave activeTabId unchanged.
     function activateRealTab(activate: () => void): void {
       clearClientHostedBrowserRowSelection()
+      // Picking a tab is the user acting on its workspace: its restore may start a stopped distro.
+      noteUserWorkspaceSwitch(useAppStore.getState().activeWorktreeId)
       activate()
     }
-    return {
+    const actions: TabBarItemActions = {
       activateTerminal: (tabId) => activateRealTab(() => latest.current.props.onActivate(tabId)),
       activateFile: (fileId) =>
         activateRealTab(() => latest.current.props.onActivateFile?.(fileId)),
@@ -77,6 +84,7 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       closeOthers: (tabId) => latest.current.props.onCloseOthers(tabId),
       closeToRight: (tabId) => latest.current.props.onCloseToRight(tabId),
       closeToLeft: (tabId) => latest.current.props.onCloseToLeft(tabId),
+      closeSplitPane: () => latest.current.props.onCloseSplitPane?.(),
       closeAllFiles: () => latest.current.props.onCloseAllFiles?.(),
       setCustomTitle: (tabId, title) => latest.current.props.onSetCustomTitle(tabId, title),
       setTabColor: (tabId, color) => latest.current.props.onSetTabColor(tabId, color),
@@ -88,5 +96,8 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       togglePinned: (item) => latest.current.togglePinned(item),
       toggleViewMode: (tabId) => latest.current.toggleTabViewMode(tabId)
     }
+    return ORCA_LAYOUT_OWNER_IS_MAIN
+      ? { ...actions, ...withLayoutOwnerTabProps(actions, () => latest.current.props.worktreeId) }
+      : actions
   }, [])
 }

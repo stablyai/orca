@@ -1,7 +1,5 @@
-// The mobile E2EE v2 client handshake, re-implemented in plain JS so the relay bench can run
-// outside the React Native bundle. Mirrors mobile/src/transport/mobile-e2ee-v2-client-session.ts
-// plus the encodings in src/shared/mobile-e2ee-v2-contract.ts and mobile-e2ee-v2-framing.ts.
-// phone-e2ee-desktop-parity.test.mjs pins it to the real desktop responder.
+// Mirror mobile E2EE v2 outside React Native; see mobile-e2ee-v2-client-session.ts and shared contract/framing.
+// phone-e2ee-desktop-parity.test.mjs pins real desktop compatibility.
 import { createHash, hkdfSync } from 'node:crypto'
 import { createRequire } from 'node:module'
 
@@ -14,7 +12,6 @@ const NONCE_LENGTH = 24
 const SESSION_ID_LENGTH = 32
 const HEADER_LENGTH = SESSION_ID_LENGTH + 1 + 1 + 8
 
-// ---------- byte helpers ----------
 export function utf8(value) {
   return new TextEncoder().encode(value)
 }
@@ -47,8 +44,7 @@ export function b64url(bytes) {
 function writeU64(target, offset, value) {
   new DataView(target.buffer, target.byteOffset).setBigUint64(offset, value)
 }
-// Transcript list encodings must stay byte-identical to encodeMobileE2EEV2Transcript in
-// src/shared/mobile-e2ee-v2-contract.ts, or the derived key schedule diverges silently.
+// Keep transcript encoding byte-identical to encodeMobileE2EEV2Transcript or key schedules diverge.
 function encodeStringList(items) {
   return concat([
     uint32(items.length),
@@ -59,7 +55,6 @@ function encodeNumberList(items) {
   return concat([uint32(items.length), ...items.map(uint32)])
 }
 
-// ---------- E2EE v2 (mirrors mobile/src/transport/mobile-e2ee-v2-client-session.ts) ----------
 export class PhoneE2EE {
   constructor(desktopPublicKeyB64, relayHostId) {
     this.keys = nacl.box.keyPair()
@@ -168,8 +163,7 @@ export class PhoneE2EE {
     return b64(concat([nonce, nacl.secretbox(body, nonce, this.m2d)]))
   }
 
-  // The inbound counter is shared across text and binary, so every inbound frame must be
-  // consumed here even when the caller discards it, or the next open() nonce is off by one.
+  // Consume every inbound frame, even discarded text/binary, because they share one nonce counter.
   open(frame, kind) {
     const counter = this.inbound++
     const nonce = this.frameNonce(1, kind, counter)

@@ -80,6 +80,23 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.notifications.search.machines', 'Machines'),
+    description: translate(
+      'auto.components.settings.notifications.search.machinesDescription',
+      'Choose which machines can show notifications on this computer, such as SSH machines or paired servers.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.ca8faa40d7',
+        'notifications'
+      ),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.host', 'host'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.remote', 'remote'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.ssh', 'ssh'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.mute', 'mute')
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.notifications.search.96562a72c6',
       'Suppress While Focused'

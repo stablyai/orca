@@ -70,11 +70,6 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
           authority.writeJsonExport.bind(authority)
         ) ?? null
       break
-    case 'export-compatibility':
-      authority.assertCurrentRevision()
-      exportedRevision =
-        (await authority.writeJsonCompatibilityExportAsync(request.targetPath)) ?? null
-      break
     case 'close':
       authority.close()
       stopping = true

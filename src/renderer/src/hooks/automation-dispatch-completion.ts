@@ -15,6 +15,7 @@ import {
 } from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
 import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -24,7 +25,7 @@ export function createAutomationDispatchCompletion(args: {
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
   releaseTerminalOwnership: () => void
-  finalizeTerminalOwnership: () => boolean
+  finalizeTerminalOwnership: AutomationTerminalOwnership['finalize']
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
@@ -66,38 +67,29 @@ export function createAutomationDispatchCompletion(args: {
       args.releaseTerminalOwnership()
       throw error
     }
-    if (args.finalizeTerminalOwnership()) {
-      await clearRetiredRunTerminalIdentity()
-    }
+    await retireRunTerminal()
   }
-  const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
-    // Why: the owned terminal was just retired, so the run's pane/pty
-    // pointers now reference a closed tab. Drop them (best-effort) so
-    // "View run" resolves to the workspace/snapshot instead of dead-ending
-    // on an unavailable terminal.
+  const retireRunTerminal = async (): Promise<void> => {
+    const retirement = await args.finalizeTerminalOwnership({
+      // Why: only a workspace made for this run is its own; a shared one would gather a sleeping tab per run.
+      preservePane: args.worktree.automationProvenance?.automationRunId === args.run.id
+    })
+    if (!retirement) {
+      return
+    }
+    // Clear stopped-process pointers best-effort; sleeping panes retain resumable tab/pane keys for View run.
     try {
       await args.markDispatchResult({
         runId: args.run.id,
         status: 'completed',
-        terminalSessionId: null,
-        terminalPaneKey: null,
+        ...(retirement === 'closed' ? { terminalSessionId: null, terminalPaneKey: null } : {}),
         terminalPtyId: null
       })
     } catch (error) {
       console.error('[automations] Failed to clear retired terminal identity:', error)
     }
   }
-  /**
-   * A lost PTY is not a result. Record nothing: the run keeps its non-final
-   * `dispatched` status, so it is never evicted from history and never shown as
-   * Failed for work that is very likely still running (on SSH, a relay whose
-   * reattach failed). Ownership of an unobservable run belongs to main's
-   * AutomationRunCompletionWatcher, which reports the truthful "lost the
-   * terminal for this run" instead of an exit code nobody witnessed.
-   *
-   * `finalize()` is deliberately never reached here — closing the terminal of a
-   * process we cannot prove dead is what orphans live work.
-   */
+  /** Lost PTY contact proves no result: retain dispatched state and let main’s watcher report lost-terminal evidence. Never finalize or close unproven-dead work, which could orphan a live remote process. */
   const abandonUnverifiableRun = (code: number): void => {
     if (completionMarked || contactLost) {
       return
@@ -134,16 +126,13 @@ export function createAutomationDispatchCompletion(args: {
       throw error
     }
     if (code === 0) {
-      if (args.finalizeTerminalOwnership()) {
-        await clearRetiredRunTerminalIdentity()
-      }
+      await retireRunTerminal()
     } else {
       args.releaseTerminalOwnership()
     }
   }
   const settleLateResult = (result: Promise<void>): void => {
-    // Why: status/exit callbacks have no awaitable caller; the result
-    // path already releases ownership before propagating persistence errors.
+    // Status/exit callbacks have no awaitable caller; release ownership before persistence failures propagate.
     void result.catch((error) => {
       console.error('[automations] Failed to persist late automation result:', error)
     })
@@ -191,10 +180,7 @@ export function createAutomationDispatchCompletion(args: {
         return
       }
       const historyOverlap = getAgentStateHistoryOverlap(observedStateHistory, entry.stateHistory)
-      // Why: sawWorkingAfterStart stays monotonic — a recreated entry
-      // (transport loss, PTY exit, cap eviction) arrives with an empty
-      // stateHistory, so clearing it here would strand reuseSession runs
-      // with nothing left to re-derive the working edge from.
+      // Keep sawWorkingAfterStart monotonic: recreated entries lose history and cannot rederive the edge needed by reuseSession.
       for (const historicalState of entry.stateHistory.slice(historyOverlap)) {
         if (historicalState.startedAt < startedAfter) {
           continue
@@ -206,8 +192,7 @@ export function createAutomationDispatchCompletion(args: {
           historicalState.state === 'done' &&
           (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
         ) {
-          // Why: this `done` already rolled out of the live entry, so its output
-          // survives only in the entry-level completed slot.
+          // The done edge left live history; only the entry’s completed slot retains its output.
           latestAssistantMessage =
             entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
           handleAgentDone()
@@ -220,9 +205,7 @@ export function createAutomationDispatchCompletion(args: {
       }
       if (
         entry.state === 'done' &&
-        // Why: a session-boundary done is the agent CONNECTING (Claude SessionStart
-        // fires at launch, before the argv prompt submits) — completing here would
-        // close the tab and record an empty run result.
+        // SessionStart boundary-done means connection before prompt submission; finishing here would record empty output and close the new tab.
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
@@ -230,8 +213,7 @@ export function createAutomationDispatchCompletion(args: {
         handleAgentDone()
       }
     }
-    // Why: Codex/Claude completion normally arrives through the global
-    // hook IPC listener, not the hidden PTY OSC fallback.
+    // Codex/Claude completion normally comes from global hook IPC rather than hidden PTY OSC.
     unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
     checkCurrentStatus()
   }

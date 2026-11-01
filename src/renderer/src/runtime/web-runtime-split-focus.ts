@@ -8,7 +8,7 @@ import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from './web-session-focus-intent'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from './web-terminal-surface-id'
+import { toHostSessionTabId, toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { RuntimeTerminalSplit } from '../../../shared/runtime-types'
 
 export type WebRuntimeSplitSource = { worktreeId: string; tabId: string; leafId: string }

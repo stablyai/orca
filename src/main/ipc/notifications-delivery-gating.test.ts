@@ -344,8 +344,7 @@ describe('registerNotificationHandlers', () => {
         delivered: false,
         reason: 'blocked-by-system'
       })
-      // Why: a swallowed native notification would still pile up in the
-      // Notification Center delivered list — skip creating it entirely.
+      // Skip creation entirely so suppressed alerts cannot accumulate in Notification Center.
       expect(notificationCtorMock).not.toHaveBeenCalled()
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })

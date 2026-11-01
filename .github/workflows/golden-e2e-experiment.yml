@@ -8,6 +8,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   golden-e2e:
     name: golden e2e ${{ matrix.platform }} experiment
@@ -41,6 +44,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2

@@ -22,7 +22,6 @@ const mocks = vi.hoisted(() => ({
     clearOrcaHookTrustForRepo: vi.fn(),
     repos: [] as Repo[]
   },
-  addRemote: vi.fn(),
   toastSuccess: vi.fn(),
   finishProjectAddWithDefaultCheckout: vi.fn()
 }))
@@ -133,13 +132,7 @@ describe('AddProjectFromFolderDialog', () => {
     mocks.state.modalData = { folderPath: '/projects/child' }
     mocks.state.repos = []
     mocks.state.fetchWorktrees.mockResolvedValue(true)
-    vi.stubGlobal('window', {
-      api: {
-        repos: {
-          addRemote: mocks.addRemote
-        }
-      }
-    })
+    vi.stubGlobal('window', { api: { repos: {} } })
   })
 
   it('adds a local Git folder and opens the default checkout', async () => {
@@ -219,40 +212,6 @@ describe('AddProjectFromFolderDialog', () => {
     })
   })
 
-  it('adds an SSH Git folder through the remote repo import path', async () => {
-    const repo = makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' })
-    mocks.state.modalData = {
-      folderPath: '/srv/projects/child',
-      connectionId: 'ssh-target-1'
-    }
-    mocks.addRemote.mockResolvedValue({ repo })
-    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
-
-    renderToStaticMarkup(<AddProjectFromFolderDialog />)
-    await clickAddProject()
-
-    expect(mocks.addRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-target-1',
-      remotePath: '/srv/projects/child'
-    })
-    expect(mocks.state.repos).toEqual([{ ...repo, executionHostId: 'ssh:ssh-target-1' }])
-    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'ssh:ssh-target-1'
-    })
-    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
-      repoId: repo.id,
-      source: 'ssh_remote_path',
-      selectedPath: '/srv/projects/child',
-      executionHostId: 'ssh:ssh-target-1',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
-    })
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Project added on SSH host', {
-      description: repo.displayName
-    })
-  })
-
   it('falls back to completion when Git worktree refresh is not authoritative', async () => {
     const repo = makeRepo()
     mocks.state.addRepoPath.mockResolvedValue(repo)
@@ -299,30 +258,5 @@ describe('AddProjectFromFolderDialog', () => {
     await addPromise
 
     expect(mocks.finishProjectAddWithDefaultCheckout).not.toHaveBeenCalled()
-  })
-
-  it('sends SSH non-Git folders to the Open as Folder confirmation with the connection id', async () => {
-    mocks.state.modalData = {
-      folderPath: '/srv/projects/docs',
-      connectionId: 'ssh-target-1'
-    }
-    mocks.addRemote.mockResolvedValue({
-      error: 'Not a valid git repository: /srv/projects/docs'
-    })
-    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
-
-    renderToStaticMarkup(<AddProjectFromFolderDialog />)
-    await clickAddProject()
-
-    expect(mocks.addRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-target-1',
-      remotePath: '/srv/projects/docs'
-    })
-    expect(mocks.state.closeModal).toHaveBeenCalled()
-    expect(mocks.state.openModal).toHaveBeenCalledWith('confirm-non-git-folder', {
-      folderPath: '/srv/projects/docs',
-      connectionId: 'ssh-target-1'
-    })
-    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
   })
 })

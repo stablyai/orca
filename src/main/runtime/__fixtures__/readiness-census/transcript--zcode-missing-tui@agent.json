@@ -1,7 +1,0 @@
-{
-  "description": "zcode recording at 120x32 replayed on the agent pane, one entry per chunk",
-  "observations": {
-    "clocked": ["0-1: now=pending:closed edge=pending:closed quiet=pending:closed wait=pending"],
-    "clockless": ["0-1: verdict=pending:closed wait=pending"]
-  }
-}

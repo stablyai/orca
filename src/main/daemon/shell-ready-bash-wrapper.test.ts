@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
+import { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
+import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
+import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
 import {
   OVERLAY_ONLY_FEATURES,
   STARTUP_COMMAND_FEATURES
@@ -12,7 +15,6 @@ import {
   expectBashOsc133Lifecycle,
   runInteractiveBashRcfile
 } from './daemon-bash-wrapper-osc133-fixture'
-// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from './shell-ready'
 
 async function importFreshShellReady() {
@@ -36,7 +38,6 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
 const itWithBash = hasBash ? it : it.skip
 
-// Split out of shell-ready.test.ts, which sits at the max-lines cap for tests.
 describePosix('daemon shell-ready bash wrapper', () => {
   let userDataPath: string
   let previousUserDataPath: string | undefined
@@ -57,14 +58,52 @@ describePosix('daemon shell-ready bash wrapper', () => {
     vi.restoreAllMocks()
   })
 
-  // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
+  itWithBash.each([
+    ['daemon', getDaemonBashShellReadyRcfileContent],
+    ['local', getBashShellReadyRcfileContent]
+  ] as const)('keeps this app CLI first after %s Bash profiles reset PATH', (_lane, content) => {
+    const cliBin = join(userDataPath, 'cli', 'bin')
+    const ambientBin = join(userDataPath, 'ambient-bin')
+    mkdirSync(cliBin, { recursive: true })
+    mkdirSync(ambientBin)
+    for (const bin of [cliBin, ambientBin]) {
+      const launcher = join(bin, 'orca-dev')
+      writeFileSync(launcher, '#!/bin/sh\nexit 0\n')
+      chmodSync(launcher, 0o755)
+    }
+    const env: Record<string, string> = {
+      HOME: userDataPath,
+      USERPROFILE: userDataPath,
+      PATH: `${ambientBin}:/usr/bin:/bin`,
+      ORCA_BACKGROUND_LAUNCH: '1'
+    }
+    const expectedLauncher = prependOrcaCliDirToChildPath(env, {
+      isPackaged: false,
+      userDataPath
+    })
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'export PATH="$HOME/ambient-bin:/usr/bin:/bin:$HOME/cli/bin"\n'
+    )
+    const rcfile = join(userDataPath, 'cli-path-rcfile')
+    writeFileSync(rcfile, content())
+    const result = spawnSync('bash', ['-c', '. "$1"; command -v orca-dev', 'bash', rcfile], {
+      env,
+      encoding: 'utf8',
+      timeout: 5000
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout.split('\x1b]133;C\x07').join('').trim()).toBe(expectedLauncher)
+  })
+
+  // Remote agent status depends on the wrapper’s OSC 133 command start and completion markers.
   it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
     getShellReadyLaunchConfig('/bin/bash')
 
-    // Why .zshenv: the zsh markers live in the epilogue, behind `markers`.
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
 
@@ -73,7 +112,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
     expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    // DEBUG is armed after PROMPT_COMMAND setup so rcfile commands aren't seen as foreground; lastIndexOf skips the epilogue's re-arm.
+    // DEBUG must arm after prompt setup; use lastIndexOf to skip its epilogue re-arm.
     expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
       bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
     )
@@ -116,7 +155,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
+      // Simulate bash-preexec replacing Orca’s DEBUG trap at the first prompt.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -142,7 +181,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
+      // A real callback verifies that chaining preserves the user’s preexec handler.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -179,6 +218,66 @@ describePosix('daemon shell-ready bash wrapper', () => {
       expect(output).not.toContain('USER_PREEXEC:__bp_')
     }
   )
+
+  // Profiles discard Bash's own prompt output the way attached ble.sh does (internal_suppress_bash_output).
+  itWithBash('signals readiness at the first prompt once ble.sh attaches its decoder', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    // Prompt-time ble-attach renders, running Orca's epilogue, before its decoder attaches.
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      [
+        '__fake_ble_attach() {',
+        '  [[ -z "${_ble_attached-}" ]] || return 0',
+        '  _ble_attached=1 _ble_decode_bind_state=none',
+        '  __orca_osc133_epilogue',
+        '  _ble_decode_bind_state=emacs',
+        "  printf 'DECODER_ATTACHED\\n'",
+        '}',
+        'PROMPT_COMMAND=__fake_ble_attach',
+        'exec 2>/dev/null'
+      ].join('\n')
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
+
+    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
+    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    expect(marker).toBeGreaterThan(output.indexOf('DECODER_ATTACHED'))
+    expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
+  })
+
+  itWithBash('signals readiness when a system bashrc already attached ble.sh', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    // Bash sources /etc/bash.bashrc before --rcfile, so ble.sh state can already be live.
+    const systemBashrc = '_ble_attached=1\n_ble_decode_bind_state=emacs\nexec 2>/dev/null\n'
+
+    const output = runInteractiveBashRcfile(
+      systemBashrc + getDaemonBashShellReadyRcfileContent(),
+      userDataPath
+    )
+
+    const marker = output.indexOf('\x1b]777;orca-shell-ready\x07')
+    expect(output.split('\x1b]777;orca-shell-ready\x07')).toHaveLength(2)
+    expect(marker).toBeLessThan(output.indexOf('\x1b]133;D;'))
+  })
+
+  itWithBash('keeps the PS1 marker when ble.sh state is only inherited', async () => {
+    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=\'printf "PS1=[%s]\\n" "$PS1"\'\nexec 2>/dev/null\n'
+    )
+
+    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath, {
+      _ble_attached: '1',
+      _ble_decode_bind_state: 'emacs',
+      BLE_ATTACHED: '1',
+      'BASH_FUNC_ble-attach%%': '() { :; }'
+    })
+
+    expect(output).not.toContain('\x1b]777;orca-shell-ready\x07')
+    expect(output).toContain('\\e]777;orca-shell-ready\\a')
+  })
 
   itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
     const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()

@@ -1,7 +1,6 @@
 import { readMobileGitStatusResult } from '../session/mobile-diff-review-rpc'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
-// Refresh after a push when possible so readiness reflects the new upstream state.
 export async function readFreshGitStatus(
   worktreeId: string,
   fallback: MobileGitStatusResult | null,

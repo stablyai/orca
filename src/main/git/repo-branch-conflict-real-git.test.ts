@@ -30,7 +30,6 @@ describe('branch conflict real Git contract', () => {
     git('commit', '--quiet', '-m', 'base')
     const head = git('rev-parse', 'HEAD').trim()
 
-    // Many remotes is the shape that used to cost one subprocess each.
     for (let index = 0; index < 12; index += 1) {
       git('remote', 'add', `remote${index}`, 'https://example.test/repo.git')
     }
@@ -38,7 +37,6 @@ describe('branch conflict real Git contract', () => {
 
     await expect(getBranchConflictKind(repoPath, 'taken')).resolves.toBe('remote')
     await expect(getBranchConflictKind(repoPath, 'free')).resolves.toBeNull()
-    // The allowed base ref is the one remote spelling that is not a conflict.
     await expect(
       getBranchConflictKind(repoPath, 'taken', 'refs/remotes/remote7/taken')
     ).resolves.toBeNull()

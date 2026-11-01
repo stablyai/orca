@@ -1,10 +1,11 @@
 import {
-  parseAutomationRrule,
   parseCronExpression,
   parseSchedule,
+  tryParseAutomationRrule,
   type ParsedCron
 } from './automation-schedule-parsing'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import { escapeTerminalControlCharacters } from './terminal-control-character-escape'
 
 export type AutomationCronScheduleClassification =
   | { kind: 'hourly'; minute: number; label: string }
@@ -20,7 +21,8 @@ export type AutomationScheduleDescriptor =
   | { kind: 'daily'; hour: number; minute: number }
   | { kind: 'weekdays'; hour: number; minute: number }
   | { kind: 'weekly'; hour: number; minute: number; dayOfWeek: number }
-  | { kind: 'custom' }
+  // `expression` carries a scheduler-valid RRULE no preset sentence can name (#24985).
+  | { kind: 'custom'; expression?: string }
   | { kind: 'invalid' }
 
 // Why: shared labels feed the CLI, which must stay English regardless of OS or UI locale.
@@ -74,7 +76,9 @@ function setContainsRange(values: Set<number>, min: number, max: number): boolea
   return true
 }
 
-function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRrule>): string {
+function formatParsedRruleSchedule(
+  schedule: NonNullable<ReturnType<typeof tryParseAutomationRrule>>
+): string {
   if (schedule.preset === 'hourly') {
     return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
   }
@@ -97,8 +101,7 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
   const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
   const everyDayOfMonth = setContainsRange(rule.daysOfMonth, 1, 31)
   const everyDayOfWeek = setContainsRange(rule.daysOfWeek, 0, 6)
-  // Labels describe the days the rule actually fires on, so they need coverage of the
-  // matched set, not the lexical restriction flags that pick OR over AND.
+  // Describe matched days, not lexical flags selecting AND/OR.
   const matchesEitherDayField = rule.dayOfMonthRestricted && rule.dayOfWeekRestricted
   const everyDay = matchesEitherDayField
     ? everyDayOfMonth || everyDayOfWeek
@@ -151,7 +154,11 @@ export function formatAutomationSchedule(scheduleExpression: string): string {
     if (schedule.kind === 'cron') {
       return classifyParsedCronSchedule(schedule).label
     }
-    return formatParsedRruleSchedule(parseAutomationRrule(trimmed))
+    const rrule = tryParseAutomationRrule(trimmed)
+    if (rrule === null) {
+      return escapeTerminalControlCharacters(trimmed, true)
+    }
+    return formatParsedRruleSchedule(rrule)
   } catch {
     return 'Invalid schedule'
   }
@@ -164,10 +171,7 @@ function toScheduleDescriptor(
   return descriptor
 }
 
-/**
- * Parse a cron or RRULE expression into its locale-free shape so callers can render their own
- * copy. Same single parse path as `formatAutomationSchedule`, minus the English label.
- */
+/** Share cron/RRULE parsing with formatAutomationSchedule, returning locale-free shape for caller-owned copy. */
 export function describeAutomationSchedule(
   scheduleExpression: string
 ): AutomationScheduleDescriptor {
@@ -177,7 +181,10 @@ export function describeAutomationSchedule(
     if (schedule.kind === 'cron') {
       return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
     }
-    const rrule = parseAutomationRrule(trimmed)
+    const rrule = tryParseAutomationRrule(trimmed)
+    if (rrule === null) {
+      return { kind: 'custom', expression: escapeTerminalControlCharacters(trimmed, true) }
+    }
     if (rrule.preset === 'hourly') {
       return { kind: 'hourly', minute: rrule.minute }
     }

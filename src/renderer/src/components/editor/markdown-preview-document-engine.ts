@@ -7,6 +7,9 @@ import {
 } from './markdown-preview-search'
 import {
   countMarkdownPreviewNodes,
+  getMarkdownPreviewTreeText,
+  isMarkdownPreviewBlockTooLarge,
+  markdownPreviewBlockHasMath,
   parseMarkdownPreviewDocument,
   renderMarkdownPreviewBlock
 } from './markdown-preview-document-tree'
@@ -29,6 +32,13 @@ function collectTextNodes(node: Root | Root['children'][number], values: string[
       (node.tagName === 'code' &&
         node.properties.className?.toString().includes('language-mermaid')))
   ) {
+    return
+  }
+  if (node.type === 'element' && node.tagName === 'code') {
+    const text = getMarkdownPreviewTreeText(node, false)
+    if (text.trim()) {
+      values.push(text)
+    }
     return
   }
   if (node.type === 'text') {
@@ -104,7 +114,18 @@ export class MarkdownPreviewDocumentEngine {
     }
     const values: string[] = []
     // Searching must not evict or reorder the viewport's rendered-block cache.
-    collectTextNodes((this.cache.get(index) ?? this.compile(index)).tree, values)
+    const source = this.tree?.children[index]
+    if (!source) {
+      throw new Error('Invalid preview block.')
+    }
+    if (!isMarkdownPreviewBlockTooLarge(source)) {
+      collectTextNodes(
+        markdownPreviewBlockHasMath(source)
+          ? (this.cache.get(index) ?? this.compile(index)).tree
+          : source,
+        values
+      )
+    }
     const bytes = values.reduce((total, value) => total + value.length * 2, 0)
     if (
       this.searchTextBytes + bytes > MARKDOWN_PREVIEW_SEARCH_TEXT_MAX_BYTES ||

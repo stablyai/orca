@@ -10,8 +10,7 @@ import type {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { AgentTerminalDialog, AgentTerminalPanel } from './AgentTerminalDialog'
 
-// Stub the preview so the assertion is on the props the dialog hands it, with
-// no xterm / IPC machinery in the way.
+// Stub xterm/IPC to inspect the routing props passed to the preview.
 vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
@@ -66,9 +65,7 @@ afterEach(() => {
   cleanup()
 })
 
-// Why: this is the only seam carrying the relayed host profile into the
-// emulator. Dropping the prop degrades every preview to client-OS byte routing
-// silently — nothing else in the app reads DashboardCard.terminalInput.
+// This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
 describe('AgentTerminalDialog', () => {
   it("hands the card's relayed host-input profile to the preview terminal", () => {
     render(
@@ -83,6 +80,16 @@ describe('AgentTerminalDialog', () => {
       'data-terminal-input',
       JSON.stringify(TERMINAL_INPUT)
     )
+  })
+
+  it.each([
+    ['interrupted', 'Interrupted'],
+    ['failed', 'Failed'],
+    ['unconfirmed', 'Couldn’t confirm']
+  ] as const)('keeps an acknowledged %s verdict in the terminal header', (verdict, label) => {
+    const statusCard = { ...card({ dotState: 'done', bucket: 'idle', unseen: false }), verdict }
+    render(<AgentTerminalPanel card={statusCard} onOpenChange={() => {}} onReveal={() => {}} />)
+    expect(screen.getByText(new RegExp(label))).toBeInTheDocument()
   })
 
   it('passes null when the card carries no profile, so the preview routes by client OS', () => {
@@ -105,7 +112,7 @@ describe('AgentTerminalDialog', () => {
     expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
   })
 
-  it('still reports a closed pane for a local card with no live pty', () => {
+  it('keeps a local agent openable without claiming its missing preview means closure', () => {
     render(
       <AgentTerminalDialog
         card={card({ ptyId: null, hostKind: 'local' })}
@@ -114,7 +121,9 @@ describe('AgentTerminalDialog', () => {
       />
     )
 
-    expect(screen.getByText(/pane has closed/)).toBeInTheDocument()
+    expect(screen.getByText(/No preview available/)).toBeInTheDocument()
+    expect(screen.queryByText(/pane has closed/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open worktree' })).toBeEnabled()
   })
 
   it('labels acknowledged completions idle without review or pin controls', () => {

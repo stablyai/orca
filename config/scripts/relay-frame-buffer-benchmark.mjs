@@ -24,7 +24,7 @@ function median(values) {
   return values.sort((a, b) => a - b)[Math.floor(values.length / 2)]
 }
 for (const count of [1, 256, 16384, 65536]) {
-  const chunks = Array.from({ length: count }, (_, index) => Buffer.alloc(64, index % 256))
+  const chunks = Array.from({ length: count }, (_, index) => Buffer.alloc(64, (index + 1) % 256))
   const expected = Buffer.concat(chunks)
   for (const mode of ['take', 'discard']) {
     const times = [[], []]

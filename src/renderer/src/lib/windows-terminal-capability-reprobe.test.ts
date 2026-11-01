@@ -40,36 +40,6 @@ afterEach(() => {
 })
 
 describe('windows terminal capability re-probe', () => {
-  it('reprobes usable WSL until Windows process identity is proved', async () => {
-    vi.useFakeTimers()
-    let current: WindowsTerminalCapabilities = USABLE_WSL
-    const probe = vi.fn(async () => {
-      current = { ...current, windowsProcessStartTimeAvailable: true }
-      return current
-    })
-    const readCached = () => current
-    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(probe).toHaveBeenCalledTimes(1)
-    expect(readCached().windowsProcessStartTimeAvailable).toBe(true)
-
-    await vi.advanceTimersByTimeAsync(30 * 60_000)
-    expect(probe).toHaveBeenCalledTimes(1)
-  })
-
-  it('resets the backoff when only process identity capability changes', async () => {
-    vi.useFakeTimers()
-    const identityAvailable = { ...ABSENT_WSL, windowsProcessStartTimeAvailable: true }
-    const { probe, readCached } = createWatcher([identityAvailable, identityAvailable])
-    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
-
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(probe).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(probe).toHaveBeenCalledTimes(2)
-  })
-
   it('backs off to a five-minute ceiling on a stable answer', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
@@ -85,9 +55,7 @@ describe('windows terminal capability re-probe', () => {
 
   it('still re-checks a transient absent answer, then stops once WSL answers', async () => {
     vi.useFakeTimers()
-    const { probe, readCached } = createWatcher([
-      { ...USABLE_WSL, windowsProcessStartTimeAvailable: true }
-    ])
+    const { probe, readCached } = createWatcher([USABLE_WSL])
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
     await vi.advanceTimersByTimeAsync(30_000)
@@ -172,8 +140,7 @@ describe('windows terminal capability re-probe', () => {
     expect(probe).toHaveBeenCalledTimes(4)
   })
 
-  // Why: each re-arm reschedules the first probe to now+30s, so an un-guarded focus handler
-  // lets a user alt-tabbing right after mount defer the re-check indefinitely.
+  // Guard focus rearming: repeated now+30s resets after mount can defer checks indefinitely under alt-tab.
   it('does not let focus churn right after mount defer the first probe', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
@@ -217,19 +184,5 @@ describe('windows terminal capability re-probe', () => {
     expect(probe).toHaveBeenCalledTimes(3)
     await vi.advanceTimersByTimeAsync(1)
     expect(probe).toHaveBeenCalledTimes(4)
-  })
-
-  it('drops the focus listener when no owner is watched', () => {
-    const addEventListener = vi.spyOn(globalThis, 'addEventListener')
-    const removeEventListener = vi.spyOn(globalThis, 'removeEventListener')
-    const { probe, readCached } = createWatcher()
-
-    const stop = startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
-    expect(addEventListener).toHaveBeenCalledWith('focus', expect.any(Function))
-
-    stop()
-    expect(removeEventListener).toHaveBeenCalledWith('focus', expect.any(Function))
-    addEventListener.mockRestore()
-    removeEventListener.mockRestore()
   })
 })

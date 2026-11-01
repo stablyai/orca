@@ -8,7 +8,9 @@ export function antigravityConversationIdFromTranscriptPath(filePath: string): s
   const segments = pathSegments(filePath)
   const transcriptIndex = segments.length - 1
   if (
-    segments[transcriptIndex] !== ANTIGRAVITY_TRANSCRIPT_FILE ||
+    ![ANTIGRAVITY_TRANSCRIPT_FILE, 'transcript_full.jsonl'].includes(
+      segments[transcriptIndex] ?? ''
+    ) ||
     segments[transcriptIndex - 1] !== ANTIGRAVITY_LOGS_DIR ||
     segments[transcriptIndex - 2] !== ANTIGRAVITY_SYSTEM_DIR
   ) {
@@ -22,8 +24,7 @@ export function isAntigravityTranscriptPath(filePath: string): boolean {
 }
 
 export function shouldDescendAntigravityBrainDirectory(name: string, depth: number): boolean {
-  // Why: brain entries contain large artifact trees; only the fixed transcript
-  // chain is part of the resumable conversation contract.
+  // Follow only the transcript chain; brain entries also contain large artifact trees.
   if (depth === 0) {
     return true
   }

@@ -1,0 +1,5 @@
+# Why crt-static: the hook must start on hosts without the Visual C++ Redistributable.
+# Why DEPENDENTLOADFLAG 0x800 (LOAD_LIBRARY_SEARCH_SYSTEM32): the copy lives in a
+# user-writable directory, so its imports must never resolve from beside it.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static", "-C", "link-arg=/DEPENDENTLOADFLAG:0x800"]

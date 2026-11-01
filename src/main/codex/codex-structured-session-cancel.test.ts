@@ -1,6 +1,7 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
-// Every way Orca reads or kills processes, never settling: a Stop that reaches for one hangs.
+// Termination probes never settle, exposing any unexpected process cleanup during Stop.
 const processWork = vi.hoisted(() => {
   const never = (): Promise<never> => new Promise(() => {})
   return {
@@ -10,6 +11,7 @@ const processWork = vi.hoisted(() => {
       capturedAtMs: 0
     })),
     terminateDescendantSnapshotAndWait: vi.fn(never),
+    terminateDescendantSnapshotWithVerdict: vi.fn(never),
     queryWindowsProcessDescendants: vi.fn(never),
     terminateWindowsProcessTree: vi.fn(never)
   }
@@ -20,7 +22,8 @@ vi.mock('../pty-descendant-termination', async (importOriginal) => ({
 }))
 vi.mock('../pty-descendant-exit-verification', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait
+  terminateDescendantSnapshotAndWait: processWork.terminateDescendantSnapshotAndWait,
+  terminateDescendantSnapshotWithVerdict: processWork.terminateDescendantSnapshotWithVerdict
 }))
 vi.mock('../providers/windows-foreground-process-rows', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -30,23 +33,24 @@ vi.mock('../windows-process-tree-kill', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   terminateWindowsProcessTree: processWork.terminateWindowsProcessTree
 }))
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
-import {
-  CodexAppServerRequestError,
-  type CodexAppServerConnection,
-  type CodexAppServerConnectionHandlers,
-  type CodexAppServerLaunch,
-  type openCodexAppServerConnection
+  CodexAppServerConnection,
+  CodexAppServerConnectionHandlers
+} from './app-server/codex-app-server-connection-types'
+import type {
+  CodexAppServerLaunch,
+  openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from './codex-app-server-session'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredSessionAdapterDeps,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredSessionAdapterDeps,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {
@@ -69,7 +73,7 @@ function identity(): AgentSessionJournalIdentity {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: THREAD_ID }
+    providerHandle: codexProviderHandle(THREAD_ID)
   }
 }
 
@@ -125,7 +129,7 @@ async function acquired(
     readProcessStartTime: async () => 1_700_000_000_000,
     ...overrides
   })
-  await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, { identity: identity(), fence: 7, spawnToken: 'spawn-9' })
   return adapter
 }
 
@@ -143,7 +147,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
+    ).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     expect(codex.connections[0].calls.at(-1)).toEqual({
       method: 'turn/interrupt',
       params: { threadId: THREAD_ID, turnId: 'turn-1' }
@@ -195,7 +199,6 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     let nextTurn = 0
     const codex = fakeCodex()
     codex.routes['turn/start'] = () => {
-      // Codex opens each turn it answers; a send's dispatch waits for that.
       const turnId = `turn-${++nextTurn}`
       codex.connections[0].handlers.onNotification?.('turn/started', {
         threadId: THREAD_ID,
@@ -224,7 +227,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       state: 'admitted'
     })
   })
@@ -245,8 +248,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
   })
 })
 
-// Codex keeps a turn's background terminals alive across an interrupt and kills its one-shot
-// commands itself, so a Stop is the interrupt alone.
+// Codex interrupts one-shot commands but retains background terminals.
 describe('a Codex Stop is the interrupt alone', () => {
   async function stopAfterASend() {
     const events: CodexStructuredSessionEvent[] = []
@@ -269,7 +271,7 @@ describe('a Codex Stop is the interrupt alone', () => {
     })
     const stopped = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
     await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
-    // Codex answers the interrupt, then sends the turn's end; one read can carry both.
+    // One read can carry both the interrupt reply and turn completion.
     const answerThenEnd = (): void => {
       answer.resolve({})
       completeTurn(codex)
@@ -288,7 +290,7 @@ describe('a Codex Stop is the interrupt alone', () => {
         params: expect.objectContaining({ turn: { id: 'turn-1', status: 'interrupted' } })
       })
     )
-    await expect(stopped).resolves.toEqual({ cancelled: true })
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
   })
 
   it('reads and kills no processes, from the send through the Stop', async () => {
@@ -299,7 +301,7 @@ describe('a Codex Stop is the interrupt alone', () => {
     for (const work of Object.values(processWork)) {
       expect(work).not.toHaveBeenCalled()
     }
-    await expect(stopped).resolves.toEqual({ cancelled: true })
+    await expect(stopped).resolves.toEqual({ cancelled: true, turnId: 'turn-1' })
     for (const work of Object.values(processWork)) {
       expect(work).not.toHaveBeenCalled()
     }

@@ -1,13 +1,14 @@
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   refuse,
-  type AgentSessionCancelResult,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
@@ -15,7 +16,6 @@ export type PendingPromptValidation =
   | { ok: true; item: AgentJournalRenderItem; prompt: PendingPromptBody }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-/** The prompt the client named is not one waiting on the user: nothing to answer. */
 function promptGone(message: string): PendingPromptValidation {
   return {
     ok: false,
@@ -23,7 +23,6 @@ function promptGone(message: string): PendingPromptValidation {
   }
 }
 
-/** The prompt item the client named, once it is no longer waiting on anyone. */
 export function settledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   itemId: string
@@ -33,7 +32,7 @@ export function settledPrompt(
   return item && prompt && prompt.resolution.state !== 'pending' ? { item, prompt } : null
 }
 
-/** A Cancel of a prompt already cancelled has nothing left to do: it is answered, not refused. */
+/** Repeated Cancel of a cancelled prompt succeeds without effects. */
 export function answerCancelOfSettledPrompt(
   ctx: Pick<AgentSessionTurnContext, 'journal'>,
   input: { turnId?: string; prompt: { itemId: string } },
@@ -90,4 +89,12 @@ export function validatePendingPrompt(
     }
   }
   return { ok: true, item, prompt }
+}
+
+/** Ended-generation prompts have no live owner. */
+export function isEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  pending: Extract<PendingPromptValidation, { ok: true }>
+): boolean {
+  return !contextStructuredAgentSessionCurrentWork(ctx).isCurrentItem(pending.item.itemId)
 }

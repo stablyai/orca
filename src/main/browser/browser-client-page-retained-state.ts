@@ -35,7 +35,6 @@ export type BrowserClientRetainedPage = {
   releaseAvailabilityWatch?: () => void
 }
 
-/** The live page a guest WebContents belongs to; retiring/reconciling pages are not addressable. */
 export function findBrowserClientPageByWebContentsId(
   pages: Iterable<BrowserClientRetainedPage>,
   webContentsId: number
@@ -46,4 +45,37 @@ export function findBrowserClientPageByWebContentsId(
     }
   }
   return undefined
+}
+
+export function forgetBrowserClientRetainedPage(
+  pages: Map<string, BrowserClientRetainedPage>,
+  browserPageId: string,
+  page: BrowserClientRetainedPage
+): void {
+  if (pages.get(browserPageId) === page) {
+    pages.delete(browserPageId)
+  }
+}
+
+export async function retireBrowserClientRetainedPage(
+  pages: Map<string, BrowserClientRetainedPage>,
+  failedPages: Map<string, BrowserClientHostedPageInventory>,
+  browserPageId: string,
+  pageHostGeneration: number,
+  cleanupPage: (page: BrowserClientRetainedPage) => Promise<void>
+): Promise<boolean> {
+  const page = pages.get(browserPageId)
+  if (!page || page.generation !== pageHostGeneration) {
+    return false
+  }
+  page.retiring ??= cleanupPage(page)
+  try {
+    await page.retiring
+  } catch (error) {
+    forgetBrowserClientRetainedPage(pages, browserPageId, page)
+    failedPages.set(browserPageId, Object.freeze({ ...page.inventory, state: 'outcomeUnknown' }))
+    throw error
+  }
+  forgetBrowserClientRetainedPage(pages, browserPageId, page)
+  return true
 }

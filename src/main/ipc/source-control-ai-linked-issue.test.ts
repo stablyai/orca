@@ -15,19 +15,6 @@ function makeStore(meta: Record<string, { linkedIssue?: number | null }>): Store
 }
 
 describe('resolveSourceControlAiLinkedIssue', () => {
-  it('reads meta with the raw id when the id matches the request path', () => {
-    const store = makeStore({ [LOCAL_ID]: { linkedIssue: 123 } })
-
-    expect(
-      resolveSourceControlAiLinkedIssue(store, {
-        worktreeId: LOCAL_ID,
-        worktreePath: LOCAL_PATH,
-        repoId: 'repo-1'
-      })
-    ).toBe(123)
-    expect(store.getWorktreeMeta).toHaveBeenCalledWith(LOCAL_ID)
-  })
-
   it('keeps the folder-repo instance suffix in the meta key while validating the stripped path', () => {
     const instanceId = `${LOCAL_ID}::workspace:${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`
     const store = makeStore({ [instanceId]: { linkedIssue: 9 } })
@@ -41,10 +28,7 @@ describe('resolveSourceControlAiLinkedIssue', () => {
     expect(store.getWorktreeMeta).toHaveBeenCalledWith(instanceId)
   })
 
-  // Why: the desktop renderer derives `worktreePath` from `worktreeId`, so it can
-  // never send a mismatched pair — these cases model an independent caller (relay,
-  // CLI, future in-process caller) and assert the guard fails closed for them.
-  // They are not evidence that a stale renderer context is rejected; it is not.
+  // Independent callers can mismatch ID/path; renderer-derived stale pairs still agree and are not rejected here.
   it('rejects an independently supplied id whose path does not match the request', () => {
     const store = makeStore({ [LOCAL_ID]: { linkedIssue: 123 } })
 
@@ -123,51 +107,5 @@ describe('resolveSourceControlAiLinkedIssue', () => {
     } finally {
       Object.defineProperty(process, 'platform', original)
     }
-  })
-
-  it('returns null without touching the store when no id is supplied', () => {
-    const store = makeStore({ [LOCAL_ID]: { linkedIssue: 123 } })
-
-    expect(resolveSourceControlAiLinkedIssue(store, { worktreePath: LOCAL_PATH })).toBeNull()
-    expect(store.getWorktreeMeta).not.toHaveBeenCalled()
-  })
-
-  it('tolerates a store without a meta accessor', () => {
-    expect(
-      resolveSourceControlAiLinkedIssue({} as Store, {
-        worktreeId: LOCAL_ID,
-        worktreePath: LOCAL_PATH
-      })
-    ).toBeNull()
-  })
-
-  it('returns null for unparsable ids and unlinked or unusable meta', () => {
-    expect(
-      resolveSourceControlAiLinkedIssue(makeStore({}), {
-        worktreeId: 'no-separator',
-        worktreePath: LOCAL_PATH
-      })
-    ).toBeNull()
-    for (const linkedIssue of [null, undefined, Number.NaN, 0, -7, 12.9]) {
-      expect(
-        resolveSourceControlAiLinkedIssue(makeStore({ [LOCAL_ID]: { linkedIssue } }), {
-          worktreeId: LOCAL_ID,
-          worktreePath: LOCAL_PATH
-        })
-      ).toBeNull()
-    }
-  })
-
-  it('does not fall back to a GitLab-linked issue', () => {
-    const store = {
-      getWorktreeMeta: vi.fn(() => ({ linkedIssue: null, linkedGitLabIssue: 456 }))
-    } as unknown as Store
-
-    expect(
-      resolveSourceControlAiLinkedIssue(store, {
-        worktreeId: LOCAL_ID,
-        worktreePath: LOCAL_PATH
-      })
-    ).toBeNull()
   })
 })

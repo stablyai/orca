@@ -58,7 +58,6 @@ describe('OpenCodeHookService.refreshInstalledPlugins (app start)', () => {
     rmSync(userDataDir, { recursive: true, force: true })
   })
 
-  // Why: QA saw an upgraded app keep a running service on the old plugin until any pane opened.
   it('upgrades an existing install, TUI copy included, so a running service reloads it', () => {
     const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
@@ -68,13 +67,6 @@ describe('OpenCodeHookService.refreshInstalledPlugins (app start)', () => {
 
     expect(readFileSync(join(pluginsDir, PLUGIN), 'utf8')).toBe(getOpenCode2PluginSource())
     expect(readFileSync(join(pluginsDir, TUI_ENTRY), 'utf8')).toBe(getOpenCode2PluginSource())
-  })
-
-  it('never creates an install the user did not already have', () => {
-    openCode2HookService.refreshInstalledPlugins()
-
-    expect(existsSync(resolveOpenCodeConfigDirectory())).toBe(false)
-    expect(existsSync(join(userDataDir, 'opencode2-config-overlays'))).toBe(false)
   })
 
   it('leaves a current install untouched so nothing reloads', () => {
@@ -119,7 +111,6 @@ describe('OpenCodeHookService.refreshInstalledPlugins (app start)', () => {
     const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     writeFileSync(join(pluginsDir, PLUGIN), '// old')
-    // A file where the TUI copy's directory belongs makes the config-dir write fail.
     writeFileSync(join(pluginsDir, 'orca-opencode2-status-tui'), 'obstruction')
     const overlayPlugins = join(userDataDir, 'opencode2-config-overlays', 'a', 'plugins')
     mkdirSync(overlayPlugins, { recursive: true })

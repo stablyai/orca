@@ -1,12 +1,17 @@
 #!/usr/bin/env node
-// Package orcad for the pinned Node; keep module loading compatible with legacy Node launchers.
+// Package the server separately from its compatibility launcher.
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import {
   buildOrcadEntry,
-  externalNativeAddons,
+  buildOrcadCli,
+  buildOrcadLauncher,
+  ORCAD_SERVER_BUILD_TARGET,
+  ORCAD_BUNDLE_PLUGINS,
   ORCAD_EXTERNAL_MODULES,
-  ORCAD_CHILD_ENTRY_POINTS
+  ORCAD_CHILD_ENTRY_POINTS,
+  ORCAD_COMMONJS_MODULE_OPTIONS,
+  orcadChildOutputFilename
 } from './orcad-entry-build.mjs'
 import { createRequire } from 'node:module'
 import {
@@ -16,6 +21,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
@@ -24,11 +30,20 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { smokeForeignSqliteReaderWorker } from './foreign-sqlite-reader-worker-smoke.mjs'
+import { smokeSessionScannerService } from './session-scanner-service-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
 import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
+import { stageOrcadWindowsCliLauncher } from './orcad-windows-cli-launcher.mjs'
+import { stageOrcadWindowsSecurity } from './orcad-windows-security.mjs'
+import { stageOrcadLinearSdk } from './orcad-linear-sdk-package.mjs'
+import { stageOrcadMobileWebBundle } from './orcad-mobile-web-bundle.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
-  ORCAD_FOREIGN_SQLITE_READER_ENTRY,
+  ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_CLI_PACKAGE_FILENAME,
+  ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS,
+  ORCAD_LAUNCHER_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_NODE_PTY_DIR,
   ORCAD_NODE_PTY_JS_ARTIFACTS,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -43,26 +58,23 @@ import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
 import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'
 import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
+import { resolveBuildSourceCommit } from './build-source-commit.mjs'
+
+const { darkBuildMarkers } = createRequire(import.meta.url)('../dark-build-switches.cjs')
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = process.env.ORCAD_OUT_DIR
   ? resolve(process.env.ORCAD_OUT_DIR)
   : join(ROOT, 'out', 'orcad')
-// Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
-// fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
-// looks for it in the app root. A deployment has no desktop out/main to fall back to.
-const WATCHER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.watcher)
-const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
-// Why beside orcad.js: orcad forks the terminal daemon so PTYs outlive the runtime process,
-// and `getDaemonEntryPath()` probes the app root for this exact filename. Without it every
-// orcad restart would SIGKILL every running terminal.
-const DAEMON_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.daemon)
-const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
-// Why beside orcad.js: the hook server's OpenCode binder and the OpenCode history scanner
-// start this worker from the module dir, since orcad has no Electron resources tree.
-const FOREIGN_SQLITE_READER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.foreignSqliteReader)
-const FOREIGN_SQLITE_READER_OUT_FILE = join(OUT_DIR, ORCAD_FOREIGN_SQLITE_READER_ENTRY)
-const OUT_FILE = join(OUT_DIR, 'orcad.js')
+// Ship fork/worker entries beside orcad.js: remote deployments have no desktop out/main fallback, and a missing daemon loses terminals on restart.
+const childOutFile = (role) =>
+  join(OUT_DIR, orcadChildOutputFilename(ORCAD_CHILD_ENTRY_POINTS[role]))
+const WATCHER_OUT_FILE = childOutFile('watcher')
+const DAEMON_OUT_FILE = childOutFile('daemon')
+const OUT_FILE = join(OUT_DIR, ORCAD_LAUNCHER_FILENAME)
+const SERVER_OUT_FILE = join(OUT_DIR, ORCAD_SERVER_ENTRY_FILENAME)
 const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
 if (!BUILD_TARGET) {
   throw new Error('ORCAD_BUILD_TARGET is required; run `pnpm build:orcad`')
@@ -96,6 +108,7 @@ async function stageParcelWatcher(target) {
   const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
   mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
   await build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     stdin: {
       contents:
         `const {createWrapper}=require(${JSON.stringify(wrapperSource)});` +
@@ -105,7 +118,7 @@ async function stageParcelWatcher(target) {
     },
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
     external: ['./watcher.node'],
@@ -148,6 +161,10 @@ function stageNodePty(target) {
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 writeFileSync(join(OUT_DIR, ORCAD_SERVER_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+// Outside the artifact list, so the version hash and every deploy ignore it.
+for (const marker of darkBuildMarkers()) {
+  writeFileSync(join(OUT_DIR, marker.fileName), marker.text)
+}
 writeFileSync(
   join(OUT_DIR, ORCAD_NODE_RUNTIME_MARKER_FILENAME),
   `${runtimeAsset.executableSha256}\n`
@@ -155,12 +172,18 @@ writeFileSync(
 stageNodePty(BUILD_TARGET)
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsCliLauncher(ROOT, OUT_DIR, BUILD_TARGET)
+stageOrcadWindowsSecurity(ROOT, OUT_DIR, BUILD_TARGET, undefined, undefined, {
+  enabled: process.env.ORCA_REUSE_PREPARED_WINDOWS_SECURITY === 'true',
+  runtimePath: nodeRuntimePath
+})
 const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
 mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
 copyFileSync(
   createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
   emojiDatasetOutput
 )
+await stageOrcadLinearSdk(ROOT, OUT_DIR)
 // The desktop template omits it: ~10 MB per target, and orcad already treats it as optional.
 if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !== '1') {
   copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
@@ -184,53 +207,61 @@ if (existsSync(AGENT_BROWSER_SOURCE) && process.env.ORCAD_OMIT_AGENT_BROWSER !==
 cpSync(join(ROOT, 'resources', 'licenses', 'ripgrep'), join(OUT_DIR, 'ripgrep', 'licenses'), {
   recursive: true
 })
+cpSync(join(ROOT, 'resources', 'native-chat-visuals'), join(OUT_DIR, 'native-chat-visuals'), {
+  recursive: true
+})
+for (const artifact of ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS) {
+  mkdirSync(dirname(join(OUT_DIR, artifact)), { recursive: true })
+  copyFileSync(join(ROOT, 'native', ...artifact.split('/')), join(OUT_DIR, ...artifact.split('/')))
+}
+stageOrcadMobileWebBundle(OUT_DIR)
 
-/** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
- *  directory under `outdir`, and both children must land flat beside orcad.js — that is where
- *  their runtime resolvers look for them. */
+// Build children individually to land flat beside orcad.js; multi-entry outdir mirrors source directories and breaks runtime resolution.
 function buildForkedChild(entryPoint, outfile) {
   return build({
+    ...ORCAD_COMMONJS_MODULE_OPTIONS,
     entryPoints: [entryPoint],
     bundle: true,
     platform: 'node',
-    target: 'node18',
+    target: ORCAD_SERVER_BUILD_TARGET,
     format: 'cjs',
     outfile,
     external: ORCAD_EXTERNAL_MODULES,
-    plugins: [externalNativeAddons],
+    plugins: ORCAD_BUNDLE_PLUGINS,
     metafile: true,
     minify: true,
     sourcemap: false,
     define: {
+      ...ORCAD_COMMONJS_MODULE_OPTIONS.define,
       'process.env.NODE_ENV': '"production"'
     },
     logLevel: 'error'
   })
 }
 
-const childResults = await Promise.all([
-  buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
-  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
-  buildForkedChild(FOREIGN_SQLITE_READER_ENTRY, FOREIGN_SQLITE_READER_OUT_FILE),
-  ...['writer', 'backup'].map((role) =>
-    buildForkedChild(
-      join(ROOT, ORCAD_CHILD_ENTRY_POINTS[role]),
-      join(OUT_DIR, `profile-state-${role}-worker-entry.js`)
-    )
+const childResults = await Promise.all(
+  Object.values(ORCAD_CHILD_ENTRY_POINTS).map((entryPoint) =>
+    buildForkedChild(join(ROOT, entryPoint), join(OUT_DIR, orcadChildOutputFilename(entryPoint)))
   )
-])
+)
 
-const result = await buildOrcadEntry(OUT_FILE)
+const result = await buildOrcadEntry(SERVER_OUT_FILE)
+const cliResult = await buildOrcadCli(join(OUT_DIR, ORCAD_CLI_ENTRY_FILENAME))
+const { version: cliVersion } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+// Why commit: the stamp keys one serve-supervisor snapshot per build.
+const cliPackage = {
+  type: 'commonjs',
+  private: true,
+  version: cliVersion,
+  commit: resolveBuildSourceCommit()
+}
+writeFileSync(join(OUT_DIR, ORCAD_CLI_PACKAGE_FILENAME), `${JSON.stringify(cliPackage)}\n`)
+const launcherResult = await buildOrcadLauncher(OUT_FILE)
 
 const output = Object.values(result.metafile.outputs).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'
 )
-// Why check `original` and not just `path`: when electron is bundleable, esbuild
-// rewrites `path` to the resolved file under node_modules and the naive check passes
-// while the package is very much in the bundle.
-// Why both metafiles: the forked children ship in the same deployment and runtime. A
-// daemon-entry that reached electron would fail at fork time, on the
-// path whose whole point is that terminals survive.
+// Check metafile original specifiers, not resolved paths, to catch bundled Electron; inspect children too or daemon fork silently fails.
 function collectImporters(metafiles, matches) {
   const importers = new Set()
   for (const metafile of metafiles) {
@@ -245,12 +276,21 @@ function collectImporters(metafiles, matches) {
   return importers
 }
 
-const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+const metafiles = [
+  launcherResult.metafile,
+  result.metafile,
+  cliResult.metafile,
+  ...childResults.map((child) => child.metafile)
+]
 const electronImporters = collectImporters(
   metafiles,
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
 )
 const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
+// A bundled UMD factory keeps its relative requires, which fail beside the single-file bundle (#33592).
+const umdInputs = metafiles.flatMap((metafile) =>
+  Object.keys(metafile.inputs).filter((file) => /[\\/]lib[\\/]umd[\\/]/.test(file))
+)
 
 const graphErrors = []
 if (electronImporters.size > 0) {
@@ -267,25 +307,22 @@ if (sqliteImporters.size > 0) {
       .join('\n')}`
   )
 }
+if (umdInputs.length > 0) {
+  graphErrors.push(
+    `${umdInputs.length} UMD module(s) in the bundle; resolve their ESM build in ORCAD_BUNDLE_PLUGINS:\n${umdInputs
+      .map((file) => `  - ${file}`)
+      .join('\n')}`
+  )
+}
 
 if (graphErrors.length > 0) {
   console.error(`[build-orcad] ${graphErrors.join('\n')}`)
-  // Why this can exceed the ratchet baseline: the ratchet measures the graph reachable
-  // from orca-runtime + runtime-rpc, but this entry also imports ipc/pty directly to
-  // install the PTY controller. Once orcad ships, it should become a ratchet entry
-  // point so the two numbers cannot drift.
+  // Entry directly imports ipc/pty beyond runtime ratchet graph; add orcad as ratchet entry to prevent the measurements drifting.
   process.exitCode = 1
 } else {
-  // Why smoke-load and not just read the metafile: the import scan proves no module
-  // *names* electron, but the rollback graph can still fail to resolve under plain Node — a
-  // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
-  // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
-  // because it is an esbuild artifact rather than a rollup input.
-  // Why an exit code and not a message match: these bundles are minified onto one line, so
-  // Node's uncaught-exception report echoes that whole line — which contains every string
-  // literal in the bundle. A crash therefore "matches" any expected message, and a textual
-  // assertion passes against a bundle that never loaded.
-  const smoke = spawnSync(process.execPath, [OUT_FILE, '--orcad-smoke-load-check'], {
+  // Smoke plain-Node resolution beyond Electron-name scans: dynamic requires/natives/top-level throws can still fail.
+  // Assert exit code: minified crash reports echo the whole bundle line, falsely matching any expected message.
+  const smoke = spawnSync(process.execPath, [SERVER_OUT_FILE, '--orcad-smoke-load-check'], {
     encoding: 'utf8',
     timeout: 60_000
   })
@@ -299,11 +336,19 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
-  // Why require + parseArgs and not a real daemon: requiring the bundle evaluates every
-  // top-level import, and calling its exported argv parser proves the entry's own code is
-  // there rather than a graph that merely resolved. Booting one would need a socket, a
-  // token and a PTY — `smoke:orcad-terminal` does that end to end, through orcad.
-  // The verdict is carried by the exit code for the same minification reason as above.
+  const providerSmoke = runProcessSync({
+    program: process.execPath,
+    args: [SERVER_OUT_FILE, '--orcad-structured-provider-load-check'],
+    timeoutMs: 60_000
+  })
+  if (providerSmoke.code !== 0 || providerSmoke.timedOut || providerSmoke.outputTruncated) {
+    console.error(
+      `[build-orcad] the packaged structured provider failed to load.\n${describeProcessFailure(providerSmoke)}`
+    )
+    process.exitCode = 1
+  }
+  // Require bundle then call exported parseArgs to prove entry code evaluates; socket/token/PTY lifecycle belongs to smoke:orcad-terminal.
+  // Assert exit code because minified exception text includes unrelated bundle strings.
   const daemonSmoke = spawnSync(
     process.execPath,
     [
@@ -337,30 +382,26 @@ if (graphErrors.length > 0) {
   }
 }
 
-try {
-  await smokeProfileStateWorkers(OUT_DIR)
-  if (nodeRuntimePath) {
-    await smokeProfileStateWorkers(OUT_DIR, { runtimePath: nodeRuntimePath })
+/** @type {{ label: string, smoke: (outDir: string, options?: { runtimePath?: string }) => unknown }[]} */
+const workerSmokes = [
+  { label: 'profile state worker', smoke: smokeProfileStateWorkers },
+  { label: 'foreign SQLite reader worker', smoke: smokeForeignSqliteReaderWorker },
+  { label: 'session scanner service', smoke: smokeSessionScannerService }
+]
+// Each shipped child is checked under the build's Node and, when set, the pinned runtime.
+for (const { label, smoke } of workerSmokes) {
+  try {
+    await smoke(OUT_DIR)
+    if (nodeRuntimePath) {
+      await smoke(OUT_DIR, { runtimePath: nodeRuntimePath })
+    }
+  } catch (error) {
+    console.error(`[build-orcad] ${label} check failed:`, error)
+    process.exitCode = 1
   }
-} catch (error) {
-  console.error('[build-orcad] profile state worker check failed:', error)
-  process.exitCode = 1
 }
 
-try {
-  smokeForeignSqliteReaderWorker(OUT_DIR)
-  if (nodeRuntimePath) {
-    smokeForeignSqliteReaderWorker(OUT_DIR, { runtimePath: nodeRuntimePath })
-  }
-} catch (error) {
-  console.error('[build-orcad] foreign SQLite reader worker check failed:', error)
-  process.exitCode = 1
-}
-
-// Why a content hash and not ORCAD_VERSION alone: the remote install directory is keyed on
-// this string, so two different builds carrying one version would share a directory — and an
-// already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
-// bytes while reporting the new version.
+// Remote install directories key by content hash; version alone would reuse install-complete directories with stale bytes.
 if (process.exitCode !== 1) {
   const fullVersion = computeOrcadFullVersion(OUT_DIR, {
     target: BUILD_TARGET,
@@ -402,8 +443,7 @@ async function smokeLoadWatcherChild(runtimePath) {
         }
       })
       child.on('error', (error) => settle(`fork failed: ${error.message}`))
-      // Why exit and not disconnect: the child exits 0 on disconnect, so a non-zero code
-      // or a signal here is a load failure rather than a clean teardown.
+      // Disconnect exits 0; nonzero/signal before that is a load failure.
       child.on('exit', (code, signal) =>
         settle(
           code === 0 && subscribed

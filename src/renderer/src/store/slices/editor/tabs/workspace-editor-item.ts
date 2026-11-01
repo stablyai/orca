@@ -3,17 +3,26 @@ import type { EditorSlice } from '../types/editor-slice'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { areEditorPreviewTabsEnabled } from './editor-preview-tab-setting'
-import { isEditorTabContentType } from './editor-tab-content-type'
+import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import type { Tab } from '../../../../../../shared/tab-types'
+import {
+  openEditorTabThroughLayoutOwner,
+  sendReusedEditorTabToLayoutOwner
+} from './editor-tab-open-through-layout-owner'
 
 export function openWorkspaceEditorItem(
   state: AppState,
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
+  contentType: EditorTabContentType,
   isPreview?: boolean,
   targetGroupId?: string,
-  selection: EditorTabSelection = 'focus'
+  selection: EditorTabSelection = 'focus',
+  /** Where in its group a reopened tab goes back to. */
+  index?: number
 ): string {
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
@@ -24,6 +33,10 @@ export function openWorkspaceEditorItem(
       contentType
     )
     if (existing) {
+      // Switch point: an open that rewrote the tab's file record or view reaches main.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        sendReusedEditorTabToLayoutOwner(state, existing)
+      }
       if (selection !== 'none') {
         // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
         state.activateTab?.(existing.id, {
@@ -34,15 +47,40 @@ export function openWorkspaceEditorItem(
       return existing.id
     }
   }
-  const created = state.createUnifiedTab?.(worktreeId, contentType, {
-    entityId: fileId,
-    label,
-    isPreview,
-    ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
-    ...(selection === 'none' ? { activate: false } : {}),
-    ...(selection === 'background' ? { recordFocus: false } : {})
-  })
-  return created?.id ?? fileId
+  const drawHere = (id?: string): Tab | undefined => {
+    const file =
+      contentType === 'editor'
+        ? state.openFiles.find((entry) => entry.id === fileId && entry.worktreeId === worktreeId)
+        : undefined
+    return state.createUnifiedTab?.(worktreeId, contentType, {
+      ...(id ? { id } : {}),
+      entityId: fileId,
+      label,
+      isPreview,
+      // The tab follows the captured file owner even when another host has UI focus.
+      ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
+      ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
+      ...(selection === 'none' ? { activate: false } : {}),
+      ...(selection === 'background' ? { recordFocus: false } : {})
+    })
+  }
+  // Switch point: main opens the tab under the window's proposed id and its frame draws it.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    const sent = openEditorTabThroughLayoutOwner(state, {
+      fileId,
+      worktreeId,
+      contentType,
+      isPreview: isPreview === true,
+      groupId: resolvedGroupId,
+      selection,
+      index,
+      drawHere
+    })
+    if (sent) {
+      return sent
+    }
+  }
+  return drawHere()?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
@@ -62,7 +100,7 @@ export function getReplaceablePreviewFileId(
     if (!previewTab) {
       return null
     }
-    // Why: split groups can share one OpenFile; a group-scoped preview replacement must not mutate it out from under another group's tab.
+    // Split groups share OpenFile records; scoped preview replacement must not mutate files still shown elsewhere.
     const isSharedEntity = tabsForWorktree.some(
       (tab) =>
         tab.id !== previewTab.id &&

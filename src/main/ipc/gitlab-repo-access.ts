@@ -40,10 +40,7 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
   return store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
 }
 
-// Why: mirror github.ts assertRegisteredRepo — main-process handlers
-// must never operate on a path the user hasn't explicitly registered as
-// a repo (filesystem-auth boundary). Source context adds a host check so a
-// task fetched from one machine cannot mutate a same-path repo on another.
+// Require registered paths and the captured host so same-path twins cannot receive cross-host mutations.
 export function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo {
   const repo = findRegisteredGitLabRepo(args, store)
   if (!repo) {

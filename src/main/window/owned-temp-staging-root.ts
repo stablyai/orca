@@ -1,14 +1,11 @@
-import type { Dir, Stats } from 'node:fs'
-import { lstat, mkdir, opendir, rm } from 'node:fs/promises'
+import type { Dir } from 'node:fs'
+import { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
+export { isSafeOwnedDirectory } from '../../shared/owned-private-directory'
+import { lstat, mkdir, opendir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 
 const SWEEP_CONCURRENCY = 8
-const REMOVE_OPTIONS = {
-  recursive: true,
-  force: true,
-  maxRetries: 3,
-  retryDelay: 100
-} as const
 
 type CleanupResult = 'failed' | 'fresh' | 'ignored' | 'removed'
 
@@ -28,16 +25,6 @@ export function getOwnedTempStagingRoot(tempRoot: string, rootName: string): str
 export async function ensureOwnedTempStagingRoot(stagingRoot: string): Promise<boolean> {
   await mkdir(stagingRoot, { recursive: true, mode: 0o700 })
   return isSafeOwnedDirectory(await lstat(stagingRoot))
-}
-
-export function isSafeOwnedDirectory(stats: Stats): boolean {
-  if (!stats.isDirectory() || stats.isSymbolicLink()) {
-    return false
-  }
-  if (typeof process.getuid !== 'function') {
-    return true
-  }
-  return stats.uid === process.getuid() && (stats.mode & 0o777) === 0o700
 }
 
 export function isDirectChild(parent: string, candidate: string): boolean {
@@ -104,7 +91,7 @@ export async function sweepExpiredOwnedDirectories(
 }
 
 export async function removeOwnedDirectory(directory: string): Promise<void> {
-  await rm(directory, REMOVE_OPTIONS)
+  await removeTree(directory)
 }
 
 async function cleanupDirectory(

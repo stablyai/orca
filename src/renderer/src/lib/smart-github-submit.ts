@@ -180,8 +180,7 @@ export function lookupSmartGitHubSubmitItem({
     expiresAt: now + SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS
   })
   pruneSmartGitHubSubmitLookupCache(now)
-  // Why: transient GitHub/IPC failures should dedupe while in flight, but
-  // must not poison immediate create retries for the full cache TTL.
+  // Deduplicate transient failures only in flight; do not poison immediate retries for the cache TTL.
   void stampedPromise.catch(() => {
     if (smartGitHubSubmitLookupCache.get(key)?.promise === stampedPromise) {
       smartGitHubSubmitLookupCache.delete(key)

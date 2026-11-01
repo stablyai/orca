@@ -22,7 +22,7 @@ export function BrowserUserAgentSetting({
   const title = translate('settings.browser.userAgent.title', 'Browser identity')
   const description = translate(
     'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Native mode disables Google sign-in. Changes take effect after a restart.'
+    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
   )
   const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
 
@@ -87,9 +87,7 @@ export function BrowserUserAgentSetting({
       </span>
     )
   } else if (status.identity.configuredMode === null) {
-    // Why the command is named here: this state deliberately exposes no reset control, because the
-    // reset overwrites data that may belong to a newer Orca. Without naming the escape the message
-    // tells the user their data must be reset and then offers no way to do it.
+    // Name the CLI escape: UI reset could overwrite newer Orca data, but refusal still needs an actionable recovery route.
     control = (
       <div className="space-y-1 text-right">
         <div className="text-xs text-destructive">
@@ -130,7 +128,7 @@ export function BrowserUserAgentSetting({
               label: translate('settings.browser.userAgent.optionNative', 'Native'),
               tooltip: translate(
                 'settings.browser.userAgent.optionNativeTooltip',
-                "Keeps Electron's built-in identity for sites that reject the cleaned identity. Google sign-in is unavailable in Native mode."
+                "Keeps Electron's built-in identity for sites that reject the cleaned identity."
               )
             }
           ]}

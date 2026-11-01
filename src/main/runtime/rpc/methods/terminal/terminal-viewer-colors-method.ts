@@ -1,18 +1,26 @@
 import { defineMethod } from '../../core'
 import { normalizeColorQueryReplyColors } from '../../../../../shared/pty-owner-color-query-colors'
-import { setPairedViewerColors } from '../../../terminal-view-attribute-store'
-import { TerminalSetViewerColors } from './unary-schemas'
+import {
+  setPairedViewAttributes,
+  setPairedViewerColors
+} from '../../../terminal-view-attribute-store'
+import { validateTerminalViewAttributes } from '../../../../../shared/terminal-view-attributes'
+import { TerminalSetViewerColors } from '../../../../../shared/rpc-contract/terminal-unary-params'
 
 export const TERMINAL_VIEWER_COLORS_METHODS = [
   defineMethod({
     name: 'terminal.setViewerColors',
+    permission: 'workspace',
     params: TerminalSetViewerColors,
-    // Why: a headless host has no theme of its own to answer OSC 10/11 with, so it answers with
-    // the colours of the paired client that last pushed; a host with its own window keeps its own.
+    // The host-wide default for PTYs no paired client launched: headless hosts take the last pusher's, windowed hosts keep their own.
     handler: async (params) => {
       const colors = normalizeColorQueryReplyColors(params.colors)
+      const attributes = colors ? validateTerminalViewAttributes(params.attributes) : null
       if (colors) {
         setPairedViewerColors(colors)
+      }
+      if (attributes) {
+        setPairedViewAttributes(attributes)
       }
       return { applied: colors !== null }
     }

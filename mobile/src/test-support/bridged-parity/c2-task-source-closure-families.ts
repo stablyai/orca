@@ -1,16 +1,6 @@
 import type { PageClosurePins } from './page-closure'
 
-/**
- * The C2 closure families reached by choosing a task source, and what each golden did at the bridge.
- *
- * The other half of the families C2 adds: the providers the route can open on (`taskSource` is this
- * domain's one query param), the lists and project boards they serve, the creates that add to them,
- * and the workspace a task is taken into. `c2-work-item-closure-families.ts` is what happens after
- * one of these rows is opened.
- *
- * Same rule as its sibling, and the same warning: the table is data for `c2-page-closure.ts`, whose
- * gate asserts these verdicts against a run rather than trusting the file.
- */
+// Task-source closure data is checked against actual runs by c2-page-closure; the table itself is not parity evidence.
 export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
   'linear.select-workspace-picker': {
     'linear-select-workspace': 'identical',
@@ -28,6 +18,7 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
   'settings.task-hydration': {
     'lifecycle-settings-task-hydration-fulfilled': 'identical',
     'matrix-settings.task-hydration-linear.status-1': 'result-absent-settlement',
+    'matrix-settings.task-hydration-jira.status-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-preflight.check-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-settings.get-1': 'result-absent-settlement',
     'matrix-settings.task-hydration-status.get-1': 'result-absent-settlement',
@@ -72,12 +63,12 @@ export const C2_TASK_SOURCE_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-repo-slugs': 'identical'
   },
   'tasks.provider-load': {
-    'matrix-tasks.provider-load-github.countworkitems-1': 'params-undefined',
-    'matrix-tasks.provider-load-github.listworkitems-1': 'params-undefined',
-    'matrix-tasks.provider-load-linear.listteams-1': 'params-undefined',
-    'matrix-tasks.provider-load-linear.status-1': 'params-undefined',
-    'matrix-tasks.provider-load-settings.update-1': 'params-undefined',
-    'tk-provider-load': 'params-undefined'
+    'matrix-tasks.provider-load-github.countworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-github.listworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-linear.listteams-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-linear.status-1': 'result-absent-settlement',
+    'matrix-tasks.provider-load-settings.update-1': 'result-absent-settlement',
+    'tk-provider-load': 'identical'
   },
   'tasks.route-repo-list': {
     'matrix-tasks.route-repo-list-repo.list-1': 'result-absent-settlement',

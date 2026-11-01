@@ -99,8 +99,7 @@ describe('canPostPRReviewThreadReply', () => {
     expect(canPostPRReviewThreadReply(comment({ id: 0, threadId: 'T1' }))).toBe(false)
   })
 
-  // Why: CodeRabbit review summaries can still carry path/threadId metadata; the
-  // pullrequestreview anchor must win or the replies endpoint 404s.
+  // Review-summary anchors override thread metadata; their IDs would 404 on the nested replies endpoint.
   it('rejects review summaries even when thread metadata is present', () => {
     expect(
       canPostPRReviewThreadReply(
@@ -292,8 +291,7 @@ describe('checksPanelReviewStableKey', () => {
 })
 
 describe('acknowledgePRCommentsAfterAiLaunch', () => {
-  // Why: the reported bug — resolving is the acknowledgement, so a resolvable thread must
-  // never also get a "Fixing." reply on top of a thread that visibly collapsed.
+  // Resolution already visibly acknowledges a thread; do not add a redundant Fixing reply.
   it('resolves host-resolvable threads without replying to them', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
     const replyInThread = vi.fn().mockResolvedValue(true)
@@ -315,7 +313,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).not.toHaveBeenCalled()
   })
 
-  // Why: a failed resolve leaves the thread open on the host, so the toast must not claim success.
   it('counts a failed resolve instead of falling back to a reply', async () => {
     const replyInThread = vi.fn()
 
@@ -333,8 +330,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyInThread).not.toHaveBeenCalled()
   })
 
-  // Why: GitLab reaches the ack with canReply false, so a failed resolve has no reply to fall
-  // back on and must still be counted.
+  // GitLab cannot post fallback replies; failed resolves must still count as failures.
   it('counts a failed resolve on a provider that cannot reply', async () => {
     const replyInThread = vi.fn()
     const replyAsConversation = vi.fn()
@@ -354,7 +350,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).not.toHaveBeenCalled()
   })
 
-  // Why: GitLab MRs reach the ack with canReply false; resolve is the whole acknowledgement there.
+  // GitLab acknowledgement consists entirely of resolution because replies are unsupported here.
   it('resolves threads on providers that cannot reply', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
 
@@ -372,8 +368,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(resolveThread).toHaveBeenCalledWith('T1')
   })
 
-  // Why: a summary thread GitHub *can* resolve is acked by resolving, even though its
-  // pullrequestreview anchor rules out a nested reply.
+  // Resolvable review summaries need no combined conversation post even though nested replies are unavailable.
   it('resolves a review-summary thread instead of batching it into a conversation post', async () => {
     const resolveThread = vi.fn().mockResolvedValue(true)
     const replyAsConversation = vi.fn()
@@ -404,7 +399,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).not.toHaveBeenCalled()
   })
 
-  // Why: an already-resolved thread has nothing left to close, so it falls back to a reply.
   it('replies in-thread when the thread is already resolved', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const resolveThread = vi.fn()
@@ -430,8 +424,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyInThread).toHaveBeenCalledWith(group.root, PR_COMMENT_AI_FIXING_REPLY)
   })
 
-  // Why: GitHub's replies endpoint keys off the top-level review comment id; replying to the
-  // newest reply 404s.
+  // Reply endpoints require the thread root ID; the newest reply ID would 404.
   it('replies to the thread root, not the newest reply, on an already-resolved thread', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const root = comment({ id: 10, threadId: 'T1', path: 'a.ts', isResolved: true })
@@ -496,8 +489,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation).toHaveBeenCalledWith(`@coderabbitai ${PR_COMMENT_AI_FIXING_REPLY}`)
   })
 
-  // Why: N selected summaries used to produce N near-identical "Fixing." conversation
-  // comments; one combined post covers the whole set.
+  // Combine unresolvable summaries to avoid repeated near-identical Fixing timeline posts.
   it('combines every unresolvable review summary into one conversation comment', async () => {
     const replyAsConversation = vi.fn().mockResolvedValue(true)
     const resolveThread = vi.fn()
@@ -512,7 +504,7 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
       }
     })
 
-    // Why: one host POST, so replied counts 1 — not one per selected comment.
+    // Count the one host POST once, not once per selected comment.
     expect(result).toEqual({ resolved: 0, replied: 1, skipped: 0, failed: 0 })
     expect(replyAsConversation).toHaveBeenCalledTimes(1)
     expect(replyAsConversation.mock.calls[0]?.[0]).toBe(
@@ -554,7 +546,6 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(replyAsConversation.mock.calls[0]?.[0]).toContain('Fixing:')
   })
 
-  // Why: a path-only review comment with no thread metadata still nests a reply.
   it('replies in-thread for an unresolvable comment that supports nesting', async () => {
     const replyInThread = vi.fn().mockResolvedValue(true)
     const target = comment({ id: 10, path: 'src/a.ts', line: 12 })
@@ -613,21 +604,21 @@ describe('acknowledgePRCommentsAfterAiLaunch', () => {
     expect(takePendingPRCommentAiAck()).toBeNull()
   })
 
-  // Why: the ack resolves after delivery, by which point the panel may show another review —
-  // the host target must ride along in the payload, not be re-read from live state.
+  // Pin the host target through delivery so panel navigation cannot retarget the acknowledgement.
   it('carries the snapshotted GitLab target through take', () => {
     const payload: PendingPRCommentAiAck = {
       reviewContextKey: 'repo::main::gitlab::7::abc',
       provider: 'gitlab',
       selectedGroups: [openThread('D1')],
-      gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7 }
+      gitlabTarget: { repoPath: '/repos/widgets', repoId: 'repo-1', iid: 7, ownerHostId: 'local' }
     }
     clearPendingPRCommentAiAck()
     setPendingPRCommentAiAck(payload)
     expect(takePendingPRCommentAiAck()?.gitlabTarget).toEqual({
       repoPath: '/repos/widgets',
       repoId: 'repo-1',
-      iid: 7
+      iid: 7,
+      ownerHostId: 'local'
     })
   })
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 import type { DropIndicator } from './drop-indicator'
 import {
@@ -21,6 +21,7 @@ export type TabBarItemSurfaceProps = Pick<
   | 'activeSimulatorTabId'
   | 'activeTabType'
   | 'expandedPaneByTabId'
+  | 'onCloseSplitPane'
 >
 
 export type TabBarItemSurfaceRuntime = Pick<
@@ -28,7 +29,6 @@ export type TabBarItemSurfaceRuntime = Pick<
   | 'resolvedGroupId'
   | 'generatedTabTitlesEnabled'
   | 'unifiedTabByVisibleId'
-  | 'nativeChatEnabled'
   | 'tabAgentTypesByTabId'
   | 'nativeChatTabWideFallbackUnsafeTabsById'
   | 'nativeChatTranscriptIsLocalReadable'
@@ -66,7 +66,6 @@ export function renderTabBarItems({
     resolvedGroupId,
     generatedTabTitlesEnabled,
     unifiedTabByVisibleId,
-    nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
     nativeChatTranscriptIsLocalReadable,
@@ -74,8 +73,7 @@ export function renderTabBarItems({
     statusByRelativePath
   } = runtime
 
-  // A selected client-hosted row covers the pane, so the tab it covers must stop looking active —
-  // the group's own activeTabId never moves for it, and two underlines would show at once.
+  // Client-hosted selection leaves group activeTabId intact; suppress the covered tab’s underline to avoid two active slots.
   const clientHostedRowOwnsActiveState = activeClientHostedBrowserRowId !== null
 
   function isActiveItem(item: TabBarItem): boolean {
@@ -114,7 +112,6 @@ export function renderTabBarItems({
       canToggleViewMode =
         unifiedTabForItem !== undefined &&
         canToggleNativeChat({
-          experimentalNativeChatEnabled: nativeChatEnabled,
           contentType: 'terminal',
           launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
           detectedAgent,
@@ -122,7 +119,7 @@ export function renderTabBarItems({
           nativeChatTranscriptIsLocalReadable,
           isChatViewMode: unifiedTabForItem.viewMode === 'chat'
         })
-      isChatView = nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'
+      isChatView = unifiedTabForItem?.viewMode === 'chat'
       viewModeTabId = unifiedTabForItem?.id
     }
     return (
@@ -144,10 +141,9 @@ export function renderTabBarItems({
         isChatView={isChatView}
         viewModeTabId={viewModeTabId}
         canDuplicate={item.type === 'browser' && managedBrowserCreationEnabled}
+        canCloseSplitPane={props.onCloseSplitPane !== undefined}
         gitStatus={
-          item.type === 'editor'
-            ? resolveEditorTabGitStatus(item.data.relativePath, statusByRelativePath)
-            : null
+          item.type === 'editor' ? resolveEditorTabGitStatus(item.data, statusByRelativePath) : null
         }
       />
     )

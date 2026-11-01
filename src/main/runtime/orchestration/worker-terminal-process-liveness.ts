@@ -1,16 +1,6 @@
 import type { PtyProcessInfo } from '../../providers/pty-process-info'
 
-// One reader for the durable `host_scope` column; re-exported so the process-liveness
-// path keeps its import site while the parse itself lives beside the fleet consumers.
-export type { WorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
-export { parseWorkerTerminalHostScope } from '../../../shared/worker-terminal-host-scope'
-
-/**
- * Does `processIncarnation` name exactly this pty's live incarnation? Requires exact
- * `${ptyId}:${incarnationId}` equality, so it is immune to colons on either side (relay/SSH
- * ptyIds, colon-bearing relay incarnationIds). A pty with no (or a whitespace-dirty)
- * incarnationId can never match — the exact-incarnation fence stays intact.
- */
+/** Match the whole ptyId:incarnationId exactly, including embedded colons; absent or whitespace-dirty incarnation cannot attest identity. */
 export function matchesProcessIncarnation(
   ptyId: string,
   incarnationId: string | null | undefined,
@@ -22,7 +12,7 @@ export function matchesProcessIncarnation(
   return `${ptyId}:${incarnationId}` === processIncarnation
 }
 
-/** Classify a recorded incarnation against live sessions: live on exact match, unverifiable when a candidate pty has a dirty or absent incarnationId (lost contact is never a death certificate), else exited. */
+/** Exact live match proves life; missing/dirty candidate incarnation remains unverifiable, otherwise classify exited. */
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]

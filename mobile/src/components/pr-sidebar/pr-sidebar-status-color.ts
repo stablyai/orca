@@ -1,8 +1,7 @@
 import { colors } from '../../theme/mobile-theme'
 import type { MobileStatusToken } from './pr-checks-presentation'
 
-// Resolves a pure-logic status token to a concrete mobile-theme color. Keeps the
-// presentation module free of style imports while centralizing the mapping.
+// Centralize token→theme color mapping while keeping presentation logic style-free.
 export function statusColor(token: MobileStatusToken): string {
   switch (token) {
     case 'statusGreen':

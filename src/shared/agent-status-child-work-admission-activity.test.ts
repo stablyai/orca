@@ -118,7 +118,10 @@ describe('child-work admission of what a child is doing', () => {
 
   it('carries owner and residency through, and clears the operation of a parked child', () => {
     const { store, admission } = setup()
-    admission.announce(observation())
+    admission.announce(
+      observation({ operation: { toolName: 'Bash', basis: 'open', observedAt: 10 } })
+    )
+    expect(store.getChild('child-1')?.operation).toMatchObject({ toolName: 'Bash' })
     admission.announce(
       observation({
         aliases: [{ segmentId: 'segment-1', aliasKind: 'task_id', alias: 'shell-1' }],

@@ -2,7 +2,6 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-// Share keywords between the pane and settings-search index.
 export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword('auto.components.settings.tasks.search.2ec54bee51', 'tasks'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.cf0e3e0c2f', 'provider'),

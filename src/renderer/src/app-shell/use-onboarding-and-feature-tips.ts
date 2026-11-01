@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { onOnboardingReopened } from '../components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from '../components/onboarding/should-show-onboarding'
@@ -7,6 +7,9 @@ import {
   isCliFeatureTipCompleted
 } from '../components/feature-tips/feature-tip-startup-gate'
 import {
+  isChatUiLaunchTipHeldOut,
+  trackChatUiFeatureTipExposure,
+  trackChatUiFeatureTipShown,
   trackCmdJPaletteFeatureTipShown,
   trackOrcaCliFeatureTipShown
 } from '../components/feature-tips/feature-tip-telemetry'
@@ -16,10 +19,7 @@ import type { OnboardingState } from '../../../shared/onboarding-state-types'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 
-/**
- * Owns first-run education: the onboarding flow's visibility plus the one-per-session
- * feature-tip prompt, which stays suppressed until onboarding's state is known.
- */
+/** Keep feature-tip education suppressed until onboarding state is known. */
 export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
@@ -32,11 +32,13 @@ export function useOnboardingAndFeatureTips() {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
+      setChatUiLaunchTipVariant: s.setChatUiLaunchTipVariant,
       setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
     }))
@@ -52,7 +54,7 @@ export function useOnboardingAndFeatureTips() {
   }, [])
 
   useEffect(() => {
-    // Why: suppress tours until onboarding state is known (null = loading) so a first-run user can't mark a tour seen before onboarding appears.
+    // Suppress tours during unknown onboarding so first-run users cannot consume them before onboarding.
     const suppressTours = !onboardingLoaded || shouldShowOnboarding(onboarding)
     actions.setContextualToursOnboardingVisible(suppressTours)
   }, [actions, onboarding, onboardingLoaded])
@@ -61,7 +63,7 @@ export function useOnboardingAndFeatureTips() {
     if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
       return
     }
-    // Why: rollout targets first-run onboarding users; existing profiles are classified once and never auto-toured.
+    // Classify existing profiles once; auto-tour only first-run onboarding users.
     actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
   }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
 
@@ -91,11 +93,37 @@ export function useOnboardingAndFeatureTips() {
   }, [persistedUIReady])
 
   useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+
+    let cancelled = false
+    void window.api.onboarding
+      .getChatUiLaunchTipVariant()
+      .then((variant) => {
+        if (!cancelled) {
+          actions.setChatUiLaunchTipVariant(variant)
+        }
+      })
+      .catch(() => {
+        // Fail closed without holding other tips behind this read.
+        if (!cancelled) {
+          actions.setChatUiLaunchTipVariant('none')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [actions, persistedUIReady])
+
+  useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
+      chatUiLaunchTipVariant,
       onboarding,
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
@@ -105,7 +133,7 @@ export function useOnboardingAndFeatureTips() {
     })
 
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
-      // Why: first-run users should finish onboarding without a second education modal in the same session.
+      // Avoid a second education modal during first-run onboarding.
       suppressedByOnboardingThisSessionRef.current = true
       return
     }
@@ -114,13 +142,24 @@ export function useOnboardingAndFeatureTips() {
       return
     }
 
+    if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
+      if (isChatUiLaunchTipHeldOut(settings ?? null)) {
+        // Control behaves as if the tip never existed, so the next pending tip may take this launch.
+        actions.markFeatureTipsSeen(['chat-ui-here'])
+        return
+      }
+    }
+
     promptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
     } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
       trackCmdJPaletteFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
+      trackChatUiFeatureTipShown(chatUiLaunchTipVariant)
     }
-    // Why: mark seen on show so a quit/crash before dismiss doesn't reappear it next launch.
+    // Mark seen when shown so a crash before dismissal cannot repeat the tip.
     actions.markFeatureTipsSeen([featureTipsDecision.tipId])
     actions.openModal('feature-tips', {
       source: 'app_open',
@@ -129,6 +168,7 @@ export function useOnboardingAndFeatureTips() {
   }, [
     activeModal,
     actions,
+    chatUiLaunchTipVariant,
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
@@ -137,10 +177,9 @@ export function useOnboardingAndFeatureTips() {
     settings
   ])
 
-  return {
-    applyStartupOnboardingState,
-    onboarding,
-    setOnboarding,
-    shouldRender: onboarding !== null && shouldShowOnboarding(onboarding)
-  }
+  const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
+  return useMemo(
+    () => ({ applyStartupOnboardingState, onboarding, setOnboarding, shouldRender }),
+    [applyStartupOnboardingState, onboarding, shouldRender]
+  )
 }

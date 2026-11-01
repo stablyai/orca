@@ -139,8 +139,7 @@ async function pasteLargeTextIntoContentEditable(
   range.deleteContents()
   let textIndex = 0
 
-  // Why: contenteditable primary-selection paste cannot rely on browser
-  // execCommand for large payloads; chunked text nodes keep the renderer yielding.
+  // Chunk contenteditable text nodes to yield on large primary-selection pastes; execCommand cannot handle them reliably.
   while (textIndex < text.length) {
     if (!isContentEditablePasteTargetAvailable(target, options.canContinue)) {
       if (textIndex > 0) {
@@ -249,8 +248,7 @@ export async function pastePrimarySelectionTextIntoTarget(
       maxBytes: options.maxBytes,
       measureYieldAfterCodeUnits: options.measureYieldAfterCodeUnits,
       yieldToEventLoop: options.yieldToEventLoop,
-      // Why: async middle-click paste can outlive focus ownership, especially
-      // during chunked textarea insertion.
+      // Async/chunked middle-click paste can outlive the original focus owner.
       canContinue: targetStillFocused
     })
     return result.status === 'pasted'

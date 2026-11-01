@@ -1,4 +1,5 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { _resetClosedPaneFencesForTests } from '../terminal-topology/closed-pane-binding-fence'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
@@ -7,10 +8,13 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
+
+// Clear process-wide close fences because these tests reuse pane IDs.
+beforeEach(_resetClosedPaneFencesForTests)
 
 const binding = {
   worktreeId: 'repo-local::/fixture/local',
@@ -133,7 +137,6 @@ it('keeps a phone close and still kills when its durable write fails', async () 
     expect.objectContaining({ message: 'close disk refused' })
   )
 
-  // Nothing rolled the removal back, so the next write makes it durable.
   await store.flushPendingOrThrowAsync()
   expect(persistedLeafIds()).toEqual([])
 })
@@ -164,7 +167,7 @@ it('commits nothing for a pane that restarted while its close waited for the wri
   store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
   const earlierWrite = store.flushPendingOrThrowAsync()
   await gate.started.promise
-  // The restart is queued first, so it lands after the close captured the pane it meant.
+  // Queue restart before close executes to test stale-close ownership fencing.
   const restart = store.persistPtyBinding({
     ...binding,
     ptyId: 'restarted-pty',
@@ -193,7 +196,7 @@ it('commits a renderer tab close whose split pane bound while the close waited f
   store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
   const earlierWrite = store.flushPendingOrThrowAsync()
   await gate.started.promise
-  // The split's binding is queued first, so it grows the tab after the close was asked.
+  // Queue the split before close executes to test a sibling added after capture.
   const split = store.persistPtyBinding({
     ...binding,
     leafId: siblingLeafId,
@@ -220,7 +223,6 @@ it('commits a renderer tab close whose split pane bound while the close waited f
       .getWorkspaceSession()
       .tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
   ).toBe(false)
-  // Why: skipping the owner fence for the layout owner's own close must not skip its record.
   expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId?.[binding.tabId]).toEqual(
     expect.objectContaining({ worktreeId: binding.worktreeId, reason: 'user' })
   )

@@ -1,23 +1,6 @@
-/**
- * Byte-exactness for a Hangul run long enough to wrap.
- *
- * The gap this closes is real independent of any bug report: every CJK byte-exactness spec in the
- * suite types a handful of characters (`日本語`, `你好。`), so none of them ever reaches the right
- * edge of a row. A wide glyph that does not fit in the last cell has to move to the next row, and
- * that regime had no byte-level coverage at all.
- *
- * #15066 claims a long Hangul run gains a stray line feed and two spaces near the wrap point — 42
- * typed, 45 stored. Chasing that report is what produced this spec, and the report did not hold:
- * the stray spaces are real characters in the buffer, but the shell *wrote* them as output. They
- * appear only when the prompt carries non-printing escapes that are not wrapped in `\[ \]`, which
- * makes readline's wrap arithmetic pad at the boundary; with a plain prompt the identical run at
- * the identical width renders clean. Nothing extra ever reached the pty as input.
- *
- * DIRECTION MATTERS: the byte reader is a node process holding the pty, so what it records is what
- * the pty *received as input*, never what the shell echoed back. An extra byte observed here could
- * only have been manufactured by the renderer's input path — which is the half of this that is
- * Orca's to guarantee, and the half that had no coverage.
- */
+// Assert byte-exact Hangul input across row wraps; short CJK runs never reach the wide-glyph boundary.
+// #15066’s extra LF/spaces were shell output from prompt escapes missing readline’s \[ \] wrappers; a plain prompt rendered cleanly.
+// The Node reader records PTY input, separating renderer-manufactured bytes from shell echo/output.
 import type { CDPSession, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -115,14 +98,7 @@ async function readPaneGrid(page: Page, ptyId: string): Promise<PaneGrid> {
   }, ptyId)
 }
 
-/**
- * Splits the pane down instead of calling `terminal.resize`.
- *
- * A direct `resize` does take, but the pane's fit pass re-fits to the container the moment
- * anything else touches layout, so the width silently springs back mid-run and the spec ends up
- * measuring the wide default. Splitting narrows the container itself, which is the only width the
- * fit pass will agree to keep.
- */
+// Split to narrow the container: direct terminal.resize is overwritten by the next fit pass.
 async function narrowPaneBySplitting(page: Page, splits: number): Promise<void> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
@@ -184,12 +160,7 @@ async function composeThenCommitPhrase(
 
 const KEYSTROKE_PAUSE_MS = 16
 
-/**
- * Asserts the pty received exactly `expectedText` and nothing else.
- *
- * Both forms are checked on purpose: the decoded compare is what makes a failure readable (an
- * inserted LF or space shows up in the diff), the hex compare is what makes it byte-exact.
- */
+// Compare decoded text for readable inserted LF/space diffs and hex for byte exactness.
 function expectExactPtyInput(received: readonly string[], expectedText: string): void {
   const decoded = received.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))
   expect(decoded).toEqual([`${expectedText}\n`])
@@ -208,7 +179,6 @@ type WrapScenario = {
 
 const SCENARIOS: readonly WrapScenario[] = [
   {
-    // The count from the report, starting at column 0.
     name: '42 syllables',
     offsetByOneCell: false,
     syllableCount: () => 42,
@@ -216,9 +186,7 @@ const SCENARIOS: readonly WrapScenario[] = [
     policies: ['mac', 'windows', 'linux']
   },
   {
-    // Same run one cell out of phase. Whichever parity the pane's real width has, this and the
-    // scenario above cover both the clean boundary and the one where the next syllable is too wide
-    // for the last cell and has to move down a row.
+    // Shift one cell to cover both clean wraps and a wide glyph that cannot fit the final cell, regardless of pane-width parity.
     name: '42 syllables offset by one cell',
     offsetByOneCell: true,
     syllableCount: () => 42,
@@ -226,8 +194,7 @@ const SCENARIOS: readonly WrapScenario[] = [
     policies: ['mac']
   },
   {
-    // Ends on the last syllable that fits the row, leaving the emulator in its deferred-wrap state
-    // when Enter arrives.
+    // Leave deferred wrap pending when Enter arrives.
     name: 'a run that ends on the wrap boundary',
     offsetByOneCell: false,
     syllableCount: (observedCols) => Math.floor(observedCols / 2) * 2,
@@ -235,8 +202,7 @@ const SCENARIOS: readonly WrapScenario[] = [
     policies: ['mac']
   },
   {
-    // Composes across the boundary instead of committing before it: the preedit outgrows the rest
-    // of the row and only commits once it is well past the edge.
+    // Grow one preedit past the boundary before committing.
     name: 'a composition that straddles the wrap boundary',
     offsetByOneCell: false,
     syllableCount: (observedCols) => Math.floor(observedCols / 2) + 8,
@@ -276,8 +242,7 @@ test.describe('Terminal Hangul wrap-boundary byte exactness', () => {
             await dispatchImeRewrittenPrintableKey(arena.session, OFFSET_KEY)
           }
           await scenario.drive(arena.session, orcaPage, run)
-          // The guard that stops this passing by measuring nothing: the echoed run has to have
-          // pushed the cursor onto a later row, which is the wrap the whole spec is about.
+          // Require cursor movement to a later row so a run that never wraps cannot pass.
           await expect
             .poll(async () => (await readPaneGrid(orcaPage, arena.ptyId)).cursorRow, {
               timeout: 10_000,

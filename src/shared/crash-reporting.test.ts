@@ -198,7 +198,6 @@ describe('crash-reporting shared helpers', () => {
       source: 'renderer',
       processType: 'renderer',
       reason: 'crashed',
-      // The bare STATUS_BREAKPOINT this ticket is about.
       exitCode: -2147483645,
       appVersion: '1.4.183',
       platform: 'win32',
@@ -216,8 +215,7 @@ describe('crash-reporting shared helpers', () => {
 
     const text = formatCrashReportText(report)
 
-    // Why: Chromium logs the source basename, not a path, so the fatal line has
-    // to survive path redaction intact or the check is unnameable again.
+    // Chromium source basenames must survive path redaction or CHECK diagnoses become unnameable.
     expect(text).toContain(`Check failure: ${fatalLine}`)
     expect(text).toContain('Faulting module: chrome_elf.dll+0x1234')
     expect(text.indexOf('Check failure:')).toBeLessThan(text.indexOf('Details:'))
@@ -264,7 +262,6 @@ describe('crash-reporting shared helpers', () => {
     expect(formatCrashReportText(report({ reason: 'launch-failed', exitCode: 18 }))).toContain(
       'Exit code: 18\n'
     )
-    // A clean exit(0) must not grow an "(exit status 0)" suffix.
     expect(formatCrashReportText(report({ reason: 'crashed', exitCode: 0 }))).toContain(
       'Exit code: 0\n'
     )

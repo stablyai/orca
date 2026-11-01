@@ -168,8 +168,7 @@ test.describe('Droid notifications', () => {
     await installMainProcessNotificationDispatchSpy(electronApp)
     const endpoint = await readHookEndpoint(electronApp)
 
-    // Why: the synthetic hook bypasses the shell startup path; wait for a
-    // responsive PTY so the notification liveness gate can observe the turn.
+    // Synthetic hooks skip shell startup; wait for PTY responsiveness so the liveness gate can observe the turn.
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const readyMarker = `__CODEX_HOOK_NOTIFY_READY_${Date.now()}__`
     await sendToTerminal(orcaPage, ptyId, `printf '${readyMarker}\\n'\r`)
@@ -192,8 +191,7 @@ test.describe('Droid notifications', () => {
           ),
         {
           timeout: 30_000,
-          // Why: this synthetic hook posts directly to main; main's cache is
-          // the durable source used to recover renderer startup/listener races.
+          // Main’s cache recovers renderer startup/listener races; assert the direct hook reached it.
           message: 'Codex UserPromptSubmit hook did not reach agent status cache'
         }
       )
@@ -364,8 +362,7 @@ test.describe('Droid notifications', () => {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    // Why: contextBridge freezes window.api, so notification invokes must be
-    // observed in Electron's main process rather than monkey-patched renderer-side.
+    // contextBridge freezes window.api; observe notification dispatch in main instead.
     await installMainProcessNotificationDispatchSpy(electronApp)
     await installRendererTitleLog(orcaPage)
 
@@ -414,8 +411,7 @@ test.describe('Droid notifications', () => {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
-    // Why: contextBridge freezes window.api, so notification invokes must be
-    // observed in Electron's main process rather than monkey-patched renderer-side.
+    // contextBridge freezes window.api; observe notification dispatch in main instead.
     await installMainProcessNotificationDispatchSpy(electronApp)
     await installRendererTitleLog(orcaPage)
 
@@ -437,8 +433,7 @@ test.describe('Droid notifications', () => {
       )
       .toBe(true)
 
-    // Why: Factory Droid can show this title while Execute is still running
-    // (for example `sleep 180`); hook events own Droid status, not this title.
+    // Droid can show this title during Execute; hooks alone own its completion status.
     await orcaPage.waitForTimeout(500)
     const dispatches = await getNotificationDispatches(electronApp)
     expect(dispatches).toEqual([])

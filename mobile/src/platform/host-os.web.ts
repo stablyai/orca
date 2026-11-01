@@ -2,11 +2,7 @@ import type { HostOs } from './host-os'
 
 export type { HostOs } from './host-os'
 
-/**
- * Web sibling: `Platform.OS` is `web` inside the shell's page, but the keyboard it lifts over is the
- * phone's, whose height the shell reports in that OS's own terms. So the page answers the phone's
- * OS from the WebView's user agent. iPadOS reports a Mac, which only its touch points give away.
- */
+// Use the phone OS for keyboard/inset arithmetic: Platform.OS is web here; iPadOS needs the Mac-plus-touch heuristic.
 export function hostOs(): HostOs {
   const agent = globalThis.navigator?.userAgent ?? ''
   if (/iP(ad|hone|od)/.test(agent)) {

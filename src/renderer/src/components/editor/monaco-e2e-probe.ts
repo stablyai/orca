@@ -40,13 +40,11 @@ export function installMonacoE2EProbe(
         throw new Error('Legacy control must be restored before running again')
       }
       legacyControlOriginalValue = editorInstance.getValue()
-      // Why: the former controlled wrapper retained a flat IPC-delivered prop
-      // while setValue rebuilt the model; preserve that ownership in the control.
+      // Retain a flat incoming prop while rebuilding the model, matching the former controlled wrapper’s memory ownership.
       legacyControlIncomingValue = new TextDecoder().decode(
         new TextEncoder().encode(`${legacyControlOriginalValue}${suffix}`)
       )
-      // Why: reproduces the former controlled read-only wrapper's unconditional
-      // whole-model setValue without exposing a switch in production builds.
+      // Reproduce the former wrapper’s whole-model setValue only in the test control.
       editorInstance.setValue(legacyControlIncomingValue)
     },
     restoreLegacySetValueControl: (): void => {
@@ -58,8 +56,7 @@ export function installMonacoE2EProbe(
       legacyControlIncomingValue = null
     },
     restoreScrollTop: (scrollTop: number): void => {
-      // Why: the legacy setValue control can perturb Monaco's pixel rounding;
-      // paired fixed-path measurements must start from the recorded geometry.
+      // Reset recorded geometry because the legacy control can perturb Monaco’s pixel rounding.
       editorInstance.setScrollTop(scrollTop)
     },
     snapshot: (): MonacoE2ESnapshot => {

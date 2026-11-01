@@ -16,7 +16,10 @@ export function gitChangeListArgs(fromOid: string | null, toOid: string): string
     : ['diff-tree', '--root', '--no-commit-id', '-r', ...format, toOid, '--']
 }
 
-export function parseGitChangeList(stdout: string): GitBranchChangeEntry[] {
+export function parseGitChangeList(
+  stdout: string,
+  format: 'raw' | 'name-status' = 'raw'
+): GitBranchChangeEntry[] {
   const entries: GitBranchChangeEntry[] = []
   let offset = 0
   function readField(): string {
@@ -30,9 +33,12 @@ export function parseGitChangeList(stdout: string): GitBranchChangeEntry[] {
   }
 
   // Raw records precede numstat records; filenames are separate NUL-delimited fields.
-  while (stdout[offset] === ':') {
+  while (offset < stdout.length && (format === 'name-status' || stdout[offset] === ':')) {
     const header = readField()
-    const match = /^:[0-7]{6} [0-7]{6} [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(header)
+    const match =
+      format === 'name-status'
+        ? /^([A-Z])\d*$/.exec(header)
+        : /^:[0-7]{6} [0-7]{6} [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(header)
     if (!match) {
       throw new Error('Invalid Git change record')
     }
@@ -48,6 +54,9 @@ export function parseGitChangeList(stdout: string): GitBranchChangeEntry[] {
       status: CHANGE_STATUS[code] ?? 'modified',
       ...(oldPath === undefined ? {} : { oldPath })
     })
+  }
+  if (offset === stdout.length) {
+    return entries
   }
   const statsByPath = parseNumstat(stdout.slice(offset))
   return entries.map((entry) => ({ ...entry, ...statsByPath.get(entry.path) }))

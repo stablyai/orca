@@ -20,8 +20,6 @@ export function AgentSessionHistoryIcon({
       aria-hidden
       className={className}
     >
-      {/* Why: this tab uses Tabler's category glyph by request; keep it local
-      and currentColor so it behaves like the lucide activity-bar icons. */}
       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
       <path d="M14 4h6v6h-6z" />
       <path d="M4 14h6v6h-6z" />

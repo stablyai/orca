@@ -1,10 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { classifyNodeServerChanges, collectNodeServerInputs } from './node-server-change-scope.mjs'
-import { ORCAD_CHILD_ENTRY_POINTS, ORCAD_ENTRY_POINT } from './orcad-entry-build.mjs'
+import {
+  ORCAD_CHILD_ENTRY_POINTS,
+  ORCAD_ENTRY_POINT,
+  ORCAD_LAUNCHER_ENTRY_POINT
+} from './orcad-entry-build.mjs'
 
 const ENTRY_POINTS = [
   ORCAD_ENTRY_POINT,
+  ORCAD_LAUNCHER_ENTRY_POINT,
   ...Object.values(ORCAD_CHILD_ENTRY_POINTS),
   'src/cli/index.ts',
   'config/scripts/build-orcad-node.mjs',

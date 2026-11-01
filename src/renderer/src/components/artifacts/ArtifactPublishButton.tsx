@@ -10,6 +10,7 @@ import { useAppStore } from '@/store'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 type PublishedLinkLookup = {
   key: string
@@ -21,6 +22,8 @@ export function ArtifactPublishButton({
   sourceKey,
   createRequest,
   className,
+  variant = 'ghost',
+  size = 'icon-sm',
   disabled,
   anchorRef,
   open: controlledOpen,
@@ -29,6 +32,9 @@ export function ArtifactPublishButton({
   sourceKey: string
   createRequest: () => Promise<ArtifactWriteRequest>
   className?: string
+  /** For a toolbar whose other buttons use a different style. */
+  variant?: React.ComponentProps<typeof Button>['variant']
+  size?: React.ComponentProps<typeof Button>['size']
   disabled?: boolean
 } & (
   | { anchorRef?: never; open?: never; onOpenChange?: never }
@@ -47,7 +53,6 @@ export function ArtifactPublishButton({
   const lookupSequence = useRef(0)
   const popoverContentRef = useRef<HTMLDivElement>(null)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
@@ -134,8 +139,8 @@ export function ArtifactPublishButton({
             <PopoverTrigger asChild>
               <Button
                 type="button"
-                variant="ghost"
-                size="icon-sm"
+                variant={variant}
+                size={size}
                 className={cn('shrink-0', className)}
                 disabled={blocked}
                 aria-label={label}
@@ -205,12 +210,10 @@ export function ArtifactPublishButton({
                   )}
                 </p>
               </div>
-              <Button
-                type="button"
+              <OrcaSignInButton
                 variant="outline"
                 size="xs"
                 disabled={authStatus?.configured !== true}
-                onClick={() => void connect()}
               >
                 {authStatus?.state === 'reconnect-required'
                   ? translate(
@@ -218,9 +221,10 @@ export function ArtifactPublishButton({
                       'Sign in again'
                     )
                   : translate('auto.components.artifacts.ArtifactPublishButton.signIn', 'Sign in')}
-              </Button>
+              </OrcaSignInButton>
             </div>
           ) : null}
+          {!signedIn ? <OrcaSignInWaitNotice /> : null}
 
           {!sharingEnabled ? (
             <div className={cn('space-y-2', !signedIn && 'border-t border-border/60 pt-3')}>

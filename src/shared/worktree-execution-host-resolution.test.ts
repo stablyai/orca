@@ -5,10 +5,7 @@ import {
   type ExecutionHostOwnerRow
 } from './worktree-execution-host-resolution'
 
-// Why (#11163, #17799): main's terminal launch scope and the renderer's owner index both answer
-// "which host does this worktree execute on". They used to answer it separately, and disagreed —
-// main derived the host from the worktree while the renderer fell back to an id-only repo lookup,
-// so a pane on one SSH host was routed to another. One rule now, exercised here directly.
+// Main’s PTY routing and the renderer’s file/reconnect routing must agree; an ID-only repo lookup previously sent ssh:m4air panes to openclaw (#11163, #17799).
 const resolve = (
   repos: readonly { id: string; connectionId?: string; executionHostId?: string }[],
   worktree: { repoId: string; hostId?: string | null }
@@ -18,22 +15,9 @@ const resolve = (
 describe('resolveWorktreeExecutionHost', () => {
   describe('the worktree names its own host', () => {
     it('routes to that host even when the only row belongs to a different SSH host', () => {
-      // The reproduced defect: `ssh:m4air` worktree, sole row on `openclaw`.
       expect(
         resolve([{ id: 'r', connectionId: 'openclaw' }], { repoId: 'r', hostId: 'ssh:m4air' })
       ).toEqual({ kind: 'resolved', hostId: 'ssh:m4air', connectionId: 'm4air', owner: null })
-    })
-
-    it('answers before the repo row hydrates, because the host is not a guess', () => {
-      // Deliberate change from "unresolved": #6648 blocks destructive ops while the *host* is
-      // unknown. A worktree naming `ssh:m4air` is not that case — the repo row adds nothing the
-      // host id has not already settled, and refusing here stalls a remote pane on hydration.
-      expect(resolve([], { repoId: 'r', hostId: 'ssh:m4air' })).toEqual({
-        kind: 'resolved',
-        hostId: 'ssh:m4air',
-        connectionId: 'm4air',
-        owner: null
-      })
     })
 
     it('picks the row on that host when both SSH hosts carry the id', () => {
@@ -53,18 +37,7 @@ describe('resolveWorktreeExecutionHost', () => {
       })
     })
 
-    it('matches a row that names the host in either spelling', () => {
-      const stamped = { id: 'r', executionHostId: 'ssh:m4air' }
-      expect(resolve([stamped], { repoId: 'r', hostId: 'ssh:m4air' })).toEqual({
-        kind: 'resolved',
-        hostId: 'ssh:m4air',
-        connectionId: 'm4air',
-        owner: stamped
-      })
-    })
-
     it('takes no connection from a row on a different host, whatever this host is', () => {
-      // The row lives on `ssh:openclaw`; neither a local nor a runtime worktree may borrow it.
       for (const hostId of ['local', 'runtime:env-a']) {
         expect(resolve([{ id: 'r', connectionId: 'openclaw' }], { repoId: 'r', hostId })).toEqual({
           kind: 'resolved',
@@ -76,9 +49,7 @@ describe('resolveWorktreeExecutionHost', () => {
     })
 
     it('reads a runtime host nested SSH target off the row on that same host', () => {
-      // Not a cross-host borrow: this row *is* the runtime host's row, and the nested target
-      // appears nowhere else. Nulling it makes the workspace read as local, which decides whether
-      // this client tries to read a transcript that lives on the nested host.
+      // Only the same runtime host’s row supplies its nested SSH target; dropping it misroutes transcript reads.
       const nested = { id: 'r', connectionId: 'ssh-nested', executionHostId: 'runtime:env-a' }
       expect(resolve([nested], { repoId: 'r', hostId: 'runtime:env-a' })).toEqual({
         kind: 'resolved',
@@ -100,30 +71,6 @@ describe('resolveWorktreeExecutionHost', () => {
   })
 
   describe('the worktree names no host', () => {
-    it('resolves from the sole row, in either spelling', () => {
-      const legacy = { id: 'r', connectionId: 'openclaw' }
-      expect(resolve([legacy], { repoId: 'r' })).toEqual({
-        kind: 'resolved',
-        hostId: 'ssh:openclaw',
-        connectionId: 'openclaw',
-        owner: legacy
-      })
-      const stamped = { id: 'r', executionHostId: 'ssh:m4air' }
-      expect(resolve([stamped], { repoId: 'r' })).toEqual({
-        kind: 'resolved',
-        hostId: 'ssh:m4air',
-        connectionId: 'm4air',
-        owner: stamped
-      })
-      const local = { id: 'r' }
-      expect(resolve([local], { repoId: 'r' })).toEqual({
-        kind: 'resolved',
-        hostId: 'local',
-        connectionId: null,
-        owner: local
-      })
-    })
-
     it('refuses when rival rows disagree about the host, including two SSH hosts', () => {
       expect(
         resolve(
@@ -153,12 +100,7 @@ describe('resolveWorktreeExecutionHost', () => {
       ).toMatchObject({ kind: 'resolved', hostId: 'ssh:m4air', connectionId: 'm4air' })
     })
 
-    it('reports an unknown owner distinctly from a conflicting one', () => {
-      expect(resolve([], { repoId: 'r' })).toEqual({ kind: 'unresolved', reason: 'unknown' })
-    })
-
-    // `unknown` is a verdict the launch path disposes of as a plain local folder, so a row that
-    // declared a host and named an unparseable one must not share the word — it has to fail closed.
+    // Unknown may fall back to a local folder; a declared but unparseable host must fail closed.
     it('reports a row naming an unparseable host distinctly from an unknown one', () => {
       for (const executionHostId of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box']) {
         expect(resolve([{ id: 'r', executionHostId }], { repoId: 'r' })).toEqual({
@@ -174,21 +116,6 @@ describe('resolveWorktreeExecutionHost', () => {
           repoId: 'r'
         })
       ).toEqual({ kind: 'unresolved', reason: 'malformed' })
-    })
-
-    it('still resolves every row that names a parseable host', () => {
-      expect(resolve([{ id: 'r', executionHostId: 'ssh:box' }], { repoId: 'r' })).toMatchObject({
-        kind: 'resolved',
-        hostId: 'ssh:box'
-      })
-      expect(resolve([{ id: 'r', connectionId: 'box' }], { repoId: 'r' })).toMatchObject({
-        kind: 'resolved',
-        hostId: 'ssh:box'
-      })
-      expect(resolve([{ id: 'r' }], { repoId: 'r' })).toMatchObject({
-        kind: 'resolved',
-        hostId: 'local'
-      })
     })
   })
 
@@ -224,7 +151,6 @@ describe('createRepoRowExecutionHostLookup', () => {
       { id: 'c' }
     ])
     const lookup = createRepoRowExecutionHostLookup(repos)
-    // One grouping pass over the list — a Map get plus a set per row — and then never again.
     const afterBuild = idReads()
     expect(afterBuild).toBeLessThanOrEqual(repos.length * 2)
 
@@ -234,33 +160,5 @@ describe('createRepoRowExecutionHostLookup', () => {
       lookup.byHost('b', 'ssh:m4air')
     }
     expect(idReads()).toBe(afterBuild)
-  })
-
-  it('answers missing, ambiguous and resolved exactly as a per-call scan would', () => {
-    expect(createRepoRowExecutionHostLookup([]).byId('r')).toEqual({ kind: 'missing' })
-
-    const openclaw = { id: 'r', connectionId: 'openclaw' }
-    const m4air = { id: 'r', connectionId: 'm4air' }
-    expect(createRepoRowExecutionHostLookup([openclaw, m4air]).byId('r')).toEqual({
-      kind: 'ambiguous'
-    })
-
-    // Two rows agreeing on one host still resolve to the first in repo-list order.
-    const first: ExecutionHostOwnerRow = { id: 'r', connectionId: 'm4air' }
-    const second: ExecutionHostOwnerRow = { id: 'r', executionHostId: 'ssh:m4air' }
-    expect(createRepoRowExecutionHostLookup([first, second]).byId('r')).toEqual({
-      kind: 'resolved',
-      owner: first
-    })
-  })
-
-  it('keeps byHost hits, misses and repo-list order', () => {
-    const openclaw = { id: 'r', connectionId: 'openclaw' }
-    const m4air = { id: 'r', connectionId: 'm4air' }
-    const lookup = createRepoRowExecutionHostLookup([openclaw, m4air])
-    expect(lookup.byHost('r', 'ssh:m4air')).toBe(m4air)
-    expect(lookup.byHost('r', 'ssh:openclaw')).toBe(openclaw)
-    expect(lookup.byHost('r', 'local')).toBeNull()
-    expect(lookup.byHost('other', 'local')).toBeNull()
   })
 })

@@ -35,8 +35,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/selectors', () => ({
   getAllWorktreesFromState: () => mocks.state.worktreeRows,
   getWorktreeMapFromState: () => mocks.state.worktreeMap,
-  // Host-qualified lookup (STA-4343); this fixture keys one row per id, so the
-  // host only has to agree when the row declares one.
+  // Match declared hosts even though this fixture indexes worktrees by ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const rows = mocks.state.worktreeRows.filter(
       (row) => (row as { id?: string }).id === worktreeId
@@ -183,7 +182,7 @@ describe('runWorktreeDeletesInParallel', () => {
 
     const deleted = runDeletesForCurrentWorktrees([
       { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-      { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
+      { id: 'child', displayName: 'child', repoId: 'repo-b', path: '/workspaces/parent/child' }
     ])
 
     expect(mocks.state.markWorktreesDeleting).toHaveBeenCalledWith(['parent', 'child'])
@@ -256,22 +255,37 @@ describe('runWorktreeDeletesInParallel', () => {
     expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps a parent delete waiting for its child to finish on this machine', async () => {
+  it.each([undefined, 'ssh:builder'] as const)('orders nested deletes on %s', async (hostId) => {
     const child = deferredDeleteResult()
     mocks.state.removeWorktree.mockImplementationOnce(() => child.promise)
 
-    const deleted = runDeletesForCurrentWorktrees([
-      { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-      { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
-    ])
+    const deleted = runDeletesForCurrentWorktrees(
+      [
+        { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
+        { id: 'child', displayName: 'child', repoId: 'repo-b', path: '/workspaces/parent/child' },
+        { id: 'independent', displayName: 'independent', repoId: 'repo-c', path: '/apart' }
+      ].map((target) => ({ ...target, hostId }))
+    )
 
-    await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1))
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
-    child.resolve({ ok: true })
-    await expect(deleted).resolves.toHaveLength(2)
     expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(2)
+    expect(mocks.state.removeWorktree.mock.calls.map(([target]) => target)).toEqual([
+      { id: 'child', executionHostId: hostId ?? null },
+      { id: 'independent', executionHostId: hostId ?? null }
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(2)
+    child.resolve({ ok: true })
+    await expect(deleted).resolves.toEqual([
+      { id: 'parent', executionHostId: hostId ?? null },
+      { id: 'child', executionHostId: hostId ?? null },
+      { id: 'independent', executionHostId: hostId ?? null }
+    ])
+    expect(mocks.state.removeWorktree).toHaveBeenLastCalledWith(
+      { id: 'parent', executionHostId: hostId ?? null },
+      false,
+      { suppressPreservedBranchToast: true }
+    )
   })
 
   it('passes confirmed force to each delete', async () => {
@@ -380,7 +394,7 @@ describe('runWorktreeDeletesInParallel', () => {
     await expect(
       runDeletesForCurrentWorktrees([
         { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-        { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
+        { id: 'child', displayName: 'child', repoId: 'repo-b', path: '/workspaces/parent/child' }
       ])
     ).resolves.toEqual([])
 

@@ -19,7 +19,7 @@ describe('PluginAuditLog retention', () => {
     for (let index = 0; index < 8; index += 1) {
       await audit.record({
         ts: index,
-        actor: 'plugin:orca-samples.demo',
+        actor: 'plugin:samples.demo',
         method: 'storage.set',
         summary: `key=${index}`,
         outcome: 'ok'

@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continuation'
-import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
+import {
+  buildAgentSessionContinuationPrompt,
+  hasFullAgentSessionContext
+} from '@/lib/agent-session-continuation'
+import {
+  canContinueAgentSessionInNewSession,
+  prepareAgentSessionContinuationFromPane
+} from './terminal-agent-session-continuation'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const store = {
@@ -64,9 +70,37 @@ describe('buildAgentSessionContinuationPrompt', () => {
     )
     expect(buildAgentSessionContinuationPrompt(source, 'full')).toBeNull()
   })
+  it.each(['opencode', 'opencode2'] as const)(
+    'uses captured context for %s SQLite references',
+    (sourceAgent) => {
+      const source = {
+        sourceAgent,
+        transcriptPath: '/home/u/.local/share/opencode/opencode.db#ses_proof',
+        capturedText: 'user: fix the parser\nassistant: tests remain'
+      }
+      expect(hasFullAgentSessionContext(source)).toBe(false)
+      expect(buildAgentSessionContinuationPrompt(source, 'focused')).toContain('tests remain')
+      expect(buildAgentSessionContinuationPrompt(source, 'focused')).not.toContain('opencode.db#')
+      expect(buildAgentSessionContinuationPrompt(source, 'full')).toBeNull()
+    }
+  )
+
+  it('preserves real transcript paths containing a hash', () => {
+    const source = {
+      sourceAgent: 'opencode' as const,
+      transcriptPath: '/home/u/project#one/session.jsonl',
+      capturedText: 'fallback'
+    }
+    expect(hasFullAgentSessionContext(source)).toBe(true)
+    expect(buildAgentSessionContinuationPrompt(source, 'full')).toContain(source.transcriptPath)
+  })
 })
 
 describe('prepareAgentSessionContinuationFromPane', () => {
+  it('does not enable session continuation for recognition-only DeepSeek Build', () => {
+    expect(canContinueAgentSessionInNewSession('dsb')).toBe(false)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     store.agentStatusByPaneKey = {
@@ -103,6 +137,30 @@ describe('prepareAgentSessionContinuationFromPane', () => {
       }
     })
   })
+
+  it.each(['opencode', 'opencode2'] as const)(
+    'captures scrollback for a %s SQLite session',
+    (sourceAgent) => {
+      store.agentStatusByPaneKey[`tab-1:${LEAF_ID}`] = {
+        agentType: sourceAgent,
+        providerSession: { transcriptPath: '/tmp/opencode.db#ses_proof' }
+      }
+      const pane = makePane('latest terminal context')
+      const request = prepareAgentSessionContinuationFromPane({
+        pane,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        groupId: null,
+        workspacePath: '/repo',
+        initialCwd: '/repo'
+      })
+      expect(pane.serializeAddon.serialize).toHaveBeenCalledWith({ scrollback: 800 })
+      expect(request?.source.capturedText).toBe('latest terminal context')
+      expect(buildAgentSessionContinuationPrompt(request!.source, 'focused')).toContain(
+        'latest terminal context'
+      )
+    }
+  )
 
   it('falls back to terminal capture when the provider transcript path is blank', () => {
     store.agentStatusByPaneKey[`tab-1:${LEAF_ID}`]!.providerSession = { transcriptPath: '   ' }

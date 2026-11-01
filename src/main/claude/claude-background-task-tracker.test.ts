@@ -21,9 +21,6 @@ function trackerAt(times: number[]): ClaudeBackgroundTaskTracker {
   return new ClaudeBackgroundTaskTracker(() => times[Math.min(index++, times.length - 1)])
 }
 
-/** The identity and stoppability of each published row, which is what the
- *  foreground cases below are about; `startedAt` and `state` have their own
- *  tests and would only make these brittle. */
 function rows(tracker: ClaudeBackgroundTaskTracker): { id: string; stoppable?: boolean }[] {
   return (tracker.state?.tasks ?? []).map((task) => ({
     id: task.id,
@@ -65,7 +62,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
       tasks: [{ id: 'task-1', kind: 'agent', state: 'working', startedAt: 100 }]
     })
 
-    // The turn settling changes nothing the strip renders.
     expect(tracker.observe(result())).toBe(false)
     expect(tracker.state?.tasks).toHaveLength(1)
   })
@@ -189,9 +185,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
   })
 
   it('settles a sibling from the captured producer order: aggregate eviction, then the outcome', () => {
-    // Verbatim sequence from a real SDK capture (2026-09-07): the aggregate
-    // roster arrives FIRST, already missing the finished task, and the
-    // terminal edges trail in the same tick.
+    // Captured SDK order: roster removal precedes terminal edges.
     const tracker = trackerAt([100, 200])
     tracker.observe(
       system('task_started', {
@@ -209,7 +203,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
       ])
     )
 
-    // The settling child is evicted by the aggregate before any outcome frame.
     tracker.observe(
       aggregate([
         { task_id: 'bprosaiim', task_type: 'local_bash', description: 'Sleep for 25 seconds' }
@@ -255,7 +248,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
       ]
     })
 
-    // Last task killed, same captured order: the strip exits.
     tracker.observe(aggregate([]))
     tracker.observe(system('task_updated', { task_id: 'bprosaiim', patch: { status: 'killed' } }))
     tracker.observe(system('task_notification', { task_id: 'bprosaiim', status: 'stopped' }))
@@ -287,7 +279,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(tracker.state?.tasks?.[0]).toEqual({
       id: 'agent-1',
       kind: 'agent',
-      // Progress descriptions are transient activity, never the task's name.
       description: 'Sleep 6 seconds test',
       name: 'general-purpose',
       state: 'working',
@@ -513,7 +504,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
     }
   })
 
-  it('admits unknown background updates conservatively and bounds edge-only fallback ids', () => {
+  it('admits unknown background updates conservatively and tracks every edge-only start', () => {
     const tracker = trackerAt([100])
     tracker.observe(
       system('task_updated', { task_id: 'unknown', patch: { is_backgrounded: true } })
@@ -529,10 +520,19 @@ describe('ClaudeBackgroundTaskTracker', () => {
         })
       )
     }
-    expect(tracker.stoppableTaskIds.length).toBeLessThanOrEqual(256)
+    expect(tracker.stoppableTaskIds).toHaveLength(401)
+    tracker.observe(system('task_notification', { task_id: 'unknown', status: 'completed' }))
+    for (let index = 0; index < 399; index += 1) {
+      tracker.observe(
+        system('task_notification', { task_id: `task-${index}`, status: 'completed' })
+      )
+    }
+    expect(tracker.goalBackgroundWork).toBe('live')
+    tracker.observe(system('task_notification', { task_id: 'task-399', status: 'completed' }))
+    expect(tracker.goalBackgroundWork).toBe('exited')
   })
 
-  it('bounds aggregate rosters and resets to the edge-only fallback on clear', () => {
+  it('lists every aggregate roster entry and resets to the edge-only fallback on clear', () => {
     const tracker = trackerAt([100])
     tracker.observe(
       aggregate(
@@ -543,7 +543,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
         }))
       )
     )
-    expect(tracker.stoppableTaskIds).toHaveLength(256)
+    expect(tracker.stoppableTaskIds).toHaveLength(400)
 
     tracker.clear()
     tracker.observe(
@@ -600,9 +600,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
     expect(tracker.state).toBeNull()
   })
   it('marks a foreground row not stoppable and leaves a backgrounded row alone', () => {
-    // `stopTask` has no foreground target, so the row must not offer a Stop that
-    // resolves to an empty list and silently reports nothing cancelled. A
-    // backgrounded row stays untouched on the wire: absent means stoppable.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     tracker.observe(started('fore-1', false))
@@ -613,9 +610,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
   })
 
   it('keeps live foreground work across an aggregate roster that never lists it', () => {
-    // `background_tasks_changed` enumerates BACKGROUNDED work only, so it is
-    // authoritative over that class alone. Treating it as the whole world wiped
-    // every in-flight foreground row and then dropped every later start.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     tracker.observe(started('fore-1', false))
@@ -623,10 +617,8 @@ describe('ClaudeBackgroundTaskTracker', () => {
       aggregate([{ task_id: 'back-1', task_type: 'local_bash', description: 'bash' }])
     )
 
-    // A retained row also keeps the place the user is already reading it in.
     expect(rows(tracker)).toEqual([{ id: 'fore-1', stoppable: false }, { id: 'back-1' }])
 
-    // A foreground start after the roster is new work, not a stale echo.
     tracker.observe(started('fore-2', false))
     expect(rows(tracker)).toEqual([
       { id: 'fore-1', stoppable: false },
@@ -634,12 +626,11 @@ describe('ClaudeBackgroundTaskTracker', () => {
       { id: 'fore-2', stoppable: false }
     ])
 
-    // Turn end still retires the foreground rows and only those.
     tracker.observe(result())
     expect(rows(tracker)).toEqual([{ id: 'back-1' }])
   })
 
-  it('drops a backgrounded start the roster no longer lists but bounds what it retains', () => {
+  it('drops a stale backgrounded start and retains every live foreground row', () => {
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     for (let index = 0; index < 300; index += 1) {
@@ -650,23 +641,15 @@ describe('ClaudeBackgroundTaskTracker', () => {
     )
 
     const ids = rows(tracker).map((row) => row.id)
-    // 255 retained foreground rows plus the roster's own entry: retention is
-    // real and still counts against the cap.
-    expect(ids).toHaveLength(256)
-    // When the cap bites, the STALEST retained row goes, not the newest.
-    expect(ids).toContain('fore-299')
-    expect(ids).not.toContain('fore-44')
+    expect(ids).toHaveLength(301)
+    expect(ids).toContain('fore-0')
     expect(ids).toContain('back-1')
 
-    // Aggregate authority over its OWN class is unchanged.
     tracker.observe(started('stale', true))
     expect(tracker.stoppableTaskIds).toEqual(['back-1'])
   })
 
   it('keeps a finished foreground id dead across a roster that never listed it', () => {
-    // The start guard only convicts BACKGROUNDED starts now, so terminal
-    // evidence is the only thing left defending a finished foreground id — and
-    // the roster carries no evidence about one, so it must not wipe it.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     tracker.observe(started('fore-1', false))
@@ -682,10 +665,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
   })
 
   it('retires a phantom foreground row when the next turn starts', () => {
-    // A foreground `task_started` with no turn open has no `result` coming to
-    // retire it, so it would sit in the strip — with no stop of its own — and
-    // refuse a conversation command. Turn start is the same evidence `result`
-    // is, and settling on it is cleanup only: nothing gates visibility on it.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe(started('phantom', false))
     expect(rows(tracker)).toEqual([{ id: 'phantom', stoppable: false }])
@@ -695,25 +674,16 @@ describe('ClaudeBackgroundTaskTracker', () => {
   })
 
   it('settles a previous turn the way the subagent roster settles it', () => {
-    // On this same frame the roster's `settleTurn` moves a still-working
-    // FOREGROUND child to `unverifiable` and leaves a backgrounded one alone.
-    // The strip has no `unverifiable` row, so keeping one would assert `live`
-    // for work Orca has already stopped vouching for.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     tracker.observe(started('fore', false))
     tracker.observe(started('back', true))
 
-    // No `result` for that turn; the next one starting is its only end.
     tracker.observe({ type: 'user' }, true)
     expect(rows(tracker)).toEqual([{ id: 'back' }])
   })
 
   it('empties only between one task retiring and the next starting', () => {
-    // The strip's mid-turn unmount in a sequential fan-out is TRUTHFUL: A leaves
-    // on the provider's own terminal frame, B does not exist yet, and nothing
-    // sweeps A early. Foreground work is not retained as a settled row either,
-    // so an empty roster means no task is running.
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
     tracker.observe(started('A', false))
@@ -723,8 +693,6 @@ describe('ClaudeBackgroundTaskTracker', () => {
     tracker.observe(started('B', false))
     expect(rows(tracker)).toEqual([{ id: 'B', stoppable: false }])
 
-    // Backgrounded work spanning the same gap holds the roster open, so an
-    // empty one is never work the strip is hiding.
     const spanned = new ClaudeBackgroundTaskTracker()
     spanned.observe({ type: 'user' }, true)
     spanned.observe(started('bg', true))

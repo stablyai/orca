@@ -1,16 +1,15 @@
-// Merges the three Cmd+J open-tab engines into one ranked list for the new-tab
-// omnibox. Pure: no store, no React.
+// Rank Cmd+J engine results together for the new-tab omnibox.
 
 import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { PaletteDocumentRank } from '@/lib/palette-match/palette-document'
+import type { PaletteDocumentRank } from '../../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
   createPaletteSearchContext,
   encodePaletteIdentity,
   type PaletteActivityRank,
   type PaletteSearchContext
-} from '@/lib/palette-match/palette-ranking'
+} from '../../../../shared/palette-match/palette-ranking'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   searchBrowserPages,
@@ -23,7 +22,7 @@ import {
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab,
@@ -57,7 +56,7 @@ export type OpenTabSearchResult =
       entityId: string
       groupId: string
       relativePath: string | null
-      occupantAgent: TuiAgent | null
+      occupantAgent: TerminalAgent | null
     })
   | (OpenTabSearchResultBase & {
       source: 'browser'
@@ -113,10 +112,7 @@ function getMatchedText(result: EngineResult): string | null {
   return result.secondaryRanges.length > 0 ? result.secondaryText : null
 }
 
-// Why read the path off the entry: the engine overwrites `secondaryText` with
-// whichever string matched, and an absolute-path match leaves no relative path.
-// Why editor-only: diff and review tabs also carry a path, but they are not the
-// same destination as opening the file, so they must not suppress its row.
+// Read paths from editor entries: engine secondaryText may name another matched field, and other path-bearing tab kinds are distinct destinations.
 function getEditorRelativePath(entry: SearchableWorkspaceTab | undefined): string | null {
   if (!entry || entry.tab.contentType !== 'editor') {
     return null
@@ -186,8 +182,7 @@ export function searchOpenTabCandidates({
   )
 
   return [
-    // Why no isCurrentTab filter: Cmd+J lists the tab you are on, and hiding it
-    // made the omnibox look broken when you searched for the tab on screen.
+    // Offer the active tab too so searching for the visible destination remains useful across columns.
     ...rank(
       'workspace',
       searchWorkspaceTabs([...workspaceTabs], trimmed, { context, fieldMode: 'omnibox' }),

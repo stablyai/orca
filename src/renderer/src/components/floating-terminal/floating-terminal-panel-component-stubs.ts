@@ -1,5 +1,4 @@
-// Render stubs for the heavy panes/primitives the floating panel composes; the tests assert on
-// element type names and props, never on rendered output.
+// Probe element names and props without mounting heavy workspace children.
 
 export function createTabBarModule() {
   return {
@@ -108,6 +107,30 @@ export function createShortcutKeyComboModule() {
   return {
     ShortcutKeyCombo: function ShortcutKeyCombo() {
       return null
+    }
+  }
+}
+
+export function createWorkspaceTabDragLayerModule() {
+  return {
+    WorkspaceTabDragLayer: function WorkspaceTabDragLayer(): never {
+      throw new Error('The floating panel probe must not mount workspace drag behavior')
+    }
+  }
+}
+
+export function createTabGroupSplitNodeTreeModule() {
+  return {
+    TabGroupSplitNodeTree: function TabGroupSplitNodeTree(): never {
+      throw new Error('The floating panel probe must not mount a workspace split tree')
+    }
+  }
+}
+
+export function createWorkspacePaneOverlayLayersModule() {
+  return {
+    WorkspacePaneOverlayLayers: function WorkspacePaneOverlayLayers(): never {
+      throw new Error('The floating panel probe must not mount retained pane layers')
     }
   }
 }

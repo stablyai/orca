@@ -111,7 +111,6 @@ describe('NativeChatContextUsageRing', () => {
 
     const press = await click(trigger)
 
-    // Checked on the whole page so a card from any primitive would count.
     expect(document.body.textContent).toContain('42k/200k')
     expect(card()?.textContent).toContain('Messages')
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
@@ -249,14 +248,14 @@ describe('NativeChatContextUsageRing', () => {
   it('spends an Escape typed in the composer on closing the card, not on stopping the agent', async () => {
     const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
     const { useNativeChatComposerKeyDown } = await import('./use-native-chat-composer-keydown')
-    const { EMPTY_HISTORY } = await import('./native-chat-composer-state')
     const interrupt = vi.fn()
     function ComposerWithRing(): React.JSX.Element {
       const onKeyDown = useNativeChatComposerKeyDown({
         autocomplete: { mode: 'none' },
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
         activeSuggestion: 0,
         draft: '',
-        history: EMPTY_HISTORY,
         isComposing: () => false,
         completePickerItem: vi.fn(),
         dispatchPickerCommand: vi.fn(),
@@ -265,8 +264,7 @@ describe('NativeChatContextUsageRing', () => {
         send: vi.fn(),
         setActiveSuggestion: vi.fn(),
         setDraft: vi.fn(),
-        setCaret: vi.fn(),
-        setHistory: vi.fn()
+        setCaret: vi.fn()
       })
       return (
         <>

@@ -24,11 +24,7 @@ function reportAuthorizationFailure(): void {
   )
 }
 
-/**
- * All blocked folders a load has surfaced so far, batched into one decision: a reader cannot
- * meaningfully judge `assets/` and `data/` separately, and N sequential banners only train the
- * allow reflex. What is granted is exactly the set named on the banner, never more.
- */
+/** Batch blocked folders into one decision granting exactly the displayed set; sequential banners encourage indiscriminate approval. */
 export function useDocPreviewDirectoryAccess({
   grantId,
   reloadRef
@@ -43,8 +39,7 @@ export function useDocPreviewDirectoryAccess({
   dismiss: () => void
   allow: () => Promise<void>
 } {
-  // Why a ref plus a version tick and not state alone: dismiss must fence the directory against
-  // an offer landing in the same event batch, which a state updater sees one render too late.
+  // Dismiss must fence same-batch offers synchronously; a state update is visible one render too late.
   const requestsByDirectoryRef = useRef(new Map<string, DocPreviewFileFailure>())
   const [, setRequestsVersion] = useState(0)
   const [busy, setBusy] = useState(false)

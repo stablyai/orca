@@ -14,7 +14,6 @@ import {
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
 
-// Why (#22592): Codex's writer spells hook trust as ["hooks"."state"."<key>"].
 const HOOK_KEY = '/Users/me/.codex/hooks.json:stop:0:0'
 const hookEntry: CodexTrustEntry = {
   sourcePath: '/Users/me/.codex/hooks.json',

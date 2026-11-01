@@ -4,8 +4,10 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import {
+  canUseGitHubRepoContext,
+  getGitHubRepoRoutingTarget
+} from '@/lib/github-source-runtime-context'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
@@ -23,7 +25,6 @@ import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
 } from '@/components/github-body-draft-state'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type {
   GitHubAssignableUser,
@@ -93,7 +94,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -102,20 +104,10 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
-  )
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
   const botAuthorOverrides = usePRBotAuthorOverrides()
   const commentCounts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),

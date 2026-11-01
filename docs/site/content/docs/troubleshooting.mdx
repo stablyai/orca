@@ -24,7 +24,7 @@ Register the CLI under [Settings → General → Orca CLI](/docs/settings). On m
 
 ## SSH connects but remote terminals fail
 
-- Confirm the remote has Node and network access for the first-time relay install.
+- On first connect to an SSH host or a WSL distro, Orca installs the Node.js version its server needs there. It downloads it on this computer, or on the host if that fails. If your network blocks nodejs.org, set **Settings → Advanced → Network → Node.js Download Mirror** to a copy of `nodejs.org/dist`, or download the file named in the error on another machine and copy it to the path the error gives on this computer. Then connect again.
 - On Linux, install a C/C++ toolchain if terminals never spawn: make, g++/clang++, python3 (see [SSH worktrees](/docs/ssh)).
 - Reconnect after installing tools so Orca can reinstall native modules.
 
@@ -32,10 +32,10 @@ Register the CLI under [Settings → General → Orca CLI](/docs/settings). On m
 
 Folder download needs recursive SFTP transfer. File download may still work on system-SSH-only connections. Use a terminal `tar`/`scp` as a fallback.
 
-## “Open in VS Code” is disabled or Local only
+## “Open in VS Code, Cursor, or Zed” is disabled or Local only
 
 - Use an SSH worktree (not a Remote Orca Server active runtime).
-- Set the Open-in command to VS Code / Insiders, not Cursor or a multi-arg shell command.
+- Set the Open-in command to VS Code / Insiders, Cursor, or Zed, not a multi-arg shell command.
 - Refresh SSH targets if the host was removed.
 
 ## Kerberos login fails
@@ -51,6 +51,15 @@ No tab is open in the current worktree. Open one with `orca tab create --url ...
 
 - Close worktrees you're not actively using. Each worktree keeps file watchers alive.
 - Split layouts with many browser tabs are the biggest RAM users — close browsers you don't need.
+
+## Windows: RAM disappears but no app is using it
+
+Orca workloads start many short-lived processes (hooks, `git status` polling, agent CLIs). If a buggy kernel driver keeps a reference to every process that exits, exited processes are never freed: RAM drains into kernel memory that Task Manager can't attribute to any app, and starting new processes gets slower, so Orca often gets blamed.
+
+- **Quick check:** Task Manager → Details → **PID** column. Windows reuses the PIDs of freed processes, so they normally stay in the tens of thousands; PIDs in the hundreds of thousands or more while the process count is normal can indicate exited processes are piling up. A huge **Page Table** in [RAMMap](https://learn.microsoft.com/en-us/sysinternals/downloads/rammap) (normally a few hundred MB) is another sign.
+- **One known cause:** the AMD integrated-GPU driver `amdkmdag.sys` (leaked in `31.0.24002.92`, Adrenalin 24.1.1). Check your actual `amdkmdag.sys` version, since OEM packages can be newer by date and still leak. See [#28293](https://github.com/stablyai/orca/issues/28293) for tested versions, check scripts, and workarounds.
+- **Fix:** install AMD's own driver (`32.0.21045.5002` tested clean). On a laptop with a MUX switch, Discrete GPU mode also stops the leak (higher power use, shorter battery life). AMD's Auto-Detect can't see the iGPU in that mode, so switch to Hybrid and restart before installing AMD's driver.
+- **Reclaim the memory** with **Restart**, not Shut down: with Fast Startup enabled, Shut down preserves kernel state, so the leaked memory survives it.
 
 ## GitHub PR panel / checks / Tasks errors
 

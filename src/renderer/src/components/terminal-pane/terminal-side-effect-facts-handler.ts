@@ -1,17 +1,5 @@
-/**
- * Renderer consumer registry for the `pty:sideEffect` channel.
- *
- * Why: with main as the side-effect parser for local-daemon/SSH PTYs, the
- * renderer no longer
- * derives title/bell/agent facts from bytes for those PTYs. This module is
- * the single channel subscriber; mounted panes and parked-tab watchers
- * register exactly one fact consumer per PTY (their existing policy
- * callbacks), so every fact has exactly one policy consumer regardless of
- * whether the tab is mounted, hidden, or parked. Facts for PTYs without a
- * registered consumer are dropped — mirroring today's eager-buffer behavior
- * where pre-mount output produces no attention side effects. The one exception
- * is a PTY whose consumer just unregistered: see the handoff buffer below.
- */
+/** One fact consumer per local-main/SSH PTY, mounted or parked. Never-consumed PTYs drop attention facts; recently unregistered consumers alone open a bounded handoff buffer. */
+import type { AgentIdleEdgeMeta } from '../../../../shared/terminal-output-side-effects'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
@@ -20,8 +8,7 @@ import type {
   TerminalSideEffectFact
 } from '../../../../shared/terminal-side-effect-facts'
 
-// Why: cached once per session — the blocking read should only ever run on
-// the pre-hydration startup path, never per pane bind.
+// Cache the blocking persisted-switch read at startup, never per pane bind.
 let persistedAuthorityFlagCache: boolean | null | undefined
 
 function readPersistedSideEffectAuthorityFlagSync(): boolean | null {
@@ -37,12 +24,7 @@ function readPersistedSideEffectAuthorityFlagSync(): boolean | null {
   return persistedAuthorityFlagCache
 }
 
-/**
- * Structural authority predicate: main owns side effects for a PTY when its
- * bytes transit local main (everything except remote-runtime PTYs) and the
- * kill switch is on. Decided at transport/watcher creation — never per chunk —
- * so each fact has one consumer with no race.
- */
+/** Main owns non-remote-runtime facts when enabled; choose once at creation to avoid racing byte/fact consumers. */
 export function isMainTerminalSideEffectAuthorityForPty(args: {
   settings: Pick<GlobalSettings, 'terminalMainSideEffectAuthority'> | null
   /** Remote-runtime owner environment; null means bytes transit local main. */
@@ -54,27 +36,20 @@ export function isMainTerminalSideEffectAuthorityForPty(args: {
   if (args.settings !== null) {
     return args.settings.terminalMainSideEffectAuthority !== false
   }
-  // Why: settings hydrate asynchronously, and the authority decision made
-  // here at transport/watcher creation is never revisited. A pane bound
-  // before hydration must honor the persisted kill switch — otherwise a user
-  // who turned main authority off gets startup panes with no byte parsers
-  // and a fact consumer they disabled. Surfaces without the sync read (web
-  // remote clients, tests) keep the default-on behavior.
+  // Pre-hydration bindings must honor the persisted switch because authority is never revisited; web/test APIs lacking sync read retain default-on behavior.
   return readPersistedSideEffectAuthorityFlagSync() !== false
 }
 
 export type TerminalSideEffectFactConsumerCallbacks = {
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
-  /** `meta.staleWorkingTitleClear` marks facts derived from main's 3s
-   *  stale-title timer — policy must clear title/cache state without
-   *  scheduling task-complete notifications or unread attention. */
+  /** Main’s staleWorkingTitleClear facts clear title/cache only, never completion or unread attention. */
   onTitleChange?: (
     normalizedTitle: string,
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ) => void
   onBell?: () => void
-  onAgentBecameIdle?: (title: string, meta?: { staleWorkingTitleClear?: boolean }) => void
+  onAgentBecameIdle?: (title: string, meta?: AgentIdleEdgeMeta) => void
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
   /** OSC 133;D — same policy hook the byte-mode commandLifecycle drove
@@ -85,9 +60,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  done is settle-checked by the pane policy before completing the turn. */
   onCommandCodeWorking?: (prompt: string) => void
   onCommandCodeDone?: (prompt: string) => void
-  /** DECSET 2031 subscribe observed by main's tracker. Registered only by
-   *  hidden-delivery-gated consumers (their bytes never arrive); it records the
-   *  subscription for later theme-flip pushes, it does not answer. */
+  /** Record live mode-2031 subscriptions for hidden-view theme pushes; this fact does not answer queries. */
   onMode2031Subscribe?: () => void
   /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
    *  subscription registry so later theme flips stop pushing CSI 997. */
@@ -96,8 +69,7 @@ export type TerminalSideEffectFactConsumerCallbacks = {
 
 type ConsumerEntry = {
   callbacks: TerminalSideEffectFactConsumerCallbacks
-  /** Output sequence of the last live title fact applied. Replay snapshots at
-   *  or before this point are stale and must not regress the title state. */
+  /** Last applied live-title sequence; snapshots at/before it cannot regress title state. */
   lastLiveTitleSeq: number | null
 }
 
@@ -124,10 +96,10 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       entry.callbacks.onAgentBecameWorking?.()
       return
     case 'agent-idle':
-      entry.callbacks.onAgentBecameIdle?.(
-        fact.title,
-        fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : undefined
-      )
+      entry.callbacks.onAgentBecameIdle?.(fact.title, {
+        ...(fact.status ? { status: fact.status } : {}),
+        ...(fact.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+      })
       return
     case 'agent-exited':
       entry.callbacks.onAgentExited?.()
@@ -154,9 +126,7 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
 
 function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBatch): void {
   if (batch.replay) {
-    // Why: the no-attention-replay rule — (re)attach snapshots restore title
-    // state only; historical bells/completions must never fire again. A replay
-    // older (by output sequence) than the last live title fact is stale.
+    // Replay restores only titles, never historical attention; reject titles older than the latest live sequence.
     if (entry.lastLiveTitleSeq !== null && batch.seq <= entry.lastLiveTitleSeq) {
       return
     }
@@ -172,12 +142,7 @@ function applyBatchToConsumer(entry: ConsumerEntry, batch: TerminalSideEffectBat
   }
 }
 
-// Why: a reveal remount unregisters the parked watcher synchronously, but the
-// replacement pane registers only after its deferred rAF + async reattach
-// resolves — and replay is title-only, so a bell or a command-code 'done'
-// dropped in that window is lost for good. Only a PTY that just lost its
-// consumer buffers (never-consumed PTYs still drop, per the module contract),
-// bounded in time, batches, and PTYs so an abandoned handoff retains nothing.
+// Bounded handoff buffering bridges watcher removal and async pane registration because replay cannot restore live bells/done. Never-consumed PTYs still drop facts.
 const HANDOFF_FACT_BUFFER_TTL_MS = 15_000
 const MAX_HANDOFF_FACT_BATCHES = 64
 const MAX_HANDOFF_FACT_PTYS = 32
@@ -270,8 +235,7 @@ function ensureSideEffectChannelSubscription(): void {
   if (channelUnsubscribe !== null) {
     return
   }
-  // Why: optional-chained from globalThis so unit tests (and any non-preload
-  // surface) without window.api degrade to "no channel" instead of throwing.
+  // Web/test surfaces lacking preload must degrade to no channel rather than throw.
   const onSideEffect = (globalThis as { window?: Window }).window?.api?.pty?.onSideEffect
   if (typeof onSideEffect !== 'function') {
     return
@@ -282,18 +246,11 @@ function ensureSideEffectChannelSubscription(): void {
 export type TerminalSideEffectFactConsumerOptions = {
   ptyId: string
   callbacks: TerminalSideEffectFactConsumerCallbacks
-  /** Pull main's title-only replay snapshot on registration. Pane transports
-   *  use this in place of deriving titles from eager-buffer byte replay.
-   *  Ordinary parked watchers already have a current pane title; cold-started
-   *  watchers request it because no pane populated their slot. */
+  /** Request title-only replay instead of eager-byte parsing; only cold-start watchers need it because ordinary parks retain current titles. */
   restoreTitleOnRegister?: boolean
 }
 
-/**
- * Register the single fact consumer for a PTY. A new registration replaces a
- * stale one for the same PTY (same semantics as the parked watcher registry):
- * two consumers would double-fire bell/completion policy for the same bytes.
- */
+/** Replace stale registrations so one PTY never double-fires bell/completion policy. */
 export function registerTerminalSideEffectFactConsumer(
   options: TerminalSideEffectFactConsumerOptions
 ): () => void {
@@ -311,8 +268,7 @@ export function registerTerminalSideEffectFactConsumer(
     if (typeof getSnapshot === 'function') {
       void getSnapshot(options.ptyId)
         .then((batch) => {
-          // Why: apply only while this registration is still the live
-          // consumer; a slow snapshot must not fire into a replaced one.
+          // Slow replay applies only while this registration remains current.
           if (batch && consumersByPtyId.get(options.ptyId) === entry) {
             applyBatchToConsumer(entry, { ...batch, replay: true })
           }
@@ -330,12 +286,10 @@ export function registerTerminalSideEffectFactConsumer(
   }
 }
 
-/** Test seam: deliver a batch as if it arrived on the channel. */
 export function _dispatchTerminalSideEffectBatchForTest(batch: TerminalSideEffectBatch): void {
   dispatchTerminalSideEffectBatch(batch)
 }
 
-/** Test seam: reset module state between tests. */
 export function _resetTerminalSideEffectFactConsumersForTest(): void {
   consumersByPtyId.clear()
   for (const ptyId of Array.from(handoffFactBuffersByPtyId.keys())) {

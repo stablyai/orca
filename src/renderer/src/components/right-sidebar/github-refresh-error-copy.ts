@@ -1,14 +1,14 @@
+import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 import type { PRRefreshUpstreamErrorType } from '../../../../shared/github/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelErrorCopy = { title: string; description: string }
 
-/**
- * Attributed empty-state copy for a PR-refresh failure caused by GitHub itself
- * being unavailable (5xx outage / network / rate limit). Returns null for
- * non-outage errors (auth, permission, unknown) so the caller keeps its generic
- * "could not refresh" copy — those are user-actionable, not "GitHub is down".
- */
+/** Attribute outages to GitHub; return null for actionable auth/permission/unknown errors so callers retain generic copy. */
 export function getGitHubUnavailableEmptyStateCopy(
   errorType: PRRefreshUpstreamErrorType | undefined
 ): ChecksPanelErrorCopy | null {
@@ -48,14 +48,10 @@ export function getGitHubUnavailableEmptyStateCopy(
       )
     }
   }
-  // Non-outage errors (auth, permission, unknown) keep the caller's generic copy.
   return null
 }
 
-/**
- * One-line banner shown over stale cached PR data when the last refresh failed.
- * Always returns a line: GitHub-attributed for outage kinds, generic otherwise.
- */
+/** Show a banner above stale cached data: attribute outage kinds to GitHub, otherwise use generic failure copy. */
 export function getChecksPanelRefreshErrorBannerLine(
   errorType: PRRefreshUpstreamErrorType | undefined
 ): string {
@@ -80,5 +76,16 @@ export function getChecksPanelRefreshErrorBannerLine(
   return translate(
     'auto.components.right.sidebar.github.refresh.error.copy.d9dd7c6687',
     "Couldn't refresh from GitHub. Showing the last known status."
+  )
+}
+
+export function getHostedReviewManualRefreshError(provider: HostedReviewProvider): string {
+  return translate(
+    'auto.components.right.sidebar.github.refresh.error.copy.manual_provider',
+    "Couldn't refresh from {{provider}}. Try again.",
+    {
+      provider: localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+        .providerName
+    }
   )
 }

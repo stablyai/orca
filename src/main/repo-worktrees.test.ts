@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi.hoisted(() => ({
   listWorktreeGraphMock: vi.fn(),
@@ -21,7 +21,6 @@ import {
   listRepoWorktrees,
   listRepoWorktreesForDetectedScan
 } from './repo-worktrees'
-import { registerSshGitProvider, unregisterSshGitProvider } from './providers/ssh-git-dispatch'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
 describe('repo-worktrees', () => {
@@ -117,7 +116,6 @@ describe('repo-worktrees', () => {
     expect(result).toHaveLength(1)
   })
 
-  // Path-only callers must reach the probe-free listing, never the annotated one.
   it('delegates to the graph listing without sparse annotation', async () => {
     listWorktreeGraphMock.mockResolvedValue([
       { path: '/workspace/repo', head: 'abc', branch: '', isBare: false, isMainWorktree: true }
@@ -200,8 +198,6 @@ describe('repo-worktrees', () => {
     expect(listWorktreesStrictMock).not.toHaveBeenCalled()
   })
 
-  // #11163: a row may spell its owner only as `executionHostId`. Reading `connectionId` answers
-  // "local" for it and runs the listing against a same-named path on this machine.
   describe('rows that spell their owner only as executionHostId', () => {
     const sshOnlyRepo = {
       id: 'repo-1',
@@ -213,22 +209,8 @@ describe('repo-worktrees', () => {
       executionHostId: 'ssh:host-a' as const
     }
 
-    afterEach(() => {
-      unregisterSshGitProvider('host-a')
-      unregisterSshGitProvider('nested-target')
-    })
-
     it('never lists an ssh-owned row with local git', async () => {
       await expect(listRepoWorktrees(sshOnlyRepo)).rejects.toThrow(WorktreeCatalogUnavailableError)
-      expect(listWorktreesMock).not.toHaveBeenCalled()
-    })
-
-    it('lists an ssh-owned row through its registered provider', async () => {
-      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/srv/repo' }])
-      registerSshGitProvider('host-a', { listWorktrees } as never)
-
-      await expect(listRepoWorktrees(sshOnlyRepo)).resolves.toEqual([{ path: '/srv/repo' }])
-      expect(listWorktrees).toHaveBeenCalledWith('/srv/repo')
       expect(listWorktreesMock).not.toHaveBeenCalled()
     })
 
@@ -242,9 +224,6 @@ describe('repo-worktrees', () => {
     })
 
     it('refuses to answer a runtime-owned row from a same-named local target', async () => {
-      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/wrong/host' }])
-      registerSshGitProvider('nested-target', { listWorktrees } as never)
-
       await expect(
         listRepoWorktrees({
           ...sshOnlyRepo,
@@ -252,8 +231,28 @@ describe('repo-worktrees', () => {
           connectionId: 'nested-target'
         })
       ).rejects.toThrow(WorktreeCatalogUnavailableError)
-      expect(listWorktrees).not.toHaveBeenCalled()
       expect(listWorktreesMock).not.toHaveBeenCalled()
+    })
+
+    it('reports an unserved ssh host as unavailable from the graph listing, never as empty', async () => {
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toThrow(
+        'SSH connection "host-a" is not connected'
+      )
+      await expect(listRepoWorktreeGraph(sshOnlyRepo)).rejects.toBeInstanceOf(
+        WorktreeCatalogUnavailableError
+      )
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
+    })
+
+    it('reports a runtime-owned row as unavailable from the graph listing, never as empty', async () => {
+      await expect(
+        listRepoWorktreeGraph({
+          ...sshOnlyRepo,
+          executionHostId: 'runtime:env-7',
+          connectionId: 'nested-target'
+        })
+      ).rejects.toThrow('host runtime:env-7 is not reachable from this process')
+      expect(listWorktreeGraphMock).not.toHaveBeenCalled()
     })
   })
 

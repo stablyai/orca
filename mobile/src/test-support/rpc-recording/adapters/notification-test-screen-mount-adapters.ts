@@ -9,15 +9,11 @@ import type { RpcClientContextValue } from '../../../transport/rpc-client-contex
 
 const HOST = 'host-1'
 
-/**
- * `useAllHostClients` reads the shared context through the module-private handle in
- * `client-context.tsx`, so exposing it mounts the real acquire/release cycle over a scripted client.
- */
+// Expose the shared private context to observe real all-host client acquire/release.
 export const notificationTestScreenMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/** The settings push probe: one `notifications.testPush` per connected desktop. */
 export function notificationTestScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -59,10 +55,10 @@ export function notificationTestScreenMountAdapters(
             return screen.unmount()
           }
           if (name === 'send-test') {
-            // An inert Pressable never fires, so the scripted press is the adapter reading back the
-            // handler the screen rendered and calling it.
+            // Invoke the handler the actual screen rendered; the inert Pressable never fires itself.
+            // Found by its label: the Troubleshooting row is a button too.
             const button = renderedElementProps(screen.tree(), 'Pressable').find(
-              (props) => props.accessibilityRole === 'button'
+              (props) => props.accessibilityLabel === 'Send test notification'
             )
             const press = button?.onPress
             if (typeof press !== 'function') {

@@ -94,10 +94,23 @@ async function bundle(mode) {
   })
 }
 
-try {
-  await bundle('baseline')
-  await bundle('candidate')
-  runDocker(['build', '--platform', platform, '-t', image, dockerDir])
+// Cover OOMPolicy rejected by systemd 249, Debian-backported 252 support and native 253+ (Debian 13 uses 257).
+const baseImages = (
+  process.env.ORCA_DAEMON_SCOPE_BASE_IMAGES ??
+  'ubuntu:22.04,debian:bookworm-slim,debian:trixie-slim'
+).split(',')
+
+function runCases(baseImage) {
+  runDocker([
+    'build',
+    '--platform',
+    platform,
+    '--build-arg',
+    `BASE_IMAGE=${baseImage}`,
+    '-t',
+    image,
+    dockerDir
+  ])
   runDocker([
     'run',
     '--detach',
@@ -139,7 +152,7 @@ try {
         container,
         'timeout',
         '--kill-after=5s',
-        '90s',
+        '240s',
         'runuser',
         '-u',
         'orca-repro',
@@ -157,11 +170,24 @@ try {
     process.stdout.write(result.stdout ?? '')
     process.stderr.write(result.stderr ?? '')
     if (result.status !== 0) {
-      throw new Error(`${mode} scope lifetime oracle failed with ${result.status}`)
+      throw new Error(`${mode} scope lifetime oracle failed on ${baseImage} with ${result.status}`)
+    }
+  }
+}
+
+try {
+  await bundle('baseline')
+  await bundle('candidate')
+  for (const baseImage of baseImages) {
+    console.log(`== ${baseImage}`)
+    try {
+      runCases(baseImage)
+    } finally {
+      runDocker(['rm', '--force', container], true)
     }
   }
   console.log(
-    'Linux systemd scope lifetime oracle passed: baseline accumulates orphans; candidate reaps them; live and unrelated work survives.'
+    'Linux systemd scope lifetime oracle passed: baseline accumulates orphans; candidate reaps them; live and unrelated work survives; each terminal is its own scope.'
   )
 } finally {
   runDocker(['rm', '--force', container], true)

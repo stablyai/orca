@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Store } from '../persistence'
+import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
@@ -19,9 +19,8 @@ function getCandidateLocalWorktreePaths(
   return new Set([worktreePath, resolvedWorktreePath].map(comparableLocalPath))
 }
 
-/** Repos owning a registered worktree at one of `candidatePaths`, in one pass over the meta table. */
 function collectRepoIdsWithRegisteredWorktreeMeta(
-  store: Store,
+  store: RuntimeStore,
   candidatePaths: Set<string>
 ): Set<string> {
   const worktreeMeta =
@@ -37,7 +36,7 @@ function collectRepoIdsWithRegisteredWorktreeMeta(
 }
 
 export function getLocalRepoForRegisteredWorktree(
-  store: Store,
+  store: RuntimeStore,
   worktreePath: string,
   resolvedWorktreePath: string
 ): Repo | undefined {
@@ -46,8 +45,7 @@ export function getLocalRepoForRegisteredWorktree(
   }
 
   const candidatePaths = getCandidateLocalWorktreePaths(worktreePath, resolvedWorktreePath)
-  // Built at most once, and only when a repo actually needs it, so the meta table is never
-  // rescanned per repo — 59 IPC call sites hit this, some per keystroke.
+  // Lazily scan meta once, not once per repo, on frequent IPC paths.
   let repoIdsWithMeta: Set<string> | undefined
   return store
     .getRepos()
@@ -61,22 +59,20 @@ export function getLocalRepoForRegisteredWorktree(
     )
 }
 
-/** Git options for a repo already resolved by `getLocalRepoForRegisteredWorktree`,
- *  so a caller needing both does not walk every repo's worktree meta twice. */
+/** Reuse a resolved repo without scanning worktree metadata again. */
 export function getLocalGitOptionsForRepo(
-  store: Store,
+  store: RuntimeStore,
   repo: Repo | undefined
 ): LocalProjectWorktreeGitOptions {
   if (!repo || typeof store.getProjects !== 'function' || typeof store.getSettings !== 'function') {
     return {}
   }
-  // Why: file discovery must use the same resolved runtime as project git,
-  // terminals, and agents even when the worktree path is a Windows path.
+  // Match project Git/terminal runtime even for Windows-spelled paths.
   return getLocalProjectWorktreeGitOptions(store, repo)
 }
 
 export function getLocalGitOptionsForRegisteredWorktree(
-  store: Store,
+  store: RuntimeStore,
   worktreePath: string,
   resolvedWorktreePath: string
 ): LocalProjectWorktreeGitOptions {

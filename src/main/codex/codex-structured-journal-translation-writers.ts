@@ -1,7 +1,3 @@
-// The translator's writers, built once. Split out so the translator reads as
-// routing, and so one place shows that every writer is handed the same
-// row attribution: the roster's producer, which knows each child thread, and the turn scope.
-
 import { CodexJournalCompactions } from './codex-structured-journal-compactions'
 import type { CodexJournalTranslatorDeps } from './codex-structured-journal-contracts'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
@@ -11,8 +7,8 @@ import { CodexJournalPrompts } from './codex-structured-journal-prompts'
 import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { CodexJournalTurnScopes } from './codex-journal-turn-scopes'
 import { CodexJournalCommandTurn } from './codex-journal-command-turn'
-import { CodexSubagentRoster } from './codex-subagent-roster'
-import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { CodexSubagentExecutions } from './codex-subagent-executions'
+import { CodexSubagentLinkage, type CodexRowAttribution } from './codex-subagent-linkage'
 
 export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslatorDeps) {
   const activeTurns = new CodexJournalActiveTurns()
@@ -25,14 +21,9 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     activeTurn,
     commandScope: (turnId) => commands.scopeFor(turnId)
   })
-  const subagents = new CodexSubagentRoster({
-    sink: deps.sink,
-    primaryThreadId,
-    activeTurn,
-    turnScopeFor: (threadId, turnId) => turnScopes.scopeFor(threadId, turnId),
-    ...(deps.subagentExecutions ? { executions: deps.subagentExecutions } : {})
-  })
-  const { linkageFor } = subagents.linkage
+  // Translator and background tracker can feed the same frame; execution updates are idempotent.
+  const executions = deps.subagentExecutions ?? new CodexSubagentExecutions()
+  const { linkageFor } = new CodexSubagentLinkage({ primaryThreadId, executions })
   const attributionFor: CodexRowAttribution = (threadId, turnId) => ({
     ...linkageFor(threadId, turnId),
     turnScope: turnScopes.scopeFor(threadId, turnId)
@@ -43,13 +34,12 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
     producerDeps,
     activeTurn,
     (threadId, turnId) => genericFrames.suppress(threadId, turnId),
-    // A collab call's row names its helpers the way the roster does.
-    (threadId) => subagents.executions.label(threadId)
+    (threadId) => executions.label(threadId)
   )
   return {
     activeTurns,
     commands,
-    subagents,
+    executions,
     attributionFor,
     genericFrames,
     items,

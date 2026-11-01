@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { computeVisibleWorktreeIds } from './visible-worktrees'
-import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { computeVisibleWorktreeIds } from './compute-visible-worktrees'
+import { isDefaultBranchWorkspace } from '../../../../shared/worktree/workspace-kinds'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
-/**
- * Repro for #8873 — "[Feature]: Display default branch".
- *
- * Reporter: turning "Hide default branch" OFF does not keep the repo's
- * default-branch workspace in the sidebar; once it has no live PTY/browser/agent
- * it counts as sleeping and "Hide sleeping" sweeps it away. There is no
- * "Always display default branch" escape hatch.
- */
+/** Hide sleeping must preserve the explicit default-branch exemption even without live PTYs/browsers/agents. */
 
 function makeRepo(id: string): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '#000', addedAt: 0 }
@@ -76,7 +69,6 @@ describe('#8873 default-branch workspace under "Hide sleeping"', () => {
 
     const visible = computeVisibleWorktreeIds({ repo1: [worktree] }, [worktree.id], {
       ...visibleOptions({
-        // "Hide sleeping" ON, "Hide default branch" OFF — exactly the reporter's setup.
         showSleepingWorkspaces: false,
         hideDefaultBranchWorkspace: false
       })
@@ -130,8 +122,7 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   })
 
   it('keeps a sleeping folder workspace, which has no sibling row to fall back to', () => {
-    // Folder-mode projects are main worktrees with an empty branch/head; sweeping
-    // them drops the whole project.
+    // Folder roots have no head/branch; sweeping the sole root hides the entire project.
     const folder: Worktree = {
       ...makeDefaultBranchWorktree(),
       id: 'wt-folder',
@@ -168,9 +159,7 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   })
 
   it('does not flicker out while an SSH host is offline', () => {
-    // A disconnected SSH provider re-synthesizes persisted worktrees with empty
-    // head/branch (orca-runtime.ts) while isMainWorktree stays a path compare —
-    // and the dead PTYs make the row read as sleeping at exactly that moment.
+    // Offline SSH synthesis preserves main-worktree identity but empties head/branch and loses live PTYs.
     const awake = makeDefaultBranchWorktree()
     const offline: Worktree = { ...awake, head: '', branch: '' }
 

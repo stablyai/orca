@@ -4,7 +4,7 @@ import {
   createPluginWorkerRuntime,
   type PluginWorkerOrcaApi,
   type PluginWorkerRuntime
-} from './plugin-host-runtime'
+} from './workers/plugin-host-runtime'
 
 export class UninstallWorkerPort extends EventEmitter {
   connected = true

@@ -23,7 +23,7 @@ export const testState: {
   previousCodexHome?: string
 } = { userDataDir: '', fakeHomeDir: '' }
 
-// Why: a custom CODEX_HOME is the production route onto the mirror lane.
+// Exercise mirror routing through the production custom-CODEX_HOME check.
 export function setRealHomeRoutableForTest(enabled: boolean): void {
   if (enabled) {
     delete process.env.CODEX_HOME
@@ -161,7 +161,6 @@ export function createCodexAuthJson(
   })}\n`
 }
 
-/** Mirrors the suite's shared beforeEach: fresh userData/home temp dirs plus the pane registry. */
 export function setupRuntimeHomeTest(): void {
   vi.resetModules()
   vi.clearAllMocks()
@@ -169,8 +168,7 @@ export function setupRuntimeHomeTest(): void {
   setRealHomeRoutableForTest(true)
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-runtime-home-'))
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
-  // Why: Windows routing reads PowerShell profiles and Git Bash rc files; keep
-  // them, and the registry-named Documents folder, inside the fake home.
+  // Keep Windows profile and registry path probes inside the fake home.
   vi.doMock('../windows-native-registry', () => ({
     loadWindowsNativeRegistry: () => {
       throw new Error('no registry in runtime-home tests')

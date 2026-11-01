@@ -1,13 +1,8 @@
-import {
-  StyleSheet,
-  Platform,
-  colors,
-  radii,
-  spacing,
-  typography
-} from './mobile-tasks-dependencies'
+import { themedStyleSheet, StyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
+import { concentricRadius } from '../theme/mobile-theme'
+import { FIELD_MIN_HEIGHT } from '../components/composer-input/composer-input-styles'
 
-export const mobileTasksProjectPickerStyles = StyleSheet.create({
+export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
   boardContainer: {
     gap: spacing.md,
     padding: spacing.md
@@ -17,7 +12,7 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     maxHeight: '100%',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
@@ -43,21 +38,21 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
   boardCard: {
     margin: spacing.sm,
     marginBottom: 0,
-    borderRadius: radii.card,
+    borderRadius: concentricRadius(radii.surface, spacing.sm),
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgBase,
     padding: spacing.md
   },
   repoPickerGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   pagePickerList: {
     maxHeight: 420,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface
   },
   projectPickerControls: {
     gap: spacing.sm,
@@ -72,8 +67,8 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.statusAmber,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel
+    borderRadius: radii.surface,
+    backgroundColor: colors.sheetGroup
   },
   projectWarningTextWrap: {
     flex: 1,
@@ -136,7 +131,7 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     maxWidth: '100%',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
@@ -157,67 +152,13 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     flex: 1
   },
   projectPasteButton: {
-    minHeight: 40,
+    minHeight: FIELD_MIN_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  pickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  pickerRowSelected: {
-    backgroundColor: colors.bgRaised
-  },
-  pickerRowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  pickerRowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  pickerRowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  pickerRowWithAction: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  pickerRowMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md
-  },
-  pickerCheck: {
-    width: 18,
-    alignItems: 'center'
-  },
-  pickerContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  pickerLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  monoText: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  pickerSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
+  pickerStack: {
+    gap: spacing.md,
+    marginBottom: spacing.md
   },
   iconActionButton: {
     width: 44,
@@ -225,4 +166,4 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   }
-})
+}))

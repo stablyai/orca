@@ -1,5 +1,5 @@
 import { recordDaemonStreamBacklogEvent } from '../../../daemon/daemon-stream-backlog-probe'
-import { isRuntimeOwnedHiddenRendererPty } from '../../pty-hidden-delivery-gate'
+import { isRuntimeOwnedHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
   PRODUCER_FLOW_CONTROL_ENABLED,
@@ -12,12 +12,6 @@ export function updateProducerFlowControl(session: PtyIpcSession, id: string): v
   if (!PRODUCER_FLOW_CONTROL_ENABLED) {
     return
   }
-  if (session.sourceCreditPendingPtys.has(id)) {
-    if (session.pendingData.get(id)) {
-      return
-    }
-    session.sourceCreditPendingPtys.delete(id)
-  }
   session.producerFlowControl.update(id, session.pendingData.get(id)?.data.length ?? 0)
 }
 
@@ -26,8 +20,7 @@ export function syncPtyBackgroundedDelivery(
   id: string,
   caller: string
 ): void {
-  // Why runtime-owned: a runtime background spawn has no pane to report visibility, but must pace
-  // like a renderer hidden-at-spawn PTY; any visible report still wins.
+  // Runtime spawns have no visibility reporter; pace them as hidden unless a renderer reports visible.
   const knownHidden =
     session.rendererPtyIsKnownHidden(id) ||
     (isRuntimeOwnedHiddenRendererPty(id) && !visibleRendererPtys.has(id))
@@ -51,7 +44,7 @@ export function syncPtyBackgroundedDelivery(
   try {
     provider.setPtyBackgrounded(id, background)
   } catch (error) {
-    // Why: a recorded state the provider never took would short-circuit every later sync for this PTY.
+    // Roll back failed provider changes so later syncs retry instead of trusting an unapplied state.
     if (previous === undefined) {
       session.backgroundedDeliverySyncByPty.delete(id)
     } else {

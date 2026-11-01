@@ -1,4 +1,3 @@
-/** Whether the task DAG has finished, and the stuck-DAG warning when it can never finish. */
 import type { OrchestrationDb } from './db'
 
 export type DagConvergence = 'empty' | 'all-done' | 'active'
@@ -17,7 +16,7 @@ export function evaluateDagConvergence(
     return 'all-done'
   }
 
-  // Why: no active tasks but some blocked → dependencies can never be satisfied (stuck).
+  // With no active task, blocked dependencies can never be satisfied.
   const active = tasks.filter(
     (t) => t.status === 'ready' || t.status === 'dispatched' || t.status === 'pending'
   )

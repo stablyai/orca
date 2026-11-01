@@ -5,15 +5,14 @@ import {
   PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
   PAIRING_RELAY_URL_MAX_CHARACTERS
 } from './mobile-pairing-protocol-limits'
+import { RuntimeHostDescriptorSchema } from './runtime-host-descriptor'
 
 export const PAIRING_OFFER_VERSION = 2
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000
-// The cell stamps expiry from its own clock; without leeway, a cell clock
-// even slightly ahead of this machine makes every invite fail validation
-// (same class as the host-proof freshness incident).
+// Cell-stamped expiry needs skew leeway or an ahead cell clock invalidates every invite (as with host-proof freshness).
 const INVITE_EXPIRY_CLOCK_SKEW_MS = 30 * 1000
 
 function isCanonicalHttpsOrigin(value: string): boolean {
@@ -72,17 +71,17 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       v: z.literal(PAIRING_OFFER_VERSION),
       endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
       deviceToken: z.string().min(1).max(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS),
-      // Why: the desktop's Curve25519 public key is pinned by the pairing
-      // offer, while relayHostId is verified from its decoded bytes later.
+      // Pairing pins the Curve25519 key; verify relayHostId from its decoded bytes later.
       publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
       pairedDeviceId: z.string().min(1).max(128).optional(),
       scope: PairingScopeSchema.optional(),
-      relay: relaySchema.optional()
+      relay: relaySchema.optional(),
+      // Why catch: a descriptor this build cannot read is dropped, never a reason to refuse pairing.
+      hostDescriptor: RuntimeHostDescriptorSchema.optional().catch(undefined)
     })
     .superRefine((offer, ctx) => {
       if (offer.relay && offer.scope === 'runtime') {
-        // Why: relay v1 is mobile-only; accepting it on runtime offers would
-        // imply routing and credential support that client does not have.
+        // Relay v1 supports mobile only; runtime offers would promise unsupported routing/credentials.
         ctx.addIssue({
           code: 'custom',
           path: ['relay'],
@@ -90,8 +89,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
         })
       }
       if (offer.relay && !isCanonicalBase64Key(offer.publicKeyB64)) {
-        // Why: relayHostId is derived from the decoded key bytes, so relay
-        // offers cannot tolerate the permissive legacy base64 aliases.
+        // relayHostId derives from decoded bytes; refuse permissive legacy base64 aliases here.
         ctx.addIssue({
           code: 'custom',
           path: ['publicKeyB64'],

@@ -7,31 +7,18 @@ import type {
   PaneAgentRunKey
 } from './pane-agent-identity-resolver'
 import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
+import type { TerminalAgent } from './terminal-agent'
 import type { TuiAgent } from './tui-agent'
 
-/**
- * Canonical pane identity ranking. All adapters, including the compatibility resolver, delegate to
- * this implementation so source precedence, ambiguity, and run eligibility cannot drift.
- */
+/** All adapters delegate here so ranking, ambiguity and run eligibility cannot drift. */
 
-/**
- * Whether the execution authority proved at least one identity-bearing source for this pane.
- * Computed from evidence presence, never from `platform`, `isRemote`, or OS: a remote pane with a
- * host-stamped hook is covered; a local pane with only a title is uncovered.
- */
+/** Coverage requires authority-bearing evidence, independent of OS/remoteness; title alone never covers a pane. */
 export type PaneAgentCoverage = 'covered' | 'uncovered'
 
-/**
- * Host-stamped proof that a recognized agent process is the pane's foreground process.
- *
- * A process NAME is not a PID-reuse-safe identity, so a bare foreground read never enters the
- * covered process rung. `processIncarnation` is an opaque token the execution host derives from
- * the selected PID plus start/creation time (or an equivalent platform-native identity); the raw
- * tuple never crosses the renderer/remote wire. The host emits no proof when the start identity
- * is unavailable or ambiguous, so that pane reads `uncovered` rather than guessed.
- */
+/** Host proof uses an opaque PID+start-time incarnation, never just a process name. Missing/ambiguous start identity
+ * means uncovered; raw platform tuples stay off the renderer/remote wire. */
 export type ForegroundProcessProof = {
-  agent: TuiAgent
+  agent: TerminalAgent
   /** Opaque host-derived PID+start-time token. Compared for equality only, never decoded. */
   processIncarnation: string
   ptyIncarnationId?: string
@@ -43,23 +30,14 @@ export type ForegroundProcessProof = {
   validForMs: number
 }
 
-/**
- * Positive evidence that a pane/process was REPLACED, required before any consumer may advance a
- * pane incarnation. A retired-pane `restart` disposition, an accepted send, an ordinary provider
- * turn boundary, a title change, a transport loss, or a renderer-only foreground change is never
- * one of these. Defined here so the rebind-gate wave has a contract to be correct against; no
- * sequencer call site consumes it yet.
- */
+/** Only positive process replacement permits incarnation advance. Sends, turns, titles, transport loss and renderer-only
+ * foreground changes do not prove replacement. Contract for the rebind gate; not yet consumed by sequencers. */
 export type PaneReplacementProof =
   | { kind: 'accepted-launch'; launchToken: string; ptyIncarnationId: string }
   | { kind: 'process-replacement'; processIncarnation: string; authorityId: string }
   | { kind: 'provider-session-attach'; providerSessionId: string }
 
-/**
- * The optional wire object a host will publish alongside `agentIdentity` after capability
- * negotiation (host-publisher wave, not now). All fields bounded and JSON-safe; old peers ignore
- * it. Never inferred from the bare `agentIdentity` string.
- */
+/** Future capability-negotiated host evidence, bounded and JSON-safe; old peers ignore it. Never infer it from bare agentIdentity. */
 export type PaneAgentIdentityEvidenceWire = {
   source: PaneAgentEvidenceSource
   coverage: PaneAgentCoverage
@@ -72,41 +50,33 @@ export type PaneAgentIdentityEvidenceWire = {
 }
 
 export type CanonicalPaneAgentIdentityInput = {
-  hookAgent?: TuiAgent | null
+  hookAgent?: TerminalAgent | null
   hookIsLive?: boolean
   hookRun?: PaneAgentRunKey
-  /** A distinct completed-hook signal for callers that hold live and completed rows separately
-   *  (the tab ladder does); `hookAgent` + `hookIsLive: false` remains the single-slot spelling. */
-  completedHookAgent?: TuiAgent | null
+  /** Separate live/completed rows where available; hookAgent with hookIsLive:false retains single-slot compatibility. */
+  completedHookAgent?: TerminalAgent | null
   completedHookRun?: PaneAgentRunKey
   launchAgent?: TuiAgent | null
   launchRun?: PaneAgentRunKey
-  /**
-   * Foreground process NAME as currently read. Without a fresh `processProof` this is a weak
-   * hint: it neither enters the covered process rung nor makes the pane covered.
-   */
-  foregroundAgent?: TuiAgent | null
+  /** Foreground names alone are weak hints; only fresh processProof qualifies as covered process evidence. */
+  foregroundAgent?: TerminalAgent | null
   processProof?: ForegroundProcessProof | null
-  sleepingSessionAgent?: TuiAgent | null
+  sleepingSessionAgent?: TerminalAgent | null
   sleepingRun?: PaneAgentRunKey
   /** Tab-level display fallback only; ignored unless `allowSibling` opts in. */
-  siblingAgent?: TuiAgent | null
+  siblingAgent?: TerminalAgent | null
   /** Additional tab-level sibling observations retained for ambiguity checking. */
-  siblingAgents?: readonly TuiAgent[]
+  siblingAgents?: readonly TerminalAgent[]
   allowSibling?: boolean
   title?: string | null
   currentRun?: PaneAgentRunKey
   minimumSource?: PaneAgentEvidenceSource
-  /**
-   * The caller's CURRENT ladder result, preserved verbatim while the pane is uncovered. The
-   * uncovered lane is a temporary compatibility lane, not a new host-specific ranking; absent a
-   * fallback, an uncovered pane answers from title evidence alone, marked title-only.
-   */
-  uncoveredFallback?: { agent: TuiAgent | null; titleOnly?: boolean }
+  /** Preserve the existing ladder while uncovered during migration; absent fallback uses title-only evidence, never a host-specific ranking. */
+  uncoveredFallback?: { agent: TerminalAgent | null; titleOnly?: boolean }
 }
 
 export type CanonicalPaneAgentIdentity = {
-  agent: TuiAgent | null
+  agent: TerminalAgent | null
   source: PaneAgentEvidenceSource | null
   coverage: PaneAgentCoverage
   /** True when the answer was derived from a parsed title (the uncovered/title-only marking). */
@@ -144,7 +114,7 @@ function isPaneAgentRunEligible(
 }
 
 /** Shared evidence ranking primitive used by every pane-identity adapter. */
-export function resolveCanonicalPaneAgentEvidence<A extends string = TuiAgent>(
+export function resolveCanonicalPaneAgentEvidence<A extends string = TerminalAgent>(
   input: PaneAgentIdentityInput<A>
 ): PaneAgentIdentity<A> {
   const superseded: PaneAgentEvidenceSource[] = []
@@ -191,7 +161,7 @@ export function isForegroundProcessProofFresh(proof: ForegroundProcessProof): bo
 /** A proof only carries identity for the agent it names; a name mismatch is no proof at all. */
 function processEvidenceFromProof(
   input: CanonicalPaneAgentIdentityInput
-): PaneAgentEvidence<TuiAgent> | null {
+): PaneAgentEvidence<TerminalAgent> | null {
   const proof = input.processProof
   if (!proof || !isForegroundProcessProofFresh(proof)) {
     return null
@@ -266,7 +236,7 @@ export function resolveCanonicalPaneAgentIdentity(
       ...(input.siblingAgents?.map((agent) => ({ source: 'sibling' as const, agent })) ?? []),
       ...(titleAgent ? [{ source: 'title' as const, agent: titleAgent }] : [])
     ]
-    const siblingResolved = resolveCanonicalPaneAgentEvidence<TuiAgent>({
+    const siblingResolved = resolveCanonicalPaneAgentEvidence<TerminalAgent>({
       evidence: siblingEvidence,
       allowSibling: input.allowSibling,
       minimumSource: input.minimumSource
@@ -281,7 +251,7 @@ export function resolveCanonicalPaneAgentIdentity(
     }
   }
 
-  const resolved = resolveCanonicalPaneAgentEvidence<TuiAgent>({
+  const resolved = resolveCanonicalPaneAgentEvidence<TerminalAgent>({
     evidence: [
       ...(input.hookAgent
         ? [

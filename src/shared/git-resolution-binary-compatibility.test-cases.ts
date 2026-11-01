@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { resolveConfiguredGitPushTarget } from './git-push-target-resolution'
-import { resolveDefaultBaseRefViaExec } from './git-default-base-ref'
+import {
+  resolveDefaultBaseRefViaExec,
+  resolveRemoteHeadBranchViaExec
+} from './git-default-base-ref'
 import { buildGitSshPolicyEnv, GIT_SSH_CONFIG_ARGS, parseGitSshConfig } from './git-ssh-policy-env'
 
 export function registerGitResolutionBinaryCompatibilityCases(
@@ -65,7 +68,7 @@ export function registerGitResolutionBinaryCompatibilityCases(
     )
     expect(
       buildGitSshPolicyEnv({}, overridden.command, overridden.variant).env.GIT_SSH_COMMAND
-    ).toBe("ssh -i 'key with spaces' -o BatchMode=yes")
+    ).toBe('ssh -o BatchMode=yes -i "key with spaces"')
   })
 
   it('resolves default bases from exact refs with symbolic chains and dangling targets', async () => {
@@ -85,5 +88,23 @@ export function registerGitResolutionBinaryCompatibilityCases(
     await expect(resolveDefaultBaseRefViaExec(runGit)).resolves.toBe('origin/master')
     await runGit(['update-ref', '--no-deref', 'refs/remotes/origin/HEAD', head])
     await expect(resolveDefaultBaseRefViaExec(runGit)).resolves.toBe('origin/master')
+  })
+
+  it('resolves each remote HEAD independently with Git 2.25-compatible ref output', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['update-ref', 'refs/remotes/origin/review-main', head])
+    await runGit(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/review-main'])
+    await runGit(['update-ref', 'refs/remotes/upstream/release/stable', head])
+    await runGit([
+      'symbolic-ref',
+      'refs/remotes/upstream/alias',
+      'refs/remotes/upstream/release/stable'
+    ])
+    await runGit(['symbolic-ref', 'refs/remotes/upstream/HEAD', 'refs/remotes/upstream/alias'])
+    await expect(resolveRemoteHeadBranchViaExec(runGit, 'origin')).resolves.toBe('review-main')
+    await expect(resolveRemoteHeadBranchViaExec(runGit, 'upstream')).resolves.toBe('release/stable')
+    await expect(resolveRemoteHeadBranchViaExec(runGit, 'missing')).resolves.toBeNull()
+    await runGit(['update-ref', '-d', 'refs/remotes/upstream/release/stable'])
+    await expect(resolveRemoteHeadBranchViaExec(runGit, 'upstream')).resolves.toBeNull()
   })
 }

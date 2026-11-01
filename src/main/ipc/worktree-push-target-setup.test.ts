@@ -16,24 +16,20 @@ const REPO = '/repo-root'
 const FORK_SSH = 'git@github.com:contributor/orca.git'
 const FORK_HTTPS = 'https://github.com/contributor/orca.git'
 
-/** Real `git remote -v` shape: a fetch row and a push row per remote, tab-separated. */
 export function renderRemoteVerbose(remotes: Record<string, string>): string {
   return Object.entries(remotes)
     .flatMap(([name, url]) => [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`])
     .join('\n')
 }
 
-// A stateful fake git: `remotes` maps name -> url. `remote add` mutates it so
-// later lookups see the new remote, matching real git behavior. Defaults
-// `symbolic-ref --short HEAD` to a real branch name, since a worktree's HEAD
-// always resolves to one (mirrors real git, unlike an empty-stdout stub).
+// Stateful Git mock preserves remote additions and defaults HEAD to a real local branch.
 function makeRepoExec(
   remotes: Record<string, string>,
   checkedOutBranch = 'local-branch'
 ): ExecMock {
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
-    if (args[0] === 'symbolic-ref' && args[1] === '--short' && args[2] === 'HEAD') {
-      return { stdout: `${checkedOutBranch}\n`, stderr: '' }
+    if (args[0] === 'symbolic-ref' && args[1] === '--quiet' && args[2] === 'HEAD') {
+      return { stdout: `refs/heads/${checkedOutBranch}\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
@@ -49,7 +45,6 @@ function makeRepoExec(
       return { stdout: `${url}\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args[1] === 'add') {
-      // Why: name/url are always the last two args, regardless of `-t`/`--no-tags` flags.
       remotes[args.at(-2)!] = args.at(-1)!
       return { stdout: '', stderr: '' }
     }
@@ -105,8 +100,7 @@ describe('prepareWorktreePushTargetWithExec', () => {
 
     await prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => false)
 
-    // Why: cleanup's ownership check must survive a store purge (worktree-push-target-cleanup.ts).
-    // Narrowing the refspec (#17887) also writes `config` calls, so scope to the marker itself.
+    // Ownership must survive store purge; isolate the config marker from unrelated refspec writes.
     expect(callsMatching(exec, ['config', 'remote.pr-contributor-orca.orca-created'])).toEqual([
       ['config', 'remote.pr-contributor-orca.orca-created', 'true']
     ])
@@ -139,7 +133,6 @@ describe('prepareWorktreePushTargetWithExec', () => {
         '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
       ]
     ])
-    // remoteCreated omitted because the predicate says no known worktree owns it.
     expect(result).toEqual({
       remoteName: 'pr-contributor-orca',
       branchName: 'contributor/fix',
@@ -355,8 +348,6 @@ describe('prepareWorktreePushTargetWithExec rollback', () => {
     expect(remotes.existing).toBe(FORK_SSH)
   })
 
-  // Regression: the rollback used to fire on inherited ownership, deleting a
-  // remote a live sibling worktree was still pushing through.
   it('keeps a reused remote a sibling worktree owns when the fetch fails', async () => {
     const remotes: Record<string, string> = {
       origin: 'git@github.com:stablyai/orca.git',

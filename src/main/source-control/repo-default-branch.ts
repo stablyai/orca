@@ -1,10 +1,11 @@
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
+import { resolveRemoteHeadBranchViaExec, type GitExec } from '../../shared/git-default-base-ref'
 import { gitExecFileAsync } from '../git/runner'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewRepoScope, scopeGeneration } from './hosted-review-scope-generations'
 import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'
 
-// Why: bounded like TRACKED_UPSTREAM_SNAPSHOT_CACHE in github/client.ts — PR
-// refresh ticks re-ask per repo, and worktree churn can mint unbounded keys.
+// Bound short-lived entries because worktree churn can mint unlimited repo/host keys.
 const REPO_DEFAULT_BRANCH_CACHE_TTL_MS = 30_000
 const REPO_DEFAULT_BRANCH_CACHE_MAX_ENTRIES = 512
 const REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS = 15_000
@@ -22,12 +23,12 @@ function getRepoDefaultBranchCacheKey(
   connectionId?: string | null,
   localGitOptions: HostedReviewLocalGitOptions = {}
 ): string {
-  // Why: scope per executing git host (native/WSL/SSH) so hosts with
-  // different clones of the "same" path cannot cross-contaminate.
+  // Namespace by native/WSL/SSH host so identical paths in different clones cannot share answers.
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
-  return [runtimeKey, repoPath].join('\0')
+  const scope = hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))
+  return [runtimeKey, repoPath, scopeGeneration(scope)].join('\0')
 }
 
 function pruneRepoDefaultBranchCache(now: number): void {
@@ -45,17 +46,67 @@ function pruneRepoDefaultBranchCache(now: number): void {
   }
 }
 
-/**
- * Resolve the repository's default branch NAME (`main`, `master`, …) over the
- * transport the surrounding hosted-review call already uses. Returns null when
- * unresolvable so callers fail open (#9171 guard skipped, current behavior).
- */
-export async function getRepoDefaultBranchName(
+function createRepoGitExec(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  localGitOptions: HostedReviewLocalGitOptions
+): GitExec | null {
+  if (connectionId) {
+    // Why: the repoPath is remote, so a local run could answer for the wrong repo.
+    return null
+  }
+  const resolutionDeadline = Date.now() + REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS
+  // Share one deadline across five fallback refs to bound unhealthy native/WSL hosts.
+  return (argv) => {
+    const timeoutMs = resolutionDeadline - Date.now()
+    if (timeoutMs <= 0) {
+      return Promise.reject(new Error('Default branch resolution timed out.'))
+    }
+    return gitExecFileAsync(argv, {
+      cwd: repoPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
+      timeout: timeoutMs
+    })
+  }
+}
+
+/** Resolve through the caller's Git transport; null skips the default-branch guard when unresolvable. */
+export function getRepoDefaultBranchName(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: HostedReviewLocalGitOptions = {}
 ): Promise<string | null> {
-  const cacheKey = getRepoDefaultBranchCacheKey(repoPath, connectionId, localGitOptions)
+  return resolveCachedBranchName(
+    getRepoDefaultBranchCacheKey(repoPath, connectionId, localGitOptions),
+    async () => {
+      const exec = createRepoGitExec(repoPath, connectionId, localGitOptions)
+      const baseRef = exec ? await resolveDefaultBaseRefViaExec(exec) : null
+      // Same base-ref → branch-name normalization as git/repo.ts getRemoteFileUrl.
+      return baseRef ? baseRef.replace(/^origin\//, '') : null
+    }
+  )
+}
+
+export function getRemoteHeadBranchName(
+  repoPath: string,
+  remoteName: string,
+  connectionId?: string | null,
+  localGitOptions: HostedReviewLocalGitOptions = {}
+): Promise<string | null> {
+  return resolveCachedBranchName(
+    [getRepoDefaultBranchCacheKey(repoPath, connectionId, localGitOptions), remoteName].join('\0'),
+    async () => {
+      const exec = createRepoGitExec(repoPath, connectionId, localGitOptions)
+      return exec ? resolveRemoteHeadBranchViaExec(exec, remoteName) : null
+    }
+  )
+}
+
+async function resolveCachedBranchName(
+  cacheKey: string,
+  resolve: () => Promise<string | null>
+): Promise<string | null> {
   const now = Date.now()
   const cached = repoDefaultBranchCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
@@ -66,45 +117,16 @@ export async function getRepoDefaultBranchName(
     return pending
   }
 
-  // Why: simultaneous refresh paths for one checkout should share the same
-  // Git/SSH subprocess chain instead of multiplying cold-cache probes.
+  // Coalesce cold-cache subprocess chains across concurrent refreshers.
   const resolution = (async (): Promise<string | null> => {
     let branchName: string | null = null
     try {
-      const provider = connectionId ? getSshGitProvider(connectionId) : null
-      if (connectionId && !provider) {
-        // Why: a dropped SSH provider must not fall back to local git — the
-        // repoPath is remote, so a local run could answer for the wrong repo.
-        return null
-      }
-      const resolutionDeadline = Date.now() + REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS
-      // Why: the resolver can try five refs; share one deadline so an unhealthy
-      // local/WSL/SSH host cannot multiply the refresh delay per fallback probe.
-      const baseRef = await resolveDefaultBaseRefViaExec((argv) => {
-        const timeoutMs = resolutionDeadline - Date.now()
-        if (timeoutMs <= 0) {
-          return Promise.reject(new Error('Default branch resolution timed out.'))
-        }
-        return provider
-          ? provider.exec(argv, repoPath, { timeoutMs })
-          : gitExecFileAsync(argv, {
-              cwd: repoPath,
-              ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-              ...(localGitOptions.admissionTier
-                ? { admissionTier: localGitOptions.admissionTier }
-                : {}),
-              timeout: timeoutMs
-            })
-      })
-      // Same base-ref → branch-name normalization as git/repo.ts getRemoteFileUrl.
-      branchName = baseRef ? baseRef.replace(/^origin\//, '') : null
+      branchName = await resolve()
     } catch {
       branchName = null
     }
     const completedAt = Date.now()
-    // Why: null (failure or genuinely no default) is cached too — the resolver
-    // cannot tell them apart, and the short TTL bounds the fail-open window
-    // without re-probing git on every refresh tick.
+    // Cache null briefly too; failure and missing default are indistinguishable, but TTL bounds fail-open behavior.
     pruneRepoDefaultBranchCache(completedAt)
     repoDefaultBranchCache.set(cacheKey, {
       branchName,
@@ -123,13 +145,7 @@ export async function getRepoDefaultBranchName(
   }
 }
 
-/**
- * #9171 invariant, applied by every provider client at its branch-lookup choke
- * point: an implicit branch-name match on the repository's default branch must
- * never surface a non-open review. The explicitly linked review is exempt.
- * Resolves the default branch lazily — only for non-open, non-linked results —
- * so the common refresh path adds zero git calls.
- */
+/** #9171: implicit default-branch matches never expose non-open reviews; explicit links are exempt. Resolve lazily only for candidate non-open results. */
 export async function shouldHideNonOpenReviewOnDefaultBranch(input: {
   /** Provider-normalized review state; 'closed' / 'merged' / 'locked' count as non-open. */
   state: string

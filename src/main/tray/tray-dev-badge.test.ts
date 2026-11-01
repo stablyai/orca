@@ -26,14 +26,6 @@ function fakeTemplate(width: number, height: number) {
 }
 
 describe('stampTrayDevBadge', () => {
-  it('returns the base unchanged when it has no pixels', () => {
-    createFromBitmapMock.mockClear()
-    const base = { getSize: () => ({ width: 0, height: 0 }), toBitmap: () => Buffer.alloc(0) }
-
-    expect(stampTrayDevBadge(base as never)).toBe(base)
-    expect(createFromBitmapMock).not.toHaveBeenCalled()
-  })
-
   it('keeps the template canvas size and stamps opaque template-black pixels', () => {
     createFromBitmapMock.mockClear()
     const width = 22
@@ -58,7 +50,6 @@ describe('stampTrayDevBadge', () => {
       }
     }
     expect(stamped).toBeGreaterThan(0)
-    // The badge occupies the lower-left area and never spills off canvas.
     expect(maxX).toBeLessThan(width)
     expect(maxY).toBeLessThan(height)
   })
@@ -85,7 +76,6 @@ describe('stampTrayDevBadge', () => {
     stampTrayDevBadge(fakeTemplate(22, 14) as never, 1)
     const [bitmap1x] = createFromBitmapMock.mock.calls[0]
 
-    // Each 1x badge pixel becomes a 2x2 block, so the @2x stamp has 4x the area.
     expect(opaque(bitmap2x)).toBe(opaque(bitmap1x) * 4)
   })
 })

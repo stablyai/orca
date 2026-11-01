@@ -1,13 +1,4 @@
-/**
- * Pure session→pane correlation for the shared OpenCode server (#21359).
- *
- * The server stamps every post with its own frozen pane, so the binder must
- * decide ownership from client-side evidence: which panes sit in the
- * session's directory, and which of those panes runs an OpenCode client that
- * could have created it. No platform APIs here — the main-process binder
- * supplies sessions (SQLite), panes (PTY registry + CWD) and clients
- * (argv-aware process sweep); this module only decides.
- */
+/** Correlate frozen shared-server stamps from client evidence (#21359). Main supplies SQLite sessions, PTY directories and argv-aware process sweeps; this module stays platform-API-free. */
 
 /** One session row as the binder sees it. */
 export type CorrelatedSession = {
@@ -21,12 +12,7 @@ export type CorrelatedSession = {
 /** One pane as the binder sees it. */
 export type CorrelatedPane = {
   paneKey: string
-  /**
-   * Worktree root backing the pane (from the PTY registry), or null when
-   * unknown. A session belongs to a pane's candidate set when its directory
-   * is the root or beneath it; same-worktree panes tie and the client sweep
-   * breaks the tie.
-   */
+  /** Candidate worktree root; exact/descendant directories qualify, and client evidence resolves ownership. */
   directory: string | null
 }
 
@@ -54,12 +40,7 @@ export const OPENCODE_CREATE_SKEW_MS = 2 * 60 * 1000
 
 import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 
-/**
- * macOS symlinks /tmp, /var and /etc into /private; opencode records
- * whichever spelling the process saw, so fold the alias to the real root
- * before comparing. Narrow on purpose: a blanket `/private` strip would merge
- * genuinely distinct POSIX roots (`/private/repo` vs `/repo`).
- */
+/** Fold only macOS /tmp, /var and /etc aliases; stripping every /private prefix would merge distinct roots. */
 function foldMacOsPrivateAlias(directory: string): string {
   for (const name of ['tmp', 'var', 'etc']) {
     if (directory === `/${name}`) {
@@ -99,11 +80,7 @@ function resolveDotSegments(normalized: string): string {
   return joined === '' ? '.' : joined
 }
 
-/**
- * Comparison key for session/pane directories. NFC + Windows-only backslash
- * folding and case folding come from the shared helper (a backslash stays a
- * literal filename character on POSIX); dot segments resolve lexically.
- */
+/** Normalize NFC, Windows separators/case and lexical dot segments; POSIX backslashes stay literal. */
 function normalizeDir(directory: string): string {
   return resolveDotSegments(
     normalizeRuntimePathForComparison(foldMacOsPrivateAlias(directory.trim()))
@@ -130,23 +107,14 @@ export function sessionIdFromArgv(argv: readonly string[]): string | null {
 }
 
 function clientCouldCreate(client: CorrelatedClient, createdAtMs: number): boolean {
-  // Why lifetime-overlap instead of a start window: a TUI opened days ago
-  // creates today's session from the same process. Started-before plus
-  // seen-alive-after brackets the creation; a start window alone would miss
-  // every long-lived client.
+  // Long-lived clients create later sessions; bracket creation by start/last-alive times, not a narrow start window.
   return (
     client.startedAtMs <= createdAtMs + OPENCODE_CREATE_SKEW_MS &&
     client.lastSeenAliveMs >= createdAtMs
   )
 }
 
-/**
- * Decide owners for sessions the registry has not bound yet. Child sessions
- * inherit their root's owner (they roll up to the same pane); argv hits bind
- * immediately; otherwise exactly one pane must have both the directory and a
- * client that brackets the creation. Anything else stays unbound — today's
- * behavior — rather than guessing.
- */
+/** Explicit argv binds first, children inherit known owners, otherwise require exactly one directory candidate with overlapping client lifetime. Leave ambiguity unbound. */
 export function correlateOpenCodeSessionOwners(args: {
   sessions: readonly CorrelatedSession[]
   panes: readonly CorrelatedPane[]
@@ -164,8 +132,7 @@ export function correlateOpenCodeSessionOwners(args: {
     results.push({ sessionId, paneKey, basis })
   }
 
-  // Why argv first: a command line names its session outright, so it outranks
-  // every heuristic even when the directory is crowded.
+  // Explicit session argv outranks directory/timing heuristics.
   for (const client of clients) {
     const named = sessionIdFromArgv(client.argv)
     if (named && !owners.has(named)) {
@@ -239,8 +206,7 @@ export function correlateOpenCodeSessionOwners(args: {
     if (evidencing.length !== 1 || !only) {
       continue
     }
-    // Why the basis split: a lone containing pane needs no client evidence
-    // to be unambiguous; a shared worktree always resolves through it.
+    // The basis records whether directory candidates were unique; both paths still require one evidencing client pane.
     claim(
       session.id,
       only.paneKey,

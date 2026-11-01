@@ -1,3 +1,5 @@
+import type { LinearWriteIssueRef } from './agent-result-types'
+
 export const LINEAR_SEARCH_DEFAULT_LIMIT = 20
 export const LINEAR_SEARCH_MAX_LIMIT = 50
 export const LINEAR_COMMENTS_CAP = 500
@@ -22,6 +24,7 @@ export const LINEAR_ERROR_CODES = [
   'linear_invalid_assignee',
   'linear_invalid_label',
   'linear_invalid_parent',
+  'linear_comment_not_found',
   'linear_invalid_project',
   'linear_team_required',
   'linear_invalid_url',
@@ -143,6 +146,30 @@ export type LinearCommentAddRequest = LinearWriteTargetRequest & {
   body: string
   replyTo?: string
   writeId?: string
+}
+
+// Why: comment ids are workspace-unique UUIDs, so the comment alone names its issue.
+export type LinearCommentEditRequest = {
+  commentId: string
+  body: string
+  workspaceId?: string
+}
+
+export type LinearCommentDeleteRequest = {
+  commentId: string
+  workspaceId?: string
+}
+
+export type LinearCommentEditResult = {
+  comment: { id: string; url: string | null; parentId: string | null }
+  issue: LinearWriteIssueRef
+  meta: { workspaceId: string; bodyChars: number }
+}
+
+export type LinearCommentDeleteResult = {
+  comment: { id: string; parentId: string | null }
+  issue: LinearWriteIssueRef
+  meta: { workspaceId: string }
 }
 
 export type LinearAttachRequest = LinearWriteTargetRequest & {

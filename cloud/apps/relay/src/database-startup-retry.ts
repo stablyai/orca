@@ -6,9 +6,7 @@ export type DatabaseStartupRetryPolicy = {
   baseDelayMs: number
   maxDelayMs: number
   jitterMs: number
-  // Which failures this particular startup step may repeat. Not every caller can
-  // repeat everything the request path calls transient: what the retry re-runs
-  // decides that, so the call site owns it.
+  // Call site owns retry policy: repeated startup work may be unsafe even for request-transient errors.
   isRetryable?: (error: unknown) => boolean
 }
 
@@ -23,9 +21,7 @@ function retryDelayMs(policy: DatabaseStartupRetryPolicy, attempt: number): numb
   return backoffMs + Math.floor(Math.random() * (policy.jitterMs + 1))
 }
 
-// Startup work that a cold dependency - a proxy sidecar that just started, a
-// database still accepting the fleet back - can fail once and serve a moment
-// later. The wall-clock window, not the attempt count, is the real bound.
+// Cold proxies/databases can recover moments later; bound startup retries by wall-clock window, not attempt count.
 export async function retryTransientDatabaseStartup<T>(
   operation: () => Promise<T>,
   policy: DatabaseStartupRetryPolicy,

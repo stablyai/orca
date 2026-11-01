@@ -4,7 +4,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { comparePaneKeysOrdinal } from './worktree-agent-row-order'
@@ -95,9 +95,7 @@ describe('buildWorktreeAgentRows', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [],
-      // Why: useWorktreeAgentRows filters retained snapshots by worktreeId, not
-      // current tab membership. This is the sidebar behavior that sleep cleanup
-      // must counter by dropping worktree-scoped retained rows.
+      // Retained rows are worktree-scoped, independent of current tab membership; Sleep must explicitly remove them.
       retained: [retained],
       now: 2000
     })
@@ -246,10 +244,7 @@ describe('buildWorktreeAgentRows', () => {
   })
 
   it('decays a stale working entry to idle but leaves a stale done entry alone', () => {
-    // Why: the freshness scheduler ticks agentStatusEpoch when an entry crosses
-    // the stale boundary; the row state machine must collapse working/blocked/
-    // waiting to idle but preserve done. Sleep is the most common path that
-    // freezes hook entries past their TTL.
+    // Freshness expires nonterminal evidence while preserving done; these fixtures have no live PTY.
     const staleAt = 1000
     const freshDoneAt = 2000
     const now = staleAt + AGENT_STATUS_STALE_AFTER_MS + 1
@@ -270,8 +265,7 @@ describe('buildWorktreeAgentRows', () => {
   })
 
   it('decays a restored-unconfirmed working entry to idle even while recent', () => {
-    // Why: a hydrated nonterminal row may describe a turn that ended while no
-    // receiver was up; it must never render as confirmed working, however new.
+    // Restored nonterminal evidence cannot prove current work, however recently its snapshot was written.
     const updatedAt = 2_000
     const now = updatedAt + 1
     const rows = buildWorktreeAgentRows({
@@ -343,9 +337,7 @@ describe('buildWorktreeAgentRows', () => {
         now: 2000
       }).map((row) => row.paneKey)
 
-    // Why: OMP can send frequent same-state updates for several panes. When
-    // those workers are worktree-attributed before their tabs arrive, row order
-    // must not inherit a noisy status-map iteration order.
+    // Worker arrival/status-map iteration order must not reorder agents whose tabs have not hydrated.
     expect(build([third, first, second])).toEqual([PANE_KEY_1, PANE_KEY_2, PANE_KEY_3])
     expect(build([{ ...second, updatedAt: 1500 }, third, first])).toEqual([
       PANE_KEY_1,
@@ -375,8 +367,7 @@ describe('buildWorktreeAgentRows', () => {
       now: 2500
     })
 
-    // Why: both rows originally started together. A later working -> terminal
-    // transition must not make fallback tab createdAt outrank paneKey order.
+    // Later terminal transitions must not make tab creation time outrank pane-key ties.
     expect(rows.map((row) => [row.paneKey, row.startedAt, row.tab.createdAt])).toEqual([
       [PANE_KEY_1, 1000, 1000],
       [PANE_KEY_2, 1000, 1000]

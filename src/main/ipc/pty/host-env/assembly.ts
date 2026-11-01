@@ -1,24 +1,23 @@
+import { applyClaudeAgentViewEnv } from './claude-agent-view'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
 } from '../../../../shared/pi-agent-kind'
-import { applyTerminalGitCredentialPromptGuard } from '../../terminal-git-credential-guard'
-import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
-import {
-  OPENCODE_CONFIG_DIR_ENV_KEYS,
-  isOpenCodeLegacySharedConfigDir
-} from '../../../opencode/legacy-shared-config-dir'
+import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/terminal-git-credential-guard'
+import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
+import { wslInteropHealthMonitor } from '../../../wsl/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
+import { scheduleCodexHookReconcile } from '../../../codex/codex-hook-reconcile'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
@@ -27,20 +26,17 @@ import {
   clearPiAgentShadowEnv,
   exposePiManagedExtensionEnv,
   isMimoLaunchCommand,
-  resolveMimocodeSourceHome,
-  resolveOpenCodeSourceConfigDir,
+  resolveMimocodeSourceConfigDir,
   resolvePiAgentSourceDir,
-  resolveScopedPiAgentSourceDir,
-  restoreOrStripOverlayEnv
+  resolveScopedPiAgentSourceDir
 } from './pi-agent'
+import { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './spawn-env-keys'
+import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
+import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
+import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
-/**
- * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
- *
- * Do NOT call when `args.connectionId` is set (SSH): every injection is host-loopback
- * or references local filesystem paths meaningless to a remote shell.
- */
+/** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
 export function buildPtyHostEnv(
   id: string,
   baseEnv: Record<string, string>,
@@ -49,31 +45,20 @@ export function buildPtyHostEnv(
   mergePersistedWindowsPath(baseEnv)
   Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
-  // Why: pre-1.4.209 panes exported Orca's retired shared hooks dir; inheriting it hides the user's global OpenCode config.
-  const isLegacyOpenCodeHooksDir = (dir: string | undefined): boolean =>
-    isOpenCodeLegacySharedConfigDir(dir, opts.userDataPath)
-  const inheritedOpenCodeEnv: NodeJS.ProcessEnv = {}
-  for (const key of OPENCODE_CONFIG_DIR_ENV_KEYS) {
-    if (isLegacyOpenCodeHooksDir(baseEnv[key])) {
-      delete baseEnv[key]
-    }
-    if (!isLegacyOpenCodeHooksDir(process.env[key])) {
-      inheritedOpenCodeEnv[key] = process.env[key]
-    }
+  // Claude currently recognizes image support only in a short terminal allowlist.
+  if (
+    opts.launchAgent === 'claude' &&
+    resolveTerminalInlineImagesEnabled(opts.terminalInlineImages) &&
+    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
+    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined
+  ) {
+    baseEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
   }
-  // A daemon or sibling shell can retain a retired path that main no longer sees.
-  openCodeHookService.refreshLegacySharedPlugin()
-  openCode2HookService.refreshLegacySharedPlugin()
-  const resolvedOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv, inheritedOpenCodeEnv)
-  const preexistingOpenCodeConfigDir = isLegacyOpenCodeHooksDir(resolvedOpenCodeConfigDir)
-    ? undefined
-    : resolvedOpenCodeConfigDir
+
+  const openCodeConfig = captureOpenCodeSourceConfig(baseEnv, opts.userDataPath)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  const openCodeAgent = selectOpenCodeHookAgent(
-    opts.launchAgent,
-    launchCommandHint,
-    (agent) => opts.agentStatusHooksEnabled && isTuiAgentEnabled(agent, opts.disabledTuiAgents)
-  )
+  applyManagedDataAccountEnvironment(baseEnv, { ...opts, launchCommand: launchCommandHint })
+  applyClaudeAgentViewEnv(baseEnv, opts)
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -83,7 +68,7 @@ export function buildPtyHostEnv(
   const hasLaunchCommand =
     typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
 
-  // Why: unattended agents must fail instead of looping on OS credential prompts; user terminals keep normal Git behavior.
+  // Unattended agents must fail instead of waiting on OS credential prompts.
   applyTerminalGitCredentialPromptGuard(baseEnv, {
     launchCommand: launchCommandHint,
     isUnattended: opts.launchAgent !== undefined,
@@ -97,7 +82,7 @@ export function buildPtyHostEnv(
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('omp', opts.disabledTuiAgents)
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
-  // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
+  // Pi/OMP source shadows are agent-scoped to avoid cross-agent extension state.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
@@ -108,66 +93,46 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
-  restoreOrStripOverlayEnv(
+  const openCodeAgent = applyOpenCodeStatusPluginEnv(
+    id,
     baseEnv,
-    {
-      primary: 'OPENCODE_CONFIG_DIR',
-      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
-      preserveExplicitPrimary: true
-    },
-    inheritedOpenCodeEnv
+    openCodeConfig,
+    opts,
+    launchCommandHint
   )
-  delete baseEnv.ORCA_OPENCODE_AGENT
-  if (openCodeAgent) {
-    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
-    const openCodeStatusService =
-      openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
-    baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
-    // WSL owns its config writes; only the guest overlay may enter a WSL pane.
-    if (!opts.isWsl) {
-      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
-    }
-    if (baseEnv.OPENCODE_CONFIG_DIR) {
-      // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
-      baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
-      if (preexistingOpenCodeConfigDir) {
-        // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
-        baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
-      } else {
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  // Older builds redirected MIMOCODE_HOME; a nested pane must not inherit that overlay.
+  restoreOrStripOverlayEnv(baseEnv, {
+    primary: 'MIMOCODE_HOME',
+    overlay: 'ORCA_MIMOCODE_HOME',
+    source: 'ORCA_MIMOCODE_SOURCE_HOME'
+  })
+  restoreOrStripOverlayEnv(baseEnv, {
+    primary: 'MIMOCODE_CONFIG_DIR',
+    overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
+    source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR',
+    preserveExplicitPrimary: true
+  })
+  const mimoSourceConfigDir = resolveMimocodeSourceConfigDir(baseEnv)
+  if (opts.agentStatusHooksEnabled && isMimoLaunchCommand(launchCommandHint)) {
+    mimoCodeHookService.carryOverLegacyAuth({ ...process.env, ...baseEnv })
+    const overlay = mimoCodeHookService.buildPtyEnv(id, mimoSourceConfigDir).MIMOCODE_CONFIG_DIR
+    if (overlay && overlay !== mimoSourceConfigDir) {
+      baseEnv.MIMOCODE_CONFIG_DIR = overlay
+      baseEnv.ORCA_MIMOCODE_CONFIG_DIR = overlay
+      if (mimoSourceConfigDir) {
+        baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = mimoSourceConfigDir
       }
     }
-  }
-  if (opts.agentStatusHooksEnabled) {
-    if (isMimoLaunchCommand(launchCommandHint)) {
-      const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
-      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
-      if (baseEnv.MIMOCODE_HOME) {
-        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
-        if (preexistingMimocodeHome) {
-          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
-        } else {
-          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
-        }
-      }
-    }
-  } else {
-    restoreOrStripOverlayEnv(baseEnv, {
-      primary: 'MIMOCODE_HOME',
-      overlay: 'ORCA_MIMOCODE_HOME',
-      source: 'ORCA_MIMOCODE_SOURCE_HOME'
-    })
   }
 
-  // Why: strip inherited hook coordinates before injecting this PTY's fresh loopback receiver, so nested-terminal callbacks route to the owning pane.
+  // Remove inherited hook coordinates before injecting the owning pane's receiver.
   for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
     delete baseEnv[key]
   }
   if (opts.agentStatusHooksEnabled) {
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
     if (opts.isWsl === true) {
-      // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
+      // Windows loopback is outside WSL's NAT namespace; use the guest relay endpoint.
       const distro = opts.wslDistro ?? null
       const wslLaunchKind =
         explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
@@ -178,7 +143,16 @@ export function buildPtyHostEnv(
       if (guestEndpoint) {
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
-      // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
+      const claude =
+        opts.claudeSubagentNavigationEnabled !== false &&
+        isTuiAgentEnabled('claude', opts.disabledTuiAgents)
+          ? wslHookRelayManager.getClaudeAgentView(distro)
+          : null
+      if (claude) {
+        baseEnv.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR = claude.pluginDir
+        baseEnv.ORCA_CLAUDE_CONFIG_DIR = claude.configDir
+      }
+      // OpenCode must load status hooks from its guest-resident overlay.
       const opencodeOverlayDir = openCodeAgent
         ? wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
         : null
@@ -195,16 +169,12 @@ export function buildPtyHostEnv(
     }
   }
 
-  // Why: PI_CODING_AGENT_DIR is the user's config/session root; install only Orca-owned extension files, don't override it.
+  // Preserve the user's Pi config/session root; install only Orca-owned extension files.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
-    // Why: bare shells historically defaulted to Pi + OMP shadow prep and
-    // created ~/.<agent>/agent even when the user never launches those agents
-    // (#10196). Only create default homes on an explicit Pi/OMP launch;
-    // otherwise install only into an existing agent dir (or userData for OMP
-    // status so a typed `omp` still gets the shell wrapper extension).
+    // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
         materializeDefaultHome: explicitPiAgentKind === 'pi'
@@ -242,7 +212,7 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
   } else {
-    // Why: nested PTYs must not inherit stale source or overlay state from another agent.
+    // Nested PTYs must not inherit another agent's source/overlay state.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
@@ -276,14 +246,14 @@ export function buildPtyHostEnv(
     }
   }
 
-  // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
+  // Keep managed Codex home selection PTY-scoped across dev/prod instances.
   if (opts.skipCodexHomeEnv) {
     delete baseEnv.CODEX_HOME
     delete baseEnv.ORCA_CODEX_HOME
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   } else if (opts.selectedCodexHomePath) {
     baseEnv.CODEX_HOME = opts.selectedCodexHomePath
-    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
+    // Startup files may re-export CODEX_HOME; wrappers restore this pane's selected runtime home.
     baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
       hooksEnabled:
@@ -305,12 +275,18 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }
 
-  // Why: an inherited copy (e.g. Orca launched from a WSL pane) names another launch's CLI.
+  if (!opts.isWsl) {
+    // Native panes may run Codex later by typing it; recheck hooks against any updated Codex install.
+    scheduleCodexHookReconcile()
+  }
+
+  // An inherited WSL CLI path belongs to another launch.
   delete baseEnv.ORCA_WSL_CLI_DIR
-  // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
+  // WSL wrapper state and development CLI routing require the owning instance's userData root.
   if (opts.isWsl) {
+    wslInteropHealthMonitor.noteActivity(opts.wslDistro ?? null)
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
-    // Why: managed WSL registration uses `orca-ide`; exposing that literal scopes agent guidance to WSL without a bare-orca shim.
+    // Advertise the managed WSL CLI name for agent guidance.
     baseEnv.ORCA_CLI_COMMAND = getWslCliCommandName(opts.isPackaged)
     const managedCliDir = getManagedWslCliDir(opts)
     if (managedCliDir) {
@@ -336,10 +312,17 @@ export function buildPtyHostEnv(
     const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
+  // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
+  applyRemoteViewerClipboardEnv(baseEnv, {
+    launchAgent: opts.launchAgent,
+    viewerIsRemote: opts.routeBrowserOpensToClient === true
+  })
 
-  // Why: must run after the prepends above — they re-read PATH from the unscrubbed
-  // process.env when baseEnv carries none, which is the daemon path's normal shape.
+  // Scrub after prepends: sparse daemon env may make them reread unsanitized ambient PATH.
   stripLegacyTerminalShimEnv(baseEnv, process.platform)
 
+  if (!opts.isWsl) {
+    ensureOpenCodeStartupPromptForLaunch(baseEnv)
+  }
   return baseEnv
 }

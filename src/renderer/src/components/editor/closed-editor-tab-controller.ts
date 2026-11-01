@@ -2,11 +2,29 @@ import type { StoreApi } from 'zustand'
 import type { editor } from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
-import { disposeClosedEditorModels, type ClosedEditorTab } from './closed-editor-tab-disposal'
+import {
+  disposeClosedEditorModels,
+  disposeClosedCheckDetailsReadingCache,
+  keptClosedEditorTabs,
+  type ClosedEditorTab
+} from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
+import { createEditorModelOwnerKeyCache } from './editor-model-owner-key-cache'
+import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
+import type { EditorBufferKeptRecords } from '@/store/slices/editor/buffers/editor-buffer-kept'
+import type { EditorBufferRouteState } from '@/store/slices/editor/buffers/editor-buffer-identity-cache'
 
-type EditorStore = Pick<StoreApi<{ openFiles: OpenFile[] }>, 'getState' | 'subscribe'>
+type EditorStore = Pick<
+  StoreApi<
+    EditorBufferRouteState &
+      Partial<EditorBufferViewIndex> & {
+        openFiles: OpenFile[]
+        editorBufferKept?: EditorBufferKeptRecords
+      }
+  >,
+  'getState' | 'subscribe'
+>
 type RetainedModel = {
   files: Map<string, ClosedEditorTab>
   detach: { dispose(): void }
@@ -14,7 +32,7 @@ type RetainedModel = {
 }
 
 function ownerKey(file: ClosedEditorTab): string {
-  return JSON.stringify([file.id, file.mode, file.filePath])
+  return JSON.stringify([file.id, file.mode, file.filePath, file.modelOwnerKey])
 }
 
 export function attachClosedEditorTabCleanup(
@@ -22,13 +40,16 @@ export function attachClosedEditorTabCleanup(
   bridge = editorModelRegistry
 ): () => void {
   let registry = bridge.get()
-  let previousFiles = store.getState().openFiles
+  let previousState = store.getState()
+  let previousFiles = previousState.openFiles
   const pendingFiles = new Map<string, ClosedEditorTab>()
   const candidateModels = new Set<editor.ITextModel>()
   const retainedModels = new Map<editor.ITextModel, RetainedModel>()
   let active = true
   let scheduled = false
   let generation = 0
+  const { ownerKeyOf, ownerKeyReaderFor, ownerInputsEqual } =
+    createEditorModelOwnerKeyCache(previousState)
 
   const releaseRetainedModel = (model: editor.ITextModel): void => {
     const retained = retainedModels.get(model)
@@ -70,7 +91,7 @@ export function attachClosedEditorTabCleanup(
     if (!registry) {
       return
     }
-    // Not `toEditorModelUri`: this re-resolves a live model's own URI (diff models are not `file:`).
+    // Re-resolve the model’s actual URI; diff models are not file: URIs.
     const model = registry.editor.getModel(registry.Uri.parse(candidate.uri.toString()))
     if (!model || model !== candidate) {
       return
@@ -88,6 +109,16 @@ export function attachClosedEditorTabCleanup(
   }
 
   const flush = (): void => {
+    const cacheGeneration = generation
+    disposeClosedCheckDetailsReadingCache(
+      [...pendingFiles.values()].filter((file) => file.mode === 'check-details'),
+      (file) =>
+        active &&
+        generation === cacheGeneration &&
+        !store
+          .getState()
+          .openFiles.some((live) => live.id === file.id && live.mode === 'check-details')
+    )
     const currentRegistry = registry
     if (!currentRegistry) {
       if (candidateModels.size === 0) {
@@ -96,24 +127,26 @@ export function attachClosedEditorTabCleanup(
       return
     }
     const flushGeneration = generation
-    let checkedOpenFiles: OpenFile[] | null = null
+    let checkedState: ReturnType<EditorStore['getState']> | null = null
     let openIds = new Set<string>()
     let openEditUris = new Set<string>()
     const stillOwned = (file: ClosedEditorTab): boolean => {
-      const openFiles = store.getState().openFiles
-      if (openFiles !== checkedOpenFiles) {
-        checkedOpenFiles = openFiles
+      const currentState = store.getState()
+      const openFiles = currentState.openFiles
+      if (currentState !== checkedState) {
+        checkedState = currentState
         openIds = new Set(openFiles.map((openFile) => openFile.id))
         openEditUris = new Set(
           openFiles
             .filter((openFile) => openFile.mode === 'edit')
-            .map((openFile) => toEditorModelUri(openFile.filePath))
+            .map((openFile) =>
+              toEditorModelUri(openFile.filePath, ownerKeyOf(openFile, currentState))
+            )
         )
       }
-      return (
-        openIds.has(file.id) ||
-        (file.mode === 'edit' && openEditUris.has(toEditorModelUri(file.filePath)))
-      )
+      return file.mode === 'edit'
+        ? openEditUris.has(toEditorModelUri(file.filePath, file.modelOwnerKey))
+        : openIds.has(file.id)
     }
     const disposeCaptured = (
       files: ClosedEditorTab[],
@@ -144,10 +177,20 @@ export function attachClosedEditorTabCleanup(
       )
     }
 
-    const files = [...pendingFiles.values()].filter((file) => !stillOwned(file))
+    const kept = keptClosedEditorTabs(pendingFiles, store.getState().editorBufferKept, (uri) =>
+      currentRegistry.editor.getModel(currentRegistry.Uri.parse(uri))
+    )
+    const files = [...pendingFiles.values()].filter((file) => !stillOwned(file) && !kept.has(file))
     const models = new Set(candidateModels)
     pendingFiles.clear()
     candidateModels.clear()
+    // Kept dirty records retain their models until record release.
+    for (const [file, model] of kept) {
+      pendingFiles.set(ownerKey(file), file)
+      if (model) {
+        candidateModels.add(model)
+      }
+    }
     disposeCaptured(files, models)
     if (active && generation !== flushGeneration) {
       for (const file of files) {
@@ -181,23 +224,43 @@ export function attachClosedEditorTabCleanup(
   }
 
   const unsubscribe = store.subscribe(() => {
-    const openFiles = store.getState().openFiles
-    if (openFiles === previousFiles) {
+    const currentState = store.getState()
+    const openFiles = currentState.openFiles
+    const previous = previousFiles
+    const closedState = previousState
+    previousFiles = openFiles
+    previousState = currentState
+    if (
+      openFiles === previous &&
+      // Detach/rejoin can change model ownership without replacing openFiles.
+      currentState.editorBufferKept === closedState.editorBufferKept &&
+      ownerInputsEqual(currentState, closedState)
+    ) {
       return
     }
-    const previous = previousFiles
-    previousFiles = openFiles
-    const liveIds = new Set(openFiles.map((file) => file.id))
+    const priorOwnerOf = ownerKeyReaderFor(closedState)
+    const liveFiles = new Map(openFiles.map((file) => [file.id, file]))
     let removed = false
     let removedDiff = false
     for (const file of previous) {
-      if (!liveIds.has(file.id)) {
-        const descriptor = { id: file.id, mode: file.mode, filePath: file.filePath }
+      const liveFile = liveFiles.get(file.id)
+      if (
+        !liveFile ||
+        liveFile.mode !== file.mode ||
+        liveFile.filePath !== file.filePath ||
+        (file.mode === 'edit' && ownerKeyOf(liveFile, currentState) !== priorOwnerOf(file))
+      ) {
+        const descriptor = {
+          id: file.id,
+          mode: file.mode,
+          filePath: file.filePath,
+          modelOwnerKey: priorOwnerOf(file)
+        }
         pendingFiles.set(ownerKey(descriptor), descriptor)
         removed = true
         if (file.mode === 'edit' && registry) {
           const model = registry.editor.getModel(
-            registry.Uri.parse(toEditorModelUri(file.filePath))
+            registry.Uri.parse(toEditorModelUri(file.filePath, descriptor.modelOwnerKey))
           )
           if (model) {
             candidateModels.add(model)
@@ -212,7 +275,8 @@ export function attachClosedEditorTabCleanup(
         candidateModels.add(model)
       }
     }
-    if (removed || retainedModels.size > 0) {
+    const keptChanged = currentState.editorBufferKept !== closedState.editorBufferKept
+    if (removed || retainedModels.size > 0 || (keptChanged && pendingFiles.size > 0)) {
       schedule()
     }
   })

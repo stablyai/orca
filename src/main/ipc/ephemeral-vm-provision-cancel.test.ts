@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: vi.fn() }
 }))
 
-vi.mock('../ephemeral-vm-provisioned-root-source', () => ({
+vi.mock('../ephemeral-vm/provisioned-root-source', () => ({
   resolveProvisionedRootSource: resolveProvisionedRootSourceMock
 }))
 
@@ -57,7 +57,13 @@ it('cancels source resolution before a provisioned-root recipe creates resources
   const result = await provision
 
   expect(cancelled).toEqual({ cancelled: true })
-  expect(result).toEqual({ ok: false, error: 'Provisioning cancelled.', stdout: '', stderr: '' })
+  expect(result).toEqual({
+    ok: false,
+    error: 'Provisioning cancelled.',
+    errorCode: 'provisionCancelled',
+    stdout: '',
+    stderr: ''
+  })
   expect(existsSync(createMarker)).toBe(false)
 })
 

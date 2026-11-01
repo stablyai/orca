@@ -1,16 +1,4 @@
-/**
- * Live count of zustand store subscribers, for the typing-latency census.
- *
- * Why this lives in the store and not in the probe: zustand's create() builds the
- * inner api first, then copies `subscribe` onto the bound hook. useStore() reads
- * the INNER api.subscribe, so patching the hook's copy after the fact counts only
- * imperative useAppStore.subscribe() callers (16 sites) and silently misses every
- * React hook subscription (~2.2k sites) — exactly the ones that scale with agent
- * rows. The inner api is only reachable as the state creator's third argument.
- *
- * Cost is per-subscribe (component mount), never per-setState: zustand notifies by
- * iterating its listener Set directly, so this never touches the keystroke path.
- */
+/** Install on inner creator API before create copies subscribe to bound hook; patching the hook misses React subscribers. Cost occurs only on subscribe/unsubscribe, never per state write. */
 
 type StoreListenerCensusApi<T> = {
   subscribe: (listener: (state: T, previousState: T) => void) => () => void

@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
-import { resolveAuthorizedPath } from './filesystem-auth'
+import {
+  resolveDesktopAuthorizedPath,
+  resolveUserNamedRegularFile
+} from './local-file-access-resolution'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { startNotebookKernel, type NotebookKernel } from '../notebook/notebook-kernel'
 import {
@@ -34,7 +38,7 @@ function cancelPendingStarts(owner: WebContents, filePath: string): void {
   }
 }
 
-// Why: a reloaded, crashed or closed renderer has lost its sessions, so its kernels go with it.
+// Renderer page teardown must also retire its notebook kernels.
 function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
   let kernels = kernelsByOwner.get(owner)
   if (!kernels) {
@@ -57,6 +61,7 @@ function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
   return kernels
 }
 
+// Open notebook paths select cwd/venv; project paths canonicalize to their real file.
 export function registerNotebookHandlers(store: Store): void {
   ipcMain.handle(
     'notebook:listPythonEnvironments',
@@ -64,8 +69,8 @@ export function registerNotebookHandlers(store: Store): void {
       _event,
       args: { filePath: string; rootPath: string | null; runWorkspaceInterpreters: boolean }
     ): Promise<PythonEnvironments> => {
-      await resolveAuthorizedPath(args.filePath, store)
-      // Why the unresolved path: rootPath is in the same (possibly symlinked) form, e.g. /tmp.
+      await resolveUserNamedRegularFile(args.filePath, store)
+      // Environment listing needs the same unresolved spelling as rootPath.
       return listPythonEnvironments(args.filePath, args.rootPath, {
         runWorkspaceInterpreters: args.runWorkspaceInterpreters === true
       })
@@ -84,7 +89,6 @@ export function registerNotebookHandlers(store: Store): void {
       if (owner.isDestroyed()) {
         return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
       }
-      // Each start stays independent until the notebook or issuing document closes.
       const requestToken = randomUUID()
       const controller = startCancellations.begin(event, requestToken)
       if (!controller) {
@@ -96,8 +100,8 @@ export function registerNotebookHandlers(store: Store): void {
       starts.set(args.filePath, pending)
       pending.add(controller)
       try {
-        // Why: run from the notebook's folder so relative imports and data paths resolve as on disk.
-        const cwd = dirname(await resolveAuthorizedPath(args.filePath, store))
+        // Use the real notebook folder so relative imports and data paths follow disk layout.
+        const cwd = dirname(await realpath(await resolveUserNamedRegularFile(args.filePath, store)))
         if (controller.signal.aborted || owner.isDestroyed()) {
           return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
         }
@@ -144,9 +148,9 @@ export function registerNotebookHandlers(store: Store): void {
       _event,
       args: { filePath: string; rootPath: string | null; python: string }
     ): Promise<CreateVenvResult> => {
-      await resolveAuthorizedPath(args.filePath, store)
+      await resolveUserNamedRegularFile(args.filePath, store)
       if (args.rootPath) {
-        await resolveAuthorizedPath(args.rootPath, store)
+        await resolveDesktopAuthorizedPath(args.rootPath, store)
       }
       return createNotebookVenv(args.python, notebookVenvParent(args.filePath, args.rootPath))
     }

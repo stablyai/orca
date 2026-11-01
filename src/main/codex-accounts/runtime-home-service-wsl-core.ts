@@ -66,10 +66,7 @@ export abstract class CodexRuntimeHomeWslCore extends CodexRuntimeHomeAuthProven
         continue
       }
       if (suppliedRead?.kind === 'unreadable') {
-        // Why: an unreadable home can never be compared, but letting the read
-        // throw abandons the scan for every other account — dropping a refresh
-        // the runtime home holds for one of them. Only its record can rule it
-        // out as the owner; when it cannot, the scan is no longer unambiguous.
+        // Keep scanning, but an unreadable possible owner makes any other match ambiguous.
         if (
           !expectedAccountId &&
           codexAuthCouldBelongToManagedAccount(runtimeAuthContents, account)

@@ -1,26 +1,29 @@
-// Desktop IPC for a delete that failed after Git dropped the registration: the leftover stays in
-// `worktrees:list` with the error, Delete retries it. Git and the disk are mocked;
-// runtime-failed-local-worktree-removal.test.ts runs the real thing.
+// Mocked desktop removal failures; runtime-failed-local-worktree-removal.test.ts covers real Git and filesystem behavior.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  gitExecFileAsyncMock,
   killAllProcessesForWorktreeMock,
   listWorktreesMock,
   removeWorktreeMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
+import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
-import type { Worktree } from '../../shared/worktree/types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from '../../shared/worktree/types'
 import { finishUnregisteredWorktreeRemoval } from '../git/worktree-removal'
+import { worktreeCheckoutExists } from '../worktree-removal-table'
 import type * as WorktreeRemovalModule from '../git/worktree-removal'
 import type * as WorktreeRemovalTable from '../worktree-removal-table'
 import type * as WorktreeRemovalLeftover from '../worktree-removal-leftover'
+import { removeLocalWorktreePath } from '../local-worktree-filesystem'
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
   retryFailedWorktreeRemoval,
   startBackgroundWorktreeRemoval
 } from '../worktree-background-removal'
+import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -45,18 +48,8 @@ vi.mock('../github/client', async () =>
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
-vi.mock('../providers/ssh-git-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
-)
-vi.mock('../providers/ssh-filesystem-dispatch', async () =>
-  (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
-)
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
-)
-vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
-vi.mock('../ssh/ssh-target-registry', async () =>
-  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
@@ -102,17 +95,25 @@ vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
-vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+vi.mock('./pty/provider/registry', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyRegistryModuleMock()
+)
+vi.mock('./pty/provider/state-cleanup', async () =>
+  (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
+)
 
 vi.mock('../git/worktree-removal', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalModule>()),
   finishUnregisteredWorktreeRemoval: vi.fn(async () => ({}))
 }))
-// The leftover is on disk and is the removed checkout's own (no `.git` left).
 vi.mock('../worktree-removal-table', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalTable>()),
   worktreeCheckoutExists: vi.fn(async () => true)
 }))
+vi.mock('../local-worktree-filesystem', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
+  return { ...actual, removeLocalWorktreePath: vi.fn(actual.removeLocalWorktreePath) }
+})
 vi.mock('../worktree-removal-leftover', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRemovalLeftover>()),
   isUnregisteredRemovalLeftover: vi.fn(async () => true)
@@ -120,19 +121,23 @@ vi.mock('../worktree-removal-leftover', async (importOriginal) => ({
 
 const featureId = 'repo-1::/workspace/feature-wt'
 const GIT_ERROR = "error: failed to delete '/workspace/feature-wt': Operation not permitted"
+const FOLLOW_UP_DELETE_ERROR =
+  "EPERM: operation not permitted, unlink '/workspace/feature-wt/locked'"
 
 function remove(args: Record<string, unknown>): Promise<RemoveWorktreeResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktrees:remove resolves a RemoveWorktreeResult.
   return handlers['worktrees:remove'](null, args) as Promise<RemoveWorktreeResult>
 }
 
-async function listFeature(): Promise<Worktree | undefined> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktrees:list resolves the repo's Worktree rows.
-  const rows = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
-  return rows.find((row) => row.id === featureId)
+async function listFeature(): Promise<DetectedWorktree | undefined> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a repo-scoped worktrees:listDetected resolves a DetectedWorktreeListResult.
+  const result = (await handlers['worktrees:listDetected'](null, {
+    repoId: 'repo-1'
+  })) as DetectedWorktreeListResult
+  return result.worktrees.find((row) => row.id === featureId)
 }
 
-/** Git fails partway and drops the registration, as `git worktree remove --force` does. */
+/** Model Git deregistering a checkout before filesystem removal fails. */
 async function failAfterGitDroppedIt(): Promise<void> {
   const [main, feature] = mockKnownFeatureWorktree()
   const result = startBackgroundWorktreeRemoval({
@@ -163,6 +168,40 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
   afterEach(() => {
     _resetPendingWorktreeRemovalsForTests()
     vi.mocked(finishUnregisteredWorktreeRemoval).mockClear()
+    vi.mocked(worktreeCheckoutExists).mockResolvedValue(true)
+  })
+
+  it('removes the push-target remote Orca added when Delete fails partway', async () => {
+    const [main] = mockKnownFeatureWorktree()
+    const pushTarget = {
+      remoteName: 'pr-contributor-orca',
+      branchName: 'feature',
+      remoteUrl: 'https://github.com/contributor/orca.git',
+      remoteCreated: true
+    }
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ pushTarget }))
+    store.getAllWorktreeMeta.mockReturnValue({ [featureId]: makeWorktreeMeta({ pushTarget }) })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) =>
+      args[0] === 'remote' && args[1] === 'get-url'
+        ? { stdout: `${pushTarget.remoteUrl}\n`, stderr: '' }
+        : { stdout: '', stderr: '' }
+    )
+    removeWorktreeMock.mockImplementation(async () => {
+      listWorktreesMock.mockResolvedValue([main])
+      throw new Error(GIT_ERROR)
+    })
+    // Orca's follow-up delete of the folder Git left also fails, so the row stays listed.
+    vi.mocked(removeLocalWorktreePath).mockRejectedValueOnce(new Error(FOLLOW_UP_DELETE_ERROR))
+
+    await expect(remove({ worktreeId: featureId })).rejects.toThrow(FOLLOW_UP_DELETE_ERROR)
+    await _settlePendingWorktreeRemovalsForTests()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'remove', pushTarget.remoteName], {
+      cwd: '/workspace/repo'
+    })
+    expect(await listFeature()).toMatchObject({
+      removalError: expect.stringContaining(FOLLOW_UP_DELETE_ERROR)
+    })
   })
 
   it('stays in the listing with the error instead of vanishing', async () => {
@@ -173,13 +212,31 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     expect(row?.removing).toBeUndefined()
   })
 
-  it('Delete runs the recorded removal again: teardown, leftover, branch and metadata', async () => {
+  it('Delete refuses while the folder is on disk, deleting nothing and keeping the row', async () => {
     await failAfterGitDroppedIt()
     killAllProcessesForWorktreeMock.mockClear()
 
+    for (const force of [false, true]) {
+      await expect(remove({ worktreeId: featureId, force })).rejects.toThrow(
+        '/workspace/feature-wt is no longer a Git worktree, so its folder was left on disk. Delete the folder yourself to finish removing this workspace.'
+      )
+    }
+    await _settlePendingWorktreeRemovalsForTests()
+
+    expect(finishUnregisteredWorktreeRemoval).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    expect(await listFeature()).toMatchObject({ removalError: GIT_ERROR })
+  })
+
+  it('once the user removed the folder, Delete finishes the rest: teardown, branch and metadata', async () => {
+    await failAfterGitDroppedIt()
+    killAllProcessesForWorktreeMock.mockClear()
+    vi.mocked(worktreeCheckoutExists).mockResolvedValue(false)
+
     await expect(remove({ worktreeId: featureId })).resolves.not.toHaveProperty('removing')
 
-    // Git has no registration to delete by; the leftover goes through Orca's own delete.
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(finishUnregisteredWorktreeRemoval).toHaveBeenCalledWith(
       '/workspace/repo',
@@ -192,19 +249,10 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
       featureId,
       expect.objectContaining({ requirePhysicalStop: true })
     )
-    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(featureId, 'local')
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
+      hostWorktreeTarget({ id: featureId, hostId: 'local' })
+    )
     expect(await listFeature()).toBeUndefined()
-  })
-
-  it('keeps the row with the new error when the retry fails again', async () => {
-    await failAfterGitDroppedIt()
-    vi.mocked(finishUnregisteredWorktreeRemoval).mockRejectedValueOnce(new Error('EPERM again'))
-
-    await expect(remove({ worktreeId: featureId })).rejects.toThrow('EPERM again')
-    await _settlePendingWorktreeRemovalsForTests()
-
-    expect(await listFeature()).toMatchObject({ removalError: 'EPERM again' })
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('joins a retry another client started while this Delete listed Git', async () => {
@@ -213,7 +261,7 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     listWorktreesMock.mockResolvedValue([main])
     const otherClientsRetry = vi.fn(async () => ({}))
     listWorktreesMock.mockImplementationOnce(async () => {
-      // Another client's Delete takes the failed record during this Delete's `git worktree list`.
+      // Another client claims the failed-removal record while this Delete lists Git worktrees.
       void retryFailedWorktreeRemoval(featureId, 'local', () => ({
         run: otherClientsRetry,
         publish: () => {}
@@ -225,14 +273,12 @@ describe('a failed delete Git no longer registers, over desktop IPC', () => {
     await _settlePendingWorktreeRemovalsForTests()
 
     expect(otherClientsRetry).toHaveBeenCalledTimes(1)
-    // Neither a second retry nor the delete for leftovers without a record ran.
     expect(finishUnregisteredWorktreeRemoval).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('Delete takes the normal delete once Git registers a checkout at the path again', async () => {
     await failAfterGitDroppedIt()
-    // A new checkout at the same path: the recorded choices were for the leftover, not for it.
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue({})
 

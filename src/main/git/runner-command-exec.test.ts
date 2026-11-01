@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild as createMockChildProcess } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -26,27 +26,9 @@ import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admi
 
 afterEach(() => _resetGitAdmissionForTests())
 
-type MockChildProcess = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-  unref?: ReturnType<typeof vi.fn>
-}
+type MockChildProcess = ReturnType<typeof createMockChildProcess>
 
-function createMockChildProcess(pid: number): MockChildProcess {
-  const child = new EventEmitter() as MockChildProcess
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = pid
-  child.kill = vi.fn()
-  return child
-}
-
-/**
- * Spawn stand-in for the gh/glab deadline tests: the CLI hangs, while the `ps`
- * quiescence probe the tree termination runs answers immediately.
- */
+/** Hang the CLI while allowing its process-tree quiescence probes to answer. */
 function mockWedgedCliSpawn(child: MockChildProcess): void {
   spawnMock.mockImplementation((program: string) => {
     if (program !== 'ps') {
@@ -69,9 +51,7 @@ function mockProcessGroupSignals(): ReturnType<typeof vi.spyOn> {
 }
 
 function createMockTaskkillProcess(): MockChildProcess {
-  const child = createMockChildProcess(9000)
-  child.unref = vi.fn()
-  return child
+  return createMockChildProcess(9000)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
@@ -293,9 +273,7 @@ describe('runner execFile timeout handling', () => {
     }
   )
 
-  // Why the group and not the child (#18234): `gh` and `glab` on PATH are often
-  // shims, so the deadline has a chain to reap. Signalling only the direct child
-  // leaves the rest of it running under init long after the deadline passed.
+  // CLI shims have descendants; direct-child signals can leave them running beyond the deadline.
   it('signals the whole gh process group when gh never calls back', async () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
@@ -430,9 +408,6 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.ORCA_TEST_ENV).toBe('kept')
   })
 
-  // Issue #5308: git read-path calls must be forced non-interactive so a
-  // credential / SSH host-key prompt fails fast instead of blocking forever on
-  // stdin and wedging the serve runtime for all clients.
   it('runs git non-interactively so a prompt fails fast instead of hanging', async () => {
     const child = createMockChildProcess(1234)
     let capturedEnv: NodeJS.ProcessEnv | undefined
@@ -469,10 +444,7 @@ describe('runner execFile timeout handling', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
-        // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-        // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-        // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-        // asserted below).
+        // Use a stable Win32 cwd instead of inheriting Orca's deletable UNC cwd.
         expect.objectContaining({ cwd: expect.any(String) }),
         expect.any(Function)
       )
@@ -506,10 +478,7 @@ describe('runner execFile timeout handling', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--exec', 'bash', '-c', expect.any(String)],
-        // Why a concrete directory (#16463): `undefined` makes CreateProcessW inherit
-        // Orca's own cwd, a deletable WSL UNC path when it was launched from a
-        // worktree. The Linux directory still rides inside the command (/mnt/c/repo,
-        // asserted below).
+        // Use a stable Win32 cwd instead of inheriting Orca's deletable UNC cwd.
         expect.objectContaining({ cwd: expect.any(String) }),
         expect.any(Function)
       )
@@ -623,7 +592,6 @@ describe('gitStreamStdout', () => {
     let calls = 0
     const promise = gitStreamStdout(['status'], {
       cwd: '/repo',
-      // Stop after the first chunk — mirrors a parser hitting its entry limit.
       onStdout: () => {
         calls += 1
         return true

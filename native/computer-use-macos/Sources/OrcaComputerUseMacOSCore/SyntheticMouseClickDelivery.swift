@@ -1,10 +1,5 @@
-/// Event plan for synthetic mouse clicks (STA-3433).
-///
-/// Clicks must be posted to the HID event tap, not `CGEventPostToPid`:
-/// pid-targeted mouse events reach the app with no window association, so
-/// AppKit never routes the press to a view (hover fires, activation never
-/// happens). The window server also drops a mouseUp posted back-to-back
-/// with its mouseDown, so consecutive events need a pause between them.
+/// Foreground (--restore-window) clicks: HID taps behind a focused-recipient fence; background clicks use BackgroundInputTransport.
+/// Pace down/up events or WindowServer can drop mouseUp.
 public enum SyntheticMouseClickDelivery {
     public static let maxClickCount = 3
 
@@ -39,13 +34,10 @@ public enum SyntheticMouseClickDelivery {
         case buttonUp(pressIndex: Int)
     }
 
-    /// Pause after posting each event; unpaced posts race the window
-    /// server's routing and the mouseUp is silently dropped.
+    /// Pace events so WindowServer can route mouseUp.
     public static let interEventPauseMicroseconds: UInt32 = 50_000
 
-    /// One move, then a paired down/up per press. `pressIndex` becomes the
-    /// event's click state so repeated presses register as double/triple
-    /// clicks instead of independent single clicks.
+    /// Paired presses use pressIndex as click state to register double/triple clicks.
     public static func steps(clickCount: Int) -> [Step] {
         var steps: [Step] = [.move]
         for press in 1...min(max(clickCount, 1), maxClickCount) {
@@ -75,6 +67,50 @@ public enum SyntheticMouseClickDelivery {
             match = candidate
         }
         return match
+    }
+
+    public static func deliverScroll<Event>(
+        move: Event,
+        wheel: Event,
+        target: Recipient,
+        currentObservation: () -> RecipientObservation,
+        post: (Event) -> Void,
+        pause: (UInt32) -> Void
+    ) throws {
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(move)
+        pause(interEventPauseMicroseconds)
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(wheel)
+    }
+
+    public static func deliverDrag<Event>(
+        move: Event,
+        down: Event,
+        dragged: [Event],
+        up: Event,
+        target: Recipient,
+        currentObservation: () -> RecipientObservation,
+        post: (Event) -> Void,
+        pause: (UInt32) -> Void
+    ) throws {
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(move)
+        try requireRecipient(target, currentObservation: currentObservation)
+        post(down)
+        pause(interEventPauseMicroseconds)
+        for event in dragged {
+            post(event)
+            pause(10_000)
+        }
+        post(up)
+    }
+
+    private static func requireRecipient(_ target: Recipient, currentObservation: () -> RecipientObservation) throws {
+        let observation = currentObservation()
+        guard observation == .focused(target) else {
+            throw FenceFailure.recipientChanged(expected: target, actual: observation.recipient, deliveredPresses: 0)
+        }
     }
 
     public static func deliver<Event>(

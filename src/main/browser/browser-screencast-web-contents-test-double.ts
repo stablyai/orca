@@ -14,7 +14,6 @@ export type MockScreencastWebContents = {
   debugger: MockScreencastDebugger
 }
 
-/** A webContents whose debugger records every CDP command and replays events on demand. */
 export function createMockScreencastWebContents(): MockScreencastWebContents {
   let attached = false
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the four fields are assigned on the next lines, before the value escapes.

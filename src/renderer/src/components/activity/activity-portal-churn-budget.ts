@@ -13,11 +13,11 @@ export function createActivityPortalChurnBudget(args: {
   now?: () => number
 }): ActivityPortalChurnBudget {
   const { limit, windowMs, now = () => Date.now() } = args
-  // Why: only the newest limit events can affect the verdict.
+  // Only the newest limit events can affect the verdict.
   let eventsAt: number[] = []
 
   const prune = (at: number): void => {
-    // Why: clock rollback must not preserve a stale spent budget.
+    // Discard stale spent budgets after clock rollback.
     eventsAt = eventsAt.filter((eventAt) => eventAt > at - windowMs && eventAt <= at)
   }
 

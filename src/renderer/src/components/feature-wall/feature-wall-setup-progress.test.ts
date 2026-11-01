@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
 import {
@@ -41,6 +40,17 @@ function makeWorktree(
 }
 
 describe('getFeatureWallSetupProgress', () => {
+  it.each([null, 'claude', 'blank'] as const)(
+    'counts an explicit default choice (%s) toward setup',
+    (defaultTuiAgent) => {
+      const progress = getFeatureWallSetupProgress(
+        makeInput({ settings: createGlobalSettingsFixture({ defaultTuiAgent }) })
+      )
+
+      expect(progress.stepDone['default-agent']).toBe(defaultTuiAgent !== null)
+    }
+  )
+
   it('tracks Add 2 projects from durable git repo count', () => {
     expect(getFeatureWallSetupProgress(makeInput({ gitRepoCount: 1 })).stepDone).toMatchObject({
       'add-two-repos': false
@@ -78,19 +88,6 @@ describe('getFeatureWallSetupProgress', () => {
       'setup-script',
       'add-two-repos'
     ])
-  })
-
-  it('renders Setup before Milestones and numbers Milestones after Setup', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx'),
-      'utf8'
-    )
-    const setupSectionIndex = source.indexOf('steps={setupSteps}')
-    const milestonesSectionIndex = source.indexOf('steps={parallelWorkSteps}')
-
-    expect(setupSectionIndex).toBeGreaterThanOrEqual(0)
-    expect(milestonesSectionIndex).toBeGreaterThan(setupSectionIndex)
-    expect(source).toContain('startOrdinal={setupSteps.length + 1}')
   })
 
   it('auto-selects incomplete parallel work after setup steps are complete', () => {

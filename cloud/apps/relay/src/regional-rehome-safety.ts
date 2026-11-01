@@ -1,39 +1,17 @@
 import type { RegionalRehomeSafetySnapshot } from './relay-observability.js'
 
-// Limits sit well above the healthy-fleet baseline measured in production on
-// 2026-08-28 (peak 2 waiters / 1ms pool waits on every cell; up to ~80
-// reconnects per published two-window row on the busiest cell).
+// Healthy-fleet peaks: 2 waiters/~1ms pool wait; ~80 reconnects per two-window row (2026-08-28).
 export const REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT = 250
 
-// Pool pressure gates one cell, never the fleet. The combined snapshot is a
-// Math.max, so a single narrow client pool stops rehoming everywhere: measured
-// 2026-09-16, the asia-east2 cells sit at 94-156 waiters and ~2000ms waits
-// against 0.2ms server-side execution -- a pool too narrow for a 176ms round
-// trip, not database distress -- while us-central1 cells breach in bursts on
-// ~33% of polls, and a bar that flaps between the pre-check and the commit
-// re-check latches the worker off. regionalRehomeCellSafetyIsClean excludes a
-// breaching cell as both source and target; the bars below stay fleet-wide
-// because sql failures, control-recovery failures and reconnect storms mean
-// database-wide distress. Instantaneous databasePoolWaiting is not checked
-// separately: databasePoolWaitersMax bounds it within every published window.
+// Gate pool pressure per cell: fleet Math.max would stop every region on one narrow Asia pool (176ms RTT, ~2000ms waits, 0.2ms SQL).
+// Candidate checks exclude it as source/target; instantaneous waiters are already bounded by the window maximum.
 export const REGIONAL_REHOME_POOL_WAITERS_MAX_LIMIT = 16
 export const REGIONAL_REHOME_POOL_WAIT_MS_MAX_LIMIT = 250
 
-// Counted SQL failures are dominated by relay_cells 55P03 lock-timeout
-// retries the transaction wrapper heals in place (Aug 25-28: ~1000 retried
-// attempts per day vs ~30 exhausted, those clustered in one storm), so a
-// zero bar disabled the worker on ambient noise just like the original pool
-// bars. Fleet-wide ambient noise peaked at 82 counted failures per minute
-// over four days; genuine database distress produced 395-457. The combined
-// snapshot spans up to two 30s windows per process (pathological ambient
-// alignment ~164), so 250 stays clear of noise while storms still trip.
-// Terminal outages also trip the per-cell pool bars and the worker's own
-// dispatch-failure budget; the sql bar only needs to catch storms.
+// Ambient retried 55P03s peak at 82/min (~164 across two windows), versus 395–457 in storms; 250 separates them.
+// Pool bars and dispatch-failure budgets cover terminal outages; this bar catches storms.
 export const REGIONAL_REHOME_SQL_FAILURES_LIMIT = 250
-// Per-cell candidate cleanliness is a soft skip, not a durable latch; the
-// worst ambient per-cell publish carried ~24 counted failures (two windows
-// of 12). The fleet bar deliberately dominates: cells that are individually
-// clean can sum past 250, and a fleet-wide sum at that scale is a storm.
+// 40 exceeds ambient per-cell ~24/two windows; soft skips stay below the durable fleet storm bar of 250.
 export const REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT = 40
 
 export function regionalRehomePoolPressure(safety: {
@@ -54,14 +32,40 @@ export function regionalRehomeSafetyFailure(
   if (safety.observedAt === 0 || now - safety.observedAt > 60_000) {
     return 'monitoring_stale'
   }
-  if (safety.sqlFailures > REGIONAL_REHOME_SQL_FAILURES_LIMIT) return 'sql_failures'
   if (safety.controlActivityRecoveryFailures > 0) {
     return 'control_recovery_failures'
   }
   const reconnectLimit =
     Math.max(1, requiredCells) * REGIONAL_REHOME_RECONNECTS_PER_CELL_LIMIT
   if (safety.reconnects > reconnectLimit) return 'elevated_reconnects'
+  // Last, so 'sql_failures' means no latching reason also failed.
+  if (safety.sqlFailures > REGIONAL_REHOME_SQL_FAILURES_LIMIT) return 'sql_failures'
   return null
+}
+
+// Routine 5–7s DB stalls leave SQL sums elevated ~90s through two windows and heartbeat lag; pause claims, latch only sustained breaches.
+export const REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS = 150_000
+// The director polls every ~6 s; a longer silence means the breach was not watched.
+export const REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS = 45_000
+
+export type RegionalRehomeSqlFailuresBreach = { since: number; lastSeenAt: number } | null
+
+export function nextRegionalRehomeSqlFailuresBreach(
+  breach: RegionalRehomeSqlFailuresBreach,
+  sqlFailures: number,
+  now: number
+): RegionalRehomeSqlFailuresBreach {
+  if (sqlFailures <= REGIONAL_REHOME_SQL_FAILURES_LIMIT) return null
+  if (!breach || now - breach.lastSeenAt > REGIONAL_REHOME_SQL_FAILURES_OBSERVATION_GAP_MS) {
+    return { since: now, lastSeenAt: now }
+  }
+  return { since: breach.since, lastSeenAt: now }
+}
+
+export function regionalRehomeSqlFailuresSustained(
+  breach: NonNullable<RegionalRehomeSqlFailuresBreach>
+): boolean {
+  return breach.lastSeenAt - breach.since >= REGIONAL_REHOME_SQL_FAILURES_SUSTAIN_MS
 }
 
 export function combineRegionalRehomeSafety(

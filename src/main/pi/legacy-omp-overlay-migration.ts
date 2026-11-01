@@ -217,8 +217,7 @@ function copyMissingLegacyOmpOverlayEntries(
 }
 
 export function migrateLegacyOmpOverlayState(sourceAgentDir: string, overlayDir: string): void {
-  // Why: temporary rescue shim for OMP builds from the legacy overlay window.
-  // Remove after 2026-08-07 once affected users have had a full upgrade window.
+  // Rescue auth/session state stranded by legacy OMP overlays.
   const overlayStats = getPathStats(overlayDir)
   if (!overlayStats || overlayStats.isSymbolicLink() || !overlayStats.isDirectory()) {
     return
@@ -229,11 +228,9 @@ export function migrateLegacyOmpOverlayState(sourceAgentDir: string, overlayDir:
   }
   try {
     mkdirSync(sourceAgentDir, { recursive: true })
-    // Why: some pre-managed-extension builds pointed OMP at this overlay, so
-    // first-login auth/session files can exist only there after an update.
+    // Pre-managed-extension builds may have saved first-login state only in the overlay.
     if (copyMissingLegacyOmpOverlayEntries(overlayDir, sourceAgentDir)) {
-      // Why: legacy source overlays can be large and are intentionally kept
-      // for recovery; mark clean migrations so future OMP spawns stay cheap.
+      // Preserve recovery overlays but avoid rescanning completed migrations on every spawn.
       writeFileSync(markerPath, 'complete\n')
     }
   } catch (error) {

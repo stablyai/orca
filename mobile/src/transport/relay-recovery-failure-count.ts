@@ -1,5 +1,12 @@
+import {
+  MOBILE_RELAY_CLOSE_CODE,
+  MOBILE_RELAY_PHONE_CLOSE_REASON
+} from '../../../src/shared/mobile-relay-close-codes'
+import { RelayOuterError } from './mobile-relay-e2ee-link'
+
 export class RelayRecoveryFailureCount {
   private count = 0
+  private attachTimeoutRedialSpent = false
   private reporter: ((count: number) => void) | null = null
 
   constructor(private readonly stableConnectionMs: number) {}
@@ -14,8 +21,21 @@ export class RelayRecoveryFailureCount {
   }
 
   record(resetFirst: boolean): number {
+    if (resetFirst) {
+      this.attachTimeoutRedialSpent = false
+    }
     this.update((resetFirst ? 0 : this.count) + 1)
     return this.count
+  }
+
+  // Why: one quick redial per streak; a desktop whose data link keeps missing
+  // the attach deadline falls back to the known-offline wait.
+  claimAttachTimeoutRedial(error: Error | null): boolean {
+    if (!isHostAttachTimeout(error) || this.attachTimeoutRedialSpent) {
+      return false
+    }
+    this.attachTimeoutRedialSpent = true
+    return true
   }
 
   recordAfterConnection(connectedAt: number | null, now: number): number {
@@ -23,6 +43,7 @@ export class RelayRecoveryFailureCount {
   }
 
   reset(): void {
+    this.attachTimeoutRedialSpent = false
     this.update(0)
   }
 
@@ -33,4 +54,13 @@ export class RelayRecoveryFailureCount {
     this.count = count
     this.reporter?.(count)
   }
+}
+
+// Attach timeout means desktop control was seated; retry the same cell rather than re-resolving its assignment.
+function isHostAttachTimeout(error: Error | null): boolean {
+  return (
+    error instanceof RelayOuterError &&
+    error.code === MOBILE_RELAY_CLOSE_CODE.HOST_OFFLINE &&
+    error.closeReason === MOBILE_RELAY_PHONE_CLOSE_REASON.HOST_ATTACH_TIMEOUT
+  )
 }

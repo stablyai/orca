@@ -15,9 +15,7 @@ export function resolveDropZone(
   const edgeHeightThreshold = rect.height * 0.1
   const splitWidthThreshold = rect.width / 3
 
-  // Why: VS Code keeps a center "merge" zone while biasing side-by-side drops
-  // toward left/right, which feels much more stable than a generic nearest-edge
-  // calculation once a workspace has nested splits.
+  // Keep a center merge zone and favor horizontal splits so nested layouts have stable drop targets.
   if (
     localX > edgeWidthThreshold &&
     localX < rect.width - edgeWidthThreshold &&
@@ -57,8 +55,7 @@ export function resolvePaneColumnEdgeZone(
 
   const tabStripHeight = options?.tabStripHeightPx ?? TAB_GROUP_TAB_STRIP_HEIGHT_PX
   const tabStripBottom = panelRect.top + tabStripHeight
-  // Why: the tab strip is for reorder/insertion targets. Vertical pane splits
-  // belong on the terminal/editor body edges only.
+  // Reserve the strip for reordering; vertical split targets belong to the pane body.
   if (point.y < tabStripBottom) {
     return null
   }

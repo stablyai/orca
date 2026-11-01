@@ -1,6 +1,3 @@
-// Real-binary coverage for the pr-* remote reconciliation sweep (#17828): the mocked-exec suite
-// proves the decision matrix, but not that `git remote -v`, `git config --get-regexp`, and
-// `git for-each-ref` are parsed correctly against real Git output.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -51,7 +48,7 @@ function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePu
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/...
+  // macOS temp aliases must match Git's canonical paths.
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-pr-remote-reconcile-')))
   repoPath = join(scratchDir, 'repo')
   forkPath = join(scratchDir, 'fork')
@@ -65,7 +62,6 @@ beforeEach(async () => {
   await git(['add', '-A'], repoPath)
   await git(['commit', '-qm', 'seed'], repoPath)
 
-  // A second local "fork" repo the pr-* remote points at, so `remote add`/fetch behave normally.
   await git(['clone', '-q', repoPath, forkPath], scratchDir)
   await git(['config', 'user.name', 'Orca Test'], forkPath)
   await git(['config', 'user.email', 'orca@example.test'], forkPath)
@@ -96,7 +92,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       repoPath,
       REPO_ID,
-      storeOf({}), // no worktree metadata anywhere claims this remote
+      storeOf({}),
       execGit,
       []
     )
@@ -128,7 +124,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       REPO_ID,
       storeOf({ [worktreeId(join(scratchDir, 'wt-gone'))]: forkTarget() }),
       execGit,
-      [] // the worktree that created it is gone, but the branch it preserved is not
+      []
     )
     expect(reclaimed).toEqual([])
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
@@ -137,8 +133,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
   it('reclaims the remote once the branch that pinned it is deleted (path 2)', async () => {
     await git(['branch', 'contributor/fix', `${FORK_REMOTE}/contributor/fix`], repoPath)
     await git(['config', `branch.contributor/fix.remote`, FORK_REMOTE], repoPath)
-    // Delete only the ref, leaving the config behind, exactly as `update-ref -d` alone would --
-    // proving the sweep checks branch existence rather than trusting stale config.
+    // Delete the ref but retain stale config to verify actual branch existence gates retention.
     await rm(join(repoPath, '.git', 'refs', 'heads', 'contributor', 'fix'))
 
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
@@ -155,9 +150,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
   it('reclaims a remote orphaned by a worktree removed outside Orca (path 3)', async () => {
     const worktreePath = join(scratchDir, 'wt-externally-removed')
     await git(['worktree', 'add', '-q', worktreePath, '-b', 'contributor/fix-local-2'], repoPath)
-    // Simulate a plain `git worktree remove` the user ran outside Orca: Orca's metadata for
-    // that worktree is still sitting in the store (nothing told it to clean up), but the
-    // worktree itself is gone.
+    // External worktree removal leaves stale Orca metadata without a cleanup event.
     await git(['worktree', 'remove', '--force', worktreePath], repoPath)
 
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
@@ -165,7 +158,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       REPO_ID,
       storeOf({ [worktreeId(worktreePath)]: forkTarget() }),
       execGit,
-      [] // listWorktrees no longer reports it
+      []
     )
     expect(reclaimed).toEqual([FORK_REMOTE])
     await expect(git(['remote'], repoPath)).resolves.not.toContain(FORK_REMOTE)

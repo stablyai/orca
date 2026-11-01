@@ -1,5 +1,4 @@
-// The annotated listing is the graph listing plus a sparse probe: callers that read only
-// `worktree.path` must skip the probe, without costing a second `git worktree list`.
+// Probe-free graph readers share the Git listing without waiting for sparse annotation.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 
@@ -73,7 +72,6 @@ describe('graph and annotated worktree scans', () => {
     expect(annotatedRows[0]?.isSparse).toBe(true)
   })
 
-  // Sharing the listing must not make the probe-free caller wait on the probe it opted out of.
   it('resolves a graph scan while the annotated scan is still probing', async () => {
     let releaseProbe!: () => void
     detectSparseCheckoutMock.mockImplementation(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
@@ -12,23 +12,46 @@ import {
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from './settings-navigation-foundations'
 
-export function useSettingsInteractionController(model: SettingsStoreModel) {
+export type SettingsInteractionModel = Pick<
+  SettingsStoreModel,
+  | 'closeSettingsPage'
+  | 'confirm'
+  | 'hasUnsavedBranchPromptChanges'
+  | 'hasUnsavedChatPromptChanges'
+  | 'hasUnsavedCommitPromptChanges'
+  | 'highlightedSettingsTargetId'
+  | 'setFontSuggestions'
+  | 'setHasUnsavedBranchPromptChanges'
+  | 'setHasUnsavedChatPromptChanges'
+  | 'setHasUnsavedCommitPromptChanges'
+  | 'setHighlightedSettingsTargetId'
+  | 'setSettingsSearchQuery'
+  | 'setSourceControlAiPromptDiscardSignal'
+  | 'settings'
+  | 'updateSettingsOrThrow'
+>
+
+export function useSettingsInteractionController(model: SettingsInteractionModel) {
   const {
     closeSettingsPage,
     confirm,
     hasUnsavedBranchPromptChanges,
+    hasUnsavedChatPromptChanges,
     hasUnsavedCommitPromptChanges,
     highlightedSettingsTargetId,
     setFontSuggestions,
     setHasUnsavedBranchPromptChanges,
+    setHasUnsavedChatPromptChanges,
     setHasUnsavedCommitPromptChanges,
     setHighlightedSettingsTargetId,
     setSettingsSearchQuery,
     setSourceControlAiPromptDiscardSignal,
     settings,
-    updateSettings
+    updateSettingsOrThrow
   } = model
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
+  // Windowed lists need a render when the scroller attaches.
+  const [contentScrollElement, setContentScrollElement] = useState<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const installedFontsLoadedRef = useRef(false)
   const installedFontsLoadPromiseRef = useRef<Promise<void> | null>(null)
@@ -43,12 +66,12 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
   sourceControlAiWriteQueueRef.current ??= Promise.resolve()
 
   const hasUnsavedSourceControlAiPromptChanges =
-    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
-  // Why: the close guard registers once, so it reads latest dirty state from a ref instead of a lagging closure.
+    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges || hasUnsavedChatPromptChanges
+  // The once-registered close guard reads current dirty state through a ref.
   const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
   hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
-  const writeSourceControlAiSettings = useCallback(
+  const writeSourceControlAiSettingsOrThrow = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
       const next = sourceControlAiWriteQueueRef.current
         .catch(() => undefined)
@@ -60,12 +83,20 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
           const latestConfig = readSourceControlAiSettings(latestSettings)
           const resolvedPatch = typeof patch === 'function' ? patch(latestConfig) : patch
-          await updateSettings({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
+          await updateSettingsOrThrow({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
         })
       sourceControlAiWriteQueueRef.current = next
       return next
     },
-    [settings, updateSettings]
+    [settings, updateSettingsOrThrow]
+  )
+
+  const writeSourceControlAiSettings = useCallback(
+    (patch: SourceControlAiSettingsPatch): Promise<void> =>
+      writeSourceControlAiSettingsOrThrow(patch).catch((error: unknown) => {
+        console.error('Failed to update settings:', error)
+      }),
+    [writeSourceControlAiSettingsOrThrow]
   )
 
   const setSettingsRootNode = useCallback(
@@ -73,7 +104,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
       if (node) {
         return
       }
-      // Why: clear the transient search filter on close, else the next visit opens with whole sections still hidden.
+      // Clear transient search on close so later visits do not inherit hidden sections.
       setSettingsSearchQuery('')
     },
     [setSettingsSearchQuery]
@@ -81,16 +112,17 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
   const setContentScrollNode = useCallback((node: HTMLDivElement | null): void => {
     contentScrollRef.current = node
+    setContentScrollElement(node)
     if (node !== null) {
       return
     }
-    // Why: cancel pending subsection jumps with the scroll container so a stale deep-link frame can't run after close.
+    // Cancel pending subsection jumps so stale frames cannot run after close.
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
   }, [])
 
   useEffect(() => {
-    // Why: StrictMode replays mount effects; async font requests should still commit while Settings is mounted.
+    // StrictMode replays mount effects; font requests may still commit while mounted.
     settingsMountedRef.current = true
     return () => {
       settingsMountedRef.current = false
@@ -119,7 +151,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
         if (!settingsMountedRef.current) {
           return
         }
-        // Latch after the first successful attempt even when empty, so a font-less system doesn't reissue listFonts() each time.
+        // Latch successful empty results too so font-less systems do not repeatedly list fonts.
         installedFontsLoadedRef.current = true
         if (fonts.length === 0) {
           return
@@ -134,16 +166,16 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
       })
   }, [setFontSuggestions])
 
-  // Pure prompt (no side effects): the close guard must ask without clearing drafts, since a later guard can still cancel the close.
+  // Ask without clearing drafts because a later close guard may still veto.
   const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
     return confirm({
       title: translate(
         'auto.components.settings.Settings.17bdee4ff1',
-        'Discard unsaved Git AI Author changes?'
+        'Discard unsaved AI settings?'
       ),
       description: translate(
         'auto.components.settings.Settings.43b68e10f0',
-        'You have unsaved Git AI Author changes. Leaving will discard them.'
+        'You have unsaved AI settings. Leaving will discard them.'
       ),
       confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
@@ -159,6 +191,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
+      setHasUnsavedChatPromptChanges(false)
     }
     return shouldDiscard
   }, [
@@ -166,7 +199,8 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     hasUnsavedSourceControlAiPromptChanges,
     setSourceControlAiPromptDiscardSignal,
     setHasUnsavedCommitPromptChanges,
-    setHasUnsavedBranchPromptChanges
+    setHasUnsavedBranchPromptChanges,
+    setHasUnsavedChatPromptChanges
   ])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
@@ -178,6 +212,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
 
   return {
     contentScrollRef,
+    contentScrollElement,
     searchInputRef,
     pendingNavSectionRef,
     pendingScrollTargetRef,
@@ -188,6 +223,7 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
     hasUnsavedSourceControlAiPromptChanges,
     hasUnsavedSourceControlAiPromptChangesRef,
     writeSourceControlAiSettings,
+    writeSourceControlAiSettingsOrThrow,
     setSettingsRootNode,
     setContentScrollNode,
     requestFontSuggestions,

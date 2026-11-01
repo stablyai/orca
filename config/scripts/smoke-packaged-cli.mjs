@@ -78,11 +78,7 @@ try {
   smokeFailure = error
 }
 
-// Why: on Windows the launcher above spawns the copied Orca.exe (and its crashpad/utility children)
-// once per command; those handles can outlive execFile's exit by a few ms, so this cleanup hits
-// EBUSY on our own just-exited process after every assertion already passed. Same retry treatment
-// as removeHostTree(); a lock that never clears still throws — unless the smoke run itself failed,
-// in which case surfacing EBUSY instead of the real assertion would hide the actual regression.
+// Retry Windows cleanup locks from just-exited Orca.exe/crashpad descendants; persistent lock still throws unless it would mask smoke’s original failure.
 const cleanupFailure = await rm(tempRoot, {
   recursive: true,
   force: true,

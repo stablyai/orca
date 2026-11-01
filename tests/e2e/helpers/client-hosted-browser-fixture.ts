@@ -5,13 +5,7 @@ import { expect } from './orca-app'
 import { readRestartRendererState } from './orca-restart'
 import type { PairedElectronClient } from './paired-electron-client'
 
-/**
- * Shared scaffolding for the client-hosted browser survival specs.
- *
- * Extracted rather than copied a third time: every one of these specs has to distinguish "the tab
- * came back" from "a tab came back", and each private copy of that distinction is one more place it
- * can quietly weaken into a URL match that any fresh tab satisfies.
- */
+// Reuse exact-tab identity checks across survival specs so a fresh guest at the same URL cannot count as a survivor.
 export type ClientHostedMarkerFixture = {
   close(): Promise<void>
   markerUrl: string
@@ -149,7 +143,6 @@ export async function findMirroredBrowserPage(
   )
 }
 
-/** Every browser row the client holds for a worktree, for diagnosing duplicates and culls. */
 export async function readClientBrowserRows(
   page: Page,
   worktreeId: string
@@ -209,7 +202,6 @@ export async function openClientHostedFixturePage(
   return mirrored
 }
 
-/** Navigates the guest itself, the way following a link does — no client-side URL entry involved. */
 export async function navigateGuest(page: Page, fromUrl: string, toUrl: string): Promise<void> {
   const navigated = await page.evaluate(
     async ({ fromUrl, toUrl }) => {
@@ -234,13 +226,7 @@ export async function navigateGuest(page: Page, fromUrl: string, toUrl: string):
   }
 }
 
-/**
- * Reads the marker out of the guest belonging to one specific page.
- *
- * Bound to that page's retained host rather than scanning every `<webview>`: a scan by URL alone is
- * satisfied by any guest on the fixture origin, so a run that lost the surviving tab and opened a
- * fresh one would still read the moved marker and pass.
- */
+// Read the target page’s retained host; a global URL scan could find a replacement guest and hide tab loss.
 export async function readClientWebviewMarker(
   page: Page,
   target: { urlPrefix: string; remotePageId: string }
@@ -283,7 +269,6 @@ export async function waitForRenderedClientWebview(
   return marker
 }
 
-/** Surfaces a row's pane so its guest is mounted where the scoped marker read can see it. */
 export async function focusClientBrowserRow(
   page: Page,
   worktreeId: string,

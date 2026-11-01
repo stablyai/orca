@@ -5,18 +5,7 @@ import {
   stopRenderDesyncSampleBurst
 } from './terminal-render-desync-sentinel'
 
-/**
- * User gestures that arm the render-desync sentinel, split from the detection
- * loop so each stays under its own roof:
- *  - Cmd/Ctrl+click on a terminal: 10s divergence-sampling burst (the ink
- *    detector, which can only see missing glyphs).
- *  - Cmd/Ctrl+Shift+click: immediate unconditional capture of the clicked
- *    pane, for states the ink detector is blind to (bold-collapse family).
- *
- * Off by default; enabled via localStorage so a production build can arm it
- * from DevTools without a settings-schema change:
- *   localStorage.setItem('orca:render-desync-sentinel', '1')  // then reload
- */
+/** Opt-in Cmd/Ctrl+click samples divergence for 10s; add Shift for immediate capture without detection/recovery. Enable through localStorage or the live hidden-experimental toggle. */
 export const RENDER_DESYNC_SENTINEL_FLAG = 'orca:render-desync-sentinel'
 
 type SentinelPane = {
@@ -79,12 +68,7 @@ export function isTerminalRenderDesyncSentinelArmed(): boolean {
   }
 }
 
-/**
- * Staff arming surface (hidden-experimental toggle): persists the flag and
- * arms/disarms the capture gestures live, so no reload is needed. The passive
- * probes (weight-change crumbs, reveal parity audit) are deliberately not
- * governed by this — they are content-free and always on.
- */
+/** Persist and toggle capture gestures live; content-free weight/reveal probes remain always on independently. */
 export function setTerminalRenderDesyncSentinelArmed(armed: boolean): void {
   try {
     const storage = globalThis.localStorage
@@ -120,8 +104,7 @@ function removeClickListener(): void {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Vite can replace this module without a full renderer reload. Remove the
-  // opt-in gesture hook so dev sessions do not retain stale pane closures.
+  // Dispose stale gesture closures on Vite replacement without requiring a full reload.
   import.meta.hot.dispose(() => {
     removeClickListener()
     stopRenderDesyncSampleBurst()

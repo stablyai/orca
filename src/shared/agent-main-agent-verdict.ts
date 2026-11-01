@@ -8,8 +8,7 @@ export type AgentMainAgentVerdictSource = {
   mainAgent?: { state: AgentStatusState; outcome?: AgentTurnOutcome }
 }
 
-/** The fields that carry the verdict. History entries, sleep records and `worktree ps` rows copy
- *  them through {@link agentVerdictFields}, so no copy keeps one form and drops the other. */
+/** Copy both verdict forms through agentVerdictFields so history, sleep and worktree ps records cannot lose one. */
 export type AgentVerdictFields = {
   interrupted?: true
   mainAgent?: AgentMainAgentStatus
@@ -26,15 +25,7 @@ export function agentVerdictFields(row: {
   }
 }
 
-/**
- * The recorded verdict on the main agent's latest finished turn. One fact at two fidelities:
- * `mainAgent.outcome`, and the legacy `interrupted` flag, which only ever meant a cancellation.
- * Read from the main agent's own state, not the combined row's: a main agent that failed while its
- * subagents still work has a verdict. Null while the main agent is not done, and when no verdict
- * was recorded. Only the legacy flag needs the combined `done`, because a row without `mainAgent`
- * has nothing else that says the main agent itself finished. An arm from a newer host reads as no
- * verdict: some mirrored rows reach here unparsed.
- */
+/** Read finished lead outcome even while children run; legacy interrupted means cancellation and requires combined done. Live leads, absent verdicts and unknown newer-host arms return null. */
 export function agentMainAgentVerdict(row: AgentMainAgentVerdictSource): AgentTurnOutcome | null {
   if (row.mainAgent && row.mainAgent.state !== 'done') {
     return null
@@ -46,13 +37,7 @@ export function agentMainAgentVerdict(row: AgentMainAgentVerdictSource): AgentTu
   return row.state === 'done' && row.interrupted === true ? 'cancellation' : null
 }
 
-/**
- * What the verdict marks on the agent's own display. A fault, whether the turn failed or something
- * other than the user cut it short, reads failed and outranks every combined state: it is news the
- * user must see even while subagents still run. A user's Stop, or a turn a newer request replaced,
- * reads interrupted, and an unproven end unconfirmed, only on a row that is itself done, so live
- * child work still reads working.
- */
+/** Faults outrank combined state as news; cancellation/supersession/unconfirmed marks wait for combined done so live children remain visible. */
 export function agentVerdictDisplayMark(
   row: AgentMainAgentVerdictSource
 ): 'failed' | 'interrupted' | 'unconfirmed' | null {
@@ -71,8 +56,7 @@ export function agentVerdictDisplayMark(
   }
 }
 
-/** The turn ended without finishing its work: stopped, replaced, failed, cut off, or unproven.
- *  Clean-finish policy (hibernation, pane ownership, the value moment) treats them all alike. */
+/** Clean-finish gates treat stopped, replaced, failed, cut-off and unconfirmed turns alike. */
 export function agentTurnEndedUncleanly(row: AgentMainAgentVerdictSource): boolean {
   const verdict = agentMainAgentVerdict(row)
   switch (verdict) {
@@ -88,10 +72,7 @@ export function agentTurnEndedUncleanly(row: AgentMainAgentVerdictSource): boole
   }
 }
 
-/** The turn was ended on purpose, not by a fault: the user's Stop, or a newer request that
- *  replaced it. Attention (completion time, Smart Sort, sticky retention) demotes only this: a
- *  failure, or a turn cut off or ended in a way nobody asked for, is news the user has not seen,
- *  so it ranks like a completion. */
+/** Attention demotes intentional Stop/replacement only; unsolicited faults and unconfirmed ends remain news like completion. */
 export function agentTurnEndedOnPurpose(row: AgentMainAgentVerdictSource): boolean {
   const verdict = agentMainAgentVerdict(row)
   switch (verdict) {

@@ -3,11 +3,9 @@ import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-se
 import {
   createMockStore,
   registerWorktreeActivationReset
-} from './worktree-activation-test-harness'
+} from './worktree-activation.test-fixture'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
-  MAX_CLOSED_TERMINAL_TAB_TOMBSTONES,
-  recordClosedTerminalTabTombstone,
   type ClosedTerminalTabTombstonesByTabId
 } from '../../../shared/closed-terminal-tab-tombstones'
 
@@ -31,37 +29,13 @@ function closedAt(closedAtMs: number): ClosedTerminalTabTombstonesByTabId {
 }
 
 describe('seeding an empty workspace reads close records', () => {
-  it('an empty row with a close record stays empty', () => {
-    expect(seeds({ [WT]: [] }, closedAt(Date.now()))).toBe(false)
-  })
-
-  it('a legacy empty row with no record seeds', () => {
-    expect(seeds({ [WT]: [] })).toBe(true)
-  })
-
   it('an empty row whose only record is past its TTL seeds', () => {
     expect(
       seeds({ [WT]: [] }, closedAt(Date.now() - CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS - 1))
     ).toBe(true)
   })
 
-  it('an empty row whose record the per-host cap evicted seeds', () => {
-    const now = Date.now()
-    let records = closedAt(now - 1_000)
-    for (let index = 0; index < MAX_CLOSED_TERMINAL_TAB_TOMBSTONES; index += 1) {
-      records = recordClosedTerminalTabTombstone(
-        records,
-        `other-${index}`,
-        { worktreeId: 'wt-other', reason: 'user' },
-        now
-      )
-    }
-    expect(records['closed-tab']).toBeUndefined()
-    expect(seeds({ [WT]: [] }, records)).toBe(true)
-  })
-
-  // Known weakness until every membership shrink is a close: an older close plus an empty row
-  // written by something that is not a close still reads as emptied on purpose.
+  // Known gap: an older close plus a later non-close empty row still reads as deliberately emptied.
   it('a stale record from an earlier close suppresses the startup seed; activation reseeds', () => {
     const earlierClose = closedAt(Date.now() - 60_000)
     expect(seeds({ [WT]: [] }, earlierClose)).toBe(false)

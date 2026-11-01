@@ -1,3 +1,4 @@
+import { BrowserClientProfileMetadata } from '../../shared/browser-client-profile-switch-protocol'
 import {
   deriveBrowserRoutePartition,
   type DerivedBrowserRoutePartition
@@ -65,7 +66,7 @@ export class BrowserRouteSessionRegistry {
     this.maxPagesPerPartition = dependencies.maxPagesPerPartition ?? DEFAULT_MAX_PAGES_PER_PARTITION
   }
 
-  /** True while a partition is prepared or preparing; its storage must not be destroyed. */
+  /** Include preparing partitions so eviction cannot race admission. */
   isPartitionRetained(partition: string): boolean {
     return this.live.has(partition) || this.pending.has(partition)
   }
@@ -130,7 +131,13 @@ export class BrowserRouteSessionRegistry {
     input: BrowserRoutePreparePageInput,
     rendererFence: BrowserRouteRendererPrepareFence
   ): Promise<BrowserRouteSessionHandle> {
-    this.dependencies.validateProfile(input.identity.browserProfileId)
+    const metadata = input.profileMetadata
+      ? BrowserClientProfileMetadata.parse(input.profileMetadata)
+      : undefined
+    if (metadata && metadata.id !== input.identity.browserProfileId) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    this.dependencies.validateProfile(input.identity.browserProfileId, metadata)
     const derived = resolveBrowserRouteSessionPartition(
       this.dependencies,
       input,
@@ -161,7 +168,8 @@ export class BrowserRouteSessionRegistry {
     const promise = this.preparePartition(
       derived,
       input.identity.browserProfileId,
-      input.proxyEndpoint
+      input.proxyEndpoint,
+      metadata
     )
     const pendingState = {
       partition: derived.partition,
@@ -228,7 +236,11 @@ export class BrowserRouteSessionRegistry {
     proxyEndpoint: ProxyEndpoint
   ): void {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
-      throw new Error('browser_route_partition_binding_conflict')
+      // Re-pairing can change a live jar's owner; trust the persisted binding over its opening fingerprint.
+      if (this.dependencies.bindingStore.get(derived.partition) !== derived.bindingFingerprint) {
+        throw new Error('browser_route_partition_binding_conflict')
+      }
+      state.bindingFingerprint = derived.bindingFingerprint
     }
     if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')
@@ -238,9 +250,11 @@ export class BrowserRouteSessionRegistry {
   private async preparePartition(
     derived: DerivedBrowserRoutePartition,
     browserProfileId: string,
-    proxyEndpoint: ProxyEndpoint
+    proxyEndpoint: ProxyEndpoint,
+    profileMetadata?: BrowserClientProfileMetadata
   ): Promise<PreparedPartition> {
     const session = await prepareBrowserRouteSessionPolicy({
+      ...(profileMetadata ? { profileMetadata } : {}),
       partition: derived.partition,
       browserProfileId,
       proxyEndpoint,

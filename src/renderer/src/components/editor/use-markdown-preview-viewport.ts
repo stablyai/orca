@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import type { MarkdownPreviewDocument } from './markdown-preview-document-types'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
@@ -8,18 +9,12 @@ import {
   getMarkdownPreviewAnchorScrollTop
 } from './markdown-preview-anchor-navigation'
 import { cancelMarkdownPreviewEditorRevealFrames } from './markdown-preview-editor-reveal'
+import { clearMarkdownPreviewReviewTimers } from './markdown-preview-review-timer-cleanup'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { useMarkdownPreviewDomSearch } from './use-markdown-preview-dom-search'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
-
-function clearMarkdownPreviewTimeout(timeoutRef: MutableRefObject<number | null>): void {
-  if (timeoutRef.current === null) {
-    return
-  }
-  window.clearTimeout(timeoutRef.current)
-  timeoutRef.current = null
-}
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useMarkdownPreviewViewport({
   foundation,
@@ -46,7 +41,6 @@ export function useMarkdownPreviewViewport({
     inputRef,
     matchesRef,
     lastAppliedInitialAnchorRef,
-    pendingEditorRevealFrameIdsRef,
     isSearchOpen,
     setIsSearchOpen,
     setQuery,
@@ -58,7 +52,10 @@ export function useMarkdownPreviewViewport({
     reviewNotesCopiedResetTimerRef,
     copiedReviewNoteResetTimerRef,
     reviewNotesCopyMountedRef,
-    attentionReviewCommentTimeoutRef
+    attentionReviewCommentTimeoutRef,
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef
   } = foundation
 
   useMarkdownPreviewScrollViewport({
@@ -73,12 +70,15 @@ export function useMarkdownPreviewViewport({
       if (count === 0) {
         return
       }
+      if (largePreview) {
+        largeNavigationRef?.current?.search()
+      }
       setActiveMatchIndex((cur) => {
         const base = cur >= 0 ? cur : direction === 1 ? -1 : 0
         return (base + direction + count) % count
       })
     },
-    [largePreview, matchCount, matchesRef, setActiveMatchIndex]
+    [largeNavigationRef, largePreview, matchCount, matchesRef, setActiveMatchIndex]
   )
 
   const openSearch = useCallback(() => {
@@ -111,15 +111,22 @@ export function useMarkdownPreviewViewport({
   }, [copiedReviewNoteResetTimerRef])
 
   const cleanupPreviewSurfaceTimers = useCallback((): void => {
-    cancelMarkdownPreviewEditorRevealFrames(pendingEditorRevealFrameIdsRef)
-    clearMarkdownPreviewTimeout(attentionReviewCommentTimeoutRef)
+    reviewActionFrameGenerationRef.current += 1
+    const reviewFrames = pendingReviewActionFrameIdsRef.current
+    pendingReviewActionFrameIdsRef.current = []
+    const reviewTimeouts = pendingReviewActionTimeoutIdsRef.current
+    pendingReviewActionTimeoutIdsRef.current = []
+    clearMarkdownPreviewReviewTimers(attentionReviewCommentTimeoutRef, reviewTimeouts)
     clearReviewNotesCopiedResetTimer()
     clearCopiedReviewNoteResetTimer()
+    cancelMarkdownPreviewEditorRevealFrames({ current: reviewFrames })
   }, [
     attentionReviewCommentTimeoutRef,
     clearCopiedReviewNoteResetTimer,
     clearReviewNotesCopiedResetTimer,
-    pendingEditorRevealFrameIdsRef
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef
   ])
 
   const setRootRef = useCallback(
@@ -156,6 +163,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
+      revealMarkdownNavigationDetails(target)
       container.scrollTo({ top: getMarkdownPreviewAnchorScrollTop(container, target) })
       target.focus({ preventScroll: true })
       return true
@@ -262,8 +270,8 @@ export function useMarkdownPreviewViewport({
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [
     activeAnnotationBlockKeyRef,
     closeSearch,

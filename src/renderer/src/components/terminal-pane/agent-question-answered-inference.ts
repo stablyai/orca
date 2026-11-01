@@ -47,20 +47,14 @@ function inferQuestionAnsweredFromEntry(
   return true
 }
 
-/** Completion signal for answer surfaces that write directly to the runtime
- *  instead of xterm (notably native chat). The same fresh-status baseline is
- *  used, so a real hook that wins the race prevents the fallback IPC. */
+/** Notify direct-runtime answer surfaces such as native chat; revalidate fresh baseline so a racing hook prevents fallback IPC. */
 export function inferQuestionAnsweredFromCurrentStatus(
   deps: AgentQuestionAnsweredInferenceDeps
 ): boolean {
   return inferQuestionAnsweredFromEntry(deps, deps.getStatusEntry())
 }
 
-/** Sibling of the interrupt inference for a hook Claude never sends: answering
- *  an AskUserQuestion emits no event, so the submit keystroke into the waiting
- *  pane is the only "question dealt with" signal. Unlike interrupts there is
- *  no expected real hook to settle for, so the inference fires immediately —
- *  the main process re-validates the baseline, so a racing hook always wins. */
+/** Claude emits no AskUserQuestion-answer hook; infer immediately from submit input and let main revalidate against racing hooks. */
 export function createAgentQuestionAnsweredInference({
   paneKey,
   getStatusEntry,
@@ -69,9 +63,7 @@ export function createAgentQuestionAnsweredInference({
 }: AgentQuestionAnsweredInferenceDeps): AgentQuestionAnsweredInference {
   return {
     observeSentTerminalInput(data) {
-      // Why: ordinary terminal input is the hot path. Reject it with one
-      // constant-time membership check before reading Zustand or parsing the
-      // bounded interactive-prompt JSON.
+      // Reject ordinary hot-path terminal input before store reads or prompt JSON parsing.
       if (!isPotentialQuestionAnsweredSubmitInput(data)) {
         return
       }

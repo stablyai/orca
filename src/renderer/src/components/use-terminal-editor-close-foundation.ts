@@ -17,6 +17,8 @@ export function useTerminalEditorCloseFoundation(
     ? openFiles.find((file) => file.id === saveDialogFileId)
     : null
   const pendingEditorCloseQueueRef = useRef<string[]>([])
+  // Why: a close request can carry what to do once its file actually closes; cancel drops it.
+  const closedReactionsRef = useRef(new Map<string, () => void>())
   const inFlightSaveFileIdRef = useRef<string | null>(null)
   const isClosingRef = useRef(false)
   const closeDialogDebounceTimersRef = useRef<Set<number>>(new Set())
@@ -28,22 +30,18 @@ export function useTerminalEditorCloseFoundation(
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
-  // Why: "running" and "could not reach the host" are different claims, and telling the user
-  // processes are running when the truth is that a host went quiet is the fabricated certainty
-  // docs/reference/ssh-execution-boundary.md forbids.
+  // Distinguish reported live work from unreachable hosts; loss of contact cannot prove running processes (ssh-execution-boundary.md).
   const [windowCloseDialogKind, setWindowCloseDialogKind] =
     useState<Exclude<WindowCloseRunningWork['kind'], 'none'>>('running')
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
   const confirmNativeWindowClose = useCallback(() => {
-    // Why: capture only after every close guard has committed. A canceled child-
-    // process prompt must not consume App's synthetic/native unload guard.
+    // Capture only after every close guard commits so canceled process prompts cannot consume App’s unload guard.
     const accepted = runWithWindowCloseCheckpointScope(() =>
       window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
     )
     if (!accepted) {
-      // Why: a checkpoint-vetoed quit used to die here with no dialog and no log,
-      // leaving SIGKILL as the only exit (#15352). Dirty-file vetoes publish no reason.
+      // Report checkpoint-vetoed quits instead of silently trapping the window (#15352); dirty-file vetoes provide no reason.
       showShutdownCheckpointFailureToast()
       return
     }
@@ -61,9 +59,7 @@ export function useTerminalEditorCloseFoundation(
           setWindowCloseDialogKind(runningWork.kind)
           setWindowCloseDialogOpen(true)
         })
-        // Why: the assessment must never be able to trap the window. A thrown store read is
-        // not evidence either way, and a close that silently does nothing is unrecoverable
-        // without SIGKILL, so fall through to the close the user actually asked for.
+        // Assessment exceptions prove neither live nor exited work; fall through so an unexpected store error cannot trap the window.
         .catch(() => {
           confirmNativeWindowClose()
         })
@@ -76,6 +72,7 @@ export function useTerminalEditorCloseFoundation(
     setSaveDialogFileId,
     saveDialogFile,
     pendingEditorCloseQueueRef,
+    closedReactionsRef,
     inFlightSaveFileIdRef,
     isClosingRef,
     closeDialogDebounceTimersRef,

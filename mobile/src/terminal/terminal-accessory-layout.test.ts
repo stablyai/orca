@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hasTerminalDirectionPadSpace, type SideRailStrip } from '../layout/side-rail-strip'
 
 import {
-  TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
   createTerminalAccessoryLayoutPreference,
   getDefaultTerminalAccessoryBuiltInIds,
   getDefaultTerminalAccessoryLayout,
@@ -48,6 +48,7 @@ describe('terminal accessory layout', () => {
 
   it('default layout shows every built-in in canonical order', () => {
     expect(getDefaultTerminalAccessoryLayout()).toEqual({
+      directionPadEnabled: true,
       orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
       visibleBuiltInIds: getDefaultTerminalAccessoryBuiltInIds()
     })
@@ -93,6 +94,7 @@ describe('terminal accessory layout', () => {
         visibleBuiltInIds: ['tab', 'escape']
       })
     ).toEqual({
+      directionPadEnabled: true,
       version: 2,
       orderedBuiltInIds: reversed,
       visibleBuiltInIds: ['tab', 'escape']
@@ -112,6 +114,7 @@ describe('terminal accessory layout', () => {
         current
       )
     ).toEqual({
+      directionPadEnabled: true,
       version: 2,
       orderedBuiltInIds: ['tab', 'escape', 'enter'],
       visibleBuiltInIds: ['tab', 'escape']
@@ -131,9 +134,8 @@ describe('terminal accessory layout', () => {
         current
       )
     ).toEqual({
+      directionPadEnabled: true,
       version: 2,
-      // Why asserted: 'space' follows its canonical predecessor 'tab' even
-      // though the user moved 'tab' into the middle of the bar.
       orderedBuiltInIds: ['enter', 'tab', 'space', 'escape'],
       visibleBuiltInIds: ['enter', 'space', 'escape']
     })
@@ -162,6 +164,7 @@ describe('terminal accessory layout', () => {
         knownBuiltInIds: getDefaultTerminalAccessoryBuiltInIds()
       })
     ).toEqual({
+      directionPadEnabled: true,
       version: 2,
       orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
       visibleBuiltInIds: ['escape', 'tab']
@@ -250,6 +253,7 @@ describe('terminal accessory layout', () => {
     const layout = { orderedBuiltInIds: ['tab', 'escape'], visibleBuiltInIds: ['tab'] }
 
     expect(setTerminalAccessoryBuiltInVisible(layout, 'escape', true, ['escape', 'tab'])).toEqual({
+      directionPadEnabled: true,
       orderedBuiltInIds: ['tab', 'escape'],
       visibleBuiltInIds: ['tab', 'escape']
     })
@@ -262,6 +266,7 @@ describe('terminal accessory layout', () => {
       ).visibleBuiltInIds
     ).toEqual(['escape'])
     expect(setTerminalAccessoryBuiltInVisible(layout, 'unknown', true, ['escape', 'tab'])).toEqual({
+      directionPadEnabled: true,
       orderedBuiltInIds: ['tab', 'escape'],
       visibleBuiltInIds: ['tab']
     })
@@ -280,11 +285,12 @@ describe('terminal accessory layout', () => {
         ['escape', 'tab', 'enter']
       )
     ).toEqual({
+      directionPadEnabled: true,
       orderedBuiltInIds: ['enter', 'escape', 'tab'],
       visibleBuiltInIds: ['enter', 'escape']
     })
 
-    // Why asserted: a stale drag result missing an id must not drop that key.
+    // Stale drag results must not drop missing ids from the layout.
     expect(
       reorderTerminalAccessoryBuiltInIds(layout, ['enter', 'escape'], ['escape', 'tab', 'enter'])
         .orderedBuiltInIds
@@ -307,13 +313,13 @@ describe('terminal accessory layout', () => {
     })
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
-      JSON.stringify(
-        createTerminalAccessoryLayoutPreference({
-          orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
-          visibleBuiltInIds: ['tab']
-        })
-      )
+      'orca:terminal-accessory-layout',
+      JSON.stringify({
+        version: 2,
+        directionPadEnabled: true,
+        orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+        visibleBuiltInIds: ['tab']
+      })
     )
   })
 
@@ -333,4 +339,46 @@ describe('terminal accessory layout', () => {
       }).visibleBuiltInIds
     ).toEqual(['escape'])
   })
+})
+
+it('uses arrow-free Duo defaults only for an untouched layout and preserves explicit choices', async () => {
+  asyncStorageMock.getItem.mockResolvedValue(null)
+  const duo = await loadTerminalAccessoryLayout(true)
+  expect(duo.directionPadEnabled).toBe(true)
+  expect(duo.visibleBuiltInIds.filter((id) => id.startsWith('arrow'))).toEqual([])
+  const strips: (SideRailStrip | null)[] = [
+    null,
+    { side: 'right', width: 84, height: 200, top: 0, bottom: 0 },
+    { side: 'right', width: 59, height: 500, top: 0, bottom: 0 }
+  ]
+  for (const strip of strips) {
+    expect(
+      (await loadTerminalAccessoryLayout(hasTerminalDirectionPadSpace(strip))).visibleBuiltInIds
+    ).toContain('arrowUp')
+  }
+  for (const side of ['left', 'right'] as const) {
+    const strip = { side, width: 84, height: 500, top: 0, bottom: 0 }
+    expect(
+      (await loadTerminalAccessoryLayout(hasTerminalDirectionPadSpace(strip))).visibleBuiltInIds
+    ).not.toContain('arrowUp')
+  }
+  const explicit = setTerminalAccessoryBuiltInVisible(
+    { ...duo, directionPadEnabled: false },
+    'arrowUp',
+    true
+  )
+  asyncStorageMock.setItem.mockResolvedValue(undefined)
+  await saveTerminalAccessoryLayout(explicit)
+  const saved = asyncStorageMock.setItem.mock.calls.at(-1)![1]
+  asyncStorageMock.getItem.mockResolvedValue(saved)
+  expect((await loadTerminalAccessoryLayout(true)).visibleBuiltInIds).toContain('arrowUp')
+  expect((await loadTerminalAccessoryLayout(true)).directionPadEnabled).toBe(false)
+  expect((await loadTerminalAccessoryLayout(false)).visibleBuiltInIds).toContain('arrowUp')
+  const legacy = {
+    version: 2,
+    orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+    visibleBuiltInIds: ['arrowDown', 'tab']
+  }
+  asyncStorageMock.getItem.mockResolvedValue(JSON.stringify(legacy))
+  expect((await loadTerminalAccessoryLayout(true)).visibleBuiltInIds).toEqual(['tab', 'arrowDown'])
 })

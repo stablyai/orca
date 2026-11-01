@@ -2,7 +2,7 @@ import type {
   LinearIssueActivityEntry,
   LinearIssueActivityValue
 } from '../../shared/linear/issue-activity'
-import type { RawNamedEntity, RawPageInfo, RawUser } from './issue-context-raw'
+import type { RawNamedEntity, RawPageInfo, RawUser } from './issue-context/raw'
 
 type RawActivityEntity = RawNamedEntity & {
   identifier?: string | null

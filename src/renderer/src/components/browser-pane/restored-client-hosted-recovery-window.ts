@@ -1,29 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 
-/**
- * How long a restored client-hosted page waits for its host to hand it back before the pane stops
- * showing it as loading.
- *
- * There is no negative outcome to wait for. A page the runtime cannot recover — its record released
- * as unrecoverable, or the tab closed from another client while this desktop was down — simply never
- * appears in a snapshot, and the restored marker exempts the row from the absent-from-snapshot cull,
- * so nothing else ever resolves it. This window is the only bound.
- *
- * Longer than the runtime's own per-page creation ceiling (DEFAULT_CLIENT_PAGE_CREATION_TIMEOUT_MS),
- * which bounds the FIRST BATCH of recoveries and nothing beyond it: recovery runs four pages at a
- * time and each awaits a create and then a navigate, so the Nth restored page is not owed an answer
- * until roughly ceil(N/4) x (create + navigate). Past the first batch this notice can appear on a
- * page that is still recovering normally. That is knowingly early rather than wrong — the window is
- * revocable, and a placement that lands later clears the notice on its own.
- */
+/** Bound absent restored pages beyond the first create ceiling; later four-page recovery batches may outlast it, so placement must revoke the notice. */
 export const RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS = 45_000
 
-/**
- * Whether a restored client-hosted page has waited long enough that the pane should offer the
- * unavailable notice instead of a spinner. The row itself stays — reopening on the server is the
- * user's decision, not this window's.
- */
+/** Offer an unavailable notice after the window; keep the row until the user chooses to close or reopen it. */
 export function useRestoredClientHostedRecoveryWindow({
   browserPageId,
   environmentId,
@@ -33,8 +14,7 @@ export function useRestoredClientHostedRecoveryWindow({
   environmentId: string
   placementPending: boolean
 }): boolean {
-  // Cleared by the first snapshot that publishes the page, which is also what supplies the
-  // placement — so this reads false the moment recovery succeeds.
+  // The snapshot supplying placement also clears the restored marker.
   const restoredFromSession = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserPageId]?.restoredFromSession === true
   )
@@ -49,8 +29,7 @@ export function useRestoredClientHostedRecoveryWindow({
       setWindowElapsed(false)
       return
     }
-    // Why the clock starts at reachable rather than at mount: an unreachable environment has not
-    // been asked yet, and its own disconnected state already explains the wait.
+    // An unreachable host has not been asked to recover yet; start the clock only when reachable.
     if (!environmentReachable) {
       return
     }
@@ -61,7 +40,6 @@ export function useRestoredClientHostedRecoveryWindow({
     return () => clearTimeout(timer)
   }, [awaitingRecovery, environmentReachable])
 
-  // The effect's reset clears this too, one render later — the conjunct is what keeps the notice
-  // off the frame between the placement landing and that reset running.
+  // Hide the notice as soon as placement lands, before the effect resets the elapsed flag.
   return awaitingRecovery && windowElapsed
 }

@@ -1,248 +1,105 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
-import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
-import { completeClaudeOAuthUsageSuccess, fetchClaudeUsageViaCli } from './claude-cli-usage-fetch'
 import {
   readClaudeOAuthCredentials,
+  type ClaudeOAuthCredentialReadResult,
   resolveClaudeOAuthCredentialReadOptions
 } from './claude-oauth-credentials'
-import {
-  canRetryClaudeOAuthWithLegacyKeychain,
-  makeClaudeUsageClassificationError,
-  makeLiveClaudeUsageDeferredResult,
-  repairClaudeCredentialsThenRetryOAuth,
-  retryClaudeOAuthWithLegacyKeychain,
-  shouldDeferClaudeUsageForLiveSession
-} from './claude-oauth-recovery'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
-import {
-  classifyClaudeCredentialAbsence,
-  classifyClaudeOAuthUsageError
-} from './claude-usage-error-classification'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
+import { OAuthUsageError } from './claude-oauth-usage-error'
 import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
-import { resolveClaudeUsageRefreshPlan } from './claude-usage-refresh-plan'
-import {
-  abortedClaudeRateLimitResult,
-  makeClaudeUsageResult,
-  metadataForClaudeUsageAttempt,
-  recordClaudeUsageAttempt,
-  warnClaudeUsageFetchFailure
-} from './claude-usage-result'
+import { abortedClaudeRateLimitResult, makeClaudeUsageResult } from './claude-usage-result'
+import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../shared/claude-profile-routing'
 
+/** Usage observes the account; only a user-started Claude process may refresh its login. */
 export async function fetchActiveClaudeRateLimits(
   options?: ClaudeRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
+  const usageError = options?.authPreparation?.usageError
+  if (usageError) {
+    return makeClaudeUsageResult('error', usageError, {
+      failureKind:
+        usageError === CLAUDE_PROFILE_MISSING_MESSAGE ? 'missing-credentials' : 'usage-unavailable',
+      attemptedSources: []
+    })
+  }
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
-  const attempts = { attemptedSources: [] }
-  const allowCliFallback = options?.allowPtyFallback !== false
-  const plan = resolveClaudeUsageRefreshPlan({
-    authPreparation: options?.authPreparation,
-    allowCliFallback
-  })
-
-  if (options?.authPreparation?.runtime === 'wsl' && !options.authPreparation.wslLinuxConfigDir) {
+  const credentials = await readClaudeOAuthCredentials(
+    resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
+  )
+  const metadata = {
+    credentialSource: credentials.source,
+    authProvenance: options?.authPreparation?.provenance ?? 'system'
+  }
+  // System Default without login may be an API-key/non-Claude user, not a signed-out account.
+  if (
+    !credentials.token &&
+    !credentials.unavailable &&
+    !credentials.hasRefreshableCredentials &&
+    metadata.authProvenance === 'system'
+  ) {
+    return makeClaudeUsageResult('unavailable', 'No subscription plan — API key billing', {
+      ...metadata,
+      failureKind: 'missing-credentials',
+      attemptedSources: []
+    })
+  }
+  if (!credentials.token) {
     return makeClaudeUsageResult(
       'error',
-      `WSL Claude config unavailable for ${options.authPreparation.wslDistro ?? 'default distro'}`,
+      credentials.unavailable
+        ? 'Claude usage is unavailable.'
+        : 'Sign in again to use this account.',
       {
-        attemptedSources: [],
-        failureKind: 'cli-unavailable',
-        authProvenance: options.authPreparation.provenance
+        ...metadata,
+        failureKind: credentials.unavailable ? 'keychain-unavailable' : 'missing-credentials',
+        attemptedSources: []
       }
     )
   }
+  try {
+    return await fetchClaudeOAuthUsage(credentials.token, options?.signal)
+  } catch (error) {
+    const { failureKind } = classifyClaudeOAuthUsageError(error)
+    if (failureKind === 'stale-token' && !canClaudeRenewLogin(credentials, error)) {
+      return makeClaudeUsageResult('error', 'Sign in again to use this account.', {
+        ...metadata,
+        failureKind: 'missing-credentials',
+        attemptedSources: ['oauth']
+      })
+    }
+    // Retain both the 429 polling delay and its user-visible cause.
+    const retryAfterMs = error instanceof OAuthUsageError ? error.retryAfterMs : null
+    return makeClaudeUsageResult(
+      'error',
+      failureKind === 'stale-token'
+        ? // Idle login's access token lapsed, not the login; Claude refreshes it when it next runs.
+          'Claude usage updates the next time Claude runs.'
+        : (failureKind === 'rate-limited' || failureKind === 'missing-scope') &&
+            error instanceof OAuthUsageError
+          ? error.message
+          : 'Claude usage is unavailable.',
+      {
+        ...metadata,
+        failureKind,
+        attemptedSources: ['oauth'],
+        ...(retryAfterMs ? { retryAtMs: Date.now() + retryAfterMs } : {})
+      }
+    )
+  }
+}
 
-  const oauthCredentials = await readClaudeOAuthCredentials(
-    resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
+// Mirrors Claude Code's own refreshability check; anything else needs a new sign-in.
+function canClaudeRenewLogin(
+  credentials: ClaudeOAuthCredentialReadResult,
+  error: unknown
+): boolean {
+  const refreshTokenExpiresAt = credentials.refreshTokenExpiresAt
+  return (
+    credentials.hasRefreshableCredentials &&
+    (refreshTokenExpiresAt === undefined || refreshTokenExpiresAt > Date.now()) &&
+    !(error instanceof OAuthUsageError && /revoked/i.test(error.message))
   )
-  if (options?.signal?.aborted) {
-    return abortedClaudeRateLimitResult()
-  }
-
-  if (plan.steps.some((step) => step.source === 'oauth') && oauthCredentials.token) {
-    recordClaudeUsageAttempt(attempts, 'oauth')
-    try {
-      const oauthLimits = await fetchClaudeOAuthUsage(oauthCredentials.token, options?.signal)
-      if (options?.signal?.aborted) {
-        return abortedClaudeRateLimitResult()
-      }
-      return await completeClaudeOAuthUsageSuccess({
-        oauthLimits,
-        oauthCredentials,
-        attempts,
-        options
-      })
-    } catch (error) {
-      warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, error)
-      const classification = classifyClaudeOAuthUsageError(error)
-
-      if (
-        canRetryClaudeOAuthWithLegacyKeychain({
-          classification,
-          oauthCredentials,
-          authPreparation: options?.authPreparation
-        })
-      ) {
-        const legacyResult = await retryClaudeOAuthWithLegacyKeychain({
-          failedToken: oauthCredentials.token,
-          attempts,
-          options
-        })
-        if (legacyResult) {
-          return legacyResult
-        }
-      }
-
-      if (shouldDeferClaudeUsageForLiveSession(options?.authPreparation, classification)) {
-        return makeLiveClaudeUsageDeferredResult({
-          attempts,
-          oauthCredentials,
-          authPreparation: options?.authPreparation
-        })
-      }
-
-      if (classification.shouldAttemptDelegatedRefresh && allowCliFallback) {
-        const repaired = await repairClaudeCredentialsThenRetryOAuth({
-          options,
-          attempts,
-          oauthCredentials
-        })
-        if (repaired) {
-          return repaired
-        }
-      }
-
-      if (classification.shouldAttemptCliFallback && allowCliFallback) {
-        try {
-          return await fetchClaudeUsageViaCli({
-            authPreparation: options?.authPreparation,
-            oauthCredentials,
-            attempts,
-            networkProxySettings: options?.networkProxySettings,
-            signal: options?.signal
-          })
-        } catch (ptyError) {
-          warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, ptyError)
-        }
-      }
-
-      return makeClaudeUsageClassificationError({
-        error,
-        classification,
-        attempts,
-        oauthCredentials,
-        authPreparation: options?.authPreparation
-      })
-    }
-  }
-
-  const credentialClassification = classifyClaudeCredentialAbsence({
-    hasRefreshableCredentials: oauthCredentials.hasRefreshableCredentials,
-    keychainUnavailable: oauthCredentials.keychainUnavailable,
-    managedRefreshDeferredByLivePty: options?.authPreparation?.managedRefreshDeferredByLivePty
-  })
-
-  if (shouldDeferClaudeUsageForLiveSession(options?.authPreparation, credentialClassification)) {
-    return makeLiveClaudeUsageDeferredResult({
-      attempts,
-      oauthCredentials,
-      authPreparation: options?.authPreparation
-    })
-  }
-
-  if (
-    oauthCredentials.hasRefreshableCredentials &&
-    credentialClassification.shouldAttemptDelegatedRefresh &&
-    allowCliFallback
-  ) {
-    const repaired = await repairClaudeCredentialsThenRetryOAuth({
-      options,
-      attempts,
-      oauthCredentials
-    })
-    if (repaired) {
-      return repaired
-    }
-  }
-
-  if (
-    (oauthCredentials.token ||
-      oauthCredentials.hasRefreshableCredentials ||
-      oauthCredentials.keychainUnavailable) &&
-    credentialClassification.shouldAttemptCliFallback &&
-    allowCliFallback
-  ) {
-    try {
-      return await fetchClaudeUsageViaCli({
-        authPreparation: options?.authPreparation,
-        oauthCredentials,
-        attempts,
-        networkProxySettings: options?.networkProxySettings,
-        signal: options?.signal
-      })
-    } catch (error) {
-      warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, error)
-      return makeClaudeUsageResult(
-        'error',
-        withMacTailscaleDnsHint(error instanceof Error ? error.message : 'Unknown error'),
-        {
-          ...metadataForClaudeUsageAttempt({
-            attemptedSources: attempts.attemptedSources,
-            oauthCredentials,
-            authPreparation: options?.authPreparation,
-            failureKind:
-              credentialClassification.failureKind === 'keychain-unavailable'
-                ? 'keychain-unavailable'
-                : 'cli-unavailable'
-          })
-        }
-      )
-    }
-  }
-
-  if (oauthCredentials.keychainUnavailable) {
-    return makeClaudeUsageResult('error', 'Claude Keychain credentials unavailable', {
-      ...metadataForClaudeUsageAttempt({
-        attemptedSources: attempts.attemptedSources,
-        oauthCredentials,
-        authPreparation: options?.authPreparation,
-        failureKind: 'keychain-unavailable'
-      })
-    })
-  }
-
-  if (oauthCredentials.hasRefreshableCredentials) {
-    return makeClaudeUsageResult('error', 'Claude OAuth access token unavailable', {
-      ...metadataForClaudeUsageAttempt({
-        attemptedSources: attempts.attemptedSources,
-        oauthCredentials,
-        authPreparation: options?.authPreparation,
-        failureKind: credentialClassification.failureKind
-      })
-    })
-  }
-
-  if (allowCliFallback && plan.steps.some((step) => step.source === 'cli')) {
-    try {
-      return await fetchClaudeUsageViaCli({
-        authPreparation: options?.authPreparation,
-        oauthCredentials,
-        attempts,
-        networkProxySettings: options?.networkProxySettings,
-        signal: options?.signal
-      })
-    } catch (error) {
-      warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, error)
-    }
-  }
-
-  return makeClaudeUsageResult('unavailable', 'No subscription plan — API key billing', {
-    ...metadataForClaudeUsageAttempt({
-      attemptedSources: attempts.attemptedSources,
-      oauthCredentials,
-      authPreparation: options?.authPreparation,
-      failureKind: 'missing-credentials'
-    })
-  })
 }

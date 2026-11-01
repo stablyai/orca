@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
 import type { WorktreeLineage, WorktreeLineageWarning } from '../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -265,5 +266,35 @@ export async function resolveRuntimeWorktreeCreateLineage(
     ...(terminalContextResolved && input.callerTerminalHandle
       ? { createdByTerminalHandle: input.callerTerminalHandle }
       : {})
+  }
+}
+
+/** Match update/hydrate/projection host boundaries (#12757): reject explicit cross-host parents before create, warn/drop inferred ones; unknown hosts stay permissive. */
+export function enforceCreateLineageHostBoundary(
+  resolution: WorktreeLineageResolution,
+  childHostId: ExecutionHostId | undefined
+): WorktreeLineageResolution {
+  if (resolution.kind !== 'lineage' || resolution.parent.type !== 'worktree') {
+    return resolution
+  }
+  const parentHostId = resolution.parent.worktree.hostId
+  if (!childHostId || !parentHostId || parentHostId === childHostId) {
+    return resolution
+  }
+  const message = 'Parent worktree must be on the same execution host as the new worktree.'
+  if (resolution.capture.confidence === 'explicit') {
+    throw new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_CONFLICT', message, {
+      nextSteps: ['Pass a parent on the same execution host, or retry with --no-parent.']
+    })
+  }
+  return {
+    kind: 'none',
+    warnings: [
+      {
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message: `Worktree created without lineage. ${message}`,
+        details: { parentWorktreeId: resolution.parent.worktree.id, parentHostId, childHostId }
+      }
+    ]
   }
 }

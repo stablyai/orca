@@ -5,9 +5,7 @@ const require = createRequire(import.meta.url)
 const { Terminal } = require('@xterm/xterm')
 const { ImageAddon } = require('@xterm/addon-image')
 
-// V8 caps live wasm memories per renderer (~124 under Electron's sandbox), so
-// these contracts pin that idle terminals hold none and that exhaustion drops
-// an image instead of wedging the terminal's write queue.
+// Renderer V8 limits live wasm memories (~124); idle terminals need zero and exhaustion must drop image without wedging write queue.
 
 const SIXEL_RED_REGISTER_1 = '\x1bPq#1;2;100;0;0#1~\x1b\\'
 const SIXEL_USE_REGISTER_1 = '\x1bPq#1~\x1b\\'

@@ -163,4 +163,84 @@ describe('browser WebAuthn account picker', () => {
     renderer.emit('render-process-gone')
     await expect(windowCrashed).resolves.toBeNull()
   })
+
+  it.each(['guest', 'renderer'] as const)(
+    'retires the request when the %s commits a navigation',
+    async (target) => {
+      const owners = { guest: mockWebContents(91), renderer: mockWebContents(92) }
+      fromFrameMock.mockReturnValue(owners.guest)
+      getRendererContextForGuestMock.mockReturnValue({
+        browserPageId: 'page-6',
+        renderer: owners.renderer
+      })
+
+      const selection = requestBrowserWebAuthnAccount(accountDetails(), mockSession())
+      const requestId = vi.mocked(owners.renderer.send).mock.calls[0][1].requestId
+      owners[target].emit('did-navigate')
+
+      await expect(selection).resolves.toBeNull()
+      expect(owners.renderer.send).toHaveBeenLastCalledWith(
+        'browser:webauthn-account-request-closed',
+        { requestId }
+      )
+      expect(
+        respondToBrowserWebAuthnAccountRequest(owners.renderer, {
+          requestId,
+          credentialId: 'credential-1'
+        })
+      ).toBe(false)
+      for (const contents of Object.values(owners)) {
+        for (const event of ['did-navigate', 'render-process-gone', 'destroyed']) {
+          expect(contents.listenerCount(event)).toBe(0)
+        }
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('keeps sibling and successor requests independent of a retired document', async () => {
+    const retiredGuest = mockWebContents(101)
+    const siblingGuest = mockWebContents(102)
+    const renderer = mockWebContents(103)
+    getRendererContextForGuestMock.mockImplementation((guestId: number) => ({
+      browserPageId: `page-${guestId}`,
+      renderer
+    }))
+    const browserSession = mockSession()
+    const requestIdAt = (index: number): string =>
+      vi.mocked(renderer.send).mock.calls[index][1].requestId
+
+    fromFrameMock.mockReturnValueOnce(retiredGuest)
+    const retired = requestBrowserWebAuthnAccount(accountDetails(), browserSession)
+    fromFrameMock.mockReturnValueOnce(siblingGuest)
+    const sibling = requestBrowserWebAuthnAccount(accountDetails(), browserSession)
+    const [retiredId, siblingId] = [requestIdAt(0), requestIdAt(1)]
+
+    retiredGuest.emit('did-navigate')
+    await expect(retired).resolves.toBeNull()
+    fromFrameMock.mockReturnValueOnce(retiredGuest)
+    const successor = requestBrowserWebAuthnAccount(accountDetails(), browserSession)
+    const successorId = requestIdAt(3)
+
+    expect(
+      respondToBrowserWebAuthnAccountRequest(renderer, {
+        requestId: retiredId,
+        credentialId: 'credential-1'
+      })
+    ).toBe(false)
+    expect(
+      respondToBrowserWebAuthnAccountRequest(renderer, {
+        requestId: successorId,
+        credentialId: 'credential-2'
+      })
+    ).toBe(true)
+    expect(
+      respondToBrowserWebAuthnAccountRequest(renderer, {
+        requestId: siblingId,
+        credentialId: 'credential-1'
+      })
+    ).toBe(true)
+    await expect(successor).resolves.toBe('credential-2')
+    await expect(sibling).resolves.toBe('credential-1')
+  })
 })

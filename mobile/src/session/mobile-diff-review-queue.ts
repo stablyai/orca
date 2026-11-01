@@ -1,3 +1,5 @@
+import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
   DiffComment,
   DiffReviewScope,
@@ -7,6 +9,7 @@ import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch
 import {
   isMobileGitDiscardableEntry,
   isMobileGitStageableEntry,
+  isMobileGitUnstageableEntry,
   type MobileGitFileStatus,
   type MobileGitStagingArea,
   type MobileGitStatusEntry
@@ -162,7 +165,6 @@ function queueNoteCounts(
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
-/** A row whose staging area this build can place. One with no area is in no section either. */
 type PlaceableStatusEntry = MobileGitStatusEntry & { area: MobileGitStagingArea }
 
 function isPlaceableStatusEntry(entry: MobileGitStatusEntry): entry is PlaceableStatusEntry {
@@ -190,12 +192,16 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: scope === 'staged' ? 'Staged' : 'Unstaged',
+    get subtitle() {
+      return scope === 'staged'
+        ? translate('session.diffReviewQueue.staged', 'Staged')
+        : translate('session.diffReviewQueue.unstaged', 'Unstaged')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
-    canUnstage: entry.area === 'staged',
-    canDiscard: isMobileGitDiscardableEntry(entry) && entry.area !== 'staged',
+    canUnstage: isMobileGitUnstageableEntry(entry),
+    canDiscard: isMobileGitDiscardableEntry(entry),
     isGeneratedOrLockFile: isGeneratedOrLockFile(entry.path),
     diffIdentity,
     ...counts,
@@ -207,7 +213,8 @@ function statusEntryToQueueItem(
 
 function branchEntryToQueueItem(
   entry: MobileGitBranchChangeEntry,
-  input: BuildMobileDiffReviewQueueInput
+  input: BuildMobileDiffReviewQueueInput,
+  comments: readonly DiffComment[]
 ): MobileDiffReviewQueueItem {
   const scope: DiffReviewScope = 'branch'
   const key = createMobileDiffReviewFileKey(scope, 'branch', entry.path, entry.oldPath)
@@ -215,7 +222,7 @@ function branchEntryToQueueItem(
   const reviewFileState = input.reviewState.files[key]
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
-    input.comments
+    comments
   )
   return {
     key,
@@ -225,7 +232,9 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: 'Committed on branch',
+    get subtitle() {
+      return translate('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,
@@ -243,21 +252,28 @@ function branchEntryToQueueItem(
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
+  const commentsByPath = new Map<string, DiffComment[]>()
+  for (const comment of input.comments) {
+    const comments = commentsByPath.get(comment.filePath) ?? []
+    comments.push(comment)
+    commentsByPath.set(comment.filePath, comments)
+  }
   const queue = [
     ...input.statusEntries
       .filter(isPlaceableStatusEntry)
-      .map((entry) => statusEntryToQueueItem(entry, input.comments, input.reviewState)),
-    ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
-  ]
-  if (queue.length > 1) {
-    const collator = new Intl.Collator(undefined, { numeric: true })
-    queue.sort(
-      (first, second) =>
-        SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-        Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-        collator.compare(first.filePath, second.filePath)
+      .map((entry) =>
+        statusEntryToQueueItem(entry, commentsByPath.get(entry.path) ?? [], input.reviewState)
+      ),
+    ...input.branchEntries.map((entry) =>
+      branchEntryToQueueItem(entry, input, commentsByPath.get(entry.path) ?? [])
     )
-  }
+  ]
+  queue.sort(
+    (first, second) =>
+      SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+      Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+      compareFileNames(first.filePath, second.filePath)
+  )
   return queue
 }
 

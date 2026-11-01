@@ -1,4 +1,15 @@
 import type { Root, RootContent, Nodes } from 'hast'
+import {
+  countMarkdownPreviewNodes,
+  getMarkdownPreviewTreeText,
+  isMarkdownPreviewBlockTooLarge
+} from './markdown-preview-tree-content'
+export {
+  countMarkdownPreviewNodes,
+  getMarkdownPreviewTreeText,
+  isMarkdownPreviewBlockTooLarge
+} from './markdown-preview-tree-content'
+import { splitMarkdownPreviewTable } from './markdown-preview-table-chunks'
 import type { Root as MarkdownRoot, Nodes as MarkdownNodes } from 'mdast'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
@@ -17,32 +28,6 @@ import {
 } from './markdown-preview-document-types'
 import type { MarkdownTocItem, MarkdownTocLevel } from './markdown-table-of-contents'
 
-export function countMarkdownPreviewNodes(
-  node: { children?: readonly unknown[] },
-  limit: number
-): number {
-  let count = 0
-  const pending: unknown[] = [node]
-  while (pending.length > 0) {
-    const current = pending.pop()
-    count += 1
-    if (count > limit) {
-      return count
-    }
-    if (
-      current &&
-      typeof current === 'object' &&
-      'children' in current &&
-      Array.isArray(current.children)
-    ) {
-      for (const child of current.children) {
-        pending.push(child)
-      }
-    }
-  }
-  return count
-}
-
 function assertDocumentBudget(tree: MarkdownRoot | Root): void {
   if (
     countMarkdownPreviewNodes(tree, MARKDOWN_PREVIEW_DOCUMENT_MAX_NODES) >
@@ -50,16 +35,6 @@ function assertDocumentBudget(tree: MarkdownRoot | Root): void {
   ) {
     throw new Error('Document exceeds the preview complexity limit.')
   }
-}
-
-export function getMarkdownPreviewTreeText(node: Nodes): string {
-  if (node.type === 'text') {
-    return node.value
-  }
-  if (node.type === 'element' && node.tagName === 'img') {
-    return String(node.properties.alt ?? '')
-  }
-  return 'children' in node ? node.children.map(getMarkdownPreviewTreeText).join('') : ''
 }
 
 function collectAnchors(node: RootContent, anchors: string[], headings: MarkdownTocItem[]): void {
@@ -140,6 +115,8 @@ export function parseMarkdownPreviewDocument(content: string): {
   tree.children = tree.children.filter(
     (node) => node.type !== 'text' || node.value.trim().length > 0
   )
+  tree.children = tree.children.flatMap(splitMarkdownPreviewTable)
+  assertDocumentBudget(tree)
   const headings: MarkdownTocItem[] = []
   const blocks = tree.children.map((node, index) => {
     const anchors: string[] = []
@@ -148,6 +125,7 @@ export function parseMarkdownPreviewDocument(content: string): {
     return {
       index,
       anchors,
+      sourceColumn: node.position?.start.column,
       estimate: Math.min(1200, Math.max(40, Math.ceil(textLength / 90) * 24 + 32)),
       ...sourceBounds(node)
     }
@@ -164,14 +142,24 @@ function hasHtml(node: MarkdownNodes): boolean {
 
 const expansion = unified().use(MARKDOWN_REHYPE_EXPANSION_PLUGINS)
 
+export function markdownPreviewBlockHasMath(node: Nodes): boolean {
+  if (
+    node.type === 'element' &&
+    node.properties.className
+      ?.toString()
+      .match(/(?:^|[, ])(?:language-math|math-inline|math-display)(?:$|[, ])/)
+  ) {
+    return true
+  }
+  return 'children' in node && node.children.some(markdownPreviewBlockHasMath)
+}
+
 export function renderMarkdownPreviewBlock(
   node: RootContent,
   index: number
 ): MarkdownPreviewRenderedBlock {
   const sourceTree: Root = { type: 'root', children: [node] }
-  const tooLarge =
-    countMarkdownPreviewNodes(sourceTree, MARKDOWN_PREVIEW_BLOCK_MAX_NODES) >
-      MARKDOWN_PREVIEW_BLOCK_MAX_NODES || getMarkdownPreviewTreeText(node).length > 32_768
+  const tooLarge = isMarkdownPreviewBlockTooLarge(node)
   if (tooLarge) {
     return { index, tree: { type: 'root', children: [] }, oversized: true }
   }
@@ -180,13 +168,13 @@ export function renderMarkdownPreviewBlock(
   if (!isHastRoot(expanded)) {
     throw new Error('Invalid rendered preview block.')
   }
-  return {
-    index,
-    tree: expanded,
-    oversized:
-      countMarkdownPreviewNodes(expanded, MARKDOWN_PREVIEW_BLOCK_MAX_NODES) >
-      MARKDOWN_PREVIEW_BLOCK_MAX_NODES
+  const oversized =
+    countMarkdownPreviewNodes(expanded, MARKDOWN_PREVIEW_BLOCK_MAX_NODES) >
+    MARKDOWN_PREVIEW_BLOCK_MAX_NODES
+  if (oversized && !markdownPreviewBlockHasMath(node)) {
+    return { index, tree: structuredClone(sourceTree), oversized: false }
   }
+  return { index, tree: expanded, oversized }
 }
 
 function isHastRoot(node: { type: string }): node is Root {

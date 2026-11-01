@@ -37,8 +37,7 @@ import {
   readCodexRegistrationEntries
 } from './config-toml-plugin-registration-tables'
 
-// The tables Codex 0.145 writes into CODEX_HOME for `plugin marketplace add`
-// followed by `plugin add`, including the quoted `<plugin>@<marketplace>` key.
+// Registration tables written by Codex 0.145 marketplace and plugin additions.
 const MARKETPLACE_TABLE = [
   '[marketplaces.ponytail]',
   'source_type = "git"',
@@ -66,8 +65,6 @@ beforeEach(() => {
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   registrationTestState.failAtomicWrite = false
-  // Why: promotion writes into homedir()/.codex — if the mock ever fails to
-  // intercept, these tests would rewrite the developer's real Codex config.
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -113,7 +110,6 @@ function readRuntimeConfig(homePath = runtimeHomeDir()): string {
   return readFileSync(join(homePath, 'config.toml'), 'utf-8')
 }
 
-/** Mimics Codex appending a registration table to the CODEX_HOME it was launched with. */
 function simulateCodexRegistrationWrite(block: string, homePath = runtimeHomeDir()): void {
   mkdirSync(homePath, { recursive: true })
   const configPath = join(homePath, 'config.toml')
@@ -121,7 +117,6 @@ function simulateCodexRegistrationWrite(block: string, homePath = runtimeHomeDir
   writeFileSync(configPath, `${existing.trimEnd()}\n\n${block}\n`, 'utf-8')
 }
 
-/** Mimics Codex rewriting a value inside a registration table it already owns. */
 function simulateCodexRegistrationFieldWrite(
   field: string,
   rawValue: string,
@@ -168,8 +163,6 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     expect(readSystemConfig()).toBe(settledSystem)
   })
 
-  // Why: #11770's metadata-only policy deliberately skips runtime-only
-  // marketplaces, so it would drop this one even though its timestamps are fine.
   it('promotes a runtime-only marketplace that a metadata-only policy would drop', () => {
     writeSystemConfig('model = "gpt-5"\n\n[marketplaces.other]\nsource = "other"\n')
     syncSystemConfigIntoManagedCodexHome()
@@ -205,7 +198,6 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     mirrorTwice()
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
 
-    // The user edits ~/.codex outside Orca and deletes both registrations.
     writeSystemConfig('model = "gpt-5"\n')
     mirrorTwice()
 
@@ -250,8 +242,7 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     expect(readRuntimeConfig()).toContain('disabled_reason = "canonical"')
   })
 
-  // Why: `enabled` is three-valued in practice — true, false, and absent — so
-  // "both sides changed" is only reachable when one of them adds the key.
+  // Include absence as the third enabled state so both sides can diverge.
   it('lets the canonical config win when enablement changed to a different value on each side', () => {
     writeSystemConfig(
       `model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE.replace('enabled = true\n', '')}\n`
@@ -279,7 +270,7 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     syncSystemConfigIntoManagedCodexHome()
 
     simulateCodexRegistrationFieldWrite('enabled', 'false')
-    // A v2 baseline, or one rebuilt after corruption, tracks no registration at all.
+    // v2 and rebuilt baselines have no registration history.
     const baseline = JSON.parse(readFileSync(baselinePath(), 'utf-8'))
     delete baseline.registrations
     writeFileSync(baselinePath(), `${JSON.stringify(baseline, null, 2)}\n`, 'utf-8')
@@ -321,7 +312,6 @@ describe('codex marketplace refresh metadata promotion', () => {
     const system = readSystemConfig()
     expect(system).toContain('last_updated = "2026-02-01T09:30:00Z"')
     expect(system).toContain('last_revision = "bbbb222"')
-    // Every other field, the comment, and unrelated tables are untouched.
     expect(system).toContain('# user comment')
     expect(system).toContain('ref_name = "main"')
     expect(system).toContain('[mcp_servers.docs]')
@@ -364,7 +354,7 @@ describe('codex marketplace refresh metadata promotion', () => {
     expect(readSystemConfig()).toContain('last_revision = "aaaa111"')
   })
 
-  // Why: Date.parse rolls an impossible day forward, which would read as newer.
+  // Date.parse rolls impossible dates forward, potentially making them look newer.
   it('rejects an impossible calendar date instead of rolling it forward', () => {
     seedMirroredMarketplace()
 
@@ -580,8 +570,7 @@ describe('codex registration reconciliation isolates accounts and source homes',
     })
   })
 
-  // Why: the baseline is the only record of what a mirror already made canonical,
-  // so losing it re-reads a pending canonical removal as a runtime-only addition.
+  // Losing the baseline makes a pending canonical removal look like a runtime addition.
   it('re-promotes a canonically removed registration when the baseline is lost first', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
@@ -593,7 +582,6 @@ describe('codex registration reconciliation isolates accounts and source homes',
     mirrorTwice()
     expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
 
-    // Recoverable: with the rebuilt baseline in place, removing it again sticks.
     writeSystemConfig('model = "gpt-5"\n')
     mirrorTwice()
     expect(readSystemConfig()).toBe('model = "gpt-5"\n')

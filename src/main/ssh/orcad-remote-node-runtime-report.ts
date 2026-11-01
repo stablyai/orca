@@ -1,35 +1,104 @@
-/** What the host-side runtime-store scripts print, shared by the POSIX and Windows installers. */
+import { parseMissingSharedLibrary } from '../orcad/native-host-abi'
+import { RelayHostAnsweredError } from './remote-exec/remote-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
 export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'
 export const REMOTE_NODE_RUNTIME_SELFTEST_FAILED = 'ORCA_NODE_RUNTIME_SELFTEST_FAILED'
-/** A file Orca wrote and verified changed or vanished afterwards; the rest of the line says which. */
+export const REMOTE_NODE_RUNTIME_NOEXEC = 'ORCA_NODE_RUNTIME_NOEXEC'
 export const REMOTE_NODE_RUNTIME_SECURITY_MODIFIED = 'ORCA_NODE_RUNTIME_SECURITY_MODIFIED'
 export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
 export const REMOTE_NODE_RUNTIME_VERIFIED_MARKER = '.verified'
+export const REMOTE_WINDOWS_BUILD_UNSUPPORTED = 'ORCA_WINDOWS_BUILD_UNSUPPORTED'
+export const REMOTE_NODE_RUNTIME_NO_EXTRACTOR = 'ORCA_NODE_RUNTIME_NO_EXTRACTOR'
 
-/** The pinned runtime ran on the host and did not report its version: a host verdict, with evidence. */
-export class RemoteNodeRuntimeSelfTestError extends Error {
+/** A failed version self-test is positive host evidence, not an unanswered transport probe. */
+export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
   constructor(
     readonly exitStatus: number | null,
     readonly output: string
   ) {
+    const exit = `exit ${exitStatus ?? 'unknown'}`
+    const missing = parseMissingSharedLibrary(output)
     super(
-      `The pinned Node runtime did not run on the host (exit ${exitStatus ?? 'unknown'}): ${output}`
+      missing
+        ? `The host is missing ${missing}, which Orca's Node runtime needs. ` +
+            `${installHint(missing)} Then reconnect. (${exit}: ${output})`
+        : `The pinned Node runtime did not run on the host (${exit}): ${output}`
     )
     this.name = 'RemoteNodeRuntimeSelfTestError'
   }
 }
 
-/** The host answered, and what it answered is that something rewrote or removed our verified bytes. */
-export class RemoteNodeRuntimeSecurityModifiedError extends Error {
+export class RemoteNodeRuntimeNoexecError extends RelayHostAnsweredError {
+  constructor(
+    readonly output: string,
+    storeDir = 'Orca’s runtime folder'
+  ) {
+    super(`The host does not allow running programs from ${storeDir}: ${output}`)
+    this.name = 'RemoteNodeRuntimeNoexecError'
+  }
+}
+
+/** Only exec refusal fails this probe; other uncertainty falls through to upload self-test for loader diagnostics. */
+export function assertRemoteNodeRuntimeStoreExecutable(probe: string, storeDir: string): void {
+  const index = probe.indexOf(REMOTE_NODE_RUNTIME_NOEXEC)
+  if (index === -1) {
+    return
+  }
+  const report = parseRemoteRuntimeExitReport(probe.slice(index))
+  // Our own 0700 shell script makes exit 126 an exec refusal; diagnostic text may be localized.
+  if (report.exitStatus === 126) {
+    throw new RemoteNodeRuntimeNoexecError(report.output, storeDir)
+  }
+}
+
+export class RemoteWindowsBuildUnsupportedError extends RelayHostAnsweredError {
+  constructor(readonly build: string) {
+    super(
+      `The host runs Windows build ${build}, older than the Windows 10 / Server 2016 Orca's Node runtime needs.`
+    )
+    this.name = 'RemoteWindowsBuildUnsupportedError'
+  }
+}
+
+export class RemoteNodeRuntimeNoExtractorError extends RelayHostAnsweredError {
+  constructor() {
+    super(
+      "The host has neither System32\\tar.exe nor PowerShell's Expand-Archive to unpack Orca's Node runtime."
+    )
+    this.name = 'RemoteNodeRuntimeNoExtractorError'
+  }
+}
+
+/** Windows hosts that can't run or unpack the runtime fail before anything is staged or uploaded. */
+export function assertWindowsHostCanInstallNodeRuntime(probe: string): void {
+  for (const line of probe.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith(`${REMOTE_WINDOWS_BUILD_UNSUPPORTED} `)) {
+      throw new RemoteWindowsBuildUnsupportedError(
+        trimmed.slice(REMOTE_WINDOWS_BUILD_UNSUPPORTED.length + 1).slice(0, 32)
+      )
+    }
+    if (trimmed === REMOTE_NODE_RUNTIME_NO_EXTRACTOR) {
+      throw new RemoteNodeRuntimeNoExtractorError()
+    }
+  }
+}
+
+// Alpine is the one supported family that ships without libstdc++ by default.
+function installHint(library: string): string {
+  return library.startsWith('libstdc++')
+    ? 'Install it (Alpine: apk add libstdc++; Debian/Ubuntu: apt install libstdc++6; Fedora: dnf install libstdc++).'
+    : 'Install the package that provides it.'
+}
+
+export class RemoteNodeRuntimeSecurityModifiedError extends RelayHostAnsweredError {
   constructor(readonly detail: string) {
     super(`Security software on the host removed or modified the pinned Node runtime: ${detail}`)
     this.name = 'RemoteNodeRuntimeSecurityModifiedError'
   }
 }
 
-/** Splits `ORCA_RUNTIME_EXIT=<n>` from the output that follows it. */
 export function parseRemoteRuntimeExitReport(text: string): {
   exitStatus: number | null
   output: string
@@ -49,7 +118,6 @@ export function parseRemoteRuntimeExitReport(text: string): {
   }
 }
 
-/** Throws the host's verdict when a promote script reported one instead of READY. */
 export function assertRemoteNodeRuntimePromoted(promoted: string): void {
   const selfTestFailure = promoted.indexOf(REMOTE_NODE_RUNTIME_SELFTEST_FAILED)
   if (selfTestFailure !== -1) {
@@ -65,6 +133,8 @@ export function assertRemoteNodeRuntimePromoted(promoted: string): void {
     )
   }
   if (promoted.trim().split(/\r?\n/).at(-1)?.trim() !== REMOTE_NODE_RUNTIME_READY) {
-    throw new Error(`The host did not verify the pinned Node runtime: ${promoted.trim()}`)
+    throw new RelayHostAnsweredError(
+      `The host did not verify the pinned Node runtime: ${promoted.trim()}`
+    )
   }
 }

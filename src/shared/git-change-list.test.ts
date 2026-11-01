@@ -11,6 +11,21 @@ const raw = (status: string, ...paths: string[]): string =>
   `:100644 100644 abc def ${status}\0${paths.join('\0')}\0`
 
 describe('Git change lists', () => {
+  it('reads compact NUL name/status records with literal paths and rename pairs', () => {
+    const path = ':tab\tnewline\n"日本語" => file'
+    const records = `M\0${path}\0R100\0old\0new\0C080\0source\0copy\0T\0type\0`
+    expect(parseGitChangeList(records, 'name-status')).toEqual([
+      { path, status: 'modified' },
+      { path: 'new', oldPath: 'old', status: 'renamed' },
+      { path: 'copy', oldPath: 'source', status: 'copied' },
+      { path: 'type', status: 'modified' }
+    ])
+    expect(parseGitChangeList('', 'name-status')).toEqual([])
+    expect(() => parseGitChangeList('R100\0old\0', 'name-status')).toThrow('Incomplete')
+    expect(() => parseGitChangeList('invalid\0path\0', 'name-status')).toThrow('Invalid')
+    expect(() => parseGitChangeList('M\0\0', 'name-status')).toThrow('Missing')
+  })
+
   it('preserves delimiters, quotes, Unicode and rename markers in paths', () => {
     const name = ':tab\tnewline\n"日本語" => file'
     const oldPath = 'old\t\nfile'
@@ -101,6 +116,12 @@ describe('Git change lists', () => {
         ])
       )
       expect(entries).toHaveLength(6)
+      expect(
+        parseGitChangeList(
+          await git(['diff', '--name-status', '-z', '-M', '-C', base, head, '--']),
+          'name-status'
+        )
+      ).toEqual(entries.map(({ added: _added, removed: _removed, ...entry }) => entry))
       expect(parseGitChangeList(await git(gitChangeListArgs(head, head)))).toEqual([])
     } finally {
       await rm(repo, { recursive: true, force: true })

@@ -1,0 +1,20 @@
+diff --git a/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js b/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
+index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c99a168e8 100644
+--- a/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
++++ b/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
+@@ -27,6 +27,15 @@ class EditorGutter extends Disposable {
+         this.editorOnDidContentSizeChange = observableSignalFromEvent('onDidContentSizeChange', this._editor.onDidContentSizeChange);
+         this.domNodeSizeChanged = observableSignal('domNodeSizeChanged');
+         this.views = new Map();
++        // Orca patch (backport of monaco-editor 0.56.0): dispose the views still on screen, or each
++        // view's toolbar menu stays registered on the global MenuRegistry and retains the whole editor.
++        this._register(toDisposable(() => {
++            for (const view of this.views.values()) {
++                view.gutterItemView.dispose();
++                view.domNode.remove();
++            }
++            this.views.clear();
++        }));
+         this._domNode.className = 'gutter monaco-editor';
+         const scrollDecoration = this._domNode.appendChild(h('div.scroll-decoration', { role: 'presentation', ariaHidden: 'true', style: { width: '100%' } })
+             .root);

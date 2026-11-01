@@ -1,15 +1,6 @@
-/**
- * Which kind of workspace a launch lands in, read from the workspace's own id.
- *
- * The three kinds are not interchangeable to a launch: only a git worktree and a folder workspace
- * have somewhere a structured session can live, and the floating terminal — a sentinel with no
- * backing repo, worktree or folder row — can host a PTY and nothing else.
- *
- * It lives in `shared` because both sides of the launch ask the same question: the renderer when a
- * user opens an agent tab, and the host when it resolves an `agent.launch` target. A host must
- * never take the answer from a caller, so it derives it here from the id it resolved itself.
- */
+/** Derive launch kind from the resolved workspace ID on renderer and host. Floating has no backing row, uses its own directory setting and stays local; never trust caller-supplied kind. */
 
+import type { AgentLaunchTarget } from './agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { parseWorkspaceKey } from './workspace-scope'
 
@@ -20,4 +11,12 @@ export function workspaceKindForWorktreeId(worktreeId: string): WorkspaceLaunchK
     return 'floating'
   }
   return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
+}
+
+/** Derive existing kind from the resolved ID, never a selector; create kind describes the workspace being created. */
+export function workspaceKindForLaunchTarget(target: AgentLaunchTarget): WorkspaceLaunchKind {
+  if (target.kind === 'existing') {
+    return workspaceKindForWorktreeId(target.worktree)
+  }
+  return target.kind === 'create-folder-workspace' ? 'folder' : 'git-worktree'
 }

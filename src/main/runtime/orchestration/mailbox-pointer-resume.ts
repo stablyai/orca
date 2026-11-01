@@ -2,34 +2,22 @@ import type {
   OrchestrationMailboxPointerMessage,
   PointerDeliveryDependencies
 } from './mailbox-pointer-delivery-contract'
-import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf } from './mailbox-owner'
+import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 import {
   MAILBOX_POINTER_ENTER_ATTEMPTED,
   MAILBOX_POINTER_RESERVED,
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from './db/messages/mailbox-pointer-enter-state'
-import type {
-  OrchestrationMailboxDeliveryFlight,
-  OrchestrationMailboxPointerState
-} from './mailbox-pointer-state'
 
-export function resumePendingOrchestrationMailboxPointer<
-  TWaiter extends OrchestrationMessageWaiter
->(args: {
-  deps: PointerDeliveryDependencies<TWaiter>
-  state: OrchestrationMailboxPointerState
-  leaf: OrchestrationMailboxLeaf
-  mailboxHandle: string
+/** Classifies persisted pointer reservations against the terminal's current process; it owns no live flight. */
+export function resumePendingOrchestrationMailboxPointer(args: {
+  deps: Pick<PointerDeliveryDependencies<never>, 'getDb' | 'resolveSubmitTarget'>
+  terminal: OrchestrationMailboxTerminal
   messages: readonly OrchestrationMailboxPointerMessage[]
-  enterDelayMs: number
-  leafKey: string
-  settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
-  redrive: (mailboxHandle: string, force?: boolean) => void
 }): boolean {
-  const ptyId = args.leaf.ptyId
+  const { ptyId } = args.terminal
   const newestSequence = args.messages.at(-1)?.sequence
-  const expectedTarget = ptyId ? args.deps.resolveSubmitTarget(args.leaf, ptyId) : null
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
   const staged = args.messages[0]
   const messageIds = args.messages.map((message) => message.id)
   const phases = new Set(args.messages.map((message) => message.pointer_enter_pending))
@@ -40,7 +28,6 @@ export function resumePendingOrchestrationMailboxPointer<
       }
     : null
   if (
-    !ptyId ||
     newestSequence === undefined ||
     !expectedTarget ||
     !staged ||

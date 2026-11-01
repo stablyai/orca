@@ -1,11 +1,6 @@
-// Every statement the journal issues against `journal_rows` / `journal_sessions`.
-//
-// Rows are keyed by the chat's identity: `(session_id, epoch, seq)`, the table's primary key. A
-// replay is one range scan of that key, and retiring an epoch deletes one range of it. Columns are
-// always named: `SELECT *` is uncacheable and can drop a column.
-
 import type Database from '../../sqlite/sync-database'
-import { serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { parseJournalRow, serializeJournalRow, type JournalRow } from './journal-row-schema'
+import { AgentSessionJournalError } from './journal-write-guards'
 
 export type JournalStoredRow = { epoch: string; seq: number; ts: number; rowJson: string }
 
@@ -19,17 +14,13 @@ const INSERT_ROW =
 const SELECT_ROWS_AFTER = `SELECT seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
-const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 const DELETE_EPOCH = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ?'
-const DELETE_UNPUBLISHED = `DELETE FROM journal_rows WHERE session_id = ?
-AND epoch IS NOT (SELECT epoch FROM journal_sessions WHERE session_id = ?)`
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
   const epoch = db.prepare(SELECT_EPOCH).get(sessionId)?.epoch
   return typeof epoch === 'string' ? epoch : null
 }
 
-/** Points the chat at `epoch`. Only an epoch change writes this row. */
 export function publishJournalSessionEpoch(
   db: Database.Database,
   identity: { sessionId: string; workspaceId: string },
@@ -41,25 +32,42 @@ export function publishJournalSessionEpoch(
 export function insertJournalRow(
   db: Database.Database,
   sessionId: string,
-  row: JournalRow
+  row: JournalRow,
+  savedAt = row.ts
 ): number {
-  const rowJson = serializeJournalRow(row)
-  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, row.ts, rowJson)
+  const { rowJson } = journalRowReadBack(sessionId, row)
+  // The table timestamp records the save; the JSON timestamp can remain pinned to item start.
+  db.prepare(INSERT_ROW).run(sessionId, row.epoch, row.seq, savedAt, rowJson)
   return Buffer.byteLength(rowJson, 'utf8')
 }
 
-// Why pages, not `.iterate()`: a lazily consumed cursor pins a read snapshot for as long as the
-// consumer reduces, and a WAL checkpoint cannot pass an open snapshot. Each page is one completed
-// statement, so the consumer's memory is bounded by a page while no snapshot outlives a fetch.
+/** Rejects a row the reader would not read back before it can break the next load, and returns the
+ * row the reader sees: without the annotations it drops as unusable. */
+export function journalRowReadBack(
+  sessionId: string,
+  row: JournalRow
+): { rowJson: string; stored: JournalRow } {
+  const rowJson = serializeJournalRow(row)
+  const readBack = parseJournalRow(rowJson)
+  if (!readBack.ok || readBack.row.seq !== row.seq) {
+    throw new AgentSessionJournalError(
+      'journal_row_rejected',
+      `the ${row.kind} row for ${sessionId} would not read back, so it was not written`
+    )
+  }
+  return { rowJson, stored: readBack.row }
+}
+
+// Page fetches release read snapshots before reduction so WAL checkpoints are not blocked.
 const EPOCH_ROW_PAGE_SIZE = 128
 
-/** The epoch's rows in sequence order, fetched one completed statement at a time. */
 export function* iterateJournalEpochRows(
   db: Database.Database,
   sessionId: string,
-  epoch: string
+  epoch: string,
+  afterSequence = Number.MIN_SAFE_INTEGER
 ): Generator<JournalStoredRow> {
-  let afterSeq = Number.MIN_SAFE_INTEGER
+  let afterSeq = afterSequence
   for (;;) {
     const page = readJournalRowsAfter(db, sessionId, epoch, afterSeq, EPOCH_ROW_PAGE_SIZE)
     yield* page
@@ -89,27 +97,10 @@ export function readJournalRowsAfter(
   )
 }
 
-/** Every row of a retired epoch, in the transaction that retires it. */
 export function deleteJournalEpochRows(
   db: Database.Database,
   sessionId: string,
   epoch: string
 ): void {
   db.prepare(DELETE_EPOCH).run(sessionId, epoch)
-}
-
-/** Rows of this chat under any epoch its pointer does not name: a copy that never published. */
-export function deleteUnpublishedJournalRows(db: Database.Database, sessionId: string): void {
-  db.prepare(DELETE_UNPUBLISHED).run(sessionId, sessionId)
-}
-
-/** Drop the rejected suffix a repair found, from `fromSeq` to the tip. */
-export function deleteJournalRowSuffix(
-  db: Database.Database,
-  sessionId: string,
-  epoch: string,
-  fromSeq: number
-): number {
-  const deleted = db.prepare(DELETE_SUFFIX).run(sessionId, epoch, fromSeq)
-  return Number(deleted.changes ?? 0)
 }

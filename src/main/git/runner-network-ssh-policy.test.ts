@@ -61,7 +61,7 @@ describe('network Git SSH policy', () => {
     expect(calls[0]?.env.GIT_SSH_COMMAND).toBeUndefined()
     expect(calls[1]?.args).toEqual(['fetch', 'origin'])
     expect(calls[1]?.env.GIT_SSH_COMMAND).toBe(
-      'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key -o BatchMode=yes'
+      'ssh -o BatchMode=yes -F ~/.ssh/github-work -i ~/.ssh/work_key'
     )
   })
 
@@ -114,7 +114,9 @@ describe('network Git SSH policy', () => {
       useConfiguredSshCommandForNetwork: true
     })
 
-    expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -i ~/.ssh/personal -o BatchMode=yes')
+    expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
+      'ssh -o BatchMode=yes -o BatchMode=no -i ~/.ssh/personal'
+    )
   })
 
   it('merges quoted ssh.exe command shapes for opted-in network calls', async () => {
@@ -137,7 +139,7 @@ describe('network Git SSH policy', () => {
     })
 
     expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
-      "'C:/Program Files/Git/usr/bin/ssh.exe' -F ~/.ssh/config -o BatchMode=yes"
+      '"C:/Program Files/Git/usr/bin/ssh.exe" -o BatchMode=yes -F ~/.ssh/config'
     )
   })
 
@@ -165,7 +167,7 @@ describe('network Git SSH policy', () => {
     })
 
     expect(capturedEnv?.GIT_SSH_COMMAND).toBe(
-      String.raw`'C:\Git\usr\bin\ssh.exe' -i 'C:\Users\me\.ssh\work_key' -o BatchMode=yes`
+      String.raw`'C:\Git\usr\bin\ssh.exe' -o BatchMode=yes -i 'C:\Users\me\.ssh\work_key'`
     )
   })
 

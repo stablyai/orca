@@ -5,6 +5,8 @@ import { searchKeywords } from './settings-search-keywords'
 const AGENT_AWAKE_TITLE_KEY = 'auto.components.settings.agent-awake-copy.modeTitle'
 const AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionWindows'
+const AGENT_AWAKE_DESCRIPTION_MAC_KEY =
+  'auto.components.settings.agent-awake-copy.modeDescriptionMac'
 const AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionDefault'
 
@@ -31,10 +33,38 @@ export function getAgentAwakeDescription(
       "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
     )
   }
+  // macOS caffeinate can't hold a closed lid awake; Linux blocks logind's lid switch.
+  if (userAgent.includes('Mac')) {
+    return translate(
+      AGENT_AWAKE_DESCRIPTION_MAC_KEY,
+      'Choose On, Agent, or Off. Agent mode prevents idle sleep while agents work, so long runs finish with the lid open. Closing the lid still puts this Mac to sleep.'
+    )
+  }
 
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
     'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+  )
+}
+
+export function getAgentAwakeLidNote(
+  userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+): string {
+  if (userAgent.includes('Windows')) {
+    return translate(
+      'auto.components.settings.agent-awake-copy.lidNoteWindows',
+      "Lid-close behavior follows this device's power settings."
+    )
+  }
+  if (userAgent.includes('Mac')) {
+    return translate(
+      'auto.components.settings.agent-awake-copy.lidNoteMac',
+      'Prevents idle sleep with the lid open; closing the lid still puts this Mac to sleep.'
+    )
+  }
+  return translate(
+    'auto.components.settings.agent-awake-copy.lidNoteDefault',
+    'Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
 }
 

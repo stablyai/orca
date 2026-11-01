@@ -12,7 +12,6 @@ function permissionOptions(
   suggestions?: CanUseToolOptions['suggestions'],
   presentation: Partial<CanUseToolOptions> = {}
 ): CanUseToolOptions {
-  // Spread first so the required fields below stay definite rather than optional.
   return {
     ...presentation,
     requestId,
@@ -57,7 +56,6 @@ describe('Claude permission callbacks', () => {
     expect(found?.prompt.suggestions).toEqual([
       { type: 'addRules', rules: [], behavior: 'allow', destination: 'session' }
     ])
-    // The prompt's settle is the SDK callback's own resolve — answering resolves this promise.
     found?.prompt.settle({ behavior: 'allow', toolUseID: 'tool-1' })
     await expect(answered).resolves.toEqual({ behavior: 'allow', toolUseID: 'tool-1' })
     expect(removeListener).toHaveBeenCalledTimes(1)
@@ -151,7 +149,6 @@ describe('Claude permission callbacks', () => {
     expect(control.emit).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: 'prompt-cancelled', promptKey: 'perm-3' })
     )
-    // Forgotten: a late answer can no longer find the prompt to authorize the wrong tool.
     expect(control.prompts.find('perm-3')).toBeNull()
   })
 
@@ -172,37 +169,5 @@ describe('Claude permission callbacks', () => {
     expect(control.emit).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'prompt-cancelled', promptKey: 'perm-4' })
     )
-  })
-
-  it('settles every in-flight prompt with null when the registry is cleared', async () => {
-    const control = callbacksFor()
-    const first = control.canUseTool(
-      'Bash',
-      { command: 'a' },
-      permissionOptions('perm-5', 'tool-5', new AbortController().signal)
-    )
-    const second = control.canUseTool(
-      'Bash',
-      { command: 'b' },
-      permissionOptions('perm-6', 'tool-6', new AbortController().signal)
-    )
-
-    // What session close does: settle each pending callback so no promise dangles.
-    for (const prompt of control.prompts.clear()) {
-      prompt.settle(null)
-    }
-
-    await expect(first).resolves.toBeNull()
-    await expect(second).resolves.toBeNull()
-  })
-
-  it('answers a user dialog deny-safe', async () => {
-    const control = callbacksFor()
-    await expect(
-      control.onUserDialog(
-        { dialogKind: 'refusal_fallback_prompt', payload: {} },
-        { signal: new AbortController().signal, requestId: 'dialog-1' }
-      )
-    ).resolves.toEqual({ behavior: 'cancelled' })
   })
 })

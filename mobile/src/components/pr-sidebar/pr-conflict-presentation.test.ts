@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import {
   buildMergeabilityRefreshCommands,
-  hasMergeConflicts,
   resolveConflictDisplay
 } from './pr-conflict-presentation'
 
@@ -18,14 +17,6 @@ function pr(over: Partial<PRInfo>): PRInfo {
     ...over
   }
 }
-
-describe('hasMergeConflicts', () => {
-  it('is true only for CONFLICTING', () => {
-    expect(hasMergeConflicts(pr({ mergeable: 'CONFLICTING' }))).toBe(true)
-    expect(hasMergeConflicts(pr({ mergeable: 'MERGEABLE' }))).toBe(false)
-    expect(hasMergeConflicts(pr({ mergeable: 'UNKNOWN' }))).toBe(false)
-  })
-})
 
 describe('resolveConflictDisplay', () => {
   it('builds safe mergeability refresh commands', () => {

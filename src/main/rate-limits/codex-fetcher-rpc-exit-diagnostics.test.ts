@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RunProcess from '../../shared/child-process/run-process'
+import type * as RunProcess from '@orca/process-host'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 
 const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => ({
@@ -11,8 +11,13 @@ const { ptySpawnMock, resolveCodexCommandMock, stubScript } = vi.hoisted(() => (
   resolveCodexCommandMock: vi.fn()
 }))
 
-// Runs the node stub in place of the resolved CLI, through the real chokepoint.
-vi.mock('../../shared/child-process/run-process', async (importOriginal) => {
+// Run the Node fixture through the real process chokepoint; worker transport has separate coverage.
+vi.mock(
+  '../worker-thread-child-process/worker-thread-child-process',
+  () =>
+    import('../worker-thread-child-process/worker-thread-child-process-in-process.test-fixtures')
+)
+vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof RunProcess>()
   return {
     ...actual,
@@ -47,8 +52,7 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
 
 import { fetchCodexRateLimits } from './codex-fetcher'
 
-// Dies the way a real app-server does: complains on stderr, then exits nonzero
-// once the client has spoken, so the initialize write can never race an EPIPE.
+// Wait for initialization bytes before exiting so stderr diagnosis cannot race an EPIPE.
 const STUB_CODEX_SOURCE = `
 process.stdin.on('data', () => {
   process.stderr.write(process.env.ORCA_STUB_CODEX_STDERR ?? '')
@@ -62,7 +66,7 @@ let stubPath: string
 function runStub(stderr: string, exitCode: number): Promise<{ error: string | null }> {
   process.env.ORCA_STUB_CODEX_STDERR = stderr
   process.env.ORCA_STUB_CODEX_EXIT_CODE = String(exitCode)
-  // Why: a temp home with no auth.json keeps the HTTP fallback off the developer's real login.
+  // Empty fixture auth keeps HTTP fallback away from the developer's real login.
   return fetchCodexRateLimits({ codexHomePath: tempRoot })
 }
 
@@ -109,8 +113,6 @@ describe('Codex RPC exit diagnostics', () => {
     )
 
     expect(result.error).toBe('Your ChatGPT session could not be refreshed. Please sign in again.')
-    // The renderer's re-auth warning gates on exactly this predicate;
-    // codex-account-auth-warning.test.ts asserts the surfaced string end-to-end.
     expect(isCodexAuthError(result.error)).toBe(true)
   })
 

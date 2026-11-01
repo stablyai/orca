@@ -11,13 +11,8 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-// Reproduction harness for issue #5096: terminal output delay and input lag
-// reported to grow with session history and disappear after compacting/clearing
-// the agent session. Measures keypress→echo latency through the full pipeline
-// (renderer keyboard → PTY → echo → xterm paint-adjacent buffer read) at three
-// scrollback fills. The fill also keeps the session continuously dirty, so
-// daemon checkpoint serialization (every 5s) lands inside the sampling window
-// exactly as it does in real agent sessions.
+// #5096: measure keypress→PTY echo→xterm-buffer detection at three scrollback fills, not actual paint.
+// Keep the session dirty so 5s daemon checkpoint serialization overlaps sampling as in live agent sessions.
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
 const MAX_WORST_KEY_LATENCY_MS = 1_000
@@ -99,10 +94,7 @@ process.stdin.on('data', (chunk) => {
 `
 }
 
-// Why not getTerminalContent: that helper serializes the entire buffer per
-// poll (~1.2s at 50k rows, on the renderer main thread), which both inflates
-// the measured latency and causes the very lag this spec quantifies. Read only
-// the trailing rows so measurement overhead stays constant across fills.
+// Read trailing rows: full-buffer serialization costs ~1.2s at 50k rows on the renderer thread and creates the lag being measured.
 const MARKER_SCAN_TRAILING_ROWS = 80
 
 async function recentTerminalTextIncludes(page: Page, marker: string): Promise<boolean> {
@@ -241,8 +233,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
           `HIST_FILL_DONE_${runId}_${phaseIndex + 1}`,
           FILL_DONE_TIMEOUT_MS
         )
-        // Let the renderer drain queued output and let one daemon checkpoint
-        // tick land before sampling, mirroring steady-state agent sessions.
+        // Drain queued output and allow a daemon checkpoint before steady-state sampling.
         await orcaPage.waitForTimeout(2_000)
         await focusActiveTerminalInput(orcaPage)
         const cumulativeRows = FILL_PHASES.slice(0, phaseIndex + 1).reduce(
@@ -259,8 +250,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
         seq = measured.nextSeq
       }
 
-      // Why stdout too: the list reporter does not surface annotations, and
-      // the per-phase numbers are the deliverable of this harness.
+      // Print phase numbers because the list reporter hides annotations.
       process.stdout.write(
         `\n[history-latency] ${JSON.stringify(
           phases.map(({ label, bufferRows, medianMs, worstMs }) => ({
@@ -287,9 +277,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
           phase.medianMs,
           `${phase.label}: median latency regressed with history size`
         ).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-        // Why: the fill keeps the session dirty so a daemon checkpoint
-        // serialization can land inside a single sample; guard the p90 so one
-        // environment-dominated spike is not a failure while median stays strict.
+        // A dirty-session checkpoint may hit one sample; gate p90 to tolerate isolated environmental spikes while keeping median strict.
         expect(
           percentile(phase.samples, 0.9),
           `${phase.label}: sustained (p90) latency regressed with history size`

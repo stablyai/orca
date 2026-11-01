@@ -3,9 +3,23 @@ export type NetworkProxySettings = {
   httpProxyBypassRules?: string | null
 }
 
+// One English table: `message` stays English; the settings UI translates by code.
+export const PROXY_URL_FAILURE_COPY = {
+  tooLong: 'Proxy URL is too long.',
+  invalid: 'Enter a valid proxy URL.',
+  unsupportedProtocol: 'Use an http, https, socks, socks4, or socks5 proxy URL.',
+  missingHost: 'Proxy URL must include a host.'
+} as const
+
+export type ProxyUrlFailureCode = keyof typeof PROXY_URL_FAILURE_COPY
+
 export type ProxyUrlValidationResult =
   | { ok: true; value: string; message?: undefined }
-  | { ok: false; value: ''; message: string }
+  | { ok: false; value: ''; message: string; code: ProxyUrlFailureCode }
+
+function proxyUrlFailure(code: ProxyUrlFailureCode): ProxyUrlValidationResult {
+  return { ok: false, value: '', message: PROXY_URL_FAILURE_COPY[code], code }
+}
 
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
@@ -19,6 +33,8 @@ const PROXY_ENV_KEYS = [
   'http_proxy'
 ] as const
 const NO_PROXY_ENV_KEYS = ['NO_PROXY', 'no_proxy'] as const
+/** Every variable the environment proxy readers below consult. */
+export const PROXY_ENVIRONMENT_KEYS: readonly string[] = [...PROXY_ENV_KEYS, ...NO_PROXY_ENV_KEYS]
 
 function formatProxyUrl(url: URL): string {
   const auth =
@@ -35,24 +51,20 @@ export function normalizeProxyUrl(value: unknown): ProxyUrlValidationResult {
     return { ok: true, value: '' }
   }
   if (trimmed.length > PROXY_URL_MAX_LENGTH) {
-    return { ok: false, value: '', message: 'Proxy URL is too long.' }
+    return proxyUrlFailure('tooLong')
   }
 
   let parsed: URL
   try {
     parsed = new URL(trimmed)
   } catch {
-    return { ok: false, value: '', message: 'Enter a valid proxy URL.' }
+    return proxyUrlFailure('invalid')
   }
   if (!PROXY_PROTOCOLS.has(parsed.protocol)) {
-    return {
-      ok: false,
-      value: '',
-      message: 'Use an http, https, socks, socks4, or socks5 proxy URL.'
-    }
+    return proxyUrlFailure('unsupportedProtocol')
   }
   if (!parsed.hostname) {
-    return { ok: false, value: '', message: 'Proxy URL must include a host.' }
+    return proxyUrlFailure('missingHost')
   }
   return { ok: true, value: formatProxyUrl(parsed) }
 }
@@ -107,9 +119,7 @@ export function buildConfiguredProxyEnv(
     all_proxy: proxy.value
   }
   const bypassRules = normalizeProxyBypassRules(settings?.httpProxyBypassRules)
-  // Why: explicit Orca proxy settings should not accidentally inherit a
-  // parent shell's NO_PROXY. The bypass field above is the single source for
-  // local child process bypass behavior when a configured proxy is present.
+  // Explicit proxy settings must not inherit shell NO_PROXY; only the configured bypass field controls child-process exclusions.
   const noProxy = bypassRules ? bypassRules.replaceAll(';', ',') : ''
   env.NO_PROXY = noProxy
   env.no_proxy = noProxy

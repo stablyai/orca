@@ -27,10 +27,18 @@ function normalizeClientSessionTabSelection(
   if (!activeTabId && !activeGroupId && Object.keys(activeTabIdByGroupId).length === 0) {
     return null
   }
-  return { activeTabId, activeGroupId, activeTabIdByGroupId }
+  const recentTabIds = Array.isArray(candidate.recentTabIds)
+    ? candidate.recentTabIds.filter((tabId): tabId is string => typeof tabId === 'string')
+    : []
+  return {
+    activeTabId,
+    activeGroupId,
+    activeTabIdByGroupId,
+    ...(recentTabIds.length > 0 ? { recentTabIds } : {})
+  }
 }
 
-// Why: this state comes off disk (and, for remote runtimes, another machine); a bad payload must degrade to "no selection", not throw.
+// Malformed disk/remote payloads must degrade to no selection without throwing.
 export function normalizePersistedMobileClientTabSelections(
   raw: unknown
 ): PersistedMobileClientTabSelections {

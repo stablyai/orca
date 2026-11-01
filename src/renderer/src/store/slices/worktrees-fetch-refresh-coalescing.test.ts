@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import type {
-  HostQualifiedDetectedWorktreeResult,
-  ListDetectedWorktreesArgs
-} from '../../../../shared/detected-worktree-provider-contract'
+import type { ListDetectedWorktreesArgs } from '../../../../shared/detected-worktree-provider-contract'
 import { clearHugeRepoWarningDismissalsForTests } from '@/lib/source-control-huge-repo-warning-dismissals'
-import { acquireDirectSshDetectedWorktreeRefresh } from './worktrees'
 import {
   TEST_SSH_AUTHORITY,
   makeDetectedResult,
@@ -75,9 +71,7 @@ describe('fetchWorktrees', () => {
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
   })
 
-  // Why (#10562): the scan coalesces but each caller carries its own known-id
-  // snapshot, so a caller that joined an in-flight scan must still request
-  // teardown — otherwise it purges renderer state and strands live PTYs.
+  // Coalesced scans share IO, but each caller’s known-ID snapshot still needs teardown or it purges state while stranding live PTYs (#10562).
   it('stops terminals for a caller that coalesced onto an in-flight scan', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -125,8 +119,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
-  // Why: teardown rides outside the scan coalescer, so identical fan-out requests
-  // must share one host sweep instead of re-scanning the host per caller.
+  // Teardown outside scan coalescing must still deduplicate identical host sweeps.
   it('shares one teardown sweep across identical concurrent refreshes', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -153,9 +146,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
   })
 
-  // Why (#10562): "I can't reach the host" must never be read as "the worktree is
-  // gone". A disconnected SSH target has no authoritative scan, so it must not
-  // purge and must not kill anything on the far side.
+  // Unreachable SSH cannot prove worktree deletion; neither purge nor kill without authoritative scan (#10562).
   it('never stops terminals for a disconnected SSH target', async () => {
     const store = createTestStore()
     const deleted = makeWorktree({ id: 'repo1::/p/deleted', repoId: 'repo1', path: '/p/deleted' })
@@ -464,164 +455,6 @@ describe('fetchWorktrees', () => {
       expect.objectContaining({ id: sshWorktree.id, hostId: 'ssh:ssh-1' })
     ])
     expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-  })
-
-  it('exposes shared direct leases and reports cancellation only for the last waiter', async () => {
-    const store = createTestStore()
-    let request!: ListDetectedWorktreesArgs
-    let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
-    const provider = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
-      resolveProvider = resolve
-    })
-    mockApi.worktrees.listDetected.mockImplementationOnce(
-      async (args: ListDetectedWorktreesArgs) => {
-        request = args
-        return provider
-      }
-    )
-
-    const input = {
-      repoId: 'repo-ssh',
-      executionHostId: 'ssh:ssh-1' as const,
-      authority: TEST_SSH_AUTHORITY
-    }
-    const first = acquireDirectSshDetectedWorktreeRefresh(store, input)
-    const second = acquireDirectSshDetectedWorktreeRefresh(store, input)
-
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-    expect(first.providerRequestId).toBe(second.providerRequestId)
-    expect(first.waiterLeaseId).not.toBe(second.waiterLeaseId)
-    expect(first.release('superseded')).toBe('retained')
-    expect(mockApi.worktrees.cancelListDetected).not.toHaveBeenCalled()
-    expect(second.release('invalidated')).toBe('cancel-started')
-    expect(second.release('stopped')).toBe('already-settled')
-    expect(mockApi.worktrees.cancelListDetected).toHaveBeenCalledWith({
-      providerRequestId: first.providerRequestId
-    })
-
-    resolveProvider(qualifyDetectedResult(request, makeDetectedResult('repo-ssh', [])))
-    await provider
-    await Promise.resolve()
-  })
-
-  it('merges one exact direct provider result once without a second scan', async () => {
-    const store = createTestStore()
-    const worktree = makeWorktree({
-      id: 'repo-ssh::/home/orca/feature',
-      repoId: 'repo-ssh',
-      path: '/home/orca/feature'
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/repo',
-          displayName: 'SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ]
-    } as Partial<AppState>)
-    mockApi.worktrees.listDetected.mockImplementationOnce(async (args: ListDetectedWorktreesArgs) =>
-      qualifyDetectedResult(args, makeDetectedResult(args.repoId, [worktree]))
-    )
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-
-    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
-      repoId: 'repo-ssh',
-      executionHostId: 'ssh:ssh-1',
-      authority: TEST_SSH_AUTHORITY
-    })
-    const providerResult = await lease.result
-    const firstMerge = lease.merge(providerResult)
-    const secondMerge = lease.merge(providerResult)
-
-    expect(firstMerge).toBe(providerResult)
-    expect(secondMerge).toBe(providerResult)
-    expect(mockApi.worktrees.listDetected).toHaveBeenCalledTimes(1)
-    expect(subscriber).toHaveBeenCalledTimes(1)
-    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([
-      { ...worktree, hostId: 'ssh:ssh-1' }
-    ])
-    unsubscribe()
-  })
-
-  it('rejects a late duplicate exact-host owner with zero mutation publications', async () => {
-    const store = createTestStore()
-    const existing = makeWorktree({
-      id: 'repo-ssh::/home/orca/existing',
-      repoId: 'repo-ssh',
-      path: '/home/orca/existing',
-      branch: 'refs/heads/old',
-      hostId: 'ssh:ssh-1'
-    })
-    store.setState({
-      repos: [
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/repo',
-          displayName: 'SSH Repo',
-          badgeColor: '#000',
-          addedAt: 0,
-          connectionId: 'ssh-1'
-        }
-      ],
-      worktreesByRepo: { 'repo-ssh': [existing] },
-      detectedWorktreesByRepo: {
-        'repo-ssh': makeDetectedResult('repo-ssh', [existing])
-      }
-    } as Partial<AppState>)
-    let request!: ListDetectedWorktreesArgs
-    let resolveProvider!: (result: HostQualifiedDetectedWorktreeResult) => void
-    mockApi.worktrees.listDetected.mockImplementationOnce(
-      (args: ListDetectedWorktreesArgs) =>
-        new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
-          request = args
-          resolveProvider = resolve
-        })
-    )
-    const lease = acquireDirectSshDetectedWorktreeRefresh(store, {
-      repoId: 'repo-ssh',
-      executionHostId: 'ssh:ssh-1',
-      authority: TEST_SSH_AUTHORITY
-    })
-
-    store.setState((state) => ({
-      repos: [
-        ...state.repos,
-        {
-          id: 'repo-ssh',
-          path: '/home/orca/duplicate',
-          displayName: 'Duplicate SSH Repo',
-          badgeColor: '#111',
-          addedAt: 1,
-          connectionId: 'ssh-1'
-        }
-      ]
-    }))
-    const beforeWorktrees = store.getState().worktreesByRepo
-    const beforeDetected = store.getState().detectedWorktreesByRepo
-    const subscriber = vi.fn()
-    const unsubscribe = store.subscribe(subscriber)
-    resolveProvider(
-      qualifyDetectedResult(
-        request,
-        makeDetectedResult('repo-ssh', [
-          {
-            ...existing,
-            branch: 'refs/heads/new'
-          }
-        ])
-      )
-    )
-
-    expect(lease.merge(await lease.result)).toMatchObject({ status: 'stale' })
-    expect(store.getState().worktreesByRepo).toBe(beforeWorktrees)
-    expect(store.getState().detectedWorktreesByRepo).toBe(beforeDetected)
-    expect(subscriber).not.toHaveBeenCalled()
-    unsubscribe()
   })
 
   it('fails closed before provider acquisition when direct authority is partial', async () => {

@@ -61,6 +61,7 @@ export function packCompilerCache({ root = ROOT, identity = compilerCacheIdentit
   const esbuildDir = dirname(require.resolve('esbuild/package.json'))
   const nativeName = `@esbuild/${process.platform}-${process.arch}`
   const nativeDir = dirname(require.resolve(`${nativeName}/package.json`, { paths: [esbuildDir] }))
+  const yamlDir = dirname(require.resolve('yaml/package.json'))
   rmSync(identity.path, { recursive: true, force: true })
   mkdirSync(join(identity.path, 'node_modules', '@esbuild'), { recursive: true })
   cpSync(esbuildDir, join(identity.path, 'node_modules', 'esbuild'), {
@@ -68,6 +69,10 @@ export function packCompilerCache({ root = ROOT, identity = compilerCacheIdentit
     dereference: true
   })
   cpSync(nativeDir, join(identity.path, 'node_modules', nativeName), {
+    recursive: true,
+    dereference: true
+  })
+  cpSync(yamlDir, join(identity.path, 'node_modules', 'yaml'), {
     recursive: true,
     dereference: true
   })
@@ -103,7 +108,7 @@ export async function activateCompilerCache({
     }
     mkdirSync(join(dependencies, '@esbuild'), { recursive: true })
     created = true
-    for (const name of ['esbuild', `@esbuild/${process.platform}-${process.arch}`]) {
+    for (const name of ['esbuild', `@esbuild/${process.platform}-${process.arch}`, 'yaml']) {
       symlinkSync(join(identity.path, 'node_modules', name), join(dependencies, name), 'dir')
     }
     const require = createRequire(join(root, 'package.json'))

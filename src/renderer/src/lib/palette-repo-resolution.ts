@@ -77,7 +77,6 @@ export function resolvePaletteWorktree<T extends PaletteWorktreeIdentity>(
   )
 }
 
-/** Resolve the repo that owns a worktree, preserving host collisions. */
 export function resolvePaletteRepoForWorktree<T extends { displayName?: string | null }>(
   worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
   repoMap: ReadonlyMap<string, T>,

@@ -1,23 +1,9 @@
-// Server-side coalescing for streamed assistant text.
-//
-// Providers emit one notification per token. Journaling each one would write a
-// row and wake every subscriber per token, so a single long answer costs
-// thousands of appends and thousands of stream frames on a phone. Deltas are
-// therefore accumulated and flushed on a short window; the journal row is a
-// SNAPSHOT of the text so far, which is also what makes dropping intermediate
-// frames safe for a reconnecting client.
-//
-// The window applies to text only. Lifecycle — an item completing, a turn
-// ending, an approval arriving — bypasses it by flushing first, so nothing can
-// be journaled ahead of the text that preceded it.
+// Coalesce token deltas into text snapshots to reduce journal writes and subscriber frames.
+// Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
-/** Long enough to fold a burst of tokens into one row, short enough that the
- *  text still reads as streaming. */
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
 
-/** Matches the admitted live provider-record envelope. The framer owns record
- * admission; this independently prevents many legal deltas from rebuilding an
- * unbounded string after they have crossed that boundary. */
+/** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
 export const AGENT_SESSION_STREAMED_TEXT_TOTAL_MAX_BYTES = 32 * 1024 * 1024
 export const AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER = '\n[Orca: streamed output truncated]'
@@ -30,32 +16,32 @@ export type AgentSessionDeltaSnapshot = {
 }
 
 export type AgentSessionDeltaCoalescerDeps = {
-  /** Called with the FULL text accumulated for the key, not the increment. */
+  /** Emit the complete snapshot, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
+  /** False skips an accepted snapshot; emit reports actual sink refusal. */
+  shouldEmit?: (key: string, textLength: number) => boolean
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
-  /** Maximum distinct item streams retained at once. */
   maxStreams?: number
-  /** The caller byte-bounds protected metadata; only ordinary streams use the count cap. */
+  /** Caller byte-bounds protected metadata; only ordinary streams use the count cap. */
   isProtected?: (key: string) => boolean
-  /** Injected by tests so a window can be driven without real time. */
   schedule?: (run: () => void, ms: number) => () => void
 }
 
 export type AgentSessionDeltaCoalescer = {
-  /** Returns false when a full stream cannot be flushed to admit this new key. */
+  /** False means a retained stream could not flush to admit this key. */
   append: (key: string, delta: string) => boolean
-  /** Emit one stream now, if it has unflushed text. */
   flush: (key: string) => boolean
-  /** Emit every stream now. The lifecycle bypass. */
+  /** Lifecycle barriers flush every stream first. */
   flushAll: () => boolean
-  /** Drop a stream without emitting — its authoritative body arrived, so the
-   *  accumulated text is now the stale copy. */
+  /** Authoritative bodies supersede buffered text; drop it without emission. */
   forget: (key: string) => void
   dispose: () => void
-  /** Bounded last-known state for terminalizing a rejected completion. */
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
+  /** External writes satisfy the current snapshot until more text arrives. */
+  markFlushed: (key: string) => void
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -78,6 +64,7 @@ export function createAgentSessionDeltaCoalescer(
     {
       chunks: string[]
       retainedBytes: number
+      textLength: number
       observedBytes: number
       truncated: boolean
       dirty: boolean
@@ -90,6 +77,10 @@ export function createAgentSessionDeltaCoalescer(
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
     if (!stream?.dirty) {
+      return true
+    }
+    if (deps.shouldEmit?.(key, stream.textLength) === false) {
+      stream.dirty = false
       return true
     }
     const text = stream.chunks.join('')
@@ -129,8 +120,7 @@ export function createAgentSessionDeltaCoalescer(
     append: (key, delta) => {
       let stream = streams.get(key)
       if (!stream) {
-        // Evict the oldest stream before admitting a new attacker-controlled
-        // id. Flush first so the retained prefix is durably visible.
+        // Flush before eviction so a new untrusted ID cannot erase observed output.
         while (!deps.isProtected?.(key) && evictable.size >= maxStreams) {
           const oldest = evictable.values().next().value
           if (oldest) {
@@ -138,8 +128,7 @@ export function createAgentSessionDeltaCoalescer(
               evictable.delete(oldest)
               continue
             }
-            // Under sink backpressure the oldest stream must remain available
-            // for a later retry; dropping it would lose already-observed output.
+            // Backpressure must retain observed text for retry.
             if (!flushKey(oldest)) {
               return false
             }
@@ -155,6 +144,7 @@ export function createAgentSessionDeltaCoalescer(
         stream = {
           chunks: [],
           retainedBytes: 0,
+          textLength: 0,
           observedBytes: 0,
           truncated: false,
           dirty: false
@@ -178,14 +168,16 @@ export function createAgentSessionDeltaCoalescer(
           streamLimit
         )
         totalRetainedBytes += next.retainedBytes - stream.retainedBytes
+        stream.textLength = next.truncated
+          ? (next.chunks[0]?.length ?? 0)
+          : stream.textLength + delta.length
         stream.chunks = next.chunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
         stream.dirty = true
       }
       streams.set(key, stream)
-      // One timer for every stream: a shared deadline bounds latency the same
-      // way and costs one wakeup per window instead of one per stream.
+      // Share one timer across streams to bound wakeups per window.
       scheduleFlush()
       return true
     },
@@ -215,6 +207,27 @@ export function createAgentSessionDeltaCoalescer(
             truncated: stream.truncated
           }
         : null
+    },
+    dirty: () =>
+      [...streams].flatMap(([key, stream]) =>
+        stream.dirty
+          ? [
+              {
+                key,
+                snapshot: {
+                  text: stream.chunks.join(''),
+                  observedBytes: stream.observedBytes,
+                  truncated: stream.truncated
+                }
+              }
+            ]
+          : []
+      ),
+    markFlushed: (key) => {
+      const stream = streams.get(key)
+      if (stream) {
+        stream.dirty = false
+      }
     }
   }
 }
@@ -228,8 +241,7 @@ function appendWithinUtf8ByteLimit(
 ): { chunks: string[]; retainedBytes: number; truncated: boolean } {
   const available = Math.max(0, maxBytes - currentBytes)
   if (deltaBytes <= available) {
-    // The caller owns the per-stream array; append in place so each token is
-    // amortized O(1) instead of copying the complete prefix on every delta.
+    // Append in place to avoid copying the entire prefix for every token.
     if (delta.length > 0) {
       current.push(delta)
     }
@@ -281,7 +293,7 @@ function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): num
     }
     const written = buffer.write(chunk, end, buffer.length - end, 'utf8')
     end += written
-    // Encode each chunk independently to preserve split-surrogate replacement.
+    // Independent chunk encoding preserves split-surrogate replacement.
     if (written < Buffer.byteLength(chunk, 'utf8')) {
       return end
     }

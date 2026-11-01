@@ -8,7 +8,6 @@ import {
   type MainProcessRuntimeLaunchOptions
 } from './main-process-runtime-launch'
 
-/** Runs the ready-phase composition in the same dependency order as the legacy entry point. */
 export async function initializeMainProcessReady(
   launchOptions: MainProcessRuntimeLaunchOptions
 ): Promise<void> {
@@ -21,6 +20,7 @@ export async function initializeMainProcessReady(
   }
   try {
     await initializeReadyFoundation()
+    await state.wslMoveStartupRewriteReady
     await initializeReadyRuntimeServices()
     // Window creation can proceed while translations and the native menu initialize.
     const i18nAndMenuReady = initializeMainProcessI18nAndMenu()

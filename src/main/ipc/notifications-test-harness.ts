@@ -1,8 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 
-// Why: mock state lives in this module so each split suite's `vi.mock` factory can
-// pull it in with a lazy dynamic import (hoisted factories cannot close over imports).
+// Split suites load mock state dynamically because hoisted factories cannot capture imports.
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type NotificationSpy = Mock<(...args: never[]) => unknown>
@@ -24,6 +23,8 @@ export const notificationCtorMock: NotificationSpy = vi.fn(function () {
   }
 })
 export const notificationIsSupportedMock = vi.fn(() => true)
+export const notificationRemoveMock: NotificationSpy = vi.fn()
+export const notificationRemoveGroupMock: NotificationSpy = vi.fn()
 export const getAllWindowsMock = vi.fn(() => [])
 export const getTrustedUIRendererWindowMock: NotificationSpy = vi.fn()
 export const shellOpenExternalMock: NotificationSpy = vi.fn()
@@ -40,7 +41,9 @@ export function createElectronModuleMock(): Record<string, unknown> {
       handle: handleMock
     },
     Notification: Object.assign(notificationCtorMock, {
-      isSupported: notificationIsSupportedMock
+      isSupported: notificationIsSupportedMock,
+      remove: notificationRemoveMock,
+      removeGroup: notificationRemoveGroupMock
     }),
     BrowserWindow: {
       getAllWindows: getAllWindowsMock
@@ -62,9 +65,7 @@ export function createTrustedUIRendererModuleMock(): Record<string, unknown> {
   return { getTrustedUIRendererWindow: getTrustedUIRendererWindowMock }
 }
 
-// Why: notifications.ts pulls in the tray module (for the minimized attention
-// dot), which transitively loads app-icon/electron-toolkit; stub it so these
-// suites stay focused on notification dispatch and avoid that import chain.
+// Stub tray imports to keep notification suites independent of app-icon/toolkit setup.
 export function createSystemTrayModuleMock(): Record<string, unknown> {
   return { setTrayAttention: setTrayAttentionMock }
 }
@@ -79,6 +80,8 @@ export function resetNotificationDispatchMocks(): void {
   notificationOnceMock.mockClear()
   notificationRemoveListenerMock.mockClear()
   notificationIsSupportedMock.mockReset()
+  notificationRemoveMock.mockReset()
+  notificationRemoveGroupMock.mockReset()
   notificationIsSupportedMock.mockReturnValue(true)
   readAuthorizationStatusMock.mockReset()
   readAuthorizationStatusMock.mockResolvedValue(null)
@@ -108,6 +111,17 @@ export function getDispatchHandler(): (event: unknown, args: unknown) => unknown
 export function getDismissHandler(): (event: unknown, ...args: unknown[]) => unknown {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selected by its exact channel; the handler takes (event, ids, paneKeys?).
   return findRegisteredHandler('notifications:dismiss') as (
+    event: unknown,
+    ...args: unknown[]
+  ) => unknown
+}
+
+export function getSettleStructuredPromptsHandler(): (
+  event: unknown,
+  ...args: unknown[]
+) => unknown {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selected by its exact channel; the handler takes (event, scope, sessionId).
+  return findRegisteredHandler('notifications:settleStructuredPrompts') as (
     event: unknown,
     ...args: unknown[]
   ) => unknown

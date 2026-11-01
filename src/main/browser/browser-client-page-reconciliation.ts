@@ -45,6 +45,7 @@ export function executeBrowserClientPageReconciliationCommand(
       return closeReconciledPage(context, event, signal)
     case 'restorePage':
       return restorePage(context, event, signal)
+    case 'switchProfile':
     case 'createPage':
     case 'navigate':
     case 'automation':
@@ -84,7 +85,10 @@ async function reclaimPage(
     page.registration,
     page.registration.partition
   )
-  const nextRegistration = { ...page.registration, pageHostGeneration: event.pageHostGeneration }
+  const nextRegistration = {
+    ...page.registration,
+    pageHostGeneration: event.pageHostGeneration
+  }
   const nextRendererPage = browserClientPageIdentity(nextRegistration, nextRegistration.partition)
   const rekeyGuestLifecycle = context.routeWebContents.rekeyGuestLifecycle
   const grantReconciledNavigation = context.routeWebContents.grantReconciledNavigation
@@ -226,6 +230,9 @@ function reconciliationCreateEvent(
     command: {
       type: 'createPage',
       browserProfileId: event.command.browserProfileId,
+      ...(event.command.type === 'restorePage' && event.command.profile
+        ? { profile: event.command.profile }
+        : {}),
       executionHostKey: event.command.executionHostKey,
       ...(event.command.workspaceId ? { workspaceId: event.command.workspaceId } : {})
     }

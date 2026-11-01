@@ -118,8 +118,7 @@ test('creates paired split-pane tabs in the focused pane without disturbing the 
   }
 })
 
-// Why: a remote-owned browser closes on the host and never runs the local closeUnifiedTab
-// collapse, so the emptied split pane can only disappear via the snapshot reconciler.
+// Remote close skips local closeUnifiedTab collapse; only snapshot reconciliation can remove the empty split.
 test('collapses the split pane when its last paired browser tab is closed from the tab strip', async ({
   testRepoPath
 }, testInfo) => {
@@ -153,9 +152,7 @@ test('collapses the split pane when its last paired browser tab is closed from t
     )
     expect(browserTab?.contentType).toBe('browser')
 
-    // Why: a local-only close would collapse the pane on its own, so this test only guards the
-    // remote-owned route while the host really holds the page. Ask the host — a client-side redo
-    // of the ownership rule stops guarding the moment that rule changes.
+    // Require real host ownership before close; a local-only close would collapse independently and miss this seam.
     const hostPagesBefore = await readHostBrowserPageIds(fixture.host.client, testRepoPath)
     expect(hostPagesBefore).toHaveLength(1)
 
@@ -190,8 +187,7 @@ test('collapses the split pane when its last paired browser tab is closed from t
     }
     const collapsed = await readPanes(client.page, worktreeId)
     expect(collapsed.activeGroupId).toBe(rootGroupId)
-    // Why: the pane collapsing proves the client removed its mirror; only the host's own tab list
-    // proves the close actually reached the runtime that owned the page.
+    // Require host inventory removal too; client pane collapse alone can hide failed remote teardown.
     await expect
       .poll(() => readHostBrowserPageIds(fixture.host.client, testRepoPath), {
         timeout: 30_000,
@@ -203,8 +199,7 @@ test('collapses the split pane when its last paired browser tab is closed from t
   }
 })
 
-// Why: terminals record a client placement derived from targetGroupId (the host does not
-// know client-minted split groups), so the mirrored tab must land in the requesting pane.
+// Respect client targetGroupId placement because host cannot know desktop-minted split groups.
 test('places a paired split-pane terminal in the pane that asked for it', async ({
   testRepoPath
 }, testInfo) => {

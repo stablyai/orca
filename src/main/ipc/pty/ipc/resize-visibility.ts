@@ -1,4 +1,4 @@
-import { getPtyIpc } from '../../pty-host-bindings'
+import { getPtyIpc } from '../pty-host-bindings'
 import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
@@ -7,10 +7,11 @@ import type {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
+  consumeHiddenRendererPtyDropMemory,
   recordHiddenRendererPtyDataDrop,
   setRendererPtyDeliveryInterest,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from '../delivery/pty-hidden-delivery-gate'
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
   activeRendererPtys,
@@ -28,20 +29,22 @@ import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
+import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
+import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   const ipcMain = getPtyIpc()
   const { runtime, mainWindow } = session
 
-  // Why: resize is fire-and-forget — ipcMain.on (not .handle) halves IPC traffic by skipping the empty acknowledgement reply.
+  // Fire-and-forget resize avoids an empty acknowledgement round trip.
   ipcMain.removeAllListeners('pty:resize')
   ipcMain.on('pty:resize', (_event, args: { id: string; cols: number; rows: number }) => {
-    // Why: after a desktop-fit override change the renderer's safeFit cascade re-measures ALL panes (background ones at full width), so suppress every pty:resize in this window to avoid corrupting PTY dimensions.
+    // Fit overrides remeasure all panes; suppress the cascade so background full-width measurements cannot resize PTYs.
     if (runtime?.isResizeSuppressed()) {
       return
     }
-    // Why: presence-lock defense-in-depth — while a phone or remote-desktop viewer drives the width, host-side resizes must not reach the PTY or its alt-screen grid garbles; load-bearing because the renderer mirror lags one IPC hop. See docs/mobile-presence-lock.md.
+    // Enforce viewer-owned geometry in main too; renderer presence state lags by one IPC hop (docs/mobile-presence-lock.md).
     const mobileOwnsResize = runtime?.getDriver(args.id).kind === 'mobile'
     const remoteDesktopOwnsResize = runtime?.isRemoteDesktopResizeDriven?.(args.id) === true
     if (mobileOwnsResize || remoteDesktopOwnsResize) {
@@ -63,34 +66,47 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
-  // Why: pty:reportGeometry is a measurement-only sibling of pty:resize — it refreshes the restore-target cache (never resizes) so mobile-fit hold learns real desktop dims even while resize is blocked. See docs/mobile-fit-hold.md.
+  // Measurement-only reports update desktop restore geometry while viewer-owned resizing is blocked (docs/mobile-fit-hold.md).
   ipcMain.removeAllListeners('pty:reportGeometry')
   ipcMain.on('pty:reportGeometry', (_event, args: { id: string; cols: number; rows: number }) => {
     runtime?.recordRendererGeometry(args.id, args.cols, args.rows)
   })
 
-  // Why: fire-and-forget — clears the DaemonPtyAdapter's sticky cold-restore cache after the renderer consumed it; no-op for non-daemon providers.
+  // Painted-restore acknowledgement clears daemon cold-restore cache without a response.
   ipcMain.removeAllListeners('pty:ackColdRestore')
-  ipcMain.on('pty:ackColdRestore', (_event, args: { id: string }) => {
-    const provider = tryGetProviderForPty(args.id)
-    if (provider && 'ackColdRestore' in provider && typeof provider.ackColdRestore === 'function') {
-      provider.ackColdRestore(args.id)
-    }
+  ipcMain.on('pty:ackColdRestore', (_event, args: Partial<PaintedRestoreAck> | undefined) => {
+    acknowledgePaintedColdRestore(args, (pane, ptyId) =>
+      Boolean(runtime?.isRestoredPaneBoundTo(pane, ptyId))
+    )
   })
 
-  // Why: renderer ACKs bound main→renderer delivery without stopping PTY ingestion — agent/status consumers still see every chunk via the provider/runtime path.
+  // Snapshot requests may outlive their pane; retire drop memory only after painted restore (#15504).
+  ipcMain.removeAllListeners('pty:hiddenOutputRestoreApplied')
+  ipcMain.on(
+    'pty:hiddenOutputRestoreApplied',
+    (_event, args: { id?: unknown; hiddenDropEpisode?: unknown }) => {
+      if (typeof args?.id !== 'string' || !args.id) {
+        return
+      }
+      const episode =
+        typeof args.hiddenDropEpisode === 'number' ? args.hiddenDropEpisode : undefined
+      consumeHiddenRendererPtyDropMemory(args.id, episode)
+    }
+  )
+
+  // Bound renderer delivery independently of provider/runtime ingestion.
   ipcMain.removeAllListeners('pty:ackData')
   ipcMain.on(
     'pty:ackData',
     (_event, args: { id: string; charCount?: number; processedChars?: number }) => {
       session.lastAckReceivedAtMs = Date.now()
-      // Why: a live ACK channel means a future unanswered probe is a fresh diagnostic event, not a continuation of the last silent streak.
+      // A live ACK ends the prior silent diagnostic streak.
       session.deliveryResyncUnansweredWarnLogged = false
       let acknowledged = 0
       if (typeof args.processedChars === 'number' && Number.isFinite(args.processedChars)) {
         acknowledged = applyCumulativeAck(session, args.id, Math.max(0, args.processedChars))
       } else {
-        // Why: tolerate legacy per-chunk delta payloads — dev hot-reload can pair an old renderer with a new main.
+        // Hot reload can pair a legacy delta-ACK renderer with a newer main.
         const accounting = session.rendererDeliveryAccountingByPty.get(args.id)
         const delta = Number.isFinite(args.charCount) ? Math.max(0, args.charCount ?? 0) : 0
         acknowledged = accounting
@@ -114,7 +130,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       }
       session.clearDeliveryResyncProbe()
       session.deliveryResyncUnansweredWarnLogged = false
-      // Why max-merge: the renderer's cumulative totals are authoritative for what it processed, draining exactly the in-flight debt from lost ACKs.
+      // Max-merge cumulative processed totals to repay debt from lost ACKs.
       let creditedAny = false
       for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
@@ -130,12 +146,12 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
   )
 
-  // Why invoke + renderer-initiated: the field wedge (v1.4.121-rc.0) kills every main→renderer push channel while invoke survives, so the resync rides here plus a write-off lane.
+  // Renderer invoke can survive broken push channels; use it for delivery resync and explicit repair.
   ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.handle(
     'pty:reportRendererDeliveryState',
     (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
-      // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
+      // Merge cumulative totals before deciding whether lost delivery needs write-off.
       let creditedAny = false
       for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
         if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
@@ -148,7 +164,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
         }
       }
       let writtenOff: PtyDeliveryWriteOff[] = []
-      // Why the main-side ACK-silence check: requiring main to have also seen no ACK stops a buggy/foreign caller from writing off live delivery.
+      // Require main-observed ACK silence before allowing a caller to write off delivery.
       if (
         args?.heal === true &&
         session.rendererInFlightTotalChars > 0 &&
@@ -175,18 +191,17 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
   )
 
-  // Why: renderer signals its pty:data listener is live; until then sends are held so boot-window bytes can't drop into a listener-less page and pin the gate.
+  // Hold sends until the replacement renderer confirms its data dispatcher exists.
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
-    // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
+    // Reconcile clears accounting; reject dying-window handshakes that could reset the new page.
     if (!isMainWindowPtyIpcEvent(event, mainWindow)) {
       return
     }
-    // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
+    // A handshake on an open gate reveals missed lifecycle reset; clear stale debt.
     if (session.rendererPtyDispatcherReady) {
       resetRendererDeliveryAccountingForLifecycleReset()
     }
-    // Why: real handshake landed — cancel the self-heal watchdog so it can't later force-open the gate.
     session.clearDispatcherReadyWatchdog()
     session.rendererPtyDispatcherReady = true
     session.pendingData.reactivateBlocked()
@@ -198,7 +213,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: renderer scheduling hint only — active panes just get first chance at the bounded output reserve; reads/state/notifications continue for inactive terminals.
+    // Active panes get scheduling priority; inactive ingestion, state and notifications continue.
     if (args.active) {
       if (activeRendererPtys.has(args.id)) {
         return
@@ -215,7 +230,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: data produced while no renderer can see this PTY must keep that origin through batching, even if the user switches back before the flush lands.
+    // Preserve hidden-at-production origin through batching even if visibility changes before flush.
     rendererVisibilityKnownPtys.add(args.id)
     if (args.visible) {
       visibleRendererPtys.add(args.id)
@@ -240,16 +255,10 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     )
     if (args.hidden === true) {
       closeStartupQueryAuthorityForPty(args.id)
-      // Why: drop bytes queued for a newly hidden PTY instead of holding them under ACK starvation; reveal restores from the snapshot.
+      // Newly hidden queued bytes can drop despite ACK starvation; reveal restores their model snapshot.
       const pending = session.pendingData.get(args.id)
       if (pending && transition.droppable) {
         session.pendingData.delete(args.id)
-        if (pending.projectionAdmissionIds) {
-          session.sshOutputIntake?.transferProjections(
-            pending.projectionAdmissionIds,
-            'hidden-drop'
-          )
-        }
         session.updateProducerFlowControl(args.id)
         session.pendingOverflowMarkedPtys.delete(args.id)
         const drop = recordHiddenRendererPtyDataDrop(args.id, pending.data.length)
@@ -258,7 +267,8 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
             session,
             args.id,
             'hidden-drop',
-            runtime?.getPtyOutputSequence(args.id)
+            runtime?.getPtyOutputSequence(args.id),
+            drop.hiddenDropEpisode
           )
         }
       }
@@ -272,13 +282,14 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       invalidatePendingPtyDrainPolicy(args.id)
     }
     session.syncPtyBackgroundedDelivery(args.id, 'gate-unmark')
-    // Why: a reload/remount may have replaced the view that latched restore-needed, so re-emit on unhide; a redundant replay is cheap/idempotent, a missed restore corrupts the pane.
+    // Reload/remount can replace the marker consumer; repeat on reveal rather than lose recovery.
     if (transition.droppedWhileHidden) {
       sendModelRestoreNeededMarker(
         session,
         args.id,
         'unhide',
-        runtime?.getPtyOutputSequence(args.id)
+        runtime?.getPtyOutputSequence(args.id),
+        transition.hiddenDropEpisode
       )
     }
   })
@@ -290,7 +301,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (typeof args.id !== 'string' || !args.id) {
       return
     }
-    // Why: any delivery interest suppresses the hidden-delivery gate (raw-byte consumers keep receiving while hidden); not synced to the daemon pacer so interest churn can't un-pace a flood.
+    // Raw-byte interests bypass hidden gating without changing daemon pacing during interest churn.
     const settings = session.getSettings?.()
     const wasDroppable = shouldDropHiddenRendererPtyData(args.id, settings)
     setRendererPtyDeliveryInterest(args.id, args.interested === true)
@@ -308,7 +319,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
 
   ipcMain.removeAllListeners('pty:clearBuffer')
   ipcMain.on('pty:clearBuffer', (_event, args: { id: string }) => {
-    // Why: clear PTY-side state (ConPTY/daemon/SSH buffer) so the next prompt repaint doesn't land at a stale cursor row.
+    // Clear provider-side state so prompt repaint cannot reuse a stale cursor row.
     tryGetProviderForPty(args.id)
       ?.clearBuffer(args.id)
       .catch(() => {})
@@ -317,7 +328,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
 
   ipcMain.removeAllListeners('pty:resetInputModes')
   ipcMain.on('pty:resetInputModes', (_event, args: { id: string }) => {
-    // Why: an older daemon or relay rejects the request; its model keeps the modes until reattach.
+    // Older daemon/relay rejection leaves its model modes until reattach.
     tryGetProviderForPty(args.id)
       ?.resetInputModes(args.id)
       .catch(() => {})

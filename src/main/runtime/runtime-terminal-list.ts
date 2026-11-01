@@ -4,6 +4,7 @@ import type {
   RuntimeTerminalSummary
 } from '../../shared/runtime-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -46,6 +47,8 @@ type RuntimeTerminalListDependencies = {
     worktrees: Iterable<ResolvedWorktree>,
     queriedHostIds: ReadonlySet<ExecutionHostId>
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
+  /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
+  listsEveryPane?: (worktreeId: string) => boolean
 }
 
 export class RuntimeTerminalList {
@@ -123,7 +126,11 @@ export class RuntimeTerminalList {
         if (opts.requireFreshPtyLiveness && (!leaf.ptyId || !refreshedPtyIds?.has(leaf.ptyId))) {
           continue
         }
-        if (!leaf.ptyId && liveWorktreeIds.has(leaf.worktreeId)) {
+        if (
+          !leaf.ptyId &&
+          liveWorktreeIds.has(leaf.worktreeId) &&
+          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId))
+        ) {
           continue
         }
         if (leaf.ptyId) {

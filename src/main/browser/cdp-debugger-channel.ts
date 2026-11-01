@@ -4,12 +4,10 @@ import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { isOrcaFrameSessionTraffic } from './guest-focused-frame-route'
 
-/**
- * The IO boundary with webContents.debugger: lease-based attach, event fan-out to
- * the websocket client, detach teardown, and generic command forwarding.
- */
 export class CdpDebuggerChannel {
+  private nativeDebugger: WebContents['debugger'] | null = null
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
   private debuggerLease: ElectronDebuggerLease | null = null
@@ -27,18 +25,16 @@ export class CdpDebuggerChannel {
     if (this.attached) {
       return
     }
+    let lease: ElectronDebuggerLease
     try {
-      this.debuggerLease = acquireElectronDebugger(this.webContents)
+      lease = acquireElectronDebugger(this.webContents)
     } catch {
       throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
     }
+    const dbg = this.webContents.debugger
+    this.nativeDebugger = dbg
+    this.debuggerLease = lease
     this.attached = true
-
-    try {
-      await this.webContents.debugger.sendCommand('Page.enable', {})
-    } catch {
-      /* best-effort — page domain may not be ready yet */
-    }
 
     this.debuggerMessageHandler = (_event: unknown, ...rest: unknown[]) => {
       const [method, params, sessionId] = rest as [
@@ -46,40 +42,60 @@ export class CdpDebuggerChannel {
         Record<string, unknown>,
         string | undefined
       ]
+      // Hide Orca-owned frame sessions that the client did not request.
+      if (isOrcaFrameSessionTraffic(this.webContents, method, params, sessionId || undefined)) {
+        return
+      }
       const client = this.getClient()
       if (!client || client.readyState !== WebSocket.OPEN) {
         return
       }
-      // Why: Electron passes empty string (not undefined) for root-session events, but
-      // agent-browser filters events by the sessionId from Target.attachToTarget.
+      // Electron uses an empty root session ID; agent-browser expects its attachToTarget ID.
       const msg: Record<string, unknown> = { method, params }
       msg.sessionId = sessionId || this.sessions.primarySessionId
       this.responder.send(msg, client)
     }
     this.debuggerDetachHandler = () => {
-      this.attached = false
-      const lease = this.debuggerLease
-      this.debuggerLease = null
-      lease?.release()
+      this.detachDebugger()
       this.onDetached()
     }
-    this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
-    this.webContents.debugger.on('detach', this.debuggerDetachHandler as never)
+    dbg.on('message', this.debuggerMessageHandler)
+    dbg.on('detach', this.debuggerDetachHandler)
+
+    try {
+      await dbg.sendCommand('Page.enable', {})
+    } catch {
+      /* The page domain may not be ready yet. */
+    }
+    if (this.debuggerLease !== lease) {
+      throw new Error('Browser debugger was detached during startup')
+    }
+    if (this.webContents.isDestroyed() || !dbg.isAttached()) {
+      this.detachDebugger()
+      throw new Error('Browser tab is no longer available')
+    }
   }
 
   detachDebugger(): void {
-    if (this.debuggerMessageHandler) {
-      this.webContents.debugger.removeListener('message', this.debuggerMessageHandler as never)
-      this.debuggerMessageHandler = null
-    }
-    if (this.debuggerDetachHandler) {
-      this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
-      this.debuggerDetachHandler = null
-    }
+    const dbg = this.nativeDebugger
+    const messageHandler = this.debuggerMessageHandler
+    const detachHandler = this.debuggerDetachHandler
     const lease = this.debuggerLease
+    this.nativeDebugger = null
+    this.debuggerMessageHandler = null
+    this.debuggerDetachHandler = null
     this.debuggerLease = null
-    lease?.release()
     this.attached = false
+    try {
+      if (messageHandler) {
+        dbg?.removeListener('message', messageHandler)
+      }
+      if (detachHandler) {
+        dbg?.removeListener('detach', detachHandler)
+      }
+    } finally {
+      lease?.release()
+    }
   }
 
   sendDebuggerCommand(

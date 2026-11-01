@@ -12,15 +12,7 @@ type ActiveWorkspaceSshTargetInput = {
   repos: readonly { id: string; connectionId?: string | null }[]
 }
 
-/**
- * SSH targets that own terminals the user sees the moment the startup gate opens: the ones
- * whose reconnect must still be awaited. Everything else can connect in the background and
- * reattach on tab focus.
- *
- * Derived from the restored PTY ids rather than the repo catalog alone, because SSH worktrees
- * are absent from `worktreesByRepo` at cold start — the PTY id is the durable name of the
- * target the pane will reattach.
- */
+/** Await reconnect only for hosts whose panes mount when startup opens; others reconnect in background/on focus. Derive owners from restored PTY IDs because cold SSH worktrees are absent from the repo catalog. */
 export function collectActiveWorkspaceSshTargetIds(input: ActiveWorkspaceSshTargetInput): string[] {
   const { activeWorktreeId } = input
   if (!activeWorktreeId) {

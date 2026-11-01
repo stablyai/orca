@@ -1,4 +1,8 @@
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
+import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { createJiraTask } from './mobile-tasks-item-mapping'
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
@@ -12,7 +16,43 @@ import {
   linearIssueRead
 } from './mobile-task-item-detail-operations'
 
-export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
+type GitLabHydratedStatus = Pick<GitLabWorkItem, 'mergeable' | 'reviewDecision' | 'reviewerCount'>
+
+function gitLabHydrationUnchanged(
+  source: GitLabWorkItem,
+  summary: ProviderCheckSummary,
+  status: GitLabHydratedStatus
+): boolean {
+  const current = source.checksSummary
+  return (
+    current?.state === summary.state &&
+    current.total === summary.total &&
+    current.passed === summary.passed &&
+    current.failed === summary.failed &&
+    current.pending === summary.pending &&
+    current.neutral === summary.neutral &&
+    (status.mergeable === undefined || source.mergeable === status.mergeable) &&
+    (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
+    (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
+  )
+}
+
+export type ItemDetailLoadingInput = Pick<
+  ItemDetailMetadataEffectsModel,
+  | 'actionItem'
+  | 'client'
+  | 'detailRefreshSeq'
+  | 'setActionItem'
+  | 'setDetailError'
+  | 'setDetailLoading'
+  | 'setDetailPayload'
+  | 'setItems'
+  | 'tasksSupported'
+>
+
+export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingInput>(
+  model: Model
+) {
   const {
     actionItem,
     client,
@@ -109,7 +149,9 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
           }
           setActionItem((current) =>
-            current?.provider === 'gitlab' && current.source.id === actionItem.source.id
+            current?.provider === 'gitlab' &&
+            current.source.id === actionItem.source.id &&
+            !gitLabHydrationUnchanged(current.source, checksSummary, hydratedStatus)
               ? {
                   ...current,
                   source: {
@@ -120,27 +162,66 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
                 }
               : current
           )
-          setItems((current) =>
-            current.map((candidate) =>
-              candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
-                ? {
-                    ...candidate,
-                    source: {
-                      ...candidate.source,
-                      checksSummary,
-                      ...hydratedStatus
-                    }
-                  }
-                : candidate
-            )
-          )
+          setItems((current) => {
+            let changed = false
+            const next = current.map((candidate) => {
+              if (
+                candidate.provider !== 'gitlab' ||
+                candidate.source.id !== actionItem.source.id ||
+                gitLabHydrationUnchanged(candidate.source, checksSummary, hydratedStatus)
+              ) {
+                return candidate
+              }
+              changed = true
+              return {
+                ...candidate,
+                source: { ...candidate.source, checksSummary, ...hydratedStatus }
+              }
+            })
+            return changed ? next : current
+          })
         }
         return
       }
 
-      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
-      // one leg's transport does, and interpreting only after both settled is what makes the issue
-      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          setActionItem((current) => {
+            if (
+              current?.provider !== 'jira' ||
+              current.source.key !== issue.key ||
+              current.source.siteId !== issue.siteId
+            ) {
+              return current
+            }
+            // Keep identity stable so detail hydration cannot fetch itself again.
+            const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated ? current : createJiraTask(issue)
+          })
+        }
+        return
+      }
+
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
       const [issueReply, commentsReply] = await Promise.all([
         linearIssueRead.request(
           client,
@@ -211,4 +292,4 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
   return model
 }
 
-export type ItemDetailLoadingModel = ReturnType<typeof useMobileTasksItemDetailLoading>
+export type ItemDetailLoadingModel = ItemDetailMetadataEffectsModel

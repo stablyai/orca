@@ -39,11 +39,9 @@ function createPage(id: string) {
     activeLoadFailureRef: ref(null),
     recoveryNavigationValidationRef: ref(null),
     keepAddressBarFocusRef: ref(false),
-    paneZoomLevelRef: ref(0),
     viewportPresetIdRef: ref(null),
     onUpdatePageStateRef: ref(vi.fn()),
     setGuestRecoveryGeneration: setGeneration,
-    setBrowserZoomPercent: vi.fn(),
     focusAddressBarNow: () => false,
     syncNavigationState: vi.fn(),
     syncBrowserAnnotationViewportBridge: vi.fn()

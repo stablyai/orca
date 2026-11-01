@@ -10,25 +10,9 @@ import {
   taskMutationConfirmationSchema
 } from './task-item-state-reply-schema'
 
-// The rest of a task item's writes and the PR reads that go with them: creating an item, editing
-// its metadata or state, reviewers, checks, file contents and viewed state, and merge. A mutation
-// whose reply is lost stays a transport rejection on the promise, so the screen reports the drop
-// rather than a failure the host never sent.
-//
-// Every reader here is checked, and each schema lives in task-item-state-reply-schema.ts with the
-// consumer line behind every requirement. Nine of the writes share one reader because they share
-// one reply convention; the acceptance and the name stay per operation, which is what a call site
-// picks.
+// Preserve lost mutation replies as transport rejections; a missing answer does not prove host failure.
 
-/**
- * One reader for the nine writes whose reply is a `{ ok, error }` envelope, not nine readers.
- *
- * The `ok === false` test and the `error` read are a single convention across both issue edits,
- * both pull/merge-request edits, both state toggles, the reviewer request, the checks rerun and
- * both merges — there is no input on which two of them would want different answers. Which
- * sentence a caller shows on a refusal stays the caller's, because each keeps its own fallback
- * copy.
- */
+// Writes share the ok/error envelope convention; refusal fallback copy stays with each caller.
 const taskItemMutationReader = rpcResultVariant('task-item-mutation', taskItemMutationSchema)
 
 export const githubIssueCreate = bindDeferredRpcOperation(
@@ -51,7 +35,6 @@ export const gitlabIssueCreate = bindDeferredRpcOperation(
   })
 )
 
-/** The composer and the sub-issue field both create through this; each keeps its own copy. */
 export const linearIssueCreate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'linear.create-issue',
@@ -142,7 +125,6 @@ export const githubReviewerRequest = bindDeferredRpcOperation(
   })
 )
 
-/** Both readers of this reply require an array and raise their own copy otherwise. */
 export const githubPullRequestChecksRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.pr-checks',
@@ -173,7 +155,6 @@ export const githubPullRequestFileContentsRead = bindDeferredRpcOperation(
   })
 )
 
-/** Syncing one file's viewed state. Like the thread toggle, the reply is `true` or nothing ran. */
 export const githubPullRequestFileViewedWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'github.set-pr-file-viewed',

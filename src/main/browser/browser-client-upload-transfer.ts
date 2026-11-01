@@ -14,11 +14,7 @@ type FileChannelRequest = (method: string, params: unknown) => Promise<unknown>
 
 export type BrowserClientRemoteUploadFile = { remotePath: string; contents: Buffer }
 
-/**
- * Reads the remote workspace files named by a client-placed `browser.upload` command. The paths are
- * interpreted by the runtime against the page's remote workspace; nothing here touches the desktop
- * filesystem, so a malicious remote cannot name a desktop path and have it read.
- */
+/** Resolve paths through the remote runtime; never read them on the desktop. */
 export async function fetchBrowserClientUploadFiles(options: {
   request: FileChannelRequest
   event: BrowserClientHostCommandEvent
@@ -69,7 +65,7 @@ export async function fetchBrowserClientUploadFiles(options: {
       if (parsed.data.eof) {
         break
       }
-      // Why: a host that keeps returning zero bytes without eof would spin this loop forever.
+      // A non-EOF empty chunk would keep this loop running indefinitely.
       if (chunk.byteLength === 0) {
         throw new Error('browser_client_upload_transfer_stalled')
       }

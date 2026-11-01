@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -20,9 +20,10 @@ import {
   closeTestStores,
   createStore,
   dataFile,
+  readPersistedStateJson,
   testState,
   writeDataFile
-} from '../persistence-test-harness'
+} from './persistence-test-harness'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -40,7 +41,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
@@ -99,7 +100,7 @@ describe('profile-state cutover fixture', () => {
     ])
     expect(store.getSettings().opencodeSessionCookie).toBe('fixture-secret')
 
-    const persisted: unknown = JSON.parse(readFileSync(dataFile(), 'utf-8'))
+    const persisted: unknown = JSON.parse(readPersistedStateJson(dataFile()))
     expect(persisted).toHaveProperty('futureTopLevelExtension', {
       keep: 'forward-compatible',
       nullable: null

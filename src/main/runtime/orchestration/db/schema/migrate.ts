@@ -14,8 +14,12 @@ import { migrateV40 } from './migrate-v40'
 import { DERIVED_DELIVERY_SCHEMA_SQL, migrateV41 } from './migrate-v41'
 import { migrateV42 } from './migrate-v42'
 import { migrateV43 } from './migrate-v43'
+import { migrateV44 } from './migrate-v44'
+import { migrateV45 } from './migrate-v45'
+import { migrateV46 } from './migrate-v46'
+import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
 
-// Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
+// CREATE TABLE IF NOT EXISTS won't alter existing tables; migrate atomically before bumping user_version.
 export function migrate(this: OrchestrationDb): void {
   const storedVersion = this.db.pragma('user_version', { simple: true }) as number
   const current = resolveOrchestrationMigrationStartVersion(this.db, storedVersion, SCHEMA_VERSION)
@@ -28,6 +32,8 @@ export function migrate(this: OrchestrationDb): void {
     this.db.exec(
       'DROP TRIGGER IF EXISTS trg_deliveries_one_outstanding; DROP VIEW IF EXISTS outstanding_deliveries;'
     )
+    // Why: their bodies name columns a step may drop or rebuild; the open after migrate recreates them.
+    this.db.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
     applySchemaMigrationsV2ToV12.call(this, current)
     applySchemaMigrationsV13ToV30.call(this, current)
     migrateMailboxPointerEnterV33.call(this, current)
@@ -38,12 +44,15 @@ export function migrate(this: OrchestrationDb): void {
     migrateV38.call(this, current)
     migrateV39.call(this, current)
     migrateV40.call(this, current)
-    // Why: older steps recreate the unique index; v41 must run after them.
+    // Run v41 after older steps that recreate the unique index.
     migrateV41.call(this, current)
     migrateV42.call(this, current)
     migrateV43.call(this, current)
+    migrateV44.call(this, current)
+    migrateV45.call(this, current)
+    migrateV46.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
-    // Why: rebuild steps above RENAME the table, which SQLite refuses while a view names it.
+    // Recreate derived objects after table rebuilds; existing views would prevent RENAME.
     this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
     this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this.db.exec('COMMIT')

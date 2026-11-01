@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-  MOBILE_WEB_BUNDLE_ERROR_CODES
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
-  MobileWebBundleAssetSchema,
   MobileWebBundleRouteSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
@@ -25,6 +21,9 @@ import {
   MobileWebBundleManifestReplySchema
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcReadResult } from './rpc-operation-contract'
+import { runRpcOperation } from './rpc-operation'
+import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
+import type { RpcResponse } from './types'
 
 const ASSET_SHA = 'b'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8
@@ -39,12 +38,9 @@ function asset(overrides: Record<string, unknown> = {}) {
   }
 }
 
-/** The id the host would publish this asset list under, since the reader now checks that. Read off
- *  the list each fixture ends up with, so a test that changes the assets does not fail on the id it
- *  did not set out to change; one that names a `buildId` itself keeps it. */
-function contentIdOf(assets: unknown): string {
-  const parsed = MobileWebBundleAssetSchema.array().safeParse(assets)
-  return parsed.success ? computeMobileWebBundleId(parsed.data) : 'a'.repeat(64)
+// Derive ids after fixture asset edits unless the test explicitly selects its own buildId.
+function contentIdOf(assets: ReturnType<typeof asset>[]): string {
+  return computeMobileWebBundleId(assets)
 }
 
 const BUILD_ID = contentIdOf([asset()])
@@ -110,9 +106,7 @@ describe('mobile web bundle manifest reply reader', () => {
   })
 
   it('refuses a manifest whose build id is not the digest of the assets it names', () => {
-    // The id is a cache key and a claim about content at once. The host pins the two together on
-    // its own strict schema; without the same refine here, a stale or forged id reaches the shell,
-    // which treats an id it already holds as the same bytes and opens the generation on disk.
+    // Recompute content ids because cached generations trust them to identify existing bytes.
     const forged = { ...manifestReply().manifest, buildId: 'f'.repeat(64) }
 
     const parsed = MobileWebBundleManifestReadSchema.safeParse(forged)
@@ -127,18 +121,34 @@ describe('mobile web bundle manifest reply reader', () => {
 
     expect(manifest.buildId).toBe(computeMobileWebBundleId([asset()]))
     expect(MobileWebBundleManifestReadSchema.safeParse(manifest).success).toBe(true)
-    // An unknown member is still read through, and it is outside the digest: the id is computed
-    // from the four asset fields the contract serializes, so a field a newer desktop adds anywhere
-    // cannot turn a cached bundle into a redownload.
+    // Unknown fields stay readable and outside the asset-content digest, avoiding needless redownloads from newer hosts.
     expect(
       MobileWebBundleManifestReadSchema.safeParse({ ...manifest, contentEncoding: 'br' }).success
     ).toBe(true)
   })
 
+  it.each([undefined, true, false, 'true', 1, null])(
+    'reads cross-layout host ownership %s without upgrading legacy or malformed declarations',
+    (value) => {
+      const route = {
+        pathname: '/h/[hostId]',
+        grants: ['navigate'],
+        canOwnHostArea: true,
+        ...(value === undefined ? {} : { canOwnHostAreaAcrossLayouts: value })
+      }
+      const parsed = MobileWebBundleManifestReadSchema.safeParse(
+        manifestReply({ routes: [route] }).manifest
+      )
+      expect(parsed.success).toBe(true)
+      expect(parsed.data?.routes?.[0]?.canOwnHostArea).toBe(true)
+      expect(parsed.data?.routes?.[0]?.canOwnHostAreaAcrossLayouts).toBe(
+        typeof value === 'boolean' ? value : undefined
+      )
+    }
+  )
+
   it('reads a route pattern with a trailing rest segment, which no field has to change for', () => {
-    // Forward compatibility for a desktop that later ships a catch-all screen: `page-route-policy`
-    // matches such a pattern, and it only ever sees one the reader let through. Pinned on the
-    // phone's loose reader and on the host's strict one, since the pathname rule lives there.
+    // Keep catch-all routes readable on both phone and host so later desktop route additions can reach page policy.
     const pathname = '/h/[hostId]/[...page]'
     const manifest = manifestReply({
       routes: [{ pathname, grants: ['navigate'] }]
@@ -163,8 +173,7 @@ describe('mobile web bundle manifest reply reader', () => {
   })
 
   it('bounds what a manifest can make the fetch allocate, however it declares totalBytes', () => {
-    // The ceilings above bound each asset and the asset count, and `totalBytes` separately. None
-    // of them bounds the product, which is what the fetch allocates.
+    // Bound summed allocations separately; per-asset/count/declared-total ceilings do not bound their product.
     const oversized = Array.from({ length: MOBILE_WEB_BUNDLE_MAX_ASSETS }, (_, index) =>
       asset({ path: `assets/${index}.js`, byteLength: MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES })
     )
@@ -175,8 +184,7 @@ describe('mobile web bundle manifest reply reader', () => {
   })
 
   it('accepts a bundle that sums to the ceiling and refuses one byte more', () => {
-    // Four assets, because one quarter of the total ceiling is the largest share that still fits
-    // under the per-asset ceiling. `lastByteLength` moves only the final one.
+    // Use four assets to fit under individual ceilings while reaching the summed allocation boundary.
     const quarter = MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES / 4
     const spread = (lastByteLength: number) =>
       Array.from({ length: 4 }, (_, index) =>
@@ -214,8 +222,7 @@ describe('mobile web bundle manifest reply reader', () => {
   })
 
   it('reads an unknown schemaVersion through so the update wall can name it', () => {
-    // Refusing it here would fail the parse before `evaluateMobileWebBundleCompat` could say
-    // `bundle-shell-too-old`, leaving a transport error where the wall belongs.
+    // Read unknown schema numbers through so compatibility can show the shell-update wall instead of a transport error.
     expect(readManifest(manifestReply({ schemaVersion: 2 })).compatible).toBe(true)
     expect(readManifest(manifestReply({ schemaVersion: undefined })).compatible).toBe(false)
     for (const schemaVersion of [1.5, 'one', null]) {
@@ -225,7 +232,7 @@ describe('mobile web bundle manifest reply reader', () => {
 
   it('types the protocol window the update wall compares, without a cast at the call site', () => {
     const parsed = MobileWebBundleManifestReplySchema.parse(manifestReply())
-    // The pin is this call: `manifest` only assigns if the reader still types both window fields.
+    // Pass directly to compatibility evaluation to pin both protocol fields’ types.
     const verdict = evaluateMobileWebBundleCompat({
       hostCapabilities: [MOBILE_WEB_BUNDLE_CAPABILITY],
       hostStatus: { protocolVersion: 2, minCompatibleMobileVersion: 2 },
@@ -342,9 +349,15 @@ describe('mobile web bundle chunk reply reader', () => {
 })
 
 describe('mobile web bundle error codes', () => {
-  it('maps every code the host declares, from both positions one can occupy', () => {
-    expect(MOBILE_WEB_BUNDLE_ERROR_CODES).toHaveLength(6)
-    for (const code of MOBILE_WEB_BUNDLE_ERROR_CODES) {
+  it('reads released wire codes bare, wrapped, and followed by diagnostic prose', () => {
+    for (const code of [
+      'mobile_web_bundle_unavailable',
+      'mobile_web_bundle_build_changed',
+      'mobile_web_bundle_asset_unknown',
+      'mobile_web_bundle_asset_changed',
+      'mobile_web_bundle_offset_invalid',
+      'mobile_web_bundle_read_limited'
+    ]) {
       expect(readMobileWebBundleErrorCode(new Error(`invalid_argument: ${code}`))).toBe(code)
       expect(readMobileWebBundleErrorCode(new Error(code))).toBe(code)
       expect(readMobileWebBundleErrorCode(new Error(`invalid_argument: ${code}: no bundle`))).toBe(
@@ -368,13 +381,11 @@ describe('mobile web bundle error codes', () => {
         new Error('invalid_argument: the bundle is mobile_web_bundle_unavailable here')
       )
     ).toBeNull()
-    // Unanchored, this one reads as a refusal; the code is neither the whole message nor what
-    // follows the envelope code.
+    // Quoted codes are diagnostic prose, not machine refusals.
     expect(
       readMobileWebBundleErrorCode(new Error('RPC mobile_web_bundle_unavailable failed'))
     ).toBeNull()
-    // The second position is `<envelope code>: `, exactly. Slicing the leading token's length off
-    // any message would make this one read as the code that follows the bracket.
+    // Recognize only the exact envelope-code prefix, not an arbitrary leading token.
     expect(
       readMobileWebBundleErrorCode(new Error('rpc (mobile_web_bundle_unavailable)'))
     ).toBeNull()
@@ -391,19 +402,35 @@ describe('mobile web bundle error codes', () => {
 })
 
 describe('mobile web bundle operation descriptors', () => {
-  it('accepts no reply but a result', () => {
-    // A salvage or bare-message policy would hand the fetch a half-bundle that fails a hash check
-    // much later, far from the cause.
-    for (const operation of [mobileWebBundleManifestRead, mobileWebBundleChunkRead]) {
-      expect(operation.acceptance).toBe('require-result-or-throw')
-      expect(operation.barrier).toBe('on-settle')
+  it('rejects host refusals and unreadable successful results for both reads', async () => {
+    let reply: RpcResponse = {
+      id: 'read-1',
+      ok: false,
+      error: { code: 'invalid_argument', message: 'mobile_web_bundle_unavailable' },
+      _meta: { runtimeId: 'host-1' }
+    }
+    const client = { sendRequest: async () => reply }
+    const reads = [
+      () => runRpcOperation(client, mobileWebBundleManifestRead, null),
+      () =>
+        runRpcOperation(client, mobileWebBundleChunkRead, {
+          buildId: BUILD_ID,
+          path: 'index.html',
+          offset: 0
+        })
+    ]
+    for (const read of reads) {
+      await expect(read()).rejects.toThrow('invalid_argument: mobile_web_bundle_unavailable')
+    }
+    reply = { id: 'read-1', ok: true, result: null, _meta: { runtimeId: 'host-1' } }
+    for (const read of reads) {
+      await expect(read()).rejects.toBeInstanceOf(RpcIncompatibleReplyError)
     }
   })
 })
 
 describe('which side a bundle read failed on', () => {
   it('reads the transport marks the transport itself sets', () => {
-    // Every socket close, relay drop and request timeout rejects in-flight requests with this mark.
     expect(
       isMobileWebBundleTransportFailure(markRpcDeliveryUnknown(new Error('Connection closed')))
     ).toBe(true)
@@ -414,7 +441,7 @@ describe('which side a bundle read failed on', () => {
   })
 
   it.each([
-    ['a host refusal', `invalid_argument: ${MOBILE_WEB_BUNDLE_ERROR_CODES[0]}`],
+    ['a host refusal', 'invalid_argument: mobile_web_bundle_unavailable'],
     ['bytes that do not hash', 'bundle asset index.html hashed aa, not bb'],
     ['a build that changed mid-fetch', 'bundle build changed mid-fetch: asked aa, served bb'],
     ['an unread reply', 'The host sent a reply this app could not read (mobileWeb.bundle.manifest)']

@@ -12,6 +12,7 @@ import {
 } from '@/components/dictation/microphone-devices'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 type VoiceMicrophoneSettingProps = {
@@ -23,8 +24,7 @@ function readMediaDeviceError(error: unknown): { name: string; message?: string 
   if (!error || typeof error !== 'object') {
     return { name: '' }
   }
-  // Why: an own `name`/`message` key can hold undefined/null; String() would
-  // turn that into the literal "undefined" and render it to the user.
+  // Coalesce nullable own name/message fields before String conversion so users cannot see literal undefined.
   const name = 'name' in error ? String(error.name ?? '') : ''
   const message = 'message' in error ? String(error.message ?? '').trim() || undefined : undefined
   return { name, message }
@@ -78,13 +78,13 @@ export function VoiceMicrophoneSetting({
   voiceSettings,
   onUpdateVoiceSettings
 }: VoiceMicrophoneSettingProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const [devices, setDevices] = useState<VoiceMicrophoneDevice[]>([])
   const [devicesKnown, setDevicesKnown] = useState(false)
   const [accessPending, setAccessPending] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
-  // Why: devicechange fires several times per Bluetooth connect; drop enumerations
-  // that resolve out of order so a stale list cannot land last.
+  // Bluetooth emits repeated devicechange events; reject stale enumeration results.
   const refreshGenerationRef = useRef(0)
 
   const refreshDevices = useCallback(async (): Promise<void> => {
@@ -106,8 +106,7 @@ export function VoiceMicrophoneSetting({
     setDevices((current) => (sameDeviceList(current, next) ? current : next))
   }, [mountedRef])
 
-  // Why: voiceSettings.enabled is a dependency so enabling dictation re-scans —
-  // that toggle is often when mic permission lands and real labels appear.
+  // Rescan when dictation enables because permission and real device labels may arrive with that toggle.
   useEffect(() => {
     void refreshDevices()
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) {
@@ -149,8 +148,7 @@ export function VoiceMicrophoneSetting({
       try {
         result = await window.api.developerPermissions.request({ id: 'microphone' })
       } catch (error) {
-        // Why separate: this one DID cross IPC, so the wrapper must be stripped — and the microphone
-        // was never reopened, so reporting it as an open failure would invert the provenance.
+        // Strip this IPC error’s wrapper; microphone reopen never happened, so do not report an open failure.
         if (mountedRef.current) {
           setAccessError(
             extractIpcErrorMessage(
@@ -217,7 +215,14 @@ export function VoiceMicrophoneSetting({
           'unavailable'
         )
       }),
-    [devices, devicesKnown, voiceSettings.microphoneDeviceId, voiceSettings.microphoneDeviceLabel]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+    [
+      devices,
+      devicesKnown,
+      voiceSettings.microphoneDeviceId,
+      voiceSettings.microphoneDeviceLabel,
+      languageRevision
+    ]
   )
 
   const showAccessHint = voiceSettings.enabled && devices.length === 0

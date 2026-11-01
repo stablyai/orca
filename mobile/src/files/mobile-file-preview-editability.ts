@@ -11,7 +11,10 @@ export function isEditableMobileTerminalArtifactPreview(
     return false
   }
   return (
-    (preview.status === 'ready' && preview.kind !== 'image' && !preview.truncated) ||
+    (preview.status === 'ready' &&
+      preview.kind !== 'image' &&
+      preview.kind !== 'media' &&
+      !preview.truncated) ||
     preview.status === 'empty'
   )
 }
@@ -41,4 +44,19 @@ export function shouldKeepDirtyDraftOnPreviewLoadResult(
   result: MobileFilePreviewResult
 ): result is Extract<MobileFilePreviewResult, { status: 'error' | 'waiting' }> {
   return preserveDirtyDraft && (result.status === 'error' || result.status === 'waiting')
+}
+
+export function terminalArtifactPreviewMatchesBase(
+  preview: MobileFilePreviewResult,
+  baseContent: string
+): boolean {
+  if (preview.status === 'empty') {
+    return baseContent.length === 0
+  }
+  return (
+    preview.status === 'ready' &&
+    preview.kind !== 'image' &&
+    preview.kind !== 'media' &&
+    preview.content === baseContent
+  )
 }

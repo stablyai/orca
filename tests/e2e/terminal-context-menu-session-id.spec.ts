@@ -28,8 +28,7 @@ test('terminal pane context menu copies its agent session ID', async ({ orcaPage
   }
   const paneKey = `${tabId}:${leafId}`
 
-  // Keep this independent of an installed provider CLI while exercising the
-  // durable pane identity used when transient live status has been cleared.
+  // Avoid installed CLIs while exercising durable pane identity after transient status clears.
   await orcaPage.evaluate(
     ({ paneKey, tabId, worktreeId, sessionId }) => {
       const state = window.__store?.getState()

@@ -3,7 +3,8 @@ import type { ParsedExecutionHost } from '../../../../shared/execution-host'
 export type AddRepoBrowseAuthorityActions = {
   browseLocal: () => void
   browseRuntime: () => void
-  browseSsh: (targetId: string) => void
+  /** Set when the runtime host is a WSL host: Windows' own folder picker reaches its distro. */
+  browseWslHost?: (() => void) | null
 }
 
 export function routeAddRepoBrowse(
@@ -11,11 +12,11 @@ export function routeAddRepoBrowse(
   actions: AddRepoBrowseAuthorityActions
 ): void {
   if (host?.kind === 'runtime') {
+    if (actions.browseWslHost) {
+      actions.browseWslHost()
+      return
+    }
     actions.browseRuntime()
-    return
-  }
-  if (host?.kind === 'ssh') {
-    actions.browseSsh(host.targetId)
     return
   }
   if (host?.kind === 'local') {

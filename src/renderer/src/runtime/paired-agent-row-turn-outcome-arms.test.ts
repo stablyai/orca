@@ -1,10 +1,4 @@
-/**
- * A paired client mirrors the host's agent rows from `session.tabs` with no per-field parser, so a
- * verdict arm the client's build does not know reaches its store as-is. The row must survive and
- * read as the done it always did; the arms this build knows read as their own mark.
- *
- * Runs the real host-snapshot mirror, the real store and the real sidebar row builder.
- */
+// Unparsed mirrored rows can carry newer verdict arms. Preserve them and legacy done fallback while known arms render their mark; exercise real mirror/store/sidebar builder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { AgentTurnOutcome } from '../../../shared/agent-turn-outcome'
@@ -14,10 +8,8 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { buildWorktreeAgentRows } from '../components/sidebar/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,

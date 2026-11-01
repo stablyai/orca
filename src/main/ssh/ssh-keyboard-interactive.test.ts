@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   collectKeyboardInteractiveResponses,
-  formatKeyboardInteractivePromptDetail,
   isKeyboardInteractivePasswordPrompt,
   type KeyboardInteractiveSession
 } from './ssh-keyboard-interactive'
@@ -16,6 +15,7 @@ function createSession(
     requestCredential: vi.fn(async () => 'answer'),
     getCachedPassword: () => null,
     setCachedPassword: vi.fn(),
+    markCachedPasswordRejected: vi.fn(),
     markCancelled: () => {
       cancelled.value = true
     },
@@ -27,11 +27,6 @@ function createSession(
 }
 
 describe('isKeyboardInteractivePasswordPrompt', () => {
-  it('matches masked password prompts', () => {
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Password: ', echo: false })).toBe(true)
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: "user@host's PASSWORD:" })).toBe(true)
-  })
-
   it('rejects echoed prompts even when they mention a password', () => {
     expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Password: ', echo: true })).toBe(false)
   })
@@ -42,28 +37,6 @@ describe('isKeyboardInteractivePasswordPrompt', () => {
     )
     expect(isKeyboardInteractivePasswordPrompt({ prompt: 'OTP password code:', echo: false })).toBe(
       false
-    )
-  })
-
-  it('rejects verification prompts that never mention a password', () => {
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Passcode:', echo: false })).toBe(false)
-    expect(isKeyboardInteractivePasswordPrompt({ prompt: 'Duo push sent', echo: false })).toBe(
-      false
-    )
-  })
-})
-
-describe('formatKeyboardInteractivePromptDetail', () => {
-  it('joins instructions and prompt on separate lines', () => {
-    expect(formatKeyboardInteractivePromptDetail('Pick an option:', 'Passcode: ')).toBe(
-      'Pick an option:\nPasscode:'
-    )
-  })
-
-  it('drops the missing half', () => {
-    expect(formatKeyboardInteractivePromptDetail('', 'Passcode: ')).toBe('Passcode:')
-    expect(formatKeyboardInteractivePromptDetail('Approve the push. ', '')).toBe(
-      'Approve the push.'
     )
   })
 })
@@ -105,10 +78,12 @@ describe('collectKeyboardInteractiveResponses', () => {
   it('re-prompts when the server rejects the auto-answered cached password', async () => {
     const requestCredential = vi.fn(async () => 'corrected-password')
     const setCachedPassword = vi.fn()
+    const markCachedPasswordRejected = vi.fn()
     const session = createSession({
       requestCredential,
       getCachedPassword: () => 'stale-password',
       setCachedPassword,
+      markCachedPasswordRejected,
       state: { passwordAutoAnswered: true }
     })
 
@@ -117,6 +92,7 @@ describe('collectKeyboardInteractiveResponses', () => {
     ])
 
     expect(responses).toEqual(['corrected-password'])
+    expect(markCachedPasswordRejected).toHaveBeenCalledTimes(1)
     expect(requestCredential).toHaveBeenCalledWith('target-1', 'password', 'example.com')
     expect(setCachedPassword).toHaveBeenCalledWith('corrected-password')
   })

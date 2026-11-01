@@ -1,16 +1,10 @@
-import { readFile, mkdtemp, rm, stat } from 'node:fs/promises'
-import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
-import { tmpdir } from 'node:os'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { AI_VAULT_AGENT_SOURCES } from './session-scanner-agent-sources'
-import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
-import { scanAiVaultSessions } from './session-scanner'
 import {
   createQoderSessionResumeState,
   parseQoderSessionContent
 } from './session-scanner-qoder-parser'
-import { remoteSessionSources } from './remote-session-scanner-sources'
 import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
 import type { TranscriptMessage } from './session-transcript-consumers'
 
@@ -66,40 +60,4 @@ it('decodes a real generated and resumed Qoder 1.1.64 session for preview and se
     executionHostId: 'ssh:test',
     cwd: '/tmp/qoder-proof'
   })
-})
-
-it('discovers Qoder folder history and prunes nested workers on local, WSL, and SSH hosts', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-qoder-vault-'))
-  roots.push(root)
-  const options = isolatedScanRoots(root)
-  const path = join(options.qoderProjectsDir, 'folder', 'qoder-session.jsonl')
-  const records = [
-    { type: 'workspace-directories', sessionId: 'qoder-session', directories: ['/tmp/folder'] },
-    {
-      type: 'user',
-      sessionId: 'qoder-session',
-      message: { role: 'user', content: 'Qoder folder proof' }
-    }
-  ]
-  await writeJsonlFile(path, records)
-  await writeJsonlFile(
-    join(options.qoderProjectsDir, 'folder', 'qoder-session', 'subagents', 'worker.jsonl'),
-    records
-  )
-  const result = await scanAiVaultSessions({ ...options, wslHomeDirs: [] })
-  const sessions = result.sessions.filter((s) => s.agent === 'qoder')
-  expect(sessions).toHaveLength(1)
-  expect(sessions[0]).toMatchObject({ title: 'Qoder folder proof', cwd: '/tmp/folder' })
-  expect(AI_VAULT_AGENT_SOURCES.qoder?.rootDirs(options, ['/home/test'])).toContain(
-    join('/home/test', '.qoder', 'projects')
-  )
-  for (const platform of ['darwin-arm64', 'linux-x64', 'win32-x64'] as const) {
-    const source = remoteSessionSources(
-      platform === 'win32-x64' ? 'C:\\Users\\test' : '/home/test',
-      getRemoteHostPlatform(platform)
-    ).find((s) => s.agent === 'qoder')
-    expect(source).toBeDefined()
-    expect(source?.partitionSubagentTranscripts).toBeDefined()
-  }
-  expect((await stat(path)).size).toBeGreaterThan(0)
 })

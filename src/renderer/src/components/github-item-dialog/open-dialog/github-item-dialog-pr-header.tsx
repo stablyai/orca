@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function GitHubItemDialogPRHeader({
   workItem,
@@ -80,8 +81,13 @@ export function GitHubItemDialogPRHeader({
                 translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
             </span>
             <span>
-              {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
-              {formatRelativeTime(workItem.updatedAt)}
+              {translate(
+                'auto.components.GitHubItemDialog.updatedRelativeTime',
+                'updated {{time}}',
+                {
+                  time: formatRelativeTime(workItem.updatedAt)
+                }
+              )}
             </span>
             {workItem.branchName && (
               <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -150,7 +156,7 @@ export function GitHubItemDialogPRHeader({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => window.api.shell.openUrl(workItem.url)}
+                onClick={(event) => openAppHttpLink(workItem.url, { event })}
                 aria-label={translate(
                   'auto.components.GitHubItemDialog.3fdf777817',
                   'Open on GitHub'

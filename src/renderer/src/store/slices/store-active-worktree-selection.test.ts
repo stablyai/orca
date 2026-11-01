@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { installAttentionScreen } from './workspace-attention/workspace-unread-characterization-fixture'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
+import { buildWorktreeComparator } from '../../../../shared/sidebar-list/smart-sort'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   createTestStore,
   makeOpenFile,
@@ -15,7 +17,6 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
-// Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -25,7 +26,6 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-// Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
@@ -72,7 +72,7 @@ describe('setActiveWorktree', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
-  it('clears unread on selection without manufacturing smart-sort activity', () => {
+  it('reads the flag of a selected workspace on screen without manufacturing smart-sort activity', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const lastActivityAt = 123456
@@ -92,6 +92,7 @@ describe('setActiveWorktree', () => {
       refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
+    installAttentionScreen(store, true)
     store.getState().setActiveWorktree(worktreeId)
 
     const worktree = store.getState().worktreesByRepo.repo1[0]
@@ -230,6 +231,7 @@ describe('setActiveWorktree', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       activeWorktreeId: wt,
+      activeWorkspaceKey: worktreeWorkspaceKey(wt),
       activeTabId: tabId,
       activeTabType: 'terminal',
       activeTabTypeByWorktree: { [wt]: 'terminal' },

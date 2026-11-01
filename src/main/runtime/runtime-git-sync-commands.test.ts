@@ -6,12 +6,12 @@ import type * as GitStatusModule from '../git/status'
 import type * as GitForkSyncModule from '../git/fork-sync'
 import type { ResolvedRuntimeGitWorktree } from './runtime-git-command-target'
 import { RuntimeGitSyncCommands } from './runtime-git-sync-commands'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const mocks = vi.hoisted(() => ({
   abortMerge: vi.fn(),
   abortRebase: vi.fn(),
   commitChanges: vi.fn(),
-  getSshGitProvider: vi.fn(),
   gitSyncForkDefaultBranch: vi.fn(),
   gitFastForward: vi.fn(),
   gitFetch: vi.fn(),
@@ -35,10 +35,6 @@ vi.mock('../git/remote', async () => ({
   gitFastForward: mocks.gitFastForward,
   gitFetch: mocks.gitFetch,
   gitPull: mocks.gitPull
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: mocks.getSshGitProvider
 }))
 
 const worktree = {
@@ -94,17 +90,7 @@ describe('RuntimeGitSyncCommands admission', () => {
     )
   })
 
-  it('keeps remote runtime git actions owned by the SSH provider', async () => {
-    const provider = {
-      abortMerge: vi.fn(),
-      abortRebase: vi.fn(),
-      commit: vi.fn().mockResolvedValue({ success: true }),
-      fastForwardBranch: vi.fn(),
-      fetchRemote: vi.fn(),
-      syncForkDefaultBranch: vi.fn().mockResolvedValue({ status: 'up-to-date' }),
-      pullBranch: vi.fn()
-    }
-    mocks.getSshGitProvider.mockReturnValue(provider)
+  it('refuses every runtime git action on an SSH host without running git here', async () => {
     const commands = new RuntimeGitSyncCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree,
@@ -113,27 +99,19 @@ describe('RuntimeGitSyncCommands admission', () => {
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
 
-    await commands.abortRuntimeGitMerge('id:wt-1')
-    await commands.abortRuntimeGitRebase('id:wt-1')
-    await commands.fetchRuntimeGit('id:wt-1', pushTarget)
-    await commands.syncRuntimeGitForkDefaultBranch('id:wt-1', expectedUpstream)
-    await commands.pullRuntimeGit('id:wt-1', pushTarget)
-    await commands.fastForwardRuntimeGit('id:wt-1', pushTarget)
-    await commands.commitRuntimeGit('id:wt-1', 'feat: keep execution remote')
-
-    expect(provider.abortMerge).toHaveBeenCalledWith(worktree.path)
-    expect(provider.abortRebase).toHaveBeenCalledWith(worktree.path)
-    expect(provider.fetchRemote).toHaveBeenCalledWith(worktree.path, pushTarget)
-    expect(provider.syncForkDefaultBranch).toHaveBeenCalledWith(worktree.path, expectedUpstream)
-    expect(provider.pullBranch).toHaveBeenCalledWith(worktree.path, pushTarget)
-    expect(provider.fastForwardBranch).toHaveBeenCalledWith(worktree.path, pushTarget)
-    expect(provider.commit).toHaveBeenCalledWith(worktree.path, 'feat: keep execution remote')
+    await expect(commands.abortRuntimeGitMerge('id:wt-1')).rejects.toThrow(SshHostNotServedError)
+    await expect(commands.fetchRuntimeGit('id:wt-1', pushTarget)).rejects.toThrow(
+      SshHostNotServedError
+    )
+    await expect(commands.pullRuntimeGit('id:wt-1', pushTarget)).rejects.toThrow(
+      SshHostNotServedError
+    )
+    await expect(commands.commitRuntimeGit('id:wt-1', 'feat: remote')).rejects.toThrow(
+      SshHostNotServedError
+    )
     expect(mocks.abortMerge).not.toHaveBeenCalled()
-    expect(mocks.abortRebase).not.toHaveBeenCalled()
     expect(mocks.gitFetch).not.toHaveBeenCalled()
-    expect(mocks.gitSyncForkDefaultBranch).not.toHaveBeenCalled()
     expect(mocks.gitPull).not.toHaveBeenCalled()
-    expect(mocks.gitFastForward).not.toHaveBeenCalled()
     expect(mocks.commitChanges).not.toHaveBeenCalled()
   })
 })

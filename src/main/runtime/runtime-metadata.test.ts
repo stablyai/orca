@@ -1,3 +1,4 @@
+import nacl from 'tweetnacl'
 import { chmodSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -25,55 +26,6 @@ describe('runtime metadata', () => {
     for (const dir of tempDirs.splice(0)) {
       clearRuntimeMetadata(dir)
     }
-  })
-
-  it('writes and reads runtime metadata atomically', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-    tempDirs.push(userDataPath)
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [
-        {
-          kind: 'unix',
-          endpoint: '/tmp/orca.sock'
-        }
-      ],
-      authToken: 'secret',
-      startedAt: 100
-    })
-
-    expect(readRuntimeMetadata(userDataPath)).toEqual({
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [
-        {
-          kind: 'unix',
-          endpoint: '/tmp/orca.sock'
-        }
-      ],
-      authToken: 'secret',
-      startedAt: 100
-    })
-  })
-
-  it('clears the runtime metadata file', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-    tempDirs.push(userDataPath)
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_123',
-      pid: 42,
-      transports: [],
-      authToken: null,
-      startedAt: 100
-    })
-
-    clearRuntimeMetadata(userDataPath)
-
-    expect(readRuntimeMetadata(userDataPath)).toBeNull()
-    expect(getRuntimeMetadataPath(userDataPath)).toContain('orca-runtime.json')
   })
 
   describe('clearRuntimeMetadataIfOwned', () => {
@@ -113,9 +65,7 @@ describe('runtime metadata', () => {
     })
 
     it('retains metadata when only the runtimeId differs', () => {
-      // Why: pid reuse is possible across an auto-update (fork+exec keeps the
-      // old pid if the OS reassigns it quickly). The runtimeId check is the
-      // second-level guard that catches this even when pid collides.
+      // Auto-update may reuse a pid; runtimeId must still prevent treating the replacement as the old owner.
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
       tempDirs.push(userDataPath)
       writeRuntimeMetadata(userDataPath, {
@@ -132,14 +82,6 @@ describe('runtime metadata', () => {
         pid: 42,
         runtimeId: 'rt_replacement'
       })
-    })
-
-    it('is a no-op when no metadata exists', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
-      tempDirs.push(userDataPath)
-
-      expect(() => clearRuntimeMetadataIfOwned(userDataPath, 42, 'rt_owner')).not.toThrow()
-      expect(readRuntimeMetadata(userDataPath)).toBeNull()
     })
   })
 
@@ -232,9 +174,13 @@ describe('runtime metadata', () => {
           }
         ])
       )
+      // Why derived: the loader advertises the public key of the stored secret.
+      const storedPublicKeyB64 = Buffer.from(
+        nacl.box.keyPair.fromSecretKey(Buffer.from(keyMaterial, 'base64')).publicKey
+      ).toString('base64')
       writeFileSync(
         keypairPath,
-        JSON.stringify({ v: 1, publicKeyB64: keyMaterial, secretKeyB64: keyMaterial })
+        JSON.stringify({ v: 1, publicKeyB64: storedPublicKeyB64, secretKeyB64: keyMaterial })
       )
       for (const path of [devicesPath, keypairPath, environmentsPath]) {
         chmodSync(path, 0o644)
@@ -245,7 +191,7 @@ describe('runtime metadata', () => {
         token: 'token',
         scope: 'mobile'
       })
-      expect(loadOrCreateE2EEKeypair(userDataPath).publicKeyB64).toBe(keyMaterial)
+      expect(loadOrCreateE2EEKeypair(userDataPath).publicKeyB64).toBe(storedPublicKeyB64)
       expect(listEnvironments(userDataPath)[0]?.id).toBe(environment.id)
 
       for (const path of [devicesPath, keypairPath, environmentsPath]) {

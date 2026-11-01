@@ -1,9 +1,3 @@
-/**
- * Row used in the "Open project on SSH host" step to pick an SSH target.
- *
- * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
- * while isolating the inline-connect interaction logic.
- */
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
@@ -29,8 +23,7 @@ export function SshTargetRow({
   onSelect,
   onConnect
 }: Props): React.JSX.Element {
-  // Why: the shared registry replaces local state — every SSH surface dials one connection
-  // per target, and it survives this row unmounting mid-connect.
+  // Share one connection per target across surfaces and preserve it through row unmounts.
   const connecting = useSshConnectInFlight(target.id)
   const status = target.state?.status ?? 'disconnected'
   const isConnected = status === 'connected'
@@ -48,8 +41,7 @@ export function SshTargetRow({
   }
 
   const handleConnectClick = (e: React.MouseEvent): void => {
-    // Why: prevent the row's onClick from also firing and treating the click
-    // as a selection when the target is disconnected.
+    // Connect must not bubble into selecting the disconnected target.
     e.stopPropagation()
     if (isBusy || isSshConnectInFlight(target.id)) {
       return
@@ -80,8 +72,6 @@ export function SshTargetRow({
         {target.label || `${target.username}@${target.host}`}
       </span>
       {!isConnected && (
-        // Why: inline Connect avoids forcing the user out to Settings just to
-        // bring up a configured target.
         <button
           type="button"
           className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-foreground hover:bg-accent/70 disabled:opacity-50 disabled:cursor-default flex items-center gap-1"

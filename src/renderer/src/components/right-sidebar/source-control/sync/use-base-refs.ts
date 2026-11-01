@@ -4,18 +4,13 @@ import {
   resolveSourceControlBaseRef,
   resolveSourceControlCompareBaseRef,
   resolveSourceControlPickerBaseRef
-} from './base-ref-resolution'
+} from '../../../../../../shared/source-control-base-ref-resolution'
 import { useSourceControlBaseRefDefault } from './use-base-ref-default'
 
-/**
- * Resolves the base refs the panel works against: the worktree/repo pins, the repo default, and the
- * separate refs used for the merge target, the compare view and the base-ref picker.
- */
 export function useSourceControlBaseRefs({
   activeRepoConnectionId,
   activeRepoExecutionHostId,
   activeRepoId,
-  activeRepoRuntimeEnvironmentId,
   activeRepoWorktreeBaseRef,
   activeWorktreeBaseRef,
   hostedReview,
@@ -27,7 +22,6 @@ export function useSourceControlBaseRefs({
   activeRepoConnectionId: SourceControlWorktreeContext['activeRepoConnectionId']
   activeRepoExecutionHostId: SourceControlWorktreeContext['activeRepoExecutionHostId']
   activeRepoId: string | null
-  activeRepoRuntimeEnvironmentId: string | null
   activeRepoWorktreeBaseRef: string | undefined
   activeWorktreeBaseRef: string | undefined
   hostedReview: HostedReviewInfo | null
@@ -40,7 +34,6 @@ export function useSourceControlBaseRefs({
     activeRepoConnectionId,
     activeRepoExecutionHostId,
     activeRepoId,
-    activeRepoRuntimeEnvironmentId,
     isBranchVisible,
     isFolder
   })
@@ -56,7 +49,7 @@ export function useSourceControlBaseRefs({
     repoBaseRef: normalizedRepoBaseRef,
     defaultBaseRef
   })
-  // Why: the compare/diff view uses this base; the PR/rebase merge target keeps effectiveBaseRef (equal when the setting is off).
+  // Keep comparison separate from the effectiveBaseRef used for PR/rebase targets.
   const compareBaseRef = resolveSourceControlCompareBaseRef({
     enabled: settings?.sourceControlCompareAgainstUpstream ?? false,
     worktreeBaseRef: normalizedWorktreeBaseRef,

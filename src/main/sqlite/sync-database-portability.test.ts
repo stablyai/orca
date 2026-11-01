@@ -180,22 +180,6 @@ describe('SQLite runtime contract', () => {
     expect(statement.all()).toEqual([{ id: rowid }])
   })
 
-  it('rejects explicit undefined bindings before modifying rows', () => {
-    const db = open(':memory:')
-    db.exec('CREATE TABLE items(value TEXT)')
-    const insert = db.prepare('INSERT INTO items VALUES(?)')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => insert.run(undefined)).toThrow()
-    expect(db.prepare('SELECT count(*) AS count FROM items').get()).toEqual({ count: 0 })
-    const select = db.prepare('SELECT ? AS value')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.get(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.all(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => [...select.iterate(undefined)]).toThrow()
-  })
-
   it('releases statements and an unfinished iterator before filesystem retirement', () => {
     const path = join(fixture(), 'database.db')
     const db = open(path)

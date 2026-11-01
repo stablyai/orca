@@ -1,14 +1,5 @@
-import {
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  type SshTargetCreateInput,
-  type SshTargetUpdateInput
-} from '../../../../shared/ssh-types'
-import {
-  getSshTargetDraftConnectionFields,
-  isRelayGracePeriodValid,
-  parseRelayGracePeriodSeconds,
-  type EditingTarget
-} from './ssh-target-draft'
+import type { SshTargetCreateInput, SshTargetUpdateInput } from '../../../../shared/ssh-types'
+import { getSshTargetDraftConnectionFields, type EditingTarget } from './ssh-target-draft'
 import { translate } from '../../i18n/i18n'
 
 type SshTargetSavePayload = {
@@ -42,23 +33,12 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     }
   }
 
-  const graceSeconds = parseRelayGracePeriodSeconds(form)
-  if (!isRelayGracePeriodValid(form, graceSeconds)) {
-    return {
-      ok: false,
-      error: translate(
-        'auto.components.settings.SshPane.3879cbaa52',
-        'Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.',
-        { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
-      )
-    }
-  }
-
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
-  const remoteRuntime = form.remoteRuntime === 'auto' ? undefined : form.remoteRuntime
+  const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
+  const reconnectOnLaunch = form.reconnectOnLaunch ? undefined : false
 
   const target: SshTargetCreateInput = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost),
@@ -67,12 +47,14 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     port,
     username,
     ...(form.gssapiAuthentication ? { gssapiAuthentication: true } : {}),
-    relayGracePeriodSeconds: graceSeconds,
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
-    ...(remoteRuntime ? { remoteRuntime } : {})
+    ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
+    ...(reconnectOnLaunch === false ? { reconnectOnLaunch } : {}),
+    // Send explicit true/false because older servers interpret absence as disabled.
+    allowRemoteCliControl: form.allowRemoteCliControl
   }
 
   return {
@@ -81,14 +63,14 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
       target,
       updates: {
         ...target,
-        // Why: updateTarget merges partially, so explicit undefined values are
-        // required to clear optional fields inherited from ~/.ssh/config.
+        // Partial updates need explicit undefined to clear fields inherited from SSH config.
         identityFile,
         gssapiAuthentication: form.gssapiAuthentication || undefined,
         proxyCommand,
         jumpHost,
         systemSshConnectionReuse,
-        remoteRuntime,
+        systemSshProxyConnectionReuse,
+        reconnectOnLaunch,
         source: 'manual'
       }
     }

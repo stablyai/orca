@@ -6,6 +6,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 import { buildPaletteFilterModel, resolveWorktreeFilterHostId } from './palette-filter-options'
+import { buildPaletteFilterPredicate } from './palette-filter'
 
 function repo(id: string, displayName: string, connectionId: string | null = null): Repo {
   return {
@@ -221,8 +222,7 @@ describe('resolveWorktreeFilterHostId', () => {
     ).toBe('runtime:env-1')
   })
 
-  // Guards the bucketing contract: the palette must land a workspace on the same
-  // host the sidebar does, including the host-less "inherit the focused runtime" case.
+  // Keep host bucketing aligned with the sidebar, including host-less rows inheriting the focused runtime.
   it('agrees with getWorktreeExecutionHostId for every default host', () => {
     const repoMap = new Map(repos.map((entry) => [entry.id, entry]))
     const cases = [
@@ -248,5 +248,55 @@ describe('resolveWorktreeFilterHostId', () => {
         )
       }
     }
+  })
+})
+
+describe('palette host filter on an SSH host merged with its managed server', () => {
+  const serverRepo: Repo = {
+    id: 'r-server',
+    path: '/srv/api',
+    displayName: 'Server',
+    badgeColor: '#999999',
+    addedAt: 1,
+    executionHostId: 'runtime:env1'
+  }
+  const sshRepo = repo('r-ssh', 'Relay', 'tgt')
+  const mergedHostOptions = buildSidebarHostOptions({
+    repos: [serverRepo, sshRepo],
+    sshTargetLabels: new Map([['tgt', 'Omarchy']]),
+    settings: null,
+    runtimeEnvironments: [
+      {
+        id: 'env1',
+        name: 'Omarchy',
+        orcadDeployment: {
+          sshTargetId: 'tgt',
+          sshTargetGeneration: 1,
+          localPort: 7001,
+          remotePort: 7002
+        }
+      }
+    ]
+  })
+  const model = buildPaletteFilterModel({
+    repos: [serverRepo, sshRepo],
+    worktrees: [worktree('w-server', 'r-server'), worktree('w-ssh', 'r-ssh')],
+    hostOptions: mergedHostOptions,
+    projects: [],
+    projectHostSetups: []
+  })
+
+  it('shows one row counting both owners', () => {
+    expect(model.hosts.map((host) => [host.id, host.count])).toEqual([
+      ['local', 0],
+      ['runtime:env1', 2]
+    ])
+  })
+
+  it.each(['runtime:env1', 'ssh:tgt'])('matches both owners from a filter saved as %s', (id) => {
+    const predicate = buildPaletteFilterPredicate({ hostIds: [id], repoIds: [] }, model)
+
+    expect(predicate?.matchesWorktree(worktree('w-server', 'r-server'))).toBe(true)
+    expect(predicate?.matchesWorktree(worktree('w-ssh', 'r-ssh'))).toBe(true)
   })
 })

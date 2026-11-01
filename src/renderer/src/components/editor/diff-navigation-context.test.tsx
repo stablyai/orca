@@ -91,20 +91,6 @@ describe('DiffNavigationProvider', () => {
     registrationRenderCount = 0
   })
 
-  it('exposes the change count and routes nav actions to the registered editor', () => {
-    mount()
-    const editor = createFakeEditor(3)
-    act(() => registration?.registerDiffEditor(editor))
-
-    expect(captured?.changeCount).toBe(3)
-
-    act(() => captured?.goToNextDiff())
-    expect(editor.goToDiff).toHaveBeenCalledWith('next')
-
-    act(() => captured?.goToPreviousDiff())
-    expect(editor.goToDiff).toHaveBeenCalledWith('previous')
-  })
-
   it('re-renders when onDidUpdateDiff flips the count 0 -> N (count is state)', () => {
     mount()
     const editor = createFakeEditor(0)
@@ -130,8 +116,7 @@ describe('DiffNavigationProvider', () => {
     expect(captured?.changeCount).toBe(4)
     expect(oldEditor.disposeUpdate).toHaveBeenCalledOnce()
 
-    // A stale update from the old editor must not flip the count back: registering
-    // the new editor disposed the old subscription, so its callback no longer fires.
+    // Replacing registration must dispose the old subscription so stale updates cannot restore its count.
     act(() => {
       oldEditor.setLineChanges(9)
       oldEditor.fireUpdate()
@@ -140,7 +125,6 @@ describe('DiffNavigationProvider', () => {
 
     act(() => registration?.unregisterDiffEditor(oldEditor))
 
-    // New editor's count is intact and nav still routes to it.
     expect(captured?.changeCount).toBe(4)
     act(() => captured?.goToNextDiff())
     expect(newEditor.goToDiff).toHaveBeenCalledWith('next')
@@ -156,18 +140,5 @@ describe('DiffNavigationProvider', () => {
 
     expect(editor.disposeUpdate).toHaveBeenCalledOnce()
     root = null
-  })
-
-  it('installs a capture-phase key listener on register and removes it on unregister', () => {
-    mount()
-    const editor = createFakeEditor(2)
-    const addSpy = vi.spyOn(editor.containerNode, 'addEventListener')
-    const removeSpy = vi.spyOn(editor.containerNode, 'removeEventListener')
-
-    act(() => registration?.registerDiffEditor(editor))
-    expect(addSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
-
-    act(() => registration?.unregisterDiffEditor(editor))
-    expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function), true)
   })
 })

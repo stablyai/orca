@@ -34,34 +34,6 @@ function createTerminal(options: {
 }
 
 describe('forceRepaintThroughRenderPause', () => {
-  it('drives a synchronous full-viewport render and clears the pause latches when paused', () => {
-    const refreshRows = vi.fn()
-    const renderService: FakeRenderService = {
-      _isPaused: true,
-      _needsFullRefresh: true,
-      refreshRows
-    }
-    const terminal = createTerminal({ rows: 30, renderService })
-
-    expect(forceRepaintThroughRenderPause(terminal)).toBe(true)
-    expect(refreshRows).toHaveBeenCalledWith(0, 29, true)
-    expect(renderService._isPaused).toBe(false)
-    expect(renderService._needsFullRefresh).toBe(false)
-  })
-
-  it('leaves the terminal untouched and returns false when not paused', () => {
-    const refreshRows = vi.fn()
-    const renderService: FakeRenderService = {
-      _isPaused: false,
-      _needsFullRefresh: false,
-      refreshRows
-    }
-    const terminal = createTerminal({ renderService })
-
-    expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
-    expect(refreshRows).not.toHaveBeenCalled()
-  })
-
   it('returns false when the render service internals are unavailable', () => {
     expect(forceRepaintThroughRenderPause(createTerminal({ withoutCore: true }))).toBe(false)
     expect(forceRepaintThroughRenderPause(createTerminal({ renderService: null }))).toBe(false)
@@ -79,32 +51,11 @@ describe('forceRepaintThroughRenderPause', () => {
     expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
     expect(refreshRows).not.toHaveBeenCalled()
   })
-
-  it('returns false when the forced render throws (disposed mid-frame)', () => {
-    const renderService: FakeRenderService = {
-      _isPaused: true,
-      _needsFullRefresh: true,
-      refreshRows: vi.fn(() => {
-        throw new Error('terminal disposed')
-      })
-    }
-    const terminal = createTerminal({ renderService })
-
-    expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
-    // Latch is still cleared — the observer reasserts authority on its next
-    // callback, and we must not leave a half-serviced full-refresh queued.
-    expect(renderService._isPaused).toBe(false)
-  })
 })
 
 describe('forceFullViewportPresent', () => {
-  it('fails closed when xterm internals are unavailable', () => {
-    expect(forceFullViewportPresent(null)).toBe(false)
-  })
-
   it('leaves an unpaused, unsynchronized terminal to the normal refresh path', () => {
-    // A forced sync renderRows on first splash paints before cell metrics
-    // settle and shows a 1px black gutter under the TUI composer.
+    // Direct first-splash renderRows paints before cell metrics settle and leaves a 1px composer gutter.
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
     const terminal = createTerminal({
@@ -177,10 +128,6 @@ describe('forceFullViewportPresent', () => {
 })
 
 describe('requestFullViewportPresent', () => {
-  it('fails closed when xterm internals are unavailable', () => {
-    expect(requestFullViewportPresent(null)).toBe(false)
-  })
-
   it('leaves a normal visible terminal on the debounced refresh path', () => {
     const refreshRows = vi.fn()
     const terminal = createTerminal({

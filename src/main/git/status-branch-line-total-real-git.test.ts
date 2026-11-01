@@ -33,17 +33,14 @@ async function write(repo: string, relativePath: string, contents: string | Buff
   await writeFile(target, contents)
 }
 
-/** The forked-from commit the chip measures against, as branch compare would resolve it. */
 function commitAll(repo: string, message: string): string {
   git(repo, ['add', '-A'])
   git(repo, ['commit', '-q', '-m', message])
   return git(repo, ['rev-parse', 'HEAD'])
 }
 
-// No fixture path here looks like test or generated code, so it is all source.
 const NO_LINES = { added: 0, removed: 0 }
 
-/** What a plain `git diff <mergeBase>` reports, i.e. the number the chip must not disagree with. */
 function rangedDiffTotal(repo: string, mergeBase: string): { added: number; removed: number } {
   let added = 0
   let removed = 0
@@ -74,8 +71,7 @@ describe('branch line total against a real repository', () => {
     const repo = await createFixtureRepo()
     await write(repo, 'f.txt', 'line1\n')
     const mergeBase = commitAll(repo, 'base')
-    // Stage "+foo", then edit that same line to "bar" without staging it: the
-    // per-area rows read +1/-0 staged and +1/-1 unstaged, summing to +2/-1.
+    // Per-area counts sum to +2/-1 here, while the merge-base diff contains just +1/-0.
     await write(repo, 'f.txt', 'line1\nfoo\n')
     git(repo, ['add', 'f.txt'])
     await write(repo, 'f.txt', 'line1\nbar\n')
@@ -171,24 +167,6 @@ describe('branch line total against a real repository', () => {
     })
   })
 
-  it('counts an untracked-only branch from the untracked file contents', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'kept.txt', 'a\n')
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'src/new.ts', 'one\ntwo\nthree\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(result.entries.map((entry) => entry.area)).toEqual(['untracked'])
-    expect(result.branchLineTotal).toEqual({
-      added: 3,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
   it('excludes a binary-only change, matching numstat reporting it as "-"', async () => {
     const repo = await createFixtureRepo()
     await write(repo, 'blob.bin', Buffer.from([0, 1, 2, 3, 10, 65, 66]))
@@ -198,23 +176,6 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(git(repo, ['diff', '--numstat', mergeBase, '--'])).toMatch(/^-\t-\t/)
-    expect(result.branchLineTotal).toEqual({
-      added: 0,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
-  it('contributes nothing for a pure rename', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'f.txt', 'a\nb\nc\nd\n')
-    const mergeBase = commitAll(repo, 'base')
-    git(repo, ['mv', 'f.txt', 'g.txt'])
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
     expect(result.branchLineTotal).toEqual({
       added: 0,
       removed: 0,
@@ -264,10 +225,7 @@ describe('branch line total against a real repository', () => {
     })
   })
 
-  // Documented deviation from a pure `git diff`: the untracked half is added on
-  // top of the tracked range, so a deleted-then-recreated path is counted twice.
-  // Locked in deliberately — changing it must be a deliberate spec change.
-  it('counts both the deletion and the recreated untracked file for the same path', async () => {
+  it('omits the total when a deleted base file is recreated as untracked', async () => {
     const repo = await createFixtureRepo()
     await write(repo, 'gone.txt', 'a\nb\nc\n')
     const mergeBase = commitAll(repo, 'base')
@@ -281,12 +239,6 @@ describe('branch line total against a real repository', () => {
       ['untracked', 'gone.txt']
     ])
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 0, removed: 3 })
-    expect(result.branchLineTotal).toEqual({
-      added: 2,
-      removed: 3,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
+    expect(result.branchLineTotal).toBeUndefined()
   })
 })

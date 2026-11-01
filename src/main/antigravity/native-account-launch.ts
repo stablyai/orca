@@ -15,6 +15,10 @@ export async function prepareAntigravityAccountForLaunch(args: {
   envIsComplete?: boolean
   envToDelete?: readonly string[]
 }): Promise<void> {
+  // Windows account selection applies the host default; the shell and agent own each launch.
+  if (process.platform === 'win32') {
+    return
+  }
   const agent =
     args.launchAgent ??
     (args.command ? recognizeAgentProcessFromCommandLine(args.command)?.agent : null)

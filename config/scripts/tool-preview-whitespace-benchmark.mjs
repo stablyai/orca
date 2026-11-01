@@ -4,26 +4,44 @@ import { dirname, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
 const file = 'src/shared/native-chat-tool-summary.ts'
+const currentFile = 'src/shared/native-chat/tools/native-chat-tool-summary.ts'
 const baseline = process.argv[2] ?? '20ab9950654'
 const beforeSource = execFileSync('git', ['show', `${baseline}:${file}`], {
   encoding: 'utf8',
   windowsHide: true
 })
-const afterSource = fs.readFileSync(file, 'utf8')
-async function load(contents) {
+const afterSource = fs.readFileSync(currentFile, 'utf8')
+async function load(contents, sourceFile = file) {
   const { outputFiles } = await build({
-    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
+    stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(sourceFile)) },
     bundle: true,
     platform: 'node',
     format: 'esm',
-    write: false
+    write: false,
+    plugins: [
+      {
+        name: 'relocated-current-preview-dependencies',
+        setup(builder) {
+          builder.onResolve({ filter: /^\./ }, (args) => {
+            const target = resolve(args.resolveDir, args.path)
+            for (const name of ['native-chat-tool-preview-prefix', 'native-chat-tool-identity']) {
+              const previous = resolve('src/shared', name)
+              if (target === previous || target === `${previous}.ts`) {
+                return { path: resolve('src/shared/native-chat/tools', `${name}.ts`) }
+              }
+            }
+            return undefined
+          })
+        }
+      }
+    ]
   })
   return import(
     `data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`
   )
 }
 const before = await load(beforeSource),
-  after = await load(afterSource)
+  after = await load(afterSource, currentFile)
 const display = (m, input) => {
   const d = m.createToolInputDisplay(input)
   return { ...d, formatDetail: d.formatDetail() }

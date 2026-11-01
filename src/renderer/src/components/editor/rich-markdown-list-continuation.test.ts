@@ -11,8 +11,7 @@ import {
 } from './rich-markdown-list-continuation'
 
 function createEditor(content: JSONContent): Editor {
-  // Why: each Editor needs its own marked registry; sharing one module-scoped
-  // extension accumulates tokenizer state across tests.
+  // Isolate each editor’s marked registry so tokenizer state cannot accumulate across tests.
   return new Editor({
     element: null,
     extensions: [StarterKit, createIsolatedMarkdownExtensionForTests()],
@@ -267,6 +266,45 @@ describe('rich markdown list continuation', () => {
       editor.destroy()
     }
   })
+
+  it.each(['preceding paragraph', 'following paragraph', 'following list'] as const)(
+    'preserves a %s when the nested item also contains an empty paragraph',
+    (placement) => {
+      const blank = { type: 'paragraph' }
+      const kept = { type: 'paragraph', content: [{ type: 'text', text: 'Keep' }] }
+      const content =
+        placement === 'following list'
+          ? [blank, { type: 'bulletList', content: [{ type: 'listItem', content: [kept] }] }]
+          : placement === 'preceding paragraph'
+            ? [kept, blank]
+            : [blank, kept]
+      const editor = createEditor({
+        type: 'doc',
+        content: [
+          {
+            type: 'orderedList',
+            content: [
+              {
+                type: 'listItem',
+                content: [
+                  { type: 'paragraph', content: [{ type: 'text', text: 'Outer' }] },
+                  { type: 'orderedList', content: [{ type: 'listItem', content }] }
+                ]
+              }
+            ]
+          }
+        ]
+      })
+      try {
+        editor.commands.setTextSelection(firstEmptyParagraphPosition(editor))
+        const before = editor.getJSON()
+        expect(convertEmptyNestedOrderedItemToContinuation(editor)).toBe(false)
+        expect(editor.getJSON()).toEqual(before)
+      } finally {
+        editor.destroy()
+      }
+    }
+  )
 
   it('leaves non-empty nested ordered items to the default Backspace behavior', () => {
     const editor = createEditor({

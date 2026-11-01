@@ -1,53 +1,63 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
 
-/** Distance from the bottom, in points, still treated as "at the tail". */
 const AT_TAIL_SLOP = 80
 
-function isAtTail(event: NativeScrollEvent): boolean {
-  const { contentOffset, contentSize, layoutMeasurement } = event
-  return contentSize.height - (contentOffset.y + layoutMeasurement.height) <= AT_TAIL_SLOP
+/** The page's list is anchored at its end, so it reports the reader's distance from it itself. */
+function listReportsGestures(): boolean {
+  return Platform.OS !== 'web'
 }
 
-export type MobileNativeChatTailFollow<TItem> = {
-  /** Attach to the transcript list; the hook scrolls through this ref alone. */
-  listRef: RefObject<FlatList<TItem> | null>
-  /** Render flag for the jump-to-latest control. */
+/** Holds the first visible row in place when rows above it change. The header is not a row. */
+const ANCHOR_BELOW_HEADER = { minIndexForVisible: 1 } as const
+const ANCHOR_AT_FIRST_ROW = { minIndexForVisible: 0 } as const
+
+export function mobileNativeChatRowAnchor(hasHeader: boolean): { minIndexForVisible: number } {
+  return hasHeader ? ANCHOR_BELOW_HEADER : ANCHOR_AT_FIRST_ROW
+}
+
+function distanceFromTail(event: NativeScrollEvent): number {
+  const { contentOffset, contentSize, layoutMeasurement } = event
+  return contentSize.height - (contentOffset.y + layoutMeasurement.height)
+}
+
+function isAtTail(event: NativeScrollEvent): boolean {
+  return distanceFromTail(event) <= AT_TAIL_SLOP
+}
+
+export type MobileNativeChatListHandle = {
+  scrollToOffset: (params: { animated: boolean; offset: number }) => void
+  scrollToEnd: (params: { animated: boolean }) => void
+}
+
+export type MobileNativeChatTailFollow = {
+  listProps: { ref: (list: MobileNativeChatListHandle | null) => void }
+  pageListProps: {
+    ref: (list: MobileNativeChatListHandle | null) => void
+    isFollowing: () => boolean
+    onEndDistance: (fromEnd: number, byReader: boolean) => void
+  }
   showJumpToTail: boolean
-  /** Passive maintenance: re-pin after the viewport resizes. */
   pinToTail: () => void
-  /** Content-size maintenance using the list's authoritative measured height. */
   pinToTailAfterContentResize: (_width: number, height: number) => void
-  /** Explicit jump — send, or the jump-to-latest control. Resumes following. */
   jumpToTail: () => void
   beginUserScroll: () => void
   endUserDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   beginMomentum: () => void
   endMomentum: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
-  /** Leave the tail deliberately, e.g. before prepending older history. */
-  detachFromTail: () => void
+  scrollMayLoadEarlier: () => boolean
   recordScrollMetrics: (event: NativeScrollEvent) => void
 }
 
-/** Sole owner of transcript scroll position.
- *
- *  Streaming used to have several tail-followers at once: a delayed *animated*
- *  `scrollToEnd` alongside an immediate non-animated one on content growth. The
- *  animated command eases toward the endpoint measured when it started, so while
- *  tokens kept arriving it ran backwards until the content-size pin yanked it
- *  forward — the visible drift-then-snap. One owner, never animated, removes it.
- *
- *  Intent (`following`) is kept separate from geometry (at-tail): a programmatic
- *  scroll reports metrics like any other, so letting metrics decide intent let
- *  the view argue with itself. Only the user's own gestures and explicit jumps
- *  move intent; metrics only decide where a *released* gesture leaves us.
- */
-export function useMobileNativeChatTailFollow<TItem>(args: {
-  /** Guards `scrollToEnd` against an empty list. */
+// Use one non-animated follower: competing animated endpoints drift backward during streaming.
+// Reader gestures and explicit jumps own follow intent; correction metrics must not change it.
+export function useMobileNativeChatTailFollow(args: {
   hasItems: boolean
-}): MobileNativeChatTailFollow<TItem> {
-  const { hasItems } = args
-  const listRef = useRef<FlatList<TItem> | null>(null)
+  /** The chat shown; another one opens following, whatever the reader did here. */
+  scopeKey: string
+}): MobileNativeChatTailFollow {
+  const { hasItems, scopeKey } = args
+  const listRef = useRef<MobileNativeChatListHandle | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
   // Event handlers read intent at event time, before a re-render lands.
@@ -55,6 +65,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
+  const scopeKeyRef = useRef(scopeKey)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -73,19 +84,21 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     setAtTailFlag(next)
   }, [])
 
+  const attachList = useCallback((list: MobileNativeChatListHandle | null) => {
+    listRef.current = list
+  }, [])
+
   const pinToTail = useCallback(() => {
-    if (!followingRef.current || !hasItems) {
-      return
+    if (followingRef.current && hasItems) {
+      listRef.current?.scrollToEnd({ animated: false })
     }
-    listRef.current?.scrollToEnd({ animated: false })
   }, [hasItems])
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
-      if (!followingRef.current || !hasItems) {
-        return
+      if (followingRef.current && hasItems) {
+        listRef.current?.scrollToOffset({ animated: false, offset: height })
       }
-      listRef.current?.scrollToOffset({ animated: false, offset: height })
     },
     [hasItems]
   )
@@ -98,8 +111,23 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   }, [])
 
   const recordScrollMetrics = useCallback(
-    (event: NativeScrollEvent) => setAtTail(isAtTail(event)),
+    (event: NativeScrollEvent) => {
+      if (listReportsGestures()) {
+        setAtTail(isAtTail(event))
+      }
+    },
     [setAtTail]
+  )
+
+  // Detach even on one-point reader moves; programmatic corrections must not alter intent.
+  const onEndDistance = useCallback(
+    (fromEnd: number, byReader: boolean) => {
+      setAtTail(fromEnd <= AT_TAIL_SLOP)
+      if (byReader) {
+        setFollowing(fromEnd <= 1)
+      }
+    },
+    [setAtTail, setFollowing]
   )
 
   const jumpToTail = useCallback(() => {
@@ -159,17 +187,27 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     [finishUserScroll]
   )
 
-  const detachFromTail = useCallback(() => {
-    clearUserScrollSettle()
-    userScrollActiveRef.current = false
-    setAtTail(false)
-    setFollowing(false)
-  }, [clearUserScrollSettle, setAtTail, setFollowing])
+  const scrollMayLoadEarlier = useCallback(
+    () => listReportsGestures() && userScrollActiveRef.current,
+    []
+  )
+
+  const isFollowing = useCallback(() => followingRef.current, [])
+
+  // Reset before paint on chat changes so a mounted view cannot expose the previous reader position.
+  useLayoutEffect(() => {
+    if (scopeKeyRef.current === scopeKey) {
+      return
+    }
+    scopeKeyRef.current = scopeKey
+    jumpToTail()
+  }, [scopeKey, jumpToTail])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
-    listRef,
+    listProps: { ref: attachList },
+    pageListProps: { ref: attachList, isFollowing, onEndDistance },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,
@@ -178,7 +216,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     endUserDrag,
     beginMomentum,
     endMomentum,
-    detachFromTail,
+    scrollMayLoadEarlier,
     recordScrollMetrics
   }
 }

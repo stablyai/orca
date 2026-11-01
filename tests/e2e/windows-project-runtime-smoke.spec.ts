@@ -101,7 +101,7 @@ test.describe('Windows project runtime smoke', () => {
         }
 
         await window.api.repos.add({ path: wslRepoPath })
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         const state = store.getState()
         const hostRepo = state.repos.find((repo) => repo.path === hostRepoPath)
         const wslRepo = state.repos.find((repo) => repo.path === wslRepoPath)
@@ -119,12 +119,20 @@ test.describe('Windows project runtime smoke', () => {
           throw new Error('Expected host and WSL smoke projects to be loaded')
         }
 
-        await state.updateProject(hostProject.id, {
-          localWindowsRuntimePreference: { kind: 'windows-host' }
-        })
-        await state.updateProject(wslProject.id, {
-          localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
-        })
+        await state.updateProject(
+          hostProject.id,
+          {
+            localWindowsRuntimePreference: { kind: 'windows-host' }
+          },
+          'local'
+        )
+        await state.updateProject(
+          wslProject.id,
+          {
+            localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+          },
+          'local'
+        )
 
         const hostWorktrees = await window.api.worktrees.listDetected({ repoId: hostRepo.id })
         const wslWorktrees = await window.api.worktrees.listDetected({ repoId: wslRepo.id })
@@ -178,7 +186,8 @@ test.describe('Windows project runtime smoke', () => {
     ).toBeVisible()
 
     await orcaPage.evaluate(async (repoId) => {
-      await window.api.repos.remove({ repoId })
+      const repo = window.__store!.getState().repos.find((entry) => entry.id === repoId)
+      await window.api.repos.removeForHost({ repoId, hostId: repo?.executionHostId ?? 'local' })
     }, smoke.wslRepoId)
   })
 })

@@ -60,9 +60,7 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
 
-  // Why: this is the case the hold metrics alone cannot see. A NOWAIT grab that
-  // fails has no duration, so a retry storm used to leave every hold field at
-  // zero while the lock was saturated.
+  // Failed NOWAIT has no duration; saturated retry storms must not leave all hold metrics looking healthy.
   it('counts failed acquisitions in a window that recorded no holds', () => {
     const samples = new CellInventoryHoldSamples()
     for (let attempt = 0; attempt < 65; attempt++) samples.recordUnavailable()
@@ -100,6 +98,26 @@ describe('cell inventory hold samples', () => {
 
     expect(samples.consumeCounts().cellInventoryLockUnavailable).toBe(4)
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
+  })
+
+  // Why: the shared max and p95 mix every lock, so only the per-site p99 says
+  // whether a drain return waits on its own regional rows or on the inventory.
+  it('reports a p99 per hold site', () => {
+    const samples = new CellInventoryHoldSamples()
+    for (let ms = 1; ms <= 100; ms++) {
+      samples.record(ms)
+      samples.record(ms * 2, 'isolated-replacement')
+    }
+    samples.record(7, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHolds: 201,
+      cellInventoryHoldMaxSite: 'isolated-replacement',
+      inventoryHoldMsP99: 99,
+      isolatedReplacementHoldMsP99: 198,
+      isolatedReplacementHolds: 100,
+      rehomeTargetRowHoldMsP99: 7
+    })
   })
 
   // Why: the alert reads one max across every lock, so the label is the only

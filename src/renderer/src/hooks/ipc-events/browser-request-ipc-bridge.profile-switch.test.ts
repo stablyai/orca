@@ -61,6 +61,7 @@ describe('browser profile request teardown', () => {
       value: {
         ui: {
           onRequestTabCreate: () => () => {},
+          onRequestRemoteCliBrowserScope: () => () => {},
           replyTabCreate: vi.fn(),
           onRequestTabSetProfile: (listener: typeof mocks.profileListener) => {
             mocks.profileListener = listener
@@ -75,7 +76,7 @@ describe('browser profile request teardown', () => {
   })
 
   it('keeps document-preview guests while rebuilding URL siblings for a profile change', () => {
-    registerBrowserRequestIpcBridge([], () => false)
+    registerBrowserRequestIpcBridge([])
 
     mocks.profileListener?.({
       requestId: 'request-1',

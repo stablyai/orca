@@ -35,11 +35,11 @@ function buildSummaries(): Record<string, SettingOwnershipSummary> {
       )
     },
     agentLaunchDefaults: {
-      ownership: 'client-default',
-      label: translate('auto.components.settings.settingOwnership.clientDefault', 'Client default'),
+      ownership: 'host-collection',
+      label: translate('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
       description: translate(
         'auto.components.settings.settingOwnership.agentLaunchDefaults',
-        'Default agent, command overrides, CLI arguments, and launch environment are client preferences. SSH and remote server launches still validate host availability at run time.'
+        'Default agent, command overrides, CLI arguments, and launch environment are saved on the selected host.'
       )
     },
     terminalQuickCommands: {

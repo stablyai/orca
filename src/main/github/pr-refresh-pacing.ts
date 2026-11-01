@@ -6,6 +6,14 @@ const BACKGROUND_BUDGET_MAX = 20
 const ACTIVE_BURST_WINDOW_MS = 30_000
 const ACTIVE_BURST_MAX = 3
 
+export function usesActiveRefreshPacing(entry: PRRefreshQueueEntry): boolean {
+  // Selected admission survives deselection while queued; periodic follow-ups clear the flag.
+  return (
+    entry.reason === 'active' ||
+    (entry.reason === 'visible' && entry.priority >= 80 && entry.bypassBackgroundBudget === true)
+  )
+}
+
 export class PRRefreshPacing {
   private readonly backgroundStarts: number[] = []
   private readonly activeStartsByScope = new Map<string, number[]>()
@@ -42,7 +50,7 @@ export class PRRefreshPacing {
   }
 
   activeOrder(a: PRRefreshQueueEntry, b: PRRefreshQueueEntry): number {
-    if (a.reason !== 'active' || b.reason !== 'active') {
+    if (!usesActiveRefreshPacing(a) || !usesActiveRefreshPacing(b)) {
       return 0
     }
     if (this.activeBurstScope(a) !== this.activeBurstScope(b)) {
@@ -52,7 +60,7 @@ export class PRRefreshPacing {
   }
 
   entryDelay(entry: PRRefreshQueueEntry): number {
-    const activeDelay = entry.reason === 'active' ? this.nextActiveBurstDelay(entry) : 0
+    const activeDelay = usesActiveRefreshPacing(entry) ? this.nextActiveBurstDelay(entry) : 0
     if (activeDelay > 0) {
       return activeDelay
     }
@@ -63,7 +71,7 @@ export class PRRefreshPacing {
   }
 
   isActiveBurstDelayed(entry: PRRefreshQueueEntry): boolean {
-    return entry.reason === 'active' && this.nextActiveBurstDelay(entry) > 0
+    return usesActiveRefreshPacing(entry) && this.nextActiveBurstDelay(entry) > 0
   }
 
   noteActiveStart(entry: PRRefreshQueueEntry): void {

@@ -15,6 +15,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
+import { resolveSettingsHostScope } from '@/components/settings/settings-host-scope'
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -27,6 +28,8 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
@@ -49,13 +52,17 @@ export default function AgentSettingsDialog({
   if (!settings) {
     return null
   }
+  // Why: no picker here; the pane names the default host it detects on.
+  const hostScope = resolveSettingsHostScope({
+    choice: null,
+    defaultEnvironmentId: settings.activeRuntimeEnvironmentId,
+    savedEnvironmentIds: runtimeEnvironments.map((environment) => environment.id),
+    catalogHydrated: runtimeEnvironmentCatalogHydrated
+  })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Why: widen past the default sm:max-w-lg so the agent rows have room
-          for the name + pills + action cluster without wrapping, while a
-          bounded max-h plus overflow-y keeps the list scrollable when many
-          agents are detected. */}
+      {/* Allow name/pills/actions to fit; the agent list owns bounded height and scrolling. */}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">
@@ -72,6 +79,7 @@ export default function AgentSettingsDialog({
           <AgentsPane
             settings={settings}
             updateSettings={updateSettings}
+            hostScope={hostScope}
             wslSupportedPlatform={wslSupportedPlatform}
             wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
             wslDistros={localWindowsTerminalCapabilities.wslDistros}

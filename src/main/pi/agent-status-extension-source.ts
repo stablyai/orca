@@ -1,26 +1,14 @@
 import { getPiAgentStatusPostQueueSourceLines } from './agent-status-post-queue-source'
-// Why: pi has no settings.json hook surface — its extensibility is the
-// in-process TypeScript extension API (pi.on('agent_start'), 'tool_call',
-// etc.). To get pi panes into the unified agent-hooks pipeline alongside
-// Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
-// the selected Pi/OMP extension dir (PiTitlebarExtensionService) that POSTs to
-// /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
-// PTY already receives from ipc/pty.ts.
-//
-// Each Pi process gets its own paneKey through env. Like the OpenCode plugin,
-// the returned source is a string (loaded by jiti from disk inside the pi process), so we
-// keep the source body in plain JS without TS types and avoid pulling pi or
-// any Orca dep into the pi runtime.
+// Pi has no settings hook surface; install a self-contained extension that posts through the pane's Orca endpoint.
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'
+import { getPiSubagentSnapshotSourceLines } from './agent-status-subagent-roster-source'
 
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
-/** Source of the status extension installed into a Pi-family agent's extension
- *  dir: it POSTs lifecycle, tool, and (under OMP) model events to Orca's hook
- *  endpoint. Returned as one self-contained string — it runs inside the agent. */
+/** Self-contained source runs inside Pi-family agents without Orca module imports. */
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
   // OMP resumes by id; its persistent file path lets native chat skip discovery.
   const sessionMetadataSourceLines =
@@ -53,14 +41,13 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '  return ompRuntime ? { ...runtimeOmpSessionMetadata, ...modelMetadata } : sessionMetadata',
           '}',
           '',
-          'function getPersistedSessionMetadata(): Record<string, unknown> {',
-          '  const sessionFile = sessionMetadata.session_file',
+          'function getPersistedSessionMetadata(metadata: Record<string, unknown>): Record<string, unknown> {',
+          '  const sessionFile = metadata.session_file',
           "  if (typeof sessionFile !== 'string' || !sessionFile) return {}",
           '  try {',
           "    const fs = require('fs')",
-          '    // Why: Pi publishes its planned path before creating the transcript;',
-          '    // recheck on every post so the first completed turn becomes resumable.',
-          '    return fs.existsSync(sessionFile) ? sessionMetadata : {}',
+          '    // Pi announces paths before creating transcripts; recheck each post so completed turns become resumable.',
+          '    return fs.existsSync(sessionFile) ? metadata : {}',
           '  } catch {',
           '    return {}',
           '  }',
@@ -88,24 +75,20 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '}',
           ''
         ]
-  // Why: OMP emits no model_select of its own, so the active model is re-read from
-  // the event context on every post; the pane's status then always carries it.
-  // Reported only under the OMP runtime — Pi has no chat surface consuming it yet.
+  // OMP lacks model_select today, so reread its active model on every post.
   const modelMetadataSourceLines = [
     'let modelMetadata: Record<string, unknown> = {}',
     'let ompModelSwitchSupported = false',
     'let modelSessionId: unknown = undefined',
     '',
-    '// Why: OMP switches sessions in-process; a model belongs to the session that',
-    '// reported it, so it must not leak onto the first posts of the next one.',
+    "// OMP session switches must not carry the previous session's model.",
     'function trackModelSession(sessionId: unknown): void {',
     '  if (sessionId === modelSessionId) return',
     '  modelSessionId = sessionId',
     '  modelMetadata = {}',
     '}',
     '',
-    '// Why: pi and OMP expose the active model as { provider, id } on both the event',
-    '// context and model_select events; the joined selector is what --model accepts.',
+    '// Join provider/id as the selector accepted by --model.',
     'function updateModelMetadata(source: unknown): void {',
     '  try {',
     "    if (!source || typeof source !== 'object' || !('model' in source)) return",
@@ -115,40 +98,32 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     "    const id = 'id' in model && typeof model.id === 'string' ? model.id : ''",
     "    if (provider && id) modelMetadata = { model: provider + '/' + id, ...(ompModelSwitchSupported ? { model_switch_command: 'orca-model' } : {}) }",
     '  } catch {',
-    '    // Why: a throwing model getter must never break status delivery.',
+    '    // Throwing model getters cannot interrupt status delivery.',
     '  }',
     '}'
   ]
 
-  // Why: Pi resumes from an existing transcript; OMP resumes directly by session id (#8962).
+  // Pi resumes by transcript; OMP resumes by session ID (#8962).
   const payloadLine =
     kind !== 'omp'
-      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata()), ...extra },'
-      : '    payload: { hook_event_name: hookEventName, ...metadata, ...extra },'
+      ? '    payload: { hook_event_name: hookEventName, ...(ompRuntime ? metadata : getPersistedSessionMetadata(metadata)), ...subagents, ...extra },'
+      : '    payload: { hook_event_name: hookEventName, ...metadata, ...subagents, ...extra },'
 
-  // Why: keep this string self-contained — it runs inside the pi process,
-  // so it cannot import from Orca's main bundle. fs/http coords come from
-  // the same endpoint file the OpenCode plugin reads (process.env is frozen
-  // at PTY spawn, so on Orca restart we have to re-read it from disk).
+  // Read endpoint files after Orca restarts because PTY-spawn environment stays frozen.
   return [
-    '// Why: no package-specific type import here. Pi and OMP expose the same',
-    '// extension API, but publish their types under different package names.',
-    '// Why: warn-once so a recurring parse error on a malformed endpoint',
-    '// file does not spam stderr inside the pi TUI on every event.',
+    '// Pi/OMP share APIs but publish types under different package names.',
+    '// Warn once so malformed endpoint files cannot flood the TUI on every event.',
     'let warnedBadEndpoint = false',
-    '// Why: Pi awaits extension handlers. Status delivery stays off that',
-    '// critical path, and the latest-only pending slot prevents a stalled',
-    '// Orca receiver from building an unbounded queue of obsolete snapshots.',
+    '// Pi awaits handlers; deliver asynchronously with bounded pending state to avoid blocking turns.',
     'const HOOK_POST_TIMEOUT_MS = 1000',
-    ...getPiAgentStatusPostQueueSourceLines(),
+    ...getPiAgentStatusPostQueueSourceLines(kind),
     ...(kind === 'pi' ? ['let piUiPromptDepth = 0', 'let piTurnInFlight = false'] : []),
     ...modelMetadataSourceLines,
     '',
+    ...getPiSubagentSnapshotSourceLines(),
     ...sessionMetadataSourceLines,
     '',
-    '// Why: re-reading the endpoint file on every event is cheap (small file,',
-    '// rare changes) but stat+mtime caching avoids re-parsing on every event',
-    '// during streaming tool execution. Mirrors the OpenCode plugin cache shape.',
+    '// Stat/mtime caching avoids reparsing endpoint files during streaming events.',
     "let cachedEndpointKey = ''",
     'let cachedEndpointValues: Record<string, string> | null = null',
     '',
@@ -166,9 +141,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     "      const contents: string = fs.readFileSync(path, 'utf8')",
     '      const out: Record<string, string> = {}',
     '      for (const line of contents.split(/\\r?\\n/)) {',
-    '        // Why: parse `KEY=VALUE` (POSIX endpoint.env) and `set KEY=VALUE`',
-    '        // (Windows endpoint.cmd) with one regex; strip a trailing CR so',
-    '        // mixed-EOL files do not leak \\r into the value.',
+    '        // Accept POSIX KEY=VALUE and Windows set KEY=VALUE; strip mixed-EOL carriage returns.',
     '        const m = line.match(/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/)',
     "        if (m) out[m[1]] = m[2].replace(/\\r$/, '')",
     '      }',
@@ -202,25 +175,33 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '',
     ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
-    'function post(hookEventName: string, extra: Record<string, unknown> = {}): void {',
+    'function post(hookEventName: string, extra: Record<string, unknown> = {}, final = false): void {',
     '  const ompRuntime = isOmpRuntime()',
-    '  cancelPostRetry()',
+    // Pin identity at event time because payload construction waits until delivery.
     '  const metadata = getPostSessionMetadata(ompRuntime)',
+    '  if (final) {',
+    '    postQueue.finalPosts.push({ revision: postQueue.postRevision, attempts: 0, delivered: false, hookEventName, extra, metadata, ompRuntime, final })',
+    '    drainPosts()',
+    '    return',
+    '  }',
+    '  cancelPostRetry()',
+    // New turns supersede same-session completions preserved across reload.
+    "  if (hookEventName === 'before_agent_start' || hookEventName === 'agent_start') retireTurnCompletionPosts(metadata)",
     '// Model changes must not erase an unacknowledged completion in the latest-only slot.',
-    "  const previousCompletion = latestPost?.hookEventName === 'agent_end' && !latestPost.delivered && latestPost.metadata.session_id === metadata.session_id",
-    '  pendingPost = {',
-    '    revision: ++postRevision,',
+    "  const previousCompletion = postQueue.latestPost?.hookEventName === 'agent_end' && !postQueue.latestPost.delivered && postQueue.latestPost.metadata.session_id === metadata.session_id",
+    '  postQueue.pendingPost = {',
+    '    revision: ++postQueue.postRevision,',
     '    attempts: 0,',
     '    delivered: false,',
     "    hookEventName: ompRuntime && hookEventName === 'model_select' && previousCompletion ? 'agent_end' : hookEventName,",
-    // Why: every coalesced snapshot must retain an open modal, not just its start event.
+    // Every coalesced snapshot must retain current modal state.
     kind === 'pi'
       ? '    extra: { ...extra, ...(!ompRuntime && piUiPromptDepth > 0 ? { ui_prompt_active: true } : {}) },'
       : '    extra,',
     '    metadata,',
     '    ompRuntime,',
     '  }',
-    '  latestPost = pendingPost',
+    '  postQueue.latestPost = postQueue.pendingPost',
     '  drainPosts()',
     '}',
     '',
@@ -228,13 +209,14 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  hookEventName: string,',
     '  extra: Record<string, unknown>,',
     '  metadata: Record<string, unknown>,',
-    '  ompRuntime: boolean',
+    '  ompRuntime: boolean,',
+    '  final: boolean',
     '): Promise<void> {',
     '  const coords = resolveHookCoords()',
     '  const paneKey = process.env.ORCA_PANE_KEY',
     '  if (!coords.port || !coords.token || !paneKey) return',
     '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath(ompRuntime)}`',
-    '  const body = JSON.stringify({',
+    '  const bodyWith = (subagents: Record<string, unknown>): string => JSON.stringify({',
     '    paneKey,',
     "    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || '',",
     "    tabId: process.env.ORCA_TAB_ID || '',",
@@ -243,6 +225,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '    version: coords.version,',
     payloadLine,
     '  })',
+    '  const bareBody = bodyWith({})',
+    '  const body = final ? bareBody : bodyWith(subagentPayload(HOOK_BODY_BUDGET_BYTES - Buffer.byteLength(bareBody)))',
     "  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null",
     '  let timeout: ReturnType<typeof setTimeout> | undefined',
     '  const timeoutPromise = new Promise<never>((_resolve, reject) => {',
@@ -267,8 +251,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '    ])',
     "    if (!response.ok) throw new Error('Orca hook HTTP ' + response.status)",
     '  } catch (error) {',
-    '    // Why: status reporting must never fail the pi run just because Orca',
-    '    // is unavailable or the loopback request failed (e.g. Orca restart).',
+    '    // After WSL loopback failure, retry through host curl.exe.',
     '    if (!isWslRuntime()) throw error',
     '    await postViaWindowsCurl(body, ompRuntime)',
     '  } finally {',

@@ -3,7 +3,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
-import { mergeWorktree } from './worktree-logic'
+import { mergeWorktree } from './worktree-metadata-merge'
 import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanArgs,
@@ -47,8 +47,7 @@ import {
 import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
-// Why: SSH repos pay a worktree-list round trip each; strictly serial repos
-// made scan wall-clock the sum of per-repo network latencies.
+// Overlap repo scans to avoid summing SSH listing round-trip latency.
 const REPO_SCAN_CONCURRENCY = 2
 
 type WorkspaceCleanupScanRepoProgress = {
@@ -162,9 +161,8 @@ async function scanRepoWorkspaces(
     })
   }
 
-  if (route.kind === 'ssh' && !route.provider) {
-    // Why: a disconnected host still owns real workspaces; the full list shows
-    // them (blocked), while legacy scans keep omitting what they cannot inspect.
+  if (route.kind === 'ssh') {
+    // Full lists retain unreachable workspaces as blocked; legacy scans omit uninspectable hosts.
     const candidates =
       targetWorktreeIds || includeAllWorkspaces
         ? synthesizeDisconnectedSshCleanupCandidates(
@@ -195,8 +193,7 @@ async function scanRepoWorkspaces(
             hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
           return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
         })
-  // Why: with includeAllWorkspaces the browser shows every workspace and lets
-  // filters narrow it; an age threshold here would hide rows from all views.
+  // Full-list views filter client-side; age thresholds here would hide workspaces from every view.
   const candidateWorktrees = targetWorktreeIds
     ? mergedWorktrees.filter((worktree) => targetWorktreeIds.has(worktree.id))
     : mergedWorktrees.filter((worktree) =>
@@ -207,16 +204,12 @@ async function scanRepoWorkspaces(
           scannedAt
         })
       )
-  // Why: with a target list or the full-list browser, every filtered row will
-  // be reported; counting them upfront keeps the progress bar honest instead
-  // of advancing discovered/scanned in lockstep at ~100%.
+  // Discover all targeted/full-list rows upfront so progress does not stay near 100%.
   const reportDiscoveredUpfront = targetWorktreeIds !== undefined || includeAllWorkspaces
   if (reportDiscoveredUpfront && candidateWorktrees.length > 0) {
     onWorktreesDiscovered?.(candidateWorktrees.length)
   }
-  // Why: fs stat has no cancellation, so on a hung network/WSL mount every
-  // timed-out row would abandon more threadpool work. After the first timeout,
-  // stop statting this repo and use persisted activity only.
+  // Stat cannot cancel: after one timeout, use persisted activity rather than queueing more work on a hung mount.
   let activityStatsUnavailable = false
   const fsActivityCache: WorkspaceCleanupFsActivityCache = new Map()
   const candidatesWithSkipped = await mapWorkspaceCleanupWithConcurrency(
@@ -224,8 +217,7 @@ async function scanRepoWorkspaces(
     WORKTREE_SCAN_CONCURRENCY,
     async (worktree) => {
       throwIfWorkspaceCleanupScanAborted(signal)
-      // Why: externally-created worktrees can miss Orca activity stamps; local
-      // filesystem metadata is a conservative guard before suggesting deletion.
+      // Filesystem activity protects external worktrees missing Orca stamps from deletion suggestions.
       const persistedActivityWorktree = resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
       const persistedActivityIsRecent = !isWorkspaceInactiveForCleanup(
         persistedActivityWorktree,
@@ -256,8 +248,7 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         route,
-        // Why: full-fleet scans defer git for recently active rows; removal preflight
-        // forces a fresh read before any selected row can be deleted.
+        // Defer Git for active rows during fleet scans; forced removal preflight reads fresh evidence.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         signal

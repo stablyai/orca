@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const prCreateEmptyStateStyles = StyleSheet.create({
+export const prCreateEmptyStateStyles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -14,7 +15,7 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
@@ -43,7 +44,7 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   createButtonDisabled: {
@@ -59,13 +60,14 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   iconButtonPressed: {
     backgroundColor: colors.bgRaised
   },
   body: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   bodyTitle: {
@@ -82,7 +84,8 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
-    padding: spacing.md
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg
   },
   // Secondary link-an-existing-PR affordance, set apart from the body copy.
   linkButton: {
@@ -104,4 +107,4 @@ export const prCreateEmptyStateStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   }
-})
+}))

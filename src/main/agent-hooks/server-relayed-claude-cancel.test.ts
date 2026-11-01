@@ -1,12 +1,9 @@
-// The captured Claude cancels (see server-claude-cancel-captures.test.ts) replayed on an SSH pane:
-// the hooks go through a real relay-side listener, which owns the provider records, and reach the
-// desktop only as relayed payloads. The relay never learns of the cancel the desktop infers from
-// Ctrl+C, so everything it restates afterwards still says the main agent is working.
+// Replay captured cancels over SSH; the relay never sees desktop Ctrl+C inference and may restate stale main-agent work.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../relay/agent-hook-server'
+import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 import { hookAt, loadCapture, type CapturedHook } from './claude-cancel-capture.test-fixture'
@@ -47,7 +44,6 @@ function temporaryDir(prefix: string): string {
 
 type SshPane = {
   relay: RelayAgentHookServer
-  /** The desktop the relay forwards to; a desktop restart swaps it. */
   desktop: AgentHookServer
   post: (payload: Record<string, unknown>) => Promise<void>
 }
@@ -79,7 +75,7 @@ async function startSshPane(desktop: AgentHookServer): Promise<SshPane> {
   return pane
 }
 
-/** The relay process restarts (upgrade, crash) with fresh listener state; the remote agent keeps running. */
+/** Restart relay state while the remote agent keeps running. */
 async function restartRelay(pane: SshPane): Promise<void> {
   pane.relay.stop()
   pane.relay = createRelay(() => pane.desktop)
@@ -133,7 +129,7 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       subagents: [expect.objectContaining({ state: 'working' })]
     })
 
-    // The child's tool activity after the cancel: the relay's record still has the main agent working.
+    // Child activity arrives while the relay still believes the main agent is working.
     const childTool = hookAt(records, 9)
     expect(childTool.payload.agent_id).toBeDefined()
     await pane.post(childTool.payload)
@@ -142,12 +138,11 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
 
-    // Both children finish on the remote; with nothing left running the cancelled row settles.
+    // Owed child notification holds the relay row while desktop cancellation remains authoritative.
     await pane.post(subagentStop(4))
     await pane.post(subagentStop(9))
     expect(row(pane.desktop)).toMatchObject({
-      state: 'done',
-      interrupted: true,
+      state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
     expect(row(pane.desktop).subagents).toBeUndefined()
@@ -178,17 +173,17 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
 
     const childTool = hookAt(records, 6).payload
     await pane.post({ ...childTool, hook_event_name: 'PermissionRequest' })
-    // A denied request runs no tool; the child moves on to a different one, and the card stays up.
+    // Denial runs no tool; unrelated child progress must not dismiss the request.
     await pane.post({ ...childTool, tool_use_id: 'toolu_after_denial' })
     expect(row(pane.desktop)).toMatchObject({
       state: 'waiting',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
 
+    // Child end dismisses its permission card while the owed notification still holds the row.
     await pane.post(subagentStop(4))
     expect(row(pane.desktop)).toMatchObject({
-      state: 'done',
-      interrupted: true,
+      state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
   })
@@ -211,7 +206,7 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     await postCaptured(pane, upToCancel)
     expect(pressCtrlC(pane.desktop)).toBe(true)
 
-    // Why: the restarted relay has no prompt cache or main agent record, so the child's hook arrives with an empty prompt.
+    // A restarted relay has no prompt or main-agent cache, so child hooks arrive with empty prompt.
     await restartRelay(pane)
     await pane.post(hookAt(records, 9).payload)
     expect(row(pane.desktop)).toMatchObject({
@@ -234,7 +229,7 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     const desktop = pane.desktop
     expect(pressCtrlC(desktop)).toBe(true)
 
-    // The link drops: the next prompt and the child's hook reach only the relay.
+    // A desktop replacement misses subsequent hooks retained only by the relay.
     pane.desktop = new AgentHookServer()
     running.push(pane.desktop)
     await pane.post(hookAt(records, 10).payload)
@@ -250,7 +245,7 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     const firstDesktop = new AgentHookServer()
     await firstDesktop.start({ env: 'production', userDataPath })
     const pane = await startSshPane(firstDesktop)
-    // The main agent Stops with the child running, and the desktop restarts.
+    // Restart the desktop after the main agent Stops with a live child.
     await postCaptured(
       pane,
       [0, 1, 2, 3, 4, 5].map((index) => hookAt(records, index))
@@ -267,17 +262,22 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     await desktop.start({ env: 'production', userDataPath })
     pane.desktop = desktop
     running.push(desktop)
-    // Hydration seeds the desktop's own roster from the saved row, relayed or not.
     expect(desktop._getStateForTests().claudeSubagentRosterByPaneKey.has(PANE)).toBe(true)
 
-    // The child finishes on the remote, then a new turn starts and is cancelled.
+    // Finish the remote child and notification turn, then cancel a new turn.
     await pane.post(subagentStop(4))
+    expect(row(desktop)).toMatchObject({ state: 'working' })
+    await pane.post({
+      hook_event_name: 'UserPromptSubmit',
+      prompt: `<task-notification>\n<task-id>${String(hookAt(records, 4).payload.agent_id)}</task-id>\n<status>completed</status>`
+    })
+    await pane.post({ hook_event_name: 'Stop', background_tasks: [] })
     expect(row(desktop)).toMatchObject({ state: 'done' })
     await pane.post(hookAt(records, 7).payload)
     expect(row(desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
     expect(pressCtrlC(desktop)).toBe(true)
 
-    // Why: nothing runs on the remote; the desktop's seed is not the relay's roster.
+    // A desktop-restored roster cannot override current remote evidence that no work remains.
     expect(row(desktop)).toMatchObject({
       state: 'done',
       interrupted: true,
@@ -309,7 +309,6 @@ describe('a relayed Claude cancel with a background shell (captured)', () => {
       mainAgent: { state: 'done', outcome: 'cancellation' }
     })
 
-    // Why: a new turn is the main agent's own fact again; the held verdict must not outlive it.
     await pane.post(hookAt(records, 7).payload)
     expect(row(pane.desktop)).toMatchObject({ state: 'working', mainAgent: { state: 'working' } })
     await pane.post(hookAt(records, 8).payload)
@@ -343,7 +342,7 @@ it("keeps the cancel when a teammate's idle hook arrives after the late-hook win
     vi.setSystemTime(Date.now() + 2_000)
     expect(pressCtrlC(pane.desktop)).toBe(true)
 
-    // Why: TeammateIdle names its child by `teammate_name` only, so it carries no agent id.
+    // TeammateIdle identifies children only by teammate_name.
     vi.setSystemTime(Date.now() + 20_000)
     await pane.post({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
     expect(row(pane.desktop)).toMatchObject({

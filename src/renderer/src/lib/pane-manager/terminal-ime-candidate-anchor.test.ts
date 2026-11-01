@@ -57,8 +57,7 @@ function createHarness(): AnchorHarness {
     return { width: COLS * CELL_WIDTH, height: ROWS * CELL_HEIGHT } as DOMRect
   }
 
-  // `width` is xterm's, not ours: it sizes the textarea to the preedit just before this
-  // listener runs, and the clamp reads it back to keep that box inside the screen.
+  // Read xterm’s just-written preedit width so the clamp preserves its box inside the screen.
   const style = { top: '', left: '', width: '' }
   const textarea = {
     isConnected: true,
@@ -143,8 +142,7 @@ describe('installTerminalImeCandidateAnchor', () => {
       typeHangulSyllable(harness, syllable)
     }
 
-    // 30 compositions x 4 events: reads collapse to one per composition, and the
-    // 90 updates re-write nothing because the anchor is already on the textarea.
+    // Thirty four-event compositions need one measurement each; ninety updates must not rewrite an unchanged anchor.
     expect(harness.counts.rectReads).toBe(30)
     expect(harness.counts.styleWrites).toBe(31)
     expect(harness.style.left).toBe(`${29 * CELL_WIDTH}px`)
@@ -158,8 +156,7 @@ describe('installTerminalImeCandidateAnchor', () => {
 
     typeHangulSyllable(harness, COLS - 1)
 
-    // Without the clamp this is 79 cells, putting the OS candidate window one cell past the
-    // right edge while xterm end-aligns the visible preedit back inside.
+    // Without clamping, the OS candidate window starts one cell beyond the right edge despite visible preedit end-alignment.
     expect(harness.style.left).toBe(`${(COLS - 2) * CELL_WIDTH}px`)
   })
 
@@ -200,8 +197,7 @@ describe('installTerminalImeCandidateAnchor', () => {
     harness.setCursor(4, 2)
     fire(harness.element, 'compositionstart')
 
-    // xterm's own compositionupdate handler repositions from its uncorrected
-    // cursor; long CJK compositions depend on us winning that back.
+    // xterm resets position from its stale cursor on every update; long CJK compositions require our correction each time.
     harness.style.top = '0px'
     harness.setCursor(6, 2)
     fire(harness.element, 'compositionupdate')

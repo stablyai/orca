@@ -24,9 +24,7 @@ describe('validateAutomationListResponse', () => {
     expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a1', 'a2'])
   })
 
-  // Why: the field is optional on the wire, so "not reported" must stay
-  // distinguishable from "authoritatively none" — a fabricated zero settles the
-  // authority's orphan bucket that nobody counted.
+  // Preserve unreported versus authoritatively none; invented zeroes settle orphan buckets nobody counted.
   it('leaves an omitted orphan count unreported instead of committing zero', () => {
     const raw = response()
     delete (raw as { orphanCount?: number }).orphanCount

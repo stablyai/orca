@@ -1,16 +1,32 @@
 import type { GitHubIssueTimelineItem, PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
+import { z } from 'zod'
+import { mapIssueWorkItem } from './client/map/work-item'
+import { restIssueActor } from './client/map/issue-actor'
+import type { MainWorkItem } from './client/map/work-item-field-coercion'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
 import type { LocalGitExecOptions } from './gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
 import { getIssueTimelineItems } from './issue-timeline'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
-const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
+const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $includeItem: Boolean!) {
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
+      number @include(if: $includeItem) title @include(if: $includeItem)
+      state @include(if: $includeItem)
+      url @include(if: $includeItem)
+      updatedAt @include(if: $includeItem)
+      author @include(if: $includeItem) { __typename login avatarUrl(size: 48) }
+      labels(first: 100) @include(if: $includeItem) {
+        nodes { name }
+        pageInfo { hasNextPage }
+      }
       body
-      assignees(first: 50) { nodes { login avatarUrl(size: 48) ... on User { name } } }
+      assignees(first: 50) {
+        nodes { login avatarUrl(size: 48) ... on User { name } }
+        pageInfo { hasNextPage }
+      }
       participants(first: 100) {
         nodes { login avatarUrl(size: 48) ... on User { name } }
       }
@@ -31,12 +47,29 @@ const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int
   }
 }`
 
+const issueItemSchema = z.object({
+  number: z.number().int().positive(),
+  title: z.string(),
+  state: z.enum(['OPEN', 'CLOSED']),
+  url: z.string(),
+  updatedAt: z.string(),
+  author: z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string() }).nullable(),
+  assignees: z.object({
+    nodes: z.array(z.object({ login: z.string().min(1) })),
+    pageInfo: z.object({ hasNextPage: z.literal(false) })
+  }),
+  labels: z.object({
+    nodes: z.array(z.object({ name: z.string() })),
+    pageInfo: z.object({ hasNextPage: z.literal(false) })
+  })
+})
+
 type GraphQLIssueDetailsResponse = {
   data?: {
     repository?: {
       issue?: {
         body?: string | null
-        assignees?: { nodes?: { login?: string; avatarUrl?: string; name?: string | null }[] }
+        assignees?: { nodes?: (Partial<GitHubAssignableUser> | null)[] | null }
         participants?: { nodes?: GitHubAssignableUser[] }
         comments?: {
           nodes?: {
@@ -58,6 +91,7 @@ type GraphQLIssueDetailsResponse = {
 }
 
 export type CollapsedIssueDetails = {
+  item?: MainWorkItem
   body: string
   comments: PRComment[]
   assignees: string[]
@@ -71,7 +105,8 @@ export async function getIssueDetailsViaGraphQL(
   issueNumber: number,
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  includeItem = false
 ): Promise<CollapsedIssueDetails | null> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
@@ -96,7 +131,9 @@ export async function getIssueDetailsViaGraphQL(
         '-f',
         `repo=${repository.repo}`,
         '-F',
-        `number=${issueNumber}`
+        `number=${issueNumber}`,
+        '-F',
+        `includeItem=${includeItem}`
       ],
       ghOptions
     )
@@ -106,6 +143,10 @@ export async function getIssueDetailsViaGraphQL(
     }
     const issue = parsed.data?.repository?.issue
     if (!issue) {
+      return null
+    }
+    const itemData = includeItem ? issueItemSchema.safeParse(issue) : undefined
+    if (itemData?.success && itemData.data.number !== issueNumber) {
       return null
     }
     const comments: PRComment[] = (issue.comments?.nodes ?? [])
@@ -121,7 +162,7 @@ export async function getIssueDetailsViaGraphQL(
       }))
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
-        Boolean(assignee.login)
+        Boolean(assignee?.login)
       )
       .map((assignee) => ({
         login: assignee.login,
@@ -136,6 +177,17 @@ export async function getIssueDetailsViaGraphQL(
         avatarUrl: user.avatarUrl ?? ''
       }))
     return {
+      ...(itemData?.success
+        ? {
+            item: mapIssueWorkItem({
+              ...itemData.data,
+              state: itemData.data.state.toLowerCase(),
+              user: restIssueActor(itemData.data.author),
+              labels: itemData.data.labels.nodes,
+              assignees: assigneeUsers
+            })
+          }
+        : {}),
       body: issue.body ?? '',
       comments,
       assignees: assigneeUsers.map((assignee) => assignee.login),
@@ -154,12 +206,7 @@ export async function getIssueBodyAndComments(
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{
-  body: string
-  comments: PRComment[]
-  assignees: string[]
-  timelineItems: GitHubIssueTimelineItem[]
-}> {
+): Promise<Pick<CollapsedIssueDetails, 'body' | 'comments' | 'assignees' | 'timelineItems'>> {
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)

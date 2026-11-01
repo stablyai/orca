@@ -51,7 +51,6 @@ describe('getFishXdgDataDirsLaunchEnv', () => {
     })
   })
 
-  // Why: restore must hand back exactly what was inherited, stale Orca entry included.
   it('prepends again when the inherited value already names the dir', () => {
     const inherited = `${DATA_DIR}:/opt/a`
     expect(getFishXdgDataDirsLaunchEnv(ROOT, inherited).XDG_DATA_DIRS).toBe(
@@ -77,7 +76,7 @@ describe('fish vendor snippet', () => {
 })
 
 const fishLookup = resolveFishBinary(3)
-// Why absolute: the shells below run with a minimal PATH.
+// The test shells run with a minimal PATH.
 const fish = fishLookup.available
   ? {
       available: true,
@@ -90,7 +89,6 @@ const FAKE_CODEX = `#!/bin/sh
 if [ "$1" = --help ]; then echo "  --no-daemon"; exit 0; fi
 echo "fake-codex $*"
 `
-// XDG_DATA_DIRS as fish and a child process see it.
 const STATE_PROBE = [
   'set -q XDG_DATA_DIRS; and echo "xdg=[$XDG_DATA_DIRS]"; or echo xdg=unset',
   `set -q ${FISH_XDG_DATA_DIRS_PREFIX_ENV}; and echo marker-left`,
@@ -98,7 +96,7 @@ const STATE_PROBE = [
   'functions -q __orca_fish_xdg_handoff; and echo handoff-left'
 ].join('\n')
 
-// Why always run: the shell contracts job sets ORCA_REQUIRE_FISH so a missing fish fails, not skips.
+// CI sets ORCA_REQUIRE_FISH so a missing binary must fail rather than skip.
 it('finds fish when the environment requires it', () => {
   expect(fishRequirementViolation(fishLookup)).toBeNull()
 })
@@ -122,7 +120,8 @@ describe.skipIf(!fish.available)('fish vendor snippet in a real fish', () => {
   })
 
   afterEach(() => {
-    rmSync(sandbox, { recursive: true, force: true })
+    // Fish may finish its universal-variable write after the shell exits.
+    rmSync(sandbox, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 })
   })
 
   function runFish(args: string[], env: Record<string, string>): string {
@@ -138,7 +137,7 @@ describe.skipIf(!fish.available)('fish vendor snippet in a real fish', () => {
     return result.stdout
   }
 
-  // Why a baseline: a distro vendor snippet (Ubuntu's snapd) may set XDG_DATA_DIRS itself.
+  // Distro vendor snippets such as snapd may change XDG_DATA_DIRS themselves.
   it.each([['/opt/a:/opt/b/'], ['/opt/a:'], [undefined]] as const)(
     'leaves fish exactly as it starts without Orca when XDG_DATA_DIRS is %s',
     (inherited) => {
@@ -188,7 +187,7 @@ describe.skipIf(!fish.available)('fish vendor snippet in a real fish', () => {
       ['-c', 'emit fish_prompt; type -t codex; functions -q __orca_define_codex; and echo hook'],
       getFishXdgDataDirsLaunchEnv(root, undefined)
     )
-    // Why a suffix: the emitted event also runs fish's own greeting handler.
+    // fish’s greeting handler also runs for this event.
     expect(output.trim()).toMatch(/file$/)
   })
 })

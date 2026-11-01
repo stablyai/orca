@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
+import { createDaemonFileLog } from './daemon-file-log'
 
 let dir: string
 
@@ -21,40 +21,51 @@ function readLines(filePath: string): Record<string, unknown>[] {
 }
 
 describe('createDaemonFileLog', () => {
-  it('appends NDJSON lines with src/ts/pid/event and terse details', () => {
+  it('appends NDJSON lines with src/ts/pid/event and terse details', async () => {
     const filePath = join(dir, 'daemon.log')
     const log = createDaemonFileLog(filePath)
     log.log('startup', { protocolVersion: 18 })
     log.log('session-created', { sessionId: 'abc', pid: 42 })
 
+    await vi.waitFor(() => expect(readLines(filePath)).toHaveLength(2), { timeout: 10_000 })
     const lines = readLines(filePath)
-    expect(lines).toHaveLength(2)
     expect(lines[0]).toMatchObject({ src: 'daemon', event: 'startup', protocolVersion: 18 })
     expect(typeof lines[0].ts).toBe('string')
     expect(lines[0].pid).toBe(process.pid)
     expect(lines[1]).toMatchObject({ event: 'session-created', sessionId: 'abc', pid: 42 })
   })
 
-  it('rotates at the byte cap and keeps only the configured rotated files', () => {
+  it('rotates at the byte cap and keeps only the configured rotated files', async () => {
     const filePath = join(dir, 'daemon.log')
     const log = createDaemonFileLog(filePath, { maxBytes: 150, maxRotatedFiles: 2 })
-    for (let i = 0; i < 40; i++) {
+    // One line per batch, so each write sees the size left by the last.
+    for (let i = 0; i < 10; i++) {
       log.log('tick', { i })
+      await vi.waitFor(() => expect(readLines(filePath).at(-1)).toMatchObject({ i }), {
+        timeout: 10_000
+      })
     }
-
     expect(existsSync(filePath)).toBe(true)
     expect(existsSync(`${filePath}.1`)).toBe(true)
     expect(existsSync(`${filePath}.2`)).toBe(true)
-    // Only 2 rotated files are retained — the oldest is dropped, not kept.
     expect(existsSync(`${filePath}.3`)).toBe(false)
+  })
 
-    // The active file holds the most recent line.
-    const active = readLines(filePath)
-    expect(active.at(-1)).toMatchObject({ event: 'tick', i: 39 })
+  it('counts a line too large for the queue instead of holding it', () => {
+    const filePath = join(dir, 'daemon.log')
+    const log = createDaemonFileLog(filePath, { maxQueuedChars: 2_000 })
+    log.log('huge', { detail: 'x'.repeat(10_000) })
+    log.log('after')
+    log.close()
+    expect(readLines(filePath).map((l) => [l.event, l.count])).toEqual([
+      ['log-entries-dropped', 1],
+      ['after', undefined],
+      ['daemon-log-closed', undefined]
+    ])
   })
 
   it('is fail-open when the log directory cannot be created', () => {
-    // Make the parent a file so mkdir of the logs subdir fails (ENOTDIR).
+    // A file as parent forces ENOTDIR without relying on directory permissions.
     const blocker = join(dir, 'blocker')
     writeFileSync(blocker, 'x')
     const filePath = join(blocker, 'logs', 'daemon.log')
@@ -71,10 +82,10 @@ describe('createDaemonFileLog', () => {
     const circular: Record<string, unknown> = {}
     circular.self = circular
     expect(() => log.log('weird', circular)).not.toThrow()
-    // The bad line is dropped; a later good line still lands.
     log.log('ok')
+    log.close()
     const lines = readLines(filePath)
-    expect(lines.map((l) => l.event)).toEqual(['ok'])
+    expect(lines.map((l) => l.event)).toEqual(['ok', 'daemon-log-closed'])
   })
 
   it('close() writes a terminal marker and stops further writes', () => {
@@ -86,15 +97,5 @@ describe('createDaemonFileLog', () => {
 
     const events = readLines(filePath).map((l) => l.event)
     expect(events).toEqual(['startup', 'daemon-log-closed'])
-  })
-})
-
-describe('createNoopDaemonFileLog', () => {
-  it('accepts log/close calls without touching the filesystem', () => {
-    const log = createNoopDaemonFileLog()
-    expect(() => {
-      log.log('startup', { x: 1 })
-      log.close()
-    }).not.toThrow()
   })
 })

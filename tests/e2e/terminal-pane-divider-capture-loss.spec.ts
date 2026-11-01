@@ -37,7 +37,7 @@ async function addTestRepo(page: Page, repoPath: string): Promise<void> {
         if (!store) {
           return false
         }
-        await store.getState().fetchRepos()
+        await store.getState().fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
         await store.getState().fetchWorktrees(id)
         const worktree = store
           .getState()
@@ -70,7 +70,7 @@ async function readDividerGeometry(page: Page): Promise<DividerGeometry> {
             .flatMap((manager) => manager.getPanes())
             .find((candidate) => candidate.container.dataset.ptyId === ptyId)
         : null
-      let proposed = null
+      let proposed: PaneGeometry['proposed'] = null
       try {
         proposed = pane?.fitAddon.proposeDimensions() ?? null
       } catch {
@@ -120,7 +120,9 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
   await divider.evaluate((element) => {
     element.dataset.captureLossCount = '0'
     element.addEventListener('pointerdown', (event) => {
-      element.dataset.captureLossPointerId = String(event.pointerId)
+      if (event instanceof PointerEvent) {
+        element.dataset.captureLossPointerId = String(event.pointerId)
+      }
     })
     element.addEventListener('lostpointercapture', () => {
       element.dataset.captureLossCount = String(Number(element.dataset.captureLossCount ?? '0') + 1)

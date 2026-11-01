@@ -1,17 +1,17 @@
 import { useEffect, useRef } from 'react'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { useUndeliveredStructuredAgentSessionOutbox } from './use-undelivered-structured-agent-session-outbox'
 
 export function useStructuredAgentSessionTransport(args: {
   sessionId: string
   target: RuntimeClientTarget
   isVisible: boolean
   enabled: boolean
+  agentName?: string
 }) {
-  const { enabled, isVisible, sessionId, target } = args
+  const { agentName, enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
   useStructuredAgentSessionHold({
     sessionId,
@@ -19,25 +19,18 @@ export function useStructuredAgentSessionTransport(args: {
     surface: 'desktop-chat',
     enabled: providerVisible
   })
-  // A worktree switch hides the pane, but a message the user already sent is still owed a
-  // delivery, and the read is what carries the journal rows that retire it. Gated on `enabled`:
-  // a session not yet published has nothing to read. Attention is not the signal; owed work is.
-  const hasUndelivered = useUndeliveredStructuredAgentSessionOutbox(sessionId)
-  const read = useStructuredAgentSessionRead({
-    sessionId,
-    target,
-    isVisible: providerVisible || (enabled && hasUndelivered)
-  })
+  // A message sent from here is settled by its own reply, so a hidden pane reads nothing.
+  const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: providerVisible })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({
     sessionId,
     target,
     stateRef,
-    enabled
+    enabled,
+    ...(agentName ? { agentName } : {})
   })
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  // `stateRef`: the read state now, for a reply that lands after the render that sent it.
   return { ...read, ...mutation, providerVisible, stateRef }
 }

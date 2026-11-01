@@ -3,7 +3,7 @@ import { act, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useActivityTerminalPortalStatus } from './ActivityPrototypePage'
+import { useActivityTerminalPortalStatus } from './activity-terminal-portal-status'
 import { ACTIVITY_PORTAL_READINESS_MAX_FLIPS } from './activity-portal-readiness-oscillation'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -19,8 +19,7 @@ const OTHER_PANE_B = `${OTHER_TAB_ID}:${LEAF_B}`
 
 let root: Root
 
-// Freeze Date (not timers/rAF, which still drive the readiness frames) so the latch's flip window is
-// decided by the churn under test rather than by how slowly the machine runs it.
+// Freeze Date only so measured churn, rather than machine speed, decides window expiry; timers/rAF still run.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
 })
@@ -55,11 +54,7 @@ async function drainReadinessFrame(): Promise<void> {
 }
 
 describe('Activity portal readiness subscription churn', () => {
-  // Why this bound matters: React raises #185 only after >50 *consecutive* commits that each leave a
-  // pending sync/default lane; any commit that leaves none resets nestedUpdateCount. This pins the
-  // reason the readiness subscription can never be that source -- its only writer is an rAF callback,
-  // and the effect cleanup cancels that frame on every churn step, so a synchronous cascade of
-  // subscription churn commits nothing at all. A #185 on this page must come from another setState.
+  // React #185 requires over 50 consecutive commits with pending sync/default work. Readiness writes only from rAF, cancelled on subscription cleanup, so sync churn must commit no readiness updates.
   it('contributes no state updates to a synchronous churn cascade past React nested-update limit', () => {
     const target = document.createElement('div')
     buildNeverReadyRoot(target)
@@ -138,9 +133,7 @@ describe('Activity portal readiness subscription churn', () => {
     expect(renders).toBeLessThanOrEqual(32)
   })
 
-  // Asserts the loop-terminating property, not just a final value: the status that drives the page's
-  // swap effect (stagedPortalUnavailable) must stop alternating part-way through the churn and stay
-  // put. While it alternates, every step re-targets both readiness subscriptions and re-stages.
+  // Prove termination: swap-driving readiness must stop alternating while DOM churn continues.
   function expectReadinessStopsAlternating(statuses: string[]): void {
     // Sanity: the fixture really does alternate early, so the run below is the latch, not a rig.
     const head = statuses.slice(0, ACTIVITY_PORTAL_READINESS_MAX_FLIPS)
@@ -151,9 +144,7 @@ describe('Activity portal readiness subscription churn', () => {
     expect(new Set(tail)).toEqual(new Set(['unavailable']))
   }
 
-  // Why: staging only happens across tabs (reconcileActivityPortalThreads returns no stagedThread for
-  // same-tab panes), so the production swap moves slot element, pane key AND tab id in lockstep --
-  // every identity a subscription-scoped latch could key on.
+  // Cross-tab staging swaps slot, pane key and tab ID together; a subscription-scoped latch would reset on every step.
   it('stops alternating readiness when the slot, pane key and tab id all churn together', async () => {
     const targets = [document.createElement('div'), document.createElement('div')]
     buildNeverReadyRoot(targets[0], TAB_ID)
@@ -225,8 +216,7 @@ describe('Activity portal readiness subscription churn', () => {
     expectReadinessStopsAlternating(settledStatuses)
   })
 
-  // Why: the flip budget outlives the subscription, so a burst window wide enough to cover ordinary
-  // clicking would let one user's thread-hopping answer 'unavailable' for the next healthy pane.
+  // The budget outlives subscriptions; its burst window must exclude ordinary thread-hopping so healthy panes remain available.
   it('does not answer for a later attaching pane after human-paced selections', async () => {
     const churnTarget = document.createElement('div')
     buildNeverReadyRoot(churnTarget, TAB_ID)

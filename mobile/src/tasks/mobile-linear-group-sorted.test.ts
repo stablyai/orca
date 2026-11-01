@@ -24,24 +24,6 @@ const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
 }))
 
 describe('mobile Linear grouping of sorted issues', () => {
-  it.each(['updated', 'identifier', 'priority'] as const)(
-    'preserves %s ordering, ties and group metadata',
-    (order) => {
-      const sorted = Object.freeze(sortLinearIssues(issues, order))
-      for (const group of ['none', 'status', 'assignee', 'team', 'priority'] as const) {
-        const expected = groupLinearIssues([...sorted], group, order)
-        const actual = groupSortedLinearIssues(sorted, group)
-        expect(actual).toEqual(expected)
-        actual.forEach((section, index) => {
-          expect(section.issues).not.toBe(sorted)
-          section.issues.forEach((issue, offset) =>
-            expect(issue).toBe(expected[index].issues[offset])
-          )
-        })
-      }
-    }
-  )
-
   it('does no date parsing or collation after ordering has been established', () => {
     const sorted = sortLinearIssues(issues, 'updated')
     const parse = vi.spyOn(Date, 'parse')

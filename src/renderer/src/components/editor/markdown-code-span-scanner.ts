@@ -1,4 +1,9 @@
 import {
+  createMarkdownBacktickRunLookup,
+  type MarkdownCodeSpanScanner
+} from '../../../../shared/markdown-code-span-runs'
+export type { MarkdownCodeSpanScanner } from '../../../../shared/markdown-code-span-runs'
+import {
   createMarkdownFenceTracker,
   findMarkdownLineEnd,
   forEachMarkdownLine
@@ -7,24 +12,19 @@ import {
 const BLANK_LINE = /^[ \t\r]*$/
 const BLOCKQUOTE_PREFIX = /^(?: {0,3}>[ \t]?)+/
 
-// marked's block-level tag list, which is what makes a line an HTML block rather
-// than inline HTML: `<div>` ends the paragraph above it, `<br>` does not.
+// Match marked’s block tags: div interrupts a paragraph, while br stays inline.
 const HTML_BLOCK_TAG =
   'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul'
 
-// Headings, thematic breaks, and setext underlines are one line each, so the line
-// after them always opens another block.
+// These single-line blocks force the next line into a new block.
 const SINGLE_LINE_BLOCK =
   /^ {0,3}(?:#{1,6}(?:\s|$)|(?:-[\t ]*){3,}$|(?:_[ \t]*){3,}$|(?:\*[ \t]*){3,}$|(?:=+|-+)[ \t]*$)/
 
-// Mirrors the rest of marked's paragraph-interruption rule. Backtick runs on
-// opposite sides of one of these lines sit in different leaf blocks, so marked
-// never pairs them.
+// Match marked’s paragraph interruptions so backticks cannot pair across leaf blocks.
 const LEAF_BLOCK_START = new RegExp(
   [
     '^ {0,3}(?:',
-    // Any ordinal, though only `1.` interrupts a paragraph: later ordinals still open
-    // the next item of a list, and splitting one block too many only costs a check.
+    // Later ordinals open list items even though only 1 interrupts paragraphs; extra splitting only costs a check.
     '(?:[*+-]|\\d{1,9}[.)])(?:[ \\t]|$)',
     `|</?(?:${HTML_BLOCK_TAG})(?: +|/?>|$)`,
     '|<(?:script|pre|style|textarea|!--)', // a declaration or PI does not interrupt
@@ -33,11 +33,9 @@ const LEAF_BLOCK_START = new RegExp(
   'i'
 )
 
-// The row of dashes under a GFM table header. marked ends the paragraph above the
-// header on this line alone, before it checks that the cell counts agree.
+// marked recognizes a GFM delimiter row before validating cell counts and ends the preceding paragraph.
 const TABLE_DELIMITER_ROW = /^(?=[^\n]*[:|]) {0,3}(?:\| *)?:?-+:? *(?:\| *:?-+:? *)*(?:\| *)?$/
 
-/** Blockquote marker count opening `line`, and the content that follows it. */
 function splitBlockquotePrefix(line: string): { depth: number; rest: string } {
   const prefix = BLOCKQUOTE_PREFIX.exec(line)?.[0]
   if (!prefix) {
@@ -52,7 +50,6 @@ function splitBlockquotePrefix(line: string): { depth: number; rest: string } {
   return { depth, rest: line.slice(prefix.length) }
 }
 
-/** True when the line at `start` is a delimiter row, making the line above a header. */
 function hasTableDelimiterAhead(content: string, start: number): boolean {
   if (start >= content.length) {
     return false
@@ -61,7 +58,6 @@ function hasTableDelimiterAhead(content: string, start: number): boolean {
   return TABLE_DELIMITER_ROW.test(splitBlockquotePrefix(next).rest)
 }
 
-/** True when an odd run of backslashes escapes the character at `index`. */
 function isEscapedAt(content: string, index: number, lineStart: number): boolean {
   let cursor = index
   while (cursor > lineStart && content[cursor - 1] === '\\') {
@@ -70,24 +66,11 @@ function isEscapedAt(content: string, index: number, lineStart: number): boolean
   return (index - cursor) % 2 === 1
 }
 
-export type MarkdownCodeSpanScanner = {
-  /**
-   * End of the inline code span opening at `index`, or null when the backtick run
-   * never closes. CommonMark closes a span on a run of exactly the opening length,
-   * so a longer run is content rather than a delimiter.
-   */
-  findSpanEnd: (index: number) => number | null
-}
-
-/**
- * Indexes every backtick run in one pass, so a lookup is a binary search rather
- * than a fresh scan of the rest of the document.
- */
+/** Index backtick runs once so each lookup binary-searches instead of rescanning the remaining document. */
 export function createMarkdownCodeSpanScanner(content: string): MarkdownCodeSpanScanner {
   const starts: number[] = []
   const lengths: number[] = []
-  // Marked parses inline content one leaf block at a time, so a span cannot pair
-  // across a blank line, a fence delimiter, or the start of the next leaf block.
+  // marked pairs backticks only within one leaf block, excluding blank lines, fences and new blocks.
   const blocks: number[] = []
   const escaped: boolean[] = []
   const runsByLength = new Map<number, number[]>()
@@ -151,71 +134,9 @@ export function createMarkdownCodeSpanScanner(content: string): MarkdownCodeSpan
     }
   })
 
-  /** Index of the run covering `index`, or -1. */
-  function findRunAt(index: number): number {
-    let low = 0
-    let high = starts.length - 1
-    let atOrBefore = -1
-    while (low <= high) {
-      const mid = (low + high) >> 1
-      if (starts[mid] <= index) {
-        atOrBefore = mid
-        low = mid + 1
-      } else {
-        high = mid - 1
-      }
-    }
-    if (atOrBefore === -1 || index >= starts[atOrBefore] + lengths[atOrBefore]) {
-      return -1
-    }
-    return atOrBefore
-  }
-
-  /** First run in `candidates` starting at or after `offset`, or -1. */
-  function findFirstRunFrom(candidates: number[], offset: number): number {
-    let low = 0
-    let high = candidates.length - 1
-    let match = -1
-    while (low <= high) {
-      const mid = (low + high) >> 1
-      if (starts[candidates[mid]] >= offset) {
-        match = candidates[mid]
-        high = mid - 1
-      } else {
-        low = mid + 1
-      }
-    }
-    return match
-  }
-
-  return {
-    findSpanEnd(index: number): number | null {
-      const opener = findRunAt(index)
-      if (opener === -1) {
-        return null
-      }
-      // A caller may resume inside a run it already rejected; only the tail opens.
-      // A backslashed backtick is literal text and cannot open, though marked
-      // still lets it close: `` `foo\` `` is a span ending on the escaped run.
-      const openStart = escaped[opener] ? Math.max(index, starts[opener] + 1) : index
-      const openerEnd = starts[opener] + lengths[opener]
-      if (openStart >= openerEnd) {
-        return null
-      }
-      const candidates = runsByLength.get(openerEnd - openStart)
-      if (!candidates) {
-        return null
-      }
-      const closer = findFirstRunFrom(candidates, openerEnd)
-      if (closer === -1 || blocks[closer] !== blocks[opener]) {
-        return null
-      }
-      return starts[closer] + lengths[closer]
-    }
-  }
+  return createMarkdownBacktickRunLookup(starts, lengths, runsByLength, blocks, escaped)
 }
 
-/** Offsets of the run of backticks at `index`, which closes no span. */
 export function skipMarkdownBacktickRun(content: string, index: number): number {
   let end = index
   while (content[end] === '`') {

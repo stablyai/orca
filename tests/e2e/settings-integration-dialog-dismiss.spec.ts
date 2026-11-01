@@ -1,10 +1,5 @@
-/**
- * A backdrop click in the Settings → Integrations Linear and Jira connect dialogs must
- * not close the dialog and discard typed credentials. Escape / Cancel stay the explicit discard
- * paths. (Bitbucket's baseline-seeded predicate is covered by the component tests.)
- *
- * Mirrors the SSH host form modal guard (tests/e2e/ssh-host-form-modal.spec.ts).
- */
+// Linear/Jira credential dialogs must retain typed values on backdrop click; only Escape/Cancel discard.
+// Mirror ssh-host-form-modal.spec.ts; Bitbucket’s seeded baseline is component-tested.
 
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -27,7 +22,7 @@ async function openIntegrationsSettings(page: Page): Promise<void> {
 }
 
 async function clickBackdrop(page: Page): Promise<void> {
-  // Why: the overlay is fixed inset-0 and the dialog sits over its center, so click near a corner.
+  // Click the backdrop corner because the dialog covers its center.
   await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 8, y: 8 } })
 }
 
@@ -54,7 +49,7 @@ test.describe('Settings integrations connect dialogs', () => {
     await keyInput.fill('lin_api_e2e_secret')
 
     await clickBackdrop(orcaPage)
-    // Why: assert the settled open state, not the exit-animation frame a broken guard would leave.
+    // Require settled open state after any exit animation.
     await expect(dialog).toHaveAttribute('data-state', 'open')
     await expect(keyInput).toHaveValue('lin_api_e2e_secret')
 
@@ -81,7 +76,7 @@ test.describe('Settings integrations connect dialogs', () => {
     await siteUrlInput.fill('https://acme.atlassian.net')
 
     await clickBackdrop(orcaPage)
-    // Why: assert the settled open state, not the exit-animation frame a broken guard would leave.
+    // Require settled open state after any exit animation.
     await expect(dialog).toHaveAttribute('data-state', 'open')
     await expect(siteUrlInput).toHaveValue('https://acme.atlassian.net')
 

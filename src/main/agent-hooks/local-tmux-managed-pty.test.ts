@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createLocalTmuxManagedPtyResolver } from './local-tmux-managed-pty'
-import type { PtyProcessInfo } from '../providers/types'
+import type { PtyProcessInfo } from '../providers/pty-provider-contract'
 
 const row: PtyProcessInfo = {
   id: 'pty',
@@ -14,7 +14,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('authenticated local tmux root resolution', () => {
+describe.skipIf(process.platform === 'win32')('authenticated local tmux root resolution', () => {
   it('shares inventory captures and accepts only the current daemon binding', async () => {
     const listProcesses = vi.fn(async () => [row])
     const resolve = createLocalTmuxManagedPtyResolver({ getPtyId: () => 'pty', listProcesses })
@@ -57,7 +57,10 @@ describe('authenticated local tmux root resolution', () => {
       .mockResolvedValueOnce([{ ...row, incarnationId: 'replacement' }])
     const resolve = createLocalTmuxManagedPtyResolver({ getPtyId: () => 'pty', listProcesses })
     expect((await resolve('pane'))?.incarnation).toBe('generation')
-    vi.setSystemTime(2001)
+    vi.setSystemTime(1999)
+    expect((await resolve('pane'))?.incarnation).toBe('generation')
+    expect(listProcesses).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(2000)
     expect((await resolve('pane'))?.incarnation).toBe('replacement')
   })
 })

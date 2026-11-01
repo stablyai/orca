@@ -28,8 +28,7 @@ export function checklistItemsFromVersion(version: SkillCloudVersion): SkillChec
   return [
     {
       id: version.manifest.name,
-      // Why: the version carries the published name and description; the
-      // manifest copy is the fallback for packages that predate them.
+      // Prefer published version metadata; older packages fall back to manifest fields.
       name: version.name || version.manifest.name,
       description: version.description || version.manifest.description,
       files: version.manifest.files
@@ -37,7 +36,6 @@ export function checklistItemsFromVersion(version: SkillCloudVersion): SkillChec
   ]
 }
 
-/** Row summary: a simple file count; detailed classifications live in the expanded list. */
 export function checklistItemSummary(files: readonly SkillChecklistFile[]): {
   label: string
 } {

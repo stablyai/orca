@@ -7,7 +7,7 @@ import { MuseUsageDetails } from './MuseUsageDetails'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatTokens, formatUpdatedAt } from './usage-formatters'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 // Why: generic labels reuse the OpenCode pane's keys so both panes share one translation.
 const RANGE_OPTIONS: MuseUsageRange[] = ['7d', '30d', '90d', 'all']
@@ -185,7 +185,7 @@ export function MuseUsagePane(): React.JSX.Element {
               'auto.components.stats.OpenCodeUsagePane.7e9433469a',
               'Sessions / Events'
             )}
-            value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.events ?? 0).toLocaleString()}`}
+            value={`${(summary?.sessions ?? 0).toLocaleString(getIntlLocale())} / ${(summary?.events ?? 0).toLocaleString(getIntlLocale())}`}
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard

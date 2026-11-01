@@ -50,8 +50,7 @@ export async function signInCodexAccount(
   try {
     const next = await window.api.codexAccounts.reauthenticate({
       accountId,
-      // Why: signing in from a signed-out status bar should leave the account
-      // usable; the main process still refuses to steal an existing selection.
+      // Activate a newly signed-in account only if selection remains empty; main preserves an existing selection.
       activateIfSelectionWasEmpty: true
     })
     recordFeatureInteraction('codex-account-switching')
@@ -61,8 +60,7 @@ export async function signInCodexAccount(
     await fetchSettings()
     const nextActiveAccountId = getCodexStatusActiveId(next, target)
     if (previousActiveAccountId !== nextActiveAccountId) {
-      // Why: sign-in that lands on a new active account changes pane credentials
-      // exactly like an explicit switch, so it owes the same restart prompt.
+      // A changed active login needs the same pane-restart prompt as an explicit account switch.
       await markLiveCodexSessionsForRestart({
         previousAccountLabel: resolveCodexRestartPromptAccountLabel(
           accountState.accounts,
@@ -71,6 +69,8 @@ export async function signInCodexAccount(
         nextAccountLabel: resolveCodexRestartPromptAccountLabel(next.accounts, nextActiveAccountId),
         previousAccountId: previousActiveAccountId ?? null,
         nextAccountId: nextActiveAccountId ?? null,
+        // Why: reauthenticate is local IPC, so only this computer's panes changed.
+        owner: { kind: 'local' },
         target
       })
       if (mountedRef.current) {

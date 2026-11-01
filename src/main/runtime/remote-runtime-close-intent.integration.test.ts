@@ -1,9 +1,10 @@
+import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { parsePairingCode } from '../../shared/pairing'
-import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime/requests/remote-runtime-request-connection'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
@@ -48,7 +49,6 @@ it(
       getRuntimeId: () => 'close-intent-runtime-test',
       getStartedAt: () => 1,
       cleanupSubscriptionsForConnection: () => {},
-      cancelMobileDictationForConnection: () => {},
       onClientDisconnected: () => {},
       listMobileSessionTabs,
       refuseUnattributedMobileSessionTabClose,
@@ -71,7 +71,9 @@ it(
       if (!pairing) {
         throw new Error('invalid pairing')
       }
-      const connection = new RemoteRuntimeRequestConnection(pairing)
+      const connection = new RemoteRuntimeRequestConnection(
+        pairedRuntimeConnectionFromOffer(pairing)
+      )
       try {
         await expect(
           connection.request(

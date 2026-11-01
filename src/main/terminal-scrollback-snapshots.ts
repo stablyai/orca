@@ -3,6 +3,7 @@ import {
   closeSync,
   mkdirSync,
   openSync,
+  readFileSync,
   readSync,
   renameSync,
   rmSync,
@@ -17,6 +18,7 @@ import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
 } from '../shared/terminal-scrollback-limits'
+import { errorMessage } from '../shared/error-message'
 
 const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
 const REF_PREFIX = 'v1'
@@ -34,7 +36,9 @@ export function getProfileTerminalScrollbackSnapshotRoot(dataFile: string): stri
   return join(dirname(dataFile), SNAPSHOT_DIR_NAME)
 }
 
-function getSnapshotRoot(storage?: TerminalScrollbackSnapshotStorage): string {
+export function getTerminalScrollbackSnapshotRoot(
+  storage?: TerminalScrollbackSnapshotStorage
+): string {
   return storage?.snapshotRoot ?? getLegacySnapshotRoot()
 }
 
@@ -50,8 +54,11 @@ function snapshotPath(ref: string, snapshotRoot: string): string | null {
   return join(snapshotRoot, `${ref}.bin`)
 }
 
-function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStorage): string[] {
-  const primaryRoot = getSnapshotRoot(storage)
+export function snapshotReadPaths(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string[] {
+  const primaryRoot = getTerminalScrollbackSnapshotRoot(storage)
   const primaryPath = snapshotPath(ref, primaryRoot)
   if (!primaryPath) {
     return []
@@ -62,6 +69,45 @@ function snapshotReadPaths(ref: string, storage?: TerminalScrollbackSnapshotStor
   }
   const fallbackPath = snapshotPath(ref, fallbackRoot)
   return fallbackPath ? [primaryPath, fallbackPath] : [primaryPath]
+}
+
+export function getTerminalScrollbackSnapshotPath(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string | null {
+  return snapshotPath(ref, getTerminalScrollbackSnapshotRoot(storage))
+}
+
+export function readTerminalScrollbackStoredBytesSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Buffer | null {
+  const bytes = readTerminalScrollbackStoredSnapshotSync(ref, storage)
+  return bytes === 'absent' ? null : bytes
+}
+
+/** `'absent'` when no root holds saved bytes; `null` when a snapshot exists but can't be read. */
+export function readTerminalScrollbackStoredSnapshotSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Buffer | 'absent' | null {
+  const paths = snapshotReadPaths(ref, storage)
+  let unreadable = paths.length === 0
+  for (const path of paths) {
+    try {
+      if (statSync(path).size > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
+        return null
+      }
+      const bytes = readFileSync(path)
+      // An empty file holds no history, but another root may.
+      if (bytes.length > 0) {
+        return bytes
+      }
+    } catch (error) {
+      unreadable ||= !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    }
+  }
+  return unreadable ? null : 'absent'
 }
 
 function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
@@ -89,6 +135,11 @@ function readTrailingUtf8(path: string, maxBytes: number): string {
   } finally {
     closeSync(fd)
   }
+  return decodeFromFirstUtf8Boundary(bytes)
+}
+
+/** Decodes a tail slice, skipping continuation bytes of a character the slice cut in half. */
+export function decodeFromFirstUtf8Boundary(bytes: Buffer): string {
   let start = 0
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
     start++
@@ -106,7 +157,7 @@ export function writeTerminalScrollbackSnapshotSync(args: {
     return null
   }
   const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
-  const snapshotRoot = getSnapshotRoot(args.storage)
+  const snapshotRoot = getTerminalScrollbackSnapshotRoot(args.storage)
   const path = snapshotPath(ref, snapshotRoot)
   if (!path) {
     return null
@@ -127,9 +178,7 @@ export function writeTerminalScrollbackSnapshotSync(args: {
     }
     return ref
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
     return null
   }
 }
@@ -144,7 +193,7 @@ export async function writeTerminalScrollbackSnapshot(args: {
     return null
   }
   const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
-  const snapshotRoot = getSnapshotRoot(args.storage)
+  const snapshotRoot = getTerminalScrollbackSnapshotRoot(args.storage)
   const path = snapshotPath(ref, snapshotRoot)
   if (!path) {
     return null
@@ -159,9 +208,7 @@ export async function writeTerminalScrollbackSnapshot(args: {
     renamed = true
     return ref
   } catch (err) {
-    console.warn(
-      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
-    )
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
     return null
   } finally {
     if (!renamed) {
@@ -178,7 +225,7 @@ export function readTerminalScrollbackSnapshotSync(
     try {
       return readTrailingUtf8(path, TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
     } catch {
-      // Try the legacy/global fallback when a profile-local snapshot is absent.
+      // Try the next snapshot root when this read fails.
     }
   }
   return null
@@ -192,7 +239,7 @@ export function deleteTerminalScrollbackSnapshotSync(
     try {
       rmSync(path, { force: true })
     } catch {
-      // Best-effort cleanup; stale refs are harmless and bounded by per-file caps.
+      // Cleanup failures must not block session deletion.
     }
   }
 }
@@ -230,7 +277,12 @@ export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
     const remainingBuffers: Record<string, string> = {}
     let layoutChanged = false
     for (const [leafId, buffer] of Object.entries(buffers)) {
-      const ref = writeTerminalScrollbackSnapshotSync({ tabId, leafId, buffer, storage })
+      const ref = writeTerminalScrollbackSnapshotSync({
+        tabId,
+        leafId,
+        buffer,
+        storage
+      })
       if (ref) {
         refs[leafId] = ref
         layoutChanged = true

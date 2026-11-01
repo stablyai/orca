@@ -8,12 +8,7 @@ export type EmojiShortcodeDataset = Readonly<Record<string, string | readonly st
 
 let loadDataset: (() => EmojiShortcodeDataset) | null = null
 
-/**
- * Why injected instead of statically imported: the renderer must keep its eager copy (a
- * dynamic import there returned an empty catalog mid-load and persisted `:wink:` literally),
- * but a static import here also inlines the same 166 KB into out/main/index.js and JSON.parses
- * it on every launch. Main supplies a lazy require instead; both stay synchronous.
- */
+/** Renderer needs eager synchronous data or it persists literal :wink: during load. Inject main’s lazy require to avoid bundling/parsing 166KB at launch. */
 export function setEmojiShortcodeDatasetLoader(load: () => EmojiShortcodeDataset): void {
   loadDataset = load
 }
@@ -29,9 +24,7 @@ type EmojiShortcodeCatalog = {
 
 let catalog: EmojiShortcodeCatalog | null = null
 
-// Why lazy: this walks ~3,900 shortcodes and is only needed once a `:` is typed
-// or a worktree name is sanitized, but at module scope every renderer and main
-// boot paid for it. Memoized so the first caller builds it exactly once.
+// Defer ~3,900-shortcode traversal until first colon/name sanitization, memoizing once instead of charging every launch.
 function loadCatalog(): EmojiShortcodeCatalog {
   if (catalog) {
     return catalog
@@ -69,11 +62,7 @@ export function isEmojiShortcodeCatalogBuiltForTest(): boolean {
   return catalog !== null
 }
 
-/**
- * Pick the alias that reads best as a branch or directory name: skip `+1`/`-1` so the name
- * starts with a letter, then cryptic stubs (👎 `no`, ✌ `v`) and the `flag_xx` namespacing
- * prefix, both of which have a spelled-out alias (`thumbsdown`, `victory`, `germany`).
- */
+/** Prefer spelled-out names over symbolic +1/-1, cryptic no/v and flag_xx namespaces for branch/directory labels. */
 function primaryShortcode(shortcodes: readonly string[]): string {
   const named = shortcodes.filter((candidate) => /^[a-z]/i.test(candidate))
   return (

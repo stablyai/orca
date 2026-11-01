@@ -7,6 +7,7 @@ import {
   runtimeEnvironmentCall
 } from './github-slice-test-harness'
 import type { AppState } from '../types'
+import { runtimeOwnedRepoState } from './store-test-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
 
@@ -47,7 +48,8 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         path: '/server/repo',
         displayName: 'repo',
         badgeColor: 'blue',
-        addedAt: 1
+        addedAt: 1,
+        executionHostId: 'runtime:env-1'
       }
     ]
     store.setState({
@@ -127,6 +129,58 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         workItemsCacheKey('caller-repo-id', 24, 'is:open', 'runtime:env-1')
       ]?.data?.[0]
     ).toMatchObject({ repoId: 'caller-repo-id', number: 17 })
+  })
+
+  it('sends the runtime work-item RPC the runtime repo id when an SSH row shares its path', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-shared-path-work-items',
+      ok: true,
+      result: {
+        items: [
+          { type: 'issue', number: 18, title: 'Shared path', url: 'https://example.test/18' }
+        ],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState((state) => ({
+      ...state,
+      settings: null,
+      repos: [
+        {
+          id: 'ssh-repo-id',
+          path: '/shared/repo',
+          displayName: 'ssh repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1'
+        },
+        {
+          id: 'runtime-repo-id',
+          path: '/shared/repo',
+          displayName: 'runtime repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          executionHostId: 'runtime:env-1'
+        }
+      ]
+    }))
+
+    await store.getState().fetchWorkItems('runtime-repo-id', '/shared/repo', 24, '')
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: undefined
+      },
+      timeoutMs: 30_000
+    })
   })
 
   it('routes work item fetches through an explicit GitHub source context', async () => {
@@ -308,10 +362,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     const error = new Error('Access denied: unknown repository path')
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [{ id: 'runtime-repo-id', path: '/server/known-repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-1', 'runtime-repo-id', '/server/known-repo'))
     mockApi.gh.listWorkItems.mockRejectedValueOnce(error)
 
     try {
@@ -371,19 +422,16 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-start' },
-      repos: [{ id: 'repo-start', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-start', 'repo-start', '/server/repo'))
     const queued = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', { force: true })
 
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-switched' },
-      repos: [{ id: 'repo-switched', path: '/server/repo', name: 'repo', kind: 'git' }],
-      workItemsCache: {}
-    } as unknown as Partial<AppState>)
+    store.setState(
+      runtimeOwnedRepoState('env-switched', 'repo-switched', '/server/repo', {
+        workItemsCache: {}
+      })
+    )
     for (const resolve of blockingResolvers) {
       resolve({
         items: [],
@@ -438,20 +486,17 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           })
       )
 
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-old' },
-      repos: [{ id: 'repo-old-runtime', path: '/server/repo', name: 'repo', kind: 'git' }]
-    } as unknown as Partial<AppState>)
+    store.setState(runtimeOwnedRepoState('env-old', 'repo-old-runtime', '/server/repo'))
     const oldFetch = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
     await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
 
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-new' },
-      repos: [{ id: 'repo-new-runtime', path: '/server/repo', name: 'repo', kind: 'git' }],
-      workItemsCache: {}
-    } as unknown as Partial<AppState>)
+    store.setState(
+      runtimeOwnedRepoState('env-new', 'repo-new-runtime', '/server/repo', {
+        workItemsCache: {}
+      })
+    )
     const newFetch = store
       .getState()
       .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')

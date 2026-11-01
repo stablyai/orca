@@ -70,7 +70,7 @@ describe('AutomationRunsTable virtualization', () => {
     container.remove()
   })
 
-  it('keeps a 10,000-run history to a bounded number of mounted rows', () => {
+  it('renders the supplied virtualizer window from 10,000 runs', () => {
     act(() => {
       root.render(
         <AutomationRunsTable
@@ -112,7 +112,7 @@ describe('AutomationRunsTable rows', () => {
     return container.querySelectorAll<HTMLButtonElement>('[data-testid="automation-runs-row"]')
   }
 
-  it('fills every column of a row from the entry it stands for', () => {
+  it('renders the entry name, title, host, trigger and status in its row', () => {
     render(
       <AutomationRunsTable
         entries={entries(1)}

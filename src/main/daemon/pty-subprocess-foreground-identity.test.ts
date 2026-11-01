@@ -1,5 +1,5 @@
-// Foreground process reporting: node-pty names, agent enrichment and its cache.
 import { describe, expect, it, vi } from 'vitest'
+import { setImmediate as nextNativeTurn } from 'node:timers/promises'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
@@ -30,9 +30,7 @@ vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
 }))
 
-// Resolve PowerShell family names to deterministic absolute paths so these
-// tests run on non-Windows CI. The real resolver (which skips the Store App
-// Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
+// Keep PowerShell resolution deterministic on non-Windows hosts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
@@ -66,17 +64,28 @@ vi.mock('../providers/agent-foreground-process', () => ({
   }
 }))
 
-// Console-membership reads run a real node-pty fork that never settles under
-// fake timers; default to "shell-only" so the degraded-scan guard falls through
-// to its existing retirement logic (the degraded-scan behavior itself is
-// covered in pty-subprocess-foreground-degraded-scan.test.ts).
 vi.mock('../providers/windows-pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: () => new Set([12345]),
   isWindowsPtyJobReadable: () => true
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
-import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import {
+  createPtyProcessEventEmitter,
+  mockPtyProcess,
+  useDaemonPtySubprocessEnv,
+  type MockPtyProcess
+} from './pty-subprocess-test-harness'
+
+async function announceConptyStartup(
+  proc: MockPtyProcess,
+  pending: ReturnType<typeof createPtySubprocess>
+) {
+  await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+  await nextNativeTurn()
+  proc._simulateData('\x1b[c')
+  return pending
+}
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -99,6 +108,29 @@ describe('createPtySubprocess', () => {
     })
 
     expect(handle.getForegroundProcess()).toBe('codex')
+  })
+
+  it('reads only fresh cached names for inventory without inspecting the process', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'codex'
+    spawnMock.mockReturnValue(proc)
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    expect(handle.getForegroundProcess({ cachedOnly: true })).toBeNull()
+    expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+    expect(handle.getForegroundProcess()).toBe('codex')
+    const readProcess = vi.fn(() => {
+      throw new Error('inventory must not inspect')
+    })
+    Object.defineProperty(proc, 'process', { get: readProcess })
+    expect(handle.getForegroundProcess({ cachedOnly: true })).toBe('codex')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 10_000)
+    try {
+      expect(handle.getForegroundProcess({ cachedOnly: true })).toBeNull()
+      expect(readProcess).not.toHaveBeenCalled()
+      expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('serves daemon wrapper agent foreground from an async cache without blocking', async () => {
@@ -159,8 +191,7 @@ describe('createPtySubprocess', () => {
       await Promise.resolve()
       expect(handle.getForegroundProcess()).toBe('grok')
 
-      // Why: renderer reads poll slower than the 1s cache TTL — an expired
-      // cache must keep answering with the resolved identity, not the wrapper.
+      // Keep serving resolved identity across cache expiry while refresh runs.
       vi.advanceTimersByTime(1_500)
       expect(handle.getForegroundProcess()).toBe('grok')
     } finally {
@@ -192,12 +223,11 @@ describe('createPtySubprocess', () => {
       await Promise.resolve()
       await Promise.resolve()
       expect(handle.getForegroundProcess()).toBe('grok')
-      // Flush the first refresh's finally so the next read can revalidate.
+      // Settle refresh cleanup so the next read can revalidate.
       await Promise.resolve()
       await Promise.resolve()
 
-      // An unrelated wrapper (e.g. npm) now owns the pane: the stale-served
-      // identity is revalidated and dropped once the refresh finds no agent.
+      // The old identity survives until the refresh rules out an agent behind the wrapper.
       vi.advanceTimersByTime(1_500)
       expect(handle.getForegroundProcess()).toBe('grok')
       await Promise.resolve()
@@ -465,7 +495,7 @@ describe('createPtySubprocess', () => {
   it('keeps menu startup agent foreground through early negative shell enrichment', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
-    const proc = mockPtyProcess()
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
     proc.process = 'powershell.exe'
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -473,13 +503,16 @@ describe('createPtySubprocess', () => {
     resolveAgentForegroundProcessMock.mockResolvedValue('powershell.exe')
 
     try {
-      const handle = await createPtySubprocess({
-        sessionId: 'test',
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\repo\\orca',
-        command: 'codex'
-      })
+      const handle = await announceConptyStartup(
+        proc,
+        createPtySubprocess({
+          sessionId: 'test',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo\\orca',
+          command: 'codex'
+        })
+      )
 
       expect(handle.getForegroundProcess()).toBe('codex')
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
@@ -507,7 +540,7 @@ describe('createPtySubprocess', () => {
   it('keeps menu startup agent foreground during a slow Windows shell enrichment window', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
-    const proc = mockPtyProcess()
+    const proc = { ...mockPtyProcess(), ...createPtyProcessEventEmitter() }
     proc.process = 'powershell.exe'
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -520,13 +553,16 @@ describe('createPtySubprocess', () => {
     )
 
     try {
-      const handle = await createPtySubprocess({
-        sessionId: 'repo::C:\\repo\\orca@@deadbeef',
-        cols: 80,
-        rows: 24,
-        cwd: 'C:\\repo\\orca',
-        command: 'codex'
-      })
+      const handle = await announceConptyStartup(
+        proc,
+        createPtySubprocess({
+          sessionId: 'repo::C:\\repo\\orca@@deadbeef',
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo\\orca',
+          command: 'codex'
+        })
+      )
 
       expect(handle.getForegroundProcess()).toBe('codex')
       expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(

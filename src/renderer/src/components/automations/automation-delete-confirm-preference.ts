@@ -1,11 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Turning off the delete confirmation is a one-click, easily regretted change,
- * so the acknowledgement carries the way back to it rather than just reporting
- * success.
- */
+/** Include the path back to confirmation when acknowledging its easy-to-regret disable action. */
 
 export type AutomationDeleteConfirmPreferenceActions = {
   updateSettings: (update: { skipDeleteAutomationConfirm: boolean }) => unknown

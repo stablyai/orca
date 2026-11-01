@@ -7,14 +7,10 @@ import type {
   TerminalQuickCommandScope
 } from './terminal-quick-command-types'
 
-export const MAX_QUICK_COMMANDS = 40
 export const MAX_QUICK_COMMAND_ID_LENGTH = 80
 export const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
 export const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
 export const MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH = 4000
-// Why: agent prompt quick commands still launch through startup commands for
-// argv/flag agents, so this must stay within Orca's Windows shell safety cap.
-export const MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH = 6000
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 
 const DEFAULT_TERMINAL_QUICK_COMMANDS: TerminalQuickCommand[] = []
@@ -104,8 +100,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
       record.action === 'agent-prompt' ? 'agent-prompt' : 'terminal-command'
     const hasCommand = typeof record.command === 'string'
     const hasPrompt = typeof record.prompt === 'string'
-    // Why: settings saves on every edit; preserve incomplete rows so a newly
-    // added command is not deleted before the user fills in the command text.
+    // Settings save on every edit; retain incomplete rows while the user fills them in.
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
@@ -139,10 +134,7 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         ...base,
         action: 'agent-prompt',
         agent: agentId,
-        prompt: (hasPrompt ? String(record.prompt).trimEnd() : '').slice(
-          0,
-          MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH
-        )
+        prompt: hasPrompt ? String(record.prompt).trimEnd() : ''
       })
     } else {
       const command = hasCommand ? String(record.command).trimEnd() : ''
@@ -152,10 +144,6 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         command: command.slice(0, MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
         appendEnter: record.appendEnter !== false
       })
-    }
-
-    if (normalized.length >= MAX_QUICK_COMMANDS) {
-      break
     }
   }
 
@@ -213,12 +201,11 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
   )
 }
 
-// Why: a full-list client must reject any "authoritative" payload that would
-// change under normalization, or its next mutation could persist silent loss.
+// Reject normalization changes in authoritative full lists or the next mutation could persist silent loss.
 export function parseNormalizedTerminalQuickCommands(
   input: unknown
 ): TerminalQuickCommand[] | null {
-  if (!Array.isArray(input) || input.length > MAX_QUICK_COMMANDS) {
+  if (!Array.isArray(input)) {
     return null
   }
   const normalized = normalizeTerminalQuickCommands(input)

@@ -6,17 +6,19 @@ import {
 } from './mobile-pairing-connection-mode'
 
 describe('mobile pairing connection mode defaults', () => {
-  it('defaults to Anywhere when no preference is saved', () => {
-    expect(resolveMobilePairingConnectionMode(undefined)).toBe('automatic')
-    expect(resolveMobilePairingConnectionMode(null)).toBe('automatic')
+  it('preselects LAN on a signed-out desktop, even with the persisted Anywhere default', () => {
+    for (const saved of [undefined, null, 'automatic', 'local-only'] as const) {
+      expect(resolveMobilePairingConnectionMode(saved, { signedIn: false })).toBe('local-only')
+    }
   })
 
-  it('keeps an explicit same-network preference', () => {
-    expect(resolveMobilePairingConnectionMode('local-only')).toBe('local-only')
+  it('defaults a signed-in desktop to Anywhere', () => {
+    expect(resolveMobilePairingConnectionMode(undefined, { signedIn: true })).toBe('automatic')
+    expect(resolveMobilePairingConnectionMode('automatic', { signedIn: true })).toBe('automatic')
   })
 
-  it('keeps an explicit Anywhere preference', () => {
-    expect(resolveMobilePairingConnectionMode('automatic')).toBe('automatic')
+  it('keeps an explicit same-network preference after sign-in', () => {
+    expect(resolveMobilePairingConnectionMode('local-only', { signedIn: true })).toBe('local-only')
   })
 
   it('cannot commit Anywhere into a QR while signed out', () => {
@@ -32,8 +34,7 @@ describe('mobile pairing connection mode defaults', () => {
   })
 
   it('refuses to mint under signed-out Anywhere and allows honest paths', () => {
-    // Why: mint refusal is the UI honesty gate that replaces silent degradation
-    // for renderer mint paths (signed-out Anywhere must not show a local QR).
+    // Signed-out Anywhere must refuse minting rather than display a misleading local QR.
     expect(canMintMobilePairingOffer({ connectionMode: 'automatic', signedIn: false })).toBe(false)
     expect(canMintMobilePairingOffer({ connectionMode: 'automatic', signedIn: true })).toBe(true)
     expect(canMintMobilePairingOffer({ connectionMode: 'local-only', signedIn: false })).toBe(true)

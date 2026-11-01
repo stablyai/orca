@@ -1,12 +1,4 @@
-/**
- * Turns cached per-host rows into the list the page renders.
- *
- * The rows keep their host of origin all the way through, because under All
- * hosts two authorities can hold records with the same name and only the
- * originating host explains which is which. `answered` is the honest gate: until
- * some host in view has actually committed a response, this projection has
- * nothing to say and the caller keeps whatever it already had.
- */
+/** Keep host origin on every visible row. Until a host in view commits an answer, preserve the caller’s prior rows instead of claiming an empty result. */
 
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationHostCacheEntry } from './automation-host-cache-types'
@@ -39,11 +31,7 @@ export type AutomationHostGroup = {
 }
 
 export type AutomationHostListRows = {
-  /**
-   * Catalog-ordered, deduplicated per authority. Each row carries its own host
-   * label and usage, because two authorities may hold the same automation ID and
-   * a map keyed by that ID can only describe one of them.
-   */
+  /** Catalog-ordered rows deduplicated per authority, with their own host/usage; bare IDs collide across authorities. */
   rows: readonly AutomationListRow[]
   /** The same rows' records, for callers that only need the automations. */
   automations: readonly Automation[]
@@ -78,11 +66,7 @@ export type AutomationHostVisibleGroup = Omit<AutomationHostGroup, 'hosts'> & {
   hosts: readonly AutomationHostGroupVisibleHost[]
 }
 
-/**
- * Applies the list search to the grouped view. Empty groups are kept: a host
- * whose rows the query hid still owes the user its status row, and dropping it
- * would make a search look like a host disappearing.
- */
+/** Keep host status groups even when search hides every row; filtering must not look like host removal. */
 export function filterAutomationHostGroups(
   groups: readonly AutomationHostGroup[],
   visibleRowKeys: ReadonlySet<string>
@@ -129,8 +113,7 @@ export function resolveAutomationHostListRows(
     const authorityKey = automationAuthorityCatalogKey(entry.stableRef.authority)
     const hostRows: AutomationListRow[] = []
     for (const row of cached?.data ?? []) {
-      // Scoped to the authority: another authority's identically named record is
-      // a different record, and dropping it would hide a row the user stored.
+      // Deduplicate within the authority; matching IDs on another host name different stored records.
       const recordKey = automationAuthorityRecordKey(authorityKey, row.automation.id)
       if (seen.has(recordKey)) {
         continue
@@ -159,9 +142,7 @@ export function resolveAutomationHostListRows(
   return {
     rows,
     automations: rows.map((row) => row.automation),
-    // Catalog order decides duplicates, and it places an authority's Self and
-    // SSH hosts before its orphan bucket — so a record keeps its owner rather
-    // than the ownerless copy the orphan scope also returns.
+    // Catalog order places owned Self/SSH copies before ownerless orphan copies, preserving captured ownership.
     capturedOwners: captureAutomationOwners(capturedRows),
     groups: input.resolution.effective.kind === 'all' ? groups : [],
     answered

@@ -1,22 +1,29 @@
-import { EventEmitter } from 'node:events'
+import { ChildProcess } from 'node:child_process'
+import { PassThrough } from 'node:stream'
 import { expect, vi } from 'vitest'
 
-export type MockDiscoveryChild = EventEmitter & {
+export type MockDiscoveryChild = ChildProcess & {
   pid: number
-  kill: ReturnType<typeof vi.fn>
-  stdout: EventEmitter
-  stderr: EventEmitter
-  stdin: { end: ReturnType<typeof vi.fn> }
+  kill: ReturnType<typeof vi.fn<() => boolean>>
+  stdout: PassThrough
+  stderr: PassThrough
+  stdin: PassThrough & { end: ReturnType<typeof vi.fn> }
 }
 
 export function createMockDiscoveryChild(): MockDiscoveryChild {
-  const child = new EventEmitter() as MockDiscoveryChild
-  child.pid = 123
-  child.kill = vi.fn()
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.stdin = { end: vi.fn() }
-  return child
+  const child = new ChildProcess()
+  Object.defineProperties(child, {
+    stdout: { writable: true, configurable: true, enumerable: true },
+    stderr: { writable: true, configurable: true, enumerable: true },
+    stdin: { writable: true, configurable: true, enumerable: true }
+  })
+  return Object.assign(child, {
+    pid: 123,
+    kill: vi.fn(() => true),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    stdin: Object.assign(new PassThrough(), { end: vi.fn() })
+  })
 }
 
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
@@ -29,8 +36,7 @@ export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   }
 }
 
-// Binds the caller's hoisted tree-kill mock so test bodies keep calling
-// expectChildTerminated(child) with no extra argument.
+// Bind the hoisted Windows tree-kill mock; supervised POSIX stop uses SIGTERM in source-control-local-process.test.ts.
 export function createChildTerminationExpectation(
   terminateWindowsProcessTreeMock: ReturnType<typeof vi.fn>
 ): (child: { pid: number; kill: ReturnType<typeof vi.fn> }) => Promise<void> {
@@ -40,10 +46,15 @@ export function createChildTerminationExpectation(
         site: 'source-control-text-generation'
       })
     }
-    // Every platform kills the root by its own handle. On win32 that is not a
-    // duplicate of the tree walk: it is what keeps a refused walk from resolving
-    // having killed nothing while the caller releases the managed-home lock. It
-    // runs after the walk there, so it can be a tick behind the caller.
+    // Kill the owned root handle too so refused Windows tree walks cannot release the home lock having killed nothing; root kill follows the walk.
     await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
   }
+}
+
+/** Unwrap supervisor -- before inspecting the actual agent argv. */
+export function spawnedAgentArgv([file, args]: readonly unknown[]): unknown[] {
+  const argv: unknown[] = Array.isArray(args) ? args : []
+  return file === process.execPath && argv[0] === '-e'
+    ? argv.slice(argv.indexOf('--') + 1)
+    : [file, ...argv]
 }

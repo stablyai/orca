@@ -1,28 +1,42 @@
-import { CLIENT_PLATFORM, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-startup-plan-inputs'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import {
+  resolveRepoExecutionHostPlatform,
+  type ExecutionHostPlatformFact
+} from '@/lib/execution-host-facts'
+import type { AppState } from '@/store/types'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
-import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 
-export function getFolderWorkspaceAgentLaunchPlatform(
-  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
-): NodeJS.Platform {
-  const parentPath = projectGroup.parentPath?.trim() ?? ''
-  if (projectGroup.connectionId) {
-    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
-  }
-  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
+/** OS of the host that owns a folder group; its agents are quoted for that host's shell. */
+export function getFolderWorkspaceAgentLaunchFact(
+  state: Pick<
+    AppState,
+    'sshConnectionStates' | 'sshStateByEnvironment' | 'runtimeStatusByEnvironmentId'
+  >,
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'executionHostId' | 'parentPath'>
+): ExecutionHostPlatformFact {
+  return resolveRepoExecutionHostPlatform(
+    state,
+    {
+      connectionId: projectGroup.connectionId,
+      executionHostId: projectGroup.executionHostId,
+      path: projectGroup.parentPath?.trim() ?? ''
+    },
+    () => undefined
+  )
 }
 
-/** Resolve the linked context that should appear in the agent input without submitting. */
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
   note: string
@@ -33,28 +47,32 @@ export function resolveFolderWorkspaceLaunchDraft(
 
 export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
+  settings?: AgentStartupSettings
   linkedWorkItem: LinkedWorkItemSummary
   note: string
   agentCmdOverrides: Record<string, string> | undefined
   agentArgs?: string | null
   agentEnv?: Record<string, string>
-  sessionOptions?: Record<string, SessionOptionValue>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
   isRemote: boolean
 }): AgentStartupPlan | null {
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: args.agent,
+    settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
+    agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
+    platform: args.platform,
+    shell: args.shell,
+    isRemote: args.isRemote
+  })
+  if (args.agentEnv) {
+    inputs.agentEnv = args.agentEnv
+  }
   const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
-        agent: args.agent,
-        draft: linkedDraftPrompt,
-        cmdOverrides: args.agentCmdOverrides ?? {},
-        agentArgs: args.agentArgs,
-        agentEnv: args.agentEnv,
-        sessionOptions: args.sessionOptions,
-        platform: args.platform,
-        shell: args.shell,
-        isRemote: args.isRemote
+        ...inputs,
+        draft: linkedDraftPrompt
       })
     : null
   if (draftLaunchPlan) {
@@ -73,16 +91,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
-    // Why: linked context must stay reviewable; launch empty, then paste the draft after readiness.
+    ...inputs,
     prompt: '',
-    cmdOverrides: args.agentCmdOverrides ?? {},
-    agentArgs: args.agentArgs,
-    agentEnv: args.agentEnv,
-    sessionOptions: args.sessionOptions,
-    platform: args.platform,
-    shell: args.shell,
-    isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && linkedDraftPrompt) {

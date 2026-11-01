@@ -42,9 +42,6 @@ describePostgres('PostgreSQL drain-send locking', () => {
       `DELETE FROM relay_control_connection_reservations WHERE user_id = ?`,
       [identity.userId]
     )
-    await database.query(`DELETE FROM relay_migration_leases WHERE user_id = ?`, [
-      identity.userId
-    ])
     await database.query(`DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`, [
       identity.userId
     ])
@@ -61,6 +58,10 @@ describePostgres('PostgreSQL drain-send locking', () => {
       target.id
     ])
     await database.query(`DELETE FROM relay_cell_admission WHERE cell_id IN (?, ?)`, [
+      source.id,
+      target.id
+    ])
+    await database.query(`DELETE FROM relay_cell_regions WHERE cell_id IN (?, ?)`, [
       source.id,
       target.id
     ])
@@ -136,7 +137,10 @@ describePostgres('PostgreSQL drain-send locking', () => {
       })
     ).rejects.toThrow('drain_application_receipt_missing')
     await expect(
-      database.query(`SELECT drain_attempt_id FROM relay_post_drain_migration_pins`)
+      database.query(
+        `SELECT drain_attempt_id FROM relay_post_drain_migration_pins WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
     ).resolves.toEqual([{ drain_attempt_id: attemptId }])
   })
 

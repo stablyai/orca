@@ -4,25 +4,27 @@ import {
   type LinearIssueTaskUpdateResult,
   type LinearIssueSummary,
   getLinearTeamLabelsOrThrow,
-  linearError,
   sameStringSet
 } from './runtime-linear-command-dependencies'
+import { linearError } from '../linear/issue-context/errors'
 import { RuntimeLinearProjectWriteCommands } from './runtime-linear-project-write-commands'
 
 export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCommands {
   public async resolveLinearLabelsForIssue(
     issue: NonNullable<Awaited<ReturnType<typeof getLinearIssueByUuidForAgent>>>,
     inputs: string[],
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId)
+    signal?.throwIfAborted()
+    const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId, signal)
     const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+      const normalized = input.toLowerCase()
+      const idMatch = labels.find((label) => label.id.toLowerCase() === normalized)
       if (idMatch) {
         return { id: idMatch.id, name: idMatch.name }
       }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+      const nameMatches = labels.filter((label) => label.name.toLowerCase() === normalized)
       if (nameMatches.length === 1) {
         return { id: nameMatches[0].id, name: nameMatches[0].name }
       }
@@ -43,16 +45,18 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
   public async resolveLinearLabelsForTeam(
     teamId: string,
     inputs: string[],
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<{ id: string; name: string }[]> {
-    const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId)
+    signal?.throwIfAborted()
+    const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId, signal)
     const resolved = inputs.map((input) => {
-      const normalized = input.toLocaleLowerCase()
-      const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+      const normalized = input.toLowerCase()
+      const idMatch = labels.find((label) => label.id.toLowerCase() === normalized)
       if (idMatch) {
         return { id: idMatch.id, name: idMatch.name }
       }
-      const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+      const nameMatches = labels.filter((label) => label.name.toLowerCase() === normalized)
       if (nameMatches.length === 1) {
         return { id: nameMatches[0].id, name: nameMatches[0].name }
       }
@@ -129,10 +133,12 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
   }
   public async getLinearTeamLabelsForWrite(
     teamId: string,
-    workspaceId: string
+    workspaceId: string,
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getLinearTeamLabelsOrThrow>>> {
+    signal?.throwIfAborted()
     try {
-      return await getLinearTeamLabelsOrThrow(teamId, workspaceId)
+      return await getLinearTeamLabelsOrThrow(teamId, workspaceId, signal)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }

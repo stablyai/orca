@@ -17,10 +17,7 @@ export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element 
 }
 
 export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: ship the official MiniMax wordmark mark so the icon is recognizable
-  // in both light and dark themes. The SVG carries its own pink→orange gradient
-  // that reads on muted backgrounds, so we keep the asset monochrome-agnostic
-  // and let CSS theme tokens drive the surrounding chrome instead.
+  // Keep the official MiniMax asset’s gradient intact across themes.
   return (
     <img
       src={minimaxIconUrl}
@@ -34,13 +31,10 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   )
 }
 
-// Why: each instance needs unique filter/mask IDs — reusing the same ID across
-// multiple SVGs on the same page causes the browser to resolve to the first one,
-// breaking all subsequent instances.
+// SVG filter/mask IDs must be unique per instance because document-wide lookup otherwise resolves to the first icon.
 let _geminiIconCount = 0
 
 export function GeminiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: use a stable per-instance ID generated once at mount, not on every render.
   const [uid] = React.useState(() => `gi-${++_geminiIconCount}`)
   const star =
     'M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z'
@@ -328,9 +322,7 @@ export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element 
 }
 
 export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: Factory.ai's favicon is a white glyph on transparent bg — unreadable on
-  // light surfaces (README kbd pills, light-mode UI). Bake in a black rounded
-  // square backdrop so the icon is self-contained across themes.
+  // Factory’s white glyph needs a black backdrop to remain visible on light surfaces.
   return (
     <svg height={size} width={size} viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
       <rect width="20" height="20" rx="4" fill="#000" />

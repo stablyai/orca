@@ -1,16 +1,26 @@
 import { randomUUID } from 'node:crypto'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../shared/runtime-types'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+import { saveWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
+import {
+  collectLayoutLeafIdsInOrder,
+  removeLayoutLeaf
+} from '../../shared/workspace-layout/terminal-pane-tree'
+import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 import { canonicalizeTerminalSessionWorktreeId } from './workspace-session-worktree-id'
-import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 type Claim = RuntimeTerminalOrphanAdoptionRequest['claims'][number]
 type Topology = NonNullable<RuntimeTerminalOrphanAdoptionRequest['topology']>
 
 export function buildRuntimeTerminalOrphanSession(args: {
+  hostId: ExecutionHostId
   session: WorkspaceSessionState
   sessionWorktreeId: string
   worktreeId: string
@@ -21,6 +31,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
   getDisplayTitle: (pty: RuntimePtyWorktreeRecord) => string | null
 }): WorkspaceSessionState {
   const {
+    hostId,
     session,
     sessionWorktreeId,
     worktreeId,
@@ -44,11 +55,11 @@ export function buildRuntimeTerminalOrphanSession(args: {
         worktreeId: worktreeId,
         title,
         defaultTitle: title,
-        customTitle: null,
+        // An orphan's rename lives on its PTY until a tab owns it.
+        customTitle: pty.manualTitle ?? null,
         color: null,
         sortOrder: tabsById.size,
-        createdAt: Date.now(),
-        pendingActivationSpawn: true
+        createdAt: Date.now()
       }
       tabsById.set(claim.tabId, tab)
     }
@@ -57,7 +68,7 @@ export function buildRuntimeTerminalOrphanSession(args: {
     next.terminalLayoutsByTabId[claim.tabId] = topologyTab
       ? {
           ...existingLayout,
-          root: topologyTab.root,
+          root: mergeAdoptedTopologyRoot(existingLayout?.root ?? null, topologyTab.root),
           activeLeafId: topologyTab.activeLeafId,
           expandedLeafId: topologyTab.expandedLeafId,
           ptyIdsByLeafId: {
@@ -186,5 +197,31 @@ export function buildRuntimeTerminalOrphanSession(args: {
     [worktreeId]: activeGroup.id
   }
   const persisted = advanceTerminalTopologyRevision(next, worktreeId)
-  return persisted
+  // The shared serializer writes each adopted tab's tab-bar entry, which nothing else would.
+  return saveWorkspaceLayout(
+    loadWorkspaceLayoutWithoutReport(hostId, persisted, nameBasedLoadContext())
+  )
+}
+
+/** Adopt only named panes while retaining healthy siblings; one split recovery must not drop the rest of its tab. */
+function mergeAdoptedTopologyRoot(
+  existingRoot: TerminalPaneLayoutNode | null,
+  adoptedRoot: TerminalPaneLayoutNode
+): TerminalPaneLayoutNode {
+  if (!existingRoot) {
+    return adoptedRoot
+  }
+  const existingLeafIds = collectLayoutLeafIdsInOrder(existingRoot)
+  const adoptedLeafIds = collectLayoutLeafIdsInOrder(adoptedRoot)
+  if (adoptedLeafIds.every((leafId) => existingLeafIds.includes(leafId))) {
+    return existingRoot
+  }
+  const siblings = adoptedLeafIds.reduce<TerminalPaneLayoutNode | null>(
+    (root, leafId) => removeLayoutLeaf(root, leafId),
+    existingRoot
+  )
+  if (!siblings) {
+    return adoptedRoot
+  }
+  return { type: 'split', direction: 'vertical', first: siblings, second: adoptedRoot }
 }

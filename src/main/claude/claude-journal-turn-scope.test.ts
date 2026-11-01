@@ -1,11 +1,6 @@
-// Which turn a Claude row belongs to (B8): the root turn open when the row is written, whoever
-// produced it, and the conversation once that turn has ended.
-
 import { expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions

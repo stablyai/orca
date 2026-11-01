@@ -4,7 +4,7 @@ import {
   terminalTabHasUnreadActivity
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { resolveRecentWorkspaceTabStatus } from '@/lib/recent-workspace-tab-rows'
-import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
+import type { TabPaneInputSources } from '../../../shared/sidebar-list/smart-attention'
 import type { OpenTabPaletteItem, OpenTabRecentRow } from './worktree-jump-palette-model'
 import type { Worktree } from '../../../shared/worktree/types'
 

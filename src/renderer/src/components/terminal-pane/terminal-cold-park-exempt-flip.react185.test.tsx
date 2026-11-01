@@ -1,15 +1,4 @@
-/**
- * Guard for the capability re-settlement fix: eviction-exemption flips are a
- * pin-unreachable input to the rendered park verdict (same family as the
- * activation-deferred clause behind the terminal.workbench React #185
- * cluster). Capability verdicts may therefore only change between commits —
- * asynchronously, off daemon answers — never as a function of the pane
- * mount/unmount lifecycle. This harness force-parks a worktree, lets pane
- * mounts write layouts/titles (the mount-lifecycle writes that feed the
- * exemption's OTHER inputs), and flips the capability verdict between commits
- * repeatedly: every flip must settle without approaching React's nested
- * update limit.
- */
+/** Capability verdicts must change only on async daemon answers, never pane mount/unmount; repeatedly flip them between commits while mount writes update other exemption inputs to catch React #185 loops. */
 /** @vitest-environment happy-dom */
 import { act, StrictMode } from 'react'
 import type * as ReactModule from 'react'
@@ -64,9 +53,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: () => {}
 }))
 
-// Why mount writes: a revealing pane publishes its title and registers its
-// layout leaf — the mount-lifecycle writes that feed the exemption's layout
-// key. The capability verdict itself must stay untouched by these.
+// Model pane title/layout writes without changing the independent capability verdict.
 vi.mock('./TerminalOverlaySlot', async () => {
   const { useEffect } = await vi.importActual<typeof ReactModule>('react')
   const { useAppStore } = await import('../../store')
@@ -181,9 +168,7 @@ function unifiedTerminalTab(id: string): Tab {
   }
 }
 
-// Why the store touch: capability answers land in module state, which the
-// exemption memo cannot subscribe to; the next store change reveals them —
-// modeled here as the routine title churn every live session produces.
+// Capability answers update module state; routine title writes wake the store memo to observe them.
 function touchStoreTitles(marker: string): void {
   harnessStore.setState({
     tabsByWorktree: {
@@ -293,8 +278,7 @@ describe('force-park exemption flips under capability changes', () => {
     consoleError.mockRestore()
 
     expect(thrown).toBeNull()
-    // Non-vacuous: the flips genuinely moved the rendered verdict both ways —
-    // all-exempt (0 parked) and all-evictable (2 parked) were both committed.
+    // Require committed verdicts on both sides so the loop check cannot pass without exercising flips.
     expect(harness.observedParkedCounts.has(0)).toBe(true)
     expect(harness.observedParkedCounts.has(TAB_IDS.length)).toBe(true)
     expect(harness.slotMounts).toBeGreaterThan(0)

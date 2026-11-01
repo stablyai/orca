@@ -74,13 +74,11 @@ describe('sameTerminalKeyboardAvoidanceMetrics', () => {
     altScreen: false,
     rowPitch: 15
   }
-  // One variant per field, each differing from `metrics` in that field alone.
   const variants: [keyof typeof metrics, TerminalKeyboardAvoidanceMetrics][] = [
     ['cursorY', { ...metrics, cursorY: 39 }],
     ['contentBottomRow', { ...metrics, contentBottomRow: 39 }],
     ['rows', { ...metrics, rows: 41 }],
     ['altScreen', { ...metrics, altScreen: true }],
-    // Desktop display mode, measured on the page: same rows, the fit scale moved to 0.46.
     ['rowPitch', { ...metrics, rowPitch: 6.96 }]
   ]
 

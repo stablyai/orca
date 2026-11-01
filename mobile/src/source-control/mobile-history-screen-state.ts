@@ -7,10 +7,7 @@ export type MobileHistoryScreenView =
   | { kind: 'empty' }
   | { kind: 'rows'; rows: MobileCommitRow[] }
 
-// Why: the history load effect no-ops while the client isn't connected, so
-// without an explicit 'waiting' view the screen showed an infinite spinner
-// with no retry when opened during a reconnect window (STA-1511). Rows loaded
-// before a drop stay visible — stale history beats a blank screen.
+// Disconnected cold loads need Retry; keep previously loaded rows visible through outages.
 export function resolveMobileHistoryScreenView(input: {
   connected: boolean
   rows: MobileCommitRow[] | null

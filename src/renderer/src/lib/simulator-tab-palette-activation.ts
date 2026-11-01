@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorkspace } from './worktree-activation'
 import {
   findAmbiguousWorktreeIds,
   getPaletteOwnershipWorktreeIds,
@@ -11,6 +11,7 @@ export type SimulatorTabPaletteActivationFailure = 'missing-tab' | 'missing-work
 
 export type SimulatorTabPaletteActivationResult =
   | { status: 'activated'; tabId: string }
+  | { status: 'blocked' }
   | { status: 'failed'; reason: SimulatorTabPaletteActivationFailure }
 
 export type SimulatorTabPaletteActivationTarget = {
@@ -48,12 +49,12 @@ export function activateSimulatorTabPaletteResult({
   }
 
   const targetHostId = executionHostId ?? worktree.hostId
-  const activated = activateAndRevealWorktree(
+  const activated = activateAndRevealWorkspace(
     worktree.id,
     targetHostId ? { executionHostId: targetHostId } : {}
   )
   if (!activated) {
-    return { status: 'failed', reason: 'missing-worktree' }
+    return { status: 'blocked' }
   }
 
   const state = useAppStore.getState()

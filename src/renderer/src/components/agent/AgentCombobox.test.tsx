@@ -7,13 +7,66 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { AGENT_FAVICON_ASSETS } from '@/lib/agent-favicon-assets'
 import AgentCombobox from './AgentCombobox'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { ReactElement } from 'react'
+
+function renderPicker(element: ReactElement) {
+  return render(element, { wrapper: TooltipProvider })
+}
 
 afterEach(cleanup)
 
 describe('AgentCombobox', () => {
+  it.each(['codex', null] as const)(
+    'clears %s without opening the picker or changing defaults',
+    (value) => {
+      const onClear = vi.fn()
+      const onSetDefault = vi.fn()
+      const onValueChange = vi.fn()
+      renderPicker(
+        <AgentCombobox
+          agents={AGENT_CATALOG}
+          value={value}
+          onValueChange={onValueChange}
+          allowBlankTerminal
+          onSetDefault={onSetDefault}
+          clearSelection={{ cleared: false, onClear }}
+        />
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Clear agent selection' }))
+      expect(onClear).toHaveBeenCalledOnce()
+      expect(onValueChange).not.toHaveBeenCalled()
+      expect(onSetDefault).not.toHaveBeenCalled()
+      expect(screen.getByRole('combobox').getAttribute('aria-expanded')).toBe('false')
+      expect(document.activeElement).toBe(screen.getByRole('combobox'))
+    }
+  )
+
+  it('keeps the cleared choice empty and lets the user choose an agent again', () => {
+    const onValueChange = vi.fn()
+    renderPicker(
+      <AgentCombobox
+        agents={AGENT_CATALOG}
+        value={null}
+        onValueChange={onValueChange}
+        allowBlankTerminal
+        onSetDefault={vi.fn()}
+        clearSelection={{ cleared: true, onClear: vi.fn() }}
+      />
+    )
+    expect(screen.getByRole('combobox').textContent).toBe('Select an Agent')
+    expect(screen.queryByRole('button', { name: 'Clear agent selection' })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('combobox'))
+    expect(screen.queryByRole('menuitem')).toBeNull()
+    fireEvent.click(screen.getByRole('combobox'))
+    expect(screen.queryByRole('option', { name: 'None' })).toBeNull()
+    fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+    expect(onValueChange).toHaveBeenCalledWith('claude')
+  })
+
   it('sets the closed trigger selection as the default agent', () => {
     const onSetDefault = vi.fn()
-    render(
+    renderPicker(
       <AgentCombobox
         agents={AGENT_CATALOG}
         value="codex"
@@ -33,11 +86,12 @@ describe('AgentCombobox', () => {
 
   it('maps the closed Blank Terminal selection to the blank default preference', () => {
     const onSetDefault = vi.fn()
-    render(
+    renderPicker(
       <AgentCombobox
         agents={AGENT_CATALOG}
         value={null}
         onValueChange={vi.fn()}
+        allowBlankTerminal
         defaultAgent="codex"
         onSetDefault={onSetDefault}
       />
@@ -51,15 +105,8 @@ describe('AgentCombobox', () => {
 
   it('does not offer a default action for an Agent-only empty state', () => {
     const onSetDefault = vi.fn()
-    render(
-      <AgentCombobox
-        agents={[]}
-        value={null}
-        onValueChange={vi.fn()}
-        allowBlankTerminal={false}
-        emptyLabel="Select an Agent"
-        onSetDefault={onSetDefault}
-      />
+    renderPicker(
+      <AgentCombobox agents={[]} value={null} onValueChange={vi.fn()} onSetDefault={onSetDefault} />
     )
 
     fireEvent.contextMenu(screen.getByRole('combobox'))
@@ -70,7 +117,7 @@ describe('AgentCombobox', () => {
 
   it('marks the closed trigger when its selection is already the default', () => {
     const onSetDefault = vi.fn()
-    render(
+    renderPicker(
       <AgentCombobox
         agents={AGENT_CATALOG}
         value="codex"
@@ -90,7 +137,7 @@ describe('AgentCombobox', () => {
 
   it('keeps the expanded agent-row default action available', () => {
     const onSetDefault = vi.fn()
-    render(
+    renderPicker(
       <AgentCombobox
         agents={AGENT_CATALOG}
         value="codex"
@@ -107,74 +154,39 @@ describe('AgentCombobox', () => {
     expect(onSetDefault).toHaveBeenCalledWith('claude')
   })
 
-  it('keeps enough trigger width for GitHub Copilot when callers pass min-w-0', () => {
+  it('defaults to an Agent-only empty state without presenting a blank terminal', () => {
     const markup = renderToStaticMarkup(
-      <AgentCombobox
-        agents={AGENT_CATALOG}
-        value="copilot"
-        onValueChange={vi.fn()}
-        triggerClassName="h-9 w-full min-w-0"
-      />
-    )
-
-    expect(markup).toContain('GitHub Copilot')
-    expect(markup).toContain('!min-w-[260px]')
-    expect(markup).toContain('flex-1')
-  })
-
-  it('centers the selected agent mark and label inside a full-width form trigger', () => {
-    const markup = renderToStaticMarkup(
-      <AgentCombobox
-        agents={AGENT_CATALOG}
-        value="codex"
-        onValueChange={vi.fn()}
-        allowNarrowTrigger
-        triggerClassName="h-9 w-full min-w-0"
-      />
-    )
-
-    expect(markup).toContain('Codex')
-    expect(markup).not.toContain('!min-w-[260px]')
-    expect(markup).toContain('min-w-0 w-full')
-    expect(markup).toContain('leading-none')
-    expect(markup).toContain('size-3.5 shrink-0')
-    expect(markup).not.toContain('translate-y')
-    // Why: React HTML-escapes `[`/`&` in class strings during static markup.
-    expect(markup).toContain('size-3.5!')
-  })
-
-  it('uses the same centered 14px layout for every agent mark', () => {
-    for (const agent of AGENT_CATALOG) {
-      const markup = renderToStaticMarkup(
-        <AgentCombobox
-          agents={AGENT_CATALOG}
-          value={agent.id}
-          onValueChange={vi.fn()}
-          allowNarrowTrigger
-        />
-      )
-
-      expect(markup).toContain(agent.label)
-      expect(markup).toContain('size-3.5 shrink-0')
-      expect(markup).not.toContain('translate-y')
-      expect(markup).toContain('width="14"')
-      expect(markup).toContain('height="14"')
-    }
-  })
-
-  it('supports an Agent-only empty state without presenting a blank terminal', () => {
-    const markup = renderToStaticMarkup(
-      <AgentCombobox
-        agents={[]}
-        value={null}
-        onValueChange={vi.fn()}
-        allowBlankTerminal={false}
-        emptyLabel="Select an Agent"
-      />
+      <AgentCombobox agents={[]} value={null} onValueChange={vi.fn()} />
     )
 
     expect(markup).toContain('Select an Agent')
     expect(markup).not.toContain('Blank Terminal')
+  })
+
+  it('hides Blank Terminal from the list unless the caller opts in', () => {
+    renderPicker(<AgentCombobox agents={AGENT_CATALOG} value="codex" onValueChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('combobox'))
+
+    expect(screen.getByRole('option', { name: 'Claude' })).toBeTruthy()
+    expect(screen.queryByRole('option', { name: 'Blank Terminal' })).toBeNull()
+  })
+
+  it('offers Blank Terminal and reports null when the caller opts in', () => {
+    const onValueChange = vi.fn()
+    renderPicker(
+      <AgentCombobox
+        agents={AGENT_CATALOG}
+        value="codex"
+        onValueChange={onValueChange}
+        allowBlankTerminal
+      />
+    )
+
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('option', { name: 'Blank Terminal' }))
+
+    expect(onValueChange).toHaveBeenCalledWith(null)
   })
 
   it('uses the bundled OpenClaude favicon crop instead of Claude or GitHub artwork', () => {
@@ -196,9 +208,15 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('<img')
   })
 
+  it('uses the bundled DeepSeek whale for observed DeepSeek Build sessions without adding it to the launch catalog', () => {
+    const markup = renderToStaticMarkup(<AgentIcon agent="dsb" />)
+
+    expect(markup).toContain(AGENT_FAVICON_ASSETS.dsh)
+    expect(AGENT_CATALOG.map((agent) => agent.id)).not.toContain('dsb')
+  })
+
   it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
-    // Why: previously loaded from Google's favicon service (#8451). Iterate the
-    // full asset map so missing files/key mismatches fail the test.
+    // Exercise the icon renderer for each bundled asset mapping.
     const sharedIcons = new Map([['qoder-cn', 'qoder']])
     for (const agent of Object.keys(AGENT_FAVICON_ASSETS) as TuiAgent[]) {
       const markup = renderToStaticMarkup(<AgentIcon agent={agent} />)

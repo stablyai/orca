@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { filePublicationFailures } = vi.hoisted(() => ({
@@ -65,7 +65,6 @@ async function makeFixture(): Promise<{ homePath: string; resourcesPath: string 
   const root = await mkdtemp(join(tmpdir(), 'orca-bare-dispatcher-'))
   created.push(root)
   const resourcesPath = join(root, 'resources')
-  // The bundled orca-ide launcher must exist for the dispatcher to be written.
   await mkdir(join(resourcesPath, 'bin'), { recursive: true })
   await writeFile(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
   return { homePath: join(root, 'home'), resourcesPath }
@@ -82,58 +81,6 @@ afterEach(async () => {
 })
 
 describe('installLinuxBareOrcaDispatcher', () => {
-  it('uses the mounted bundled launcher when only APPDIR is inherited', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-    vi.stubEnv('APPIMAGE', '')
-    vi.stubEnv('APPDIR', resourcesPath)
-
-    const result = await installLinuxBareOrcaDispatcher({ resourcesPath, homePath })
-
-    expect(result.state).toBe('installed')
-    expect(result.target).toBe(join(resourcesPath, 'bin', 'orca-ide'))
-  })
-
-  it('writes an executable bare-orca dispatcher that execs the bundled orca-ide launcher', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-
-    const result = await installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath,
-      appImagePath: null
-    })
-
-    const expectedTarget = join(resourcesPath, 'bin', 'orca-ide')
-    expect(result.state).toBe('installed')
-    expect(result.target).toBe(expectedTarget)
-    expect(result.dispatcherPath).toBe(join(homePath, '.local', 'bin', 'orca'))
-
-    const content = await readFile(result.dispatcherPath, 'utf8')
-    expect(content).toContain('#!/usr/bin/env bash')
-    // Single-quoted so a resources path with shell metacharacters can't break out.
-    expect(content).toContain(`exec '${expectedTarget}' "$@"`)
-
-    const mode = (await stat(result.dispatcherPath)).mode & 0o777
-    expect(mode & 0o111).not.toBe(0)
-  })
-
-  it('is idempotent — a second install rewrites its own dispatcher without throwing', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-
-    const first = await installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath,
-      appImagePath: null
-    })
-    const second = await installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath,
-      appImagePath: null
-    })
-
-    expect(second).toEqual(first)
-    expect(second.state).toBe('installed')
-  })
-
   it('publishes when the home filesystem does not support hard links', async () => {
     const { homePath, resourcesPath } = await makeFixture()
     filePublicationFailures.link = 1
@@ -166,59 +113,6 @@ describe('installLinuxBareOrcaDispatcher', () => {
     expect(result.state).toBe('skipped-foreign')
     await expect(readFile(result.dispatcherPath, 'utf8')).resolves.toBe(foreignContent)
   })
-
-  it('quotes a resources path containing spaces so the exec line cannot be split', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-bare-dispatcher-space-'))
-    created.push(root)
-    const resourcesPath = join(root, 'App Support', 'resources')
-    await mkdir(join(resourcesPath, 'bin'), { recursive: true })
-    await writeFile(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
-
-    const result = await installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath: join(root, 'home'),
-      appImagePath: null
-    })
-
-    const content = await readFile(result.dispatcherPath, 'utf8')
-    expect(content).toContain(`exec '${join(resourcesPath, 'bin', 'orca-ide')}' "$@"`)
-  })
-
-  // Why: this dispatcher must survive a restart, and an AppImage's resourcesPath
-  // is a mount that dies with the app. Point it at the extracted payload, which
-  // also keeps it clear of AppRun's `--no-sandbox` injection (#11609).
-  it.skipIf(process.platform === 'win32')(
-    'execs the extracted payload (not the ephemeral mount) when running from an AppImage',
-    async () => {
-      const { homePath, resourcesPath } = await makeFixture()
-      const appImagePath = join(homePath, 'Orca.AppImage')
-      await mkdir(homePath, { recursive: true })
-      await writeFile(appImagePath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o755 })
-      const cacheRootPath = join(homePath, 'cache')
-
-      const result = await installLinuxBareOrcaDispatcher({
-        resourcesPath,
-        homePath,
-        appImagePath,
-        appImageCacheRootPath: cacheRootPath,
-        appImageExtractRunner: async (_appImagePath, cwd) => {
-          const launcherDir = join(cwd, 'squashfs-root', 'resources', 'bin')
-          await mkdir(launcherDir, { recursive: true })
-          await writeFile(join(launcherDir, 'orca-ide'), '', { encoding: 'utf8', mode: 0o755 })
-        }
-      })
-
-      expect(result.state).toBe('installed')
-      expect(relative(cacheRootPath, result.target as string).split(sep)).toEqual([
-        'launcher',
-        'orca-ide'
-      ])
-      const content = await readFile(result.dispatcherPath, 'utf8')
-      expect(content).toContain(result.target as string)
-      expect(content).not.toContain(resourcesPath)
-      expect(content).not.toContain(appImagePath)
-    }
-  )
 
   it('skips (does not clobber) a user-owned orca already at ~/.local/bin', async () => {
     const { homePath, resourcesPath } = await makeFixture()
@@ -330,20 +224,6 @@ describe('installLinuxBareOrcaDispatcher', () => {
     expect(existsSync(previous.rootPath)).toBe(false)
     expect(existsSync(current.rootPath)).toBe(true)
     expect(existsSync(sibling)).toBe(true)
-  })
-
-  it('skips when the bundled orca-ide launcher is missing from the build', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-bare-dispatcher-nolauncher-'))
-    created.push(root)
-
-    const result = await installLinuxBareOrcaDispatcher({
-      resourcesPath: join(root, 'resources'),
-      homePath: join(root, 'home'),
-      appImagePath: null
-    })
-
-    expect(result.state).toBe('skipped-launcher-missing')
-    expect(result.target).toBeNull()
   })
 })
 

@@ -1,6 +1,11 @@
 import type { MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import { editorSelectionCache, scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  editorSelectionCache,
+  editorViewStateCache,
+  scrollTopCache,
+  setWithLRU
+} from '@/lib/scroll-cache'
 
 type MonacoViewStateTrackingParams = {
   editorInstance: editor.IStandaloneCodeEditor
@@ -10,6 +15,14 @@ type MonacoViewStateTrackingParams = {
   setEditorCursorLine: (fileId: string, line: number) => void
 }
 
+function editorViewStateKey(
+  editorInstance: editor.IStandaloneCodeEditor,
+  viewStateKey: string
+): string | null {
+  const model = editorInstance.getModel()
+  return model ? JSON.stringify([viewStateKey, model.uri.toString()]) : null
+}
+
 export function installMonacoViewStateTracking(params: MonacoViewStateTrackingParams): {
   cursorPositionSub: { dispose: () => void }
   scrollStateSub: { dispose: () => void }
@@ -17,7 +30,6 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
   const { editorInstance, fileIdRef, viewStateKey, scrollThrottleTimerRef, setEditorCursorLine } =
     params
 
-  // Track cursor line for "copy path to line" feature
   const pos = editorInstance.getPosition()
   if (pos) {
     setEditorCursorLine(fileIdRef.current, pos.lineNumber)
@@ -42,33 +54,47 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
 
 export function restoreMonacoViewState(
   editorInstance: editor.IStandaloneCodeEditor,
-  viewStateKey: string
+  viewStateKey: string,
+  canFocus?: () => boolean
 ): void {
+  const cacheKey = editorViewStateKey(editorInstance, viewStateKey)
+  const savedViewState = cacheKey === null ? undefined : editorViewStateCache.get(cacheKey)
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
-  if (savedScrollTop !== undefined || savedSelections) {
+  if (savedViewState || savedScrollTop !== undefined || savedSelections) {
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
     requestAnimationFrame(() => {
-      if (savedSelections) {
-        editorInstance.setSelections(savedSelections)
+      if (savedViewState) {
+        editorInstance.restoreViewState(savedViewState)
+      } else {
+        if (savedSelections) {
+          editorInstance.setSelections(savedSelections)
+        }
+        if (savedScrollTop !== undefined) {
+          editorInstance.setScrollTop(savedScrollTop)
+        }
       }
-      if (savedScrollTop !== undefined) {
-        editorInstance.setScrollTop(savedScrollTop)
+      if (canFocus?.() !== false) {
+        editorInstance.focus()
       }
-      editorInstance.focus()
     })
-  } else {
+  } else if (canFocus?.() !== false) {
     editorInstance.focus()
   }
 }
 
-// Why: takes the ref, not the instance — the caller runs this from an effect cleanup, where reading `.current` inline trips the ref-in-cleanup lint.
+// Accept the ref so effect cleanup can read the current instance without violating ref-in-cleanup lint.
 export function snapshotMonacoViewState(
   editorRef: MutableRefObject<editor.IStandaloneCodeEditor | null>,
   viewStateKey: string
 ): void {
   const ed = editorRef.current
   if (ed) {
+    const cacheKey = editorViewStateKey(ed, viewStateKey)
+    const viewState = ed.saveViewState()
+    if (cacheKey !== null && viewState) {
+      setWithLRU(editorViewStateCache, cacheKey, viewState)
+    }
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
     const selections = ed.getSelections()
     if (selections) {

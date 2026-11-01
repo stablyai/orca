@@ -1,12 +1,18 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceSpaceBreakdownList } from './workspace-space-breakdown-list'
 import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
+
+const revealInFileManager = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/reveal-in-file-manager', () => ({
+  getRevealInFileManagerLabel: () => 'Reveal in Finder',
+  revealInFileManager
+}))
 
 function item(name: string, sizeBytes: number): WorkspaceSpaceItem {
   return { name, path: `/workspace/${name}`, kind: 'directory', sizeBytes }
@@ -45,67 +51,46 @@ function renderedRowNames(container: HTMLElement): string[] {
   )
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  revealInFileManager.mockReset()
+})
 
 describe('WorkspaceSpaceBreakdownList', () => {
-  it('renders one row per counted top-level item, including the omitted aggregate', () => {
-    const { container } = render(
+  it('reveals the selected top-level folder from its context menu', () => {
+    render(
       <WorkspaceSpaceBreakdownList
         isScanning={false}
         worktree={worktree({
-          topLevelItems: [item('node_modules', 400), item('src', 100)],
-          omittedTopLevelItemCount: 7,
-          omittedTopLevelSizeBytes: 900
+          executionHostId: 'local',
+          topLevelItems: [item('src', 250)]
         })}
       />
     )
 
-    const names = renderedRowNames(container)
-    expect(names).toEqual(['node_modules', 'src', 'Other top-level items (7)'])
-    // The header count labels this list: the 7 omitted items are one aggregate row.
-    expect(container.textContent).toContain('9 top-level items')
-    expect(names.length - 1 + 7).toBe(9)
+    fireEvent.contextMenu(screen.getByText('src'))
+    fireEvent.click(screen.getByText('Reveal in Finder'))
+    expect(revealInFileManager).toHaveBeenCalledWith('/workspace/src', 'local')
   })
 
-  it('scales the size bars against the omitted aggregate when it is the largest item', () => {
+  it('keeps compacted folder details available in the overflow popover', () => {
     const { container } = render(
       <WorkspaceSpaceBreakdownList
         isScanning={false}
         worktree={worktree({
-          topLevelItems: [item('src', 250)],
-          omittedTopLevelItemCount: 3,
-          omittedTopLevelSizeBytes: 1000
+          topLevelItems: [
+            item('first', 500),
+            item('second', 400),
+            item('third', 300),
+            item('fourth', 200),
+            item('fifth', 100)
+          ]
         })}
       />
     )
 
-    const widths = Array.from(container.querySelectorAll<HTMLElement>('div[style]')).map(
-      (node) => node.style.width
-    )
-    expect(widths).toEqual(['25%', '100%'])
-  })
-
-  it('omits the aggregate row when nothing was omitted', () => {
-    const { container } = render(
-      <WorkspaceSpaceBreakdownList
-        isScanning={false}
-        worktree={worktree({ topLevelItems: [item('src', 250)] })}
-      />
-    )
-
-    expect(renderedRowNames(container)).toEqual(['src'])
-    expect(container.textContent).toContain('1 top-level items')
-  })
-
-  it('shows the omitted aggregate rather than an empty state when every item was omitted', () => {
-    const { container } = render(
-      <WorkspaceSpaceBreakdownList
-        isScanning={false}
-        worktree={worktree({ omittedTopLevelItemCount: 4, omittedTopLevelSizeBytes: 80 })}
-      />
-    )
-
-    expect(container.textContent).not.toContain('No files found.')
-    expect(renderedRowNames(container)).toEqual(['Other top-level items (4)'])
+    expect(renderedRowNames(container)).toEqual(['first', 'second', 'third', 'fourth'])
+    fireEvent.click(screen.getByText('Show more folder details'))
+    expect(screen.getAllByText('fifth')).toHaveLength(1)
   })
 })

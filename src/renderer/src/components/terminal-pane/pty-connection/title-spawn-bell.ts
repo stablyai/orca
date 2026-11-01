@@ -9,6 +9,7 @@ import {
 import { canCommandCodeOutputOwnPane } from '../command-code-output-ownership'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -20,9 +21,10 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     rawTitle: string,
     meta?: { staleWorkingTitleClear?: boolean }
   ): void => {
-    // Why: one owner-aware decision drives the display label, the runtime/tab
-    // title, task-completion tracking, and the renderer gate, so raw title text
-    // can no longer disable GPU behind stronger owner evidence (#7428/#7447).
+    if (!meta?.staleWorkingTitleClear && resolveCommittedTitleAgentType(rawTitle)) {
+      session.paneForegroundAgentTracker.onAgentStartupObserved()
+    }
+    // Share owner-aware display/title/completion/GPU decisions so raw title text cannot override stronger pane identity (#7428/#7447).
     const decision = resolvePaneTitleDecision({
       normalizedTitle: title,
       rawTitle,
@@ -33,23 +35,15 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     const paneTitle = decision.displayTitle
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
-    // Why: a stale-derived cleared title comes from main's unthrottled 3s
-    // timer, not agent output. It must update the visible title but never
-    // feed completion tracking — observeTitle would classify the cleared
-    // title as idle and mint a task-complete for a merely-paused agent.
+    // Stale expiry updates display without feeding completion; silence mid-task is not observed idle.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
       const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
       if (!session.shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
-        // Why: display titles still update while hooks are active, but a stale
-        // idle frame must not complete the coordinator turn before hook `done`.
+        // Hooks retain active-turn authority while display titles change; stale idle frames cannot precede hook done.
         session.agentCompletionCoordinator.observeTitle(decision.rawTitle)
       }
     }
-    // Why: only the focused pane should drive the tab title — otherwise two
-    // agents in split panes cause rapid title flickering as each emits OSC
-    // sequences. Only the active split's title propagates to the tab. When
-    // focus changes, onActivePaneChange syncs the newly active pane's stored
-    // title to the tab.
+    // Only active split titles drive the tab to avoid flicker; focus changes copy the newly active pane’s stored title.
     if (session.manager.getActivePane()?.id === session.pane.id) {
       session.deps.updateTabTitle(session.deps.tabId, paneTitle)
     }
@@ -71,9 +65,10 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   }
 
   session.applyInitialAgentStatus = (terminalTitle?: string): void => {
-    const initialStatus = session.paneStartup?.initialAgentStatus
+    const startup = session.paneStartup
+    const initialStatus = startup?.initialAgentStatus
     const routing = session.resolveCurrentAgentStatusRouting()
-    if (!initialStatus || !routing) {
+    if (!initialStatus || !routing || startup.resumeSource?.cancelled) {
       return
     }
     const statusPayload = {
@@ -96,11 +91,17 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
           launchConfig: session.paneStartup.launchConfig,
           ...(session.launchToken ? { launchToken: session.launchToken } : {})
         })
-      return
+    } else {
+      useAppStore
+        .getState()
+        .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
     }
-    useAppStore
-      .getState()
-      .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
+    if (startup.resumeSource) {
+      session.savedStartupStatus = {
+        source: startup.resumeSource,
+        entry: useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      }
+    }
   }
 
   session.canApplyCommandCodeOutputStatus = (): boolean => {
@@ -153,11 +154,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     )
   }
 
-  // Why the settle window lives outside this binding: park unmounts the pane
-  // mid-settle, so a pane-owned timer would be cancelled with nothing left to
-  // complete the turn — the row would stick at 'working'. Only the row write
-  // (routing + title slot) is pane-local; the deadline transfers to whichever
-  // owner (parked watcher or remounted pane) holds the pane next.
+  // Turn settle deadlines outlive park/remount; only row-routing writes remain pane-local so the next owner inherits completion.
   session.releaseCommandCodeDoneSettleExecutor = setCommandCodeDoneSettleExecutor(
     session.cacheKey,
     (normalizedPrompt) => {
@@ -205,8 +202,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       cancelCommandCodeDoneSettle(session.cacheKey)
       return
     }
-    // Why: Command Code keeps rendering the composer while tools run. Only
-    // complete the row if no active status repaint arrives during this window.
+    // Command Code renders the composer during tools; complete only without an active repaint during settling.
     openCommandCodeDoneSettle(session.cacheKey, normalizedPrompt)
   }
 

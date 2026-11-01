@@ -608,8 +608,6 @@ describe('BrowserNetworkTunnelSession', () => {
     openAndBuffer(33)
     expect(sockets[32]!.destroyed).toBe(false)
 
-    // Exhaustion is an aggregate-resource condition, not a peer violation: only the stream that
-    // could not reserve is retired, and every other stream keeps running.
     openAndBuffer(34)
     expect(sockets[33]!.destroyed).toBe(true)
     expect(sockets.slice(1, 33).some((socket) => socket.destroyed)).toBe(false)

@@ -8,11 +8,19 @@ import {
   emptyPostgresPoolPressureCounts,
   isPostgresPoolConnectFailure,
   PostgresPoolPressure,
+  type PostgresPoolLane,
   type PostgresPoolPressureCounts
 } from './postgres-pool-pressure.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
 import { POSTGRES_STATEMENT_STATS_MIGRATION } from './postgres-statement-stats.js'
 import { reportPostgresQueryFailure } from './postgres-query-failure.js'
+import { noteStickySlotPoolWait, noteStickySlotStatement } from './sticky-slot-statements.js'
+import { noteConnectionStatement, SlowConnectionRetirement } from './postgres-connection-latency.js'
+import {
+  isPostgresReadTimeout,
+  isRelayDatabaseLayerError,
+  markRelayDatabaseError
+} from './relay-database-rejection-fence.js'
 import {
   CellInventoryHoldSamples,
   emptyCellInventoryHoldCounts,
@@ -71,6 +79,9 @@ export type RelayTransactionOptions = { reportRetries?: boolean }
 export interface RelayDatabase {
   readonly dialect?: 'sqlite' | 'postgres'
   query(sql: string, params?: unknown[]): Promise<SqlRow[]>
+  // Ahead of every queued query() for the next free connection; see
+  // PostgresPoolPressure. Absent means plain query().
+  queryPriority?(sql: string, params?: unknown[]): Promise<SqlRow[]>
   queryLocked(
     sql: string,
     params?: unknown[],
@@ -80,7 +91,19 @@ export interface RelayDatabase {
     operation: (transaction: RelayDatabase) => Promise<T>,
     options?: RelayTransactionOptions
   ): Promise<T>
+  // Only on a PostgreSQL transaction handle; see commitWithFinalWrite.
+  commitWithFinal?(sql: string, params?: unknown[]): Promise<boolean>
   close(): Promise<void>
+}
+
+// Final RETURNING write and COMMIT share one PostgreSQL message, avoiding a lock-held round trip; false means already rolled back.
+export async function commitWithFinalWrite(
+  database: RelayDatabase,
+  sql: string,
+  params: unknown[] = []
+): Promise<boolean> {
+  if (database.commitWithFinal) return await database.commitWithFinal(sql, params)
+  return (await database.query(sql, params)).length > 0
 }
 
 // RULE - no new index and no new column on `relay_control_connection_reservations`,
@@ -94,6 +117,10 @@ export interface RelayDatabase {
 // Constraint swaps are matched by NAME in pg_constraint, never by body, because the CHECK list is
 // generated from REGION_LIST. Changing a constraint's definition under the same name therefore does
 // nothing on boot: an operator drops it, and the next boot adds the current definition back.
+// relay_confirmable_splices, relay_cell_drain_attempts and relay_migration_leases are no longer
+// created; nothing ever wrote them. Databases that have them keep them empty until a drop is safe:
+// an older image still creates them at boot, and a drop racing that CREATE can fail its schema step.
+// Account erasure in orca-cloud must be deployed with retired-table support (orca-cloud#493) first.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS relay_invites (
   user_id TEXT NOT NULL,
@@ -152,19 +179,6 @@ CREATE TABLE IF NOT EXISTS relay_install_results (
   result_json TEXT NOT NULL,
   committed_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id, relay_device_id, req_id)
-);
-
-CREATE TABLE IF NOT EXISTS relay_confirmable_splices (
-  basis_conn_id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  owning_control_generation BIGINT NOT NULL,
-  relay_device_id TEXT NOT NULL,
-  accepted_credential_version BIGINT NOT NULL,
-  accepted_as TEXT NOT NULL,
-  confirm_deadline BIGINT NOT NULL,
-  active BIGINT NOT NULL,
-  created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS relay_connection_bases (
@@ -345,6 +359,22 @@ CREATE TABLE IF NOT EXISTS relay_cell_admission (
   roll_isolated_at BIGINT
 );
 
+-- Step 5: written by the flag workflow. A cell with no row is in database mode.
+CREATE TABLE IF NOT EXISTS relay_cell_admit_modes (
+  cell_id TEXT PRIMARY KEY,
+  admit_mode TEXT NOT NULL CHECK (admit_mode IN ('db', 'reserve')),
+  updated_at BIGINT NOT NULL
+);
+
+-- Step 5: written by each cell, its raw mode (switch file and dead-man latch). The database
+-- path places on a reserve cell only while this row, from its current process, says db.
+CREATE TABLE IF NOT EXISTS relay_cell_admit_effective (
+  cell_id TEXT PRIMARY KEY,
+  cell_incarnation TEXT NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('db', 'reserve')),
+  updated_at BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS relay_admission_selectors (
   selector_id TEXT PRIMARY KEY,
   generation BIGINT NOT NULL,
@@ -404,7 +434,8 @@ CREATE TABLE IF NOT EXISTS relay_cell_connection_limits (
   cell_id TEXT PRIMARY KEY,
   hard_cap BIGINT NOT NULL,
   unobserved_bound BIGINT NOT NULL,
-  updated_at BIGINT NOT NULL
+  updated_at BIGINT NOT NULL,
+  reported_hard_cap BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS relay_cell_connection_runtime (
@@ -507,15 +538,6 @@ CREATE TABLE IF NOT EXISTS relay_cell_fence_apply_invocations (
 CREATE INDEX IF NOT EXISTS relay_cell_fence_apply_invocations_attempt
   ON relay_cell_fence_apply_invocations(attempt_id, started_at);
 
-CREATE TABLE IF NOT EXISTS relay_cell_drain_attempts (
-  cell_id TEXT PRIMARY KEY,
-  cell_incarnation TEXT NOT NULL,
-  planned_grace_ms BIGINT NOT NULL,
-  attempted_at BIGINT NOT NULL,
-  retry_after BIGINT NOT NULL,
-  recover_forward_attempted_at BIGINT
-);
-
 CREATE TABLE IF NOT EXISTS relay_cell_drain_attempt_states (
   attempt_id TEXT PRIMARY KEY,
   cell_id TEXT NOT NULL,
@@ -605,17 +627,6 @@ CREATE TABLE IF NOT EXISTS relay_rate_windows (
 CREATE INDEX IF NOT EXISTS relay_rate_windows_started
   ON relay_rate_windows(window_started_at);
 
-CREATE TABLE IF NOT EXISTS relay_migration_leases (
-  user_id TEXT NOT NULL,
-  relay_host_id TEXT NOT NULL,
-  source_cell_id TEXT NOT NULL,
-  target_cell_id TEXT NOT NULL,
-  assignment_epoch BIGINT NOT NULL,
-  expires_at BIGINT NOT NULL,
-  completed_at BIGINT,
-  PRIMARY KEY (user_id, relay_host_id, assignment_epoch)
-);
-
 CREATE TABLE IF NOT EXISTS relay_assignment_migrations (
   user_id TEXT NOT NULL,
   relay_host_id TEXT NOT NULL,
@@ -674,10 +685,7 @@ CREATE TABLE IF NOT EXISTS relay_audit_events (
 CREATE INDEX IF NOT EXISTS relay_audit_events_at ON relay_audit_events(at);
 `
 
-// Rehoming is bidirectional, but tables created before that carry the
-// original single-region column check. The old constraint is the one Postgres
-// auto-named; the replacement is named, so both statements are no-ops on a
-// database the current schema created and neither can drop the other.
+// Replace auto-named legacy single-region checks with named bidirectional checks; current-schema databases no-op without either statement dropping the other.
 export const POSTGRES_SCHEMA_MIGRATIONS = [
   POSTGRES_STATEMENT_STATS_MIGRATION,
   `ALTER TABLE relay_region_decisions ADD COLUMN IF NOT EXISTS last_considered_at BIGINT NOT NULL DEFAULT 0`,
@@ -695,29 +703,22 @@ export const POSTGRES_SCHEMA_MIGRATIONS = [
   // Nullable with no default, so the rewrite is catalog-only; every row
   // aborted before this column existed reads as an unattributed abort.
   `ALTER TABLE relay_region_rehome_attempts ADD COLUMN IF NOT EXISTS abort_reason TEXT`,
-  // migration-only alone cannot say why a cell is parked there: five flows park loaded cells in
-  // that state durably. This stamps only the same-cap roll's isolate step, so placement can tell a
-  // cell being rolled from an evacuation target or an Asia rollback. Nullable with no default, so
-  // the rewrite is catalog-only; a cell isolated before this column existed reads as unmarked and
-  // keeps its hosts pinned, which is the pre-existing behaviour.
+  // Only same-cap roll stamps migration-only; other parked hosts stay pinned. Nullable/no-default is catalog-only, and pre-column isolates retain unmarked legacy behavior.
   `ALTER TABLE relay_cell_admission ADD COLUMN IF NOT EXISTS roll_isolated_at BIGINT`,
-  // Dropped, not created: see the comment on relay_assignment_activity_leases. Deferrable because
-  // this is the one boot where it has to take ACCESS EXCLUSIVE on a table under continuous write,
-  // and all 28 directors reach it at once; a lock timeout here must not restart the instance, which
-  // would only re-queue the same DDL behind the same writers. Once it wins, the pre-check answers
-  // absent and no later boot sends it at all.
+  // The cap the cell last reported enforcing; see cell-connection-cap.ts. Nullable with no default,
+  // so the rewrite is catalog-only, and a director that predates it neither reads nor clears it.
+  `ALTER TABLE relay_cell_connection_limits ADD COLUMN IF NOT EXISTS reported_hard_cap BIGINT`,
+  // Deferrable DROP: one boot must win ACCESS EXCLUSIVE against continuous writes; restarting 28 directors would repeat the lock queue. Once absent, catalog precheck skips it.
   `-- schema-deferrable: one boot has to win ACCESS EXCLUSIVE on a table written ~475/s
    DROP INDEX IF EXISTS relay_assignment_activity_expiry`,
-  // The drop is what makes HOT legal; this is what makes it possible. A renewal can only reuse the
-  // row's own page when that page has room for a second version, and at the default fillfactor of
-  // 100 a freshly filled page has none - measured at 0.5% HOT with the index gone and the default,
-  // against 100% at 70. Takes SHARE UPDATE EXCLUSIVE, which blocks vacuum and DDL but no reader or
-  // writer, and only for the catalog write. Applies to pages as they refill, so the table converges
-  // over its own renewal cycle rather than at boot.
-  // Deferrable for the same reason, though SHARE UPDATE EXCLUSIVE blocks only vacuum and DDL: it
-  // buys nothing until the drop lands, so a boot that deferred the drop should defer this too.
+  // Dropping expiry index permits HOT; fillfactor 70 leaves room for versions (100% HOT vs 0.5% at 100). Catalog-only SHARE UPDATE EXCLUSIVE blocks vacuum/DDL, not reads/writes; defer with the drop and let pages converge through renewals.
   `-- schema-deferrable: buys nothing until the drop above lands
-   ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`
+   ALTER TABLE relay_assignment_activity_leases SET (fillfactor = 70)`,
+  // Slow ~5.5GB-index autovacuums from ~3 to ~15min at 20ms/200 cost units to reduce shared-DB cache eviction. Deferrable: vacuum holds the same lock, and boot needs no change.
+  `-- schema-deferrable: a running vacuum holds the lock this needs
+   ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_delay = 20)`,
+  `-- schema-deferrable: a running vacuum holds the lock this needs
+   ALTER TABLE relay_control_connection_reservations SET (autovacuum_vacuum_cost_limit = 200)`
 ]
 
 // The exact statement list a Postgres boot applies, in order, so the lock-target census can read
@@ -741,7 +742,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_region_rehome_', 'regional-rehome'],
   ['relay_assignment_activity_leases', 'activity-lease'],
   ['relay_assignment_migration', 'migration'],
-  ['relay_migration_leases', 'migration'],
   ['relay_post_drain_migration_pins', 'migration'],
   ['relay_cell_connection_runtime', 'cell-runtime'],
   ['relay_cell_connection_snapshots', 'cell-runtime'],
@@ -753,7 +753,6 @@ const POSTGRES_TRANSACTION_PHASES = [
   ['relay_admission_selector', 'admission'],
   ['relay_cell_admission', 'admission'],
   ['relay_control_connection_reservations', 'connection'],
-  ['relay_confirmable_splices', 'connection'],
   ['relay_connection_bases', 'connection'],
   ['relay_direct_authorizations', 'connection'],
   ['relay_confirm_results', 'connection'],
@@ -875,13 +874,112 @@ class SqliteDatabase extends SqliteTransaction {
   }
 }
 
+// Literals for a simple-query message, which carries no bind parameters. Only safe
+// integers and strings: anything else is a caller bug, not something to stringify.
+function inlinePostgresParameters(sql: string, params: unknown[], client: pg.PoolClient): string {
+  let index = 0
+  const inlined = sql.replace(/\?/g, () => {
+    const value = params[index++]
+    if (typeof value === 'number' && Number.isSafeInteger(value)) return String(value)
+    if (typeof value === 'string') return client.escapeLiteral(value)
+    throw new Error('unsupported_inline_parameter')
+  })
+  if (index !== params.length) throw new Error('inline_parameter_count_mismatch')
+  return inlined
+}
+
+// A per-query read timeout, when the cell's switch overrides the pool's (pg reads
+// `query_timeout` from a query config object first). Undefined keeps the pool's.
+type PostgresQueryTimeout = () => number | undefined
+
+async function timedQuery(
+  client: pg.PoolClient,
+  connectionId: number,
+  text: string,
+  values: unknown[] | undefined,
+  queryTimeout: PostgresQueryTimeout | undefined
+): Promise<pg.QueryResult> {
+  const startedAt = performance.now()
+  try {
+    const timeout = queryTimeout?.()
+    if (timeout === undefined) return values === undefined ? await client.query(text) : await client.query(text, values)
+    // pg@8.22 reads it at client.js:660; @types/pg does not declare it on QueryConfig.
+    const config: pg.QueryConfig & { query_timeout: number } = {
+      text,
+      ...(values === undefined ? {} : { values }),
+      query_timeout: timeout
+    }
+    return await client.query(config)
+  } finally {
+    const durationMs = performance.now() - startedAt
+    noteStickySlotStatement(durationMs, connectionId)
+    noteConnectionStatement(client, durationMs)
+  }
+}
+
 class PostgresTransaction implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private held: { fromMs: number; site: CellLockHoldSite } | undefined
   private lockUnavailable = 0
   private lockTimeouts = 0
+  private state: 'open' | 'committed' | 'rolled-back' = 'open'
+  // Lost replies leave pg’s active query running; queued COMMIT could commit caller-failed work, so poison and destroy this connection.
+  private lostReply: Error | undefined
 
-  constructor(protected readonly client: pg.PoolClient) {}
+  constructor(
+    protected readonly client: pg.PoolClient,
+    private readonly connectionId: number,
+    private readonly queryTimeout?: PostgresQueryTimeout
+  ) {}
+
+  get poisonedBy(): Error | undefined {
+    return this.lostReply
+  }
+
+  private failIfPoisoned(): void {
+    if (this.lostReply) throw this.lostReply
+  }
+
+  private noteFailure(error: unknown): void {
+    markRelayDatabaseError(error)
+    if (isPostgresReadTimeout(error)) this.lostReply ??= error
+  }
+
+  get open(): boolean {
+    return this.state === 'open'
+  }
+
+  async commitWithFinal(sql: string, params: unknown[] = []): Promise<boolean> {
+    this.assertNotCommitted()
+    this.failIfPoisoned()
+    // Zero rows divides by zero, so the message stops before COMMIT exactly when the write missed.
+    const message =
+      `WITH final_write AS (${inlinePostgresParameters(sql, params, this.client)}) ` +
+      'SELECT 1 / (SELECT count(*)::int FROM final_write); COMMIT'
+    try {
+      await timedQuery(this.client, this.connectionId, message, undefined, this.queryTimeout)
+    } catch (error) {
+      // Simple query stops on first error, before COMMIT; retry server errors normally, but never unknown outcomes after connection loss.
+      this.noteFailure(error)
+      if (String((error as { code?: unknown }).code) !== '22012') {
+        rememberPostgresTransactionPhase(error, sql)
+        throw error
+      }
+      await this.client.query('ROLLBACK').catch((rollbackError: unknown) => {
+        this.noteFailure(rollbackError)
+        throw rollbackError
+      })
+      this.state = 'rolled-back'
+      return false
+    }
+    this.state = 'committed'
+    return true
+  }
+
+  private assertNotCommitted(): void {
+    // A later statement would run in autocommit, outside the work it belongs to.
+    if (this.state === 'committed') throw new Error('postgres_transaction_already_committed')
+  }
 
   consumeHold(): MeasuredHold | undefined {
     if (this.held === undefined) return undefined
@@ -890,8 +988,7 @@ class PostgresTransaction implements RelayDatabase {
     return hold
   }
 
-  // Drained by the owning database on both the commit and the rollback path: a
-  // 55P03 rolls the transaction back, so counting only on success would drop it.
+  // Drain metrics on rollback too or contended 55P03 attempts disappear from counts.
   consumeLockUnavailable(): number {
     const count = this.lockUnavailable
     this.lockUnavailable = 0
@@ -905,10 +1002,19 @@ class PostgresTransaction implements RelayDatabase {
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    this.assertNotCommitted()
+    this.failIfPoisoned()
     try {
-      const result = await this.client.query(postgresSql(sql), params)
+      const result = await timedQuery(
+        this.client,
+        this.connectionId,
+        postgresSql(sql),
+        params,
+        this.queryTimeout
+      )
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
+      this.noteFailure(error)
       rememberPostgresTransactionPhase(error, sql)
       throw error
     }
@@ -919,8 +1025,7 @@ class PostgresTransaction implements RelayDatabase {
     params: unknown[] = [],
     options: RelayLockOptions = {}
   ): Promise<SqlRow[]> {
-    // SET LOCAL lasts to COMMIT, so a bound left in place would silently govern
-    // every later locked statement in the transaction and misattribute its 55P03s.
+    // Restore SET LOCAL after lock or later statements inherit the bound and misattribute 55P03s.
     const bounded = options.lockTimeoutMs !== undefined && !options.failIfUnavailable
     try {
       // A blocked waiter holds its pooled client for the whole lock_timeout, so
@@ -965,13 +1070,12 @@ class PostgresTransaction implements RelayDatabase {
 const POSTGRES_TRANSACTION_ATTEMPTS = 3
 const POSTGRES_RETRY_MAX_DELAY_MS = 25
 const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
-// Derivation: a control renewal must land inside its own 30s tick
-// (RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2), and a transaction gets
-// POSTGRES_TRANSACTION_ATTEMPTS tries, so the worst case a renewal can spend in
-// Postgres is attempts * timeout. 5s keeps that at 15s, half the tick, and still
-// leaves room for the connect timeout above.
+// Three attempts × 5s timeout = 15s, half the 30s renewal tick, leaving connect-timeout room.
 export const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
+// Allow routine 5–7s VM stalls to deliver already-timed replies; shorter read deadlines would destroy otherwise healthy clients (connect-burst RCA).
+export const POSTGRES_READ_TIMEOUT_MARGIN_MS = 10_000
+const POSTGRES_IDLE_SESSION_TIMEOUT_MS = 30_000
 
 export function relayPostgresStatementTimeoutMs(
   env: NodeJS.ProcessEnv = process.env
@@ -987,11 +1091,21 @@ export function relayPostgresStatementTimeoutMs(
   return milliseconds
 }
 
+export function relayPostgresReadTimeoutMarginMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const configured = env.ORCA_RELAY_POSTGRES_READ_TIMEOUT_MARGIN_MS
+  if (configured === undefined || configured === '') return POSTGRES_READ_TIMEOUT_MARGIN_MS
+  const milliseconds = Number(configured)
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_read_timeout_margin')
+  }
+  return milliseconds
+}
+
 function retryablePostgresTransactionError(error: unknown): boolean {
   const code = String((error as { code?: unknown }).code)
-  // 57014 is the pool statement_timeout firing. It aborts the transaction the
-  // same way a lock timeout does, so it belongs on the bounded retry path
-  // rather than surfacing as a terminal failure to the caller.
+  // 57014 aborts like lock timeout; use bounded transaction retry instead of terminal failure.
   return code === '40P01' || code === '40001' || code === '55P03' || code === '57014'
 }
 
@@ -999,12 +1113,51 @@ export function isRelayDatabaseTransientError(error: unknown): boolean {
   // Runs inside the query catch, where a thrown null or undefined would turn a
   // database failure into a TypeError that buries it.
   const code = String((error as { code?: unknown } | null)?.code)
-  if (['40P01', '40001', '55P03', '57014', '53300', '57P03', '08001', '08006'].includes(code)) {
+  if (
+    [
+      '40P01',
+      '40001',
+      '55P03',
+      '57014',
+      '53300',
+      '57P03',
+      '08000',
+      '08001',
+      '08003',
+      '08006',
+      // The server ended the session: pg_terminate_backend or a fast/immediate shutdown.
+      '57P01',
+      '57P02',
+      // The server ended a session idle in a transaction past its limit (a database stall).
+      '25P03'
+    ].includes(code)
+  ) {
     return true
   }
+  // The connection dropped mid-statement: pg's own message, or the socket's reset. Only from
+  // the database layer, since any other socket can raise the same errno.
+  if (
+    isRelayDatabaseLayerError(error) &&
+    (code === 'ECONNRESET' ||
+      code === 'EPIPE' ||
+      String((error as { message?: unknown }).message).startsWith('Connection terminated'))
+  ) {
+    return true
+  }
+  // Lost reply answers 503 but may have committed: no transaction retry. Startup reconcile alone retries convergent upserts (cell-admission-startup.ts).
+  if (isPostgresReadTimeout(error)) return true
   // A pool that cannot hand out a client reports no SQLSTATE at all, so the
   // acquire boundary owns that vocabulary.
   return isPostgresPoolConnectFailure(error)
+}
+
+// pg may still call ended sessions queryable until socket end; destroy on release or the next caller inherits a dead connection.
+const SESSION_ENDING_CODES = new Set(['57P01', '57P02', '57P03', '57P04', '57P05', '25P03'])
+function endsPostgresSession(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const code = 'code' in error ? String(error.code) : ''
+  if (SESSION_ENDING_CODES.has(code) || code.startsWith('08')) return true
+  return error instanceof Error && error.message.startsWith('Connection terminated')
 }
 
 async function waitForPostgresRetry(random: () => number = Math.random): Promise<void> {
@@ -1016,25 +1169,56 @@ export class PostgresDatabase implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private readonly pressure: PostgresPoolPressure
   private readonly holds = new CellInventoryHoldSamples()
+  // pg-pool hands the same client object back for the same connection.
+  private readonly connectionIds = new WeakMap<pg.PoolClient, number>()
+  private nextConnectionId = 1
+  private readonly slowConnections: SlowConnectionRetirement | undefined
 
   consumeHoldCounts(): CellInventoryHoldCounts {
     return this.holds.consumeCounts()
   }
 
-  constructor(private readonly pool: pg.Pool) {
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly queryTimeout?: PostgresQueryTimeout,
+    options: { retiresSlowConnections?: boolean } = {}
+  ) {
     this.pressure = new PostgresPoolPressure(pool)
+    this.slowConnections = options.retiresSlowConnections ? new SlowConnectionRetirement() : undefined
   }
 
   async query(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    return await this.queryOnLane('general', sql, params)
+  }
+
+  async queryPriority(sql: string, params: unknown[] = []): Promise<SqlRow[]> {
+    return await this.queryOnLane('priority', sql, params)
+  }
+
+  private async queryOnLane(
+    lane: PostgresPoolLane,
+    sql: string,
+    params: unknown[]
+  ): Promise<SqlRow[]> {
     const startedAt = performance.now()
     let phase: 'acquire' | 'execute' = 'acquire'
     let client: pg.PoolClient | undefined
+    let lostReply: Error | undefined
     try {
-      client = await this.pressure.connect()
+      client = await this.connect(lane)
       phase = 'execute'
-      const result = await client.query(postgresSql(sql), params)
+      const result = await timedQuery(
+        client,
+        this.idOfConnection(client),
+        postgresSql(sql),
+        params,
+        this.queryTimeout
+      )
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
+      markRelayDatabaseError(error)
+      if (isPostgresReadTimeout(error)) lostReply = error
+      else if (error instanceof Error && endsPostgresSession(error)) lostReply = error
       reportPostgresQueryFailure({
         error,
         phase,
@@ -1047,7 +1231,10 @@ export class PostgresDatabase implements RelayDatabase {
       })
       throw error
     } finally {
-      client?.release()
+      // An error destroys the client rather than handing the next caller a dead connection.
+      if (client) {
+        this.release(client, lostReply)
+      }
     }
   }
 
@@ -1077,21 +1264,43 @@ export class PostgresDatabase implements RelayDatabase {
     options: RelayTransactionOptions = {}
   ): Promise<T> {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
-      const client = await this.pressure.connect()
-      const transaction = new PostgresTransaction(client)
+      const client = await this.connect()
+      const connectionId = this.idOfConnection(client)
+      const transaction = new PostgresTransaction(client, connectionId, this.queryTimeout)
+      let lostReply: Error | undefined
+      let sessionEnded: Error | undefined
       try {
-        await client.query('BEGIN')
+        await timedQuery(client, connectionId, 'BEGIN', undefined, this.queryTimeout)
         const result = await operation(transaction)
-        await client.query('COMMIT')
+        // Even when the operation caught it: COMMIT must not run after a lost reply.
+        if (transaction.poisonedBy) throw transaction.poisonedBy
+        if (transaction.open) {
+          await timedQuery(client, connectionId, 'COMMIT', undefined, this.queryTimeout)
+        }
         recordMeasuredHold(this.holds, transaction)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
         return result
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined)
+        markRelayDatabaseError(error)
+        // No ROLLBACK behind a lost reply: it would queue behind the dead statement. Destroying
+        // the client ends the session, and the server drops its locks.
+        lostReply = transaction.poisonedBy ?? (isPostgresReadTimeout(error) ? error : undefined)
+        if (error instanceof Error && endsPostgresSession(error)) sessionEnded = error
+        const open = transaction.open
+        // An ended session cannot roll back; the untimed ROLLBACK would only wait on a dead socket.
+        if (open && !lostReply && !sessionEnded) {
+          await client.query('ROLLBACK').catch(() => undefined)
+        }
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
-        if (!retryablePostgresTransactionError(error) || attempt === POSTGRES_TRANSACTION_ATTEMPTS) {
+        // Once the fused commit has ended the transaction, a retry would apply the work twice.
+        if (
+          !open ||
+          lostReply ||
+          !retryablePostgresTransactionError(error) ||
+          attempt === POSTGRES_TRANSACTION_ATTEMPTS
+        ) {
           if (retryablePostgresTransactionError(error) && options.reportRetries !== false) {
             console.warn(
               JSON.stringify({
@@ -1115,7 +1324,7 @@ export class PostgresDatabase implements RelayDatabase {
           )
         }
       } finally {
-        client.release()
+        this.release(client, lostReply ?? sessionEnded)
       }
       // A PostgreSQL transaction is unusable after an abort, so retry all work
       // on a fresh pooled client with a small full-jitter delay.
@@ -1128,12 +1337,47 @@ export class PostgresDatabase implements RelayDatabase {
     await this.pool.end()
   }
 
+  private async connect(lane?: PostgresPoolLane): Promise<pg.PoolClient> {
+    const startedAt = performance.now()
+    try {
+      const client = await this.pressure.connect(lane)
+      this.slowConnections?.track(client)
+      return client
+    } finally {
+      noteStickySlotPoolWait(performance.now() - startedAt)
+    }
+  }
+
+  // Destroys the client on an error, or when it has turned slow, so the pool dials a fresh one.
+  private release(client: pg.PoolClient, error: Error | undefined): void {
+    if (error) {
+      this.slowConnections?.forget(client)
+      client.release(error)
+      return
+    }
+    const slow = this.slowConnections?.shouldRetire(client, this.idOfConnection(client))
+    client.release(slow || undefined)
+  }
+
+  private idOfConnection(client: pg.PoolClient): number {
+    let id = this.connectionIds.get(client)
+    if (id === undefined) {
+      id = this.nextConnectionId++
+      this.connectionIds.set(client, id)
+    }
+    return id
+  }
+
   consumePoolPressure(): PostgresPoolPressureCounts {
     return this.pressure.consumeCounts()
   }
 
   peekPoolPressure(): PostgresPoolPressureCounts {
     return this.pressure.peekCounts()
+  }
+
+  poolOldestWaitMs(): number {
+    return this.pressure.oldestWaitMs()
   }
 }
 
@@ -1160,6 +1404,38 @@ export function readRelayDatabasePoolPressure(
     : emptyPostgresPoolPressureCounts()
 }
 
+// How long the longest-waiting pooled query has queued so far; 0 when none waits.
+export function readRelayDatabasePoolOldestWaitMs(database: RelayDatabase): number {
+  return database instanceof PostgresDatabase ? database.poolOldestWaitMs() : 0
+}
+
+// Keep a listener across pg-pool checkout/release listener swaps so no error gap can crash the process; checked-out/idle listeners own logging.
+export function keepPostgresClientErrorsHandled(pool: Pick<pg.Pool, 'on'>): void {
+  pool.on('connect', (client) => {
+    client.on('error', () => undefined)
+  })
+}
+
+// URL options can override pool defaults; report effective idle timeout without reading/logging the URL.
+function reportPostgresIdleSessionTimeoutOnce(pool: Pick<pg.Pool, 'on'>): void {
+  let reported = false
+  pool.on('connect', (client) => {
+    if (reported) return
+    reported = true
+    client
+      .query("SELECT current_setting('idle_session_timeout') AS value")
+      .then((result: pg.QueryResult) => {
+        console.log(
+          JSON.stringify({
+            event: 'orca_relay_postgres_session_settings',
+            idleSessionTimeout: String(result.rows[0]?.value)
+          })
+        )
+      })
+      .catch(() => undefined)
+  })
+}
+
 export function absorbPostgresIdleClientErrors(pool: Pick<pg.Pool, 'on'>): void {
   pool.on('error', () => {
     // Why: node-postgres removes failed idle clients itself; leaving `error`
@@ -1172,22 +1448,19 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   for (const statement of SCHEMA.split(';')) {
     if (statement.trim()) await database.query(statement)
   }
-  for (const [table, column] of [
-    ['relay_control_capabilities', 'idle_regional_rehome'],
-    ['relay_region_rehome_attempts', 'source_generation']
+  for (const [table, column, definition] of [
+    ['relay_control_capabilities', 'idle_regional_rehome', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_region_rehome_attempts', 'source_generation', 'BIGINT NOT NULL DEFAULT 0'],
+    ['relay_cell_connection_limits', 'reported_hard_cap', 'BIGINT']
   ]) {
     const columns = await database.query('SELECT name FROM pragma_table_info(?)', [table])
     if (!columns.some((existing) => existing.name === column)) {
-      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} BIGINT NOT NULL DEFAULT 0`)
+      await database.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
     }
   }
 }
 
-// Why: DDL is not a request. A CREATE INDEX on a grown table legitimately runs
-// longer than the request statement_timeout, and inheriting that timeout would
-// make every startup fail at the same statement instead of finishing once. One
-// short-lived connection of its own, ended before the serving pool opens, keeps
-// the untimed session off the request path entirely.
+// DDL can exceed request deadlines; use a separate untimed schema connection and close it before serving or every startup repeats the same failure.
 async function applySchemaOnUntimedPool(
   databaseUrl: string,
   applicationName: string | undefined
@@ -1204,16 +1477,13 @@ async function applySchemaOnUntimedPool(
     idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
   })
   absorbPostgresIdleClientErrors(pool)
+  keepPostgresClientErrorsHandled(pool)
   const database = new PostgresDatabase(pool)
   try {
     await applyPostgresSchema(
       relayPostgresSchemaStatements(),
       async (statement) => await database.query(statement),
-      // Asks the catalog whether each index or column is already there. CREATE INDEX IF NOT EXISTS
-      // and ALTER TABLE ADD COLUMN IF NOT EXISTS take their relation lock before the server
-      // evaluates the existence test, so on an already-migrated database the boot still joins the
-      // lock queue - and relation locks are granted in queue order, so every writer queues behind
-      // it. The catalog read takes no lock on the table.
+      // IF NOT EXISTS takes table locks before checking existence; catalog reads skip migrated objects without queueing writers behind boot DDL.
       { catalogQuery: async (sql, params) => await database.query(sql, params) }
     )
   } finally {
@@ -1235,23 +1505,53 @@ export type RelayDatabaseOpenInput = {
   poolMax?: number
   applicationName?: string
   statementTimeoutMs?: number
+  readTimeoutMarginMs?: number
+  // Read per query, so a cell's switch moves the margin without a restart.
+  readTimeoutMarginOverrideMs?: () => number | undefined
+  // Directors own schema; cells skip boot DB access, listen through outages and stay unready until the first successful query.
+  appliesPostgresSchema?: boolean
+  // Directors only: on cells, lock waits and batch flushes could trip the tail rule, and cells have not shown this stall.
+  retiresSlowConnections?: boolean
 }
 
 export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<RelayDatabase> {
   let database: RelayDatabase
+  const appliesPostgresSchema = input.appliesPostgresSchema !== false
   if (input.databaseUrl) {
-    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    if (appliesPostgresSchema) {
+      await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
+    }
+    const statementTimeoutMs = input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs()
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
       application_name: input.applicationName,
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
-      statement_timeout: input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs(),
+      statement_timeout: statementTimeoutMs,
+      // The server answers every statement within statement_timeout, as 57014 at worst, so
+      // this fires only on a lost reply, or a database or event-loop stall past the margin.
+      query_timeout:
+        statementTimeoutMs + (input.readTimeoutMarginMs ?? relayPostgresReadTimeoutMarginMs()),
       lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
-      idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
+      idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS,
+      // Bounds a backend whose client was destroyed outside a transaction (after a lost
+      // reply on an autocommit write or COMMIT). pg-pool closes healthy idle clients at 10 s.
+      options: `-c idle_session_timeout=${POSTGRES_IDLE_SESSION_TIMEOUT_MS}`
     })
     absorbPostgresIdleClientErrors(pool)
-    database = new PostgresDatabase(pool)
+    keepPostgresClientErrorsHandled(pool)
+    reportPostgresIdleSessionTimeoutOnce(pool)
+    const override = input.readTimeoutMarginOverrideMs
+    database = new PostgresDatabase(
+      pool,
+      override
+        ? () => {
+            const marginMs = override()
+            return marginMs === undefined ? undefined : statementTimeoutMs + marginMs
+          }
+        : undefined,
+      { retiresSlowConnections: input.retiresSlowConnections === true }
+    )
   } else {
     mkdirSync(input.dataDir, { recursive: true })
     const sqlite = new DatabaseSync(join(input.dataDir, 'orca-relay.sqlite'))
@@ -1260,7 +1560,7 @@ export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<
   }
   try {
     if (!input.databaseUrl) await applySchema(database)
-    await backfillRelayCellRegions(database)
+    if (!input.databaseUrl || appliesPostgresSchema) await backfillRelayCellRegions(database)
     return database
   } catch (error) {
     await database.close().catch(() => undefined)

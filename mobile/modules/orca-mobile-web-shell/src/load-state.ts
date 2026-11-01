@@ -1,15 +1,7 @@
 import { z } from 'zod'
 
-/**
- * The load state the native shell view reports, and the parser that rebuilds the union from the
- * flat dictionary a native event carries.
- *
- * Recovery is the caller's, never the view's: the view retries nothing and reloads nothing.
- * `generation-unreadable` and `document-load-failed` mean the cached generation is suspect, so the
- * caller deletes that host's cache and downloads once. `render-process-gone` remounts once and
- * never deletes, because renderer memory pressure and a WebView provider update are
- * indistinguishable here from a bad bundle.
- */
+// Parse native load events; caller owns recovery, view never reloads/retries.
+// generation-unreadable/document-load-failed: delete host cache and download once. render-process-gone: remount once without deletion; memory pressure/provider updates look like bad bundles.
 export const MOBILE_WEB_SHELL_FAILURE_REASONS = [
   /** The generation directory has no readable manifest, or declares an asset we refuse to map. */
   'generation-unreadable',
@@ -28,11 +20,7 @@ export type MobileWebShellLoadState =
   | { state: 'ready' }
   | { state: 'failed'; reason: MobileWebShellFailureReason }
 
-/**
- * What the native event body actually is; the union above is derived from it, never asserted.
- * Own-property parse: zod reads a shape key straight off the value, so an inherited `reason` would
- * otherwise count as one the shell sent.
- */
+// Check own properties: Zod shape reads would otherwise accept inherited reason as a native event.
 const loadStatePayloadSchema = z.object({
   state: z.string(),
   reason: z.string().optional()

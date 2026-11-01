@@ -1,22 +1,24 @@
-/**
- * STA-3107 (blank-pane half): a paired client with SIX remote terminal tabs is
- * slept and woken. All six panes share one multiplex connection, so the sleep
- * closes every stream at once and all six recoveries race each other.
- *
- * Invariant: after the reconnect every pane resolves to a live host handle —
- * including a pane whose host PTY was parked while the client was away, which
- * only `session.tabs.activate` can re-materialize (the STA-3002 defect fixed by
- * #11542). No pane may be left with a null PTY id.
- *
- * The fault is injected at the multiplex transport seam (onClose), never with
- * elapsed time; the oracle is the per-pane handle inventory.
- */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+/** STA-3107: multiplex close races six pane recoveries; every pane must regain a host handle, including parked PTYs requiring session.tabs.activate (STA-3002). */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// These transport fixtures never read abandoned-launch ownership from the app store.
+const appStore = vi.hoisted(() => ({
+  getState: vi.fn(() => {
+    throw new Error('These transport fixtures must not read app-store ownership')
+  })
+}))
+
+vi.mock('@/store', () => ({ useAppStore: { getState: appStore.getState } }))
+
+afterEach(() => {
+  expect(appStore.getState).not.toHaveBeenCalled()
+})
+
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
 } from '../../../../shared/terminal-stream-protocol'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
 
 type SubscriptionCallbacks = {
   onResponse: (response: unknown) => void
@@ -79,7 +81,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.doUnmock('../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session', () => ({
+    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
     }))
     vi.clearAllMocks()
@@ -110,9 +112,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
-    vi.stubGlobal('window', {
-      api: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
-    })
+    stubRuntimeEnvironmentBridge({ call: runtimeCall, subscribe: runtimeSubscribe })
   })
 
   async function attachAllPanes(): Promise<
@@ -152,7 +152,9 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
       PANE_COUNT
     )
     for (const pane of panes) {
-      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} lost its handle`).not.toBeNull()
+      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} bound the wrong handle`).toBe(
+        `remote:env-1@@${hostHandleByTabId.get(pane.hostTabId)}`
+      )
       pane.transport.destroy?.()
     }
   })
@@ -160,9 +162,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
   it('re-materializes a pane whose host PTY was parked while the client slept', async () => {
     const panes = await attachAllPanes()
     const before = subscribedHandles().length
-    // One agent's host PTY went away while the laptop was closed; the host still
-    // publishes the surface, but unmaterialized. This is the pane the reporter
-    // sees as blank/black.
+    // The host still lists this surface, but its PTY was parked while the client slept.
     const parked = HOST_TAB_IDS[2]!
     hostHandleByTabId.set(parked, null)
 
@@ -175,7 +175,9 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     const evidence = `resubscribes: ${JSON.stringify(afterReconnect)}`
     expect(afterReconnect, evidence).toContain(`${parked}-respawned`)
     for (const pane of panes) {
-      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} lost its handle`).not.toBeNull()
+      expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} bound the wrong handle`).toBe(
+        `remote:env-1@@${hostHandleByTabId.get(pane.hostTabId)}`
+      )
       pane.transport.destroy?.()
     }
   })

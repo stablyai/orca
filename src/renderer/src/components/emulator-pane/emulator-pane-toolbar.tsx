@@ -37,8 +37,7 @@ export function EmulatorPaneToolbar({
   onHome,
   onRotate
 }: EmulatorPaneToolbarProps) {
-  // Why: the toolbar chip describes Orca's preview/control stream, not the
-  // lower-level CoreSimulator boot state.
+  // Show preview/control connection state rather than CoreSimulator boot state.
   const statusLabel = isLive ? 'Connected' : loading ? 'Working…' : 'Not connected'
   const subtleStatus = isLive || loading
   const statusClassName = subtleStatus

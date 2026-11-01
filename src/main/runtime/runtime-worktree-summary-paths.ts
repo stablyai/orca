@@ -1,6 +1,7 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
-import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
+import { worktreePathComparisonKey } from '../worktree-path-comparison-key'
+import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
 
 type ResolvedWorktreePath = { id: string; repoId: string; path: string }
 type RuntimeWorktreeSummaryPathCandidate = { summary: RuntimeWorktreePsSummary; order: number }
@@ -55,6 +56,40 @@ export function buildRuntimeWorktreeSummaryPathIndex(
   return index
 }
 
+export type RuntimeWorktreePsSummaryLookup = (worktreeId: string) => RuntimeWorktreePsSummary | null
+
+export function createRuntimeWorktreePsSummaryLookup(
+  summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+  pathIndex: RuntimeWorktreeSummaryPathIndex
+): RuntimeWorktreePsSummaryLookup {
+  const missingIds = new Set<string>()
+  return (worktreeId) => {
+    const exact = summaries.get(worktreeId)
+    if (exact) {
+      return exact
+    }
+    if (missingIds.has(worktreeId)) {
+      return null
+    }
+    const parsed = parseRuntimeWorktreeId(worktreeId)
+    if (!parsed) {
+      return null
+    }
+    const platform = pathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
+    const indexed = findRuntimeWorktreeSummaryByPath(
+      pathIndex,
+      parsed.repoId,
+      parsed.worktreePath,
+      platform
+    )
+    if (indexed) {
+      return indexed
+    }
+    missingIds.add(worktreeId)
+    return null
+  }
+}
+
 export function findRuntimeWorktreeSummaryByPath(
   index: RuntimeWorktreeSummaryPathIndex,
   repoId: string,
@@ -75,7 +110,7 @@ export function findRuntimeWorktreeSummaryByPath(
     runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
   )
   const windowsCandidate = index.windowsAbsolute.get(windowsKey)
-  // Why: a malformed path can match both the POSIX and Windows indexes; keep the old pairwise scan's first-match order.
+  // Malformed paths can match both indexes; preserve the pairwise scan's first-match order.
   if (!posixCandidate) {
     return windowsCandidate?.summary ?? null
   }

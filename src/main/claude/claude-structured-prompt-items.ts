@@ -1,11 +1,15 @@
 import type {
   AgentJournalApprovalItem,
-  AgentJournalItemIdentity,
   AgentJournalPromptOption,
   AgentJournalQuestion,
   AgentJournalQuestionItem
-} from '../../shared/agent-session-journal-types'
-import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import {
+  formatToolInput,
+  truncateToolDetail
+} from '../../shared/native-chat/tools/native-chat-tool-summary'
+import { isPlanApprovalSubject } from '../../shared/agent-session/agent-session-approval-subject'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
@@ -44,7 +48,7 @@ export function claudePromptIdentity(input: {
 }
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
-  const planSubject = prompt.subject?.kind === 'plan' ? prompt.subject : null
+  const planSubject = isPlanApprovalSubject(prompt.subject) ? prompt.subject : null
   const detail = truncateToolDetail(planSubject?.text ?? formatToolInput(prompt.input))
   return boundJournalPromptBody({
     kind: 'approval',

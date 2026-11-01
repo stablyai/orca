@@ -46,8 +46,7 @@ describe('pane terminal output scheduler', () => {
       vi.useFakeTimers()
       const { writeTerminalOutput } = await loadScheduler()
 
-      // Why many medium chunks: compactConsumedChunks only splices once chunkIndex reaches 64,
-      // so below that the drained slots stay in the array and must be cleared individually.
+      // Below 64 consumed chunks, compaction does not splice; drained slots must release strings individually.
       const CHUNKS_PER_TERMINAL = 40
       const CHUNK = 48 * 1024
       const SINKS = 4
@@ -106,9 +105,7 @@ describe('pane terminal output scheduler', () => {
       vi.useFakeTimers()
       const { writeTerminalOutput } = await loadScheduler()
 
-      // Why a slice: agent-status-osc.ts and the restore-overlap trims hand the scheduler
-      // strings cut from a much larger buffer. The queue must own its copy rather than
-      // trusting every producer to flatten first (STA-3567 review round 2).
+      // Producers can hand off slices of large buffers (OSC/restore trimming); the queue must own copies rather than pin parents (STA-3567).
       const KEEP_CHARS = 64 * 1024
       const sinks = Array.from({ length: TERMINALS }, () => ({
         write: (_data: string, callback?: () => void) => callback?.()
@@ -134,8 +131,7 @@ describe('pane terminal output scheduler', () => {
       vi.useFakeTimers()
       const { writeTerminalOutput } = await loadScheduler()
 
-      // Why a hand-rolled write: vi.fn() retains every argument in mock.calls, which would
-      // dominate the measurement with the very bytes the queue is supposed to have released.
+      // Avoid vi.fn: mock.calls would retain the measured bytes independently of the queue.
       let writtenChars = 0
       const makeSink = (): { write: (data: string, callback?: () => void) => void } => ({
         write: (data: string, callback?: () => void) => {
@@ -145,9 +141,7 @@ describe('pane terminal output scheduler', () => {
       })
       const terminals = Array.from({ length: TERMINALS }, makeSink)
 
-      // Why baseline BEFORE enqueueing: the queue owns a copy of every chunk, so a baseline
-      // taken after enqueue already contains the parents this test must prove get released,
-      // and the assertion would hold even with residual flattening disabled.
+      // Measure baseline before enqueue; afterwards the owned copies already mask whether residual flattening releases parents.
       const baseline = collect()
 
       for (const [index, terminal] of terminals.entries()) {
@@ -168,8 +162,7 @@ describe('pane terminal output scheduler', () => {
         throw new Error('scheduler debug API unavailable')
       }
 
-      // Why stop early: the leak is what a PARTIALLY drained queue pins. Draining to empty
-      // frees the chunks either way, so a full drain cannot observe the defect.
+      // Stop partially drained; an empty queue frees buffers even with the leak present.
       const TAIL_CHARS = 64 * 1024
       let ticks = 0
       while (debug.snapshot().queuedChars > TAIL_CHARS && ticks < 20000) {
@@ -180,8 +173,7 @@ describe('pane terminal output scheduler', () => {
       const queuedChars = debug.snapshot().queuedChars
       const retainedBytes = collect() - baseline
 
-      // Sanity: nearly everything drained, but a real tail is still queued - otherwise
-      // there is no residual slice to hold a parent chunk and the measurement is meaningless.
+      // Require both substantial drain and a real tail; otherwise residual-parent retention is untested.
       expect(writtenChars).toBeGreaterThan(TERMINALS * CHUNK_CHARS * 0.9)
       expect(queuedChars).toBeGreaterThan(0)
       expect(queuedChars).toBeLessThanOrEqual(TAIL_CHARS)

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  EPHEMERAL_SETUP_TERMINAL_WORKTREE_ID_PREFIX,
   brandEphemeralSetupTerminalWorktreeId,
   isEphemeralSetupTerminalWorktreeId
 } from './ephemeral-setup-terminal-worktree-id'
@@ -8,7 +7,7 @@ import {
 describe('ephemeral setup terminal worktree id', () => {
   it('brands a panel id with the ephemeral prefix', () => {
     expect(brandEphemeralSetupTerminalWorktreeId('feature-wall-orchestration-skill-terminal')).toBe(
-      `${EPHEMERAL_SETUP_TERMINAL_WORKTREE_ID_PREFIX}feature-wall-orchestration-skill-terminal`
+      'ephemeral-setup-terminal:feature-wall-orchestration-skill-terminal'
     )
   })
 

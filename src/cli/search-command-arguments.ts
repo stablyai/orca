@@ -16,8 +16,7 @@ export type SearchCommand =
   | { kind: 'index-status' }
   | { kind: 'search'; request: AiVaultSearchRequest }
 
-// Why enumerated: --index-status calls a different RPC that reads none of these,
-// so ignoring one would answer a question the caller did not ask.
+// --index-status uses a different RPC; query flags would otherwise be silently ignored.
 const QUERY_ONLY_FLAGS = [
   'query',
   'scope',
@@ -40,7 +39,6 @@ function readEnum<TValue extends string>(
   if (value === undefined) {
     return undefined
   }
-  // Why find and not includes: the match carries the narrow type, so nothing is asserted.
   const matched = allowed.find((candidate) => candidate === value)
   if (matched === undefined) {
     throw new RuntimeClientError(
@@ -86,8 +84,7 @@ function readScopePaths(flags: Map<string, string | boolean>): string[] | undefi
   return paths
 }
 
-// Why the contract's own schema: the offset requirement lives there, and a
-// second copy here would drift from what the host accepts.
+// Reuse the host schema so timestamp offset requirements cannot drift.
 function readSince(flags: Map<string, string | boolean>): string | undefined {
   const since = getOptionalStringFlag(flags, 'since')
   if (since === undefined) {
@@ -129,7 +126,6 @@ function readFilters(
   return Object.keys(filters).length > 0 ? filters : undefined
 }
 
-/** Maps `orca search` flags onto the session-search contract; nothing it does not have. */
 export function parseSearchCommand(flags: Map<string, string | boolean>): SearchCommand {
   if (flags.has('index-status')) {
     const conflicting = QUERY_ONLY_FLAGS.filter((flag) => flags.has(flag))

@@ -1,30 +1,31 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-decay-state'
+import type { AgentRowState } from '../../../shared/agent-row-decay-state'
+import { isProgramStatusRow } from './program-status/row'
+import {
+  agentToolPreviewInput,
+  formatAgentToolPreviewLine
+} from '../../../shared/agent-tool-preview'
 
-/**
- * States whose cached tool fields describe live work: 'working' names the tool the agent is
- * running, 'waiting' names the tool a permission request is blocked on. Tool fields outlive
- * the turn that set them, so on any other state they read as work still in flight.
- *
- * Shared because three surfaces render this line — the sidebar's compact row, the dashboard
- * row, and the activity thread — and a rule that only two of them relax is a rule that lies.
- */
+type ToolPreviewEntry = Pick<AgentStatusEntry, 'toolName' | 'toolInput'> &
+  Partial<Pick<AgentStatusEntry, 'agentType' | 'programStatus' | 'observation'>>
+
+/** Cached tool fields describe live work only in working/permission-wait states; share this gate across sidebar, dashboard and activity rows. */
 export function showsAgentToolPreview(state: AgentRowState | null | undefined): boolean {
   return state === 'working' || state === 'waiting'
 }
 
-/** One-line `tool: input` preview, or '' when the state or the entry has nothing to show. */
-export function formatAgentToolPreview(
-  entry: Pick<AgentStatusEntry, 'toolName' | 'toolInput'>,
+export function agentRowToolInput(
+  entry: ToolPreviewEntry,
   state: AgentRowState | null | undefined
 ): string {
-  if (!showsAgentToolPreview(state)) {
-    return ''
-  }
-  const toolName = entry.toolName?.trim() ?? ''
-  const toolInput = entry.toolInput?.trim() ?? ''
-  if (toolName && toolInput) {
-    return `${toolName}: ${toolInput}`
-  }
-  return toolName
+  return showsAgentToolPreview(state) ? agentToolPreviewInput(entry, isProgramStatusRow(entry)) : ''
+}
+
+export function formatAgentToolPreview(
+  entry: ToolPreviewEntry,
+  state: AgentRowState | null | undefined
+): string {
+  return showsAgentToolPreview(state)
+    ? formatAgentToolPreviewLine(entry, isProgramStatusRow(entry))
+    : ''
 }

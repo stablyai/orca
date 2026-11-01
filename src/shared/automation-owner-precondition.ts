@@ -1,21 +1,18 @@
-/**
- * The owner precondition an authority enforces before it reads, mutates, or
- * executes one stored automation.
- *
- * Optional on the wire preserves old-client/new-server compatibility. Current
- * clients send the capture and get strict enforcement; legacy clients omit it.
- */
+/** Keep owner capture optional for legacy wire clients; current clients echo it for strict read/write/execute fencing. */
 
 import type { Automation } from './automations-types'
 import type { AutomationExecutionTargetSelection } from './automation-execution-target'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 import {
+  AUTOMATION_ORPHAN_ISSUES,
   projectAutomationSelector,
+  automationCapturedHostIssue,
   type AutomationListItemSelector,
   type AutomationProjectionContext
 } from './automation-list-scope'
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
+  AUTOMATION_CAPTURED_HOST_REFUSALS,
   AutomationOwnerConflictError
 } from './automation-owner-conflict'
 import { sanitizeSshTargetGeneration } from './ssh-target-generation'
@@ -36,12 +33,7 @@ export type AutomationDestination = {
 
 export type AutomationOwnerFenceOperation = 'read' | 'mutate' | 'execute'
 
-/**
- * The precondition a client echoes back to act on a record it just read.
- *
- * The orphan issue is dropped on purpose: a precondition names the host the
- * caller believes owns the record, not the reason that host is unusable.
- */
+/** Echo captured host identity, omitting orphan diagnosis: ownership and why its host is unusable are separate claims. */
 export function toAutomationOwnerPrecondition(
   selector: AutomationListItemSelector
 ): AutomationOwnerPrecondition {
@@ -71,13 +63,20 @@ function conflict(code: keyof typeof AUTOMATION_OWNER_CONFLICT_CODES): never {
 export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): void {
   const stored = projectAutomationSelector(input.automation, input.context)
   const expected = input.expectedOwner?.selector
+  if (expected && expected.kind !== stored.kind) {
+    conflict('ownerChanged')
+  }
   if (stored.kind === 'orphan' && input.operation === 'execute') {
-    conflict('targetRemoved')
+    const issue = automationCapturedHostIssue(input.automation, input.context)
+    throw new AutomationOwnerConflictError(
+      AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved,
+      issue && issue !== AUTOMATION_ORPHAN_ISSUES.targetMissing
+        ? AUTOMATION_CAPTURED_HOST_REFUSALS[issue]
+        : undefined
+    )
   }
   if (!expected) {
-    // Optional on the wire is not unenforced: a record fenced to an SSH registration
-    // may not be mutated or executed by a caller that names no host at all. Only
-    // reads, Self records, and generation-less legacy SSH rows stay callable bare.
+    // Require owner capture for fenced SSH mutations/execution; only reads, Self and generation-less legacy SSH remain callable bare.
     if (
       input.operation !== 'read' &&
       stored.kind === 'ssh' &&
@@ -86,9 +85,6 @@ export function assertAutomationOwnerFence(input: AutomationOwnerFenceInput): vo
       conflict('fencingRequired')
     }
     return
-  }
-  if (expected.kind !== stored.kind) {
-    conflict('ownerChanged')
   }
   if (
     expected.kind === 'ssh' &&
@@ -116,11 +112,7 @@ export function assertAutomationDestination(
   }
 }
 
-/**
- * Where the derived selection actually lands, which is the projected selector
- * rather than the stored fields: a `local` target under a workspace pin runs on
- * that registration, so the stored type is not the host.
- */
+/** Use the projected selector: local-stored records pinned to SSH actually execute at that registration. */
 function landingSelector(
   selection: AutomationExecutionTargetSelection,
   workspaceSshPin: AutomationWorkspaceSshPin | undefined

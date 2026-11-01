@@ -8,14 +8,7 @@ import {
   type DiffCommentLineRange
 } from './diff-comment-line-range'
 
-// Why: press-and-drag down the gutter to pick the lines a review note covers, the way every
-// review tool does it.
-//
-// Monaco's own gutter gesture (select this line) is pre-empted rather than fought after the fact.
-// It registers its press handler as a bubble-phase `pointerdown` on the view DOM node — the very
-// node `editor.getDomNode()` returns — so a capture-phase listener on that same node still runs
-// first for any descendant target (line numbers, our "+"), and stopPropagation there keeps the
-// event from ever reaching Monaco.
+// Capture pointerdown before Monaco’s bubble handler on the same view node so gutter selection cannot compete with the drag.
 
 export type DiffCommentRangeDragEditor = Pick<
   monacoEditor.ICodeEditor,
@@ -48,9 +41,7 @@ export type DiffCommentRangeDragHandle = {
   isDragging: () => boolean
 }
 
-// Line numbers only: the rest of the gutter carries Monaco's own press handlers (fold chevrons
-// live in GUTTER_LINE_DECORATIONS), and a capture-phase stopPropagation here would swallow them.
-// The "+" press needs no entry — it resolves through the button, not a Monaco target.
+// Claim line numbers only: decoration presses toggle folds. The external add button resolves separately.
 const GUTTER_PRESS_TARGET_TYPES: ReadonlySet<monacoEditor.MouseTargetType> = new Set([
   monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
 ])
@@ -128,9 +119,7 @@ export function installDiffCommentRangeDrag({
     }
   }
 
-  // Why: probe a fixed column just inside the text, never the pointer's own column. The gesture
-  // is vertical, and hit-testing under the pointer is how this used to stall — Monaco reports no
-  // position for a point over our own "+" button, so every move there was silently discarded.
+  // Probe inside the text column: Monaco cannot resolve positions over the external add button.
   const getLineAtViewportY = (editorLeft: number, clientY: number): number | null => {
     const model = editor.getModel()
     if (!model) {
@@ -161,8 +150,7 @@ export function installDiffCommentRangeDrag({
     return true
   }
 
-  // One hit-test against the coordinate the drag last saw, clamped into the editor so a pointer
-  // dragged past an edge keeps resolving to the edge line.
+  // Clamp offscreen coordinates to the viewport edge so dragging beyond it keeps extending the range.
   const resolveFocusLine = (active: NonNullable<typeof drag>, rect: DOMRect): void => {
     const clampedY = Math.max(rect.top + 1, Math.min(rect.bottom - 1, active.clientY))
     const probed = getLineAtViewportY(rect.left, clampedY)
@@ -175,8 +163,7 @@ export function installDiffCommentRangeDrag({
     }
   }
 
-  // One hit-test, one scroll step and at most one decoration write per frame, however many
-  // pointermove events the OS delivered in between.
+  // Coalesce pointer bursts into one hit-test, scroll step and decoration write per frame.
   const runFrame = (timestampMs: number): void => {
     if (!drag || disposed) {
       return
@@ -189,7 +176,7 @@ export function installDiffCommentRangeDrag({
     const scrolling = autoScroll(rect, drag.clientY, frameDeltaMs)
     resolveFocusLine(drag, rect)
     repaint()
-    // Keep the loop alive only while the edge is still pulling; a held, still pointer costs zero.
+    // Continue frames only while edge scrolling; a stationary interior pointer needs no work.
     if (scrolling) {
       scheduleFrame()
     }
@@ -218,10 +205,7 @@ export function installDiffCommentRangeDrag({
     if (!drag || event.pointerId !== drag.pointerId) {
       return
     }
-    // Pointerup can carry a position no pointermove reported, and can arrive before the coalesced
-    // animation frame. Resolve the release coordinate before committing so a fast drag cannot lose
-    // its final lines. No scroll step: the gesture is over, so pulling the view further would only
-    // drag the committed range past the line the user released on.
+    // Resolve pointerup before committing: it may precede the frame or contain unseen coordinates. Do not scroll after release.
     drag.clientY = event.clientY
     cancelFrame()
     resolveFocusLine(drag, editorDomNode.getBoundingClientRect())
@@ -285,8 +269,7 @@ export function installDiffCommentRangeDrag({
     repaint()
   }
 
-  // Chromium still emits the compatibility mousedown after a cancelled pointerdown; swallow it
-  // so Monaco's mouse handler can't start a text selection underneath the drag.
+  // Chromium emits compatibility mousedown after cancelled pointerdown; swallow it to prevent Monaco selection underneath.
   const handleMouseDown = (event: MouseEvent): void => {
     if (drag) {
       event.preventDefault()
@@ -294,9 +277,7 @@ export function installDiffCommentRangeDrag({
     }
   }
 
-  // On document, not the editor: captured pointer events still bubble here, and a release outside
-  // the pane (or a DOM that cannot capture) still finishes the drag. Bound only for the life of a
-  // drag, because a combined diff mounts one of these controllers per file section.
+  // Document listeners finish off-pane releases even without capture; bind only during drags because combined diffs mount one controller per section.
   function attachDragListeners(): void {
     document.addEventListener('pointermove', handlePointerMove)
     document.addEventListener('pointerup', handlePointerUp)
@@ -341,8 +322,7 @@ export function installDiffCommentRangeDrag({
   }
 }
 
-// Pointer capture keeps pointerup reaching us when the drag leaves the window, and is absent in
-// the test DOM.
+// Capture preserves releases outside the window; test DOMs may lack it.
 function capturePointer(node: HTMLElement, pointerId: number): void {
   if (typeof node.setPointerCapture !== 'function') {
     return

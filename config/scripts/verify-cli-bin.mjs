@@ -4,24 +4,22 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 
-// Electron packaging restamps the channel-specific version after compilation.
-function buildOutPackageJson(version) {
+// Packager restamps channel version after compilation; compiled CLI’s commit pins official skill installs.
+function buildOutPackageJson(version, commit) {
   return `${JSON.stringify(
-    { name: 'orca-compiled-output', type: 'commonjs', private: true, version },
+    { name: 'orca-compiled-output', type: 'commonjs', private: true, version, commit },
     null,
     2
   )}\n`
 }
 
-/**
- * Verifies the published CLI entrypoint and the module-type boundary for the
- * compiled output tree that the packaged CLI loads at runtime.
- */
 export function verifyPackageCliBin({
   projectDir = path.resolve(import.meta.dirname, '..', '..'),
   fixExecutable = false,
   fixPackageJson = false,
+  sourceCommit,
   runHelp = false
 } = {}) {
   const packageJsonPath = path.join(projectDir, 'package.json')
@@ -48,7 +46,11 @@ export function verifyPackageCliBin({
   const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
   if (fixPackageJson) {
     mkdirSync(path.dirname(outPackageJsonPath), { recursive: true })
-    writeFileSync(outPackageJsonPath, buildOutPackageJson(packageJson.version), 'utf8')
+    writeFileSync(
+      outPackageJsonPath,
+      buildOutPackageJson(packageJson.version, sourceCommit),
+      'utf8'
+    )
   }
   let outPackageJson
   try {
@@ -87,12 +89,12 @@ export function verifyPackageCliBin({
   return { binPath, outPackageJsonPath, size: statSync(binPath).size }
 }
 
-/** Runs CLI verification from npm scripts and local release checks. */
 function main() {
   const args = new Set(process.argv.slice(2))
   const result = verifyPackageCliBin({
     fixExecutable: args.has('--fix-executable'),
     fixPackageJson: args.has('--fix-package-json'),
+    sourceCommit: args.has('--fix-package-json') ? resolveBuildSourceCommit() : undefined,
     runHelp: args.has('--run-help')
   })
   console.log(

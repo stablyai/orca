@@ -13,6 +13,7 @@ describe('parseRpcRequestParams', () => {
   it('parses repeated valid requests through the compiled schema', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ requestId: z.string().min(1), count: z.number().int().nonnegative() }),
       handler: () => null
     })
@@ -28,12 +29,15 @@ describe('parseRpcRequestParams', () => {
   it('preserves validation errors from the runtime fallback', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ count: z.number().int('Count must be an integer') }),
       handler: () => null
     })
 
     expect(parseRpcRequestParams(request({ count: 1.5 }), method, META)).toMatchObject({
       error: {
+        id: 'req-1',
+        _meta: { runtimeId: 'runtime-1' },
         ok: false,
         error: { code: 'invalid_argument', message: 'Count must be an integer' }
       }
@@ -43,6 +47,7 @@ describe('parseRpcRequestParams', () => {
   it('keeps transform output when compilation falls back', () => {
     const method = defineMethod({
       name: 'test.parse',
+      permission: 'workspace',
       params: z.object({ value: z.string().transform((value) => value.toUpperCase()) }),
       handler: () => null
     })

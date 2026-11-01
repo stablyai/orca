@@ -13,7 +13,7 @@ import { AgentHookServerStatusInference } from './server-status-inference'
 
 export abstract class AgentHookServerStatusDisposition extends AgentHookServerStatusInference {
   protected markTabClosedForAgentStatus(tabId: string): void {
-    // Delete-then-add keeps recently closed tabs most-recent so eviction sheds only the oldest ids.
+    // Refresh insertion order so only the oldest closed tabs are evicted.
     this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
     for (const key of this.state.lastStatusByPaneKey.keys()) {
@@ -44,13 +44,15 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     paneKey: string,
     event?: {
       source?: AgentHookSource
-      /** Raw wire value, so the gate can tell "field absent" from "field present but unknown". */
+      /** Distinguish absent legacy source from unknown or malformed wire values. */
       rawSource?: unknown
       hookEventName?: string
       isReplay?: boolean
       hasExplicitPrompt?: boolean
       launchToken?: string
-      /** A process-lifetime Working: a fresh command whose foreground argv proves a new agent run. */
+      /** Host/workspace provenance matched internally to a retained authority commitment. */
+      retainedLaunchTokenHash?: string
+      /** Foreground argv proves a fresh agent command. */
       processNewTurn?: boolean
     }
   ): 'accept' | 'restart' | 'suppress' {
@@ -80,8 +82,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     }
     if (!paneRetired) {
       const tokenFence = this.restartedStatusLaunchTokenHashByPaneKey.get(ownerPaneKey)
-      // Why: deferred retirement lets a new process start in a still-authorized pane, so
-      // its tokened SessionStart re-fences; prompts recur, so a stale process would win.
+      // Only tokened SessionStart re-fences a deferred retirement; recurring prompts could revive a stale owner.
       if (
         event?.hookEventName === 'SessionStart' &&
         event.isReplay !== true &&
@@ -89,53 +90,40 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       ) {
         const startedLaunchToken = event.launchToken?.trim()
         if (startedLaunchToken) {
-          this.restartedStatusLaunchTokenHashByPaneKey.set(
-            ownerPaneKey,
-            createHash('sha256').update(startedLaunchToken).digest('hex')
-          )
+          this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, {
+            hash: createHash('sha256').update(startedLaunchToken).digest('hex')
+          })
           return 'accept'
         }
       }
       if (event && event.processNewTurn !== true && tokenFence) {
         const launchToken = event.launchToken?.trim()
-        if (!launchToken || createHash('sha256').update(launchToken).digest('hex') !== tokenFence) {
+        const tokenHash =
+          event.retainedLaunchTokenHash ??
+          (launchToken ? createHash('sha256').update(launchToken).digest('hex') : undefined)
+        if (tokenHash !== tokenFence.hash) {
           return 'suppress'
         }
       }
       return 'accept'
     }
-    // Why: command completion retires launch authority but leaves its shell pane reusable.
-    // A live new-turn event proves a new agent process owns the retired pane just like a
-    // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
-    // Why the classifier, not literals: only 5 of 18 sources name their boundary
-    // `UserPromptSubmit`/`SessionStart`; the rest stayed retired forever.
-    // Why four branches: `source` collapses to undefined when an older relay omits the field,
-    // when a newer host sends an unknown string, and when the wire value is malformed. Only an
-    // unknown string is valid future-provider evidence. Unreachable from the local path, which
-    // 404s an unresolvable source.
+    // Reusable panes revive on provider boundaries; older missing sources and future unknown sources need distinct fallbacks.
     const isNewTurn =
       event?.source !== undefined
         ? isNewTurnEvent(event.source, event.hookEventName)
         : typeof event?.rawSource === 'string' && event.rawSource.trim().length > 0
-          ? // Why fail OPEN for an unknown provider: its boundary event is unknowable here, and
-            // the costs are asymmetric — a stranded pane is invisible and permanent with no user
-            // recovery, while a spurious revive decays after AGENT_STATUS_STALE_AFTER_MS.
+          ? // Unknown providers may use any boundary; false revival expires, but permanent suppression strands the pane.
             true
           : event?.rawSource === undefined
-            ? // Why literals here: an older relay omits `source` entirely. Legacy shim only — it
-              // cannot revive a provider whose boundary event is named anything else.
+            ? // Older relays omit source; retain their literal boundary fallback.
               event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart'
             : false
-    // Why in addition to the classifier: the OpenCode family carries its mid-session boundary in
-    // an explicit-prompt MessagePart, which isNewTurnEvent cannot name — and mimo-code has no
-    // SessionStart at all, so without this its retired panes never come back.
+    // OpenCode MessagePart carries mid-session prompts; mimo-code has no SessionStart.
     const freshOpenCodeFamilyPrompt =
       (event?.source === 'opencode' || event?.source === 'mimo-code') &&
       event.hookEventName === 'MessagePart' &&
       event.hasExplicitPrompt === true
-    // Why the token is minted here: a revive proves a live lifecycle, and fencing follow-up
-    // status on that launch token stops a stale process reclaiming the pane's row without
-    // restoring retired orchestration authority.
+    // Fence the revived status by launch token without restoring retired orchestration authority.
     if (
       (isNewTurn || freshOpenCodeFamilyPrompt || event?.processNewTurn === true) &&
       event?.isReplay !== true
@@ -144,10 +132,9 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
       const launchToken = event?.launchToken?.trim()
       if (launchToken) {
-        this.restartedStatusLaunchTokenHashByPaneKey.set(
-          ownerPaneKey,
-          createHash('sha256').update(launchToken).digest('hex')
-        )
+        this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, {
+          hash: createHash('sha256').update(launchToken).digest('hex')
+        })
       } else {
         this.restartedStatusLaunchTokenHashByPaneKey.delete(ownerPaneKey)
       }
@@ -156,8 +143,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     return 'suppress'
   }
 
-  // Why: a fence can span tabs (a pane detached into another tab), and legacy numeric
-  // keys never parse as stable ones — resolve both forms so neither slips the tab check.
+  // Detached fences can span tabs; resolve stable and legacy keys for the closed-tab check.
   protected isClosedAgentStatusTabForPaneKey(paneKey: string): boolean {
     const tabId =
       parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? undefined
@@ -196,7 +182,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
       ...(closed ? { closed: true as const } : {})
     }
     for (const key of paneKeys) {
-      // Delete-then-set keeps the newest fence most-recent so eviction sheds only the oldest.
+      // Refresh insertion order so only the oldest fences are evicted.
       this.retiredPaneFencesByKey.delete(key)
       this.retiredPaneFencesByKey.set(key, fence)
     }

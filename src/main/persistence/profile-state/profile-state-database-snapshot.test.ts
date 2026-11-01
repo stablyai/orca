@@ -80,7 +80,7 @@ describe('asynchronous profile-state database snapshots', () => {
     }
     expect(exportProfileStateJson(db)).toBe(originalJson)
     expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
-    expect(readFileSync(databasePath)).toEqual(sourceFile)
+    expect(readFileSync(databasePath).equals(sourceFile)).toBe(true)
     importProfileStateJson(db, JSON.stringify({ settings: { theme: 'dark' } }))
     expect(readSnapshot(targetPath)).toBe(originalJson)
     expectNoTemporaryFiles(directory)
@@ -150,7 +150,7 @@ describe('asynchronous profile-state database snapshots', () => {
       'injected native backup failure'
     )
 
-    expect(readFileSync(targetPath)).toEqual(previous)
+    expect(readFileSync(targetPath).equals(previous)).toBe(true)
     expect(exportProfileStateJson(db)).toBe(originalJson)
     expectNoTemporaryFiles(directory)
   })
@@ -184,7 +184,7 @@ describe('asynchronous profile-state database snapshots', () => {
       'injected rename failure'
     )
 
-    expect(readFileSync(targetPath)).toEqual(previous)
+    expect(readFileSync(targetPath).equals(previous)).toBe(true)
     expectNoTemporaryFiles(directory)
   })
 
@@ -202,7 +202,7 @@ describe('asynchronous profile-state database snapshots', () => {
       db.exec('ROLLBACK')
     }
 
-    expect(readFileSync(targetPath)).toEqual(previous)
+    expect(readFileSync(targetPath).equals(previous)).toBe(true)
     expect(exportProfileStateJson(db)).toBe(originalJson)
     expectNoTemporaryFiles(directory)
   })

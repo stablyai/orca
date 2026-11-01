@@ -148,8 +148,7 @@ export function createTerminalEphemeralActions(
       recordTerminalInputActivity({
         paneKey,
         timestamp,
-        // Why: the first stamp for a pane must land synchronously; automation take-over
-        // detection subscribes and compares undefined→value across a launch.
+        // Publish first pane input synchronously so automation takeover observes undefined→timestamp across launch.
         forceWrite: get().lastTerminalInputAtByPaneKey[paneKey] === undefined,
         commit: {
           insert: (key, at) =>

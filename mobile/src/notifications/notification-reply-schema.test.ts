@@ -29,8 +29,7 @@ describe('notification replies tolerate the shapes their call sites guard', () =
     expect(reads(pushDeliveryTestResultSchema, { error: 'refused' })?.accepted).toBe(undefined)
   })
 
-  // The screen interprets this inside a `try` that prints the thrown message, so a refusal would
-  // replace main's "Could not send through Orca's push service" with the reader's own sentence.
+  // Schema refusal would replace the screen’s generic send-failure copy with a parser error.
   it('reads a non-object test-push result as absent, which takes the generic copy', () => {
     for (const value of ['garbage', 7, true, []]) {
       expect(refuses(pushDeliveryTestResultSchema, value)).toBe(false)
@@ -61,8 +60,6 @@ describe('closed enums degrade to the copy main showed', () => {
     expect(
       reads(pushDeliveryTestResultSchema, { accepted: false, reason: 'not_registered' })?.reason
     ).toBe('not_registered')
-    // An arm this build has never seen falls to the generic "could not send" copy, which is the
-    // arm main took for it too.
     expect(reads(pushDeliveryTestResultSchema, { accepted: false, reason: 'quota' })?.reason).toBe(
       undefined
     )
@@ -76,8 +73,7 @@ describe('closed enums degrade to the copy main showed', () => {
     ).toBe(undefined)
   })
 
-  // Both arm lists are pinned to the host's refusal unions in the schema module, where tsc looks;
-  // these loops prove every pinned arm survives the parse, not just the ones picked above.
+  // Host-pinned unions cover every arm; these loops prove each survives parsing.
   it('keeps every refusal reason the host declares for either route', () => {
     for (const reason of PUSH_TEST_REFUSAL_REASONS) {
       expect(reads(pushDeliveryTestResultSchema, { accepted: false, reason })?.reason).toBe(reason)
