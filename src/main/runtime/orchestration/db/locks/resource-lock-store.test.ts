@@ -147,6 +147,15 @@ describe('OrchestrationDb resource locks & collaboration board', () => {
       })
       expect(completed.status).toBe('completed')
 
+      expect(() =>
+        d.claimBoardEntry({
+          id: taskEntry.id,
+          assigneeHandle: 'term_agent_b',
+          status: 'claimed',
+          nowMs: 2_100
+        })
+      ).toThrow(/already claimed by term_agent_a/)
+
       const entries = d.listBoardEntries({ scopeKey: 'w0m', status: 'completed' })
       expect(entries).toHaveLength(1)
       expect(entries[0]?.id).toBe(taskEntry.id)
