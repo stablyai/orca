@@ -13,6 +13,7 @@ import {
 } from './session-scanner-cline-parser'
 import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from './session-scanner-devin-db'
+import { isDshSessionFilePath, resolveDshSessionsDir } from './session-scanner-dsh-paths'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from './session-scanner-muse-paths'
 import {
@@ -299,6 +300,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.jsonl'],
     // Exclude log, SQLite and materialized-projection sidecars.
     filePredicate: (filePath) => basename(filePath) === 'session.jsonl'
+  },
+  dsh: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(resolveDshSessionsDir(options.dshSessionsDir), wslHomeDirs, [
+        '.dsh',
+        'sessions'
+      ]),
+    // `session.v<N>.jsonl.zstd` by default, plain `.jsonl` with compression off.
+    extensions: ['.zstd', '.jsonl'],
+    filePredicate: isDshSessionFilePath,
+    // <root>/<encoded-cwd>/<session-id>/session.v<N>.jsonl[.zstd]; nothing nests deeper.
+    directoryPredicate: (_name, depth) => depth <= 1
   }
 }
 
