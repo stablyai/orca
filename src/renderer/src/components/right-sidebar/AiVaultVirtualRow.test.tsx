@@ -42,14 +42,30 @@ afterEach(() => {
   Reflect.deleteProperty(window, 'api')
 })
 
+type OpenPaneOptions = {
+  onJumpToOriginalPane?: (session: AiVaultSession) => void
+  onCloseOriginalPane?: (session: AiVaultSession) => void
+  structuredSessionOpen?: boolean
+}
+
+type LogDetails = { onOpenLog: (session: AiVaultSession) => Promise<void> }
+
+function isLogDetails(value: LogDetails | OpenPaneOptions): value is LogDetails {
+  return 'onOpenLog' in value
+}
+
 function renderSession(
   session: AiVaultSession,
   blocked = false,
   searchHit?: AiVaultSearchHit,
   searchHitHostLabels?: ReadonlyMap<string, string>,
-  logDetails?: { onOpenLog: (session: AiVaultSession) => Promise<void> },
+  detailsOrOpenPane?: LogDetails | OpenPaneOptions,
   liveState: AgentDotState | null = null
 ) {
+  const logDetails =
+    detailsOrOpenPane && isLogDetails(detailsOrOpenPane) ? detailsOrOpenPane : undefined
+  const openPane =
+    detailsOrOpenPane && !isLogDetails(detailsOrOpenPane) ? detailsOrOpenPane : undefined
   if (logDetails) {
     Object.defineProperty(window, 'api', { configurable: true, value: { aiVault: {} } })
   }
@@ -57,6 +73,8 @@ function renderSession(
   const onCopyResume = vi.fn()
   const onResume = vi.fn()
   const onResumeInNewCli = vi.fn()
+  const onJumpToOriginalPane = openPane?.onJumpToOriginalPane ?? vi.fn()
+  const onCloseOriginalPane = openPane?.onCloseOriginalPane
   render(
     <TooltipProvider>
       <AiVaultVirtualRow
@@ -71,8 +89,17 @@ function renderSession(
         searchHits={searchHit ? new Map([[session.id, searchHit]]) : undefined}
         searchHitHostLabels={searchHitHostLabels}
         buildResumeStartup={buildResumeStartup}
-        getOriginalPaneTarget={() => null}
-        isStructuredSessionOpen={() => false}
+        getOriginalPaneTarget={() =>
+          openPane && !openPane.structuredSessionOpen
+            ? {
+                paneKey: 'pane-1',
+                worktreeId: 'worktree-1',
+                tabId: 'tab-1',
+                leafId: 'leaf-1'
+              }
+            : null
+        }
+        isStructuredSessionOpen={() => openPane?.structuredSessionOpen ?? false}
         getSessionLiveState={() => liveState}
         getWorktreeInfo={() => null}
         getSessionResumeState={() => ({
@@ -87,7 +114,8 @@ function renderSession(
         getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
         onToggleGroup={vi.fn()}
         onToggleSessionDetails={vi.fn()}
-        onJumpToOriginalPane={vi.fn()}
+        onJumpToOriginalPane={onJumpToOriginalPane}
+        onCloseOriginalPane={onCloseOriginalPane}
         onJumpToWorktree={vi.fn()}
         onResume={onResume}
         onContinueInNewSession={vi.fn()}
@@ -103,7 +131,14 @@ function renderSession(
       />
     </TooltipProvider>
   )
-  return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
+  return {
+    buildResumeStartup,
+    onCopyResume,
+    onResume,
+    onResumeInNewCli,
+    onJumpToOriginalPane,
+    onCloseOriginalPane
+  }
 }
 
 describe('AiVaultVirtualRow conversation logs', () => {
@@ -278,6 +313,44 @@ describe('AiVaultVirtualRow resume command actions', () => {
     fireEvent.contextMenu(screen.getByText('Paired native chat'))
     await user.click(await screen.findByRole('menuitem', { name: 'Resume in New Tab' }))
     expect(onResume).toHaveBeenCalledExactlyOnceWith(session, 'worktree-1')
+  })
+})
+
+describe('AiVaultVirtualRow open session actions', () => {
+  it('hides Play and offers jump and close when the original pane is open', () => {
+    const onJumpToOriginalPane = vi.fn()
+    const onCloseOriginalPane = vi.fn()
+    renderSession(cliSession, false, undefined, undefined, {
+      onJumpToOriginalPane,
+      onCloseOriginalPane
+    })
+
+    expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
+    fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+    fireEvent.click(screen.getByTestId('ai-vault-session-close-original-pane'))
+    expect(onJumpToOriginalPane).toHaveBeenCalledExactlyOnceWith(cliSession)
+    expect(onCloseOriginalPane).toHaveBeenCalledExactlyOnceWith(cliSession)
+  })
+
+  it('hides Play and offers jump and close when the structured chat is open', () => {
+    const onJumpToOriginalPane = vi.fn()
+    const onCloseOriginalPane = vi.fn()
+    const session: AiVaultSession = {
+      ...cliSession,
+      title: 'Open structured chat',
+      structuredSession: { sessionId: 'session-1', workspaceId: 'worktree-1' }
+    }
+    renderSession(session, false, undefined, undefined, {
+      onJumpToOriginalPane,
+      onCloseOriginalPane,
+      structuredSessionOpen: true
+    })
+
+    expect(screen.queryByTestId('ai-vault-session-resume')).toBeNull()
+    fireEvent.click(screen.getByTestId('ai-vault-session-jump-original-pane'))
+    fireEvent.click(screen.getByTestId('ai-vault-session-close-original-pane'))
+    expect(onJumpToOriginalPane).toHaveBeenCalledExactlyOnceWith(session)
+    expect(onCloseOriginalPane).toHaveBeenCalledExactlyOnceWith(session)
   })
 })
 
