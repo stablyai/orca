@@ -55,7 +55,7 @@ describe('the shared catalog probe runner', () => {
     expect(stdout).toBe('models\nsettings\n')
     const pid = Number(readFileSync(file, 'utf8'))
     await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 5_000 })
-  }, 20_000)
+  })
 
   it('keeps required replies when the listing deadline lands inside the optional grace', async () => {
     const stdout = await runAgentModelCatalogListing(
@@ -70,7 +70,7 @@ describe('the shared catalog probe runner', () => {
       }
     )
     expect(stdout).toBe('models\nsettings\n')
-  }, 20_000)
+  })
 
   it('answers a listing’s stdout once it exits 0, with its request on stdin', async () => {
     const stdout = await runAgentModelCatalogListing(
