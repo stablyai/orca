@@ -58,6 +58,13 @@ export function useRemoteFileBrowserFilterKeyCommands({
   return useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       const modified = e.shiftKey || e.metaKey || e.ctrlKey || e.altKey
+      // Why: until the debounce resolves typed path input, the rows on screen belong to another directory.
+      const rowsStale =
+        Boolean(preview?.error || preview?.loading) ||
+        (parsePathInput(filter, pathFlavor).mode === 'path' &&
+          (!preview || !previewMatchesInput(filter)))
+      const canNavigateUp = filter === '' && !preview && resolvedPath !== '/'
+      const highlighted = displayEntries[activeIndex]
       if (
         (e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
         !modified &&
@@ -70,16 +77,29 @@ export function useRemoteFileBrowserFilterKeyCommands({
         }
         return
       }
+      if (
+        (e.key === 'ArrowRight' || e.key === 'ArrowLeft') &&
+        !modified &&
+        !isImeOwnedKeyboardEvent(e)
+      ) {
+        const { selectionStart, selectionEnd } = e.currentTarget
+        // Right only opens a folder once the caret has nowhere left to move.
+        const caretAtEnd = selectionStart === filter.length && selectionEnd === filter.length
+        // Left waits for the listing: held key repeat would re-request the same parent.
+        if (e.key === 'ArrowRight' && caretAtEnd && highlighted?.isDirectory && !rowsStale) {
+          e.preventDefault()
+          navigate(joinPath(listParentPath, highlighted.name, pathFlavor))
+        } else if (e.key === 'ArrowLeft' && canNavigateUp && !loading) {
+          e.preventDefault()
+          navigateUp()
+        }
+        return
+      }
       if (e.key === 'Enter') {
-        // Why: until the debounce resolves typed path input, the rows on screen belong to another directory.
-        const pathPending =
-          parsePathInput(filter, pathFlavor).mode === 'path' &&
-          (!preview || !previewMatchesInput(filter))
-        if (preview?.error || preview?.loading || pathPending) {
+        if (rowsStale) {
           e.preventDefault()
           return
         }
-        const highlighted = displayEntries[activeIndex]
         if (highlighted) {
           e.preventDefault()
           if (highlighted.isDirectory) {
@@ -138,11 +158,9 @@ export function useRemoteFileBrowserFilterKeyCommands({
           onCancel()
         }
       }
-      if (e.key === 'Backspace' && filter === '' && !preview) {
-        if (resolvedPath !== '/') {
-          e.preventDefault()
-          navigateUp()
-        }
+      if (e.key === 'Backspace' && canNavigateUp) {
+        e.preventDefault()
+        navigateUp()
       }
     },
     [
