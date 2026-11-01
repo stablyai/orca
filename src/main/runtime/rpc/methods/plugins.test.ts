@@ -133,7 +133,12 @@ describe('plugin system switch over RPC', () => {
     const switchMethod = method('plugins.setSystemEnabled')
 
     expect(switchMethod.permission).toBe('host-admin')
-    await expect(switchMethod.handler({ enabled: true }, context())).resolves.toEqual({
+    const context: RpcContext = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+      runtime: {} as RpcContext['runtime'],
+      caller: { kind: 'local-cli' }
+    }
+    await expect(switchMethod.handler({ enabled: true }, context)).resolves.toEqual({
       enabled: true,
       plugins: []
     })
