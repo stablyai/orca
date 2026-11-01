@@ -144,11 +144,7 @@ it('creates from the host hook path when Claude filename differs, then checks ac
           paneKey: 'tab:leaf',
           worktreeId: 'folder',
           agentType: 'claude',
-          state: 'waiting',
-          prompt: '',
           connectionId: null,
-          receivedAt: 1,
-          stateStartedAt: 1,
           providerSession: { key: 'session_id', id, transcriptPath }
         }
       ]
@@ -632,11 +628,7 @@ it.each([
           paneKey: 'tab:leaf',
           worktreeId: 'folder',
           agentType: 'opencode',
-          state: 'waiting',
-          prompt: '',
           connectionId: null,
-          receivedAt: 1,
-          stateStartedAt: 1,
           providerSession: { key: 'session_id', id: 'ses_1', transcriptPath: '/data/opencode.db' }
         }
       ]

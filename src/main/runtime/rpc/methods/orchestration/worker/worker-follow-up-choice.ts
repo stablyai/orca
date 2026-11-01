@@ -22,6 +22,7 @@ import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {
   reopenWorkerChat,
   reopenWorkerTerminal,
+  revealChatInBackground,
   type WorkerFollowUp
 } from './worker-follow-up-placement'
 import { inspectWorkerTerminal } from './worker-observation'
@@ -97,7 +98,18 @@ export async function chooseWorkerFollowUpPlacement(
   if (session && isResumableTuiAgent(session.agent)) {
     const chat = chatHoldingSession(session)
     if (chat) {
-      return { delivery: 'follow_up', worktreeId: chat.workspaceId, terminal: chat.address }
+      const host = getStructuredAgentSessionHost()
+      // A closed chat takes no mail; bring the same chat back rather than resuming a terminal on its conversation.
+      const closed = !!host && !host.isSessionTabVisible(chat.sessionId)
+      if (host && closed) {
+        release.admit()
+        await revealChatInBackground(runtime, host, chat.sessionId)
+      }
+      return {
+        delivery: closed ? 'reopened' : 'follow_up',
+        worktreeId: chat.workspaceId,
+        terminal: chat.address
+      }
     }
     const userTab = await userTabHoldingSession(runtime, session)
     return userTab
@@ -200,13 +212,14 @@ function chatTabOpen(db: OrchestrationDb, resource: WorkerTerminalResourceRow): 
 /** A chat took the conversation over, as opening the closed worker does: the follow-up goes there, never to a second terminal on it. */
 function chatHoldingSession(
   session: WorkerResumeSession
-): { address: string; workspaceId: string } | null {
+): { sessionId: string; address: string; workspaceId: string } | null {
   const held = chatHoldingWorkerConversation(session)
   if (!held || !isOrcaSessionId(held.sessionId)) {
     return null
   }
   try {
     return {
+      sessionId: held.sessionId,
       address: formatOrcaSessionAddress(canonicalOrcaSessionId(held.sessionId)),
       workspaceId: held.workspaceId
     }

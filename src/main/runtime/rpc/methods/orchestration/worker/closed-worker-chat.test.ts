@@ -8,6 +8,19 @@ import type * as HistoryAdoption from '../../../../../native-chat/structured-age
 import type * as SessionRegistry from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type * as SessionGate from '../../structured-agent-session-gate'
 
+const chatHost = vi.hoisted(() => {
+  const host = {
+    tabShown: true,
+    deps: { store: { listConversations: () => [] } },
+    isSessionTabVisible: () => host.tabShown,
+    revealSession: async (sessionId: string) => {
+      host.tabShown = true
+      return { sessionId, workspaceId: 'wt-chat', agent: 'claude' }
+    }
+  }
+  return host
+})
+
 vi.mock('../../structured-agent-session-create', async (importOriginal) => ({
   ...(await importOriginal<typeof SessionCreate>()),
   createStructuredAgentSessionForWorktree: vi.fn()
@@ -23,7 +36,7 @@ vi.mock(
   '../../../../../native-chat/agent-session-wire/structured-agent-session-registry',
   async (importOriginal) => ({
     ...(await importOriginal<typeof SessionRegistry>()),
-    getStructuredAgentSessionHost: () => ({ deps: { store: { listConversations: () => [] } } })
+    getStructuredAgentSessionHost: () => chatHost
   })
 )
 
@@ -39,6 +52,7 @@ describe('a terminal worker Orca closed', () => {
   const f = useHelperFollowUpCli()
   const { h, panes, pair, success } = f
   beforeEach(() => {
+    chatHost.tabShown = true
     vi.mocked(createStructuredAgentSessionForWorktree).mockReset()
     vi.mocked(findConflictingStructuredAdoption).mockReturnValue(null)
   })
@@ -151,5 +165,37 @@ describe('a terminal worker Orca closed', () => {
       worktreeId: 'wt-chat',
       terminal: `orca_session_id:${HELD_CHAT}`
     })
+  })
+
+  it('brings back a chat the user closed and sends the follow-up there, not to a new terminal', async () => {
+    const { helper, resource } = await closedHelper()
+    // SAFETY: only the holding chat's ids are read.
+    vi.mocked(findConflictingStructuredAdoption).mockReturnValue({
+      sessionId: HELD_CHAT,
+      workspaceId: 'wt-chat'
+    } as never)
+    chatHost.tabShown = false
+    const publish = vi
+      .spyOn(h.runtime, 'publishStructuredAgentSessionTab')
+      .mockResolvedValue(undefined)
+    const resume = vi.spyOn(h.runtime, 'resumeAgentSessionInWorkspace')
+
+    const placement = await chooseWorkerFollowUpPlacement(
+      h.runtime,
+      h.db,
+      h.db.getDispatchContextById(helper.dispatchId)!,
+      resource,
+      { admit: () => {}, requested: () => {} }
+    )
+    expect(placement).toEqual({
+      delivery: 'reopened',
+      worktreeId: 'wt-chat',
+      terminal: `orca_session_id:${HELD_CHAT}`
+    })
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: HELD_CHAT, workspaceId: 'wt-chat', activate: false })
+    )
+    expect(chatHost.tabShown).toBe(true)
+    expect(resume).not.toHaveBeenCalled()
   })
 })

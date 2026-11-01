@@ -5,6 +5,7 @@ import type { OrchestrationParty } from '../../../../orchestration/orchestration
 import { CHAT_WORKER_AUTHORITY } from '../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-host'
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
@@ -128,13 +129,7 @@ export async function reopenWorkerChat(
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
   const userOpened = host.isSessionTabVisible(sessionId)
-  const revealed = await host.revealSession(sessionId)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: revealed.workspaceId,
-    sessionId: revealed.sessionId,
-    agent: revealed.agent,
-    activate: false
-  })
+  await revealChatInBackground(runtime, host, sessionId)
   return {
     handle,
     chat: true,
@@ -145,4 +140,19 @@ export async function reopenWorkerChat(
       hostScope: JSON.stringify(identity.hostScope)
     }
   }
+}
+
+/** Show a chat's tab again without taking focus, so mail reaches it as a live chat. */
+export async function revealChatInBackground(
+  runtime: Pick<OrcaRuntimeService, 'publishStructuredAgentSessionTab'>,
+  host: Pick<StructuredAgentSessionHost, 'revealSession'>,
+  sessionId: string
+): Promise<void> {
+  const revealed = await host.revealSession(sessionId)
+  await runtime.publishStructuredAgentSessionTab({
+    workspaceId: revealed.workspaceId,
+    sessionId: revealed.sessionId,
+    agent: revealed.agent,
+    activate: false
+  })
 }

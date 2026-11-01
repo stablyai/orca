@@ -126,14 +126,10 @@ export function openClosedWorkerChat(
       structuredAgentCliSourceEvidence: {
         rows: [
           {
-            state: 'done',
-            prompt: '',
             agentType: session.agent,
             paneKey,
             worktreeId,
             connectionId: null,
-            receivedAt: 0,
-            stateStartedAt: 0,
             providerSession: session.providerSession
           }
         ]
