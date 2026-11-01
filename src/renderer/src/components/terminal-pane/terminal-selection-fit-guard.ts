@@ -1,9 +1,12 @@
 import type { IDisposable } from '@xterm/xterm'
 
 const PRIMARY_BUTTON = 0
+const PRIMARY_BUTTONS_MASK = 1
 
 export type TerminalSelectionFitGuard = IDisposable & {
   isActive: () => boolean
+  /** Resolves once the current drag ends (mouseup, blur, or dispose); immediately when idle. */
+  whenInactive: () => Promise<void>
 }
 
 type SelectionElement = EventTarget & {
@@ -22,19 +25,38 @@ export function installTerminalSelectionFitGuard(
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
   let active = false
+  let inactiveWaiters: (() => void)[] = []
+  const resolveInactiveWaiters = (): void => {
+    const waiters = inactiveWaiters
+    inactiveWaiters = []
+    for (const resolve of waiters) {
+      resolve()
+    }
+  }
+
+  // Why `buttons`: `button` names only the button that fired, so a secondary press or release during a primary drag would otherwise end the guard early.
+  const isPrimaryHeld = (event: Event, fallback: boolean): boolean =>
+    'buttons' in event && typeof event.buttons === 'number'
+      ? (event.buttons & PRIMARY_BUTTONS_MASK) !== 0
+      : fallback
 
   const handleMouseDown = (event: Event): void => {
-    active = 'button' in event && event.button === PRIMARY_BUTTON
-  }
-  const handleMouseUp = (): void => {
+    active = isPrimaryHeld(event, 'button' in event && event.button === PRIMARY_BUTTON)
     if (!active) {
+      resolveInactiveWaiters()
+    }
+  }
+  const handleMouseUp = (event: Event): void => {
+    if (!active || isPrimaryHeld(event, false)) {
       return
     }
     active = false
     onSelectionEnd()
+    resolveInactiveWaiters()
   }
   const clear = (): void => {
     active = false
+    resolveInactiveWaiters()
   }
 
   if (terminalElement && typeof terminalElement.addEventListener === 'function') {
@@ -49,6 +71,8 @@ export function installTerminalSelectionFitGuard(
 
   return {
     isActive: () => active,
+    whenInactive: () =>
+      active ? new Promise<void>((resolve) => inactiveWaiters.push(resolve)) : Promise.resolve(),
     dispose: () => {
       clear()
       terminalElement?.removeEventListener?.('mousedown', handleMouseDown, true)

@@ -130,6 +130,11 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
+      if (session.terminalSelectionFitGuard?.isActive()) {
+        // Why: a held drag intentionally parks the replay; abandoning it now would print a restore-gap warning mid-selection.
+        session.armHiddenOutputRestoreForegroundDeadline()
+        return
+      }
       // A painted snapshot awaiting fit proves recovery answered, regardless of live queue size.
       const replayed = session.hiddenOutputRestoreReplayingSnapshot
       let preserveReplayState = false
