@@ -180,6 +180,14 @@ describe('useMobilePanZoom dismiss', () => {
     })
     expect(dismiss.onBack).not.toHaveBeenCalled()
     expect(latest?.scale).toBe(fitted)
+
+    dismiss.onMove.mockClear()
+    dismiss.onRelease.mockClear()
+    pointer('down', 1, 100, 200, 200)
+    pointer('move', 1, 108, 260, 230)
+    pointer('up', 1, 108, 260, 240)
+    expect(dismiss.onMove).toHaveBeenCalledWith(8, 60)
+    expect(dismiss.onRelease).toHaveBeenCalledWith(8, 60, 800 / 3, 2000)
   })
 
   it('cancels a dismiss when a second finger pinches, and pans once zoomed', async () => {
