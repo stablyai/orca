@@ -4,8 +4,8 @@
  * user-gesture methods are offered); on, a guest that cannot be set up fails closed.
  */
 
-/** Off until the flip PR: flipping (or rolling back) the feature is this one line. */
-export const PLUGIN_ISOLATED_FRAMES_DEFAULT = false
+/** Rolling the feature back is this one line. */
+export const PLUGIN_ISOLATED_FRAMES_DEFAULT = true
 
 export const PLUGIN_ISOLATED_FRAMES_ENV = 'ORCA_PLUGIN_ISOLATED_FRAMES'
 

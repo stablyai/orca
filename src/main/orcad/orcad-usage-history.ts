@@ -2,7 +2,7 @@ import { ClaudeUsageStore, initClaudeUsagePath } from '../claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from '../codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from '../opencode-usage/store'
 import { MuseUsageStore, initMuseUsagePath } from '../muse-usage/store'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { UsageProviderFacade } from '../usage/usage-provider-facade'
 import type { OrcadRuntimeCleanup } from './orcad-runtime-lifetime'
 

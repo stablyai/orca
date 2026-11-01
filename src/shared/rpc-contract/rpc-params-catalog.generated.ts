@@ -498,14 +498,20 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginDevEmitParams,
+  PluginDevInspectParams,
   PluginDevLoadParams,
+  PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
   PluginInvokeCommandParams,
+  PluginOpenParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
   PluginSetSystemEnabledParams,
+  PluginShotParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -1314,16 +1320,22 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
   'plugins.consent': PluginRpcConsentParams,
+  'plugins.devEmit': PluginDevEmitParams,
+  'plugins.devInspect': PluginDevInspectParams,
   'plugins.devLoad': PluginDevLoadParams,
+  'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
+  'plugins.open': PluginOpenParams,
   'plugins.panelAction': PluginsPanelActionParams,
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.refresh': null,
+  'plugins.restart': PluginRestartParams,
   'plugins.setEnabled': PluginSetEnabledParams,
   'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
+  'plugins.shot': PluginShotParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

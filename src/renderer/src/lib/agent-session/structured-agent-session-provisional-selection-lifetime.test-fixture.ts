@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type * as launchModule from '../structured-agent-session-launch-create-call'
+import type * as launchModule from './launch/structured-agent-session-launch-create-call'
 import type { StructuredAgentLaunchHandle } from '../structured-agent-launch-settlement'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
@@ -14,14 +14,14 @@ import { promptTextContent } from '@/components/native-chat/native-chat-prompt-d
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
-} from '../structured-agent-session-launch'
+} from './launch/structured-agent-session-launch'
 import { trackStructuredLaunchConfirmationDeadline } from './launch/structured-agent-session-launch-prompt-outcome'
-import { holdStructuredAgentSessionLaunchOption } from '../structured-agent-session-launch-options'
+import { holdStructuredAgentSessionLaunchOption } from './launch/structured-agent-session-launch-options'
 import * as sessionClient from '@/runtime/structured-agent-session-client'
 import * as runtimeRpc from '@/runtime/runtime-rpc-client'
 import { structuredSessionSelectionController } from '../structured-agent-session-selection-controller'
 import type { SelectionOperation } from '../../../../shared/structured-agent-session-selection-operations'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 
 export async function assertProvisionalSelectionLifetime({
   launch,

@@ -1,55 +1,39 @@
 import { z } from 'zod'
 import { PLUGIN_PANEL_ICONS } from '../contributions/plugin-panel-contribution'
 import { PLUGIN_DECLARATIVE_LIMITS as LIMITS } from './plugin-declarative-limits'
-import { PLUGIN_DECLARATIVE_EDIT_PROP } from './plugin-declarative-message-names'
+import {
+  align,
+  callback,
+  component,
+  editAck,
+  flag,
+  gap,
+  icon,
+  label,
+  requiredLabel,
+  size,
+  text,
+  tone,
+  variant
+} from './plugin-declarative-prop-schemas'
+import type { PLUGIN_DECLARATIVE_TONES } from './plugin-declarative-prop-schemas'
+import { PLUGIN_DECLARATIVE_FORM_CATALOG } from './plugin-declarative-form-props'
+import { PLUGIN_DECLARATIVE_LAYOUT_CATALOG } from './plugin-declarative-layout-props'
+import { PLUGIN_DECLARATIVE_DATA_CATALOG } from './plugin-declarative-data-props'
+import { PLUGIN_DECLARATIVE_CONTENT_CATALOG } from './plugin-declarative-content-props'
+
+export {
+  PLUGIN_DECLARATIVE_CALLBACK_ID,
+  PLUGIN_DECLARATIVE_TONES,
+  pluginDeclarativeCallbackSchema,
+  type PluginDeclarativeCallback,
+  type PluginDeclarativeChildPolicy
+} from './plugin-declarative-prop-schemas'
 
 /** One icon vocabulary with the manifest's panel icons; unknown names draw a fallback glyph. */
 export const PLUGIN_DECLARATIVE_ICONS = PLUGIN_PANEL_ICONS
 export type PluginDeclarativeIconName = (typeof PLUGIN_DECLARATIVE_ICONS)[number]
 export const PLUGIN_DECLARATIVE_ICON_SET: ReadonlySet<string> = new Set(PLUGIN_DECLARATIVE_ICONS)
-
-export const PLUGIN_DECLARATIVE_CALLBACK_ID = /^[A-Za-z0-9_.:-]+$/
-export const pluginDeclarativeCallbackSchema = z
-  .object({
-    $callback: z
-      .string()
-      .min(1)
-      .max(LIMITS.maxCallbackIdLength)
-      .regex(PLUGIN_DECLARATIVE_CALLBACK_ID)
-  })
-  .strict()
-export type PluginDeclarativeCallback = z.infer<typeof pluginDeclarativeCallbackSchema>
-
-/** The one colour vocabulary every component shares. */
-export const PLUGIN_DECLARATIVE_TONES = [
-  'neutral',
-  'accent',
-  'success',
-  'warning',
-  'danger'
-] as const
-
-const label = z.string().max(LIMITS.maxLabelLength)
-const requiredLabel = label.min(1)
-const callback = pluginDeclarativeCallbackSchema.optional()
-// Why any short name: an unknown icon falls back to a glyph instead of rejecting the render.
-const icon = z.string().regex(/^[a-z0-9-]{1,64}$/)
-const gap = z.enum(['none', 'xs', 'sm', 'md', 'lg']).optional()
-const align = z.enum(['start', 'center', 'end', 'stretch']).optional()
-const tone = z.enum(PLUGIN_DECLARATIVE_TONES).optional()
-const size = z.enum(['xs', 'sm', 'md']).optional()
-const variant = z.enum(['solid', 'outline', 'ghost']).optional()
-const flag = z.boolean().optional()
-const text = z.string().max(LIMITS.maxTextLength)
-/** Wire-only on value controls (see PLUGIN_DECLARATIVE_EDIT_PROP); authors never set it. */
-const editAck = {
-  [PLUGIN_DECLARATIVE_EDIT_PROP]: z
-    .number()
-    .int()
-    .nonnegative()
-    .max(Number.MAX_SAFE_INTEGER)
-    .optional()
-}
 
 const stackProps = z.object({ gap, align }).strict()
 const rowProps = z
@@ -73,10 +57,27 @@ const headingProps = z
   .object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() })
   .strict()
 const buttonProps = z
-  .object({ variant, tone, size, icon: icon.optional(), disabled: flag, onPress: callback })
+  .object({
+    variant,
+    tone,
+    size,
+    icon: icon.optional(),
+    tooltip: label.optional(),
+    disabled: flag,
+    onPress: callback
+  })
   .strict()
 const iconButtonProps = z
-  .object({ icon, label: requiredLabel, variant, tone, size, disabled: flag, onPress: callback })
+  .object({
+    icon,
+    label: requiredLabel,
+    tooltip: label.optional(),
+    variant,
+    tone,
+    size,
+    disabled: flag,
+    onPress: callback
+  })
   .strict()
 const badgeProps = z.object({ tone }).strict()
 const cardProps = z.object({ title: label.optional(), description: label.optional() }).strict()
@@ -155,13 +156,6 @@ const linkProps = z
   .strict()
 const codeProps = z.object({ block: flag }).strict()
 
-/** What a component accepts as children: `inline` is text plus Text/Link/Code/Badge. */
-export type PluginDeclarativeChildPolicy = 'none' | 'text' | 'inline' | 'items' | 'any'
-
-function component<P extends z.ZodObject>(props: P, children: PluginDeclarativeChildPolicy) {
-  return { props, children }
-}
-
 export const PLUGIN_DECLARATIVE_CATALOG = {
   Stack: component(stackProps, 'any'),
   Row: component(rowProps, 'any'),
@@ -181,7 +175,11 @@ export const PLUGIN_DECLARATIVE_CATALOG = {
   Spinner: component(spinnerProps, 'none'),
   EmptyState: component(emptyStateProps, 'any'),
   Link: component(linkProps, 'text'),
-  Code: component(codeProps, 'text')
+  Code: component(codeProps, 'text'),
+  ...PLUGIN_DECLARATIVE_FORM_CATALOG,
+  ...PLUGIN_DECLARATIVE_LAYOUT_CATALOG,
+  ...PLUGIN_DECLARATIVE_DATA_CATALOG,
+  ...PLUGIN_DECLARATIVE_CONTENT_CATALOG
 } as const
 
 export type PluginDeclarativeComponentName = keyof typeof PLUGIN_DECLARATIVE_CATALOG
@@ -195,7 +193,7 @@ export function isPluginDeclarativeComponentName(
 export const PLUGIN_DECLARATIVE_COMPONENT_NAMES: readonly PluginDeclarativeComponentName[] =
   Object.keys(PLUGIN_DECLARATIVE_CATALOG).filter(isPluginDeclarativeComponentName)
 export const PLUGIN_DECLARATIVE_INLINE_COMPONENTS: ReadonlySet<string> =
-  new Set<PluginDeclarativeComponentName>(['Text', 'Link', 'Code', 'Badge'])
+  new Set<PluginDeclarativeComponentName>(['Text', 'Link', 'Code', 'Badge', 'RelativeTime'])
 /** Controls a pressable ListItem may not contain: one row, one press target. */
 export const PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS: ReadonlySet<string> =
   new Set<PluginDeclarativeComponentName>([
@@ -205,8 +203,19 @@ export const PLUGIN_DECLARATIVE_INTERACTIVE_COMPONENTS: ReadonlySet<string> =
     'Switch',
     'Select',
     'Link',
-    'ListItem'
+    'ListItem',
+    'Textarea',
+    'Checkbox',
+    'RadioGroup',
+    'Slider',
+    'Tabs',
+    'Collapsible',
+    'Table',
+    'Tree',
+    'Markdown'
   ])
+/** Components that hold only one child type, and that child's only parent. */
+export const PLUGIN_DECLARATIVE_SLOT_CHILDREN = { items: 'ListItem', tabs: 'Tab' } as const
 
 export type PluginDeclarativeProps<T extends PluginDeclarativeComponentName> = z.infer<
   (typeof PLUGIN_DECLARATIVE_CATALOG)[T]['props']

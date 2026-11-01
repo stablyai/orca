@@ -15,7 +15,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journ
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
@@ -35,7 +35,7 @@ import * as publication from '../../src/main/runtime/session-tabs/structured-ses
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from '../../src/main/runtime/agent-session-record-store-test-harness'
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'

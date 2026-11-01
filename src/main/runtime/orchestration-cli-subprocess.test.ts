@@ -9,7 +9,7 @@ import { Store } from '../persistence/loading-store/store'
 import { createSqliteTestStore, closeTestStores } from '../persistence/persistence-test-harness'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceReferenceUrl } from '../../shared/workspace-reference-identity'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { isOrchestrationRetryRequestId } from '../../shared/orchestration-retry-request-id'
@@ -33,7 +33,7 @@ import {
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
 
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')

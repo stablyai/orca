@@ -6,8 +6,8 @@ import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acqui
 import {
   agentSessionAccountHome,
   type LegacyAgentSessionAccountHome
-} from '../../../shared/agent-session-account-home'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import {
   ClaudeProfileRouter,
@@ -15,7 +15,7 @@ import {
 } from '../../claude-accounts/claude-profile-router'
 import type { ClaudeProfileSetupReport } from '../../claude-accounts/claude-profile-setup'
 import { prepareClaudeReceivingAccount } from '../../claude/claude-receiving-account'
-import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
 import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
 import { createReceivingAccountFixture } from './structured-agent-session-receiving-account.test-support'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'

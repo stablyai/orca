@@ -14,7 +14,7 @@ import {
 } from './codex-structured-session-adapter-fixture'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { prepareCodexThreadForVisuals } from './codex-structured-visuals'
 
 import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'

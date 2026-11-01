@@ -5,7 +5,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
 } from './journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../agent-session-turn-record'
+import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
 
 export function isStructuredAgentSessionCommandEntry(
   body: AgentJournalItemBody | null | undefined

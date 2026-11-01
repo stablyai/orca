@@ -118,7 +118,8 @@ describe('declarative runtime', () => {
         payload: {
           document: runtime.document,
           revision: 0,
-          message: expect.stringContaining('duplicate key "x"')
+          message: expect.stringContaining('duplicate key "x"'),
+          stack: expect.any(String)
         }
       }
     ])
@@ -282,7 +283,12 @@ describe('declarative runtime', () => {
     drain()
     expect(posted.at(-1)).toEqual({
       event: 'ui.error',
-      payload: { document: runtime.document, revision: 1, message: 'boom' }
+      payload: {
+        document: runtime.document,
+        revision: 1,
+        message: 'boom',
+        stack: expect.stringContaining('declarative-renderer.test.ts')
+      }
     })
     expect(event(1, id)).toBe(true)
     await Promise.resolve()
@@ -329,6 +335,8 @@ describe('declarative runtime', () => {
       'ui.ack',
       'ui.event',
       'ui.hydrate',
+      'ui.restore',
+      'ui.snapshot',
       'ui.visibility'
     ])
     runtime.dispose()

@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type SyntheticEvent } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -19,12 +19,42 @@ export function TabHoverCard({
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLElement>(null)
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
+  const canOpen = (): boolean => {
+    const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
+    return interactive || !!(label && label.scrollWidth > label.clientWidth)
+  }
+
+  useEffect(() => {
+    if (!open || interactive) {
+      return
+    }
+    const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
+    if (!label) {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      if (label.scrollWidth <= label.clientWidth) {
+        setOpen(false)
+      }
+    })
+    observer.observe(label)
+    return () => observer.disconnect()
+  }, [open, interactive, title])
+
   return (
-    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
+    <Tooltip
+      open={open}
+      onOpenChange={(nextOpen) => setOpen(nextOpen && canOpen())}
+      disableHoverableContent={!interactive}
+    >
       <TooltipTrigger
+        ref={(node) => {
+          triggerRef.current = node
+        }}
         asChild
         onFocus={(event) => {
           // Nested controls own their focus hints.
@@ -60,7 +90,7 @@ export function TabHoverCard({
             className="flex items-center gap-2 text-muted-foreground"
             data-tab-hover-card-program
           >
-            <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden>
+            <span className="flex h-4 min-w-4 shrink-0 items-center justify-center" aria-hidden>
               {icon}
             </span>
             <span className="min-w-0 break-all">{programName}</span>

@@ -6,8 +6,8 @@ import { getDefaultPersistedState } from '../../shared/constants'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../shared/agent-session-record-stored-form'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../daemon/history-paths'
@@ -16,8 +16,8 @@ import { getOrcaProfileStateDatabaseFile } from '../orca-profiles/profile-storag
 import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
 import Database from '../sqlite/sync-database'
-import { loadAgentSessionStoreRows } from '../runtime/agent-session-record-rows'
-import { getAgentSessionConversation } from '../runtime/agent-session-store-state'
+import { loadAgentSessionStoreRows } from '../runtime/agent-session/records/agent-session-record-rows'
+import { getAgentSessionConversation } from '../runtime/agent-session/records/agent-session-store-state'
 import { hashWorktreeId } from '../terminal-history-id'
 import type * as Journal from './wsl-drive-unc-conversion-journal'
 import {

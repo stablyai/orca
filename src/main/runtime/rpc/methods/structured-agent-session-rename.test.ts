@@ -2,11 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 import * as naming from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { countRecordQueries, countStoreWork } from '../../agent-session-scale.test-fixture'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-abandon'
 import {
@@ -21,7 +21,7 @@ import {
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 import {
   call,
   clearStructuredHostStub,

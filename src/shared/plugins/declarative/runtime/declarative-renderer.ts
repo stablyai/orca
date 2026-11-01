@@ -1,12 +1,6 @@
+import { describePluginErrorForLog } from './declarative-error-location'
 import { PLUGIN_DECLARATIVE_MESSAGES } from '../plugin-declarative-message-names'
-import {
-  hostAtom,
-  read,
-  subscribeAtom,
-  trackAtomReads,
-  watchPersistedAtoms,
-  type OrcaAtom
-} from './declarative-atoms'
+import { hostAtom, read, subscribeAtom, trackAtomReads, type OrcaAtom } from './declarative-atoms'
 import type { OrcaComponent } from './declarative-elements'
 import type {
   OrcaDeclarativeRuntime,
@@ -15,9 +9,20 @@ import type {
   OrcaTheme
 } from './declarative-runtime-types'
 import { evaluateOrcaTree, type OrcaCallback } from './declarative-evaluate'
-import { createPersistQueue } from './declarative-persist-queue'
+import { createMemoryRetention } from './declarative-memory-retention'
+import { actSnapshotSubscriptions } from './declarative-act-snapshot'
+import {
+  defaultSchedule,
+  errorMessage,
+  HYDRATION_TIMEOUT_MS,
+  isCallable,
+  MAX_RETAINED_RENDERS,
+  MIN_RENDER_INTERVAL_MS,
+  newDocumentId
+} from './declarative-renderer-support'
 import { readHostMessage } from './declarative-host-messages'
 import { createPanelContext } from './declarative-panel-context'
+import { createDeclarativePersistence } from './declarative-storage-sync'
 
 export type { OrcaWireNode } from './declarative-evaluate'
 export type {
@@ -31,33 +36,6 @@ export type {
   OrcaTheme
 } from './declarative-runtime-types'
 
-// Why: an update loop must not flood the host; ~one render per display frame is plenty.
-const MIN_RENDER_INTERVAL_MS = 16
-// Renders the host has not acknowledged yet whose callbacks stay resolvable.
-const MAX_RETAINED_RENDERS = 32
-// Why a ceiling: an older host never answers `ui.ready`, and the panel must still appear.
-const HYDRATION_TIMEOUT_MS = 3000
-
-function errorMessage(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).slice(0, 4096)
-}
-
-function defaultSchedule(flush: () => void, delayMs: number): void {
-  if (delayMs > 0) {
-    setTimeout(flush, delayMs)
-  } else {
-    queueMicrotask(flush)
-  }
-}
-
-function newDocumentId(now: number): string {
-  return `${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-}
-
-function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
-  return typeof value === 'function'
-}
-
 export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaDeclarativeRuntime {
   const { post } = options
   const bridge = options.bridge ?? null
@@ -65,7 +43,10 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   const now = options.now ?? (() => Date.now())
   const document = newDocumentId(now())
   const theme = hostAtom<OrcaTheme>({ colorScheme: options.colorScheme ?? 'dark' })
-  const panel = createPanelContext()
+  const retention = createMemoryRetention((entries) =>
+    post(PLUGIN_DECLARATIVE_MESSAGES.retain, { document, entries })
+  )
+  const panel = createPanelContext(retention.start)
   const { context } = panel
   let component: OrcaComponent | null = null
   let revision = 0
@@ -106,7 +87,15 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
   }
 
   function report(error: unknown): void {
-    post(PLUGIN_DECLARATIVE_MESSAGES.error, { document, revision, message: errorMessage(error) })
+    // Main routes guest console errors to `orca plugin logs`; this text is located like the banner.
+    console.error(describePluginErrorForLog(error))
+    const stack = error instanceof Error && error.stack ? error.stack.slice(0, 8192) : undefined
+    post(PLUGIN_DECLARATIVE_MESSAGES.error, {
+      document,
+      revision,
+      message: errorMessage(error),
+      ...(stack ? { stack } : {})
+    })
   }
 
   function retain(at: number, callbacks: Map<string, OrcaCallback>): void {
@@ -198,12 +187,12 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     }
   }
 
-  const persistQueue = createPersistQueue({
+  const persistence = createDeclarativePersistence({
+    bridge,
     report,
     post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document, entries })
   })
-  const flushPersist = persistQueue.flush
-  watchPersistedAtoms(persistQueue.add)
+  const flushPersist = persistence.flush
 
   const bridgeSubscriptions: OrcaDisposable[] = bridge?.on
     ? [
@@ -211,6 +200,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.hydrate, panel.hydrate),
         bridge.on(PLUGIN_DECLARATIVE_MESSAGES.visibility, panel.setVisibility),
+        ...actSnapshotSubscriptions(bridge.on.bind(bridge), document),
         bridge.on('theme', (payload) => {
           const { colorScheme } = readHostMessage(payload)
           if (
@@ -225,7 +215,9 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
 
   if (options.awaitHydration) {
     post(PLUGIN_DECLARATIVE_MESSAGES.ready, { document })
-    setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS)
+    const fallback = setTimeout(panel.markHydrated, HYDRATION_TIMEOUT_MS)
+    // Why cleared: a pending timer would keep a test process (Node) alive for seconds.
+    void panel.hydrated.then(() => clearTimeout(fallback))
   } else {
     panel.markHydrated()
   }
@@ -241,6 +233,7 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     document,
     async boot(module) {
       await panel.hydrated
+      await persistence.loaded()
       if (isCallable(module.setup)) {
         const cleanup = module.setup(context)
         setupCleanup = isCallable(cleanup) ? () => void cleanup() : null
@@ -280,12 +273,15 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
     dispatchEvent,
     acknowledge,
     hydrate: panel.hydrate,
+    rerender: () => render(),
     flush() {
       if (scheduled) {
         render()
       }
       flushPersist()
+      retention.flush()
     },
+    report,
     themeAtom: theme.atom,
     bridge,
     dispose() {
@@ -293,11 +289,12 @@ export function createOrcaDeclarativeRuntime(options: OrcaRuntimeOptions): OrcaD
         return
       }
       flushPersist()
+      retention.stop()
       disposed = true
       component = null
       scheduled = false
       unsubscribeAll()
-      watchPersistedAtoms(null)
+      persistence.dispose()
       for (const subscription of [...bridgeSubscriptions, ...context.subscriptions]) {
         try {
           subscription.dispose()

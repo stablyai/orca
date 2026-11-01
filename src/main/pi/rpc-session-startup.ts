@@ -5,7 +5,7 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
-import type { AgentSessionSlashCommand } from '../../shared/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
 import {
   AgentSessionAcquisitionRefusal,
   type StructuredAgentSessionAcquireInput

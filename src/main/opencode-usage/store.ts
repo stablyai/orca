@@ -13,7 +13,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type {
   OpenCodeUsageDailyAggregate,
   OpenCodeUsagePersistedState,

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import * as rowSchema from '../agent-session-journal/journal-row-schema'
 import {
   createTrackedJournalOpener,
@@ -20,7 +20,7 @@ import { readAgentSessionHistory } from './agent-session-history-page'
 import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const identity: AgentSessionJournalIdentity = {
   sessionId: 'bounded-catch-up',
