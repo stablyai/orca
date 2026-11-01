@@ -91,7 +91,10 @@ const baseProps = {
   markdownFrontmatterVisible: false,
   sideBySide: false,
   openFileState: { canOpen: false },
+  canShowMarkdownCopy: false,
+  canCopyMarkdown: false,
   onCopyPath: vi.fn(),
+  onCopyMarkdown: vi.fn(async () => false),
   onOpenDiffTargetFile: vi.fn(),
   onOpenPreviewToSide: vi.fn(),
   onOpenMarkdownPreview: vi.fn(),
@@ -164,5 +167,26 @@ describe('EditorPanelHeader', () => {
         isMarkdown: true
       })
     ).not.toContain('data-artifact-publish')
+  })
+
+  it('shows the copy markdown control only when canShowMarkdownCopy is true', () => {
+    expect(
+      renderHeader({
+        canShowMarkdownCopy: true,
+        canCopyMarkdown: true
+      })
+    ).toContain('aria-label="Copy markdown"')
+    expect(
+      renderHeader({
+        canShowMarkdownCopy: false,
+        canCopyMarkdown: true
+      })
+    ).not.toContain('aria-label="Copy markdown"')
+    expect(
+      renderHeader({
+        canShowMarkdownCopy: true,
+        canCopyMarkdown: false
+      })
+    ).toContain('aria-label="Markdown is not ready to copy"')
   })
 })
