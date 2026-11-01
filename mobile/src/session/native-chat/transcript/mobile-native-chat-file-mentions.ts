@@ -6,7 +6,7 @@ import {
 // A line that is only a file mention, in formatNativeChatFileReference's forms: @path, @"path", @'path'.
 const MENTION_LINE = /^@(?:"((?:\\"|[^"])+)"|'([^']+)'|([^\s"'@]+))$/
 // Draw a tile only for something named like a file; @someone stays text.
-const FILE_NAME = /[^/\\]\.[A-Za-z0-9]{1,8}$/
+const FILE_NAME = /[^/\\]\.[A-Za-z0-9]{1,16}$/
 
 function mentionedFilePath(line: string): string | null {
   const match = MENTION_LINE.exec(line.trim())

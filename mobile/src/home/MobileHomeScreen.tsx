@@ -130,6 +130,7 @@ export function MobileHomeScreen() {
         <View style={styles.fill} />
       ) : data.hostCatalog.length === 0 ? (
         <>
+          {pendingShare ? <MobileHomeShareCard share={pendingShare} /> : null}
           <MobileHomeEmptyState contentMaxWidth={contentMaxWidth} isWideLayout={isWideLayout} />
           <MobileHomePairBar
             bottomInset={insets.bottom}

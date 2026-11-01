@@ -524,8 +524,25 @@ describe('taking a share', () => {
     const { share } = shareTakeResultSchema.parse(await probe.serve('native.share.take', {}))
     expect(share?.text).toBe('https://example.com')
     expect(share?.items.map((item) => [item.mime, item.byteLength])).toEqual([['text/markdown', 5]])
+    expect(share?.skipped).toBe(1)
     expect(probe.discarded).toEqual([`${CACHE}/huge.pdf`])
   })
+  it('reports shared files beyond the free handles instead of dropping them silently', async () => {
+    const files = Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES + 2 }, (_, index) => ({
+      uri: `${CACHE}/photo-${index}.jpg`,
+      mimeType: 'image/jpeg',
+      name: `photo-${index}.jpg`
+    }))
+    const probe = harness({ takeShare: once({ text: '', files }) })
+    for (const file of files) {
+      probe.files.set(file.uri, bytesOf(3))
+    }
+
+    const { share } = shareTakeResultSchema.parse(await probe.serve('native.share.take', {}))
+    expect(share?.items).toHaveLength(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
+    expect(share?.skipped).toBe(2)
+  })
+
   it('skips a shared file whose copy is missing, keeping the text', async () => {
     const probe = harness({
       takeShare: once({
@@ -536,7 +553,7 @@ describe('taking a share', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await expect(probe.serve('native.share.take', {})).resolves.toEqual({
-      share: { text: 'cite?', items: [] }
+      share: { text: 'cite?', items: [], skipped: 1 }
     })
   })
 })

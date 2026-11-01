@@ -113,7 +113,7 @@ async function takeShare(
     text: share.text,
     images: images.length > 0 ? readPicked(verbs, images, 'library') : null,
     files: files.length > 0 ? readPickedFiles(verbs, files) : null,
-    skipped: skipped.length
+    skipped: skipped.length + share.skipped
   }
 }
 

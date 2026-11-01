@@ -224,7 +224,7 @@ export function createNativeMediaVerbServer(
 
   // Stage each file alone: one the page cannot hold drops that file, not the share's text or other files.
   function stageShared(files: readonly PickedAsset[]): StagedMedia[] {
-    return files.slice(0, deps.registry.remainingCapacity()).flatMap((file) => {
+    return files.slice(0, Math.max(0, deps.registry.remainingCapacity())).flatMap((file) => {
       try {
         // A copy the sending app never let the shell read is missing (Expo reports no size); skip it.
         if (!(deps.openFile(file.uri).size > 0)) {
@@ -245,10 +245,12 @@ export function createNativeMediaVerbServer(
       if (share === null) {
         return { share: null }
       }
+      const items = deps.registry.mint(stageShared(share.files))
       return {
         share: {
           text: share.text.slice(0, BRIDGE_SHARE_TEXT_MAX_CHARS),
-          items: deps.registry.mint(stageShared(share.files))
+          items,
+          skipped: share.files.length - items.length
         }
       }
     }

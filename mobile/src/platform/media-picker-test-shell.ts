@@ -92,7 +92,7 @@ export function createMediaTestShell(options: {
         const taken = share
         share = null
         return Promise.resolve({
-          share: taken ? { text: taken.text, items: taken.items.map(mint) } : null
+          share: taken ? { text: taken.text, items: taken.items.map(mint), skipped: 0 } : null
         })
       }
       if (verb === 'native.media.pick') {

@@ -5,6 +5,7 @@ import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-hos
 import type { PdfThumbnailer } from './pdf-thumbnail'
 
 // One render per file for the page's lifetime; scrolling a chat back and forth must not redownload PDFs.
+// A failure is forgotten, so the next tile to mount retries (say, once the desktop is reachable again).
 const pages = new Map<string, Promise<string | null>>()
 
 // Older shells lack the verb, so tiles keep their document icon.
@@ -23,7 +24,10 @@ export function usePdfThumbnailer(): PdfThumbnailer | null {
         page = verbs
           .thumbnailPdf({ worktreeId, relativePath, ...(executionHost ? { executionHost } : {}) })
           .then((jpegBase64) => `data:image/jpeg;base64,${jpegBase64}`)
-          .catch(() => null)
+          .catch(() => {
+            pages.delete(key)
+            return null
+          })
         pages.set(key, page)
       }
       return page

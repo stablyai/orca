@@ -114,8 +114,8 @@
         {
           "android": {
             "enabled": true,
-            "singleShareMimeTypes": ["text/*", "image/*", "application/pdf"],
-            "multipleShareMimeTypes": ["image/*", "application/pdf"]
+            "singleShareMimeTypes": ["text/*", "image/*", "application/*"],
+            "multipleShareMimeTypes": ["text/*", "image/*", "application/*"]
           }
         }
       ],

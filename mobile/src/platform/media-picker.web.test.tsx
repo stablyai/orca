@@ -14,7 +14,10 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import { BRIDGE_MEDIA_READ_MAX_BYTES } from '../mobile-web-shell/bridge/bridge-media-verbs'
+import {
+  BRIDGE_MEDIA_READ_MAX_BYTES,
+  shareTakeResultSchema
+} from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
 import {
   createFakeBridgePortPair,
@@ -429,6 +432,28 @@ describe('taking a share from inside the shell', () => {
     expect(shell.released).toEqual(['media-2'])
     await collectAll(pair, share?.images ?? null)
     expect(shell.released).toEqual(['media-2', 'media-1'])
+  })
+
+  it('counts files the shell could not stage among the skipped', async () => {
+    const shell = createMediaTestShell({
+      staged: {},
+      share: { text: 'look', items: [sharedPhoto] }
+    })
+    // A shell that dropped two more shared files it had no free handles for.
+    const pair = createFakeBridgePortPair({
+      serveNativeVerb: async (verb, params) => {
+        const answer = await shell.serveNativeVerb(verb, params)
+        const share =
+          verb === 'native.share.take' ? shareTakeResultSchema.parse(answer).share : null
+        return share ? { share: { ...share, skipped: 2 } } : answer
+      }
+    })
+    const picker = await mount(pair)
+
+    const share = await settle(pair, picker.takeShare({ images: true, files: false }))
+
+    expect(share?.skipped).toBe(2)
+    expect(await collectAll(pair, share?.images ?? null)).toHaveLength(1)
   })
 
   it('leaves the share with a shell that never granted the take', async () => {

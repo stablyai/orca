@@ -9,11 +9,12 @@ describe('splitUserFileMentions', () => {
     const shared = [
       'Read this and tell me whether we should cite it',
       formatNativeChatFileReference('docs/paper.pdf'),
-      formatNativeChatFileReference('docs/my notes (2).md')
+      formatNativeChatFileReference('docs/my notes (2).md'),
+      formatNativeChatFileReference('docs/config.properties')
     ].join('\n')
 
     expect(splitUserFileMentions([text(shared)])).toEqual({
-      paths: ['docs/paper.pdf', 'docs/my notes (2).md'],
+      paths: ['docs/paper.pdf', 'docs/my notes (2).md', 'docs/config.properties'],
       blocks: [text('Read this and tell me whether we should cite it')]
     })
   })

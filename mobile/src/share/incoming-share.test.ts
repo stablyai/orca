@@ -105,7 +105,7 @@ describe('incoming share intake', () => {
 
     expect(await Promise.all([receiveIncomingShare(), receiveIncomingShare()])).toEqual([
       true,
-      true
+      false
     ])
     expect(await receiveIncomingShare()).toBe(false)
     expect(takeIncomingShare()).toEqual({ text: chromeUrl.value, files: [] })
@@ -119,6 +119,23 @@ describe('incoming share intake', () => {
     expect(takeIncomingShare()?.files.map((file) => file.uri)).toEqual([
       'file:///data/user/0/com.stably.orca.mobile/cache/PXL_0042.jpg'
     ])
+    expect(native.intent).toBeNull()
+  })
+
+  it('reads a newer share that arrives while an earlier one is being copied, not clear it', async () => {
+    native.intent = {
+      raw: [galleryPhoto],
+      resolve: async () => {
+        native.intent = {
+          raw: [chromeUrl],
+          resolve: () => Promise.reject(new Error('Failed to resolve shared data'))
+        }
+        return [galleryPhotoCopy]
+      }
+    }
+
+    expect(await receiveIncomingShare()).toBe(true)
+    expect(takeIncomingShare()).toEqual({ text: chromeUrl.value, files: [] })
     expect(native.intent).toBeNull()
   })
 

@@ -87,7 +87,9 @@ export const shareTakeResultSchema = z.strictObject({
   share: z
     .strictObject({
       text: z.string().max(BRIDGE_SHARE_TEXT_MAX_CHARS),
-      items: z.array(mediaItemSchema).max(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
+      items: z.array(mediaItemSchema).max(BRIDGE_MEDIA_MAX_LIVE_HANDLES),
+      // Shared files the shell could not stage (no free handle, too big, unreadable); the share is gone once taken.
+      skipped: z.number().int().min(0)
     })
     .nullable()
 })
