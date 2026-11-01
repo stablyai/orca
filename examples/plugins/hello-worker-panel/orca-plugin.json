@@ -35,6 +35,15 @@
         "type": "string",
         "multiline": true,
         "default": "Write a test\nReview a pull request\nTake a break"
+      },
+      {
+        "key": "suggestionOrder",
+        "title": "Suggestion order",
+        "description": "Which end of Task ideas Suggest starts from.",
+        "type": "string",
+        "enum": ["listed", "reversed"],
+        "enumLabels": ["As listed", "Last first"],
+        "default": "listed"
       }
     ]
   },

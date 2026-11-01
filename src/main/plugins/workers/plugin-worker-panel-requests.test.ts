@@ -132,10 +132,11 @@ describe('worker panel requests', () => {
 })
 
 describe('worker entry', () => {
-  it('accepts a named activate export as well as a default one', async () => {
+  it('names the fix when activate is exported by name instead of as the default', async () => {
     const activate = vi.fn()
+    const send = vi.fn()
     const runtime = createPluginWorkerRuntime({
-      send: vi.fn(),
+      send,
       exit: vi.fn(),
       importModule: async () => ({ activate })
     })
@@ -150,6 +151,12 @@ describe('worker entry', () => {
         grantedCapabilities: []
       }
     })
-    expect(activate).toHaveBeenCalledOnce()
+    expect(activate).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'fatal',
+        payload: { error: expect.stringContaining('export default function activate(orca)') }
+      })
+    )
   })
 })

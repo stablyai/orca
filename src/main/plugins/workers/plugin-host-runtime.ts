@@ -127,11 +127,13 @@ export function createPluginWorkerRuntime(
     const entryUrl = pathToFileURL(join(input.pluginRoot, ...input.mainEntry.split(/[\\/]/))).href
     options.prepareModuleLoading?.(input.pluginRoot)
     const module: unknown = await importModule(entryUrl)
-    // Either spelling: `export default function activate` or `export function activate`.
-    const activate = readExport(module, 'default') ?? readExport(module, 'activate')
+    const activate = readExport(module, 'default')
     if (typeof activate !== 'function') {
+      // Why name it: `export function activate` is the usual slip, and Orca never calls it.
       throw new Error(
-        `plugin entry ${input.mainEntry} exports no activate function (export default, or export function activate)`
+        typeof readExport(module, 'activate') === 'function'
+          ? `plugin entry ${input.mainEntry} exports activate by name, but Orca calls the default export: write \`export default function activate(orca)\``
+          : `plugin entry ${input.mainEntry} has no default-exported activate function`
       )
     }
     const deactivateExport = readExport(module, 'deactivate')

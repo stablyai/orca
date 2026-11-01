@@ -16,6 +16,9 @@ export default async function activate(orca) {
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
+    if ((await orca.settings.get('suggestionOrder')) === 'reversed') {
+      ideas.reverse()
+    }
     return { title: ideas.find((idea) => !taken.includes(idea)) ?? null }
   })
 

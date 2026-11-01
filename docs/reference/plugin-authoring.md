@@ -133,8 +133,9 @@ Browser clients (`orca serve` in a web browser) still load a frame as one sandbo
 with an opaque origin and `connect-src 'none'`: inline your scripts and styles, use `data:` URLs
 for images and fonts, and do not rely on storage, workers or WASM loaded by URL there.
 
-A worker's `main` module exports `activate(orca)`, as its default export or as
-`export function activate`, and Orca calls it once when the worker starts; it may be `async`.
+A worker's `main` module's **default export** is `activate(orca)`, which Orca calls once when the
+worker starts; it may be `async`. A named `export function activate` is not called: the worker
+fails to start with an error saying so.
 An optional `export function deactivate()` runs (and is awaited) before the worker stops, for
 flushing state; the worker may also stop when it has been idle for a while, and starts again on
 its next command, event or panel request.
@@ -142,7 +143,7 @@ its next command, event or panel request.
 ```ts
 import type { OrcaWorkerApi } from 'orca/worker'
 
-export async function activate(orca: OrcaWorkerApi) {
+export default async function activate(orca: OrcaWorkerApi) {
   orca.commands.register('hello', () => 'Hello from the worker')
 }
 

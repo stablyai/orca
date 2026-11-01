@@ -93,7 +93,8 @@ declare module 'orca/worker' {
     /** Lands in `orca plugin logs`. */
     log(message: string): void
   }
-  /** A worker's `main` exports it as default or as `activate`; Orca calls it once when the worker
-   *  starts. An optional `export function deactivate()` is awaited before the worker stops. */
+  /** A worker's `main` must export it as the DEFAULT export (`export default function
+   *  activate(orca)`); Orca calls it once when the worker starts and never calls a named
+   *  `activate`. An optional `export function deactivate()` is awaited before it stops. */
   export type Activate = (orca: OrcaWorkerApi) => void | Promise<void>
 }

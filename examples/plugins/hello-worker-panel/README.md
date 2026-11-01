@@ -23,7 +23,7 @@ It shows one of each part of the API:
   the panel hears it with `plugin.on`.
 - **Shared storage**: the task list is `atom('todos', ..., { persist: 'storage' })`, so the
   worker reads the same value with `orca.storage.get('todos')` and hears each change.
-- **Settings**: `contributes.settings` declares `celebrate` and `suggestions`; change them under
+- **Settings**: `contributes.settings` declares `celebrate`, `suggestions` and `suggestionOrder` (a switch, a text box and a picker); change them under
   the plugin in Orca's Settings and the worker reads them with `orca.settings.get`.
 - **Events**: `on('agent.status.changed')` counts working agents (the `agent:read` capability).
 - **One typed contract**: `src/protocol.ts` declares `PluginRequests` and `PluginPanelEvents` in
