@@ -89,7 +89,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 28,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     padding: 2
   },
@@ -98,7 +98,7 @@ const styles = themedStyleSheet(() => ({
     width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   buttonPressed: {
     backgroundColor: colors.borderSubtle

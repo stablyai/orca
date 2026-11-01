@@ -8,6 +8,7 @@ import type { TerminalRecord } from '../../../session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as MobileNativeChatReadability from '../../../session/native-chat/transcript/use-mobile-native-chat-readability'
 
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
@@ -140,9 +141,9 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.native-chat-readability': ({ client }) => {
-      const useReadability = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-readability')
-      >('mobile/src/session/use-mobile-native-chat-readability.ts').useMobileNativeChatReadability
+      const useReadability = modules.load<typeof MobileNativeChatReadability>(
+        'mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts'
+      ).useMobileNativeChatReadability
       let readable = false
       let worktreeId = `repo-1::/w`
       const hook = hookMount(() => {

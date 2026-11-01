@@ -84,6 +84,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [mutatingStatus, setMutatingStatus] = useState(false)
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
+  const [linearStatesError, setLinearStatesError] = useState('')
   const [linearCommentDraft, setLinearCommentDraft] = useState('')
   const [linearSubIssueTitle, setLinearSubIssueTitle] = useState('')
   const [taskStateHydrated, setTaskStateHydrated] = useState(false)
@@ -119,7 +120,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   )
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
-  const [showGitHubProjectSortPicker, setShowGitHubProjectSortPicker] = useState(false)
   const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
     useState<GitHubProjectRef | null>(null)
@@ -225,6 +225,8 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setLinearStates,
     linearStatesLoading,
     setLinearStatesLoading,
+    linearStatesError,
+    setLinearStatesError,
     linearCommentDraft,
     setLinearCommentDraft,
     linearSubIssueTitle,
@@ -273,8 +275,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setShowGitHubProjectPicker,
     showGitHubProjectViewPicker,
     setShowGitHubProjectViewPicker,
-    showGitHubProjectSortPicker,
-    setShowGitHubProjectSortPicker,
     showGitHubProjectFieldsPicker,
     setShowGitHubProjectFieldsPicker,
     pendingGitHubProjectViewSelection,

@@ -53,7 +53,9 @@ async function runBuiltCli(
   args: string[],
   extraEnv: Record<string, string> = {}
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [CLI_PATH, ...args], {
+  // These tests read the full receipt, not the concise agent view.
+  const fullArgs = args[0] === 'orchestration' ? [...args, '--full'] : args
+  const child = spawn(process.execPath, [CLI_PATH, ...fullArgs], {
     env: {
       ...process.env,
       ORCA_USER_DATA_PATH: userDataPath,

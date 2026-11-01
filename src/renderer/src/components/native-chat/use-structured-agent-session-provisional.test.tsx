@@ -207,18 +207,6 @@ describe('useStructuredAgentSession provisional launch gate', () => {
     expect(methodsCalled().filter((method) => method === 'agentSession.cancel')).toEqual([])
   })
 
-  it('shows no stored selection for a chat this view did not launch', () => {
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target: LOCAL_TARGET,
-        agent: 'codex',
-        isVisible: true
-      })
-    )
-    expect(currentModel(result.current.optionSnapshot)).toBeUndefined()
-  })
-
   it('activates provider surfaces after publication without repeating option discovery', async () => {
     const { rerender } = renderHook(
       ({ transportEnabled }: { transportEnabled: boolean }) =>

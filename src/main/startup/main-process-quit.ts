@@ -143,6 +143,7 @@ function installWillQuitHandler(): void {
     state.pluginMarketplaceInstaller = null
     state.pluginAutoUpdater?.dispose()
     state.pluginAutoUpdater = null
+    state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountSessionBridges()

@@ -36,6 +36,8 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
+  /** Mail a worker left unread when it reported before a restart still continues it. */
+  protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
@@ -162,6 +164,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
       // Recover deadlines armed before a restart.
       getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      this.continueRestoredWorkerMail(this._orchestrationDb)
     }
     return this._orchestrationDb
   }

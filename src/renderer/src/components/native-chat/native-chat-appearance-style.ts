@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { getSystemPrefersDark, isTerminalBackgroundLight } from '@/lib/terminal-theme'
@@ -45,7 +46,13 @@ export function selectNativeChatAppearanceSettings(
     terminalThemeLight: settings?.terminalThemeLight,
     terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme,
     terminalCustomThemes: settings?.terminalCustomThemes,
+    terminalPluginPalettes: settings?.terminalPluginPalettes,
+    pluginSystemEnabled: settings?.pluginSystemEnabled,
+    disabledPlugins: settings?.disabledPlugins,
     terminalColorOverrides: settings?.terminalColorOverrides,
+    terminalColorOverridesLight: settings?.terminalColorOverridesLight,
+    pluginAppThemeDark: settings?.pluginAppThemeDark,
+    pluginAppThemeLight: settings?.pluginAppThemeLight,
     terminalFontFamily: settings?.terminalFontFamily,
     terminalFontSize: settings?.nativeChatAppearance?.matchTerminalInterface
       ? settings.terminalFontSize
@@ -59,6 +66,65 @@ export function nativeChatContrastMix(contrast: number, light: boolean): number 
   return light
     ? Math.min(100, Math.max(55, 82 + (value - 100) * 0.36))
     : Math.min(100, Math.max(50, 78 + (value - 100) * 0.44))
+}
+
+/** Chat surfaces in the terminal's colors; the app theme already paints them under Match Terminal. */
+function applyTerminalChatColors(
+  style: NativeChatAppearanceStyle,
+  input: {
+    background: string
+    foreground: string
+    light: boolean
+    font: string
+    appMatchesTerminal: boolean
+  }
+): void {
+  const { background, foreground, light, font, appMatchesTerminal } = input
+  style.colorScheme = light ? 'light' : 'dark'
+  style['--chat-font-family'] = font
+  if (!appMatchesTerminal) {
+    // Ghost controls inherit a color, so remapping the token alone leaves the app's color in place.
+    style.color = 'var(--foreground)'
+    Object.assign(style, {
+      '--background': 'var(--chat-canvas)',
+      '--foreground': 'var(--chat-foreground-strong)',
+      '--muted-foreground': 'var(--chat-source-muted-foreground)',
+      '--accent': 'color-mix(in srgb, var(--chat-source-foreground) 9%, var(--chat-canvas))',
+      '--muted': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--popover': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
+      '--popover-foreground': 'var(--chat-foreground-strong)',
+      '--accent-foreground': 'var(--chat-foreground-strong)',
+      '--border': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--input': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
+      '--card': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
+      '--card-foreground': 'var(--chat-foreground-strong)',
+      '--primary': 'var(--chat-foreground-strong)',
+      '--primary-foreground': 'var(--chat-canvas)',
+      '--secondary': 'var(--muted)',
+      '--secondary-foreground': 'var(--chat-foreground-strong)',
+      '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
+      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      '--chat-user-message': 'initial',
+      '--chat-source-background': background,
+      '--chat-source-foreground': foreground,
+      '--chat-source-muted-foreground':
+        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))'
+    })
+  }
+  Object.assign(style, {
+    '--chat-canvas-mix': '0%',
+    '--chat-faint-mix': light ? '100%' : '83%',
+    '--chat-user-mix': light ? '4%' : '7%',
+    '--chat-user-border-mix': light ? '7%' : '6%',
+    '--chat-code-mix': light ? '2%' : '3.5%',
+    '--chat-code-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-inline-code-mix': light ? '4%' : '6%',
+    '--chat-inline-code-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-inline-code-border-mix': light ? '9%' : '8%',
+    '--chat-composer-mix': light ? '0%' : '4%',
+    '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
+    '--chat-composer-border-mix': light ? '11%' : '9%'
+  })
 }
 
 export function nativeChatAppearanceStyle(
@@ -99,7 +165,10 @@ export function nativeChatAppearanceStyle(
       : {})
   }
   let light = settings?.theme === 'light' || (settings?.theme === 'system' && !systemPrefersDark)
-  if (matching) {
+  const appMatchesTerminal =
+    (light ? settings?.pluginAppThemeLight : settings?.pluginAppThemeDark) ===
+    MATCH_TERMINAL_APP_THEME
+  if (matching || appMatchesTerminal) {
     const colors = resolveConfiguredTerminalColors(
       {
         theme: settings?.theme ?? 'dark',
@@ -107,53 +176,27 @@ export function nativeChatAppearanceStyle(
         terminalThemeLight: settings?.terminalThemeLight ?? '',
         terminalUseSeparateLightTheme: settings?.terminalUseSeparateLightTheme ?? false,
         terminalCustomThemes: settings?.terminalCustomThemes,
-        terminalColorOverrides: settings?.terminalColorOverrides
+        terminalPluginPalettes: settings?.terminalPluginPalettes,
+        pluginSystemEnabled: settings?.pluginSystemEnabled,
+        disabledPlugins: settings?.disabledPlugins,
+        terminalColorOverrides: settings?.terminalColorOverrides,
+        terminalColorOverridesLight: settings?.terminalColorOverridesLight
       },
       systemPrefersDark
     )
-    const hasThemeColors = Boolean(colors.background && colors.foreground)
-    const background = hasThemeColors ? colors.background : '#000000'
-    const foreground = hasThemeColors ? colors.foreground : '#fafafa'
-    light = isTerminalBackgroundLight(background)
-    style.colorScheme = light ? 'light' : 'dark'
-    // Ghost controls inherit a color, so remapping the token alone leaves the app's color in place.
-    style.color = 'var(--foreground)'
-    Object.assign(style, {
-      '--chat-font-family': font,
-      '--background': 'var(--chat-canvas)',
-      '--foreground': 'var(--chat-foreground-strong)',
-      '--muted-foreground': 'var(--chat-source-muted-foreground)',
-      '--accent': 'color-mix(in srgb, var(--chat-source-foreground) 9%, var(--chat-canvas))',
-      '--muted': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
-      '--popover': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
-      '--popover-foreground': 'var(--chat-foreground-strong)',
-      '--accent-foreground': 'var(--chat-foreground-strong)',
-      '--border': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
-      '--input': 'color-mix(in srgb, var(--chat-source-foreground) 7%, var(--chat-canvas))',
-      '--card': 'color-mix(in srgb, var(--chat-source-foreground) 4%, var(--chat-canvas))',
-      '--card-foreground': 'var(--chat-foreground-strong)',
-      '--primary': 'var(--chat-foreground-strong)',
-      '--primary-foreground': 'var(--chat-canvas)',
-      '--secondary': 'var(--muted)',
-      '--secondary-foreground': 'var(--chat-foreground-strong)',
-      '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
-      '--chat-source-background': background,
-      '--chat-source-foreground': foreground,
-      '--chat-source-muted-foreground':
-        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))',
-      '--chat-canvas-mix': '0%',
-      '--chat-faint-mix': light ? '100%' : '83%',
-      '--chat-user-mix': light ? '4%' : '7%',
-      '--chat-user-border-mix': light ? '7%' : '6%',
-      '--chat-code-mix': light ? '2%' : '3.5%',
-      '--chat-code-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-inline-code-mix': light ? '4%' : '6%',
-      '--chat-inline-code-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-inline-code-border-mix': light ? '9%' : '8%',
-      '--chat-composer-mix': light ? '0%' : '4%',
-      '--chat-composer-base': light ? 'var(--chat-canvas)' : 'transparent',
-      '--chat-composer-border-mix': light ? '11%' : '9%'
-    })
+    const readable =
+      colors.background && colors.foreground
+        ? { background: colors.background, foreground: colors.foreground }
+        : null
+    const { background, foreground } = readable ?? { background: '#000000', foreground: '#fafafa' }
+    // Why also for the app theme: Match Terminal can paint the mode the setting doesn't ask for;
+    // an unreadable palette keeps the requested mode, as the app does.
+    if (readable || matching) {
+      light = isTerminalBackgroundLight(background)
+    }
+    if (matching) {
+      applyTerminalChatColors(style, { background, foreground, light, font, appMatchesTerminal })
+    }
   }
   const bodyMix = matching ? 100 : nativeChatContrastMix(appearance.contrast, light)
   style['--chat-foreground-mix'] = `${bodyMix}%`

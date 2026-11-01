@@ -1,3 +1,4 @@
+import { terminalLaunchOpened } from '@/lib/launch-agent-in-new-tab-host-agents'
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -211,7 +212,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
   let admitted: AdmittedLaunch | null = null
   const isCancelled = (): boolean => cancelled || args.hooks.signal?.aborted === true
   let resolveDelivery: (result: StructuredPromptDeliveryResult) => void = () => undefined
-  const deliversPrompt = Boolean(plan.prompt?.trim()) && plan.promptDelivery !== 'draft'
+  const deliversPrompt = Boolean(plan.prompt?.trim())
   const promptDeliveryResult = deliversPrompt
     ? new Promise<StructuredPromptDeliveryResult>((resolve) => {
         resolveDelivery = resolve
@@ -276,14 +277,13 @@ export function beginHostAdmittedStructuredLaunch(args: {
           )
         }
         const terminal = await args.onHostDeclined(args.target)
-        if (paired && terminal.opened) {
+        const opened = await terminalLaunchOpened(terminal)
+        if (paired && opened) {
           notifyHostDeclined(plan.agent)
         }
-        void (
-          terminal.promptDeliveryResult ??
-          Promise.resolve(terminal.opened ? DELIVERED : NOT_DELIVERED)
-        ).then(resolveDelivery, () => resolveDelivery(NOT_DELIVERED))
-        return terminal.opened ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+        const delivery = terminal.promptDeliveryResult ?? (opened ? DELIVERED : NOT_DELIVERED)
+        void Promise.resolve(delivery).then(resolveDelivery, () => resolveDelivery(NOT_DELIVERED))
+        return opened ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
       }
       // A host that would run the chat with more access than asked for gets nothing to start.
       const permission = paired

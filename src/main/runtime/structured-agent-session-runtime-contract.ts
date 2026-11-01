@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 import type {
   StructuredAgentCommand,
@@ -82,4 +82,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
+  /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
+  launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
+  parentAccountWork?: StructuredAgentSessionHostDeps['parentAccountWork']
 } & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'statusSink'>

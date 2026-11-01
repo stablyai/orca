@@ -1,3 +1,9 @@
+import { completeAutomationSave } from './automation-save-completion'
+import {
+  recordedAutomationRunContext,
+  isSameAutomationWorkspace
+} from './automation-recorded-target'
+import { capturedAutomationOwner } from './automation-captured-owner'
 import {
   automationChatSupport,
   automationDraftLaunchSetup,
@@ -9,7 +15,7 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
@@ -35,20 +41,14 @@ export async function saveOrcaAutomation(
   context: AutomationSaveContext,
   time: { hour: number; minute: number; now: number; surface: 'chat' | 'terminal' }
 ): Promise<void> {
-  const { store, local, setup, destination, destinationForm, pageRefresh } = context
-  const { repos, projectHostSetups } = store
+  const { store, local, setup, destination, destinationForm } = context
+  const { projectHostSetups } = store
   const {
     draft,
     editingAutomationId,
     editingRowKey,
     editingDestination,
-    automations,
-    setAutomations,
-    setDraft,
-    selectAutomationId,
-    setSelectedRowKey,
-    setSelectedAutomationRunPageId,
-    setCreateOpen,
+    draftAtOpen,
     setEditorNotice,
     setEditorNoticeHost,
     moveCreationKeysRef
@@ -56,7 +56,6 @@ export async function saveOrcaAutomation(
   const {
     automationHostTarget,
     automationDispatchContext,
-    invalidateRowHost,
     invalidateWrittenHost,
     rowRecoveryHost,
     createDestination
@@ -70,7 +69,31 @@ export async function saveOrcaAutomation(
     return
   }
 
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  let currentAutomation: Automation | null = null
+  if (editingAutomationId !== null) {
+    const reread = await dispatchAutomationReread(
+      automationDispatchContext,
+      { rowKey: editingRowKey ?? '', automationId: editingAutomationId },
+      async () =>
+        (await listAutomationsForTarget(automationHostTarget ?? { kind: 'local' })).find(
+          (automation) => automation.id === editingAutomationId
+        ) ?? null
+    )
+    if (!reread.ok) {
+      setEditorNotice(reread.notice)
+      return
+    }
+    currentAutomation = reread.value
+    if (!currentAutomation) {
+      throw new Error('This automation is no longer available. Refresh and try again.')
+    }
+  }
+
+  const edited = (key: keyof typeof draft): boolean =>
+    !draftAtOpen || draft[key] !== draftAtOpen[key]
+  const targetEdited = !currentAutomation || local.targetEdited
+  const scheduleEdited = (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(edited)
+  const timezone = currentAutomation?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const rrule =
     draft.preset === 'custom'
       ? draft.customSchedule.trim()
@@ -83,34 +106,45 @@ export async function saveOrcaAutomation(
   const rawGrace = Number(draft.missedRunGraceMinutes)
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
   const precheck = buildDraftPrecheck(draft)
-  const reposForDraft = editingAutomationId !== null ? dialogRepos : repos
+  const recordedContext =
+    currentAutomation && editingDestination && isSameAutomationWorkspace(currentAutomation, draft)
+      ? recordedAutomationRunContext(
+          currentAutomation,
+          capturedAutomationOwner(context.list.capturedAutomationOwners, editingRowKey),
+          editingDestination.destination
+        )
+      : null
   const setupResolution =
     editingAutomationId !== null
       ? editHostResolution
       : createCheck
         ? { status: 'ready' as const, ...createCheck.destination }
         : null
-  const setupHostId: ExecutionHostId | undefined =
-    setupResolution?.status === 'ready' && setupResolution.authority.kind === 'runtime'
-      ? (`runtime:${setupResolution.authority.environmentId}` as ExecutionHostId)
+  const selectedRepos = dialogRepos.filter((repo) => repo.id === draft.projectId)
+  const setupHostId =
+    setupResolution?.status === 'ready' && selectedRepos.length === 1
+      ? getRepoExecutionHostId(selectedRepos[0])
       : undefined
   const setupProjectHostSetups = setupHostId
     ? projectHostSetups.filter(
         (candidate) => candidate.repoId !== draft.projectId || candidate.hostId === setupHostId
       )
     : projectHostSetups
-  let setupDecision = resolveAutomationSetupDecisionForSave({
-    workspaceMode: draft.workspaceMode,
-    repoId: draft.projectId,
-    repos: reposForDraft,
-    projectHostSetups: setupProjectHostSetups,
-    yamlHooks:
-      draft.workspaceMode === 'new_per_run'
-        ? await setup.loadAutomationYamlHooksForRepo(draft.projectId, setupHostId)
-        : null,
-    draftSetupDecision: draft.setupDecision
-  })
-  if (setupDecision === 'run') {
+  let setupDecision =
+    !currentAutomation || edited('setupDecision')
+      ? resolveAutomationSetupDecisionForSave({
+          workspaceMode: draft.workspaceMode,
+          repoId: draft.projectId,
+          repos: dialogRepos,
+          projectHostSetups: setupProjectHostSetups,
+          yamlHooks:
+            draft.workspaceMode === 'new_per_run'
+              ? await setup.loadAutomationYamlHooksForRepo(draft.projectId, setupHostId)
+              : null,
+          draftSetupDecision: draft.setupDecision
+        })
+      : currentAutomation.setupDecision
+  if (setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))) {
     const trustDecision = await ensureHooksConfirmed(
       useAppStore.getState(),
       draft.projectId,
@@ -122,12 +156,15 @@ export async function saveOrcaAutomation(
     }
   }
 
-  const runContext = buildAutomationRunContextForRepo({
-    repoId: draft.projectId,
-    repos: reposForDraft,
-    projectHostSetups: setupProjectHostSetups
-  })
-  if (!runContext) {
+  const runContext = targetEdited
+    ? (recordedContext ??
+      buildAutomationRunContextForRepo({
+        repoId: draft.projectId,
+        repos: dialogRepos,
+        projectHostSetups: setupProjectHostSetups
+      }))
+    : currentAutomation?.runContext
+  if (targetEdited && !runContext) {
     toast.error(
       translate(
         'auto.components.automations.AutomationsPage.32534e7c9c',
@@ -135,25 +172,6 @@ export async function saveOrcaAutomation(
       )
     )
     return
-  }
-
-  let currentAutomation = editingAutomationId
-    ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
-    : null
-  if (editingAutomationId !== null) {
-    const reread = await dispatchAutomationReread(
-      automationDispatchContext,
-      { rowKey: editingRowKey ?? '', automationId: editingAutomationId },
-      async () =>
-        (await listAutomationsForTarget(automationHostTarget ?? { kind: 'local' })).find(
-          (automation) => automation.id === editingAutomationId
-        ) ?? null
-    )
-    if (!reread.ok && reread.notice.severity === 'owner') {
-      setEditorNotice(reread.notice)
-      return
-    }
-    currentAutomation = (reread.ok ? reread.value : null) ?? currentAutomation
   }
 
   const surface =
@@ -166,44 +184,64 @@ export async function saveOrcaAutomation(
     ) === false
       ? 'terminal'
       : time.surface
-  const launchSetup = automationDraftLaunchSetup(draft, surface, currentAutomation)
+  const launchSetup = automationDraftLaunchSetup(
+    {
+      extraAgentArgs: edited('extraAgentArgs')
+        ? draft.extraAgentArgs
+        : (currentAutomation?.extraAgentArgs ?? '')
+    },
+    edited('surface') ? surface : (currentAutomation?.surface ?? surface),
+    currentAutomation
+  )
   const updates: AutomationUpdateInput = {
-    name: draft.name,
-    prompt: draft.prompt,
-    precheck,
-    agentId: draft.agentId,
-    ...launchSetup,
-    runContext,
-    projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
-    workspaceId: draft.workspaceId,
-    baseBranch: draft.baseBranch.trim() || null,
-    setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
-    timezone,
-    missedRunGraceMinutes
+    ...(edited('name') ? { name: draft.name } : {}),
+    ...(edited('prompt') ? { prompt: draft.prompt } : {}),
+    ...(edited('precheckCommand') || edited('precheckTimeoutSeconds') ? { precheck } : {}),
+    ...(edited('agentId') ? { agentId: draft.agentId } : {}),
+    ...(!currentAutomation || edited('surface') || edited('extraAgentArgs') ? launchSetup : {}),
+    ...(targetEdited
+      ? {
+          runContext,
+          projectId: draft.projectId,
+          workspaceMode: draft.workspaceMode,
+          workspaceId: draft.workspaceId
+        }
+      : {}),
+    ...(edited('baseBranch') ? { baseBranch: draft.baseBranch.trim() || null } : {}),
+    ...(edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
+      ? { setupDecision }
+      : {}),
+    ...(edited('reuseSession') || edited('workspaceMode')
+      ? { reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession }
+      : {}),
+    ...(edited('missedRunGraceMinutes') ? { missedRunGraceMinutes } : {})
   }
-  if (!currentAutomation || currentAutomation.rrule !== rrule) {
+  if (!currentAutomation || (scheduleEdited && currentAutomation.rrule !== rrule)) {
     updates.rrule = rrule
     updates.dtstart = time.now
   }
   const createInput: AutomationCreateInput = {
-    name: draft.name,
-    prompt: draft.prompt,
-    precheck,
-    agentId: draft.agentId,
+    name: currentAutomation ? currentAutomation.name : draft.name,
+    prompt: currentAutomation ? currentAutomation.prompt : draft.prompt,
+    precheck: currentAutomation ? currentAutomation.precheck : precheck,
+    agentId: currentAutomation ? currentAutomation.agentId : draft.agentId,
     ...launchSetup,
-    runContext,
-    projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
-    workspaceId: draft.workspaceId,
-    baseBranch: draft.baseBranch.trim() || null,
-    setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
+    runContext: currentAutomation ? currentAutomation.runContext : runContext,
+    projectId: currentAutomation ? currentAutomation.projectId : draft.projectId,
+    workspaceMode: currentAutomation ? currentAutomation.workspaceMode : draft.workspaceMode,
+    workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
+    baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
+    setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
+    reuseSession: currentAutomation
+      ? currentAutomation.reuseSession
+      : draft.workspaceMode === 'existing' && draft.reuseSession,
     timezone,
-    rrule,
-    dtstart: updates.dtstart ?? time.now,
-    missedRunGraceMinutes
+    rrule: currentAutomation ? currentAutomation.rrule : rrule,
+    dtstart: currentAutomation ? currentAutomation.dtstart : (updates.dtstart ?? time.now),
+    missedRunGraceMinutes: currentAutomation
+      ? currentAutomation.missedRunGraceMinutes
+      : missedRunGraceMinutes,
+    ...updates
   }
 
   const destinationResult = resolveAutomationEditDestination({
@@ -211,6 +249,7 @@ export async function saveOrcaAutomation(
     editingAutomationId,
     editingDestination,
     draft,
+    targetEdited: local.targetEdited,
     rowKey: editingRowKey,
     automationDialogTarget,
     editHostEntries: destinationForm.editHostEntries,
@@ -267,38 +306,5 @@ export async function saveOrcaAutomation(
     setEditorNoticeHost(moveTarget?.entry ?? null)
     return
   }
-  const automation = saved.value
-  if (editingAutomationId !== null) {
-    invalidateRowHost(editingRowKey, 'definition')
-  } else {
-    await pageRefresh.hydratePersistedUIState()
-  }
-  setAutomations((current) => {
-    const next = current.filter((entry) => entry.id !== automation.id)
-    return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
-  })
-  setDraft((current) => ({ ...current, name: '', prompt: '' }))
-  await pageRefresh.refresh()
-  if (editingAutomationId !== null && editingRowKey && !moveTarget) {
-    setSelectedAutomationRunPageId(null)
-    setSelectedRowKey(editingRowKey)
-  }
-  selectAutomationId(automation.id)
-  setCreateOpen(false)
-  if (editingAutomationId === null) {
-    useAppStore.getState().recordFeatureInteraction('automation-created')
-  }
-  if (moveTarget && !originalRemoved) {
-    return
-  }
-  toast.success(
-    moveTarget
-      ? translate(
-          'auto.components.automations.AutomationsPage.moved',
-          'Automation moved to {host}.'
-        ).replace('{host}', () => moveTarget.entry.authorityLabel)
-      : editingAutomationId !== null
-        ? translate('auto.components.automations.AutomationsPage.244727e655', 'Automation updated.')
-        : translate('auto.components.automations.AutomationsPage.2a20596d6b', 'Automation saved.')
-  )
+  await completeAutomationSave(context, saved.value, moveTarget, originalRemoved)
 }

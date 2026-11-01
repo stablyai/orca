@@ -29,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
@@ -122,7 +124,6 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export type { MobileColorScheme } from '../theme/mobile-theme'
 export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit,

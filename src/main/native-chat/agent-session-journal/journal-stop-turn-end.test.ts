@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
 import {

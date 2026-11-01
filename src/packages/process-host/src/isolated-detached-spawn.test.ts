@@ -62,6 +62,7 @@ describe('spawnDetachedWithoutInheritance', () => {
     setIsolatedSpawner(null)
     onPlatform(originalPlatform)
     vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     spawnProcess.mockReset()
   })
 
@@ -176,6 +177,21 @@ describe('spawnDetachedWithoutInheritance', () => {
     setIsolatedSpawner(() => ({ pid: 8, exitWatchError: null, breakawayDenied: false }))
     spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
     expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('refuses to kill a child whose exit it cannot watch, since its pid may be reused', async () => {
+    onPlatform('win32')
+    setIsolatedSpawner(() => ({ pid: 77, exitWatchError: 5, breakawayDenied: false }))
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const child = spawnDetachedWithoutInheritance({ program: 'C:\\wsl.exe' })
+    await once(child, 'spawn')
+
+    expect(child.pid).toBe(77)
+    expect(child.kill()).toBe(false)
+    expect(processKill).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pid 77 is untracked'))
   })
 
   it('reports a native spawn failure as an error event, like libuv', async () => {

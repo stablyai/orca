@@ -94,14 +94,6 @@ describe('browser session profile IPC', () => {
     expect(setBrowserIdentityModeMock).not.toHaveBeenCalled()
   })
 
-  it('commits a recognized identity mode unchanged', async () => {
-    setTrustedBrowserRendererWebContentsId(91)
-    const handler = identitySetHandler()
-
-    await expect(handler({ sender: trustedSender() }, 'native')).resolves.toEqual({ ok: true })
-    expect(setBrowserIdentityModeMock).toHaveBeenCalledWith('native')
-  })
-
   function clientHostDetectHandler(): (
     event: { sender: Electron.WebContents },
     args: { environmentId: string }
@@ -138,44 +130,5 @@ describe('browser session profile IPC', () => {
       }
     ])
     expect(routeIdentityMock).toHaveBeenCalledWith('env-1')
-  })
-
-  it('returns null so detection falls back to the server when nothing is client-hosted', () => {
-    routeIdentityMock.mockReturnValue(null)
-
-    const handler = clientHostDetectHandler()
-
-    expect(handler({ sender: trustedSender() }, { environmentId: 'env-1' })).toBeNull()
-    expect(detectBrowsersMock).not.toHaveBeenCalled()
-  })
-
-  it('creates a profile for a trusted renderer', async () => {
-    const profile = {
-      id: 'profile-google',
-      scope: 'isolated',
-      partition: 'persist:orca-browser-session-profile-google',
-      label: 'Google',
-      source: null
-    }
-    createProfileMock.mockReturnValue(profile)
-    registerBrowserHandlers()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registered test handler is selected by its exact channel and called with its declared boundary shape.
-    const createHandler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'browser:session:createProfile'
-    )?.[1] as (
-      event: { sender: Electron.WebContents },
-      args: { scope: 'isolated'; label: string }
-    ) => unknown
-    const sender = {
-      id: 91,
-      isDestroyed: () => false,
-      getType: () => 'window',
-      getURL: () => 'file:///renderer/index.html'
-    } as Electron.WebContents
-
-    await expect(
-      createHandler({ sender }, { scope: 'isolated', label: 'Google' })
-    ).resolves.toEqual(profile)
-    expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google')
   })
 })

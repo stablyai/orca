@@ -1,9 +1,11 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
 /** Round controls on an action row: attach, mic, Send/Stop. */
 export const COMPOSER_CONTROL_SIZE = 38
+/** Grows a round control to a 44 pt touch box without crossing the action row's 8 pt gap. */
+export const COMPOSER_CONTROL_HIT_SLOP = (44 - COMPOSER_CONTROL_SIZE) / 2
 // Every input uses the composer's size, which also keeps the page above iOS's 16px focus-zoom floor.
 export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
@@ -17,7 +19,7 @@ export const FIELD_MIN_HEIGHT = 44
 const roundControl = {
   width: COMPOSER_CONTROL_SIZE,
   height: COMPOSER_CONTROL_SIZE,
-  borderRadius: COMPOSER_CONTROL_SIZE / 2,
+  borderRadius: radii.pill,
   alignItems: 'center',
   justifyContent: 'center'
 } as const
@@ -33,14 +35,11 @@ const surface = () =>
 export const composerInputStyles = themedStyleSheet(() => ({
   box: {
     ...surface(),
-    paddingTop: spacing.md,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    borderRadius: radii.composer
+    padding: spacing.md,
+    borderRadius: radii.floating
   },
   formBox: {
-    paddingTop: 10,
-    borderRadius: radii.composerItem
+    borderRadius: radii.surface
   },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
@@ -65,7 +64,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingBottom: MESSAGE_PADDING_VERTICAL
   },
   actionRow: {
-    marginTop: 10,
+    marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
@@ -88,7 +87,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     backgroundColor: colors.composerControl
   },
   pressed: {
-    opacity: 0.7
+    opacity: feedback.pressedOpacity
   },
   field: {
     ...surface(),
@@ -96,7 +95,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: radii.composerItem,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md
   },
   fieldText: {
@@ -117,6 +116,6 @@ export const composerInputStyles = themedStyleSheet(() => ({
     color: 'transparent'
   },
   disabled: {
-    opacity: 0.5
+    opacity: feedback.disabledOpacity
   }
 }))

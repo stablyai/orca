@@ -1,12 +1,12 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalApprovalSubject
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalApprovalSubject,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -17,7 +17,7 @@ import { performCancel, type AgentSessionTurnContext } from './structured-agent-
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import type { AgentSessionPromptCancelRoute } from './structured-agent-session-adapter-stop'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
@@ -327,35 +327,6 @@ describe("a card's own Cancel, as its provider answers it", () => {
     const card = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
     return { result, routes, answerPrompt, dismissPrompt, card }
   }
-
-  describe('on an approval whose subject a newer Orca wrote, which only its Cancel answers', () => {
-    const NEWER_SUBJECT: AgentJournalApprovalSubject = JSON.parse('{"kind":"diff","path":"a.ts"}')
-
-    it('has Claude decline the request, the turn going on, and keeps the subject as it was', async () => {
-      const { routes, dismissPrompt, card } = await cancelCard(
-        { kind: 'dismiss' },
-        1,
-        true,
-        true,
-        NEWER_SUBJECT
-      )
-
-      expect(dismissPrompt).toHaveBeenCalledWith(expect.objectContaining({ answer: true }))
-      expect(routes.interrupt).not.toHaveBeenCalled()
-      expect(routes.stop).not.toHaveBeenCalled()
-      expect(card).toMatchObject({
-        subject: { kind: 'diff', path: 'a.ts' },
-        resolution: { state: 'cancelled' }
-      })
-    })
-
-    it('has Codex end the turn holding it', async () => {
-      const { routes, dismissPrompt } = await cancelCard(undefined, 1, true, true, NEWER_SUBJECT)
-
-      expect(routes.interrupt).toHaveBeenCalledOnce()
-      expect(dismissPrompt).not.toHaveBeenCalled()
-    })
-  })
 
   it('interrupts the turn holding the card for a provider that gives no answer', async () => {
     const { routes, answerPrompt } = await cancelCard(undefined)

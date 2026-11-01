@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { orderMessages } from './native-chat-session-assembler'
 
 /** Reuse assembler ordering: null timestamps first, then timestamp and id. */

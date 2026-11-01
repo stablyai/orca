@@ -2,7 +2,7 @@ import { claudeStartedUnechoedSend } from './claude-command-lifecycle'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
   createStructuredAgentSessionLogger,

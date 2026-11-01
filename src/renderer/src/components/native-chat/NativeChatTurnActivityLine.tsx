@@ -7,7 +7,7 @@ import { nativeChatReasoningDisclosureKey } from '../../../../shared/native-chat
 import {
   describeNativeChatActiveTurnLabel,
   type NativeChatActiveTurnLabel
-} from '../../../../shared/native-chat-turn-status'
+} from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   NativeChatReasoningBody,
   NativeChatReasoningChevron

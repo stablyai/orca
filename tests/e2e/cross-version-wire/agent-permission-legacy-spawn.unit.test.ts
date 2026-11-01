@@ -257,11 +257,13 @@ describe('createWebRuntimeSessionTerminal', () => {
         agent: test.agent,
         worktreeId: TEST_WORKTREE_ID,
         environmentId: ENVIRONMENT_ID,
-        startupPlan: plan,
+        buildStartup: () => ({
+          startupPlan: plan,
+          pasteDraftAfterLaunch: null,
+          submitPastedPrompt: false
+        }),
         prompt: '',
         promptDelivery: 'auto-submit',
-        pastePromptAfterReady: null,
-        submitPastedPrompt: false,
         activate: 'activate' in test ? test.activate : true,
         cwd: TEST_WORKTREE_PATH,
         groupId: 'group',

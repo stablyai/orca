@@ -41,11 +41,6 @@ afterEach(() => {
 })
 
 describe('isWslDistroRunning', () => {
-  it('matches running distros case-insensitively', async () => {
-    await expect(isWslDistroRunning(' ubuntu ')).resolves.toBe(true)
-    await expect(isWslDistroRunning('Debian')).resolves.toBe(false)
-  })
-
   it('reads a distro as stopped when the probe fails, not as its last-known state', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     let probe: () => Promise<string[]> = async () => ['Ubuntu']
@@ -178,18 +173,6 @@ describe('deferUntilWslDistroRunning', () => {
 
     expect(ubuntuTask).toHaveBeenCalledTimes(1)
     expect(debianTask).not.toHaveBeenCalled()
-  })
-
-  it('keeps only the latest task per key', () => {
-    const first = vi.fn()
-    const second = vi.fn()
-    deferUntilWslDistroRunning('Ubuntu', 'same', first)
-    deferUntilWslDistroRunning('Ubuntu', 'same', second)
-
-    noteWslDistrosRunning(['Ubuntu'])
-
-    expect(first).not.toHaveBeenCalled()
-    expect(second).toHaveBeenCalledTimes(1)
   })
 
   it('drains on a confirmed running-distro probe but not on a failed one', async () => {

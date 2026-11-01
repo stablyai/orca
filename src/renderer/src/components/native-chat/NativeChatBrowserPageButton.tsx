@@ -13,7 +13,7 @@ import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { nativeChatToolRunCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 import { nativeChatFullCommand } from '../../../../shared/native-chat/tools/native-chat-tool-input-text'
 import { parseOrcaBrowserCommand } from '../../../../shared/orca-browser-cli-commands'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 
 // Without `--page` a run only knows the worktree's latest agent page, so each run keeps the
 // page it first resolved to instead of following later runs to newer pages.

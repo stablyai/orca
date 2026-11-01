@@ -3,37 +3,11 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hubStyles = themedStyleSheet(() => ({
+  // Inset like the Tasks and Agent History switches in their NavBar accessory rows.
   segments: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    width: '100%',
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  segment: {
-    flex: 1,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    // Reserve underline height so selection cannot shift layout.
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  segmentActive: {
-    borderBottomColor: colors.textPrimary
-  },
-  segmentPressed: {
-    opacity: 0.7
-  },
-  segmentText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  segmentTextActive: {
-    color: colors.textPrimary
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
+    backgroundColor: colors.bgPanel
   },
   chip: {
     flexDirection: 'row',
@@ -59,7 +33,7 @@ export const hubStyles = themedStyleSheet(() => ({
   statePill: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth
   },
   statePillText: {

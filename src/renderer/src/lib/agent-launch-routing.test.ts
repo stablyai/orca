@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it } from 'vitest'
 import {
   RUNTIME_CAPABILITIES,
@@ -8,7 +9,7 @@ import {
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveAgentLaunchRoute, structuredAgentLaunchSupported } from './agent-launch-routing'
 
-const settings = { experimentalNativeChat: true }
+const settings = { nativeChatProviders: EVERY_AGENT_CHAT }
 
 function route(overrides: Partial<Parameters<typeof resolveAgentLaunchRoute>[0]> = {}) {
   return resolveAgentLaunchRoute({
@@ -23,7 +24,7 @@ function route(overrides: Partial<Parameters<typeof resolveAgentLaunchRoute>[0]>
 
 describe('new agent launch routing', () => {
   it('opens the terminal when Chat UI is off', () => {
-    expect(route({ settings: { experimentalNativeChat: false } })).toBe('terminal-tui')
+    expect(route({ settings: { nativeChatProviders: {} } })).toBe('terminal-tui')
     expect(route({ settings: null })).toBe('terminal-tui')
   })
 
@@ -95,7 +96,7 @@ describe('explicit structured chat requests', () => {
   it('still permits an explicit structured history request while Chat UI is off', () => {
     const input = {
       agent: 'codex' as const,
-      settings: { experimentalNativeChat: false },
+      settings: { nativeChatProviders: {} },
       executionHostId: 'local',
       hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
     }

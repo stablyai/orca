@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
-import { configureWslHostsGate, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
+import {
+  configureWslHostsGate,
+  noteWslHostsLivePolicyBlock,
+  resetWslHostsGateForTests
+} from '../wsl/wsl-host-gate'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { listWslMoveCutovers } from '../persistence/moving-wsl-projects/wsl-move-cutover-journal'
@@ -32,8 +36,14 @@ vi.mock('electron', () => ({
 
 const track = vi.hoisted(() => vi.fn())
 vi.mock('../telemetry/client', () => ({ track }))
+const cancelWslMove = vi.hoisted(() => vi.fn((_distro: string) => true))
+vi.mock('../persistence/moving-wsl-projects/wsl-move-driver', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslMoveDriver>()),
+  cancelWslMove
+}))
 
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import type * as WslMoveDriver from '../persistence/moving-wsl-projects/wsl-move-driver'
 
 let userDataPath: string
 beforeEach(() => {
@@ -140,6 +150,50 @@ describe('WSL move IPC', () => {
       expect(
         await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
       ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
+  // A block published while Orca runs refuses a new move at once, yet the moves already made stay.
+  it('after a live policy block refuses a new move and keeps unfinished moves listed', async () => {
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => true })
+    try {
+      const unfinished = invoke('wslMove:listUnfinished')
+      noteWslHostsLivePolicyBlock()
+
+      expect(
+        await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+      expect(
+        await invoke('wslMove:preview', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+      expect(invoke('wslMove:listUnfinished')).toEqual(unfinished)
+      expect(invoke('wslMove:listPendingRendererRewrites')).toMatchObject([
+        { migrationId: 'move-1' }
+      ])
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
+  // Stopping a move already running is never new work: a block must leave cancel available.
+  it('still cancels a running move after a live policy block', async () => {
+    registerWslMoveHandlers(
+      () => userDataPath,
+      (senderId) => senderId === MAIN_WINDOW_ID,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cancel only checks that a driver exists; the driver is mocked.
+      () => ({}) as never
+    )
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => true })
+    try {
+      noteWslHostsLivePolicyBlock()
+
+      expect(
+        await invoke('wslMove:start', { distro: 'Ubuntu', repoIds: ['repo-1'] })
+      ).toMatchObject({ outcome: 'refused', code: 'wsl_move_unavailable' })
+      expect(await invoke('wslMove:cancel', 'Ubuntu')).toBe(true)
+      expect(cancelWslMove).toHaveBeenCalledWith('Ubuntu')
     } finally {
       resetWslHostsGateForTests()
     }

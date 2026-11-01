@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionTurnActivity

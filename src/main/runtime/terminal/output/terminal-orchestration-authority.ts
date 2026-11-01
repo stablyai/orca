@@ -26,6 +26,7 @@ import { resolveStructuredWorkerAuthority } from '../../structured-worker-author
 import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
@@ -53,6 +54,26 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       }
     }
     return paneKeys
+  }
+
+  protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
+    const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    return claimIdleShellPrompt({
+      hasPaneAgent: () => {
+        const paneKeys = [...this.collectPaneKeysForPty(ptyId)]
+        // No store, no pane identity, or any row at all keeps the settle; a stale row costs only the wait.
+        return (
+          this.getPaneTerminalAgent(ptyId) !== null ||
+          !readPane ||
+          paneKeys.length === 0 ||
+          paneKeys.some((paneKey) => readPane(paneKey).length > 0)
+        )
+      },
+      claimPromptMarker: () =>
+        this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
+      confirmShellForeground: confirm ? () => confirm(ptyId) : null
+    })
   }
 
   /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */

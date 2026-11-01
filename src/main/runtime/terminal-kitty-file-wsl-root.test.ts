@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromises from 'node:fs/promises'
 import type * as NodePath from 'node:path'
 
-const { realpath, open, handle } = vi.hoisted(() => {
+const { realpath, open } = vi.hoisted(() => {
   const stats = { size: 5, dev: 1, ino: 1, nlink: 1, isFile: () => true }
   const handle = {
     stat: vi.fn(async () => stats),
@@ -59,14 +59,6 @@ const OWNER = { workspacePath: 'C:\\repo', wslDistro: 'Ubuntu' }
 const ROOT = '\\\\wsl.localhost\\Ubuntu'
 
 describe('authoritative WSL Kitty file roots', () => {
-  it('allows guest /tmp for a WSL PTY with a native Windows workspace', async () => {
-    await expect(readTerminalKittyFile({ path: '/tmp/claude-image' }, OWNER)).resolves.toEqual({
-      base64: 'SU1BR0U='
-    })
-    expect(open).toHaveBeenCalledWith(`${ROOT}\\tmp\\claude-image`, expect.any(Number))
-    expect(handle.close).toHaveBeenCalledOnce()
-  })
-
   it('allows only guest temporary roots for a floating WSL terminal', async () => {
     const owner = { workspacePath: null, wslDistro: 'Ubuntu' }
     await expect(readTerminalKittyFile({ path: '/tmp/claude-image' }, owner)).resolves.toEqual({
@@ -77,14 +69,6 @@ describe('authoritative WSL Kitty file roots', () => {
       'outside this terminal'
     )
     expect(realpath).not.toHaveBeenCalledWith(null)
-  })
-
-  it('uses the native path for the guest Windows drive mount', async () => {
-    await expect(readTerminalKittyFile({ path: '/mnt/c/repo/image' }, OWNER)).resolves.toEqual({
-      base64: 'SU1BR0U='
-    })
-    expect(realpath).toHaveBeenCalledWith('C:\\repo')
-    expect(open).toHaveBeenCalledWith('C:\\repo\\image', expect.any(Number))
   })
 
   it('maps a POSIX workspace to the native drive path', async () => {

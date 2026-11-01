@@ -2,21 +2,21 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   providerDiagnosticOf,
-  type AgentSessionArgumentProblem,
   type SubmissionRejectionFact,
   type AgentSessionFailureKind,
   type ProviderDiagnostic
-} from '../../../shared/agent-session-failure'
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionArgumentProblem } from '../../../shared/agent-session/agent-session-argument-problem'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentSessionRefusalReference,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionRefusal,
   isAgentSessionPreSpawnError

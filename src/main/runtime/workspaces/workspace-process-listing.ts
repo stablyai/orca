@@ -1,3 +1,7 @@
+import { structuredNativeWorkReaders } from '../structured-native-work-readers'
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
 import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -40,10 +44,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { chatWorkerTurnStopReporter } from '../orchestration/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
-import {
-  structuredWorkerOpenTaskTitle,
-  structuredWorkerOwesWork
-} from '../structured-worker-custody'
+import { structuredWorkerOpenTaskTitle } from '../structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
@@ -132,7 +133,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       terminalTitleEvidenceByWorktreeId,
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
-      getSummary
+      getSummary,
+      conversationName: this.orchestrationSenderNames.agentRowNamer()
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
@@ -151,29 +153,31 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     sourceDefaultsSupported = true
   ): ResolvedWorktreeSnapshot {
     const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+    const sourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
       snapshot.worktrees,
       sourceDefaultsSupported,
       visibilitySettings
     )
     const hiddenRepos = runtimeHiddenRepos(this.store)
+    const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     return {
       ...snapshot,
-      worktrees: snapshot.worktrees.filter(
-        (worktree) =>
-          !hiddenRepos.hasWorktree(worktree) &&
-          this.isRuntimeWorktreeVisible(
-            worktree,
-            visibilitySourceMatchersByRepoId.get(worktree.repoId),
-            sourceDefaultsSupported,
-            visibilitySettings
-          )
-      )
+      worktrees: snapshot.worktrees.filter((worktree) => {
+        const owner = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+        if (owner.kind === 'ambiguous' || hiddenRepos.hasWorktree(worktree)) {
+          return false
+        }
+        return this.isRuntimeWorktreeVisible(
+          worktree,
+          owner.kind === 'resolved'
+            ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
+            : undefined,
+          sourceDefaultsSupported,
+          visibilitySettings
+        )
+      })
     }
-  }
-
-  listRepos(): Repo[] {
-    return this.store?.getRepos() ?? []
   }
 
   /** Exclude retained migration sources from client listings. */
@@ -272,6 +276,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
+      launchAccountHome: (record, purpose) =>
+        this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       ...(this.prepareCodexCatalogProbeHomeFn
         ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
         : {}),
@@ -301,9 +307,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         now: () => Date.now()
       }),
       onTurnAttention: chatWorkerTurnStopReporter(this.workerTurnStopReportDeps),
-      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
-      hasOpenDispatch: (record) =>
-        structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+      ...structuredNativeWorkReaders(
+        () => this.getOrchestrationDbIfAvailable?.() ?? null,
+        () => this.getExistingOrchestrationDb()
+      )
     })
   }
 }

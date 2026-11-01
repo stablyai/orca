@@ -5,7 +5,7 @@ import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem,
   AgentJournalFreeTextInput
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isPlanApprovalSubject } from '../../../shared/agent-session-approval-subject'
 import { boundInlineText, boundPayload } from './journal-payload-bounds'
 

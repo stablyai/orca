@@ -61,7 +61,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+  it('rejects paired attempts to write the retired Chat UI switch', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()

@@ -103,5 +103,5 @@ export function useAgentMessageSenderView(
     },
     [address, sessionId, handle, chatWorktreeId, stableTarget]
   )
-  return useAgentMessageSenderSource(locate)
+  return useAgentMessageSenderSource(locate, sender?.agent)
 }

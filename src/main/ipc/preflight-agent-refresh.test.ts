@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import type * as WslGuestEnvironment from '../wsl/wsl-guest-environment'
 import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
@@ -35,6 +36,11 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+const invalidateGuest = vi.hoisted(() => vi.fn())
+vi.mock('../wsl/wsl-guest-environment', async (original) => ({
+  ...(await original<typeof WslGuestEnvironment>()),
+  invalidateWslGuestEnvironment: invalidateGuest
+}))
 // These cases cover a running distro; the E9 stopped-distro gate has its own suite.
 vi.mock('../wsl/wsl-background-exec-gate', () => ({
   assertWslDistroRunningForExec: async () => {},
@@ -185,6 +191,7 @@ describe('preflight', () => {
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
     expect(resolveProfileLoadingShell).not.toHaveBeenCalled()
+    expect(invalidateGuest).toHaveBeenCalledWith('Ubuntu')
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

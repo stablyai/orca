@@ -1,8 +1,8 @@
+import { exposeDispatchContext } from './dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import {
-  exposeDispatchContext,
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,
@@ -238,8 +238,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       )
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon must release redrive like stop/release, or an unowned session keeps receiving nudges.
-          releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }
         return {
@@ -256,11 +254,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       if (abandoned.disposition === 'abandoned') {
         // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
         releaseStructuredWorkerSession(
-          params.dispatch,
-          runtime,
           sessionIdFromStructuredWorkerIncarnation(
             db.getDispatchContextById(params.dispatch)?.process_incarnation
-          )
+          ),
+          runtime
         )
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
       }

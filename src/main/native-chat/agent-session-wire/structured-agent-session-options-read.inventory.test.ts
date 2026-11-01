@@ -2,17 +2,18 @@ import { readFileSync } from 'node:fs'
 import { expect, it } from 'vitest'
 import { AcpStructuredOptions } from '../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../acp/generated/acp-protocol.generated'
-import { structuredAgentSessionSeedCatalog } from '../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../../shared/structured-agent-session-options'
+  createStructuredAgentSessionOptionState
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
+  hostTestCatalogReadOperation,
   hostTestOptionsReadStore,
   hostTestRestingOptionsJournal,
   hostTestRestingOptionsRecord
@@ -35,7 +36,7 @@ it('marks unknown resting inventory but preserves completed empty live and resti
       adapter: { readOptions: async () => live },
       agents: NO_STRUCTURED_AGENTS,
       store: hostTestOptionsReadStore(() => record),
-      modelCatalog: { read: async () => inventory }
+      modelCatalog: { captureRead: hostTestCatalogReadOperation, read: async () => inventory }
     },
     serialize: (_id: string, task: () => Promise<unknown>) => task(),
     openConversation: async () => session(),

@@ -1,4 +1,5 @@
 import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -44,11 +45,18 @@ export async function refreshPreparedWorktreeTip(
     if (prepared.value.stdout.trim() === targetHead) {
       return
     }
+    const checkoutWorkersArgs = await checkoutWorkersGitArgs(preparedPath, refreshOptions)
     try {
       // Reset preserves detached HEAD and does not run post-checkout hooks before submit.
       await runWithGitReadCacheInvalidation(() =>
         gitExecFileAsync(
-          [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],
+          [
+            ...checkoutWorkersArgs,
+            ...windowsLongPathGitArgs(preparedPath),
+            'reset',
+            '--hard',
+            targetHead
+          ],
           gitExecOptions(preparedPath, refreshOptions)
         )
       )

@@ -1,4 +1,7 @@
-import { agentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   readCodexErrorAdditionalDetails,

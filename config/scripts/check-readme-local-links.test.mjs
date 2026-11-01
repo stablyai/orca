@@ -80,6 +80,20 @@ describe('README local link check', () => {
     expect(findBrokenReadmeLinks(makeFixture(validReadmes))).toEqual([])
   })
 
+  it('checks mixed-case HTML attributes without changing their URLs', () => {
+    const root = makeFixture({
+      ...validReadmes,
+      'README.md':
+        '<img SRC="docs/Hero.png"><a HrEf=\'Missing.png\'>x</a><source SrcSet="docs/Hero.png 1x, docs/Gone@2x.png 2x">',
+      'docs/Hero.png': 'png'
+    })
+
+    expect(findBrokenReadmeLinks(root).map((link) => link.target)).toEqual([
+      'Missing.png',
+      'docs/Gone@2x.png'
+    ])
+  })
+
   it('rejects a missing full URL even when its split fragments are tracked', () => {
     const root = makeFixture({
       ...validReadmes,

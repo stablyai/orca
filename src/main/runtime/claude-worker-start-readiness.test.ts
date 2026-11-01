@@ -23,6 +23,37 @@ describe('a Claude worker start with its terminal title turned off', () => {
     vi.restoreAllMocks()
   })
 
+  it.each(['idle', 'marker'] as const)(
+    'still accepts the other source after a local %s failure',
+    async (failed) => {
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'Terminal',
+        foregroundProcess: 'claude',
+        launchAgent: 'claude',
+        data: ''
+      })
+      vi.spyOn(
+        runtime,
+        failed === 'idle' ? 'waitForTerminal' : 'waitForFreshWorkerComposer'
+      ).mockRejectedValue(new Error('source_unavailable'))
+      vi.useFakeTimers()
+      const outcome = waitForWorkerStartComposer(runtime, handle, 'claude', 60_000)
+      const settled = vi.fn()
+      outcome.then(settled, settled)
+      runtime.onPtyData(
+        TRANSCRIPT_PANE_PTY_ID,
+        readRuntimeFixture(
+          failed === 'idle' ? NO_TITLE_BOOT : 'claude-dialog-trust-workspace-answered'
+        ),
+        Date.now()
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(settled).toHaveBeenCalledOnce()
+      await expect(outcome).resolves.toMatchObject({ satisfied: true })
+      expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+    }
+  )
+
   it('is ready on its composer, which is the only signal it draws', async () => {
     const { chunks, times } = readTimedRuntimeFixture(NO_TITLE_BOOT)
     // Presence precondition: no OSC title, so tui-idle alone never settles (#22655).
@@ -52,6 +83,10 @@ describe('a Claude worker start with its terminal title turned off', () => {
     expect(settledAt).not.toBeNull()
     expect(settledAt).toBeGreaterThanOrEqual(composerAt)
     expect(settledAt).toBeLessThan(composerAt + 1_000)
+    expect(runtime['terminalWaiters'].forPty(TRANSCRIPT_PANE_PTY_ID)).toHaveLength(0)
+    expect(
+      runtime['terminalStreamConsumers']['dataListeners'].get(TRANSCRIPT_PANE_PTY_ID)
+    ).toBeUndefined()
   })
 })
 

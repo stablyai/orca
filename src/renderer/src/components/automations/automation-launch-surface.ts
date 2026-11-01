@@ -7,7 +7,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import {
   buildAgentLaunchRouteInput,
   type AgentLaunchRouteStore,
@@ -80,7 +80,7 @@ export function automationDraftSurface(
 ): 'chat' | 'terminal' {
   return (
     draft.surface ??
-    (chatSupported !== false && isNativeChatDefaultFor(settings, draft.agentId)
+    (chatSupported !== false && nativeChatPreferenceFor(settings, draft.agentId)
       ? 'chat'
       : 'terminal')
   )

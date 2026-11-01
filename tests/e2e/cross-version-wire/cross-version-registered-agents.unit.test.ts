@@ -5,13 +5,13 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/main/ipc/desktop-renderer-runtime-capabilities'
 import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tab-agent-status-projection'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../../src/shared/agent-session-record-stored-form'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
 import {
   isPersistedAgentSessionRecord,
   type AgentSessionRecord
-} from '../../../src/shared/agent-session-record'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-record'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,

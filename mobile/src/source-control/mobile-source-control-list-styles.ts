@@ -7,35 +7,17 @@ export const listStyles = themedStyleSheet(() => ({
   listContent: {
     paddingHorizontal: spacing.lg
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
-  },
-  sectionCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
+  // SectionHeader brings its own row padding, so it reaches past the list's.
+  sectionHeaderBleed: {
+    marginHorizontal: -spacing.lg
   },
   branchCompareBlock: {
     paddingBottom: spacing.sm
   },
-  branchSectionTitleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
   branchSectionSubtitle: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
-    marginTop: 2
+    paddingBottom: spacing.xs
   },
   branchStateRow: {
     minHeight: 44,
@@ -70,9 +52,10 @@ export const listStyles = themedStyleSheet(() => ({
   fileRowUnavailable: {
     opacity: 0.72
   },
+  // Leading-aligned so the status letter starts on the section label's edge.
   statusBadge: {
     width: 24,
-    alignItems: 'center'
+    alignItems: 'flex-start'
   },
   statusBadgeText: {
     fontFamily: typography.monoFamily,
@@ -103,7 +86,7 @@ export const listStyles = themedStyleSheet(() => ({
   iconButton: {
     width: 32,
     height: 32,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -116,7 +99,7 @@ export const listStyles = themedStyleSheet(() => ({
   conflictActionButton: {
     minHeight: 30,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -137,8 +120,9 @@ export const listStyles = themedStyleSheet(() => ({
     left: 0,
     right: 0,
     gap: spacing.xs,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
@@ -146,7 +130,7 @@ export const listStyles = themedStyleSheet(() => ({
   // A capsule beside the composer's round controls; the action's name matters more than an arrow.
   commitButton: {
     height: COMPOSER_CONTROL_SIZE,
-    borderRadius: COMPOSER_CONTROL_SIZE / 2,
+    borderRadius: radii.pill,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center',
@@ -174,7 +158,7 @@ export const listStyles = themedStyleSheet(() => ({
   commitFailurePanel: {
     marginTop: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed,
@@ -203,7 +187,7 @@ export const listStyles = themedStyleSheet(() => ({
   commitFailureFixButton: {
     minHeight: 36,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     flexDirection: 'row',
     alignItems: 'center',

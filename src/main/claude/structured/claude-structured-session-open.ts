@@ -30,16 +30,18 @@ export async function openClaudeStructuredSession(input: {
   const { proof, account, resumesTranscript, onLateRefusal } = session.initialization
   const opened = openClaudeSession({
     session,
-    facts: readClaudeStartupFacts({
-      connection: session.connection,
-      initProof: proof,
-      sessionId: request.sessionId,
-      providerSessionId: session.providerSessionId,
-      resumesTranscript,
-      account,
-      requestTimeoutMs: deps.requestTimeoutMs,
-      emit: (event) => emit(session, event)
-    }),
+    facts:
+      session.initialization.facts ??
+      readClaudeStartupFacts({
+        connection: session.connection,
+        initProof: proof,
+        sessionId: request.sessionId,
+        providerSessionId: session.providerSessionId,
+        resumesTranscript,
+        account,
+        requestTimeoutMs: deps.requestTimeoutMs,
+        emit: (event) => emit(session, event)
+      }),
     readSettings: () =>
       readClaudeStructuredSessionSettings(session.connection, deps.requestTimeoutMs),
     isCurrent: () => sessions.get(request.sessionId) === session,
@@ -89,5 +91,5 @@ export async function openClaudeStructuredSession(input: {
     )
     current()
   }
-  return { link: session.link, ...result }
+  return { ...result, link: session.link, newConversation: !resumesTranscript }
 }

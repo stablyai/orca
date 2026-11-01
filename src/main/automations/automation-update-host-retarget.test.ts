@@ -184,7 +184,7 @@ describe('pausing an orphan never re-adopts it', () => {
         expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } },
         operation: 'execute'
       })
-    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved }))
+    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged }))
   })
 
   it('keeps the stale generation when the same target id came back re-registered', async () => {

@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 const FLOATING_CONTROLS_BOTTOM = spacing.md
@@ -65,7 +65,7 @@ export const styles = themedStyleSheet(() => ({
   fab: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
@@ -87,7 +87,7 @@ export const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     height: LOAD_EARLIER_RETRY_HEIGHT,
     paddingHorizontal: spacing.md,
-    borderRadius: LOAD_EARLIER_RETRY_HEIGHT / 2,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle

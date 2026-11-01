@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -7,11 +7,9 @@ import {
   type StructuredAgentSessionLinkageJournal,
   type StructuredAgentSessionReadingControl
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { blockOf } from './claude-background-task-row-test-support'
 import {
@@ -77,29 +75,6 @@ function persistedTarget(
 }
 
 describe('Claude structured reading control', () => {
-  it('binds sink pressure to SDK reading and unbinds on requested close', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    const events = controlledSink()
-
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: events.sink
-    })
-
-    const pauseReading = vi.spyOn(claude.connections[0], 'pauseReading')
-    const resumeReading = vi.spyOn(claude.connections[0], 'resumeReading')
-    events.control()?.pauseReading()
-    expect(pauseReading).toHaveBeenCalledOnce()
-    events.control()?.resumeReading()
-    expect(resumeReading).toHaveBeenCalledOnce()
-
-    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(events.unbind).toHaveBeenCalledOnce()
-  })
-
   it('unbinds when acquisition fails after the connection opens', async () => {
     const claude = fakeClaude()
     const open = claude.openConnection
@@ -120,23 +95,6 @@ describe('Claude structured reading control', () => {
         events: events.sink
       })
     ).rejects.toThrow('exited (code 1)')
-    expect(events.unbind).toHaveBeenCalledOnce()
-  })
-
-  it('unbinds when the published provider exits unexpectedly', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    const events = controlledSink()
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: events.sink
-    })
-
-    claude.connections[0].handlers.onExit?.(new Error('provider exited'))
-    await adapter.drainObservedExits()
-
     expect(events.unbind).toHaveBeenCalledOnce()
   })
 

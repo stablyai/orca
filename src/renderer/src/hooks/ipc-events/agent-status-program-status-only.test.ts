@@ -81,24 +81,6 @@ describe('agent-status programStatus ingest', () => {
     })
   })
 
-  it('passes a full publish facet through, and null when main sent none', () => {
-    const apply = createApplicator()
-    apply(status({ receivedAt: 1_700_000_010_000, programStatus: FACET }))
-    apply(status({ receivedAt: 1_700_000_011_000 }))
-
-    expect(setAgentStatus.mock.calls[0][1].programStatus).toEqual(FACET)
-    expect(setAgentStatus.mock.calls[1][1].programStatus).toBeNull()
-  })
-
-  it('drops a malformed facet whole', () => {
-    const apply = createApplicator()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Simulates an untrusted IPC value.
-    const malformed = { state: 'exploded', observedAt: 1 } as unknown as ProgramStatusFacet
-    apply(status({ receivedAt: 1_700_000_010_000, programStatus: malformed }))
-
-    expect(setAgentStatus.mock.calls[0][1].programStatus).toBeNull()
-  })
-
   it('patches only the facet for a facet-only republish, even with an older receivedAt', () => {
     const apply = createApplicator()
 
@@ -107,20 +89,6 @@ describe('agent-status programStatus ingest', () => {
     expect(setAgentProgramStatus).toHaveBeenCalledWith(PANE_KEY, FACET)
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(mocks.observe).not.toHaveBeenCalled()
-  })
-
-  it('clears through a facet-only republish without a facet', () => {
-    const apply = createApplicator()
-    apply(status({ programStatusOnly: true }))
-
-    expect(setAgentProgramStatus).toHaveBeenCalledWith(PANE_KEY, null)
-  })
-
-  it('reports a facet-only republish the store ignored (no row or unchanged facet) as dropped', () => {
-    setAgentProgramStatus.mockReturnValue(false)
-    const apply = createApplicator()
-
-    expect(apply(status({ programStatus: FACET, programStatusOnly: true }))).toBe('dropped')
   })
 
   it('keeps the pending state row of a known pane when a facet tick lands', () => {

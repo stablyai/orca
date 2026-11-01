@@ -1,6 +1,6 @@
 import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
-  markClaudeLeadTurnInterrupted,
+  markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
@@ -64,6 +64,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
   )
 
   observeClaudeTerminalEvidence(paneKey: string, evidence: ClaudeTerminalEvidence): void {
+    if (evidence.kind === 'input') {
+      this.programStatusFacets.noteInput(paneKey)
+    }
     this.claudeTerminalInterrupts.observe(paneKey, evidence)
   }
 
@@ -138,53 +141,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
       return false
     }
-    // Update local producer records too, or later child hooks revive stale work; remote records belong to the relay.
-    const local =
-      agentType === 'claude' && !existing.connectionId
-        ? markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
-        : undefined
-    const relayed =
-      agentType === 'claude' && existing.connectionId
-        ? foldMainAgentWithRowChildWork('done', existing)
-        : undefined
-    const state = local?.state ?? relayed?.stateName ?? 'done'
-    const workingMode = local?.workingMode ?? relayed?.workingMode
-    const inferred = this.applyNormalizedStatus({
-      paneKey: existing.paneKey,
-      tabId: existing.tabId,
-      worktreeId: existing.worktreeId,
-      connectionId: existing.connectionId,
-      providerSession: existing.providerSession,
-      launchToken: existing.launchToken,
-      hostTurnRevision: existing.hostTurnRevision,
-      source: existing.source,
-      // Retain shell evidence so restart can seed the cancelled main agent and later settle drained children.
-      ...(existing.claudeRunningNonAgentTask !== undefined
-        ? { claudeRunningNonAgentTask: existing.claudeRunningNonAgentTask }
-        : {}),
-      payload: {
-        state,
-        claudeTaskWakeupPending:
-          state !== 'done'
-            ? local
-              ? local.claudeTaskWakeupPending
-              : payload.claudeTaskWakeupPending
-            : undefined,
-        ...(workingMode ? { workingMode } : {}),
-        prompt: payload.prompt,
-        agentType,
-        ...(payload.model ? { model: payload.model } : {}),
-        // Older readers use interrupted on done rows; monitoring rows keep cancellation on mainAgent.outcome.
-        ...(state === 'done' ? { interrupted: true } : {}),
-        // Idle children remain display state across inferred cancellation.
-        ...(payload.subagents ? { subagents: payload.subagents } : {}),
-        mainAgent: local?.mainAgent ?? {
-          state: 'done',
-          outcome: 'cancellation',
-          stateStartedAt: Date.now()
-        }
-      }
-    })
+    const inferred = this.settleTurnWithoutStop(existing, 'cancellation')
     if (!inferred) {
       return false
     }
@@ -219,6 +176,78 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       intent: request.intent
     })
     return true
+  }
+
+  /** A prompt hook blocked Claude's prompt (its claimed run rested with no result), so no Stop follows. */
+  protected settleClaudePromptBlocked(row: EnrichedAgentHookEventPayload): void {
+    if (
+      this.programStatusFacets.claimedRunRestedWithoutResult(row.paneKey, 'claude') &&
+      // Relayed interrupts are adjudicated on the relay, which sees the input this host does not.
+      !row.connectionId &&
+      this.state.lastStatusByPaneKey.get(row.paneKey) === row &&
+      row.payload.agentType === 'claude' &&
+      row.payload.mainAgent?.state === 'working' &&
+      !row.restoredUnconfirmed &&
+      !row.providerSessionOnly
+    ) {
+      this.settleTurnWithoutStop(row)
+    }
+  }
+
+  /** End a working main-agent turn whose Stop hook never comes; cancellation marks an interrupt. */
+  private settleTurnWithoutStop(
+    existing: EnrichedAgentHookEventPayload,
+    outcome?: 'cancellation'
+  ): EnrichedAgentHookEventPayload | undefined {
+    const { payload } = existing
+    const agentType = payload.agentType
+    // Update local producer records too, or later child hooks revive stale work; remote records belong to the relay.
+    const local =
+      agentType === 'claude' && !existing.connectionId
+        ? markClaudeLeadTurnDone(this.state, existing.paneKey, outcome)
+        : undefined
+    const relayed =
+      agentType === 'claude' && existing.connectionId
+        ? foldMainAgentWithRowChildWork('done', existing)
+        : undefined
+    const state = local?.state ?? relayed?.stateName ?? 'done'
+    const workingMode = local?.workingMode ?? relayed?.workingMode
+    return this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      launchToken: existing.launchToken,
+      hostTurnRevision: existing.hostTurnRevision,
+      source: existing.source,
+      // Retain shell evidence so restart can seed the cancelled main agent and later settle drained children.
+      ...(existing.claudeRunningNonAgentTask !== undefined
+        ? { claudeRunningNonAgentTask: existing.claudeRunningNonAgentTask }
+        : {}),
+      payload: {
+        state,
+        claudeTaskWakeupPending:
+          state !== 'done'
+            ? local
+              ? local.claudeTaskWakeupPending
+              : payload.claudeTaskWakeupPending
+            : undefined,
+        ...(workingMode ? { workingMode } : {}),
+        prompt: payload.prompt,
+        agentType,
+        ...(payload.model ? { model: payload.model } : {}),
+        // Older readers use interrupted on done rows; monitoring rows keep cancellation on mainAgent.outcome.
+        ...(state === 'done' && outcome ? { interrupted: true } : {}),
+        // Idle children remain display state across inferred cancellation.
+        ...(payload.subagents ? { subagents: payload.subagents } : {}),
+        mainAgent: local?.mainAgent ?? {
+          state: 'done',
+          ...(outcome ? { outcome } : {}),
+          stateStartedAt: Date.now()
+        }
+      }
+    })
   }
 
   /** Claude can omit the final hook after AskUserQuestion is answered or dismissed. */

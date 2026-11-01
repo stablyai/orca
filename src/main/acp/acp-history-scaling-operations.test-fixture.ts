@@ -166,7 +166,8 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
   Object.defineProperty(Set.prototype, 'has', {
     ...has,
     value: function (this: Set<unknown>, value: unknown) {
-      if (operationStack()?.split('\n')[2]?.includes('acp-history-replay.ts')) {
+      const caller = operationStack()?.split('\n')[2]
+      if (caller?.includes('acp-history-replay.ts')) {
         counts.membership++
       }
       return setHas.call(this, value)
@@ -207,6 +208,9 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
     ...get,
     value: function (this: Map<unknown, unknown>, key: unknown) {
       const stack = operationStack()
+      if (stack.split('\n')[2]?.includes('compose') && stack.includes('acp-history-catch-up.ts')) {
+        counts.compositionReads++
+      }
       if (stack.includes('structuredAgentSessionRejectedShownInPlace')) {
         counts.copies++
       }
@@ -223,6 +227,9 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
     ...set,
     value: function (this: Map<unknown, unknown>, key: unknown, value: unknown) {
       const stack = operationStack()
+      if (stack.split('\n')[2]?.includes('compose') && stack.includes('acp-history-catch-up.ts')) {
+        counts.compositionWrites++
+      }
       if (stack.includes('structuredAgentSessionRejectedShownInPlace')) {
         counts.copies++
       }
@@ -235,7 +242,7 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
     for (const script of coverage.result) {
       const path = script.url.split('?')[0]
       if (
-        !/acp-history-(ordered-availability|turn-matching)\.ts$|structured-agent-session-message-projection\.ts$/.test(
+        !/acp-history-(ordered-availability|turn-matching|catch-up)\.ts$|structured-agent-session-message-projection\.ts$/.test(
           path
         )
       ) {
@@ -245,6 +252,9 @@ export async function work(run: (counts: ReturnType<typeof newCounts>) => Promis
         const total = fn.ranges.reduce((sum, block) => sum + block.count, 0)
         if (path.endsWith('acp-history-turn-matching.ts')) {
           counts.matching += total
+        }
+        if (path.endsWith('acp-history-catch-up.ts')) {
+          counts.catchUp += total
         }
       }
     }

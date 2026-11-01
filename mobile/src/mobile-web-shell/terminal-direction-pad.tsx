@@ -160,7 +160,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },

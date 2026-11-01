@@ -1,3 +1,6 @@
+import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
+import type { Worktree } from '../worktree/workspace-list-types'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
@@ -21,6 +24,7 @@ import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,
+  ServerRowSnapshots,
   NO_SERVER_WORKSPACES
 } from '../worktree/server-workspaces'
 
@@ -47,6 +51,7 @@ export function useHostWorktreeCatalog(args: {
     syncViewSettingsFromDesktop
   } = args
   const {
+    catalogError,
     clientRef,
     fetchWorktreesInFlightRef,
     newWorktreeModalVisibleRef,
@@ -59,10 +64,20 @@ export function useHostWorktreeCatalog(args: {
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
-    worktreeCatalogRef
+    worktreeCatalogRef,
+    worktrees,
+    worktreesLoaded
   } = state
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
+  const firstPageRef = useRef<Worktree[] | null>(null)
+  const serverRowSnapshotsRef = useRef<ServerRowSnapshots | null>(null)
+  // A first page only helps a never-loaded empty screen whose full read is not already failing.
+  const firstPageUseful = !worktreesLoaded && worktrees.length === 0 && catalogError === null
+  const firstPageUsefulRef = useRef(firstPageUseful)
+  useEffect(() => {
+    firstPageUsefulRef.current = firstPageUseful
+  }, [firstPageUseful])
 
   // Fetch server rows separately so a slow server cannot delay desktop rows.
   const fetchServerRows = useCallback(
@@ -77,7 +92,13 @@ export function useHostWorktreeCatalog(args: {
       }
       serverFetchInFlightRef.current = requestClient
       try {
-        const fetched = await fetchServerWorkspaces(requestClient)
+        const deltas = hostCapabilities.includes(
+          MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY
+        )
+        if (serverRowSnapshotsRef.current?.deltas !== deltas) {
+          serverRowSnapshotsRef.current = new ServerRowSnapshots(deltas)
+        }
+        const fetched = await fetchServerWorkspaces(requestClient, serverRowSnapshotsRef.current)
         if (fetched && clientRef.current === requestClient) {
           setServerWorkspaces((previous) => applyServerWorkspaces(previous, fetched))
         }
@@ -111,9 +132,29 @@ export function useHostWorktreeCatalog(args: {
       const requestClient = client
       const requestHostId = hostId
       void fetchServerRows(requestClient)
+      // With nothing to show yet, draw the host's first rows while the full catalog arrives.
+      let fullSettled = false
+      if (firstPageUsefulRef.current) {
+        void readWorktreeFirstPage(requestClient)
+          .then((rows) => {
+            const current = clientRef.current === requestClient && hostId === requestHostId
+            if (rows && current && !fullSettled) {
+              firstPageRef.current = rows
+              setWorktrees((current) => (current.length === 0 ? rows : current))
+            }
+          })
+          .catch(() => {})
+      }
+      // A failed full read must not leave the first page looking like the whole host.
+      const dropFirstPage = () =>
+        setWorktrees((current) => (current === firstPageRef.current ? [] : current))
 
       try {
-        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+        const fetched = await worktreeCatalogRef.current
+          .fetch(requestClient, requestHostId)
+          .finally(() => {
+            fullSettled = true
+          })
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
@@ -123,14 +164,18 @@ export function useHostWorktreeCatalog(args: {
         // Report catalog failure rather than zero workspaces so broken remote hosts remain diagnosable (STA-3123).
         if (fetched.kind === 'request_failed') {
           setCatalogError(fetched.code)
+          dropFirstPage()
           return
         }
         if (fetched.pending.admission.kind === 'invalid') {
           setCatalogError('invalid_response')
+          dropFirstPage()
         }
         // Even unchanged replies reassert host truth over optimistic local edits.
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
+          // Confirmed rows may keep the first page's array; a later failed poll must not clear them.
+          firstPageRef.current = null
           setCatalogError(null)
           // A confirmed catalog proves a transient action failure is no longer current.
           setActionError('')
@@ -177,6 +222,7 @@ export function useHostWorktreeCatalog(args: {
           setCatalogError(
             error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
           )
+          dropFirstPage()
         }
       } finally {
         fetchWorktreesInFlightRef.current = false

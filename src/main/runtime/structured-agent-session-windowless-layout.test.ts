@@ -3,12 +3,19 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  getStructuredAgentSessionHost,
+  setStructuredAgentSessionHost
+} from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { chatTabCommandsSettled, layoutApplyOn } from './session-layout-apply.test-fixture'
+import {
+  captureStructuredSessionSurface,
+  closeCapturedStructuredSession
+} from './agent-session/structured-agent-session-close'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 
 const WT = 'repo-1::/tmp/worktree-a'
@@ -54,12 +61,45 @@ function useChatHost(fake: Partial<StructuredAgentSessionHost>): void {
     typeof fake.getPersistedVisibleSessionTabIndex === 'function'
       ? fake.getPersistedVisibleSessionTabIndex()
       : { present: false, sessionIds: [] }
+  const visible = new Set(index().sessionIds)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each test supplies every host member its path reads.
   setStructuredAgentSessionHost({
-    deps: { store: { getConversation: () => null, isSessionUnreadable: () => false } },
+    deps: {
+      logger: { warn: vi.fn() },
+      store: {
+        getConversation: (id: string) => ({
+          sessionId: id,
+          location: { executionHostId: 'local', workspaceId: WT }
+        }),
+        isSessionUnreadable: () => false
+      }
+    },
+    getSessionTabId: (id: string) => (visible.has(id) ? `structured-agent-session-${id}` : null),
     isSessionTabVisible: (id: string) => index().sessionIds.includes(id),
+    setSessionTabVisibility: async (id: string, show: boolean) => {
+      if (show) {
+        visible.add(id)
+      } else {
+        visible.delete(id)
+      }
+    },
+    close: async () => {},
     ...fake
   } as never)
+}
+
+async function closeChat(runtime: OrcaRuntimeService, id: string) {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('Expected fixture host')
+  }
+  await closeCapturedStructuredSession(
+    host,
+    id,
+    'user-close',
+    captureStructuredSessionSurface(host, id, runtime),
+    runtime
+  )
 }
 
 function chat(sessionId: string) {
@@ -152,7 +192,7 @@ describe('a chat tab on a host with no window', () => {
     const fresh = new OrcaRuntimeService(partialRuntimeStore(runtimeStore(state)))
     useChatHost({ getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }) })
 
-    fresh.onStructuredSessionTabHidden('chat-1')
+    await closeChat(fresh, 'chat-1')
     await settled()
 
     expect(savedChatIds(state)).toEqual([])
@@ -203,7 +243,7 @@ describe('a chat tab on a host with no window', () => {
     const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     useChatHost({ getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }) })
 
-    runtime.onStructuredSessionTabHidden('chat-1')
+    await closeChat(runtime, 'chat-1')
     runtime.onStructuredSessionTabHidden('chat-x')
     runtime.onStructuredSessionTabHidden('chat-ssh')
     runtime.onStructuredSessionTabHidden('chat-y')
@@ -331,14 +371,13 @@ describe('a chat tab on a host with no window', () => {
     useChatHost({ getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }) })
 
     // Not awaited between: the close reaches main while the open is still in its queue.
-    void runtime.publishStructuredAgentSessionTab({
+    await runtime.publishStructuredAgentSessionTab({
       workspaceId: WT,
       sessionId: 'chat-1',
       agent: 'codex',
       activate: true
     })
-    runtime.onStructuredSessionTabHidden('chat-1')
-    await settled()
+    await closeChat(runtime, 'chat-1')
     await settled()
 
     expect(savedChatIds(state)).toEqual([])

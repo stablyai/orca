@@ -392,6 +392,9 @@ function createMobileCiScopeRepository(
     'config/scripts/pr-e2e-source-routing.mjs',
     'config/scripts/pr-browser-e2e-source-routes.mjs',
     'config/scripts/pr-editor-preview-e2e-source-routes.mjs',
+    'config/scripts/pr-feature-area-e2e-source-routes.mjs',
+    'config/scripts/pr-plugin-e2e-source-routes.mjs',
+    'config/scripts/pr-wsl-e2e-source-routes.mjs',
     'config/scripts/ci-e2e-job-selection.mjs'
   ]) {
     mkdirSync(dirname(join(directory, file)), { recursive: true })

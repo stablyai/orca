@@ -29,7 +29,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
@@ -40,7 +40,8 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   sectionBody: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   sectionLabel: {
@@ -69,7 +70,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: colors.bgRaised
   },
@@ -80,9 +81,9 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   prTitle: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    lineHeight: 24
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 21
   },
   prMeta: {
     color: colors.textSecondary,
@@ -118,7 +119,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
-    borderRadius: radii.button
+    borderRadius: radii.pill
   },
   row: {
     minHeight: 44,
@@ -147,7 +148,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   emptyText: {
     color: colors.textSecondary,
@@ -208,7 +209,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   checkDetailLogScroll: {
     maxHeight: 160,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -244,7 +245,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -263,7 +264,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   pickerTitle: {
     color: colors.textPrimary,

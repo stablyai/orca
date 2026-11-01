@@ -2,7 +2,11 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import {
+  pendingCreationChatDraftScopeKey,
+  withPendingChatInput,
+  type WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
@@ -32,9 +36,15 @@ type LaunchStructuredWorktreeSessionArgs = {
 /** Host-declined chats keep background creates in place without navigation (#23974); still-visible creates use normal agent-tab fallback. */
 function openBackgroundDeclinedTerminal(
   args: LaunchStructuredWorktreeSessionArgs,
-  host: RuntimeClientTarget
+  host: RuntimeClientTarget,
+  heldChatMessage: string | undefined
 ): StructuredLaunchTerminal {
-  const startup = buildWorktreeCreationStartupOpt(args.request, false)
+  const built = buildWorktreeCreationStartupOpt(args.request, false)
+  // The submit-time plan never saw a message sent while the worktree was created; leave it unsent in the agent's input.
+  const startup =
+    built && heldChatMessage && !built.draftPrompt
+      ? { ...built, draftPrompt: heldChatMessage }
+      : built
   if (host.kind === 'environment') {
     ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup,
@@ -75,14 +85,19 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
+  // Read at launch, not submit: the user may have written or sent in the chat while git worked.
+  const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
+  const request = withPendingChatInput(pending, args.request)
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
-    prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
-    ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
+    prompt: request.launchDraftPrompt ?? request.quickPrompt,
+    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+    // What the user left unsent in the chat shown while the worktree was created.
+    draftFromScope: pendingCreationChatDraftScopeKey(args.creationId)
   })
   const abandoned = new AbortController()
   let ownershipTransferred = false
@@ -99,7 +114,10 @@ export async function launchStructuredWorktreeSession(
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion
         ? {}
-        : { onHostDeclined: (host) => openBackgroundDeclinedTerminal(args, host) }),
+        : {
+            onHostDeclined: (host) =>
+              openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
+          }),
       beforeOpen: () => {
         // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
         if (abandoned.signal.aborted || isCancelled()) {

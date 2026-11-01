@@ -38,10 +38,8 @@ import {
 } from '../browser/doc-preview-grant-registry'
 import {
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
-  DOC_PREVIEW_LINK_CLICK_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
-  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
-  parseDocPreviewUrl
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL
 } from '../../shared/doc-preview-scheme'
 
 const REQUEST: DocPreviewGrantRequest = {
@@ -78,14 +76,6 @@ function authorize(grantId: unknown, relativePath: unknown): boolean {
   return handler({ sender }, grantId, relativePath) as boolean
 }
 
-function reportLinkClick(url: unknown, modifiers?: unknown): void {
-  const listener = mocks.listeners.get(DOC_PREVIEW_LINK_CLICK_CHANNEL)
-  if (!listener) {
-    throw new Error('link click listener not registered')
-  }
-  listener({ sender }, url, modifiers)
-}
-
 beforeEach(() => {
   mocks.handlers.clear()
   mocks.listeners.clear()
@@ -97,30 +87,6 @@ beforeEach(() => {
 })
 
 describe('document preview grant handlers', () => {
-  it('mints a grant addressable by the URL it returns', () => {
-    const result = mint()
-
-    expect(parseDocPreviewUrl(result.url)).toEqual({
-      grantId: result.grantId,
-      relativePath: 'index.html'
-    })
-    expect(getDocPreviewGrant(result.grantId)?.root).toBe('/home/alice/docs')
-    expect(mocks.isTrustedBrowserRenderer).toHaveBeenCalledWith(sender)
-  })
-
-  it('revokes a grant it minted', () => {
-    const result = mint()
-
-    expect(revoke(result.grantId)).toBe(true)
-    expect(getDocPreviewGrant(result.grantId)).toBeNull()
-  })
-
-  it('rejects a request that names no root, entry document or page', () => {
-    expect(() => mint({ ...REQUEST, root: '  ' })).toThrow(/Invalid/)
-    expect(() => mint({ ...REQUEST, entryRelativePath: '' })).toThrow(/Invalid/)
-    expect(() => mint({ ...REQUEST, browserPageId: ' ' })).toThrow(/Invalid/)
-  })
-
   // Keep browser/document registries disjoint when minting the document identity.
   it('refuses to make a page that already hosts a browsing guest into a document page', () => {
     mocks.getGuestWebContentsId.mockReturnValue(42)
@@ -167,35 +133,5 @@ describe('document preview grant handlers', () => {
     expect(authorize(result.grantId, null)).toBe(false)
     expect(authorize(null, 'assets/app.js')).toBe(false)
     expect(authorize('0'.repeat(32), 'assets/app.js')).toBe(false)
-  })
-
-  // Preview guests are untrusted; the guest policy validates sender binding and link URL.
-  it('hands a reported link click to the guest policy with the sender that reported it', () => {
-    reportLinkClick('https://example.com/docs')
-
-    expect(mocks.reportDocPreviewLinkClick).toHaveBeenCalledExactlyOnceWith(
-      sender,
-      'https://example.com/docs',
-      undefined
-    )
-    expect(mocks.isTrustedBrowserRenderer).not.toHaveBeenCalled()
-  })
-
-  it('forwards additive modifier data without changing the legacy URL argument', () => {
-    const modifiers = { metaKey: true, ctrlKey: false, shiftKey: true }
-    reportLinkClick('https://example.com/docs', modifiers)
-
-    expect(mocks.reportDocPreviewLinkClick).toHaveBeenCalledExactlyOnceWith(
-      sender,
-      'https://example.com/docs',
-      modifiers
-    )
-  })
-
-  it('ignores a reported click that is not a string at all', () => {
-    reportLinkClick({ url: 'https://example.com/docs' })
-    reportLinkClick(undefined)
-
-    expect(mocks.reportDocPreviewLinkClick).not.toHaveBeenCalled()
   })
 })

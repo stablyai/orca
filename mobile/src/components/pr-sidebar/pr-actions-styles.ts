@@ -23,7 +23,7 @@ export const prActionsStyles = themedStyleSheet(() => ({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -75,7 +75,7 @@ export const prActionsStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel

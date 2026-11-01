@@ -29,7 +29,9 @@ export async function addLocalRepoFromPath(
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
     return {
-      error: (await describeWslUncAccessDenied(path)) ?? `Not a valid git repository: ${path}`
+      error:
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        `Not a valid git repository: ${path}`
     }
   }
 

@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/protocol-version'
 import {
   createSupportFollowsHostSetting,
+  isStructuredNativeChatDefaultFor,
   structuredAgentsReadBy,
   clientRendersStructuredAgent,
   supportsStructuredAgentSessions
@@ -117,3 +118,22 @@ describe.each([
     expect(clientRendersStructuredAgent(clientCapabilities, agent)).toBe(true)
   })
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'legacy phone admission reads host default %s and its override',
+  (agentDefaultSurface) => {
+    const runtime = {
+      requireStore: () => ({
+        getSettings: () => ({
+          agentDefaultSurface,
+          nativeChatProviders: { codex: agentDefaultSurface !== 'chat' }
+        })
+      })
+    }
+    expect(
+      createSupportFollowsHostSetting({ clientKind: 'mobile', clientCapabilities: CAPABLE })
+    ).toBe(true)
+    expect(isStructuredNativeChatDefaultFor(runtime, 'claude')).toBe(agentDefaultSurface === 'chat')
+    expect(isStructuredNativeChatDefaultFor(runtime, 'codex')).toBe(agentDefaultSurface !== 'chat')
+  }
+)

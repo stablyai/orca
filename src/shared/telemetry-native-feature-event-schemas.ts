@@ -82,6 +82,39 @@ export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   })
   .strict()
 
+const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
+export const chatUiFeatureTipShownSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const chatUiFeatureTipActionSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    action: z.enum(['use_chat_ui', 'stay_in_terminal', 'open_settings', 'dismissed']),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+// Fires in both arms when the tip would open, so control has the same exposure moment as treatment.
+export const chatUiFeatureTipExposureSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    launch_tip_cohort: z.enum(['control', 'treatment', 'unassigned']),
+    shown: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const agentDefaultSurfaceChangedSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    source: z.enum(['launch_card', 'settings']),
+    launch_tip_shown: z.boolean(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 export const featureWallOpenedSchema = z
   .object({
     source: featureWallOpenSourceSchema

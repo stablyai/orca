@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { NativeChatBlock } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 
 vi.mock('react-native', () => ({
   Animated: {

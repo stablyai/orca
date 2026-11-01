@@ -50,6 +50,7 @@ export type RuntimeServiceCommandSurface = {
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
+  getAccountsStreamSnapshot: RuntimeAccountController['getStreamSnapshot']
   getUsageRateLimits: RuntimeAccountController['usageRateLimits']
   requireUsageRateLimits: RuntimeAccountController['requireUsageRateLimits']
   refreshAccountsForMobile: RuntimeAccountController['refreshForMobile']
@@ -163,6 +164,7 @@ export function installRuntimeServiceCommandSurface(
     getCommitMessageAgentEnvironmentResolvers:
       accounts.getCommitMessageAgentEnvironment.bind(accounts),
     getAccountsSnapshot: accounts.getSnapshot.bind(accounts),
+    getAccountsStreamSnapshot: accounts.getStreamSnapshot.bind(accounts),
     getUsageRateLimits: accounts.usageRateLimits.bind(accounts),
     requireUsageRateLimits: accounts.requireUsageRateLimits.bind(accounts),
     refreshAccountsForMobile: accounts.refreshForMobile.bind(accounts),

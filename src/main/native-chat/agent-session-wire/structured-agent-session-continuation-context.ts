@@ -1,5 +1,5 @@
 import { projectSavedChatContextItems } from '../agent-session-saved-prompt-text'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../shared/agent-session-wire'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import { trimAgentSessionContext } from '../../../shared/agent-session-context-budget'

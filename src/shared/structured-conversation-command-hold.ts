@@ -6,15 +6,15 @@ import {
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from './agent-session-failure'
+} from './agent-session/failures/agent-session-failure'
 import {
   sayAgentSessionFailureEnglish,
   type AgentSessionFailureSay
-} from './agent-session-failure-copy'
-import { agentSessionFailureSentence } from './agent-session-failure-words'
-import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
-import type { AgentSessionWriteNoticeSentence } from './agent-session-write-notice-copy'
-import { structuredAgentSessionCommandHostRefusalCause } from './structured-agent-session-command-refusal-cause'
+} from './agent-session/failures/agent-session-failure-copy'
+import { agentSessionFailureSentence } from './agent-session/failures/agent-session-failure-words'
+import { agentSessionFailureStatedByRow } from './agent-session/failures/agent-session-visible-failures'
+import type { AgentSessionWriteNoticeSentence } from './agent-session/failures/agent-session-write-notice-copy'
+import { structuredAgentSessionCommandHostRefusalCause } from './agent-session/failures/structured-agent-session-command-refusal-cause'
 import type { StructuredAgentSessionCommandRefusalCause } from './structured-agent-session-composer'
 
 /** Ahead leaves command text untouched behind an unanswered local send; other holds return an explicit refusal. */

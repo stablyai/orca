@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 // Docs-only CI skips some media owners; check index paths because GitHub cannot render uncommitted docs-site/feature-wall assets.
 const TRANSLATED_README_DIR = path.join('docs', 'readme')
 const EXTERNAL_TARGET = /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i
-const HTML_ATTRIBUTE = /\b(src|srcset|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+const HTML_ATTRIBUTE = /\b(src|srcset|href)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi
 const MARKDOWN_LINK = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
 
 function readmeFiles(root) {
@@ -36,7 +36,7 @@ function* localTargets(markdown) {
     const value = doubleQuoted ?? singleQuoted
     // Only srcset lists candidates; each begins with its URL. src/href hold one whole URL.
     const targets =
-      attribute === 'srcset'
+      attribute.toLowerCase() === 'srcset'
         ? value.split(',').map((candidate) => candidate.trim().split(/\s+/)[0])
         : [value.trim()]
     for (const target of targets) {

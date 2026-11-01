@@ -285,8 +285,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       resolveStructuredTarget: (mailboxHandle) =>
         this.resolveStructuredMailboxTarget(mailboxHandle),
       getCliCommand: localOrchestrationCliCommand,
-      senderName: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.nameOf(party, reportedDispatchId),
+      senderSnapshot: (party, reportedDispatchId) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
       host: createStructuredMailboxPointerHost()
     })
 
@@ -337,6 +337,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   // Replay bounded startup bytes when draft paste subscribes after the ready marker.
   protected recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
+
+  // A fresh launch's pending composer watch; submits await it, and it is dropped once settled.
+  protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
 
   protected setupCompletionTokenByPtyId = new Map<string, string>()
 }

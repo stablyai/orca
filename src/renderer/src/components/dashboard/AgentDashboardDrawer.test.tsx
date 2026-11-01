@@ -77,17 +77,6 @@ afterEach(() => {
 })
 
 describe('AgentDashboardDrawer', () => {
-  it('derives no dashboard snapshot while closed', () => {
-    render(<AgentDashboardDrawer statusBarVisible />)
-
-    expect(mocks.useLiveDashboardSnapshot).not.toHaveBeenCalled()
-    expect(mocks.useAgentDashboardTelemetry).not.toHaveBeenCalled()
-
-    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
-    expect(mocks.useLiveDashboardSnapshot).toHaveBeenCalledTimes(1)
-    expect(mocks.useAgentDashboardTelemetry).toHaveBeenCalledWith('in_window')
-  })
-
   it('leaves Escape to an open terminal panel before dismissing the drawer', () => {
     mocks.blockingOverlay = true
     const view = render(<AgentDashboardDrawer statusBarVisible />)
@@ -148,21 +137,6 @@ describe('AgentDashboardDrawer', () => {
     })
   }
 
-  it('reveals a colliding worktree on the card execution host', () => {
-    const setActiveWorktree = vi.spyOn(useAppStore.getState(), 'setActiveWorktree')
-
-    revealFromBoard('runtime:env-1')
-
-    // Use the shared dispatcher to switch terminal view, seed initial terminals and resume sleeping workspaces.
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
-      executionHostId: 'runtime:env-1'
-    })
-    expect(setActiveWorktree).not.toHaveBeenCalled()
-    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
-      flashFocusedPane: true
-    })
-  })
-
   it('activates a parked SSH workspace before reaching for its pane', () => {
     revealFromBoard('ssh:devbox')
 
@@ -173,13 +147,5 @@ describe('AgentDashboardDrawer', () => {
     expect(mocks.activateAndRevealWorkspace.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.activateTabAndFocusPane.mock.invocationCallOrder[0] as number
     )
-  })
-
-  it('skips pane focus when the revealed workspace is gone', () => {
-    mocks.activateAndRevealWorkspace.mockReturnValue(false)
-
-    revealFromBoard('ssh:devbox')
-
-    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 })

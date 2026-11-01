@@ -2,6 +2,7 @@ import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-ha
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 import {
   buildPtyTerminalWaitBlockedResult,
+  buildPtyTerminalWaitExitError,
   buildPtyTerminalWaitResult
 } from '../../terminal-wait-results'
 import type { AgentStatus } from '../../../../shared/agent-detection'
@@ -38,7 +39,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
         this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
   }

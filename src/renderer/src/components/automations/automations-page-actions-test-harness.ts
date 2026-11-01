@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import {
   addRuntimeProject,
   api,
@@ -123,7 +124,7 @@ export async function holdRuntimeSave(
   scopedList([])
   runtimeHost([], [])
   addRuntimeProject()
-  mocks.state.settings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+  mocks.state.settings = { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT }
   mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
   observeRuntimeIncarnation('A')
   await learnRuntimeAgents('A', initialAgents)

@@ -2,7 +2,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentCommandOverrideInput, AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
+import {
+  AgentCommandOverrideInput,
+  AgentDefaultArgsInput,
+  AgentDefaultEnvInput
+} from './AgentLaunchDefaultsEditor'
 import { TooltipProvider } from '../ui/tooltip'
 
 afterEach(() => {
@@ -79,6 +83,18 @@ it('bounds content sizing and permits long tokens to wrap inside the scrollable 
   expect(input.classList.contains('[field-sizing:content]')).toBe(true)
   expect(input.parentElement?.classList.contains('overflow-y-auto')).toBe(true)
   expect(input.parentElement?.classList.contains('max-h-[calc(var(--spacing)*41+2px)]')).toBe(true)
+})
+
+it('keeps the environment editor reachable when no variables are configured', async () => {
+  const save = vi.fn().mockResolvedValue(undefined)
+  const user = userEvent.setup()
+  render(<AgentDefaultEnvInput defaultEnv={{}} envOverride={{}} onSaveEnv={save} />)
+  const input = screen.getByPlaceholderText('No default environment')
+  await user.type(input, 'CLAUDE_CONFIG_DIR=/tmp/claude-official')
+  await user.tab()
+  await waitFor(() =>
+    expect(save).toHaveBeenCalledWith({ CLAUDE_CONFIG_DIR: '/tmp/claude-official' })
+  )
 })
 
 it.each(['', '--default'])(

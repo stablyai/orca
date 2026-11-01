@@ -44,8 +44,6 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 // Why stars: importers keep reading every capability from here while each area owns its module.
 export * from './agent-session-runtime-capabilities'
-export * from './agent-session-resume-runtime-capabilities'
-export * from './agent-session-stop-capabilities'
 export * from './ai-vault-runtime-capabilities'
 export * from './browser-runtime-capabilities'
 export * from './files-runtime-capabilities'
