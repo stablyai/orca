@@ -1,4 +1,5 @@
 import type {
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -12,6 +13,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
+  formatTerminalAgentStatus,
   formatTerminalCreate,
   formatTerminalFocus,
   formatTerminalList,
@@ -86,6 +88,15 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, formatTerminalShow)
+  },
+  'terminal agent-status': async ({ flags, client, cwd, json }) => {
+    const result = await client.call<{ agentStatus: RuntimeTerminalAgentStatus }>(
+      'terminal.agentStatus',
+      {
+        terminal: await getTerminalHandle(flags, cwd, client)
+      }
+    )
+    printResult(result, json, formatTerminalAgentStatus)
   },
   'terminal read': async ({ flags, client, cwd, json }) => {
     const cursorFlag = getOptionalStringFlag(flags, 'cursor')

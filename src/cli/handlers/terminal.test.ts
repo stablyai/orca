@@ -803,3 +803,102 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 })
+
+describe('terminal agent-status CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = ORIGINAL_EXIT_CODE
+  })
+
+  it.each(['working', 'permission', 'idle'] as const)(
+    'prints terminal agent status JSON for %s',
+    async (status) => {
+      process.exitCode = undefined
+      const call = vi.fn().mockResolvedValue({
+        id: 'req-agent-status',
+        ok: true,
+        result: {
+          agentStatus: {
+            handle: 'term_worker',
+            isRunningAgent: true,
+            status
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await TERMINAL_HANDLERS['terminal agent-status']({
+        flags: new Map([['terminal', 'term_worker']]),
+        client: terminalClient(call),
+        cwd: '/tmp/worktree',
+        json: true
+      })
+
+      expect(call).toHaveBeenCalledWith('terminal.agentStatus', { terminal: 'term_worker' })
+      expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.agentStatus).toEqual({
+        handle: 'term_worker',
+        isRunningAgent: true,
+        status
+      })
+    }
+  )
+
+  it('prints terminal agent status in human-readable mode', async () => {
+    process.exitCode = undefined
+    const call = vi.fn().mockResolvedValue({
+      id: 'req-agent-status',
+      ok: true,
+      result: {
+        agentStatus: {
+          handle: 'term_worker',
+          isRunningAgent: true,
+          status: 'permission'
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal agent-status']({
+      flags: new Map([['terminal', 'term_worker']]),
+      client: terminalClient(call),
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.agentStatus', { terminal: 'term_worker' })
+    expect(String(log.mock.calls[0]?.[0])).toBe(
+      ['handle: term_worker', 'isRunningAgent: true', 'status: permission'].join('\n')
+    )
+  })
+
+  it('prints null status for a terminal that is not running an agent', async () => {
+    process.exitCode = undefined
+    const call = vi.fn().mockResolvedValue({
+      id: 'req-agent-status',
+      ok: true,
+      result: {
+        agentStatus: {
+          handle: 'term_shell',
+          isRunningAgent: false,
+          status: null
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal agent-status']({
+      flags: new Map([['terminal', 'term_shell']]),
+      client: terminalClient(call),
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.agentStatus', { terminal: 'term_shell' })
+    const printed = String(log.mock.calls[0]?.[0])
+    expect(printed).toContain('isRunningAgent: false')
+    expect(printed).toContain('status: null')
+  })
+})

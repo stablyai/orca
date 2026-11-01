@@ -186,6 +186,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'terminal']
   },
   {
+    path: ['terminal', 'agent-status'],
+    summary: 'Show the detected agent state for a terminal',
+    usage: 'orca terminal agent-status [--terminal <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
+    notes: ['Reports terminal.agentStatus state: working, permission, idle, or null.'],
+    examples: [
+      'orca terminal agent-status --terminal term_abc123',
+      'orca terminal agent-status --terminal term_abc123 --json'
+    ]
+  },
+  {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
     usage:
