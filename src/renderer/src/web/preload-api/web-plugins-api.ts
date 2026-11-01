@@ -1,7 +1,7 @@
 import type { PluginsApi } from '../../../../preload/api/plugin-host-api'
 
-/** Desktop-only: plugins run in the desktop app, so a web client has no updates or counts to show.
- *  Explicit because the fallback resolves `undefined`, which crashes callers expecting lists. */
+/** Desktop-only: plugins run in the desktop app. Explicit because the fallback's `undefined`
+ *  crashes callers expecting lists and records. */
 export function createWebPluginsApi(): Pick<
   PluginsApi,
   'getAutoUpdateState' | 'takeUpdateReviewNotices' | 'getInstallCounts'
