@@ -221,10 +221,7 @@ export function structuredAgentSessionOptionSnapshot(
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
   const options = modelOptionSnapshot(state).map((option) =>
-    (state.fastModeRestricted && option.id === 'fastMode') ||
-    (state.listingInProgress && ['effort', 'serviceTier', 'fastMode'].includes(option.id))
-      ? { ...option, settable: false }
-      : option
+    state.fastModeRestricted && option.id === 'fastMode' ? { ...option, settable: false } : option
   )
   return permission ? [...options, permission] : options
 }

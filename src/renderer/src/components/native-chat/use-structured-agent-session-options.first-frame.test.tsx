@@ -300,7 +300,9 @@ describe('a new chat picker’s first frame', () => {
     await waitFor(() => expect(effort()?.settable).toBe(true))
     raw = { ...raw, listingInProgress: true }
     await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
-    expect(effort()?.settable).toBe(false)
+    // A refresh of a list already shown leaves its controls usable.
+    expect(effort()?.settable).toBe(true)
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
     await act(async () =>
       next.resolve({
         ...raw,
@@ -318,6 +320,140 @@ describe('a new chat picker’s first frame', () => {
       model: { value: 'A' },
       effort: { value: 'low' }
     })
+    view.unmount()
+  })
+
+  it('codex: a refresh keeps the CLI-default effort a running chat shows', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' }
+    ]
+    const gpt = {
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      isDefault: true,
+      defaultEffort: 'medium',
+      efforts
+    }
+    let raw: AgentSessionModelCatalogResult = { origin: 'probe', models: [gpt], fetchedAt: 1_000 }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve({ models: [gpt], current: { model: 'gpt-5.5', defaulted: [] } })
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve(raw)
+            : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'codex',
+        sessionId: 'codex-default-effort',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const effort = () => view.result.current.optionSnapshot.find((row) => row.id === 'effort')
+    const medium = {
+      settable: true,
+      valueSource: 'default',
+      kind: { currentValue: 'medium' }
+    }
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    // The refresh also lists a model no finished listing has verified for this chat.
+    const unverified = { ...gpt, id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', isDefault: false }
+    raw = { ...raw, models: [gpt, unverified], listingInProgress: true }
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    expect(effort()).toMatchObject(medium)
+    expect(view.result.current.sendSource.optionStateRef.current.verifiedModelIds).toEqual([
+      'gpt-5.5'
+    ])
+    await act(async () => next.resolve({ origin: 'probe', models: [gpt], fetchedAt: 2_000 }))
+    await waitFor(() => expect(effort()).toMatchObject(medium))
+    view.unmount()
+  })
+
+  it('grok: a running chat keeps its own effort menu while the picker rejoins a host listing', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'high', label: 'High' },
+      { value: 'low', label: 'Low' }
+    ]
+    const child: AgentSessionOptionsResult = {
+      models: [
+        { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, efforts },
+        { id: 'grok-4.6', label: 'Grok 4.6', isDefault: false, efforts }
+      ],
+      listedModelIds: ['grok-4.7', 'grok-4.6'],
+      current: { model: 'grok-4.6', effort: 'high', defaulted: [] }
+    }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve(child)
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve({ origin: 'unknown', listingInProgress: true })
+            : new Promise(() => {})
+    )
+    const view = renderHook(
+      ({ isVisible }) =>
+        useStructuredAgentSessionOptions({
+          agent: 'grok',
+          sessionId: 'grok-running',
+          target: LOCAL_TARGET,
+          transportEnabled: true,
+          isVisible,
+          providerVisible: true,
+          fence: 1,
+          turnId: null,
+          unloadedTurnRevisions: undefined,
+          mutate: vi.fn()
+        }),
+      { initialProps: { isVisible: true } }
+    )
+    const capabilities = () =>
+      view.result.current.optionSnapshot.filter(({ id }) =>
+        ['effort', 'serviceTier', 'fastMode'].includes(id)
+      )
+    const usable = () => {
+      expect(capabilities().map(({ id }) => id)).toContain('effort')
+      expect(capabilities().every((row) => row.settable)).toBe(true)
+    }
+    await waitFor(() =>
+      expect(
+        mocks.call.mock.calls.some(
+          ([, method, params]) =>
+            method === 'agentSession.modelCatalog' &&
+            typeof params === 'object' &&
+            params !== null &&
+            'waitForListing' in params &&
+            params.waitForListing === true
+        )
+      ).toBe(true)
+    )
+    await waitFor(usable)
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    usable()
+    view.rerender({ isVisible: false })
+    view.rerender({ isVisible: true })
+    await act(async () => {})
+    usable()
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
+    await act(async () => next.resolve({ origin: 'unknown' }))
     view.unmount()
   })
 

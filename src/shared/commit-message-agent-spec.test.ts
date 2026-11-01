@@ -269,8 +269,8 @@ describe('buildArgs (Jcode)', () => {
     expect(
       spec.modelDiscovery?.parse('claude-opus-5-5\nclaude-haiku-4-5\ngemini-2.5-pro\n')
     ).toEqual([
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5 5' },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4 5' },
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' }
     ])
   })
