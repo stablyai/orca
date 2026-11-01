@@ -11,6 +11,7 @@ import {
   formatTerminalList,
   formatTerminalRead,
   formatWorktreeList,
+  formatWorktreePs,
   printResult,
   reportCliError
 } from './format'
@@ -175,6 +176,59 @@ describe('formatWorktreeList', () => {
     expect(child).toContain('repo::/tmp/repo/child  feature/child')
     expect(child).toContain('parentWorktreeId: repo::/tmp/repo/parent')
     expect(child).toContain('childWorktreeIds: []')
+  })
+
+  it('marks a checkout the host is still deleting as removing', () => {
+    const output = formatWorktreeList({
+      worktrees: [
+        worktree({
+          id: 'repo::/tmp/repo/dying',
+          path: '/tmp/repo/dying',
+          branch: 'feature/dying',
+          removing: true
+        })
+      ],
+      totalCount: 1,
+      truncated: false
+    })
+
+    expect(output).toContain('removing: yes (deletion in progress)')
+  })
+})
+
+describe('formatWorktreePs', () => {
+  it('shows removing for a checkout the host is still deleting', () => {
+    const output = formatWorktreePs({
+      worktrees: [
+        {
+          ...worktree({
+            id: 'repo::/tmp/repo/dying',
+            path: '/tmp/repo/dying',
+            branch: 'feature/dying'
+          }),
+          repo: 'repo',
+          worktreeId: 'repo::/tmp/repo/dying',
+          hasHostSidebarActivity: false,
+          workspaceStatus: 'todo',
+          linkedPR: null,
+          linkedGitLabMR: null,
+          linkedGitLabIssue: null,
+          isActive: false,
+          unread: false,
+          liveTerminalCount: 0,
+          hasAttachedPty: false,
+          lastOutputAt: null,
+          preview: '',
+          status: 'working',
+          agents: [],
+          removing: true
+        }
+      ],
+      totalCount: 1,
+      truncated: false
+    })
+
+    expect(output).toContain('removing:yes')
   })
 })
 
