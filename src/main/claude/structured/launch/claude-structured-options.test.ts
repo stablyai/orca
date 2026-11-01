@@ -110,6 +110,9 @@ describe('identified versions across native Claude consumers', () => {
       expect(flags.thinkingDisplayArgs).toEqual(
         fact === 'supported' ? { 'thinking-display': 'summarized' } : {}
       )
+      expect(flags.promptSuggestionArgs).toEqual(
+        fact === 'supported' ? { 'prompt-suggestions': null } : {}
+      )
       expect(flags.visuals?.pluginDir).toBe(fact === 'supported' ? '/plugin' : null)
       const effortFlag = await support.check(CLAUDE_EFFORT_FLAG, launch)
       const control = await support.check(CLAUDE_APPLY_FLAG_SETTINGS_CONTROL, launch)
@@ -137,6 +140,32 @@ describe('identified versions across native Claude consumers', () => {
       }
     }
   )
+})
+
+it.each([
+  ['2.1.153 (Claude Code)', {}],
+  ['2.1.154 (Claude Code)', { 'prompt-suggestions': null }]
+])('passes --prompt-suggestions from the CLI version that has it: %s', async (stdout, args) => {
+  vi.mocked(runProcess).mockResolvedValue({
+    stdout,
+    stderr: '',
+    code: 0,
+    signal: null,
+    timedOut: false
+  })
+  const support = createClaudeCliFlagSupport({
+    probe: probeClaudeCliVersion,
+    keyOf: async () => 'binary',
+    budgetMs: 1_000,
+    now: () => performance.now()
+  })
+  const flags = await resolveClaudeLaunchFlags({ cliFlags: support }, 'session', {
+    command: '/bin/claude',
+    cwd: '/repo',
+    env: {}
+  })
+  expect(flags.thinkingDisplayArgs).toEqual({ 'thinking-display': 'summarized' })
+  expect(flags.promptSuggestionArgs).toEqual(args)
 })
 
 describe('Claude structured option mutation fencing', () => {
