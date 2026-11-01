@@ -196,8 +196,11 @@ function taskBody(title: string, prompt: string): string {
 }
 
 function missingTask(firstText: string, title: string, prompt: string): string {
-  const promptShown =
-    prompt.length > 0 && firstText.includes(prompt.slice(0, Math.min(80, prompt.length)))
+  // A sealed spawn has no prompt. The roster line is the child's output, so the title stands alone.
+  if (!prompt) {
+    return title && firstText.trim() !== title ? title : ''
+  }
+  const promptShown = firstText.includes(prompt.slice(0, Math.min(80, prompt.length)))
   const titleShown = title.length === 0 || firstText.includes(title)
   if (promptShown && titleShown) {
     return ''
@@ -245,7 +248,7 @@ export function frameNativeChatSubagentTranscript(
   const activity = page.filter((message) => !echoedSpawn(message))
   const brief = nativeChatSubagentBriefs(parents).get(agentId)
   const title = brief?.title || fallback?.title || ''
-  const prompt = brief?.prompt || (brief ? '' : (fallback?.prompt ?? ''))
+  const prompt = brief?.prompt ?? ''
   const first = activity.find((message) => message.role === 'user')
   const lead = missingTask(first ? textOf(first) : '', title, prompt)
   const framed = lead ? [note(`${agentId}:task`, 'user', lead), ...activity] : activity.slice()
