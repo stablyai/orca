@@ -15,7 +15,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalSnapshot
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../text-generation/commit-message-text-generation'
 
 const mocks = vi.hoisted(() => ({

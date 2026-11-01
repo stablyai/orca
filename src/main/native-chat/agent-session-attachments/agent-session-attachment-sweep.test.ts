@@ -31,7 +31,7 @@ vi.mock('node:fs', async (original) => {
 })
 import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

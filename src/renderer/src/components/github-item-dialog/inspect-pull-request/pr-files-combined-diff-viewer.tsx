@@ -1,7 +1,6 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
-import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
 import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
@@ -18,7 +17,7 @@ import {
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
-import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
+import { buildInlineReviewComments } from '@/components/pull-request-page/files/inline-comments'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { PRFilesCombinedDiffBody } from './pr-files-combined-diff-body'
 import { getPRFilesCombinedDiffSignature } from './pr-files-combined-diff-signature'
@@ -123,34 +122,8 @@ function PRFilesCombinedDiffSections({
       fileByPath.get(section.path)?.reviewCommentLineNumbers,
     [fileByPath]
   )
-  const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
-    () =>
-      comments.flatMap((comment): DecoratedDiffComment[] => {
-        // Why: outdated threads' line number can attach the comment to unrelated current code, so skip them inline.
-        if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
-          return []
-        }
-        const createdAtMs = new Date(comment.createdAt).getTime()
-        return [
-          {
-            id: `github-pr-comment:${comment.id}`,
-            worktreeId: `github-pr:${repoId}:${prNumber}`,
-            filePath: comment.path,
-            source: 'diff',
-            startLine: comment.startLine,
-            lineNumber: comment.line,
-            body: comment.body,
-            createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
-            side: 'modified',
-            author: comment.author,
-            authorAvatarUrl: comment.authorAvatarUrl,
-            createdAtLabel: formatRelativeTime(comment.createdAt),
-            url: comment.url,
-            canDelete: false,
-            canEdit: false
-          }
-        ]
-      }),
+  const inlineReviewComments = useMemo(
+    () => buildInlineReviewComments(comments, repoId, prNumber),
     [comments, prNumber, repoId]
   )
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})

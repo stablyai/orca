@@ -7,7 +7,7 @@ import { i18n } from '@/i18n/i18n'
 import type {
   AgentJournalQuestionItem,
   AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { structuredQuestionTranscript } from '../../../../shared/structured-agent-question-projection'

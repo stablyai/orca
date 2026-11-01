@@ -1,8 +1,8 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
 import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
@@ -11,7 +11,7 @@ import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry
 } from '../../../shared/agent-session/structured-agent-session-command-entry'
-import { classifyDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'

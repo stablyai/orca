@@ -9,16 +9,19 @@ import {
 import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
 import { agentSessionWriteNotDoneParts } from './agent-session-refusal-notice'
 import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
-import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionAttemptFailureParts } from './structured-agent-session-rejection-words'
-import type { AgentJournalItemBody, AgentJournalSubmission } from './agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalSubmission
+} from './agent-session/journal/agent-session-journal-types'
 import { pendingPromptsAllUnanswerableHere } from './agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 import {
   readAgentMessageSource,
   type AgentMessageSource

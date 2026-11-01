@@ -1,9 +1,9 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalQuestionItem
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemRowOrigin } from '../../shared/agent-session-journal-position'
-import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemRowOrigin } from '../../shared/agent-session/journal/agent-session-journal-position'
+import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers

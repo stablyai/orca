@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   withdrawCodexSendsNoTurnOpenedFor,
   type UnopenedSendJournal

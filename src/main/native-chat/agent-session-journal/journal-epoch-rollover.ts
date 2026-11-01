@@ -2,8 +2,8 @@
 
 import { journalOutcomeSource } from './journal-outcome-format'
 import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'

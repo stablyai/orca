@@ -1,6 +1,6 @@
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../shared/agent-session-wire'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome

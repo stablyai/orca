@@ -3,7 +3,7 @@ import {
   queuedMessageEditableText,
   queuedEditKeptImages
 } from '../../../src/shared/queued-message-edit'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createUuidV4 } from '../../../src/shared/uuid-v4'
 import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { mobileQueuedEditValueKey } from './mobile-queued-message-edit-value'

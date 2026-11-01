@@ -3,7 +3,7 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import { agentSessionWriteNoticeParts } from '../../../src/shared/agent-session-refusal-notice'
 import {

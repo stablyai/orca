@@ -26,11 +26,18 @@ export const TERMINAL_QUERY_METHODS = [
       if (ORCA_LAYOUT_OWNER_IS_MAIN && params.placeUnshownLiveTerminals && params.worktree) {
         await runtime.placeUnshownLiveTerminalsOf(params.worktree)
       }
-      return runtime.listTerminals(params.worktree, params.limit, {
+      const result = await runtime.listTerminals(params.worktree, params.limit, {
         handles: params.handles,
         requireFreshPtyLiveness: params.requireFreshPtyLiveness,
         includeVisualLayouts: params.includeVisualLayouts
       })
+      if (params.includePreview !== false) {
+        return result
+      }
+      return {
+        ...result,
+        terminals: result.terminals.map(({ preview: _preview, ...terminal }) => terminal)
+      }
     }
   }),
   defineMethod({

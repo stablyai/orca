@@ -4,7 +4,7 @@ import * as commands from '../../shared/agent-session/structured-agent-session-c
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Count only the original status reader, after production context selection. */
 export function countStatusCutWork() {

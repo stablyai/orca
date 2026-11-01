@@ -1,7 +1,7 @@
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLease } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,

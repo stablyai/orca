@@ -77,8 +77,7 @@
       "cancel": "Filtreleri koru"
     },
     "startupWorktreeRefresh": {
-      "loading": "Çalışma alanları bulunuyor…",
-      "description": "Yerel ve uzak projeler yüklenirken daha fazla çalışma alanı görünebilir."
+      "loading": "Çalışma alanları bulunuyor…"
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ana makinesine taşındı",

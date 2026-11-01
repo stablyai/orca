@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from '../../agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { projectNativeChatTranscript } from './native-chat-transcript-projection'
 import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
 import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
-import { DISPATCH_REJECTED_CANCELLED } from '../../structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
 
 const STOPPED_ROW = 'stopped-before-start:'

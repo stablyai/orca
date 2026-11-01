@@ -20901,8 +20901,7 @@
       "quitDuringMoveConfirm": "Quitter quand même"
     },
     "startupWorktreeRefresh": {
-      "loading": "Recherche des espaces de travail…",
-      "description": "D'autres espaces de travail peuvent apparaître pendant le chargement des projets locaux et distants."
+      "loading": "Recherche des espaces de travail…"
     },
     "createProject": {
       "errors": {

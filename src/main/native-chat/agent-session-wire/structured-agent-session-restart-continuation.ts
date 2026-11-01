@@ -3,7 +3,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionRefusalReference,
   type AgentSessionRefusalReference

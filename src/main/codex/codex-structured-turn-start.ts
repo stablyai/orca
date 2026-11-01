@@ -11,7 +11,7 @@ import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agen
 import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'

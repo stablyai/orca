@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type SetStateAction } from 'react'
-import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   resetMobileNativeChatDraftInputsForTests,
   closeMobileNativeChatEditInputs,

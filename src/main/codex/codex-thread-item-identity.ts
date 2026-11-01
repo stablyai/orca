@@ -1,4 +1,4 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
 
 // Count only messages: resumed history can omit other items and renumber provider IDs.
