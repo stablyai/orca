@@ -407,6 +407,8 @@
       "claudeRemoveFolder": "Orca はこのアカウントの Claude フォルダーとサインイン情報をこのコンピュータから削除します。システムのデフォルトと共有しているチャット履歴は残ります。このアカウントが選択されている場合、次に起動する Claude はシステムのデフォルトを使用します。"
     },
     "sourceControl": {
+      "gitBusyInAnotherWorkspace": "他の場所で Git 実行中",
+      "remoteOperationInAnotherWorkspace": "Git 操作の重複を避けるため、このアクションは一時的に無効になっています。他のワークスペースの Git 操作が完了するまで待ってください。",
       "actionModel": {
         "on": "オン",
         "off": "オフ",

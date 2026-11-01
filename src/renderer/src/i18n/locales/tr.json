@@ -836,6 +836,8 @@
       "claudeRemoveFolder": "Orca, bu hesabın Claude klasörünü ve oturum açma bilgilerini bu bilgisayardan siler. Sistem varsayılanı ile paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude başlatılışında Sistem varsayılanı kullanılır."
     },
     "sourceControl": {
+      "gitBusyInAnotherWorkspace": "Git başka yerde meşgul",
+      "remoteOperationInAnotherWorkspace": "Çakışan Git işlemlerini önlemek için bu eylem geçici olarak devre dışı. Diğer çalışma alanındaki Git işleminin bitmesini bekleyin.",
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",

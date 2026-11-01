@@ -809,6 +809,8 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "gitBusyInAnotherWorkspace": "Git 正在別處執行",
+      "remoteOperationInAnotherWorkspace": "為避免 Git 操作重疊，此動作已暫時停用。請等待其他工作區中的 Git 操作完成。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",

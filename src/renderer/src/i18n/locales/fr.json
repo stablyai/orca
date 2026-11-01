@@ -632,6 +632,8 @@
       "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
     },
     "sourceControl": {
+      "gitBusyInAnotherWorkspace": "Git occupé ailleurs",
+      "remoteOperationInAnotherWorkspace": "Cette action est temporairement désactivée pour éviter des opérations Git simultanées. Attendez la fin de l’opération Git dans l’autre espace de travail.",
       "actionModel": {
         "on": "Activé",
         "off": "Désactivé",
