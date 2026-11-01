@@ -9,6 +9,7 @@ import type {
   RuntimeVisibleTerminalState
 } from '../../runtime-terminal-state-records'
 import {
+  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
   VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from '../../orca-runtime-postlude'
@@ -17,6 +18,7 @@ import { visibleNonBlankTerminalLines } from '../../terminal-tail-read'
 import type { RuledScreen } from '../../screen-input-veto'
 import { HeadlessEmulator } from '../../../daemon/headless-emulator'
 import { withTimeout } from '../../runtime-async-boundaries'
+import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
@@ -199,6 +201,60 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       lines: visibleNonBlankTerminalLines(state.emulator.getVisibleLines()),
       alternateScreen: state.emulator.isAlternateScreen
     }
+  }
+
+  /** The provider's grid for a screen-ruled pane whose model waits on a snapshot to replace it, held to
+   *  the ruled screen's terms: as painted, on the PTY's own size, covering all output the runtime holds,
+   *  and with no live output during the read. */
+  protected async readWithheldRuledScreen(ptyId: string): Promise<RuledScreen | null> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const sequence = this.getPtyOutputSequence(ptyId)
+    const isCurrentOn = (grid: { cols: number; rows: number; seq: number }) => {
+      const ptySize = this.getTerminalSize(ptyId)
+      return (
+        this.getPtyLifecycleGeneration(ptyId) === generation &&
+        this.getPtyOutputSequence(ptyId) === sequence &&
+        // One-sided on purpose: a fresh frame's reconciled seq meets or leads the runtime's count.
+        grid.seq >= sequence &&
+        ptySize?.cols === grid.cols &&
+        ptySize.rows === grid.rows
+      )
+    }
+    // Why fresh and visible-only: a cached or shared frame can predate output the runtime has since
+    // received, and readiness needs no history, which would cost the provider a checkpoint rebuild.
+    // Bounded like every provider reader, so a provider that never answers frees the poll to retry.
+    const snapshot = await withTimeout(
+      this.captureProviderTerminalBuffer(ptyId, { scrollbackRows: 0 }, generation),
+      AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      null
+    )
+    if (!snapshot || !isCurrentOn(snapshot)) {
+      return null
+    }
+    const emulator = new HeadlessEmulator({
+      cols: snapshot.cols,
+      rows: snapshot.rows,
+      scrollback: 0
+    })
+    try {
+      await emulator.write(`\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
+      return isCurrentOn(snapshot)
+        ? {
+            lines: visibleNonBlankTerminalLines(emulator.getVisibleLines()),
+            alternateScreen: snapshot.alternateScreen ?? emulator.isAlternateScreen
+          }
+        : null
+    } finally {
+      emulator.dispose()
+    }
+  }
+
+  /** Null unless the pane's rules read only a trusted screen that its model is withheld from. */
+  protected readWithheldTuiIdleScreen(ptyId: string): Promise<RuledScreen | null> | null {
+    return readsTrustedScreen(this.getPaneAgentForTuiIdle(ptyId)) &&
+      this.providerSnapshotPreferredPtys.has(ptyId)
+      ? this.readWithheldRuledScreen(ptyId).catch(() => null)
+      : null
   }
 
   protected readWholeScreenModel(ptyId: string | null | undefined): RuntimeHeadlessTerminal | null {
