@@ -256,13 +256,19 @@ export function loadWorkspace(args: WorkspaceLoadArgs): WorkspaceLayout {
   }
   const editorViews = loadEditorViews(args, tabs)
   if (editorViews) {
+    const storedTabById = new Map<string, Tab>()
+    for (const entry of session.unifiedTabs?.[key] ?? []) {
+      if (!storedTabById.has(entry.id)) {
+        storedTabById.set(entry.id, entry)
+      }
+    }
     for (const tab of tabs) {
       const editorView = editorViews[tab.id]
       const prefix = `${worktreeId}::check-details::`
       if (tab.kind !== 'check-details' || !editorView || !tab.entityId.startsWith(prefix)) {
         continue
       }
-      const entry = session.unifiedTabs?.[key]?.find((entry) => entry.id === tab.id)
+      const entry = storedTabById.get(tab.id)
       const scope = checkRunDetailsOwnerScope(
         entry?.executionHostId ?? args.hostId,
         editorView.file.runtimeEnvironmentId

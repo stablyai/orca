@@ -43,6 +43,17 @@ export function findWorktreeById(
   if (!hostId) {
     return null
   }
+  const explicitMatches = entry.owners.filter((worktree) => {
+    const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+    const ownerHostId = runtimeOwner
+      ? toRuntimeExecutionHostId(runtimeOwner)
+      : normalizeExecutionHostId(worktree.hostId)
+    return ownerHostId === hostId
+  })
+  // Explicit execution owners take precedence over physical aliases and legacy recovery.
+  if (explicitMatches.length > 0) {
+    return explicitMatches.length === 1 ? explicitMatches[0] : null
+  }
   const matches = entry.owners.filter((worktree) => {
     if (worktree.hostId || worktree.runtimeOwnerEnvironmentId) {
       return (

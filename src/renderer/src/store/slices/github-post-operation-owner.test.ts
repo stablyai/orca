@@ -63,6 +63,71 @@ describe('post-operation review refresh ownership', () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  it.each(['ssh:builder', 'runtime:server'] as const)(
+    'refreshes %s after pushing with a same-ID copy on the same physical SSH host',
+    async (hostId) => {
+      const store = createTestStore()
+      const direct: Repo = { ...repo, connectionId: 'builder' }
+      const paired: Repo = { ...direct, executionHostId: 'runtime:server' }
+      const directKey = `ssh:builder::${repo.id}::${branch}`
+      const pairedKey = `runtime:server::${repo.id}::${branch}`
+      const ownerKey = hostId === 'ssh:builder' ? directKey : pairedKey
+      const twinKey = hostId === 'ssh:builder' ? pairedKey : directKey
+      const worktree = makePRRefreshWorktree({
+        repoId: repo.id,
+        branch,
+        hostId: 'ssh:builder',
+        linkedPR: 22
+      })
+      const twinEntry = { data: makePR({ number: 11 }), fetchedAt: Date.now() }
+      store.setState({
+        ...createGitRemotePushPull(store.setState, store.getState),
+        beginRemoteOperation: vi.fn(),
+        endRemoteOperation: vi.fn(),
+        fetchUpstreamStatus: vi.fn().mockResolvedValue(undefined),
+        repos: [direct, paired],
+        worktreesByRepo: {
+          [repo.id]: [
+            { ...worktree, linkedPR: hostId === 'ssh:builder' ? 22 : 11 },
+            {
+              ...worktree,
+              runtimeOwnerEnvironmentId: 'server',
+              linkedPR: hostId === 'runtime:server' ? 22 : 11
+            }
+          ]
+        },
+        activeWorktreeId: worktree.id,
+        activeWorkspaceExecutionHostId: hostId,
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ]),
+        prCache: { [twinKey]: twinEntry }
+      })
+      const pending = Promise.withResolvers<void>()
+      vi.mocked(pushRuntimeGit).mockReturnValueOnce(pending.promise)
+      const runtimeTarget: RuntimeClientTarget =
+        hostId === 'ssh:builder'
+          ? { kind: 'local' }
+          : { kind: 'environment', environmentId: 'server' }
+      const task = store
+        .getState()
+        .pushBranch(worktree.id, worktree.path, false, 'builder', undefined, { runtimeTarget })
+      store.setState({
+        activeWorkspaceExecutionHostId: hostId === 'ssh:builder' ? 'runtime:server' : 'ssh:builder'
+      })
+      pending.resolve()
+      await task
+
+      await vi.waitFor(() => expect(store.getState().prCache[ownerKey]?.data?.number).toBe(22))
+      expect(store.getState().prCache[twinKey]).toBe(twinEntry)
+      const transport = hostId === 'ssh:builder' ? mockApi.gh.refreshPRNow : runtimeEnvironmentCall
+      expect(transport).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it.each(
     operations.flatMap((operation) => [
       { operation, selectTwin: true },

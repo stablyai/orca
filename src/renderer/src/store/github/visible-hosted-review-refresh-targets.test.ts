@@ -14,6 +14,7 @@ import {
 } from '../slices/github-slice-test-harness'
 import {
   getVisibleHostedReviewRefreshTargets,
+  getVisibleHostedReviewWorkspaces,
   visibleHostedReviewRefreshInputsChanged
 } from './visible-hosted-review-refresh-targets'
 import { getWorkspaceReferenceRequest } from '@/components/sidebar/workspace-reference-details'
@@ -264,6 +265,114 @@ describe('visible hosted review refresh targets', () => {
       expect(targets(store)).toMatchObject([{ key, selected: false }])
       store.setState({ workspaceHostScope: 'runtime:other-server' })
       expect(targets(store)).toEqual([])
+    }
+  )
+
+  it.each(['github', 'gitlab'] as const)(
+    'refreshes both %s copies when direct SSH and runtime ownership share a physical host',
+    async (provider) => {
+      const direct: Repo = { ...repo, connectionId: 'builder' }
+      const paired: Repo = { ...direct, executionHostId: 'runtime:owner-server' }
+      const store = setup(direct)
+      store.setState({
+        repos: [paired, direct],
+        worktreesByRepo: {
+          [repo.id]: [
+            {
+              ...worktree,
+              hostId: 'ssh:builder',
+              runtimeOwnerEnvironmentId: 'owner-server',
+              ...(provider === 'github' ? { linkedPR: 22 } : { linkedGitLabMR: 9 })
+            },
+            {
+              ...worktree,
+              hostId: 'ssh:builder',
+              ...(provider === 'github' ? { linkedPR: 12 } : { linkedGitLabMR: 8 })
+            }
+          ]
+        },
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+      mockApi.gh.refreshPRNow.mockResolvedValue({
+        kind: 'found',
+        pr: makePR({ number: 12 }),
+        fetchedAt: Date.now()
+      })
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'review',
+        ok: true,
+        result: provider === 'github' ? makePR({ number: 22 }) : { ...review, number: 9 }
+      })
+
+      const rows = targets(store)
+      const directKey = `ssh:builder::${repo.id}::${worktree.branch}`
+      const pairedKey = `runtime:owner-server::${repo.id}::${worktree.branch}`
+      expect([...getVisibleHostedReviewWorkspaces(store.getState())]).toHaveLength(2)
+      expect(rows.map((row) => row.key).sort()).toEqual(
+        provider === 'github' ? [pairedKey] : [pairedKey, directKey].sort()
+      )
+      for (const row of rows) {
+        expect(await row.refresh()).toBe(true)
+      }
+      if (provider === 'github') {
+        await store.getState().fetchPRForBranch(repo.path, worktree.branch, {
+          force: true,
+          repoId: repo.id,
+          repoOwnerExecutionHostId: 'ssh:builder',
+          worktreeId: worktree.id,
+          linkedPRNumber: 12
+        })
+      }
+      expect(store.getState().hostedReviewCache[directKey]?.data?.number).toBe(
+        provider === 'github' ? 12 : 8
+      )
+      expect(store.getState().hostedReviewCache[pairedKey]?.data?.number).toBe(
+        provider === 'github' ? 22 : 9
+      )
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          selector: 'owner-server',
+          method: provider === 'github' ? 'github.prForBranch' : 'hostedReview.forBranch'
+        })
+      )
+      const directTransport =
+        provider === 'github' ? mockApi.gh.refreshPRNow : mockApi.hostedReview.forBranch
+      expect(directTransport).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it.each(['ssh:builder', 'runtime:owner-server'] as const)(
+    'rejects duplicate explicit %s worktree owners while retaining the other copy',
+    (hostId) => {
+      const direct: Repo = { ...repo, connectionId: 'builder' }
+      const store = setup(direct)
+      const directWorktree = { ...worktree, hostId: 'ssh:builder' as const, linkedGitLabMR: 8 }
+      const pairedWorktree = { ...directWorktree, runtimeOwnerEnvironmentId: 'owner-server' }
+      store.setState({
+        repos: [direct, { ...direct, executionHostId: 'runtime:owner-server' }],
+        worktreesByRepo: {
+          [repo.id]: [
+            directWorktree,
+            pairedWorktree,
+            { ...(hostId === 'ssh:builder' ? directWorktree : pairedWorktree) }
+          ]
+        },
+        sshConnectionStates: new Map([
+          [
+            'builder',
+            { targetId: 'builder', status: 'connected', error: null, reconnectAttempt: 0 }
+          ]
+        ])
+      })
+      const otherHostId = hostId === 'ssh:builder' ? 'runtime:owner-server' : 'ssh:builder'
+      expect(targets(store).map((row) => row.key)).toEqual([
+        `${otherHostId}::${repo.id}::${worktree.branch}`
+      ])
     }
   )
 
