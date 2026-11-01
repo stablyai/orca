@@ -19,7 +19,10 @@ function isNativeChatMessage(value: unknown): value is NativeChatMessage {
   )
 }
 
-function pageFrom(value: unknown): Awaited<ReturnType<MobileNativeChatSubagentRead>> {
+function pageFrom(
+  value: unknown,
+  agentId: string
+): Awaited<ReturnType<MobileNativeChatSubagentRead>> {
   if (typeof value !== 'object' || value === null) {
     return { error: 'Transcript unavailable' }
   }
@@ -29,7 +32,12 @@ function pageFrom(value: unknown): Awaited<ReturnType<MobileNativeChatSubagentRe
   if (!('messages' in value) || !Array.isArray(value.messages)) {
     return { error: 'Transcript unavailable' }
   }
-  const messages = value.messages.filter(isNativeChatMessage)
+  const stamped = value.messages.filter(isNativeChatMessage)
+  const messages = stamped.filter((message) => message.agentId === agentId)
+  // An older host ignores subagentId and returns the parent, which has no child stamp.
+  if (stamped.length > 0 && messages.length === 0) {
+    return { error: 'Transcript unavailable' }
+  }
   return {
     messages,
     hasMore: 'hasMore' in value && value.hasMore === true,
@@ -69,7 +77,7 @@ export function useMobileNativeChatSubagentReader(args: {
         if (!accepted.accepted) {
           return { error: 'Transcript unavailable' }
         }
-        return pageFrom(accepted.value)
+        return pageFrom(accepted.value, agentId)
       } catch {
         return { error: 'Transcript unavailable' }
       }

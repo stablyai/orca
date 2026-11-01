@@ -8,6 +8,7 @@ import type {
 import type { NativeChatSubagentActivity } from '../../shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../shared/native-chat/input/native-chat-claude-task-updates'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
+import { nativeChatReadSessionBounds } from './native-chat-read-bounds'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
 import { readNativeChatTranscriptTail } from '../native-chat/transcript-watch'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -48,6 +49,10 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   const { agent, sessionId } = args
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
   const wake = args.wakeWslDistro === true
+  const bounds = nativeChatReadSessionBounds(args)
+  if ('error' in bounds) {
+    return bounds
+  }
   const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath, wake)
   await waking
   return readNativeChatTranscriptTail({
@@ -56,8 +61,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
     transcriptPath,
     limit,
     sourceOrder: true,
-    ...(args.beforeOffset !== undefined ? { beforeOffset: args.beforeOffset } : {}),
-    ...(args.subagentId ? { subagentId: args.subagentId } : {})
+    ...bounds
   })
 }
 

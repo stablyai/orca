@@ -375,10 +375,10 @@ export function NativeChatMessageList({
             // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
             className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           >
-            {showOlderHistory ? (
+            {(view.childHistory?.hasMore ?? showOlderHistory) ? (
               <NativeChatOlderHistoryRow
                 olderHistory={olderHistory}
-                loadingEarlier={loadingEarlier}
+                loadingEarlier={view.childHistory?.loadingEarlier ?? loadingEarlier}
               />
             ) : null}
             <div className={nativeChatTranscriptOuterClass(rail.visible)}>
