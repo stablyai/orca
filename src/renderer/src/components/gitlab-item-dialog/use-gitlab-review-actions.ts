@@ -13,7 +13,8 @@ import { codeHostErrorText } from '@/lib/code-host-error-copy'
 export function useGitLabReviewActions(
   item: GitLabWorkItem | null,
   repoSelector: GitLabDialogRepoSelector | null,
-  state: GitLabItemDialogState
+  state: GitLabItemDialogState,
+  handleRefresh: () => void
 ) {
   const {
     details,
@@ -107,11 +108,14 @@ export function useGitLabReviewActions(
       } finally {
         if (mountedRef.current) {
           setReviewerUpdating(false)
+          // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+          handleRefresh()
         }
       }
     },
     [
       details,
+      handleRefresh,
       item,
       mountedRef,
       repoSelector,

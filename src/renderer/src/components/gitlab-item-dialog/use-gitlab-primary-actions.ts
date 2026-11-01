@@ -39,7 +39,6 @@ export function useGitLabPrimaryActions(
               value0: item.number
             })
           )
-          handleRefresh()
         }
       } else {
         if (mountedRef.current) {
@@ -53,6 +52,8 @@ export function useGitLabPrimaryActions(
     } finally {
       if (mountedRef.current) {
         setActionInFlight(null)
+        // Why: a failed response doesn't prove the host kept the old state; reread on every attempted write.
+        handleRefresh()
       }
     }
   }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
@@ -72,7 +73,6 @@ export function useGitLabPrimaryActions(
               value0: item.number
             })
           )
-          handleRefresh()
         }
       } else {
         if (mountedRef.current) {
@@ -86,6 +86,7 @@ export function useGitLabPrimaryActions(
     } finally {
       if (mountedRef.current) {
         setActionInFlight(null)
+        handleRefresh()
       }
     }
   }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
@@ -105,7 +106,6 @@ export function useGitLabPrimaryActions(
               value0: item.number
             })
           )
-          handleRefresh()
         }
       } else {
         if (mountedRef.current) {
@@ -119,6 +119,7 @@ export function useGitLabPrimaryActions(
     } finally {
       if (mountedRef.current) {
         setActionInFlight(null)
+        handleRefresh()
       }
     }
   }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])

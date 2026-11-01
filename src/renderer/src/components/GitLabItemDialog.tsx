@@ -43,9 +43,9 @@ export default function GitLabItemDialog({
   const handleRefresh = useCallback(() => {
     setRefreshNonce((n) => n + 1)
   }, [setRefreshNonce])
-  const detailsEditing = useGitLabDetailsEditing(item, repoSelector, state)
+  const detailsEditing = useGitLabDetailsEditing(item, repoSelector, state, handleRefresh)
   const pipelineActions = useGitLabPipelineActions(item, repoSelector, state, handleRefresh)
-  const reviewActions = useGitLabReviewActions(item, repoSelector, state)
+  const reviewActions = useGitLabReviewActions(item, repoSelector, state, handleRefresh)
   const primaryActions = useGitLabPrimaryActions(item, itemId, repoSelector, state, handleRefresh)
 
   return (

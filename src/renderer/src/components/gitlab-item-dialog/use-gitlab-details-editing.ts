@@ -17,7 +17,8 @@ import { codeHostErrorText } from '@/lib/code-host-error-copy'
 export function useGitLabDetailsEditing(
   item: GitLabWorkItem | null,
   repoSelector: GitLabDialogRepoSelector | null,
-  state: GitLabItemDialogState
+  state: GitLabItemDialogState,
+  handleRefresh: () => void
 ) {
   const {
     bodyDraft,
@@ -164,12 +165,15 @@ export function useGitLabDetailsEditing(
     } finally {
       if (mountedRef.current) {
         setDetailsSaving(false)
+        // Why: a failed response doesn't prove the host kept the old details; reread (drafts stay) on every attempted write.
+        handleRefresh()
       }
     }
   }, [
     bodyDraft,
     details,
     handleCancelDetailsEdit,
+    handleRefresh,
     item,
     labelDraft,
     mountedRef,
