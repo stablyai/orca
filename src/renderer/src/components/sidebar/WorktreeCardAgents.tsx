@@ -28,6 +28,10 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 import { opensClaudeParentConversation } from '@/lib/claude-agent-row-view'
+import {
+  ChildAgentsWithIdleGroup,
+  collapsedChildAgentsSignalState
+} from './worktree-card-idle-child-agents'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -161,9 +165,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const hasLineage = childrenByParentPaneKey.size > 0
   // Persist disclosure outside component state so virtualizer/sibling-triggered remounts cannot reset it.
   const {
-    collapsedLineageParents,
+    expandedLineageParents,
+    expandedIdleChildGroups,
     compactRootListExpanded,
     toggleLineageParent: toggleLineageParentState,
+    toggleIdleChildGroup: toggleIdleChildGroupState,
     toggleCompactRootList
   } = useWorktreeAgentExpansionState(worktreeId)
 
@@ -189,6 +195,27 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     },
     [toggleLineageParentState]
   )
+  const toggleIdleChildGroup = useCallback(
+    (parentPaneKey: string) => {
+      dispatchSuppressScrollAdjustment()
+      toggleIdleChildGroupState(parentPaneKey)
+    },
+    [toggleIdleChildGroupState]
+  )
+
+  const renderChildAgents = (
+    parentPaneKey: string,
+    childAgents: DashboardAgentRowData[],
+    renderChild: (childAgent: DashboardAgentRowData, idleGroupExpanded: boolean) => React.ReactNode
+  ): React.ReactNode => (
+    <ChildAgentsWithIdleGroup
+      childAgents={childAgents}
+      idleExpanded={expandedIdleChildGroups.has(parentPaneKey)}
+      onToggleIdle={() => toggleIdleChildGroup(parentPaneKey)}
+      layout={agentActivityDisplayMode === 'compact' ? 'compact' : 'full'}
+      renderChild={renderChild}
+    />
+  )
 
   const stopBubble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -204,7 +231,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const expanded = !collapsedLineageParents.has(agent.paneKey)
+    const expanded = expandedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
           status: 'disabled' as const,
@@ -246,7 +273,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         />
         {hasChildAgents && expanded ? (
           <div className="worktree-agent-lineage-children">
-            {childAgents.map((childAgent) =>
+            {renderChildAgents(agent.paneKey, childAgents, (childAgent) =>
               renderAgentBranch(childAgent, descendantAncestorPaneKeys)
             )}
           </div>
@@ -265,7 +292,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
-    const expanded = !collapsedLineageParents.has(agent.paneKey)
+    const expanded = expandedLineageParents.has(agent.paneKey)
     const sendTarget = isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(agent.paneKey) ?? {
           status: 'disabled' as const,
@@ -300,6 +327,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
           childAgentCount={hasChildAgents ? childAgents.length : undefined}
           childAgentsExpanded={expanded}
+          collapsedChildAgentsState={
+            hasChildAgents && !expanded ? collapsedChildAgentsSignalState(childAgents) : undefined
+          }
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
@@ -309,11 +339,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
             <div className="worktree-agent-lineage-children flex flex-col gap-0.5">
-              {childAgents.map((childAgent) =>
+              {renderChildAgents(agent.paneKey, childAgents, (childAgent, idleGroupExpanded) =>
                 renderCompactAgentBranch(
                   childAgent,
                   descendantAncestorPaneKeys,
-                  cacheTimerActive && expanded
+                  cacheTimerActive && expanded && idleGroupExpanded
                 )
               )}
             </div>
