@@ -4,7 +4,7 @@ import {
   RelayAssignmentStore,
   STRANDED_MIGRATION_ABANDON_MS,
   type RelayAssignmentMigration
-} from './assignment-store.js'
+} from './assignment/assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { readRegisteredMigrationInventory } from './registered-migration-inventory.js'
 

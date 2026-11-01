@@ -118,8 +118,6 @@ function initialState(): MobileSourceControlContentState {
     worktreeLabel: 'fixture',
     screenState: { kind: 'loading' },
     branchCompareState: { kind: 'ready', result: branchCompareResult },
-    branchDiffPreview: null,
-    setBranchDiffPreview: noop,
     busyAction: null,
     commitMessage: '',
     setCommitMessage: noop,
@@ -149,8 +147,6 @@ function initialState(): MobileSourceControlContentState {
       launch: unusedAsync
     },
     keyboardLift: 0,
-    openingPath: null,
-    openingBranchPath: null,
     status: null,
     sections: [],
     branchCompareResult,
@@ -183,8 +179,7 @@ function initialState(): MobileSourceControlContentState {
       onPress: noop
     },
     loadStatus: unusedAsync,
-    openFile: unusedAsync,
-    openBranchDiff: unusedAsync,
+    openDiffForFile: noop,
     runGitAction: unusedAsync,
     stageAll: unusedAsync,
     unstageAll: unusedAsync,
@@ -325,15 +320,8 @@ describe('committed branch files during commit-message typing', () => {
     expect(rows()[0]?.props.disabled).toBe(true)
     patch({ busyAction: null })
     expect(rows()[0]?.props.disabled).toBe(false)
-    patch({ openingPath: 'local.ts' })
-    expect(rows()[0]?.props.disabled).toBe(true)
-    patch({ openingPath: null })
-    patch({ openingBranchPath: 'changed.ts' })
-    expect(rows()[0]?.props.disabled).toBe(true)
-    expect(rows()[0]?.findAll((node) => String(node.type) === 'ActivityIndicator')).toHaveLength(1)
-    patch({ openingBranchPath: null })
-    const open = vi.fn(async () => {})
-    patch({ openBranchDiff: open })
+    const open = vi.fn()
+    patch({ openDiffForFile: open })
     act(() => {
       const onPress = rows()[0]?.props.onPress
       if (typeof onPress !== 'function') {
@@ -341,7 +329,7 @@ describe('committed branch files during commit-message typing', () => {
       }
       onPress()
     })
-    expect(open).toHaveBeenCalledWith(expect.objectContaining({ path: 'changed.ts' }))
+    expect(open).toHaveBeenCalledWith({ kind: 'changes', filePath: 'changed.ts', area: 'branch' })
     patch({ branchCompareState: { kind: 'error', message: 'compare failed' } })
     expect(text()).toContain('compare failed')
     expect(rows()).toHaveLength(0)

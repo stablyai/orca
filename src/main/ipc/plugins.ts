@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
 import {

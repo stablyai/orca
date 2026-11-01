@@ -7,7 +7,7 @@ import {
   getPinnedClaudeAccountIdForPty
 } from '../claude-accounts/claude-pinned-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   ACTIVE_CLAUDE_ACCOUNT,
   type ProjectClaudeAccountPreference

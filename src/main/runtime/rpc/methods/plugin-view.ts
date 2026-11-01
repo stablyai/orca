@@ -1,6 +1,10 @@
 import { defineMethod } from '../core'
 import type { PluginViewDesktop } from '../../../plugins/view/plugin-view-desktop'
-import { PluginOpenParams, PluginShotParams } from '../../../../shared/rpc-contract/plugins-params'
+import {
+  PluginOpenParams,
+  PluginShotParams,
+  PluginShotReplayParams
+} from '../../../../shared/rpc-contract/plugins-params'
 
 // Desktop only: a headless `orca serve` has no window to show or capture a plugin in.
 let pluginViewForRpc: PluginViewDesktop | null = null
@@ -29,5 +33,12 @@ export const PLUGIN_VIEW_METHODS = [
     permission: 'host-admin',
     params: PluginShotParams,
     handler: async (params) => requirePluginView().shot(params)
+  }),
+  defineMethod({
+    // Never opens the plugin's panel or reaches its guest or worker; see plugin-view-replay-shot.
+    name: 'plugins.shotReplay',
+    permission: 'host-admin',
+    params: PluginShotReplayParams,
+    handler: async (params) => requirePluginView().shotReplay(params)
   })
 ]

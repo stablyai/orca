@@ -9,14 +9,14 @@ import {
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
-import type { StructuredLaunchAdmission } from './structured-agent-session-host-admission'
-import type * as admissionModule from './structured-agent-session-host-admission'
-import type * as launchModule from './structured-agent-session-launch-create-call'
+import type { StructuredLaunchAdmission } from './agent-session/launch/structured-agent-session-host-admission'
+import type * as admissionModule from './agent-session/launch/structured-agent-session-host-admission'
+import type * as launchModule from './agent-session/launch/structured-agent-session-launch-create-call'
 import {
   getStructuredLaunchStateBySessionId,
   resetStructuredAgentLaunchRegistryForTests
 } from './agent-session/launch/structured-agent-session-launch-registry'
-import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
+import { StructuredAgentSessionCreateRefusalError } from './agent-session/launch/structured-agent-session-launch-errors'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -29,17 +29,17 @@ import {
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
-import { hasStagedStructuredLaunchPrompt } from './structured-agent-session-launch-prompt'
+import { hasStagedStructuredLaunchPrompt } from './agent-session/launch/structured-agent-session-launch-prompt'
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
   createSession: vi.fn<typeof launchModule.launchStructuredAgentSession>()
 }))
-vi.mock('./structured-agent-session-host-admission', async (original) => ({
+vi.mock('./agent-session/launch/structured-agent-session-host-admission', async (original) => ({
   ...(await original<typeof admissionModule>()),
   admitStructuredLaunchOnHost: mocks.admission
 }))
-vi.mock('./structured-agent-session-launch-create-call', async (original) => ({
+vi.mock('./agent-session/launch/structured-agent-session-launch-create-call', async (original) => ({
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.createSession
 }))
