@@ -174,7 +174,12 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
           asyncSourceScope: 'host/session/epoch',
           hiddenAsyncIds: new Set(),
           enabled: true,
-          structured: { permission: null, question: null, sendWithOutcome },
+          structured: {
+            permission: null,
+            question: null,
+            sendWithOutcome,
+            sendFollowUp: { action: 'queue', offersChoice: true }
+          },
           status: null,
           messages,
           transcriptLoading: false
@@ -197,7 +202,14 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
         outcome
       )
-      expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+      expect(sendWithOutcome).toHaveBeenCalledWith(
+        '> Which color?\n\nBlue',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { alternate: true }
+      )
       messages = [
         ...messages,
         {

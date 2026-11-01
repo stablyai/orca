@@ -378,7 +378,7 @@ export function NativeChatStructuredSession(
               answerInputRef={questionAnswerInputRef}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport.send)}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

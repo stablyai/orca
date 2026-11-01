@@ -110,7 +110,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       ).toBe('Green')
       act(() => vi.runAllTimers())
 
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
       expect(container.textContent).toContain('Which color?')
       render([
         asked,
@@ -187,7 +187,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
       )
       act(() => blue?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
       act(() => vi.runAllTimers())
-      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+      expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
       expect(container.textContent).toContain('Which color?')
 
       render([
@@ -396,7 +396,7 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     act(settle)
     render()
     expect(container.textContent).not.toContain('Which color?')
-    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [])
+    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], undefined)
   })
 
   it.each([
@@ -424,6 +424,33 @@ describe('NativeChatStructuredAsyncQuestion', () => {
     act(() => vi.runAllTimers())
     expect(container.textContent?.includes('Which color?')).toBe(shown)
   })
+  it.each([
+    [{ action: 'queue', offersChoice: true }, { alternate: true }],
+    [{ action: 'queue', offersChoice: false }, undefined],
+    [{ action: 'steer', offersChoice: true }, undefined]
+  ] as const)('steers the answer into the running turn (follow-up: %j)', (followUp, request) => {
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>(() => true)
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="tab-1:structured"
+          sourceKey="host"
+          sourceScope="journal/session/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+          sendFollowUp={followUp}
+        />
+      )
+    )
+    act(() =>
+      [...container.querySelectorAll('button[aria-pressed]')]
+        .find((node) => node.textContent?.includes('Blue'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    act(() => vi.runAllTimers())
+    expect(send).toHaveBeenCalledWith('> Which color?\n\nBlue', [], request)
+  })
+
   it('resets pending choices when host ownership changes with the same portable definition', () => {
     const send = vi.fn(() => true)
     const render = (host: string) =>

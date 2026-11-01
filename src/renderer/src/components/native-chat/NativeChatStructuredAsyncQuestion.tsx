@@ -5,6 +5,7 @@ import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
 import { formatAskAnswer } from '../../../../shared/native-chat-ask-answer'
+import { nativeChatAnswerSendIntent } from '../../../../shared/native-chat-follow-up-behavior'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -17,7 +18,8 @@ export function NativeChatStructuredAsyncQuestion({
   sourceKey,
   sourceScope,
   blocked = false,
-  send
+  send,
+  sendFollowUp
 }: {
   paneKey: string
   sourceKey: string
@@ -25,6 +27,7 @@ export function NativeChatStructuredAsyncQuestion({
   blocked?: boolean
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>
   send: NativeChatStructuredComposerTransport['send']
+  sendFollowUp?: NativeChatStructuredComposerTransport['sendFollowUp']
 }): React.JSX.Element | null {
   const { prompt, dismiss, ownerKey } = useNativeChatAsyncQuestions({
     paneKey,
@@ -43,8 +46,13 @@ export function NativeChatStructuredAsyncQuestion({
       prompt={prompt}
       onAnswer={(selections) => {
         // Send admission can precede delivery; canonical transcript rows retire questions.
-        // A queued answer posts no row until the turn ends, so hide it or every Submit queues a copy.
-        if (send(formatAskAnswer(prompt, selections), []) === 'queued') {
+        const sent = send(
+          formatAskAnswer(prompt, selections),
+          [],
+          nativeChatAnswerSendIntent(sendFollowUp)
+        )
+        // Stop or a waiting command can still queue it; no row lands until the turn ends.
+        if (sent === 'queued') {
           dismiss()
         }
       }}
@@ -57,7 +65,7 @@ export function nativeChatStructuredAsyncQuestion(
   props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'sessionId' | 'tabId'>,
   controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'epoch' | 'prompts'>,
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>,
-  send: NativeChatStructuredComposerTransport['send']
+  transport: Pick<NativeChatStructuredComposerTransport, 'send' | 'sendFollowUp'>
 ): React.JSX.Element {
   const { agent, sessionId } = props
   const { epoch } = controller
@@ -65,7 +73,8 @@ export function nativeChatStructuredAsyncQuestion(
     <NativeChatStructuredAsyncQuestion
       paneKey={structuredAgentSessionPaneKey(props.tabId, sessionId)}
       session={session}
-      send={send}
+      send={transport.send}
+      sendFollowUp={transport.sendFollowUp}
       blocked={controller.prompts[0] != null}
       sourceKey={JSON.stringify([
         'journal',
