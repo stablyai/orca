@@ -26,8 +26,9 @@ const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 /** A snapshot only counts under the owner it came from, so A's numbers never render as B's. */
 type OwnedUsage = {
-  ownerId: string
+  ownerId: string | null
   rateLimits: RateLimitState | null
+  accounts: ProviderAccountsSnapshot | null
   failure: OwnerUsageFailureReason | null
 }
 
@@ -46,6 +47,8 @@ export function getUsageOwnerHostScope(remoteOwner: RemoteUsageOwner | null): Ru
 
 export type OwnerUsageRateLimits = {
   rateLimits: RateLimitState
+  accounts: ProviderAccountsSnapshot | null
+  accountsUnverifiable: boolean
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
   /** Forces the owning host to re-read usage; null when this device owns it. */
@@ -53,29 +56,38 @@ export type OwnerUsageRateLimits = {
 }
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
-export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
+export function useOwnerUsageRateLimits(
+  local: RateLimitState,
+  ownerTarget?: RuntimeClientTarget,
+  includeAccounts = false
+): OwnerUsageRateLimits {
   const languageRevision = useUiLanguageRevision()
   // Why: route by the focused workspace's owner, never by the Active Server setting.
-  const { target } = useActiveAccountOwner(LOCAL_TARGET)
+  const activeOwner = useActiveAccountOwner(LOCAL_TARGET)
+  const target = ownerTarget ?? activeOwner.target
   const ownerId = runtimeTargetEnvironmentId(target)
+  const localAccountRates = ownerId === null && includeAccounts ? local : null
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
   )
   const [owned, setOwned] = useState<OwnedUsage | null>(null)
   const ownedRef = useRef<OwnedUsage | null>(null)
+  const usageGeneration = useRef(0)
 
   const apply = useCallback((next: OwnedUsage) => {
+    usageGeneration.current += 1
     ownedRef.current = next
     setOwned(next)
   }, [])
 
   // Why: losing contact must not erase what the host already vouched for.
   const fail = useCallback(
-    (owner: string, failure: OwnerUsageFailureReason) => {
+    (owner: string | null, failure: OwnerUsageFailureReason) => {
       const current = ownedRef.current
       apply({
         ownerId: owner,
         rateLimits: current?.ownerId === owner ? current.rateLimits : null,
+        accounts: current?.ownerId === owner ? current.accounts : null,
         failure
       })
     },
@@ -85,25 +97,60 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   const applySnapshot = useCallback(
     (owner: string, snapshot: ProviderAccountsSnapshot) => {
       if (snapshot.rateLimits) {
-        apply({ ownerId: owner, rateLimits: snapshot.rateLimits, failure: null })
+        apply({
+          ownerId: owner,
+          rateLimits: snapshot.rateLimits,
+          accounts: snapshot,
+          failure: null
+        })
       } else {
         // Why: a host that predates published usage answers without it; say so, never spin.
-        fail(owner, 'usage-not-published')
+        apply({
+          ownerId: owner,
+          rateLimits: null,
+          accounts: snapshot,
+          failure: 'usage-not-published'
+        })
       }
     },
-    [apply, fail]
+    [apply]
   )
 
   const ownerIdRef = useRef(ownerId)
   useEffect(() => {
     ownerIdRef.current = ownerId
+    usageGeneration.current += 1
   }, [ownerId])
   // Why: bumping reopens the stream; each open makes the host refresh stale usage.
   const [streamGeneration, setStreamGeneration] = useState(0)
 
   useEffect(() => {
     if (!ownerId) {
-      return
+      if (!includeAccounts) {
+        return
+      }
+      let active = true
+      const watcher = watchProviderAccounts(LOCAL_TARGET, {
+        onSnapshot: (snapshot) => {
+          if (active) {
+            apply({
+              ownerId: null,
+              rateLimits: localAccountRates,
+              accounts: snapshot,
+              failure: null
+            })
+          }
+        },
+        onError: () => {
+          if (active) {
+            fail(null, 'unreachable')
+          }
+        }
+      })
+      return () => {
+        active = false
+        watcher.close()
+      }
     }
     let active = true
     const reopen = (): void => setStreamGeneration((value) => value + 1)
@@ -136,12 +183,13 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
       clearTimeout(reconnectTimer)
       watcher.close()
     }
-  }, [ownerId, streamGeneration, applySnapshot, fail])
+  }, [ownerId, streamGeneration, includeAccounts, localAccountRates, applySnapshot, fail, apply])
 
   const refreshRemote = useCallback(async () => {
     if (!ownerId) {
       return
     }
+    const generation = ++usageGeneration.current
     try {
       const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
         { kind: 'environment', environmentId: ownerId },
@@ -149,8 +197,8 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
         { refreshUsage: true },
         { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
       )
-      // Why: a refresh that outlives an owner switch must not overwrite the new owner's usage.
-      if (ownerIdRef.current === ownerId) {
+      // A stream update, owner switch or newer refresh supersedes this request.
+      if (ownerIdRef.current === ownerId && usageGeneration.current === generation) {
         applySnapshot(ownerId, snapshot)
       }
     } catch {
@@ -198,6 +246,11 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   )
   return {
     rateLimits,
+    accounts:
+      owned?.ownerId === ownerId && (ownerId !== null || owned.rateLimits === local)
+        ? owned.accounts
+        : null,
+    accountsUnverifiable: owned?.ownerId === ownerId && owned.failure !== null,
     remoteOwner,
     refreshRemote: ownerId ? refreshRemote : null
   }
