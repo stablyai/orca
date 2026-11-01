@@ -3,7 +3,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
-import { eraseRpcMethods } from '../../../core'
+import { isStreamingMethod, eraseRpcMethods } from '../../../core'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
 
 // Host proof must report agent exit whether its PTY survives the kill or disappears on reboot (#24353).
@@ -71,7 +71,7 @@ describe('federation host agent-death liveness', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     const params =

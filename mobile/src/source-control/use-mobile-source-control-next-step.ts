@@ -44,6 +44,8 @@ type Params = {
   headSha: string | null
   /** The Changes body shows git workflow failures; elsewhere the bar has to. */
   showWorkflowErrors: boolean
+  /** Opens the PR tab's Merge sheet, which picks the method, instead of confirming the default. */
+  onMerge?: () => void
 }
 
 // Steps where the bar itself offers the PR's merge actions.
@@ -73,7 +75,8 @@ export function useMobileSourceControlNextStep({
   reviewsSupported,
   refetchPr,
   headSha,
-  showWorkflowErrors
+  showWorkflowErrors,
+  onMerge
 }: Params) {
   const t = useMobileTranslation()
   const { client, connState, status, createPrAction, primaryActionArgs, busyAction } = state
@@ -224,7 +227,7 @@ export function useMobileSourceControlNextStep({
               )
             }
           },
-          merge: setMergeMethod,
+          merge: onMerge ? () => onMerge() : setMergeMethod,
           setAutoMerge: (enabled) =>
             actions.setAutoMerge(
               enabled,
@@ -241,6 +244,7 @@ export function useMobileSourceControlNextStep({
       busyAction,
       client,
       createPrAction,
+      onMerge,
       pr,
       primaryAction,
       readyPr,

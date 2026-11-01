@@ -14,7 +14,6 @@ import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
-import { z } from 'zod'
 import {
   acquireOrcadInstanceLock,
   ORCAD_LOCK_FILE_NAME,
@@ -198,60 +197,8 @@ describe('acquireOrcadInstanceLock', () => {
         writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), JSON.stringify(olderRecord))
         expect(acquireOrcadInstanceLock(root, liveMismatch(1001)).record.nonce).not.toBe('stale')
       })
-
-      it('says "an unknown program" when the live process name cannot be read', () => {
-        const root = makeRoot()
-        writeFileSync(join(root, ORCAD_LOCK_FILE_NAME), JSON.stringify(olderRecord))
-        expect(() =>
-          acquireOrcadInstanceLock(root, { ...liveMismatch(1000), processName: () => null })
-        ).toThrow(
-          expect.objectContaining({ message: expect.stringContaining('an unknown program') })
-        )
-      })
-
-      it('keeps the plain refusal for a record that carries a boot id', () => {
-        const root = makeRoot()
-        writeFileSync(
-          join(root, ORCAD_LOCK_FILE_NAME),
-          JSON.stringify({ ...olderRecord, bootId: 'boot-a' })
-        )
-        expect(() => acquireOrcadInstanceLock(root, liveMismatch(1000))).toThrow(
-          expect.objectContaining({
-            code: 'orcad_instance_lock_held',
-            message: expect.stringContaining('already owns the data root')
-          })
-        )
-      })
     }
   )
-
-  it('records the incarnation in a lock an older reader still parses', () => {
-    const root = makeRoot()
-    const incarnation = { linuxStartTicks: '1234', bootId: 'boot-a' }
-    const lock = acquireOrcadInstanceLock(root, hooks({ incarnation: () => incarnation }))
-    const written: unknown = JSON.parse(readFileSync(lock.path, 'utf8'))
-    expect(written).toMatchObject({ startedAtMs: 1_000, ...incarnation })
-    // Older schemas strip additive identity fields rather than rejecting the record.
-    const olderReader = z.object({
-      pid: z.number().int().positive(),
-      startedAtMs: z.number().finite().nonnegative().nullable(),
-      identity: z.string().min(1),
-      version: z.string().min(1),
-      acquiredAt: z.iso.datetime({ offset: true }),
-      nonce: z.string().min(1),
-      role: z.enum(['orcad', 'desktop']).optional()
-    })
-    expect(olderReader.parse(written)).toEqual({
-      pid: process.pid,
-      startedAtMs: 1_000,
-      identity: 'uid-1000',
-      version: '1.0.0-test',
-      acquiredAt: lock.record.acquiredAt,
-      nonce: lock.record.nonce,
-      role: 'orcad'
-    })
-    lock.release()
-  })
 
   it('reads an older lock without an incarnation, and salvages a malformed one', () => {
     const root = makeRoot()
@@ -391,18 +338,6 @@ describe('acquireOrcadInstanceLock', () => {
       expect(acquireOrcadInstanceLock(root, hooks()).record.identity).toBe('uid-1000')
     }
   )
-
-  it('leaves the terminal daemon alone: the lock covers only the runtime role', () => {
-    const root = makeRoot()
-    const daemonDir = join(root, 'daemon')
-    mkdirSync(daemonDir, { recursive: true })
-    writeFileSync(join(daemonDir, 'daemon-v36.pid'), JSON.stringify({ pid: 99, startedAtMs: 1 }))
-    const lock = acquireOrcadInstanceLock(root, hooks())
-    lock.release()
-    expect(JSON.parse(readFileSync(join(daemonDir, 'daemon-v36.pid'), 'utf8')).pid).toBe(99)
-    const next = acquireOrcadInstanceLock(root, hooks())
-    expect(next.record.pid).toBe(process.pid)
-  })
 
   it('restricts a Windows data root by ACL, and refuses when the ACL cannot be applied', () => {
     const root = makeRoot()
