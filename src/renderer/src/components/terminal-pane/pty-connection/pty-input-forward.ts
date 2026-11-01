@@ -11,6 +11,7 @@ import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay
 import { createPtySizeReassertion } from '../pty-size-reassertion'
 import { isPaneReplaying } from '../replay-guard'
 import { isXtermMouseReport, isXtermWheelCursorKey } from '../terminal-pointer-input-sequences'
+import { TerminalOutputControlInputFilter } from '../terminal-output-control-input-filter'
 import { shouldDropQuarantinedTerminalInput } from '../terminal-input-quarantine'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
@@ -27,7 +28,16 @@ import { initializePaneGeometry, readPaneSize } from './read-pane-size'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
+  const outputControlInputFilter = new TerminalOutputControlInputFilter()
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+    if (wasUserInput) {
+      outputControlInputFilter.reset()
+    } else {
+      data = outputControlInputFilter.filter(data)
+      if (!data) {
+        return
+      }
+    }
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
       isPaneReplaying(session.deps.replayingPanesRef, session.pane.id) &&
