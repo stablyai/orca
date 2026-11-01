@@ -12742,7 +12742,7 @@
         "wslHosts": {
           "title": "WSL ana makineleri",
           "experimental": "Deneysel",
-          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Durdurulmuş bir dağıtım yalnızca projelerinden birini açtığınızda veya buradan bağlandığınızda başlar.",
+          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Bir proje açmak durdurulmuş bir dağıtımı asla başlatmaz: Başlat’a tıklayın, yeni bir terminal açın veya buradan bağlanın.",
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",
@@ -19596,8 +19596,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
-        "exitUnconfirmedFromTerminal": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
-        "exitUnconfirmed": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. O terminalde {{agent}} uygulamasından çıkın veya terminali kapatın, ardından bu sohbeti Oturum geçmişi bölümünden açın.",
         "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin."
       },
       "state": {

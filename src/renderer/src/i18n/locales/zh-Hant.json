@@ -12579,7 +12579,7 @@
         "wslHosts": {
           "title": "WSL 主機",
           "experimental": "實驗性",
-          "description": "Orca 在每個發行版內執行一個伺服器。已停止的發行版只有在您開啟其某個專案或在此連線它時才會啟動。",
+          "description": "Orca 在每個發行版內執行一個伺服器。開啟專案不會啟動已停止的發行版：請按一下「啟動」、開啟新終端機，或在此連線它。",
           "add": "新增 WSL 發行版",
           "connect": "連線",
           "forceUpdate": "強制更新",
@@ -19313,8 +19313,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "請更新此主機上的 Orca，以便在聊天介面中繼續。",
-        "exitUnconfirmedFromTerminal": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
-        "exitUnconfirmed": "{{agent}} 已在另一個終端機中執行此對話。請在該處結束 {{agent}} 或關閉該終端機，再從「工作階段歷史記錄」開啟此對話。",
         "notSavedYet": "{{agent}} 尚未儲存此對話。請在它回覆後重試。"
       },
       "state": {

@@ -7,7 +7,7 @@ import {
   type NativeChatMessage
 } from '../../native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../harness-injected-user-turns'
-import { isNoiseMessage } from '../../native-chat-noise'
+import { isNoiseMessage } from '../native-chat-noise'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrameMessage

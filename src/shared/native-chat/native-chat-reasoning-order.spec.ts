@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 import {
   compareNativeChatTranscriptMessages,
   projectNativeChatTranscriptMessages
-} from './native-chat-transcript-projection'
+} from '../native-chat-transcript-projection'
 
 function row(id: string, role: NativeChatMessage['role'], timestamp = 1): NativeChatMessage {
   return { id, role, timestamp, source: 'transcript', blocks: [{ type: 'text', text: id }] }
