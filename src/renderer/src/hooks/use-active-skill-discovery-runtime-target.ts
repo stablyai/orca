@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legacy-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 
 /** Null waits for ownership; unsupported is a resolved host that cannot scan skills. */
 export type SkillDiscoveryRuntimeTarget = RuntimeClientTarget | { kind: 'unsupported' } | null
@@ -49,7 +49,7 @@ function getPairingRevision(
   return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
 }
 
-/** Pairing and process incarnations own separate disk evidence, even when the target ID is unchanged. */
+/** The lifecycle fence distinguishes first confirmation from replacement, even before status arrives. */
 export function useSkillDiscoveryRuntimeIdentity(
   runtimeTarget: RuntimeClientTarget | null
 ): string | undefined {
@@ -59,8 +59,7 @@ export function useSkillDiscoveryRuntimeIdentity(
     }
     return JSON.stringify([
       getPairingRevision(state.runtimeEnvironments, runtimeTarget.environmentId),
-      lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(runtimeTarget.environmentId))
-        ?.runtimeId
+      getRuntimeEnvironmentConnectionGeneration(runtimeTarget.environmentId)
     ])
   })
 }

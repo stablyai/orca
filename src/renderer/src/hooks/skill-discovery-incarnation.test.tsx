@@ -13,7 +13,8 @@ import { resetSkillDiscoveryCacheForTests } from './installed-agent-skill-discov
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc,
-  clearRuntimeCompatibilityCache: vi.fn()
+  clearRuntimeCompatibilityCache: vi.fn(),
+  clearRecentRuntimeCompatibilityFailure: vi.fn()
 }))
 
 afterEach(() => {
@@ -85,8 +86,9 @@ it.each([
       liveLeafCount: 0
     }
     if (scope === 'process') {
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: new Map([['paired', { status: processStatus, checkedAt: 1 }]])
+      useAppStore.getState().setRuntimeEnvironmentStatus('paired', {
+        status: processStatus,
+        checkedAt: 1
       })
     }
     const oldResult: SkillDiscoveryResult = {
@@ -133,10 +135,9 @@ it.each([
     }
     act(() => {
       if (scope === 'process') {
-        useAppStore.setState({
-          runtimeStatusByEnvironmentId: new Map([
-            ['paired', { status: { ...processStatus, runtimeId: 'replacement' }, checkedAt: 2 }]
-          ])
+        useAppStore.getState().setRuntimeEnvironmentStatus('paired', {
+          status: { ...processStatus, runtimeId: 'replacement' },
+          checkedAt: 2
         })
       } else {
         useAppStore.getState().setRuntimeEnvironments([{ ...environment, pairingRevision: 2 }])

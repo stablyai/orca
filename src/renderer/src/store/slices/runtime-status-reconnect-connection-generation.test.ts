@@ -145,6 +145,44 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before)
   })
 
+  it.each(['checking', 'unavailable', 'blocked'] as const)(
+    'keeps first confirmation on the startup fence after an empty %s snapshot',
+    (verification) => {
+      const store = createSliceStore()
+      seedEnvironment(store)
+      const before = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
+      store
+        .getState()
+        .applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification, status: null }))
+
+      store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'verified' }))
+
+      expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before)
+      expect(
+        store.getState().runtimeStatusByEnvironmentId.get(ENVIRONMENT_ID)?.connectionGeneration
+      ).toBe(before)
+    }
+  )
+
+  it('fences explicit retirement once, without treating it as transport loss', () => {
+    const store = createSliceStore()
+    seedEnvironment(store)
+    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
+    const before = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
+
+    for (const sequence of [2, 3]) {
+      store.getState().applyRuntimeHostStatusSnapshot(
+        makeSnapshot(sequence, {
+          verification: 'blocked',
+          retired: true,
+          transport: 'disconnected'
+        })
+      )
+      expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before + 1)
+      expect(mirrorKeys(store).environmentKey).toBe('')
+    }
+  })
+
   it('advances the generation when the runtime restarted during the outage', () => {
     const store = createSliceStore()
     seedEnvironment(store)
