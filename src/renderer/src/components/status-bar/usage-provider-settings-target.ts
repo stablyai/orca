@@ -25,6 +25,9 @@ export function getUsageProviderAccountsSectionId(
       return null
     case 'zcode':
       return 'accounts-zcode'
+    case 'deepseek':
+      // Why: v1 uses DEEPSEEK_API_KEY env only — no Accounts UI yet.
+      return null
   }
 }
 

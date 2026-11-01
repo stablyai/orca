@@ -630,6 +630,7 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
+        "deepseekToggleDescription": "Show DeepSeek prepaid balance when DEEPSEEK_API_KEY is set.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
       },
       "menuBarIcon": {
@@ -4648,6 +4649,7 @@
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "cursorUsageMenu": "Cursor Usage",
+            "deepseekUsageMenu": "DeepSeek Usage",
             "hiddenUsageProviders": "Also: {{value0}}",
             "zcodeUsageMenu": "ZCode Usage",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
@@ -9918,7 +9920,12 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "deepseekUsageTitle": "DeepSeek Usage",
+            "deepseekUsageDescription": "Show DeepSeek prepaid balance from DEEPSEEK_API_KEY.",
+            "deepseekKeyword": "deepseek",
+            "deepseekBalanceKeyword": "balance",
+            "deepseekApiKeyKeyword": "api key"
           }
         },
         "auto": {

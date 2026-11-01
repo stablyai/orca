@@ -35,11 +35,15 @@ export abstract class RateLimitServiceState {
     minimax: null,
     grok: null,
     cursor: null,
+    deepseek: null,
     zcode: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Async Keychain/desktop DB probing belongs in fetch cycles, never synchronous construction.
   protected cursorAuthConfigured = false
+  // Why: DEEPSEEK_API_KEY is an env probe, not a keychain read, but it still
+  // changes between launches, so each fetch cycle refreshes the flag.
+  protected deepseekAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
@@ -55,6 +59,7 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
+    deepseek: 0,
     zcode: 0
   }
   // Failures increase activation backoff; success/unavailable resets it.
@@ -68,6 +73,7 @@ export abstract class RateLimitServiceState {
     grok: 0,
     antigravity: 0,
     cursor: 0,
+    deepseek: 0,
     zcode: 0
   }
   protected mainWindow: BrowserWindow | null = null

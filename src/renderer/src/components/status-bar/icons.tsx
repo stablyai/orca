@@ -31,6 +31,33 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   )
 }
 
+export function DeepSeekIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: DeepSeek has no bundled brand mark in Orca yet; monogram keeps the
+  // status-bar provider row consistent without inventing a trademark glyph.
+  return (
+    <svg
+      height={size}
+      width={size}
+      viewBox="0 0 16 16"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect width="16" height="16" rx="3" fill="currentColor" opacity="0.14" />
+      <text
+        x="8"
+        y="11.5"
+        textAnchor="middle"
+        fontSize="7"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+        fill="currentColor"
+      >
+        DS
+      </text>
+    </svg>
+  )
+}
+
 // SVG filter/mask IDs must be unique per instance because document-wide lookup otherwise resolves to the first icon.
 let _geminiIconCount = 0
 

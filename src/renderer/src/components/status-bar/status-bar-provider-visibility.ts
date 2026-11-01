@@ -19,6 +19,8 @@ export type UsageProviderSettings = Pick<
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
+  // Why: DeepSeek uses DEEPSEEK_API_KEY env; main sets this each poll.
+  deepseekAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -32,6 +34,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  deepseek?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -78,7 +81,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
     settings?.cursorAuthConfigured === true ||
-    settings?.zcodePlanApiKeyConfigured === true
+    settings?.zcodePlanApiKeyConfigured === true ||
+    settings?.deepseekAuthConfigured === true
   )
 }
 
@@ -120,6 +124,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'zcode') {
     return settings.zcodePlanApiKeyConfigured === true
   }
+  if (providerId === 'deepseek') {
+    return settings.deepseekAuthConfigured === true
+  }
   return false
 }
 
@@ -128,7 +135,7 @@ export function createPendingProviderSnapshot(providerId: UsageProviderId): Prov
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'deepseek' ? { monthly: null } : {}),
     // Bucket-backed providers need bucket-shaped pending skeletons to avoid layout changes on their first reading.
     ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
       ? { buckets: [] }
@@ -175,7 +182,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.deepseek !== undefined && isProviderSnapshotPending(providers.deepseek))
   ) {
     return false
   }
@@ -190,6 +198,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.deepseek)
   )
 }
