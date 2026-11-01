@@ -1,3 +1,4 @@
+import { toDetectedProjectWorktree } from '../project-realpath-identity'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../shared/worktree-execution-host-resolution'
@@ -24,8 +25,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import {
   applyMetadataFallbackVisibility,
   buildKnownOrcaWorkspaceLayouts,
-  isLegacyRepoForExternalWorktreeVisibility,
-  toDetectedWorktree
+  isLegacyRepoForExternalWorktreeVisibility
 } from '../../shared/worktree/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../worktree-lineage-host-peers'
 import {
@@ -261,7 +261,7 @@ export class RuntimeManagedWorktreeQueries {
       }
     }
     const visibilityDefaults = this.visibilityDefaults(defaultsSupported, settings)
-    return toDetectedWorktree({
+    return toDetectedProjectWorktree({
       repo,
       worktree,
       meta:

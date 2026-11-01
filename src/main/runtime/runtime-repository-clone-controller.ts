@@ -17,12 +17,13 @@ import { reuseSavedCloneTarget } from '../git/saved-clone-target'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { invalidateAuthorizedRootsCache } from '../ipc/registered-worktree-roots-cache'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
-import { getRepoName } from '../git/repo'
+import { getGitRepoRootAsync, getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoIsRegistrationCandidate } from './runtime-worktree-selection'
 import { resolveClonedFolderConversion } from '../folder-repo-git-conversion'
 import { findExtraFolderWorkspaceIds } from '../folder-workspace-meta-presence'
+import { findProjectAtSameRealPath } from '../project-realpath-identity'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
@@ -92,11 +93,18 @@ export class RuntimeRepositoryCloneController {
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+    let resolvedClonePath = clonePath
+    const aliasMatch = await findProjectAtSameRealPath(
+      store.getRepos().filter((repo) => runtimeRepoIsRegistrationCandidate(repo, executionHostId)),
+      clonePath
+    )
     // Git runs here; an SSH row with the same path refers to another machine.
     const findSaved = (): Repo | undefined =>
       store.getRepos().find((repo) => {
         return (
-          getClonePathComparisonKey(repo.path) === clonePathKey &&
+          (getClonePathComparisonKey(repo.path) === clonePathKey ||
+            getClonePathComparisonKey(repo.path) === getClonePathComparisonKey(resolvedClonePath) ||
+            (aliasMatch !== null && repo.id === aliasMatch.id && repo.path === aliasMatch.path)) &&
           runtimeRepoIsRegistrationCandidate(repo, executionHostId)
         )
       })
@@ -153,6 +161,7 @@ export class RuntimeRepositoryCloneController {
       proc.on('close', (code, signal) => void finish(code, signal))
     })
 
+    resolvedClonePath = await getGitRepoRootAsync(clonePath)
     const existing = findSaved()
     if (existing) {
       const conversion = await resolveClonedFolderConversion(store, existing)
@@ -183,13 +192,13 @@ export class RuntimeRepositoryCloneController {
     }
     // cloneRepo validated and cloned locally; runtime row stamps do not change where files live.
     const detected = await detectRepoIconAndUpstream({
-      repoPath: clonePath,
+      repoPath: resolvedClonePath,
       kind: 'git',
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
       id: randomUUID(),
-      path: clonePath,
+      path: resolvedClonePath,
       displayName: getRepoName(clonePath),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...(executionHostId != null ? { executionHostId } : {}),

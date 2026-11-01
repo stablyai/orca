@@ -1,3 +1,4 @@
+import { isProjectCheckout } from '../../../project-realpath-identity'
 import { preserveFolderUpgradeWorktreePath } from '../../../folder-upgrade-worktree-path'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { parseWorktreeId } from '../../worktree-logic'
@@ -166,6 +167,7 @@ export function buildDetectedGitWorktrees(
     const detected = toDetectedWorktree({
       repo,
       worktree,
+      isSelectedCheckout: isProjectCheckout(repo, worktree),
       meta,
       settings,
       knownOrcaLayouts,
@@ -190,6 +192,7 @@ export function buildDetectedGitWorktrees(
     return toDetectedWorktree({
       repo,
       worktree: mergeWorktree(repo.id, gitWorktree, backfilledMeta, repo.displayName),
+      isSelectedCheckout: detected.selectedCheckout,
       meta: backfilledMeta,
       settings,
       knownOrcaLayouts,
