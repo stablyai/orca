@@ -260,18 +260,15 @@ export async function findCommandsOnLocalPath(
       })
     )
   }
-  // Preserve first-directory hits; overlap later absence scans without waiting on unrelated ones.
-  if (searchDirs.length > 0) {
-    await scanDirectory(searchDirs[0])
-    await Promise.race([
-      allFound.promise,
-      forEachWithConcurrency(
-        searchDirs.slice(1),
-        commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 1 : 4,
-        scanDirectory
-      )
-    ])
-  }
+  // Detection returns names, so a slow earlier directory must not delay later hits.
+  await Promise.race([
+    allFound.promise,
+    forEachWithConcurrency(
+      searchDirs,
+      commands.length <= DIRECT_DETECTION_COMMAND_LIMIT ? 2 : 4,
+      scanDirectory
+    )
+  ])
   return found
 }
 
