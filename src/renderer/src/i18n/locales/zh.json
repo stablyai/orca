@@ -20834,6 +20834,7 @@
     "scanIssues": {
       "issuesOmitted": "已省略其他扫描问题。",
       "sessionMetadataUnreadable": "本次扫描未能读取会话元数据。",
+      "transcriptTooLarge": "有一个 {{label}} 会话过大，无法在会话历史中加载。请尝试直接在 {{label}} 中恢复该会话。",
       "openCodeScannerUnavailable": "由于无法启动后台扫描器，已跳过 OpenCode 历史记录；应用仍可正常响应。",
       "openCodeScanIncomplete": "OpenCode 历史记录扫描未完成：{{detail}}",
       "openCodeWslReaderPreparing": "正在准备 WSL SQLite 读取器。设置完成后请刷新 Vault。",

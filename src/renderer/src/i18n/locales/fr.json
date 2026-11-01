@@ -21485,6 +21485,7 @@
     "scanIssues": {
       "issuesOmitted": "D’autres problèmes d’analyse ont été omis.",
       "sessionMetadataUnreadable": "Les métadonnées des sessions n’ont pas pu être lues lors de cette analyse.",
+      "transcriptTooLarge": "Une conversation {{label}} est trop volumineuse pour être chargée dans l'historique des sessions. Essayez de la reprendre directement dans {{label}}.",
       "openCodeScannerUnavailable": "L’historique OpenCode a été ignoré, car son analyseur en arrière-plan n’a pas pu démarrer ; l’application reste réactive.",
       "openCodeScanIncomplete": "L’analyse de l’historique OpenCode ne s’est pas terminée : {{detail}}",
       "openCodeWslReaderPreparing": "Préparation du lecteur SQLite WSL. Actualisez Vault une fois la configuration terminée.",

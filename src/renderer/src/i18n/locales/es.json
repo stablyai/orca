@@ -21812,6 +21812,7 @@
     "scanIssues": {
       "issuesOmitted": "Se omitieron problemas adicionales del escaneo.",
       "sessionMetadataUnreadable": "No se pudieron leer los metadatos de las sesiones en este escaneo.",
+      "transcriptTooLarge": "Una conversación de {{label}} es demasiado grande para cargarla en el historial de sesiones. Intenta reanudarla directamente en {{label}}.",
       "openCodeScannerUnavailable": "Se omitió el historial de OpenCode porque su escáner en segundo plano no pudo iniciarse; la aplicación sigue respondiendo.",
       "openCodeScanIncomplete": "El escaneo del historial de OpenCode no se completó: {{detail}}",
       "openCodeWslReaderPreparing": "Preparando el lector SQLite de WSL. Actualiza Vault cuando termine la configuración.",
