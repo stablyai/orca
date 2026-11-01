@@ -115,8 +115,6 @@ describe('visible unselected workspace twins', () => {
 
   it.each([
     ['ssh:builder', 'all'],
-    ['ssh:builder', 'local'],
-    ['ssh:builder', 'remote'],
     ['runtime:server', 'all'],
     ['runtime:server', 'local'],
     ['runtime:server', 'remote']

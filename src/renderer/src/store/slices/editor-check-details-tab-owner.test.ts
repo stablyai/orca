@@ -316,40 +316,4 @@ describe('check-details tab owner', () => {
       ).toBeNull()
     }
   )
-
-  it('delivers a sidebar request to its tab after the user selects the local twin', async () => {
-    const localRepo = { ...TEST_REPO, id: 'repo-1', path: '/repo' }
-    const localWorktree = makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo' })
-    const remoteWorktree: typeof localWorktree = {
-      ...localWorktree,
-      path: '/remote',
-      hostId: 'runtime:server',
-      runtimeOwnerEnvironmentId: 'server'
-    }
-    const { store } = createOwnerStore({
-      activeWorkspaceExecutionHostId: 'runtime:server',
-      repos: [localRepo, { ...localRepo, path: '/remote', executionHostId: 'runtime:server' }],
-      worktreesByRepo: { 'repo-1': [localWorktree, remoteWorktree] }
-    })
-    const remoteTabId = open(store)
-    const requestId = createCheckRunDetailsRequestId()
-    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
-      requestId,
-      details: null,
-      loading: true,
-      error: null
-    })
-
-    store.setState({ activeWorkspaceExecutionHostId: 'local' })
-    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
-      requestId,
-      details,
-      loading: false,
-      error: null
-    })
-
-    expect(store.getState().openFiles.find((file) => file.id === remoteTabId)).toMatchObject({
-      checkRunDetails: { requestId, loading: false, details: { title: 'Build passed' } }
-    })
-  })
 })

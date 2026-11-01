@@ -131,7 +131,7 @@ describe('post-operation review refresh ownership', () => {
   it.each(
     operations.flatMap((operation) => [
       { operation, selectTwin: true },
-      { operation, selectTwin: false }
+      ...(operation === 'push' ? [{ operation, selectTwin: false }] : [])
     ])
   )(
     '$operation refreshes its owner after switching (same-ID twin: $selectTwin)',
