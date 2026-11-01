@@ -304,6 +304,19 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
       .catch((error: unknown) => console.warn('[runtime] sleeping agent wake failed', error))
   }
 
+  /** The host wakes one of its suspended recipe VMs; a workspace without one costs a store read. */
+  async resumeWorkspaceVm(worktreeId: string): Promise<void> {
+    await this.workspaceSleepPlatform?.resumeVm(worktreeId)
+  }
+
+  /** Any activation of the workspace: a suspended recipe VM resumes host-side, so headless serve,
+   *  paired clients and the CLI wake it without the window's resume IPC. Never rejects. */
+  protected queueWorkspaceVmWake(worktreeId: string): Promise<void> {
+    return this.workspaceSleep
+      .wakeVm(worktreeId)
+      .catch((error: unknown) => console.warn('[runtime] workspace VM wake failed', error))
+  }
+
   /** The window opened a slept pane; main resumes it and the window attaches. */
   resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<boolean> {
     return this.workspaceSleep.resumePane(pane, automatic)

@@ -42,6 +42,8 @@ export type WorkspaceSleepRuntime = {
   ensureStructuredAgentSessionHost: () => Promise<void>
   notifyWorkspaceSleep: (notice: WorkspaceSleepNotice) => void
   wakeRecordsForWorktree: (worktreeId: string) => SleepingAgentSessionRecord[]
+  /** The host-side wake of a suspended recipe VM behind this workspace; a no-op without one. */
+  resumeWorkspaceVm: (worktreeId: string) => Promise<void>
   resumeSleptWorkspaceAgents: (worktreeId: string) => Promise<void>
   ensureRestoredPaneStarted: (
     pane: RestoredPane,
@@ -132,6 +134,16 @@ export class WorkspaceSleepCoordinator {
         await this.runtime.resumeSleptWorkspaceAgents(worktreeId)
         this.runtime.wakeWindowHibernatedAgents(worktreeId)
       }
+    })
+  }
+
+  /** Activation's VM wake, queued like any wake: a sleep still running sees the reopen and keeps
+   *  the VM up, and a wake behind an already-finished suspend finds the VM and resumes it. */
+  wakeVm(worktreeId: string): Promise<void> {
+    this.noteReopened(worktreeId)
+    return queueTerminalWorkspaceCommand(this.runtime, `id:${worktreeId}`, {
+      kind: 'wake',
+      run: () => this.runtime.resumeWorkspaceVm(worktreeId)
     })
   }
 
