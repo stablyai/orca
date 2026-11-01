@@ -32,9 +32,9 @@ import {
   verifyAgentPromptSubmission
 } from '../../agent-prompt-submission-verification'
 import { AgentPromptPermissionReturnedError } from './agent-prompt-permission-hold'
-import { OrcaRuntimeWithResubmitHeldAgentPrompt } from './terminal-agent-prompt-resubmit'
+import { OrcaRuntimeWithPendingComposerInputGuard } from './terminal-agent-prompt-pending-input'
 
-export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResubmitHeldAgentPrompt {
+export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithPendingComposerInputGuard {
   protected abstract createAgentPromptRenderGate(
     ptyId: string,
     pasteIngestMs: number
@@ -80,7 +80,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     if (options.onPermission === 'wait') {
       this.throwIfAgentPromptPermissionReturned(permissionBaseline, permissionBaseline)
     }
-    this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
+    await this.assertAgentPromptEntryGuards(permissionBaseline, ptyId, observationSignal)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pty = this.ptysById.get(ptyId)
     // OMP needs paste and submit in one write; the foreground consumer wins, with launchAgent only a startup fallback.
@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
     let baseline: AgentPromptActivity
     try {
       await beforeWrite(admissionSignal)
-      assertWritable(admissionSignal)
+      await this.assertComposerStillClear(ptyId, admissionSignal, assertWritable)
       if (options.onPermission === 'wait') {
         this.throwIfAgentPromptPermissionReturned(
           permissionBaseline,

@@ -4,6 +4,7 @@ import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { isUntypedTerminalInput } from '../../../../../shared/terminal-untyped-input'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { AgentPromptPendingInputError } from '../../../terminal/input/agent-prompt-permission-hold'
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   assertTerminalSendExactPtyBinding,
@@ -235,6 +236,11 @@ export const TERMINAL_SEND_METHODS = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        const refused = { handle: params.terminal, accepted: false as const, bytesWritten: 0 }
+        if (error instanceof AgentPromptPendingInputError) {
+          const { pendingInput } = error
+          return { send: { ...refused, refusedReason: 'pending-input' as const, pendingInput } }
+        }
         if (acceptedPromptCheckpoint) {
           return acceptedPromptCheckpoint
         }
