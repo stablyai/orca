@@ -129,6 +129,23 @@ describe('useMobileSessionDocumentReaders markdown reads', () => {
     expect(doc).toEqual({ status: 'error', message: "Couldn't load markdown" })
   })
 
+  it('explains an outside-workspace markdown path refusal instead of a generic failure', async () => {
+    const doc = await readMarkdown({
+      id: 'frame-1',
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message:
+          'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+      },
+      _meta: META
+    })
+    expect(doc).toEqual({
+      status: 'error',
+      message: 'This file is outside the workspace. Open it on desktop to view it.'
+    })
+  })
+
   it('carries a truncated prefix and the full size into the document', async () => {
     const doc = await readMarkdown(readTabResult({ truncated: true, byteLength: 3_000_000 }))
     expect(doc).toMatchObject({

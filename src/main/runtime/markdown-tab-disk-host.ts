@@ -82,10 +82,16 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           route.pairingRevision
         )
       }
+      const openFiles =
+        runtime.getWorkspaceSessionForWorktree(worktreeId)?.openFilesByWorktree?.[worktreeId] ?? []
+      const isPersistedOpenTab = openFiles.some(
+        (candidate) => candidate.filePath === file.filePath
+      )
       const { bytes, size } = await readLocalRuntimeFilePrefix(
         file.filePath,
         runtime.requireStore(),
-        maxBytes
+        maxBytes,
+        isPersistedOpenTab ? { extraRoots: [file.filePath] } : {}
       )
       if (isBinaryBuffer(bytes)) {
         throw new Error('binary_file')
