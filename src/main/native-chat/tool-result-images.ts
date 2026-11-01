@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { basename, extname, isAbsolute } from 'node:path'
-import type { NativeChatImageRefBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
+import type {
+  NativeChatImageRefBlock,
+  NativeChatMessage
+} from '../../shared/native-chat/native-chat-types'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from '../runtime/files/file-preview-budget'
@@ -11,8 +14,6 @@ import { takePendingToolResultImages, type ToolResultImageSource } from './trans
 const SPOOL_BASE64_MAX_CHARS = Math.ceil(RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES / 3) * 4 + 8
 
 export type ToolImageSpool = (bytes: Buffer, extension: string) => string | null
-
-const spooledImages = new Map<string, string>()
 
 export function toolInputFilePath(input: unknown): string | null {
   const record = asRecord(input) ?? (typeof input === 'string' ? parseJsonObject(input) : null)
@@ -32,6 +33,9 @@ export function resolveToolResultImageRefs(args: {
   filePath?: string | null
   spool?: ToolImageSpool
 }): NativeChatImageRefBlock[] {
+  if (args.sources.length === 0) {
+    return []
+  }
   const paired = existingImageFile(args.filePath)
   let usedPaired = false
   const refs: NativeChatImageRefBlock[] = []
@@ -230,13 +234,5 @@ function spoolImage(
 function defaultSpool(bytes: Buffer, extension: string): string | null {
   const hash = createHash('sha256').update(bytes).digest('hex')
   const name = `chat-image-${hash}${extension}`
-  const cached = spooledImages.get(name)
-  if (cached) {
-    return cached
-  }
-  const stored = getAgentSessionAttachmentStore()?.storeImageOnce(name, bytes) ?? null
-  if (stored) {
-    spooledImages.set(name, stored)
-  }
-  return stored
+  return getAgentSessionAttachmentStore()?.storeImageOnce(name, bytes) ?? null
 }

@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { fileUriToFilesystemPath } from '../../../../../src/shared/file-uri-path'
 import {
   isImageRefBlock,
   isTextBlock
@@ -120,19 +121,26 @@ function chatMarkdownImageBlock(href: string, alt: string): NativeChatImageRefBl
 
 function absoluteMarkdownImagePath(href: string): string | null {
   if (href.startsWith('/') && !href.startsWith('//')) {
-    return href
+    return decodeLocalImagePath(href)
   }
   if (/^[A-Za-z]:[\\/]/.test(href)) {
-    return href
+    return decodeLocalImagePath(href)
   }
   if (!href.startsWith('file://')) {
     return null
   }
   try {
-    const pathname = decodeURIComponent(new URL(href).pathname)
-    return pathname.startsWith('/') && pathname.length > 1 ? pathname : null
+    return fileUriToFilesystemPath(new URL(href))
   } catch {
     return null
+  }
+}
+
+function decodeLocalImagePath(path: string): string {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
   }
 }
 

@@ -96,6 +96,23 @@ describe('mobile chat markdown images', () => {
     act(() => tree.unmount())
   })
 
+  it.each([
+    ['![Shot](/tmp/my%20shot.png)', '/tmp/my shot.png'],
+    ['![Shot](file:///C:/shots/my%20shot.png)', 'C:/shots/my shot.png'],
+    ['![Shot](file://server/share/shot.png)', '//server/share/shot.png']
+  ])('reads local image paths from %s', async (markdown, path) => {
+    const tree = render(markdown)
+    await act(async () => {
+      await readHostChatImage.mock.results[0]?.value
+    })
+    expect(readHostChatImage).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'worktree' }),
+      path,
+      expect.any(AbortSignal)
+    )
+    act(() => tree.unmount())
+  })
+
   it('leaves a relative image as a link', () => {
     const tree = render('![Notes](notes/shot.png)')
     expect(images(tree)).toHaveLength(0)
