@@ -5,6 +5,7 @@ import {
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
+import { traceWslSpawn } from '../wsl/wsl-spawn-trace'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
 
@@ -89,6 +90,7 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
       resolve({ kind: 'rejected' })
       return
     }
+    traceWslSpawn('git-read-env', 'wsl.exe', args)
     execFile(
       'wsl.exe',
       args,

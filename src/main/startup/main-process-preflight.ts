@@ -38,12 +38,8 @@ import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
 import { startEventLoopStallProbe } from './event-loop-stall-probe'
 import { startEventLoopDelayProbe } from '../diagnostics/event-loop-delay-probe'
-import {
-  isMainThreadDiagnosticsEnabled,
-  recordSubprocessSpawn,
-  startMainThreadChurnProbe
-} from '../diagnostics/main-thread-churn-probe'
-import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { startMainThreadChurnProbe } from '../diagnostics/main-thread-churn-probe'
+import { installMainSpawnObserver } from './main-spawn-observer'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
@@ -225,10 +221,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     startEventLoopStallProbe()
   }
   // Session-long main-thread diagnostics (#7576) distinguish cold cache from unstable filesystem stamps via hit/miss/unprovable counts.
-  if (isMainThreadDiagnosticsEnabled()) {
-    // Include process-host spawns too; Git-only probe sites miss rg/ps/PTY helpers.
-    setSpawnObserver(recordSubprocessSpawn)
-  }
+  installMainSpawnObserver()
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Lock after userData override so dev/packaged namespaces differ; concurrent dev copies also need separate profiles to avoid store corruption (#1326, #1312).
   const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
