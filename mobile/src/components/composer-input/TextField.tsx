@@ -21,6 +21,8 @@ type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 's
   /** A caption that stays above the text, e.g. what the field types into. */
   label?: string
   monospace?: boolean
+  hiddenText?: boolean
+  inputOverlay?: ReactNode
   style?: StyleProp<ViewStyle>
 }
 
@@ -31,6 +33,8 @@ export function TextField({
   trailing,
   label,
   monospace = false,
+  hiddenText = false,
+  inputOverlay,
   style,
   editable = true,
   onFocus,
@@ -39,17 +43,25 @@ export function TextField({
 }: TextFieldProps): React.JSX.Element {
   useMobileColorScheme()
   const focus = useInputFocus({ onFocus, onBlur })
-  const input = (
+  const rawInput = (
     <TextInput
       ref={inputRef}
       editable={editable}
       placeholderTextColor={colors.textMuted}
       selectionColor={colors.accentBlue}
-      style={[styles.fieldText, monospace && styles.mono]}
+      style={[styles.fieldText, monospace && styles.mono, hiddenText && styles.hiddenText]}
       {...inputProps}
       onFocus={focus.onFocus}
       onBlur={focus.onBlur}
     />
+  )
+  const input = inputOverlay ? (
+    <View style={styles.inputOverlayHost}>
+      {rawInput}
+      {inputOverlay}
+    </View>
+  ) : (
+    rawInput
   )
   return (
     <View
