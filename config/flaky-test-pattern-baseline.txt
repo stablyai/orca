@@ -1172,7 +1172,7 @@
 1 test-skip-needs-quarantine:src/main/browser/browser-session-ua-cloudflare-live.electron.test.ts
 3 test-timeout-needs-reason:config/scripts/mobile-web-app/mobile-web-app-frame-budget-sweep.test.ts
 2 test-timeout-needs-reason:mobile/src/platform/dictation-capture-bridge-budget.test.tsx
-1 test-timeout-needs-reason:mobile/src/session/mobile-native-chat-merged-snapshot-parity.test.ts
+1 test-timeout-needs-reason:mobile/src/session/native-chat/mobile-native-chat-merged-snapshot-parity.test.ts
 7 test-timeout-needs-reason:mobile/src/tasks/worktree-create-retry.test.ts
 2 test-timeout-needs-reason:mobile/src/terminal/document/native-document-bundle.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/family-recordings.test.ts
