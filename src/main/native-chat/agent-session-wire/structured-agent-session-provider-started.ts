@@ -20,6 +20,7 @@ import {
   noteStructuredAgentSessionReportedOptions
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
+import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
@@ -36,7 +37,11 @@ export type StructuredAgentSessionProviderStartedContext = {
   now: () => number
   publishStatus?: (sessionId: string) => void
   runtimeState: {
-    startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'ready' | 'onClock' | 'readiness'>
+    startupAttempts: Pick<
+      StructuredAgentSessionStartupAttempts,
+      'ready' | 'onClock' | 'readiness' | 'observeOpen'
+    >
+    startFlights: Pick<StructuredAgentSessionStartFlights, 'ownsChild'>
     acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   }
   /** Commits the child's buffered lifecycle events. */

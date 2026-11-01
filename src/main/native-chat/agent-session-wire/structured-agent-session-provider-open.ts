@@ -1,4 +1,6 @@
+import { providerStartupFailureFact } from './structured-agent-session-failure-text'
 import { sameProviderChild } from './structured-agent-session-provider-child'
+import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
@@ -22,10 +24,21 @@ export async function openStructuredAgentSessionProviderChild(
   if (!context.runtimeState.startupAttempts.onClock(sessionId, child)) {
     return
   }
+  // A start flight joins the outstanding answer after exit and retires it; a direct attach has no such owner.
   const attempt = context.runtimeState.acquireAborts.begin(sessionId, false, false, () => {
     const current = context.sessions.get(sessionId)?.child
-    return current !== undefined && current !== null && sameProviderChild(current, child)
+    return (
+      current !== undefined &&
+      current !== null &&
+      sameProviderChild(current, child) &&
+      !context.runtimeState.startFlights.ownsChild(sessionId, child)
+    )
   })
+  const observation = context.runtimeState.startupAttempts.observeOpen(
+    sessionId,
+    child,
+    attempt.abort
+  )
   const openedAt = context.now()
   try {
     attempt.signal.throwIfAborted()
@@ -51,6 +64,13 @@ export async function openStructuredAgentSessionProviderChild(
       attempt.signal
     )
   } catch (error) {
+    if (!attempt.signal.aborted) {
+      observation.failed(
+        providerStartupFailureFact(error),
+        retryableStructuredAgentSessionStart(error),
+        error
+      )
+    }
     // Aborted startup already has a Stop/close/quit/expiry owner.
     if (!attempt.signal.aborted) {
       const openMs = Math.max(0, context.now() - openedAt)
@@ -65,6 +85,7 @@ export async function openStructuredAgentSessionProviderChild(
         )
     }
   } finally {
+    observation.finish()
     attempt.end()
   }
 }

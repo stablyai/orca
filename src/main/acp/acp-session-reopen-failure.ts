@@ -5,6 +5,8 @@ import type { ProviderTimelineEvent } from '../native-chat/agent-session-timelin
 import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 
+import { temporaryAcpStartupAnswer } from './acp-startup-failure'
+
 const ACP_RESOURCE_NOT_FOUND = -32002
 export const ACP_REOPEN_FAILED = 'ACP agent could not reopen its saved session; starting a new one'
 
@@ -14,7 +16,7 @@ export function acpReopenTakeover(
   start: { over: boolean; now: number; warn: (fields: { scope: string; error: unknown }) => void }
 ): Pick<AgentSessionProviderHandleLink, 'supersedesKey' | 'replaces'> {
   // A replacement session cannot resolve sign-in failure or an abandoned start.
-  if (error instanceof AcpAuthRequiredError || start.over) {
+  if (error instanceof AcpAuthRequiredError || temporaryAcpStartupAnswer(error) || start.over) {
     throw error
   }
   if (

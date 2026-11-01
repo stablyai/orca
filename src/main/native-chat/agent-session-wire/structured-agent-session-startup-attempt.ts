@@ -1,5 +1,3 @@
-import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
-import { randomUUID } from 'node:crypto'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   waitForStructuredAgentSessionStart,
@@ -7,9 +5,6 @@ import {
 } from './structured-agent-session-start-readiness'
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import {
@@ -18,37 +13,7 @@ import {
   type StructuredAgentSessionStartupLimits
 } from './structured-agent-session-startup-attempt-contract'
 
-export function mintStructuredAgentSessionStartupAttempt(input: {
-  record: AgentSessionRecord
-  identity: AgentSessionJournalIdentity
-  spawnToken: string
-  permissionMode?: AgentChatPermissionChoice
-  accountRecipe?: ClaudeAccountRecipe
-  events?: StructuredAgentSessionEventSink
-  signal?: AbortSignal
-  startupOptions?: Readonly<Record<string, string>>
-  attemptId?: string
-}): StructuredAgentSessionStartupAttempt {
-  const { record } = input
-  const selected = input.startupOptions ?? record.options
-  const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
-  return {
-    attemptId: input.attemptId ?? randomUUID(),
-    identity: input.identity,
-    fence: record.lease.runtimeFence,
-    spawnToken: input.spawnToken,
-    launch: {
-      location: record.location,
-      accountHome: record.accountHome,
-      ...(record.launchDirectory === undefined ? {} : { launchDirectory: record.launchDirectory })
-    },
-    ...(options ? { options } : {}),
-    ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
-    ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
-    ...(input.events ? { events: input.events } : {}),
-    ...(input.signal ? { signal: input.signal } : {})
-  }
-}
+export { mintStructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-mint'
 
 export type StructuredAgentSessionExpiredStartup = {
   sessionId: string
@@ -78,7 +43,10 @@ type Tracked = {
   /** Defer expiry reporting until aborted spawn settles; successful readiness overrides it. */
   expiry: StructuredAgentSessionStartupSettled | null
   failure?: SubmissionRejectionFact
+  openError?: unknown
   retry?: boolean
+  opening?: Promise<void>
+  cancelOpen?: () => void
   readiness: PromiseWithResolvers<'ready' | 'ended'>
 }
 
@@ -109,7 +77,11 @@ export class StructuredAgentSessionStartupAttempts {
   }
 
   pastCeiling(registeredAt: number): boolean {
-    return this.now() - registeredAt >= this.limits.ceilingMs
+    return this.untilCeiling(registeredAt) <= 0
+  }
+
+  untilCeiling(registeredAt: number): number {
+    return registeredAt + this.limits.ceilingMs - this.now()
   }
 
   childFailed(
@@ -121,6 +93,29 @@ export class StructuredAgentSessionStartupAttempts {
     const tracked = this.open.get(sessionId)
     if (tracked?.child && sameProviderChild(tracked.child, child)) {
       Object.assign(tracked, { failure, retry })
+    }
+  }
+
+  /** The retained attempt survives child removal, but never records into its replacement. */
+  observeOpen(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChildIdentity,
+    cancel: () => void
+  ) {
+    const tracked = this.open.get(sessionId)
+    const completion = Promise.withResolvers<void>()
+    const matches = tracked?.child && sameProviderChild(tracked.child, child)
+    if (matches) {
+      tracked.opening = completion.promise
+      tracked.cancelOpen = cancel
+    }
+    return {
+      failed: (failure: SubmissionRejectionFact, retry: boolean, openError: unknown): void => {
+        if (matches) {
+          Object.assign(tracked, { failure, retry, openError })
+        }
+      },
+      finish: (): void => completion.resolve()
     }
   }
 

@@ -1,3 +1,4 @@
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -8,7 +9,10 @@ import {
   startupAcquisitionRefusal
 } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
-import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
+import {
+  claudeSessionHasTurnWork,
+  settledClaudeTurnEndLeaf
+} from './claude-structured-resume-point'
 import { claudeHeldSends } from '../claude-command-lifecycle'
 import { claudeCloseReport, settleClaudeExitedSession } from './claude-structured-session-close'
 import {
@@ -46,7 +50,11 @@ export function observeClaudeSessionExit(
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.sessions.delete(sessionId)
   // Run tree cleanup before recovery; an exit callback proves only root exit.
-  const closePromise = session.connection.close().catch(() => false)
+  const cleanup = session.connection.close().catch(() => false)
+  const closePromise =
+    claudeStartDied(session) && providerExitObserved(error)
+      ? withTimeout(cleanup, 2_000, false)
+      : cleanup
   const exit: ClaudeSessionExit = {
     connection: session.connection,
     session,
@@ -69,6 +77,12 @@ export function observeClaudeSessionExit(
     .catch(() => undefined)
 }
 
+/** Exited before initialize answered and before any turn; turns can settle without an Orca dispatch. */
+function claudeStartDied(session: ClaudeSession): boolean {
+  // Startup arms later refusals for the published session once initialize facts apply.
+  return session.initialization.proof.onRefusal === null && !claudeSessionHasTurnWork(session)
+}
+
 export function settleClaudeUnexpectedExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,
@@ -81,10 +95,12 @@ export function settleClaudeUnexpectedExit(
       settleClaudeExitedSession(exit.session)
       return
     }
-    // Save the completed-turn cursor before recovery permits reacquisition.
-    await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
-      console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
-    })
+    // A dead start's host open is still waiting on this exit, and nothing advanced acquisition's cursor.
+    if (!claudeStartDied(exit.session)) {
+      await persistClaudeSessionHandle(sessionId, exit.session, deps).catch((error: unknown) => {
+        console.warn('[claude-resume-point] exit cursor was not persisted:', { sessionId, error })
+      })
+    }
     if (exits.get(sessionId) !== exit) {
       settleClaudeExitedSession(exit.session)
       return
@@ -92,6 +108,9 @@ export function settleClaudeUnexpectedExit(
     exits.delete(sessionId)
     const report = claudeCloseReport(exit.connection, true, exit.error)
     lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
+    const startupFailure = claudeSessionHasTurnWork(exit.session)
+      ? undefined
+      : exit.connection.startupFailure?.()
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,
@@ -100,11 +119,13 @@ export function settleClaudeUnexpectedExit(
       failure:
         startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
           ? providerStartupFailureFact(exit.error)
-          : providerExitObserved(exit.error)
-            ? agentSessionFailureFact('providerExited', {
-                detail: providerDiagnosticOf(exit.error)
-              })
-            : agentSessionFailureFact('hostFault'),
+          : startupFailure
+            ? providerStartupFailureFact(startupFailure)
+            : providerExitObserved(exit.error)
+              ? agentSessionFailureFact('providerExited', {
+                  detail: providerDiagnosticOf(exit.error)
+                })
+              : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'

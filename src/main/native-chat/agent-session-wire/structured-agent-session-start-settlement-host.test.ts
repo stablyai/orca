@@ -38,6 +38,7 @@ vi.mock('node:timers/promises', async (importOriginal) => {
 let host: ReturnType<typeof hostTestState>['host']
 let acquire: ReturnType<typeof hostTestState>['acquire']
 let dispatch: ReturnType<typeof hostTestState>['dispatch']
+const openFailures = new Map<string, (error: Error) => void>()
 const openGates = new Map<string, () => void>()
 const eventually = (assertion: () => void | Promise<void>) =>
   vi.waitFor(assertion, { timeout: 10_000, interval: 0 })
@@ -52,8 +53,10 @@ beforeEach(async () => {
   await host.close(SESSION, 'evict')
   acquire.mockClear()
   openGates.clear()
+  openFailures.clear()
   host.deps.adapter.open = ({ acquisitionGeneration }) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
+      openFailures.set(acquisitionGeneration!, reject)
       openGates.set(acquisitionGeneration!, () => resolve({ reportedOptions: {} }))
     })
 })
@@ -116,6 +119,8 @@ async function endAttempt() {
     reason: 'exited while starting',
     cause: 'unexpected-exit'
   })
+  openFailures.get(child.generation)?.(new Error('provider exited before open answered'))
+  openFailures.delete(child.generation)
   await eventually(() => expect(session.child).toBeNull())
 }
 
@@ -369,6 +374,7 @@ describe('final logical startup settlement', () => {
       expect(runtimeState.currentEventSink(SESSION)).toBeUndefined()
       acquire.mockClear()
       openGates.clear()
+      openFailures.clear()
       const other = 'unrelated-chat'
       const unrelated = hostTestAttachParams(null, {
         providerHandle: undefined,

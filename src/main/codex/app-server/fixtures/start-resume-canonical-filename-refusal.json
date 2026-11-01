@@ -1,0 +1,6 @@
+{
+  "capture": "Native resume failure logged on 2026-10-30; only the account path is sanitized. The original dispatcher did not retain error.data, so it is unknown here.",
+  "method": "thread/resume",
+  "code": -32600,
+  "message": "paginated rollout path `/qa-home/.codex/sessions/rollout-2026-10-28T18-52-57.454Z-01a183db-b8d6-7170-af39-e004651c1e1e.jsonl` does not have a canonical rollout filename"
+}

@@ -1,3 +1,4 @@
+import { claudeScriptedChild } from '../../claude/claude-scripted-child.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +33,11 @@ afterEach(async () => {
   }
 })
 
-async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgentChild) {
+async function failedStart(
+  agent: 'pi' | 'codex' | 'grok' | 'claude',
+  script: ScriptedAgentChild,
+  unanswered = false
+) {
   directory = await mkdtemp(join(tmpdir(), 'orca-adapter-start-failure-'))
   const root = directory
   const host = await ensureStructuredAgentSessionHost({
@@ -55,9 +60,11 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
           agent,
           providerHandle: undefined,
           accountHome:
-            agent === 'pi'
-              ? { variable: 'PI_CODING_AGENT_DIR', path: root }
-              : { variable: 'GROK_HOME', path: root },
+            agent === 'claude'
+              ? { variable: 'CLAUDE_CONFIG_DIR', path: root }
+              : agent === 'pi'
+                ? { variable: 'PI_CODING_AGENT_DIR', path: root }
+                : { variable: 'GROK_HOME', path: root },
           location: {
             executionHostId: 'local',
             wslDistro: null,
@@ -88,10 +95,15 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
   }
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  const expectedAttempts = unanswered || agent === 'grok' || agent === 'claude' ? 5 : 1
+  for (let attempt = 1; attempt <= expectedAttempts; attempt++) {
     // Retries back off 100·2^n ms (800 ms before the fifth spawn); the 1 s default leaves no room under load.
     await vi.waitFor(() => expect(script.spawns()).toBe(attempt), { timeout: 5_000 })
-    script.failHandshake('provider config is invalid: bad key')
+    const fail = unanswered ? script.exitHandshake : script.failHandshake
+    if (!fail) {
+      throw new Error('fixture has no unanswered exit')
+    }
+    fail('provider config is invalid: bad key')
   }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
@@ -104,7 +116,7 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   })
   const settled = await submission()
   const snapshot = await host.journalSnapshot(SESSION)
-  const failureKind = agent === 'codex' ? 'startFailed' : 'providerStartFailed'
+  const failureKind = agent === 'codex' && !unanswered ? 'startFailed' : 'providerStartFailed'
   expect(readWholeAgentSessionFailureFact(settled?.rejection)).toMatchObject({
     kind: failureKind,
     detail: { text: 'provider config is invalid: bad key' }
@@ -117,7 +129,7 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
     )
   ).toHaveLength(1)
   expect(script.prompts()).toEqual([])
-  expect(script.spawns()).toBe(5)
+  expect(script.spawns()).toBe(expectedAttempts)
 }
 
 it('Pi records one failure without dispatch after a failed start', async () => {
@@ -128,4 +140,14 @@ it('Codex records one failure without dispatch after a failed start', async () =
 })
 it('ACP records one failure without dispatch after a failed start', async () => {
   await failedStart('grok', acpScriptedChild('grok')())
+})
+
+it('Claude keeps unanswered early exits within five attempts', async () => {
+  await failedStart('claude', claudeScriptedChild())
+})
+it('Codex keeps unanswered early exits within five attempts', async () => {
+  await failedStart('codex', codexScriptedChild(), true)
+})
+it('Pi keeps unanswered early exits within five attempts', async () => {
+  await failedStart('pi', piScriptedChild(), true)
 })

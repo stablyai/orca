@@ -11,6 +11,8 @@ export type ScriptedAgentChild = {
   releaseHandshake(): void
   /** Fails the held handshake of the newest spawn with this provider error; its process exits. */
   failHandshake(message: string): void
+  /** The child dies without answering the pending startup request. */
+  exitHandshake?: (message: string) => void
   /** Default prompts complete immediately; false keeps turns running until interrupt or child exit, modeling background work. */
   completeTurns: boolean
   /** The text of every prompt any spawn received, in order. */
