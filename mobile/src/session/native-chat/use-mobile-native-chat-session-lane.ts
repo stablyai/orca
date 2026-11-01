@@ -83,8 +83,16 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  // Claude's journal import stops at 1024 ops, so older tasks live only in the transcript file.
+  const journal = structuredSession.session
   const fileTaskList = useMobileTranscriptTaskList({
-    client: structured ? client : null,
+    client:
+      structured &&
+      agent === 'claude' &&
+      (journal.status === 'ready' || journal.status === 'error') &&
+      !journal.taskList
+        ? client
+        : null,
     agent,
     sessionId,
     transcriptPath: resolution?.transcriptPath ?? null
