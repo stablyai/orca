@@ -38,7 +38,10 @@ export function buildProjectSectionCatalog(
   const setups = [...served.setups]
   const projects = [...served.projects]
   const knownRepoIds = new Set(setups.map((s) => s.repoId))
-  const unrepresentedRepos = shownDesktopRepos.filter((r) => !knownRepoIds.has(r.id))
+  const desktopOnlyRepos = shownDesktopRepos.filter(
+    (repo) => !shownRepos.some((shown) => iconKey(shown) === iconKey(repo))
+  )
+  const unrepresentedRepos = desktopOnlyRepos.filter((repo) => !knownRepoIds.has(repo.id))
   if (unrepresentedRepos.length > 0) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SectionRepo fields satisfy Repo for projection derivation.
     const derived = projectHostSetupProjectionFromRepos(unrepresentedRepos as readonly Repo[])
@@ -46,12 +49,7 @@ export function buildProjectSectionCatalog(
     projects.push(...derived.projects)
   }
   return {
-    repos: [
-      ...shownRepos,
-      ...unrepresentedRepos.filter(
-        (repo) => !shownRepos.some((shown) => iconKey(shown) === iconKey(repo))
-      )
-    ],
+    repos: [...shownRepos, ...desktopOnlyRepos],
     grouping: { projects, projectHostSetups: setups },
     // Why: served repos come in the sidebar's header order, cross-host manual order included.
     repoOrder: getLogicalRepoOrderRankById(served.repos.map((repo) => repo.id)),

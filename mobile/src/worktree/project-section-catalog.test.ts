@@ -73,4 +73,29 @@ describe('buildProjectSectionCatalog', () => {
     )
     expect(catalog.repos.map((r) => r.id)).toEqual(['r1', 'slides-benchmark'])
   })
+
+  it('includes desktop repo absent from served.repos even when a stale served setup matches it', () => {
+    const served: ServedProjectSections = {
+      repos: [],
+      projects: [{ id: 'repo:r1', displayName: 'orca' }],
+      setups: [
+        {
+          id: 'r1',
+          projectId: 'repo:r1',
+          hostId: 'local',
+          repoId: 'r1',
+          path: '/repos/r1',
+          displayName: 'orca',
+          setupMethod: 'legacy-repo'
+        }
+      ],
+      projectOrderBy: 'manual',
+      projectGroups: undefined
+    }
+    const desktopRepo = repo('r1')
+    const catalog = buildProjectSectionCatalog(served, [desktopRepo], null, 'manual')
+
+    expect(catalog.repos.map((r) => r.id)).toEqual(['r1'])
+    expect(catalog.grouping?.projectHostSetups).toHaveLength(1)
+  })
 })
