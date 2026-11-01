@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -6,6 +6,8 @@ import type { RpcResponse } from '../transport/types'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
+import type { MessageBox } from '../components/composer-input/MessageBox'
+import type { TextField } from '../components/composer-input/TextField'
 
 const doubles = vi.hoisted(
   (): {
@@ -36,11 +38,11 @@ vi.mock('lucide-react-native', async (importOriginal) =>
 // Thin native adapters: the real composer, picker and search own their state; these forward it.
 vi.mock('../components/composer-input/MessageBox', async () => {
   const { createElement: element } = await import('react')
-  return { MessageBox: (props: object) => element('MessageBox', props) }
+  return { MessageBox: (props: ComponentProps<typeof MessageBox>) => element('MessageBox', props) }
 })
 vi.mock('../components/composer-input/TextField', async () => {
   const { createElement: element } = await import('react')
-  return { TextField: (props: object) => element('TextField', props) }
+  return { TextField: (props: ComponentProps<typeof TextField>) => element('TextField', props) }
 })
 vi.mock('../components/BottomDrawer', async () => {
   const { createElement: element } = await import('react')
