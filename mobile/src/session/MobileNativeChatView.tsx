@@ -11,13 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
-} from '../../../src/shared/native-chat-turn-status'
-import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
-import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
+} from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'

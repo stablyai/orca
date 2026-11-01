@@ -1,6 +1,6 @@
 // Shared turn status/copy for desktop translations and direct mobile rendering; platforms own their clocks.
 
-import type { AgentTurnOutcome } from './agent-turn-outcome'
+import type { AgentTurnOutcome } from '../../agent-turn-outcome'
 
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',

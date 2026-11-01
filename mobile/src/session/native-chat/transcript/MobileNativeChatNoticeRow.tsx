@@ -10,7 +10,7 @@ import {
   isTextBlock,
   type NativeChatBlock,
   type NativeChatTextBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session-failure'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {

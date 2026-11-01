@@ -1,10 +1,13 @@
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
-import type { AgentSessionLatestTurn } from './agent-session-wire'
-import { readAgentJournalTurn } from './agent-session-turn-record'
-import type { NativeChatRole } from './native-chat-types'
-import { isStructuredAgentSessionCommandTurn } from './agent-session/structured-agent-session-command-entry'
-import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
-import { structuredAgentSessionOpeningSendIn } from './structured-agent-session-opening-send'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../agent-session-wire'
+import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import type { NativeChatRole } from '../native-chat-types'
+import { isStructuredAgentSessionCommandTurn } from '../../agent-session/structured-agent-session-command-entry'
+import { runningStructuredAgentSessionTurnScope } from '../../structured-agent-session-live-turn'
+import { structuredAgentSessionOpeningSendIn } from '../../structured-agent-session-opening-send'
 
 /** Place pending sends after live activity when host handover waits: during conversation commands (/compact), Stop, or a send still opening its turn.
  * Include this client’s unrecorded sends; ordinary running turns accept sends promptly, and pre-Stop sends stay put.

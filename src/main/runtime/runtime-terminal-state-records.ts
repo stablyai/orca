@@ -40,6 +40,15 @@ export type PtyRegistrationClaim = {
   exitedIncarnations: Set<PtyIncarnationId | null>
 }
 
+export type RuntimeWorktreeTerminalSleepState = {
+  worktreeId: string
+  generation: number
+  phase: 'stopping' | 'partial' | 'sleeping'
+  ptyIds: string[]
+  terminalHandles: string[]
+  terminalHandlesByPtyId: Record<string, string[]>
+}
+
 export type RuntimeLeafRecord = RuntimeSyncedLeaf &
   RuntimeTerminalTailState & {
     ptyGeneration: number

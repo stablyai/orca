@@ -29,7 +29,7 @@ import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
 } from './native-chat-orca-stop-context'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { nativeChatMessageCopyText } from '../../../../shared/native-chat-message-copy-text'

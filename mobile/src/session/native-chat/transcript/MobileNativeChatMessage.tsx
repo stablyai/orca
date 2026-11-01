@@ -8,7 +8,7 @@ import {
   isImageRefBlock,
   isSubagentGroupBlock,
   isTextBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
@@ -17,10 +17,10 @@ import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
@@ -39,10 +39,10 @@ import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'

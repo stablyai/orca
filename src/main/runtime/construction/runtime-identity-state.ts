@@ -46,7 +46,11 @@ import type {
   PtyControllerInventory,
   RuntimePtyController
 } from '../runtime-pty-controller-contract'
-import type { RuntimeLeafRecord, PtyRegistrationClaim } from '../runtime-terminal-state-records'
+import type {
+  RuntimeLeafRecord,
+  PtyRegistrationClaim,
+  RuntimeWorktreeTerminalSleepState
+} from '../runtime-terminal-state-records'
 import type { TerminalHandleRecord } from '../runtime-terminal-contracts'
 import type { PtyIncarnationHandleRecord } from '../orca-runtime-core'
 import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
@@ -204,14 +208,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   protected terminalSleepStateByHostWorktree = new Map<
     HostScopedWorktreeKey,
-    {
-      worktreeId: string
-      generation: number
-      phase: 'stopping' | 'partial' | 'sleeping'
-      ptyIds: string[]
-      terminalHandles: string[]
-      terminalHandlesByPtyId: Record<string, string[]>
-    }
+    RuntimeWorktreeTerminalSleepState
   >()
 
   protected terminalSleepGeneration = 0

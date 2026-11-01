@@ -4,7 +4,10 @@ import {
 } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { fitInteractivePrompt } from '../../../../shared/agent-status-field-normalization'
 import { parseAskFromToolInput } from '../../../../shared/native-chat/input/native-chat-ask'
-import type { NativeChatBlock, NativeChatSubagentState } from '../../../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatSubagentState
+} from '../../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'

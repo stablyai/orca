@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { agentMessageTranscriptText } from '../../../../../src/shared/agent-session/agent-message-display-text'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
 

@@ -34,7 +34,7 @@ import {
   structuredAgentSessionToolCallBlock
 } from './agent-session/structured-agent-session-tool-call-block'
 
-import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat/native-chat-types'
 import { sha256 } from './sha256'
 import { readAgentMessageSource } from './agent-session/agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'

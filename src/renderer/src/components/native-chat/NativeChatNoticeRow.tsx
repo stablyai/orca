@@ -13,7 +13,7 @@ import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
 } from '../../../../shared/agent-session-host-status-rows'
-import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook

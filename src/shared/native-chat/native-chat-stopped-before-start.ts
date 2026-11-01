@@ -10,8 +10,11 @@ import type {
   AgentJournalSubmission
 } from '../agent-session-journal-types'
 import { inSendOrder } from './native-chat-send-order'
-import { stoppedTurnOpeners, structuredAgentTurnAnchors } from '../native-chat-turn-membership'
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
+import {
+  stoppedTurnOpeners,
+  structuredAgentTurnAnchors
+} from './transcript/native-chat-turn-membership'
+import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 
 /** Presentation key for the notice after a send stopped before execution. */
 export const NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION = 'stopped-before-start'

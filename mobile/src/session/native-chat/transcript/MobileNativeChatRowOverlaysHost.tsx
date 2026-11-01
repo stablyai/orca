@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { triggerMediumImpact } from '../../../platform/haptics'
 import { MobileNativeChatImageViewer } from '../visual/MobileNativeChatImageViewer'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { nativeChatTurnDrawOrder } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem

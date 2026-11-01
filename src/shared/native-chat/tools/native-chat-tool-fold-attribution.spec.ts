@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { foldToolMessages } from './native-chat-tool-fold'
 import { pairToolBlocks } from './native-chat-tool-pairs'
-import type { NativeChatBlock, NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', source: 'transcript', timestamp: 1, blocks }

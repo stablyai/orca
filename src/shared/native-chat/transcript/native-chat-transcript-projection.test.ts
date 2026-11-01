@@ -1,11 +1,11 @@
-import './native-chat/native-chat-reasoning-order.spec'
+import '../native-chat-reasoning-order.spec'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from './agent-session-journal-types'
-import type { NativeChatMessage } from './native-chat-types'
+  AgentJournalRenderItem
+} from '../../agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import type { NativeChatMessage } from '../native-chat-types'
 import {
   projectNativeChatTranscript,
   projectNativeChatTranscriptMessages

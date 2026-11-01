@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalTurnItem } from './agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalTurnItem
+} from '../../agent-session-journal-types'
 import { reduceNativeChatTurnTiming, selectNativeChatTurnStatuses } from './native-chat-turn-status'
-import { selectStructuredAgentSettledTurns } from './structured-agent-session-turn-timing'
+import { selectStructuredAgentSettledTurns } from '../../structured-agent-session-turn-timing'
 
 function userItem(itemId: string): AgentJournalRenderItem {
   return {

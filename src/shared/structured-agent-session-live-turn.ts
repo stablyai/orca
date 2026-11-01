@@ -12,7 +12,7 @@ import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import { isAgentSessionContextClear } from './agent-session-context-clear'
-import type { NativeChatToolCallBlock } from './native-chat-types'
+import type { NativeChatToolCallBlock } from './native-chat/native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
   isStructuredAgentSessionToolAction,

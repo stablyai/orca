@@ -30,7 +30,7 @@ import type {
 import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionRecord } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { NativeChatSubagentEntry } from './native-chat-types'
+import type { NativeChatSubagentEntry } from './native-chat/native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type { AgentSessionHandoffStatus } from './agent-session-handoff-status'

@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey, agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from './agent-session-journal-types'
-import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
-import {
-  nativeChatTurnMembership,
-  structuredAgentTurnAnchors,
-  isNativeChatRowInLiveWorkingTurn
-} from './native-chat-turn-membership'
-import { isAgentSessionRewindTarget } from './agent-session-rewind'
-import { readAgentJournalTurn } from './agent-session-turn-record'
-import type { NativeChatRole } from './native-chat-types'
+  AgentJournalSubmission
+} from '../../agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
+import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
+import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../native-chat-live-turn-membership'
+import { isAgentSessionRewindTarget } from '../../agent-session-rewind'
+import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import type { NativeChatRole } from '../native-chat-types'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
 let sequence = 0

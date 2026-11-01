@@ -14,9 +14,9 @@ import { foldSubagentItems } from '../../../src/shared/native-chat/transcript/na
 import { prepareNativeChatMessages } from '../../../src/shared/native-chat/transcript/native-chat-message-preparation'
 import {
   isImageRefBlock,
-  type AgentType,
   type NativeChatMessage
-} from '../../../src/shared/native-chat-types'
+} from '../../../src/shared/native-chat/native-chat-types'
+import type { AgentType } from '../../../src/shared/agent-status-types'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { translate } from '../i18n/mobile-i18n'
 

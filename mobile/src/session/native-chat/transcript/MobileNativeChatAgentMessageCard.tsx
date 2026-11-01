@@ -1,7 +1,7 @@
 import { memo, useContext, useState, useRef, useLayoutEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowUpRight, Bot } from 'lucide-react-native'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import { agentMessageSendersShown } from '../../../../../src/shared/agent-session/agent-session-message-source'
 import {

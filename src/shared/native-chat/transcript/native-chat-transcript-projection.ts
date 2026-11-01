@@ -1,12 +1,12 @@
 // Share ordered/filter/fold projection with the host conversation outline so visible user rows agree with renderers.
 // Journal subagent rows belong to separate agent transcripts and fold beside their spawn, never into the conversation.
 
-import { nativeChatSemanticRowId, type NativeChatMessage } from './native-chat-types'
-import { compareAgentJournalPositions } from './agent-session-journal-position'
-import { agentJournalItemSubagentId } from './agent-session-journal-producer'
-import { stripNoiseMessages } from './native-chat/native-chat-noise'
-import { foldToolMessages } from './native-chat/tools/native-chat-tool-fold'
-import { foldSubagentItems } from './native-chat/transcript/native-chat-subagent-items'
+import { nativeChatSemanticRowId, type NativeChatMessage } from '../native-chat-types'
+import { compareAgentJournalPositions } from '../../agent-session-journal-position'
+import { agentJournalItemSubagentId } from '../../agent-session-journal-producer'
+import { stripNoiseMessages } from '../native-chat-noise'
+import { foldToolMessages } from '../tools/native-chat-tool-fold'
+import { foldSubagentItems } from './native-chat-subagent-items'
 import { nativeChatTurnMembership, type NativeChatTurnJournal } from './native-chat-turn-membership'
 
 /** Timestamp, then id. A null timestamp sorts first so a source that cannot supply

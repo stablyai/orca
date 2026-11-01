@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatElapsedSeconds } from '../../../../../src/shared/native-chat-turn-status'
+import { nativeChatElapsedSeconds } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy

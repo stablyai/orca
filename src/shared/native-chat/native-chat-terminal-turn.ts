@@ -1,6 +1,9 @@
 import type { AgentStatusEntry } from '../agent-status-types'
-import { isInterruptedStatusMessage, type NativeChatMessage } from '../native-chat-types'
-import type { NativeChatSettledTurn, NativeChatSettledTurns } from '../native-chat-turn-status'
+import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
+import type {
+  NativeChatSettledTurn,
+  NativeChatSettledTurns
+} from './transcript/native-chat-turn-status'
 import { isNoiseMessage } from './native-chat-noise'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
 

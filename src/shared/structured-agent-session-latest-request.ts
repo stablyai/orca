@@ -18,7 +18,7 @@ import {
   isStructuredAgentSessionCommandRow,
   structuredAgentSessionCommandTurnItemIds
 } from './agent-session/structured-agent-session-command-entry'
-import type { NativeChatBlock } from './native-chat-types'
+import type { NativeChatBlock } from './native-chat/native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {
   kind: 'turn' | 'refused-send'
