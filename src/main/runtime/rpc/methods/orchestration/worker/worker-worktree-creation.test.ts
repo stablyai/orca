@@ -7,6 +7,7 @@ import {
 } from '../../../../../../shared/worktree/retired-name-registry'
 import { createWorkerWorktree, resolveWorkerWorktreeName } from './worker-worktree-creation'
 import type { WorkerEffect } from './worker-topology'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 const pool = MARINE_CREATURES.map((name) => name.toLowerCase())
 
@@ -60,7 +61,7 @@ describe('resolveWorkerWorktreeName', () => {
 describe('createWorkerWorktree naming', () => {
   async function create(name: string | undefined, failAfterWorkspace = false) {
     const createManagedWorktree = vi.fn(
-      async (args: { onWorkspaceCreated?: (id: string) => void }) => {
+      async (args: Parameters<OrcaRuntimeService['createManagedWorktree']>[0]) => {
         args.onWorkspaceCreated?.('repo::/worktrees/repo/otter')
         if (failAfterWorkspace) {
           throw new Error('fixture create failed after workspace')

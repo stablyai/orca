@@ -1,4 +1,7 @@
-import { subscribeToNativeChatComposerDraftAppend } from '../components/native-chat/native-chat-composer-draft-store'
+import {
+  subscribeToNativeChatComposerDraftAppend,
+  structuredAgentSessionDraftScopeKey
+} from '../components/native-chat/native-chat-composer-draft-store'
 // @vitest-environment happy-dom
 
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -29,7 +32,6 @@ import {
   writeNativeChatDraftCache,
   clearNativeChatDraftCacheForTests
 } from '../components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/native-chat-composer-draft-store'
 import {
   instrumentUnrelatedTerminalBindings,
   type InitialTerminalCensusMetrics,
@@ -652,12 +654,12 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
     const rows = Array.from({ length: size }, (_, i) =>
       makeInitialTerminalCensusRow(`default-${i}`, `default-pty-${i}`, LEAF, i === 0)
     )
-    let snapshot: RuntimeMobileSessionTabsResult = {
+    let snapshot = {
       ...topology('terminal'),
-      tabs: [],
+      tabs: rows.slice(0, 0),
       activeTabId: rows[0]!.id,
       tabGroups: []
-    }
+    } satisfies RuntimeMobileSessionTabsResult
     const rpc = vi.spyOn(rpcModule, 'callRuntimeRpc').mockImplementation(async () => snapshot)
     visits.ownershipVisits = 0
     visits.bindingVisits = 0

@@ -1,4 +1,3 @@
-import { metadataRow } from './agent-launch.test-fixture'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
 /** Exercise at-most-once launch and truthful replay against the durable ledger; adjacent ablations prove each guard prevents duplication. */
@@ -35,6 +34,7 @@ import { terminalStartError } from '../../../../shared/terminal-start-failure'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import {
+  metadataRow,
   methodNamed,
   rpcContext,
   runtimeStub,

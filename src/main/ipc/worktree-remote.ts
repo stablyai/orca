@@ -1,4 +1,3 @@
-import { holdInFlightWorktreeCreate } from '../worktree-create-in-flight'
 import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -151,6 +150,7 @@ import {
 import { createRetiredNameLookup } from '../../shared/worktree/retired-name-registry'
 import { findPendingWorktreeRemovalConflict } from '../worktree-removal-table'
 import {
+  holdInFlightWorktreeCreate,
   openWorktreeCreatePathClaim,
   type WorktreeCreatePathClaim
 } from '../worktree-create-in-flight'

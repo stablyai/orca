@@ -1,5 +1,6 @@
 import {
   parseDesktopCreateLaunchRecord,
+  structuredAgentLaunchRecordFor,
   validRecord
 } from './structured-agent-session-launch-record'
 // @vitest-environment happy-dom
@@ -19,7 +20,6 @@ import {
   markStructuredAgentLaunchCancelledPersisted
 } from './structured-agent-session-launch-persistence'
 
-import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 
 const SERVER = 'runtime:server-1'

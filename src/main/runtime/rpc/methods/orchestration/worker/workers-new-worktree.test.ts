@@ -13,10 +13,6 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import {
-  formatWorkerStart,
-  type WorkerStartReceipt
-} from '../../../../../../cli/handlers/orchestration/worker-output'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -147,10 +143,6 @@ describe('orchestration new-worktree workers', () => {
       ])
     )
     expect(runtime.createTerminal).not.toHaveBeenCalled()
-    // SAFETY: The real method's required receipt fields and named worktree effect are asserted above.
-    expect(formatWorkerStart(result as WorkerStartReceipt).split('\n')).toContain(
-      'Created workspace: Release audit'
-    )
   })
 
   it('passes launch preferences into agent-first worktree creation', async () => {

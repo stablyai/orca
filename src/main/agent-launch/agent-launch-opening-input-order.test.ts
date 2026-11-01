@@ -343,21 +343,24 @@ it.each(['before-fold', 'after-fold'] as const)(
   async (failure) => {
     const prepare = JournalWriteProjection.prototype.prepare
     let injected = false
-    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(
-      function (db, rows, at) {
-        const adopt = prepare.call(this, db, rows, at)
-        if (injected || !rows.some((row) => row.kind === 'submission')) {
-          return adopt
-        }
-        injected = true
-        return () => {
-          if (failure === 'after-fold') {
-            adopt()
-          }
-          throw new Error('simulated fold failure after COMMIT')
-        }
+    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(function (
+      this: JournalWriteProjection,
+      db,
+      rows,
+      at
+    ) {
+      const adopt = prepare.call(this, db, rows, at)
+      if (injected || !rows.some((row) => row.kind === 'submission')) {
+        return adopt
       }
-    )
+      injected = true
+      return () => {
+        if (failure === 'after-fold') {
+          adopt()
+        }
+        throw new Error('simulated fold failure after COMMIT')
+      }
+    })
     const h = harness()
     h.ancillaryRelease.resolve()
     const result = await h.run()
@@ -538,18 +541,21 @@ it.each(['before fold'] as const)(
     const publishTab = vi.fn(async () => {})
     const prepare = JournalWriteProjection.prototype.prepare
     let injected = false
-    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(
-      function (db, rows, at) {
-        const adopt = prepare.call(this, db, rows, at)
-        if (injected || !rows.some((row) => row.kind === 'submission')) {
-          return adopt
-        }
-        injected = true
-        return () => {
-          throw new Error('fold skipped after COMMIT')
-        }
+    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(function (
+      this: JournalWriteProjection,
+      db,
+      rows,
+      at
+    ) {
+      const adopt = prepare.call(this, db, rows, at)
+      if (injected || !rows.some((row) => row.kind === 'submission')) {
+        return adopt
       }
-    )
+      injected = true
+      return () => {
+        throw new Error('fold skipped after COMMIT')
+      }
+    })
     const created = await rig.host.create(CALLER, params, { firstMessage, publishTab })
     expect(created).toMatchObject({
       ok: false,

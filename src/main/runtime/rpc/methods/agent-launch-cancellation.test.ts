@@ -237,7 +237,12 @@ it('keeps positive COMMIT through a failed fold and progress cancel, then ordina
   const h = harness()
   const prepare = JournalWriteProjection.prototype.prepare
   let injected = false
-  vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(function (db, rows, at) {
+  vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(function (
+    this: JournalWriteProjection,
+    db,
+    rows,
+    at
+  ) {
     const adopt = prepare.call(this, db, rows, at)
     if (injected || !rows.some((row) => row.kind === 'submission')) {
       return adopt

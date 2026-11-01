@@ -54,6 +54,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../components/mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'BottomDrawer' }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../components/bottom-drawer-modal-host-scope', () => ({
   useBottomDrawerModalHost: () => null
 }))
