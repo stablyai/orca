@@ -327,8 +327,8 @@ afterEach(() => {
 })
 
 describe('Session History keyboard selection', () => {
-  it.each(['structured', 'adopted-here', 'adopted-elsewhere'] as const)(
-    'keeps the selected remote owner when reopening %s from /resume',
+  it.each(['structured', 'adopted-here', 'adopted-elsewhere', 'unroutable', 'local'] as const)(
+    'keeps the selected owner when reopening %s from /resume',
     async (kind) => {
       const workspaceId = 'folder:notes'
       const owner = {
@@ -337,7 +337,7 @@ describe('Session History keyboard selection', () => {
       }
       if (kind === 'adopted-elsewhere') {
         vi.mocked(activateAiVaultStructuredSession).mockResolvedValueOnce(true)
-      } else {
+      } else if (kind !== 'unroutable') {
         vi.mocked(openDesktopStructuredSession).mockResolvedValueOnce({
           kind: 'opened',
           target: { sessionId: owner.sessionId, worktreeId: owner.workspaceId },
@@ -346,8 +346,15 @@ describe('Session History keyboard selection', () => {
       }
       const picked: AiVaultSession = {
         ...session(0),
-        executionHostId: 'runtime:selected-host',
-        ...(kind === 'structured' ? { structuredSession: owner } : {})
+        executionHostId:
+          kind === 'unroutable'
+            ? 'ssh:unroutable'
+            : kind === 'local'
+              ? 'local'
+              : 'runtime:selected-host',
+        ...(kind === 'structured' || kind === 'unroutable' || kind === 'local'
+          ? { structuredSession: owner }
+          : {})
       }
       useAppStore.setState(useAppStore.getInitialState(), true)
       useAppStore.setState({
@@ -385,18 +392,31 @@ describe('Session History keyboard selection', () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         await main?.settle()
       })
-      if (kind === 'adopted-elsewhere') {
-        expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith({
-          structuredSession: owner,
-          executionHostId: picked.executionHostId
-        })
+      if (kind === 'unroutable') {
+        expect(activateAiVaultStructuredSession).not.toHaveBeenCalled()
+        expect(toastError).toHaveBeenCalledOnce()
+        expect(
+          useAppStore.getState().unifiedTabsByWorktree[workspaceId]?.some((tab) => tab.id === 'old')
+        ).toBe(true)
       } else {
-        expect(openDesktopStructuredSession).toHaveBeenCalledExactlyOnceWith(
-          { kind: 'history', structuredSession: owner },
-          { kind: 'environment', environmentId: 'selected-host' }
-        )
+        const target =
+          kind === 'local'
+            ? { kind: 'local' as const }
+            : { kind: 'environment' as const, environmentId: 'selected-host' }
+        if (kind === 'adopted-elsewhere') {
+          expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith(
+            { structuredSession: owner },
+            undefined,
+            target
+          )
+        } else {
+          expect(openDesktopStructuredSession).toHaveBeenCalledExactlyOnceWith(
+            { kind: 'history', structuredSession: owner },
+            target
+          )
+        }
+        expect(toastError).not.toHaveBeenCalled()
       }
-      expect(toastError).not.toHaveBeenCalled()
     }
   )
 

@@ -1,4 +1,4 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import type {
   StructuredSessionOpenSource,
@@ -65,7 +65,7 @@ export async function activateAiVaultStructuredSession(
     return false
   }
   if (!target && session.executionHostId) {
-    const owner = ipcOrRuntimeTargetForHostId(session.executionHostId)
+    const owner = structuredAgentSessionTargetForHost(session.executionHostId)
     if (!owner) {
       ;(deps ?? structuredSessionOpenFeedback).hostCannotOpen()
       return true
