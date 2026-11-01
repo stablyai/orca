@@ -150,6 +150,47 @@ describe('Claude profile refresh from the default home', () => {
     await provision(f)
     expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
   })
+  it('preserves profile modelSettings and effortLevel when provisioning runs again', async () => {
+    const f = fixture()
+    const settings = {
+      model: 'claude-sonnet-4-5',
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.test' }
+    }
+    f.json(join(f.source, 'settings.json'), settings)
+    await provision(f)
+
+    // User chooses Opus and high effort in this profile session (/model command)
+    f.json(join(f.profileHome, 'settings.json'), {
+      ...settings,
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
+    })
+
+    // Next session start invokes provision; settings should be unchanged and not overwritten
+    expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      ...settings,
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
+    })
+
+    // When ~/.claude/settings.json updates with new global settings (e.g. proxy or hooks)
+    f.json(join(f.source, 'settings.json'), {
+      ...settings,
+      futureFeature: true,
+      apiKeyHelper: 'new-helper'
+    })
+
+    // Provision merges new settings from ~/.claude/settings.json while keeping profile model choices
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
+      ...settings,
+      futureFeature: true,
+      apiKeyHelper: 'new-helper',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
+    })
+  })
   itLinks(
     'restores settings the profile changed and leaves a linked settings file alone',
     async () => {
