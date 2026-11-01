@@ -95,6 +95,25 @@ describe('orchestration worker automatic release', () => {
     })
   })
 
+  it('keeps a worker-keep-open terminal across follow-up work until the coordinator releases it', async () => {
+    setupWithFakeClock()
+    const { dispatchId } = await h.startSettledWorker()
+    await h.call('orchestration.workerRetain', { dispatch: dispatchId })
+
+    const followUp = await h.startWorker({ terminal: 'term_worker' })
+    h.settle(followUp.taskId, followUp.dispatchId, 'succeeded')
+    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
+
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(h.db.getWorkerTerminalResourceByOwner(followUp.dispatchId)).toMatchObject({
+      release_state: 'retained',
+      retained_reason: 'user_requested',
+      auto_release_at: null
+    })
+    await h.call('orchestration.workerRelease', { dispatch: followUp.dispatchId })
+    await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker'))
+  })
+
   it("closes a worker the user typed into on time; an older client's typing report keeps nothing", async () => {
     setupWithFakeClock()
     const { dispatchId } = await h.startSettledWorker()
