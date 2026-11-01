@@ -89,26 +89,6 @@ export function safetyBlockerState(
   reason: NonNullable<HostedReviewCreationBlockedReason>
 ): ChecksPanelReviewState {
   const { reviewLabel } = input
-  if (reason === 'existing_review') {
-    // Same family as positive evidence — offer trusted Open Review, never Create.
-    return {
-      renderReview: false,
-      title: translate(
-        'auto.components.right.sidebar.checks.panel.review.existing.title',
-        '{{reviewLabelCap}} already exists',
-        { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
-      ),
-      description: translate(
-        'auto.components.right.sidebar.checks.panel.review.existing.body',
-        'Orca found an existing {{reviewLabel}} for this branch.',
-        { reviewLabel }
-      ),
-      composerMode: 'hidden',
-      workflowAction: null,
-      recovery: input.openReviewUrl ? ['open_review'] : [],
-      openReviewUrl: input.openReviewUrl
-    }
-  }
   const copy = SAFETY_COPY[reason as keyof typeof SAFETY_COPY] ?? SAFETY_COPY.unsupported_provider
   const vars = { reviewLabel, reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
   return {

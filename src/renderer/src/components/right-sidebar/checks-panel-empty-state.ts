@@ -94,13 +94,13 @@ export function getChecksPanelReviewState(
     }
   }
 
-  // Safety blockers own their guidance; existing_review always blocks create.
+  // Safety blockers own their guidance.
   if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
     return safetyBlockerState(input, blockedReason)
   }
 
   // Known but unrenderable review evidence must block create actions.
-  if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
+  if (hasPendingReviewEvidence && !isBranchBlocker(blockedReason)) {
     return {
       renderReview: false,
       title: translate(
@@ -116,7 +116,8 @@ export function getChecksPanelReviewState(
       composerMode: 'hidden',
       workflowAction: null,
       recovery: input.openReviewUrl ? ['open_review', 'retry'] : ['retry'],
-      openReviewUrl: input.openReviewUrl
+      openReviewUrl: input.openReviewUrl,
+      ...autoRetrySchedule(input)
     }
   }
 
