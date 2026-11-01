@@ -11,7 +11,12 @@ import {
 } from './terminal-pane/terminal-hidden-worktree-retention'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { selectEvictionExemptTerminalTabIds } from './terminal-pane/terminal-eviction-exempt-tabs'
-import { captureParkedTerminalBuffers } from './terminal-pane/parked-terminal-buffer-capture'
+import {
+  beginParkedCapturePass,
+  captureParkedTerminalBuffers,
+  enqueueParkedTerminalCapture,
+  whenParkedCaptureSettles
+} from './terminal-pane/parked-terminal-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import { recordTerminalWorktreeParkingDebugVerdicts } from './terminal-pane/terminal-parking-e2e-overrides'
 import { getTerminalWorktreeColdParkRecheckDelayMs } from './terminal-pane/terminal-cold-park-recheck-deadlines'
@@ -49,8 +54,12 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     forceParked: ReadonlySet<string>
     evictionExempt: ReadonlySet<string>
   } | null>(null)
+  const parkingPassGenerationRef = useRef(0)
 
   useEffect(() => {
+    // Why a pass token: a yielding capture can outlive this effect; an older settlement
+    // must not overwrite a newer park verdict or mark a worktree captured after a reveal.
+    const passGuard = beginParkedCapturePass(parkingPassGenerationRef)
     const pass = collectTerminalParkingPassCandidates(controller)
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] =
       pass.retentionCandidates.map((candidate) => {
@@ -89,23 +98,28 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       }
     }
     const repos = useAppStore.getState().repos
+    const pendingCaptures: Promise<unknown>[] = []
     // Capture before unmount while xterm still owns client scrollback; paired-parking capability
     // does not guarantee host buffer retention. Force-parks capture below under their eviction exemption.
     // Why localOnly: the ordinary park is the every-hide cadence; its bytes stay off the upload.
+    // Yielding captures return a Promise; local and no-op captures stay synchronous.
     for (const worktreeId of pass.nextParkedTerminalWorktreeIds) {
       if (capturedParked.has(worktreeId)) {
         continue
       }
-      if (
+      enqueueParkedTerminalCapture(
         captureParkedTerminalBuffers({
           worktreeId,
           tabIds: (tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id),
           repos,
           localOnly: true
-        })
-      ) {
-        capturedParked.add(worktreeId)
-      }
+        }),
+        () => {
+          capturedParked.add(worktreeId)
+        },
+        pendingCaptures,
+        passGuard.isCurrent
+      )
     }
     const nextEvictionExemptTabIds = new Set<string>()
     for (const worktreeId of forceParkedWorktreeIds) {
@@ -131,37 +145,47 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           })
         }
         // Rare force-parks share captures so another desktop can cold-restore them.
-        if (
+        enqueueParkedTerminalCapture(
           captureParkedTerminalBuffers({
             worktreeId,
             tabIds: evictableTabIds,
             repos,
             localOnly: false
-          })
-        ) {
-          capturedParked.add(worktreeId)
-        }
+          }),
+          () => {
+            capturedParked.add(worktreeId)
+          },
+          pendingCaptures,
+          passGuard.isCurrent
+        )
       }
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
     }
     // No-op functional updaters still queue renders in PTY-exit commit cascades and can exceed React’s nested-update limit (#185).
-    const dispatched = (dispatchedIdSetsRef.current ??= {
-      parked: new Set(),
-      forceParked: new Set(),
-      evictionExempt: new Set()
-    })
-    if (!haveSameIdSet(dispatched.parked, pass.nextParkedTerminalWorktreeIds)) {
-      dispatched.parked = pass.nextParkedTerminalWorktreeIds
-      setParkedTerminalWorktreeIds(pass.nextParkedTerminalWorktreeIds)
+    const commitParkedIds = (): void => {
+      const dispatched = (dispatchedIdSetsRef.current ??= {
+        parked: new Set(),
+        forceParked: new Set(),
+        evictionExempt: new Set()
+      })
+      if (!haveSameIdSet(dispatched.parked, pass.nextParkedTerminalWorktreeIds)) {
+        dispatched.parked = pass.nextParkedTerminalWorktreeIds
+        setParkedTerminalWorktreeIds(pass.nextParkedTerminalWorktreeIds)
+      }
+      if (!haveSameIdSet(dispatched.forceParked, forceParkedWorktreeIds)) {
+        dispatched.forceParked = forceParkedWorktreeIds
+        setForceParkedTerminalWorktreeIds(forceParkedWorktreeIds)
+      }
+      if (!haveSameIdSet(dispatched.evictionExempt, nextEvictionExemptTabIds)) {
+        dispatched.evictionExempt = nextEvictionExemptTabIds
+        setEvictionExemptTerminalTabIds(nextEvictionExemptTabIds)
+      }
     }
-    if (!haveSameIdSet(dispatched.forceParked, forceParkedWorktreeIds)) {
-      dispatched.forceParked = forceParkedWorktreeIds
-      setForceParkedTerminalWorktreeIds(forceParkedWorktreeIds)
-    }
-    if (!haveSameIdSet(dispatched.evictionExempt, nextEvictionExemptTabIds)) {
-      dispatched.evictionExempt = nextEvictionExemptTabIds
-      setEvictionExemptTerminalTabIds(nextEvictionExemptTabIds)
-    }
+    whenParkedCaptureSettles(
+      pendingCaptures.length > 0 ? Promise.all(pendingCaptures) : undefined,
+      commitParkedIds,
+      passGuard.isCurrent
+    )
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)
@@ -197,6 +221,11 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           setTerminalParkingRevision((revision) => revision + 1)
         }, delayMs)
         pass.parkingTimers.set(worktreeId, timer)
+      }
+    }
+    return () => {
+      if (passGuard.isCurrent()) {
+        parkingPassGenerationRef.current += 1
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `controller` is rebuilt every render; the pass reads only the listed values and stable refs.

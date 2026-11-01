@@ -71,7 +71,9 @@ describe('shutdownWorktreeTerminals ordering', () => {
       dropAgentStatusByWorktree: vi.fn(() => orderHarness.events.push('agent-cleanup')),
       clearPaneForegroundAgentByWorktree: vi.fn()
     })
-    shutdownBufferCaptures.set('tab-1', () => orderHarness.events.push('buffer-capture'))
+    shutdownBufferCaptures.set('tab-1', () => {
+      orderHarness.events.push('buffer-capture')
+    })
     const unsubscribe = store.subscribe((state, previous) => {
       if (!previous.pendingPtyShutdownIds['pty-1'] && state.pendingPtyShutdownIds['pty-1']) {
         orderHarness.events.push('shutdown-guard-publication')
