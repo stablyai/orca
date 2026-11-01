@@ -3,9 +3,18 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PanZoomSize } from '../../../src/shared/pan-zoom-view'
 
+const back = vi.hoisted(() => ({ press: null as (() => boolean) | null }))
+
 vi.mock('react-native', () => ({
   BackHandler: {
-    addEventListener: () => ({ remove() {} })
+    addEventListener: (_event: string, handler: () => boolean) => {
+      back.press = handler
+      return {
+        remove() {
+          back.press = null
+        }
+      }
+    }
   }
 }))
 
@@ -33,9 +42,13 @@ class ResizeObserver {
 
 function dismissSpies() {
   return {
-    onMove: vi.fn<(translationY: number) => void>(),
-    onRelease: vi.fn<(translationY: number, velocityY: number) => void>(),
-    onCancel: vi.fn<() => void>()
+    onMove: vi.fn<(translationX: number, translationY: number) => void>(),
+    onRelease:
+      vi.fn<
+        (translationX: number, translationY: number, velocityX: number, velocityY: number) => void
+      >(),
+    onCancel: vi.fn<() => void>(),
+    onBack: vi.fn<() => void>()
   }
 }
 
@@ -61,6 +74,7 @@ describe('useMobilePanZoom dismiss', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserver)
     latest = null
+    back.press = null
   })
 
   afterEach(() => {
@@ -114,16 +128,17 @@ describe('useMobilePanZoom dismiss', () => {
     })
   }
 
-  it('follows a vertical finger at the fitted size and ignores a horizontal one', async () => {
+  it('follows the finger in any direction at the fitted size', async () => {
     const dismiss = dismissSpies()
     await mount(dismiss)
     expect(latest?.scale).toBeGreaterThan(0)
+    expect(back.press).toEqual(expect.any(Function))
 
     pointer('down', 1, 100, 200, 0)
     pointer('move', 1, 108, 230, 30)
     pointer('up', 1, 108, 230, 40)
-    expect(dismiss.onMove).toHaveBeenCalledWith(30)
-    expect(dismiss.onRelease).toHaveBeenCalledWith(30, 1000)
+    expect(dismiss.onMove).toHaveBeenCalledWith(8, 30)
+    expect(dismiss.onRelease).toHaveBeenCalledWith(8, 30, 8000 / 30, 1000)
     expect(dismiss.onCancel).not.toHaveBeenCalled()
 
     dismiss.onMove.mockClear()
@@ -131,8 +146,8 @@ describe('useMobilePanZoom dismiss', () => {
     pointer('down', 1, 100, 200, 100)
     pointer('move', 1, 160, 210, 130)
     pointer('up', 1, 160, 210, 140)
-    expect(dismiss.onMove).not.toHaveBeenCalled()
-    expect(dismiss.onRelease).not.toHaveBeenCalled()
+    expect(dismiss.onMove).toHaveBeenCalledWith(60, 10)
+    expect(dismiss.onRelease).toHaveBeenCalledWith(60, 10, 2000, 1000 / 3)
   })
 
   it('drops a flick that paused before release', async () => {
@@ -141,7 +156,30 @@ describe('useMobilePanZoom dismiss', () => {
     pointer('down', 1, 40, 40, 0)
     pointer('move', 1, 40, 90, 20)
     pointer('up', 1, 40, 90, 200)
-    expect(dismiss.onRelease).toHaveBeenCalledWith(50, 0)
+    expect(dismiss.onRelease).toHaveBeenCalledWith(0, 50, 0, 0)
+  })
+
+  it('closes from Back at the fitted size and returns a zoomed picture to fit instead', async () => {
+    const dismiss = dismissSpies()
+    await mount(dismiss)
+    const fitted = latest?.scale
+    act(() => {
+      back.press?.()
+    })
+    expect(dismiss.onBack).toHaveBeenCalledOnce()
+
+    pointer('down', 1, 40, 200, 0)
+    pointer('down', 2, 140, 200, 10)
+    pointer('move', 2, 260, 200, 30)
+    pointer('up', 2, 260, 200, 40)
+    pointer('up', 1, 40, 200, 40)
+    expect(latest?.scale).toBeGreaterThan(fitted ?? 0)
+    dismiss.onBack.mockClear()
+    act(() => {
+      back.press?.()
+    })
+    expect(dismiss.onBack).not.toHaveBeenCalled()
+    expect(latest?.scale).toBe(fitted)
   })
 
   it('cancels a dismiss when a second finger pinches, and pans once zoomed', async () => {
@@ -176,5 +214,6 @@ describe('useMobilePanZoom dismiss', () => {
       pointer('move', 1, 20, 80, 16)
       pointer('up', 1, 20, 80, 20)
     }).not.toThrow()
+    expect(back.press).toBeNull()
   })
 })

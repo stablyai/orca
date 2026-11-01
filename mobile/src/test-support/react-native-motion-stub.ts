@@ -14,6 +14,9 @@ export function reactNativeMotionStub() {
   const curve = (t: number) => t
   const shaped = (easing: (t: number) => number) => easing
   return {
+    BackHandler: {
+      addEventListener: () => ({ remove: () => {} })
+    },
     AccessibilityInfo: {
       isReduceMotionEnabled: () => Promise.resolve(false),
       addEventListener: () => ({ remove: () => {} }),
@@ -23,6 +26,24 @@ export function reactNativeMotionStub() {
       Value,
       View: 'Animated.View',
       multiply: (left: Value) => left,
+      parallel: (
+        animations: {
+          start: (done?: (result: { finished: boolean }) => void) => void
+          stop: () => void
+        }[]
+      ) => ({
+        start: (done?: (result: { finished: boolean }) => void) => {
+          for (const animation of animations) {
+            animation.start()
+          }
+          done?.({ finished: true })
+        },
+        stop: () => {
+          for (const animation of animations) {
+            animation.stop()
+          }
+        }
+      }),
       spring: () => ({
         start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
         stop: () => {}

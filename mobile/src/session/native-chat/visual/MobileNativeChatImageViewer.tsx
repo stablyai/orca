@@ -46,9 +46,10 @@ export function MobileNativeChatImageViewer({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
-  const { height } = useWindowDimensions()
+  const { width, height } = useWindowDimensions()
   const { backdropStyle, stageStyle, chromeStyle, close, dismiss } = useViewerPresence(
     onClose,
+    width,
     height
   )
   return (
@@ -94,19 +95,23 @@ function viewerTiming(value: Animated.Value, toValue: number, ms: number, reduce
   })
 }
 
-// Grows from the centre while fading in. A vertical swipe at the fitted size follows the finger,
+// Grows from the centre while fading in. A swipe at the fitted size follows the finger in both axes,
 // then leaves or springs back; Reduce Motion fades from where the finger stopped.
-function useViewerPresence(onClose: () => void, windowHeight: number) {
+function useViewerPresence(onClose: () => void, windowWidth: number, windowHeight: number) {
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(0)).current
+  const dragX = useRef(new Animated.Value(0)).current
   const dragY = useRef(new Animated.Value(0)).current
+  const dragSpan = useRef(new Animated.Value(0)).current
   const closing = useRef(false)
   const opening = useRef<Animated.CompositeAnimation | null>(null)
   const dragMotion = useRef<Animated.CompositeAnimation | null>(null)
   const onCloseRef = useRef(onClose)
+  const widthRef = useRef(windowWidth)
   const heightRef = useRef(windowHeight)
   const reducedRef = useRef(reducedMotion)
   onCloseRef.current = onClose
+  widthRef.current = windowWidth
   heightRef.current = windowHeight
   reducedRef.current = reducedMotion
 
@@ -146,34 +151,40 @@ function useViewerPresence(onClose: () => void, windowHeight: number) {
     })
   }
 
+  const placeDrag = (x: number, y: number) => {
+    dragX.setValue(x)
+    dragY.setValue(y)
+    dragSpan.setValue(Math.hypot(x, y))
+  }
+
   const settle = () => {
     stopDrag()
     if (reducedRef.current) {
-      dragY.setValue(0)
+      placeDrag(0, 0)
       return
     }
-    const spring = Animated.spring(dragY, {
-      toValue: 0,
-      ...VIEWER_SETTLE,
-      useNativeDriver: NATIVE_DRIVER
-    })
+    const spring = Animated.parallel([
+      Animated.spring(dragX, { toValue: 0, ...VIEWER_SETTLE, useNativeDriver: NATIVE_DRIVER }),
+      Animated.spring(dragY, { toValue: 0, ...VIEWER_SETTLE, useNativeDriver: NATIVE_DRIVER }),
+      Animated.spring(dragSpan, { toValue: 0, ...VIEWER_SETTLE, useNativeDriver: NATIVE_DRIVER })
+    ])
     dragMotion.current = spring
     spring.start()
   }
 
   const dismiss: MobilePanZoomDismiss = {
-    onMove: (translationY) => {
+    onMove: (translationX, translationY) => {
       if (closing.current) {
         return
       }
       stopDrag()
-      dragY.setValue(translationY)
+      placeDrag(translationX, translationY)
     },
-    onRelease: (translationY, velocityY) => {
+    onRelease: (translationX, translationY, velocityX, velocityY) => {
       if (closing.current) {
         return
       }
-      if (!shouldDismissImageViewer(translationY, velocityY)) {
+      if (!shouldDismissImageViewer(translationX, translationY, velocityX, velocityY)) {
         settle()
         return
       }
@@ -195,12 +206,32 @@ function useViewerPresence(onClose: () => void, windowHeight: number) {
         })
         return
       }
-      const fly = Animated.timing(dragY, {
-        toValue: imageViewerDismissTarget(translationY, heightRef.current),
-        duration: IMAGE_VIEWER_DISMISS_MS,
-        easing: VIEWER_EASING,
-        useNativeDriver: NATIVE_DRIVER
-      })
+      const target = imageViewerDismissTarget(
+        translationX,
+        translationY,
+        widthRef.current,
+        heightRef.current
+      )
+      const fly = Animated.parallel([
+        Animated.timing(dragX, {
+          toValue: target.x,
+          duration: IMAGE_VIEWER_DISMISS_MS,
+          easing: VIEWER_EASING,
+          useNativeDriver: NATIVE_DRIVER
+        }),
+        Animated.timing(dragY, {
+          toValue: target.y,
+          duration: IMAGE_VIEWER_DISMISS_MS,
+          easing: VIEWER_EASING,
+          useNativeDriver: NATIVE_DRIVER
+        }),
+        Animated.timing(dragSpan, {
+          toValue: Math.hypot(target.x, target.y),
+          duration: IMAGE_VIEWER_DISMISS_MS,
+          easing: VIEWER_EASING,
+          useNativeDriver: NATIVE_DRIVER
+        })
+      ])
       dragMotion.current = fly
       fly.start(({ finished }) => {
         if (finished) {
@@ -212,12 +243,13 @@ function useViewerPresence(onClose: () => void, windowHeight: number) {
       if (!closing.current) {
         settle()
       }
-    }
+    },
+    onBack: () => close()
   }
 
-  const dragFade = dragY.interpolate({
-    inputRange: [-IMAGE_VIEWER_FADE_DISTANCE, 0, IMAGE_VIEWER_FADE_DISTANCE],
-    outputRange: [0, 1, 0],
+  const dragFade = dragSpan.interpolate({
+    inputRange: [0, IMAGE_VIEWER_FADE_DISTANCE],
+    outputRange: [1, 0],
     extrapolate: 'clamp'
   })
   const scale = reducedMotion
@@ -225,7 +257,10 @@ function useViewerPresence(onClose: () => void, windowHeight: number) {
     : shown.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] })
   return {
     backdropStyle: { opacity: Animated.multiply(shown, dragFade) },
-    stageStyle: { opacity: shown, transform: [{ translateY: dragY }, { scale }] },
+    stageStyle: {
+      opacity: shown,
+      transform: [{ translateX: dragX }, { translateY: dragY }, { scale }]
+    },
     chromeStyle: { opacity: shown },
     close,
     dismiss

@@ -27,11 +27,18 @@ type Geometry = { content: PanZoomSize; viewport: PanZoomSize; fitScale: number 
 type Pinch = { mid: PanZoomPoint; distance: number }
 type Tap = { at: number; point: PanZoomPoint }
 
-/** A fitted image can follow a vertical finger. Zoomed pans and pinches never report one. */
+/** A fitted image can follow the finger in any direction. Zoomed pans and pinches never report one. */
 export type MobilePanZoomDismiss = {
-  onMove: (translationY: number) => void
-  onRelease: (translationY: number, velocityY: number) => void
+  onMove: (translationX: number, translationY: number) => void
+  onRelease: (
+    translationX: number,
+    translationY: number,
+    velocityX: number,
+    velocityY: number
+  ) => void
   onCancel: () => void
+  /** Fitted Back closes the viewer. While this is set, the claim also blocks the iOS edge swipe. */
+  onBack: () => void
 }
 
 export type MobilePanZoom = {
@@ -115,14 +122,24 @@ export function useMobilePanZoom(
         ? getFittedPanZoomView(content)
         : null
 
-  // While zoomed, Back returns to fit; on iOS this also stops the full-screen back swipe from eating a pan.
+  // A dismissable viewer claims Back the whole time it is open, so the iOS edge swipe cannot pop the
+  // screen out from under a sideways drag. Zoomed Back still returns to fit before that claim closes it.
   useBackClaim(
-    manualView && manualView.zoom !== 1
+    dismiss
       ? () => {
-          setManualView(null)
+          if (zoomRef.current !== 1) {
+            setManualView(commitView(null))
+            return true
+          }
+          dismissRef.current?.onBack()
           return true
         }
-      : null
+      : manualView && manualView.zoom !== 1
+        ? () => {
+            setManualView(commitView(null))
+            return true
+          }
+        : null
   )
 
   const handlers = useMemo<MobilePanZoom['handlers']>(() => {
@@ -149,15 +166,18 @@ export function useMobilePanZoom(
       pointers.current.delete(event.pointerId)
       pinch.current = pointers.current.size === 2 ? pinchOf([...pointers.current.values()]) : null
       const swipe = swipeRef.current
-      if (swipe?.phase === 'vertical' && pointers.current.size === 0) {
+      if (swipe?.phase === 'tracking' && pointers.current.size === 0) {
         swipeRef.current = null
         tap.current = null
         if (event.type === 'pointercancel') {
           dismissRef.current?.onCancel()
         } else {
+          const velocity = imageViewerReleaseVelocity(swipe, event.timeStamp)
           dismissRef.current?.onRelease(
+            swipe.translationX,
             swipe.translationY,
-            imageViewerReleaseVelocity(swipe, event.timeStamp)
+            velocity.x,
+            velocity.y
           )
         }
         return
@@ -201,7 +221,7 @@ export function useMobilePanZoom(
           return
         }
         if (pointers.current.size >= 2) {
-          if (swipeRef.current?.phase === 'vertical') {
+          if (swipeRef.current?.phase === 'tracking') {
             dismissRef.current.onCancel()
           }
           swipeRef.current = swipeRef.current
@@ -233,11 +253,11 @@ export function useMobilePanZoom(
             pointers.current.size
           )
           swipeRef.current = next
-          if (before === 'vertical' && next.phase !== 'vertical') {
+          if (before === 'tracking' && next.phase !== 'tracking') {
             dismissRef.current.onCancel()
           }
-          if (next.phase === 'vertical') {
-            dismissRef.current.onMove(next.translationY)
+          if (next.phase === 'tracking') {
+            dismissRef.current.onMove(next.translationX, next.translationY)
             return
           }
         }
