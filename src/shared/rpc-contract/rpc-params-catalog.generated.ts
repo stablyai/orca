@@ -482,6 +482,14 @@ import {
   RunStopParams
 } from './orchestration-gates-params'
 import {
+  BoardClaimParams,
+  BoardListParams,
+  BoardPostParams,
+  LockAcquireParams,
+  LockListParams,
+  LockReleaseParams
+} from './orchestration-locks-params'
+import {
   AskParams,
   CheckParams,
   DispatchParams,
@@ -1299,6 +1307,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
   'orchestration.ask': AskParams,
+  'orchestration.boardClaim': BoardClaimParams,
+  'orchestration.boardList': BoardListParams,
+  'orchestration.boardPost': BoardPostParams,
   'orchestration.callerShow': null,
   'orchestration.check': CheckParams,
   'orchestration.crewSubscribe': CrewSubscribeParams,
@@ -1319,6 +1330,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.gateList': GateListParams,
   'orchestration.gateResolve': GateResolveParams,
   'orchestration.inbox': InboxParams,
+  'orchestration.lockAcquire': LockAcquireParams,
+  'orchestration.lockList': LockListParams,
+  'orchestration.lockRelease': LockReleaseParams,
   'orchestration.partyLocation': PartyLocationParams,
   'orchestration.partyOpen': PartyLocationParams,
   'orchestration.reply': ReplyParams,

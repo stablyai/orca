@@ -21,9 +21,32 @@ function notifyResourceLockWaiters(resourceKey: string): void {
   if (!waiters || waiters.size === 0) {
     return
   }
-  for (const wake of [...waiters]) {
+  for (const wake of Array.from(waiters)) {
     wake()
   }
+}
+
+function requireCallerHandle(
+  from: string | undefined,
+  orchestrationCaller:
+    | { terminalHandle?: string | null; sessionId?: string | null }
+    | null
+    | undefined,
+  action: string
+): string {
+  const handle = (
+    from ??
+    orchestrationCaller?.terminalHandle ??
+    orchestrationCaller?.sessionId ??
+    ''
+  ).trim()
+  if (!handle) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Missing caller identity for ${action}; supply --from or call from a recognized session.`
+    )
+  }
+  return handle
 }
 
 function waitForLockChangeOrTimeout(
@@ -71,12 +94,11 @@ export const ORCHESTRATION_LOCK_METHODS = [
     params: LockAcquireParams,
     handler: async (params, { runtime, orchestrationCaller, signal }) => {
       const db = runtime.getOrchestrationDb()
-      const ownerHandle = (
-        params.from ??
-        orchestrationCaller?.terminalHandle ??
-        orchestrationCaller?.sessionId ??
-        'agent'
-      ).trim()
+      const ownerHandle = requireCallerHandle(
+        params.from,
+        orchestrationCaller,
+        'orchestration.lockAcquire'
+      )
       const ownerPaneKey = orchestrationCaller?.paneKey ?? null
       const startedAtMs = Date.now()
 
@@ -115,6 +137,10 @@ export const ORCHESTRATION_LOCK_METHODS = [
         const nowMs = Date.now()
         const remainingMs = deadlineMs - nowMs
         if (remainingMs <= 0) {
+          db.releaseResourceLock({
+            resourceKey: params.resource,
+            ownerHandle
+          })
           return {
             lock: attempt.lock,
             position: attempt.position,
@@ -129,6 +155,9 @@ export const ORCHESTRATION_LOCK_METHODS = [
             : LOCK_WAIT_POLL_INTERVAL_MS
         const sleepMs = Math.min(remainingMs, LOCK_WAIT_POLL_INTERVAL_MS, holderExpiryDelta)
         await waitForLockChangeOrTimeout(params.resource.trim(), sleepMs, signal)
+        if (signal?.aborted) {
+          continue
+        }
         attempt = db.acquireResourceLock({
           resourceKey: params.resource,
           ownerHandle,
@@ -153,12 +182,11 @@ export const ORCHESTRATION_LOCK_METHODS = [
     params: LockReleaseParams,
     handler: (params, { runtime, orchestrationCaller }) => {
       const db = runtime.getOrchestrationDb()
-      const ownerHandle = (
-        params.from ??
-        orchestrationCaller?.terminalHandle ??
-        orchestrationCaller?.sessionId ??
-        'agent'
-      ).trim()
+      const ownerHandle = requireCallerHandle(
+        params.from,
+        orchestrationCaller,
+        'orchestration.lockRelease'
+      )
       const result = db.releaseResourceLock({
         resourceKey: params.resource,
         ownerHandle,
@@ -188,12 +216,11 @@ export const ORCHESTRATION_LOCK_METHODS = [
     params: BoardPostParams,
     handler: (params, { runtime, orchestrationCaller }) => {
       const db = runtime.getOrchestrationDb()
-      const authorHandle = (
-        params.from ??
-        orchestrationCaller?.terminalHandle ??
-        orchestrationCaller?.sessionId ??
-        'agent'
-      ).trim()
+      const authorHandle = requireCallerHandle(
+        params.from,
+        orchestrationCaller,
+        'orchestration.boardPost'
+      )
       const entry = db.postBoardEntry({
         scopeKey: params.scope,
         kind: params.kind,
@@ -212,12 +239,11 @@ export const ORCHESTRATION_LOCK_METHODS = [
     params: BoardClaimParams,
     handler: (params, { runtime, orchestrationCaller }) => {
       const db = runtime.getOrchestrationDb()
-      const assigneeHandle = (
-        params.from ??
-        orchestrationCaller?.terminalHandle ??
-        orchestrationCaller?.sessionId ??
-        'agent'
-      ).trim()
+      const assigneeHandle = requireCallerHandle(
+        params.from,
+        orchestrationCaller,
+        'orchestration.boardClaim'
+      )
       const entry = db.claimBoardEntry({
         id: params.id,
         assigneeHandle,
