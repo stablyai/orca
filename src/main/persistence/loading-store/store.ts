@@ -6,6 +6,8 @@ import {
 import { agentHookServer } from '../../agent-hooks/server'
 import { ActiveViewPreference } from '../../active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
+import { installLiveLeafOwnerResolver } from './live-leaf-owner-resolver'
+import { isTerminalOwnerPartition } from '../terminal-topology/terminal-topology-membership'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
@@ -150,6 +152,11 @@ export class Store {
       for (const entry of normalized.legacyPaneKeyAliasEntries) {
         registerPersistedPaneKeyAlias(entry)
       }
+      installLiveLeafOwnerResolver(this.runtime, () =>
+        this.getWorkspaceSessionHostIds()
+          .filter(isTerminalOwnerPartition)
+          .map((hostId) => this.getWorkspaceSession(hostId))
+      )
       setMigrationUnsupportedPtyPersistenceListener((entries) => {
         this.state.migrationUnsupportedPtyEntries = entries
         scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])

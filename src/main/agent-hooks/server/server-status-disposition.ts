@@ -26,7 +26,8 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     }
     for (const [key, fence] of this.retiredPaneFencesByKey) {
       const ownerTabId = parsePaneKey(key)?.tabId ?? parseLegacyNumericPaneKey(key)?.tabId
-      if (ownerTabId === tabId) {
+      // Why: a fence shared with a moved pane's open owner key must outlive the source tab.
+      if (ownerTabId === tabId && !this.isFenceKeyOwnerOpen(fence, key)) {
         fence.retirementIdsByPaneKey = {}
         fence.closed = true
       }
@@ -150,6 +151,20 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     return tabId !== undefined && this.closedAgentStatusTabIds.has(tabId)
   }
 
+  // Why: a moved pane's process keeps posting its stable physical key, so that key's own tab may be
+  // closed while the owner tab is open. Legacy numeric keys keep the stricter closed-tab claim
+  // (R35: a moved legacy-key pane stays suppressed once its source tab closes; server-closed-tab-suppression.test.ts pins it).
+  protected isFenceKeyOwnerOpen(
+    fence: Pick<RetiredPaneFence, 'aliases'> | undefined,
+    paneKey: string
+  ): boolean {
+    if (parseLegacyNumericPaneKey(paneKey)) {
+      return false
+    }
+    const owner = fence?.aliases.find(({ physicalPaneKey }) => physicalPaneKey === paneKey)?.entry
+    return owner !== undefined && !this.isClosedAgentStatusTabForPaneKey(owner.stablePaneKey)
+  }
+
   protected takeRetiredPaneRestartId(paneKey: string): string | undefined {
     const fence = this.retiredPaneFencesByKey.get(paneKey)
     const id = fence?.retirementIdsByPaneKey[paneKey]
@@ -166,7 +181,9 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
   ): void {
     const closed = [...paneKeys].some(
       (key) =>
-        this.retiredPaneFencesByKey.get(key)?.closed || this.isClosedAgentStatusTabForPaneKey(key)
+        this.retiredPaneFencesByKey.get(key)?.closed ||
+        // Why: a moved pane's source key may sit in a closed tab while its owner tab is open.
+        (this.isClosedAgentStatusTabForPaneKey(key) && !this.isFenceKeyOwnerOpen({ aliases }, key))
     )
     const retirementIdsByPaneKey: Record<string, string> = {}
     for (const key of paneKeys) {
