@@ -64,7 +64,8 @@ function resumableStateFactoryFor(
     case 'openclaw':
     case 'pi':
     case 'omp':
-    case 'prime-agent': {
+    case 'prime-agent':
+    case 'zeroclaw': {
       const agent = candidate.agent
       return (messages) => createMessageGraphSessionResumeState(agent, candidate.file, messages)
     }
@@ -252,10 +253,10 @@ async function reuseCachedSession(
     stats.reused++
   }
   let session = entry.session
-  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
-  if (session && session.messageCount === 0) {
+  // Zero-turn parents and ZeroClaw sessions can gain/lose companion transcripts outside the cached file signature.
+  if (session && (session.messageCount === 0 || session.agent === 'zeroclaw')) {
     const subagentTranscriptCount =
-      session.agent === 'claude'
+      session.agent === 'claude' || session.agent === 'zeroclaw'
         ? await countSubagentTranscripts(candidate.file.path)
         : session.agent === 'omp'
           ? await countOmpSubagentTranscripts(candidate.file.path)

@@ -125,6 +125,8 @@ export async function parseAgentSessionFile(
       return parseRovoSessionFile(candidate.file, platform, messages)
     case 'openclaw':
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform, messages)
+    case 'zeroclaw':
+      return parseMessageGraphSessionFile('zeroclaw', candidate.file, platform, messages)
     case 'pi':
       return parseMessageGraphSessionFile('pi', candidate.file, platform, messages)
     case 'omp':

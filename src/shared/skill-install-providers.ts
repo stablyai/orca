@@ -156,6 +156,13 @@ export const SKILL_INSTALL_PROVIDERS = Object.freeze([
     workspaceSegments: null
   },
   {
+    id: 'zeroclaw',
+    displayName: 'ZeroClaw',
+    globalSegments: ['.zeroclaw', 'skills'],
+    workspaceSegments: ['.zeroclaw', 'skills'],
+    homeEnv: 'ZEROCLAW_HOME'
+  },
+  {
     id: 'devin',
     displayName: 'Devin',
     globalSegments: null,

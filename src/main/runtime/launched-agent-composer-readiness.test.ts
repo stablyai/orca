@@ -49,6 +49,7 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   antigravity: 'tui-idle',
   aider: 'tui-idle',
   openclaw: 'tui-idle',
+  zeroclaw: 'tui-idle',
   copilot: 'tui-idle',
   muse: 'tui-idle',
   qoder: 'tui-idle',

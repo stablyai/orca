@@ -1,7 +1,10 @@
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { SubagentTranscriptPartition } from './session-scanner-subagent-transcripts'
+import {
+  countSubagentTranscripts,
+  type SubagentTranscriptPartition
+} from './session-scanner-subagent-transcripts'
 import type { ResumableSessionParseState } from './session-scanner-types'
 
 // Infer lineage from stamp_UUID artifact directories: task transcripts are label-named and omit parentSession (#9330).
@@ -79,13 +82,22 @@ export function withOmpSubagentTranscriptCount(
       const session = await state.finalize(platform, options)
       const ownsTranscriptDisk =
         !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
-      if (session?.agent !== 'omp' || !ownsTranscriptDisk) {
+      if (!session || !ownsTranscriptDisk) {
         return session
       }
-      return {
-        ...session,
-        subagentTranscriptCount: await countOmpSubagentTranscripts(transcriptFilePath)
+      if (session.agent === 'omp') {
+        return {
+          ...session,
+          subagentTranscriptCount: await countOmpSubagentTranscripts(transcriptFilePath)
+        }
       }
+      if (session.agent === 'zeroclaw') {
+        return {
+          ...session,
+          subagentTranscriptCount: await countSubagentTranscripts(transcriptFilePath)
+        }
+      }
+      return session
     }
   }
 }
