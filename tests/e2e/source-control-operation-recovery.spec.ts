@@ -86,7 +86,7 @@ test('offers Resolve with AI for a paused rebase with no unmerged files', async 
       },
       ensureDetectedAgents: async () => []
     })
-    state.beginRemoteOperation('fetch')
+    state.beginRemoteOperation('fetch', 'unrelated-workspace')
   })
 
   const resolve = orcaPage.getByRole('button', { name: 'Resolve with AI', exact: true })

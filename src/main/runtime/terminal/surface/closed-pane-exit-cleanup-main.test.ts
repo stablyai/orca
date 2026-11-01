@@ -148,7 +148,10 @@ for (const host of ['no window', 'a window'] as const) {
         leaves: []
       })
       relaunched.registerPty('pty-b', TEST_WORKTREE_ID)
-      relaunched['ptysById'].get('pty-b')!.incarnationId = 'inc-b'
+      relaunched['terminalIdentity'].setPtyIncarnationId(
+        relaunched['ptysById'].get('pty-b')!,
+        'inc-b'
+      )
       const reconciled: string[] = []
       watchReconciled(relaunched, reconciled)
 
@@ -161,7 +164,10 @@ for (const host of ['no window', 'a window'] as const) {
     it(`does not take the closed pane for a later incarnation of the id: ${route}, with ${host}`, async () => {
       const harness = closingHost(host)
       await close(harness.runtime)
-      harness.runtime['ptysById'].get('pty-b')!.incarnationId = 'inc-later'
+      harness.runtime['terminalIdentity'].setPtyIncarnationId(
+        harness.runtime['ptysById'].get('pty-b')!,
+        'inc-later'
+      )
 
       harness.runtime.onPtyExit('pty-b', 0, 'inc-later')
 

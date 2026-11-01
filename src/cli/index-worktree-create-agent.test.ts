@@ -90,9 +90,13 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('starts an agent worktree through agent.launch, in the background unless activation is explicit', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo-1::/tmp/repo'
     queueFixtures(
       callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2'),
+        buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')
+      ]),
       agentLaunchHostFixture(),
       agentLaunchFixture('repo-1::/tmp/repo/agent-task', 'The inferred parent contexts conflict.'),
       okFixture('req_show', {
@@ -105,8 +109,6 @@ describe('orca cli worktree awareness', () => {
       [
         'worktree',
         'create',
-        '--repo',
-        'id:repo-1',
         '--name',
         'agent-task',
         '--branch',
@@ -143,6 +145,7 @@ describe('orca cli worktree awareness', () => {
           setupDecision: 'run',
           parentWorktree: undefined,
           cwdParentWorktree: 'id:repo-1::/tmp/repo',
+          envParentWorkspace: 'worktree:repo-1::/tmp/repo',
           noParent: false,
           callerTerminalHandle: undefined,
           cliProvenanceRequest: {}
@@ -160,6 +163,7 @@ describe('orca cli worktree awareness', () => {
     })
     const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
     expect(printed.result.worktree.path).toBe('/tmp/repo/agent-task')
+    expect(printed.result.worktree.id).toBe('repo-1::/tmp/repo/agent-task')
     expect(printed.result.launch.outcome).toEqual({
       kind: 'structured',
       sessionId: 'codex_1',
@@ -202,9 +206,13 @@ describe('orca cli worktree awareness', () => {
   ])(
     'falls back to the startup terminal when the host lacks a required launch capability: $capabilities',
     async ({ capabilities }) => {
+      process.env.ORCA_WORKTREE_ID = 'repo-1::/tmp/repo'
       queueFixtures(
         callMock,
-        worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+        worktreeListFixture([
+          buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2'),
+          buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')
+        ]),
         okFixture('req_status', { capabilities }),
         okFixture('req_create', {
           worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
@@ -212,7 +220,7 @@ describe('orca cli worktree awareness', () => {
           warnings: []
         })
       )
-      vi.spyOn(console, 'log').mockImplementation(() => {})
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
       await main(
         [
@@ -243,6 +251,7 @@ describe('orca cli worktree awareness', () => {
         navigation: 'host',
         parentWorktree: undefined,
         cwdParentWorktree: 'id:repo-1::/tmp/repo',
+        envParentWorkspace: 'worktree:repo-1::/tmp/repo',
         noParent: false,
         callerTerminalHandle: undefined,
         cliProvenanceRequest: {},
@@ -250,8 +259,34 @@ describe('orca cli worktree awareness', () => {
         startupPrompt: 'hi',
         launchSource: 'cli'
       })
+      expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).result.worktree.id).toBe(
+        'repo-1::/tmp/repo/agent-task'
+      )
     }
   )
+
+  it('refuses inferred agent creation before capability lookup or either launch path when projects tie', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1'),
+        buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2')
+      ])
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    try {
+      await main(
+        ['worktree', 'create', '--name', 'task', '--agent', 'codex', '--json'],
+        '/tmp/repo/src'
+      )
+      expect(process.exitCode).toBe(1)
+      expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.code).toBe('selector_ambiguous')
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.list'])
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
 
   it('rejects prompt without agent on worktree.create', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -1607,7 +1607,6 @@
       "durationSeconds": "{{seconds}}s",
       "durationMinutes": "{{minutes}}m {{seconds}}s",
       "durationHours": "{{hours}}h {{minutes}}m",
-      "refreshChecks": "Refresh checks",
       "failing": "Failing",
       "fixWithAi": "Fix with AI",
       "runningSection": "Running",
@@ -1624,7 +1623,6 @@
       "noUnresolved": "No unresolved threads.",
       "resolvedCount": "Resolved {{count}}",
       "hideBots": "Hide bots",
-      "refreshComments": "Refresh comments",
       "bot": "bot",
       "commentActions": "More for this comment",
       "replyAndMore": "{{body}} (+{{count}} more)",
@@ -1639,7 +1637,11 @@
       "threadSubtitle_other": "{{author}} · {{count}} messages",
       "replyPlaceholder": "Reply…",
       "back": "Back to pull request",
-      "noPullRequest": "This branch has no pull request now."
+      "noPullRequest": "This branch has no pull request now.",
+      "fixWith": "Fix with {{agent}}",
+      "live": "Live",
+      "askToFix": "Ask {{agent}} to fix",
+      "askAiToFix": "Ask AI to fix"
     },
     "reviewersSheet": {
       "approvals_one": "{{count}} approval",

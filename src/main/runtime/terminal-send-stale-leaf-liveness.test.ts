@@ -1,3 +1,4 @@
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -418,6 +419,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       })
     },
     db: {
+      crewChanges: new CrewChanges(),
       listSessionDispatchesForPresentation: () => [],
       // Mirrors the real query: `read = 0 AND delivered_at IS NULL`.
       getUndeliveredUnreadMessages: (handle: string) =>

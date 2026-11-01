@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
-import { Bot, ListFilter, RefreshCw } from 'lucide-react-native'
+import { Bot, ListFilter } from 'lucide-react-native'
 import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -13,6 +13,10 @@ import {
 } from '../../../../src/shared/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
 import { canAddRootComment } from '../../session/pr-comment-actions'
+import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/github/pr-comments-resolution-prompt'
+import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+import { useHostProtocolGates } from '../host-protocol-gates-context'
+import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -21,7 +25,7 @@ import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import { MobileSegmentedControl } from '../MobileSegmentedControl'
 import { SectionHeader } from '../list/ListGroup'
 import { MobileLoadErrorState, MobileStateView } from '../MobileStateView'
-import { PrThreadRow, type PrThreadActions } from './PrThreadRow'
+import { PrThreadRow, type PrAskToFix, type PrThreadActions } from './PrThreadRow'
 import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'
 import { NotReady, ScreenFrame, type ScreenProps } from './pr-tab-screen-frame'
@@ -92,6 +96,39 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
     [commentActions, data?.pr.prRepo, isPr]
   )
   const canComment = isPr && canAddRootComment(data?.pr.state ?? null)
+  const { hostCapabilities } = useHostProtocolGates()
+  const hasBotFindings = unresolved.some((group) =>
+    isBotPRComment(getPRCommentGroupRoot(group), tab.botAuthorOverrides)
+  )
+  const askAgent = useMobileLaunchAgentLabel({
+    client: tab.client,
+    worktreeId: tab.worktreeId,
+    hostCapabilities,
+    actionId: 'resolveComments',
+    enabled: hasBotFindings
+  })
+  const askNotice = tab.triage.noticeFor('resolve-comments')
+  // One bot finding per launch, through desktop's own Resolve comments prompt.
+  const askToFix = (group: PRCommentGroup): PrAskToFix | undefined =>
+    data
+      ? {
+          label: askAgent
+            ? t('pullRequest.screens.askToFix', 'Ask {{agent}} to fix', { agent: askAgent })
+            : t('pullRequest.screens.askAiToFix', 'Ask AI to fix'),
+          busy: tab.triage.isBusy('resolve-comments'),
+          disabled: tab.triage.availability !== 'available',
+          onPress: () =>
+            void tab.triage.launch('resolve-comments', () =>
+              buildPRCommentsResolutionPrompt({
+                reviewKind: 'PR',
+                reviewNumber: data.pr.number,
+                reviewTitle: data.pr.title,
+                reviewUrl: data.pr.url,
+                groups: [group]
+              })
+            )
+        }
+      : undefined
   const openThread =
     openThreadId === null
       ? null
@@ -115,6 +152,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
             }
           : undefined
       }
+      askToFix={askToFix(group)}
     />
   )
 
@@ -240,6 +278,18 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                   ) : null}
                 </View>
               ) : null}
+              {hasBotFindings ? (
+                <View style={styles.notice}>
+                  <AgentLaunchNotice
+                    availability={tab.triage.availability}
+                    success={askNotice.success}
+                    error={askNotice.error}
+                    warning={askNotice.warning}
+                    undeliveredPrompt={askNotice.undeliveredPrompt}
+                    errorStyle={styles.noticeError}
+                  />
+                </View>
+              ) : null}
               {commentActions.error ? (
                 <Text style={styles.error}>{commentActions.error}</Text>
               ) : null}
@@ -258,13 +308,6 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
               icon: Bot,
               checked: hideBots,
               onPress: () => setHideBots((value) => !value)
-            }
-          ],
-          [
-            {
-              label: t('pullRequest.screens.refreshComments', 'Refresh comments'),
-              icon: RefreshCw,
-              onPress: () => tab.refetch({ includeDetails: true })
             }
           ]
         ]}
@@ -324,6 +367,8 @@ const styles = themedStyleSheet(() => ({
   },
   error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.lg },
   showMoreButton: { paddingVertical: spacing.md },
+  notice: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  noticeError: { color: colors.statusRed, fontSize: 13 },
   showMore: { color: colors.textPrimary, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   composerBar: {
     paddingHorizontal: spacing.lg,

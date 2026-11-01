@@ -240,6 +240,8 @@ export function MobileSourceControlPanel({
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
+    activeTab,
+    hubPage: hubScreens.page,
     worktreeId,
     prController,
     prBranch,
