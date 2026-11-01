@@ -274,6 +274,63 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   ...ORCHESTRATION_GATE_COMMAND_SPECS,
   {
+    path: ['orchestration', 'lock-acquire'],
+    summary: 'Acquire or queue for a FIFO resource lock across worktrees',
+    usage:
+      'orca orchestration lock-acquire --resource <key> [--reason <text>] [--ttl-ms <n>] [--wait] [--timeout-ms <n>] [--from <handle>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'resource',
+      'reason',
+      'ttl-ms',
+      'wait',
+      'timeout-ms',
+      'from'
+    ],
+    identityFlagRoles: { from: 'caller' },
+    notes: [
+      'Serializes shared operations such as worktree landing across peer agents in FIFO order.',
+      'With --wait, blocks until promoted to position 0 or --timeout-ms expires.'
+    ]
+  },
+  {
+    path: ['orchestration', 'lock-release'],
+    summary: 'Release a held or queued resource lock and promote the next FIFO waiter',
+    usage:
+      'orca orchestration lock-release --resource <key> [--force] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'resource', 'force', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'lock-list'],
+    summary: 'List active and queued FIFO resource locks',
+    usage: 'orca orchestration lock-list [--resource <key>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'resource']
+  },
+  {
+    path: ['orchestration', 'board-post'],
+    summary: 'Post an announcement, task, or handoff entry to the collaboration board',
+    usage:
+      'orca orchestration board-post --title <text> [--body <text>] [--kind <announcement|task|handoff>] [--scope <key>] [--assignee <handle>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'title', 'body', 'kind', 'scope', 'assignee', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'board-claim'],
+    summary: 'Claim or complete a collaboration board entry',
+    usage:
+      'orca orchestration board-claim --id <entry_id> [--status <claimed|completed>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'status', 'from'],
+    identityFlagRoles: { from: 'caller' }
+  },
+  {
+    path: ['orchestration', 'board-list'],
+    summary: 'List collaboration board entries across agents and worktrees',
+    usage:
+      'orca orchestration board-list [--scope <key>] [--kind <announcement|task|handoff>] [--status <open|claimed|completed>] [--limit <n>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'scope', 'kind', 'status', 'limit']
+  },
+  {
     path: ['orchestration', 'reset'],
     destructive: true,
     summary: 'Reset one explicit orchestration state scope',

@@ -1,6 +1,7 @@
 import type { AttemptObservationStoreMethods } from './attempt-observation-store'
 import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-run-store'
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
+import type { ResourceLockStoreMethods } from './locks/resource-lock-store'
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
@@ -133,5 +134,6 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   DispatchCompletionMethods &
   WorkerReportSettlementMethods &
   DecisionGateStoreMethods &
+  ResourceLockStoreMethods &
   CoordinatorRunStoreMethods &
   OrchestrationResetMethods
