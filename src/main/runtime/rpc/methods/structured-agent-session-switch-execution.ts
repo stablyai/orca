@@ -208,7 +208,9 @@ async function switchToChat(
         atRest: true,
         ensureHost: async () => host,
         structuredAgentCliSourceEvidence: sourceEvidence,
-        switchedTabOnly: true,
+        // Only a stopped, captured source is the switched tab; a pane it could not capture (and a
+        // History open) keeps main's writer check, since nothing proved its CLI stopped.
+        switchedTabOnly: Boolean(close && paneKey),
         // After a stop, the transcript read before it: the stop's record founds even if it moved.
         pinnedAdoption:
           adopt?.transcriptPath && stopped
