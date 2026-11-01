@@ -164,6 +164,34 @@ export async function startSkillUpdateRun(request: {
   notifyInstalledAgentSkillsChanged()
 }
 
+/**
+ * Runs a silent update under the target's single-run ownership, so a manual update cannot
+ * interleave with it and the dialog shows busy. Returns null without running when the target is busy.
+ */
+export async function runAutomaticSkillUpdate<T>(
+  target: BundledSkillTarget,
+  names: string[],
+  run: () => Promise<T>
+): Promise<{ value: T } | null> {
+  const targetKey = bundledSkillTargetKey(target)
+  const slot = slotFor(targetKey)
+  if (slot.run.state === 'running') {
+    return null
+  }
+  const token = ++nextToken
+  slot.token = token
+  // Why no latestTargetKey: a silent update never claims the status bar.
+  setRun(targetKey, { state: 'running', targetKey, names, startedAt: Date.now() })
+  try {
+    return { value: await run() }
+  } finally {
+    if (slots.get(targetKey)?.token === token) {
+      slot.token = ++nextToken
+      setRun(targetKey, IDLE)
+    }
+  }
+}
+
 export function acknowledgeSkillUpdateRun(targetKey: string): void {
   const slot = slots.get(targetKey)
   if (!slot || slot.run.state === 'idle' || slot.run.state === 'running') {

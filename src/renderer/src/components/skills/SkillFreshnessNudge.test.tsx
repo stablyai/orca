@@ -7,12 +7,19 @@ import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { bundledSkillNudgeKey } from '../../../../shared/bundled-skill-summary'
 import { SkillFreshnessNudge } from './SkillFreshnessNudge'
 import { _resetSkillFreshnessAutoUpdate } from './skill-freshness-auto-update'
+import {
+  _resetSkillUpdateRunStore,
+  getSkillUpdateRun,
+  startSkillUpdateRun
+} from './skill-update-run-store'
 import { planEntry, planOf, planOp, sharedEntry } from './bundled-skill-plan-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
   dismissed: [] as string[],
   updateSettings: vi.fn(),
   toastInfo: vi.fn(),
+  toastWarning: vi.fn(),
+  manualExecute: vi.fn(),
   toastDismiss: vi.fn(),
   requestDialog: vi.fn(),
   settingsLoaded: true,
@@ -31,7 +38,8 @@ function editedPlan(digest?: string): BundledSkillPlan {
 }
 
 vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
-  autoUpdateBundledSkillsOnTarget: mocks.execute
+  autoUpdateBundledSkillsOnTarget: mocks.execute,
+  executeBundledSkillsOnTarget: mocks.manualExecute
 }))
 
 vi.mock('@/hooks/useInstalledAgentSkills', () => ({
@@ -58,7 +66,7 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { info: mocks.toastInfo, dismiss: mocks.toastDismiss }
+  toast: { info: mocks.toastInfo, warning: mocks.toastWarning, dismiss: mocks.toastDismiss }
 }))
 
 vi.mock('./skill-freshness-update-dialog', () => ({
@@ -109,6 +117,9 @@ describe('SkillFreshnessNudge', () => {
     mocks.execute.mockResolvedValue({ scope: 'global', skills: [] })
     mocks.notifyChanged.mockReset()
     _resetSkillFreshnessAutoUpdate()
+    _resetSkillUpdateRunStore()
+    mocks.toastWarning.mockReset()
+    mocks.manualExecute.mockReset()
     mocks.updateSettings.mockReset()
     mocks.updateSettings.mockResolvedValue(undefined)
     mocks.toastInfo.mockReset()
@@ -307,5 +318,67 @@ describe('SkillFreshnessNudge', () => {
     await rerenderNudge()
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces edits preserved in a backup instead of passing as a silent success', async () => {
+    const backupPath = '/home/u/.agents/.orca-skill-backups/orca-cli-1'
+    mocks.execute.mockResolvedValue({
+      scope: 'global',
+      skills: [
+        {
+          name: 'orca-cli',
+          status: 'ran',
+          ops: [
+            { path: '/home/u/.agents/skills/orca-cli', kind: 'update', status: 'done', backupPath }
+          ]
+        }
+      ]
+    })
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+    await act(async () => {})
+
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(mocks.toastWarning.mock.calls[0]?.[0]).toContain('orca-cli')
+    expect(mocks.toastWarning.mock.calls[0]?.[1].description).toContain(backupPath)
+  })
+
+  it('shares target ownership with manual updates while a silent update runs', async () => {
+    let finish: (value: unknown) => void = () => {}
+    mocks.execute.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+    await renderNudge()
+
+    expect(getSkillUpdateRun('local').state).toBe('running')
+    await startSkillUpdateRun({ target: { kind: 'local' }, names: [], planDigest: 'd', force: [] })
+    expect(mocks.manualExecute).not.toHaveBeenCalled()
+
+    await act(async () => finish({ scope: 'global', skills: [] }))
+    expect(getSkillUpdateRun('local').state).toBe('idle')
+  })
+
+  it('does not start a silent update while a manual update owns the target', async () => {
+    mocks.manualExecute.mockReturnValue(new Promise(() => {}))
+    void startSkillUpdateRun({ target: { kind: 'local' }, names: [], planDigest: 'd', force: [] })
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+
+    expect(mocks.execute).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a programmatically retracted nudge again when its skills return', async () => {
+    const edited = sharedEntry('orca-linear', 'leave', { reason: 'edited', replaceable: true })
+    mocks.plan = planOf([edited])
+    await renderNudge()
+    mocks.plan = planOf([edited, sharedEntry('orca-emulator', 'restore')], 'c'.repeat(64))
+    await rerenderNudge()
+    mocks.plan = planOf([edited], 'd'.repeat(64))
+    await rerenderNudge()
+
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(3)
+    expect(mocks.toastDismiss).toHaveBeenCalledTimes(2)
   })
 })

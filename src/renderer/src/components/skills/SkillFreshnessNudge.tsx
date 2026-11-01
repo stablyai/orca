@@ -36,12 +36,17 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
+    // Programmatic retraction is not a user dismissal, so the same nudge may return this session.
+    const retract = (active: ActiveFreshnessNudge): void => {
+      active.persistDismissal = false
+      activeNudgeRef.current = null
+      shownFingerprints.current.delete(active.fingerprint)
+      toast.dismiss(active.id)
+    }
     if (!target || !targetKey) {
       const active = activeNudgeRef.current
       if (active) {
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
@@ -53,9 +58,7 @@ export function SkillFreshnessNudge(): null {
       const active = activeNudgeRef.current
       if (state.error && active) {
         // Retract authority based on old bytes after a failed recheck without persisting a user dismissal.
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
@@ -67,9 +70,7 @@ export function SkillFreshnessNudge(): null {
       const active = activeNudgeRef.current
       if (active) {
         // Retracting a resolved/replaced nudge is not an explicit user dismissal.
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
@@ -78,9 +79,7 @@ export function SkillFreshnessNudge(): null {
       return
     }
     if (active) {
-      active.persistDismissal = false
-      activeNudgeRef.current = null
-      toast.dismiss(active.id)
+      retract(active)
     }
     if (shownFingerprints.current.has(fingerprint)) {
       return
