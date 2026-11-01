@@ -760,4 +760,27 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(generateBranchNameMock).not.toHaveBeenCalled()
     expect(onRenamed).not.toHaveBeenCalled()
   })
+
+  it('renames a branch whose prefix uses a custom separator like hyphen', async () => {
+    gitExecFileAsyncMock.mockImplementation(
+      gitResponder({ currentBranch: 'you-Nautilus', hasUpstream: false })
+    )
+    computeBranchNameMock.mockImplementation((leaf: string) => `you-${leaf}`)
+    const settings = {
+      autoRenameBranchFromWork: true,
+      branchPrefix: 'git-username',
+      branchPrefixSeparator: '-'
+    } as unknown as GlobalSettings
+    const { deps, setDisplayName } = makeDeps({
+      getSettings: () => settings
+    })
+    const event = workingEvent()
+    await maybeAutoRenameBranchOnFirstWork(event, deps)
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you-fix-auth'],
+      expect.anything()
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
+  })
 })

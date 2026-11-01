@@ -213,27 +213,51 @@ export function GitPane({
           ))}
         </div>
         {isBranchPrefixInputMode && (
-          <Input
-            value={branchPrefixInputValue}
-            onChange={(e) => {
-              const next = e.target.value
-              lastCommittedPrefixRef.current = next
-              setCustomPrefixDraft(next)
-              updateSettings({ branchPrefixCustom: next })
-            }}
-            placeholder={
-              settings.branchPrefix === 'git-username'
-                ? translate(
-                    'auto.components.settings.GitPane.aefa1ecb59',
-                    'No git username configured'
-                  )
-                : translate('auto.components.settings.GitPane.b559bf9899', 'e.g. feature')
-            }
-            className="max-w-xs"
-            readOnly={settings.branchPrefix === 'git-username'}
+          <div className="flex items-center gap-2">
+            <Input
+              value={branchPrefixInputValue}
+              onChange={(e) => {
+                const next = e.target.value
+                lastCommittedPrefixRef.current = next
+                setCustomPrefixDraft(next)
+                updateSettings({ branchPrefixCustom: next })
+              }}
+              placeholder={
+                settings.branchPrefix === 'git-username'
+                  ? translate(
+                      'auto.components.settings.GitPane.aefa1ecb59',
+                      'No git username configured'
+                    )
+                  : translate('auto.components.settings.GitPane.b559bf9899', 'e.g. feature')
+              }
+              className="max-w-xs"
+              readOnly={settings.branchPrefix === 'git-username'}
+            />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {translate('auto.components.settings.GitPane.separatorLabel', 'Separator')}
+              </span>
+              <Input
+                value={settings.branchPrefixSeparator ?? '/'}
+                onChange={(e) => {
+                  updateSettings({ branchPrefixSeparator: e.target.value })
+                }}
+                placeholder="/"
+                className="w-16 text-center"
+                aria-label={translate(
+                  'auto.components.settings.GitPane.separatorLabel',
+                  'Separator'
+                )}
+              />
+            </div>
+          </div>
+        )}
+        {isBranchPrefixInputMode && (
+          <BranchPrefixFeedback
+            rawPrefix={branchPrefixInputValue}
+            separator={settings.branchPrefixSeparator ?? '/'}
           />
         )}
-        {isBranchPrefixInputMode && <BranchPrefixFeedback rawPrefix={branchPrefixInputValue} />}
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {

@@ -2,13 +2,69 @@ import { describe, expect, it } from 'vitest'
 import {
   assertBranchPrefixValid,
   getBranchPrefixIssue,
+  getBranchPrefixSeparator,
+  getBranchPrefixSeparatorIssue,
   normalizeBranchPrefix,
   selectBranchPrefixInput
 } from './branch-prefix'
 
+describe('getBranchPrefixSeparator', () => {
+  it('returns default slash when undefined or null', () => {
+    expect(getBranchPrefixSeparator(undefined)).toBe('/')
+    expect(getBranchPrefixSeparator(null)).toBe('/')
+    expect(getBranchPrefixSeparator({})).toBe('/')
+  })
+
+  it('returns default slash when empty string', () => {
+    expect(getBranchPrefixSeparator({ branchPrefixSeparator: '' })).toBe('/')
+  })
+
+  it('returns custom separator when configured', () => {
+    expect(getBranchPrefixSeparator({ branchPrefixSeparator: '-' })).toBe('-')
+    expect(getBranchPrefixSeparator({ branchPrefixSeparator: '_' })).toBe('_')
+  })
+})
+
+describe('getBranchPrefixSeparatorIssue', () => {
+  it('accepts common separators', () => {
+    expect(getBranchPrefixSeparatorIssue('/')).toBeNull()
+    expect(getBranchPrefixSeparatorIssue('-')).toBeNull()
+    expect(getBranchPrefixSeparatorIssue('_')).toBeNull()
+    expect(getBranchPrefixSeparatorIssue('.')).toBeNull()
+  })
+
+  it('treats empty as valid (will fallback)', () => {
+    expect(getBranchPrefixSeparatorIssue('')).toBeNull()
+  })
+
+  it('flags spaces and control characters', () => {
+    expect(getBranchPrefixSeparatorIssue(' ')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('-\t')).toBe('invalid-characters')
+  })
+
+  it('flags git ref-reserved characters', () => {
+    expect(getBranchPrefixSeparatorIssue('~')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue(':')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('?')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('..')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('//')).toBe('invalid-characters')
+    expect(getBranchPrefixSeparatorIssue('@{')).toBe('invalid-characters')
+  })
+})
+
 describe('normalizeBranchPrefix', () => {
   it('strips a trailing slash so the join does not double it', () => {
     expect(normalizeBranchPrefix('team/')).toBe('team')
+  })
+
+  it('strips trailing custom separator so join does not double it', () => {
+    expect(normalizeBranchPrefix('team-', '-')).toBe('team')
+    expect(normalizeBranchPrefix('team--', '-')).toBe('team')
+    expect(normalizeBranchPrefix('-team-', '-')).toBe('team')
+  })
+
+  it('preserves inner hyphens when separator is hyphen', () => {
+    expect(normalizeBranchPrefix('team-frontend', '-')).toBe('team-frontend')
   })
 
   it('strips a leading slash', () => {
@@ -137,9 +193,19 @@ describe('assertBranchPrefixValid', () => {
     expect(() => assertBranchPrefixValid('team')).not.toThrow()
   })
 
+  it('does not throw for a valid prefix with valid separator', () => {
+    expect(() => assertBranchPrefixValid('team', '-')).not.toThrow()
+  })
+
   it('throws with a settings hint for an invalid prefix', () => {
     expect(() => assertBranchPrefixValid('team x')).toThrow(
       'Branch prefix "team x" contains characters git rejects — update it in Settings → Git'
+    )
+  })
+
+  it('throws with a settings hint for an invalid separator', () => {
+    expect(() => assertBranchPrefixValid('team', ':')).toThrow(
+      'Branch prefix separator ":" contains characters git rejects — update it in Settings → Git'
     )
   })
 })
