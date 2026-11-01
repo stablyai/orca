@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { CodexResetCreditAction } from './CodexResetCreditAction'
+import { feedback } from '../theme/mobile-theme'
 import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
@@ -61,7 +62,9 @@ describe('CodexResetCreditAction', () => {
 
     expect(button.props.accessibilityLabel).toBe('Resetting Codex rate limits')
     expect(button.props.accessibilityState).toEqual({ busy: true, disabled: true })
-    expect(button.props.style({ pressed: false })[1]).toMatchObject({ opacity: 0.5 })
+    expect(button.props.style({ pressed: false })[1]).toMatchObject({
+      opacity: feedback.disabledOpacity
+    })
     expect(text).toContain('Resetting…')
     act(() => renderer.unmount())
   })

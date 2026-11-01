@@ -1,4 +1,4 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 
 export type AtRestCommandChange = { retired: (record: AgentSessionRecord) => boolean }

@@ -1,7 +1,7 @@
 import {
   agentProviderSessionsEqual,
   type TerminalLaunchResult
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { ReattachPayloadSession } from './reattach-payload-session'

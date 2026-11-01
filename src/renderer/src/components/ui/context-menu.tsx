@@ -6,6 +6,7 @@ import * as ContextMenuPrimitive from 'radix-ui/context-menu'
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { keepFocusWhileMenuCloses } from './menu-item-closing-focus'
+import { useMenuPointerHighlight } from './menu-pointer-highlight'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" modal={false} {...props} />
@@ -70,6 +71,7 @@ function ContextMenuSubContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent> &
   VariantProps<typeof contentAnimationVariants>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.SubContent
@@ -84,6 +86,7 @@ function ContextMenuSubContent({
         // Portal submenus outside the scrollable parent to prevent overflow clipping.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>
@@ -97,6 +100,7 @@ function ContextMenuContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> &
   VariantProps<typeof contentAnimationVariants>) {
+  const pointerHighlight = useMenuPointerHighlight(props)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
@@ -109,6 +113,7 @@ function ContextMenuContent({
         // Disable native dragging so overlapping titlebar regions cannot intercept menu clicks.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         {...props}
+        {...pointerHighlight}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </ContextMenuPrimitive.Portal>

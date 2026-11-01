@@ -7,11 +7,11 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { settleStaleStructuredAgentSessionState } from '../native-chat/agent-session-wire/structured-agent-session-dead-generation-settlement'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { bindClaudeContextUsageCapture } from './claude-context-usage'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const journals = createTrackedJournalOpener()
 let root: string

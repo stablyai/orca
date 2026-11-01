@@ -1,5 +1,5 @@
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { TerminalLaunchResult } from '../../shared/agent-session-resume'
+import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'

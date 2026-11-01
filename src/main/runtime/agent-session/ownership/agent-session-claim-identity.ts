@@ -19,7 +19,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const COORDINATION_KEY_BYTES = 32
 const COORDINATION_KEY_FILE = 'agent-session-authority.key'

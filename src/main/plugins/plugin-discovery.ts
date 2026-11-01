@@ -44,6 +44,8 @@ export type ValidDiscoveredPlugin = {
   consentContentHash?: string | null
   /** Null for mutable dev trees. */
   contentHash: string | null
+  /** Dev worker plugins: hash of the working tree, so a save restarts the worker. */
+  devRevision?: string | null
   isDev: boolean
 }
 
@@ -135,12 +137,18 @@ async function readManifestDir(
   }
   // Why dev trees bind only instructions: dev code is the author's working copy, and
   // binding it would re-prompt on every save.
+  let devRevision: string | null = null
   if (isDev && hasDeclarativePluginContributions(manifest)) {
-    const treeHash = await hashPluginTree(rootDir)
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
     if (!treeHash.ok) {
       return { pluginKey, rootDir, error: treeHash.error, isDev }
     }
     consentContentIdentity = treeHash.hash
+    devRevision = treeHash.hash
+  } else if (isDev && manifest.main) {
+    const treeHash = await hashPluginTree(rootDir, { devFolder: true })
+    // Why not an error: an oversized tree still runs; only edit-triggered restarts are lost.
+    devRevision = treeHash.ok ? treeHash.hash : null
   }
   return {
     pluginKey,
@@ -154,6 +162,7 @@ async function readManifestDir(
     ),
     consentContentHash: consentContentIdentity ?? null,
     contentHash: null,
+    ...(isDev && manifest.main ? { devRevision } : {}),
     isDev
   }
 }

@@ -1,16 +1,14 @@
 // Parse recovery offers/failures, including legacy layouts, from files written by independently versioned hosts.
 
-import {
-  readAgentSessionRefusalReference,
-  type AgentSessionAnyRefusalDetails
-} from '../../shared/agent-session-wire-refusals'
+import { readAgentSessionRefusalReference } from '../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionAnyRefusalDetails } from '../../shared/agent-session/failures/agent-session-refusal-details'
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
   parseAgentSessionResumeMarker,
   type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker
-} from '../../shared/agent-session-resume-marker'
+} from '../../shared/agent-session/lifecycle/agent-session-resume-marker'
 
 const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 export const MAX_FAILURE_FIELD_LENGTH = 512

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 import { copyLaunchConfig } from '../../../shared/agent-resume-record-from-status'
 

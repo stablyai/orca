@@ -6,7 +6,7 @@ import { JournalInputCardIndex } from '../agent-session-journal/journal-input-ca
 import { JournalInputLineageOwner } from '../agent-session-journal/journal-input-lineage'
 import { encodeJournalState } from '../agent-session-journal/journal-state-codec'
 import { expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'

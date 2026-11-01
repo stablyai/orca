@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { SHEET_CURVE } from '../components/sheet-motion-values'
 import { MessageBox } from '../components/composer-input/MessageBox'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
@@ -16,6 +18,33 @@ import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 const INITIAL_COMMIT_BAR_HEIGHT = 180
+const CLEAN_FADE_MS = 240
+const REDUCED_CLEAN_FADE_MS = 150
+
+// The clean state settles in when a commit empties the list; on load it is simply there.
+function CleanStateFade({ animate, children }: { animate: boolean; children: ReactNode }) {
+  const reducedMotion = useReducedMotionEnabled() === true
+  const shown = useRef(new Animated.Value(animate ? 0 : 1)).current
+  useEffect(() => {
+    if (!animate) {
+      return
+    }
+    Animated.timing(shown, {
+      toValue: 1,
+      duration: reducedMotion ? REDUCED_CLEAN_FADE_MS : CLEAN_FADE_MS,
+      easing: Easing.bezier(...SHEET_CURVE),
+      useNativeDriver: true
+    }).start()
+  }, [animate, reducedMotion, shown])
+  const scale = reducedMotion
+    ? 1
+    : shown.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] })
+  return (
+    <Animated.View style={[styles.state, { opacity: shown, transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  )
+}
 
 type Props = {
   state: Omit<MobileSourceControlState, 'primaryActionArgs'>
@@ -58,6 +87,13 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
+  const [listShown, setListShown] = useState(hasVisibleChanges)
+  const [cleanedByCommit, setCleanedByCommit] = useState(false)
+  if (listShown !== hasVisibleChanges) {
+    setListShown(hasVisibleChanges)
+    setCleanedByCommit(!hasVisibleChanges && busyAction?.startsWith('commit') === true)
+  }
   // A capped all-staged prefix can hide unstaged rows.
   const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
@@ -192,14 +228,14 @@ export function MobileSourceControlContent({ state, primaryAction }: Props) {
       </View>
 
       {!hasVisibleChanges ? (
-        <View style={styles.state}>
+        <CleanStateFade animate={cleanedByCommit}>
           <Text style={styles.stateTitle}>
             {t('sourceControl.content.emptyTitle', 'No local changes')}
           </Text>
           <Text style={styles.stateText}>
             {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
           </Text>
-        </View>
+        </CleanStateFade>
       ) : (
         fileList
       )}

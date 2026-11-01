@@ -2,7 +2,7 @@
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { ProgramStatusFacet } from './program-status/facet'
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
   AgentStatusExecutionId,

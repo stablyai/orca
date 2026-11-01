@@ -1,9 +1,9 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,

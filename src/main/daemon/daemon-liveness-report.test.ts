@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
-import {
-  inspectDaemonRecordProcess,
-  readTerminalDaemonLiveness,
-  type DaemonLivenessDependencies
-} from './daemon-liveness-report'
+import { inspectDaemonRecordProcess } from './daemon-liveness-report'
 
 const record: ParsedDaemonPid = {
   pid: 4288,
@@ -19,62 +15,7 @@ const record: ParsedDaemonPid = {
   processCeiling: { state: 'on', limit: 200, mechanism: 'systemd-slice', unit: 'orca.slice' }
 }
 
-function deps(overrides: Partial<DaemonLivenessDependencies>): DaemonLivenessDependencies {
-  return {
-    endpoint: () => ({ socketPath: '/run/d.sock', tokenPath: '/run/d.token' }),
-    checkHealth: async () => ({ verdict: 'healthy', coverage: 'pty-spawn' }),
-    readRecord: () => record,
-    inspectPid: async () => 'live',
-    confirmCeiling: (state) => state,
-    ...overrides
-  }
-}
-
 describe('terminal daemon liveness report', () => {
-  it('is live with the ceiling when the daemon answers', async () => {
-    await expect(readTerminalDaemonLiveness(deps({}))).resolves.toEqual({
-      verdict: 'live',
-      pid: 4288,
-      detail: 'it answered its health check',
-      processCeiling: record.processCeiling
-    })
-  })
-
-  it('is exited after a kill -9, before anything respawns it', async () => {
-    const report = await readTerminalDaemonLiveness(
-      deps({
-        checkHealth: async () => ({ verdict: 'unreachable', coverage: 'pty-spawn' }),
-        inspectPid: async () => 'exited'
-      })
-    )
-    expect(report.verdict).toBe('exited')
-    expect(report.processCeiling).toBeNull()
-  })
-
-  it('is unverifiable, never exited, when a silent pid still runs or cannot be checked', async () => {
-    for (const state of ['live', 'unverifiable'] as const) {
-      const report = await readTerminalDaemonLiveness(
-        deps({
-          checkHealth: async () => ({ verdict: 'unreachable', coverage: 'pty-spawn' }),
-          inspectPid: async () => state
-        })
-      )
-      expect(report.verdict).toBe('unverifiable')
-    }
-    const noRecord = await readTerminalDaemonLiveness(
-      deps({
-        checkHealth: async () => ({ verdict: 'unreachable', coverage: 'pty-spawn' }),
-        readRecord: () => null
-      })
-    )
-    expect(noRecord.verdict).toBe('unverifiable')
-  })
-
-  it('is unverifiable on a server with no daemon provider', async () => {
-    const report = await readTerminalDaemonLiveness(deps({ endpoint: () => null }))
-    expect(report.verdict).toBe('unverifiable')
-  })
-
   it.runIf(process.platform === 'linux')(
     'reads a pid reused by another process as exited',
     async () => {

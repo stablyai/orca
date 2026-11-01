@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hasEmptyReattachRetireEvidence } from './empty-reattach-retire-evidence'
 import { isHibernationDoneRecord } from '../../../../../shared/hibernation-done-record'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 function note(overrides: Partial<SleepingAgentSessionRecord> = {}): SleepingAgentSessionRecord {

@@ -1,7 +1,7 @@
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
 import type { Repo } from '../../../shared/repo-types'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/tui-agent'

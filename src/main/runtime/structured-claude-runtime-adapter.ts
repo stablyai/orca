@@ -1,5 +1,5 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../claude/claude-structured-session-adapter'
 import type {

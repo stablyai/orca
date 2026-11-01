@@ -163,7 +163,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         host: projection?.host.id,
         attention: nonEmpty(projection?.attention?.categories),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
-        next: projection ? renderOrchestrationArgv(projection.nextAction.argv) : undefined
+        next: projection
+          ? renderOrchestrationArgv(projection.nextAction.argv)
+          : olderHostReleaseNext(worker)
       }
     }),
     scope: value.scope,
@@ -180,6 +182,13 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         }
       : undefined
   }
+}
+
+// Older runtimes send no projection and cannot close finished workers on their own.
+function olderHostReleaseNext(worker: WorkerListResult['workers'][number]): string | undefined {
+  return worker.terminalState === 'reclaimable' && !worker.resource?.autoReleaseAt
+    ? renderOrchestrationArgv(['orchestration', 'worker-release', '--dispatch', worker.dispatchId])
+    : undefined
 }
 
 function workerListWarnings(value: WorkerListResult): string[] {

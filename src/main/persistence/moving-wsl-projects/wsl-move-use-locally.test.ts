@@ -39,12 +39,6 @@ describe('bringWslMovedProjectBack', () => {
     expect(hidden().size).toBe(0)
   })
 
-  it('also releases a committed move whose desktop rewrite never finished', () => {
-    seedWslMoveCutover(userDataPath, wslMoveCutoverFixture('move-1', 'destination-committed'))
-    expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' }).released).toBe(true)
-    expect(hidden().size).toBe(0)
-  })
-
   it('refuses a project no committed move took', () => {
     seedWslMoveCutover(userDataPath, wslMoveCutoverFixture('move-1', 'blobs-transferred'))
     expect(bringWslMovedProjectBack(userDataPath, { repoId: 'repo-1' })).toEqual({

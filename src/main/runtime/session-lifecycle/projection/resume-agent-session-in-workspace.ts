@@ -4,7 +4,7 @@ import {
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   getConnectionExecutionHostId,

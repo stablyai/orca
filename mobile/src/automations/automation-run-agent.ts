@@ -61,6 +61,7 @@ export async function canOpenAutomationRunAgent(
         await terminalList.request(client, {
           worktree: `id:${run.workspaceId}`,
           includeVisualLayouts: false,
+          includePreview: false,
           ...(limit === undefined ? {} : { limit })
         })
       )

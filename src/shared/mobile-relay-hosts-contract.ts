@@ -21,8 +21,13 @@ export type MobileRelayHost = {
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }
 
+// Strict: phones send the snapshot fields only to desktops advertising MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY.
 export const MobileRelayHostWorktreesParamsSchema = z
-  .object({ hostId: z.string().min(1).max(1024) })
+  .object({
+    hostId: z.string().min(1).max(1024),
+    afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+    acceptRowDelta: z.literal(true).optional()
+  })
   .strict()
 
 /** One of a server's own `worktree.ps` rows (RuntimeWorktreePsSummary), carrying the server's host id. */

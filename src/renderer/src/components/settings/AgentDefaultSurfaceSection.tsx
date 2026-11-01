@@ -12,6 +12,10 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import {
+  trackAgentDefaultSurfaceChanged,
+  wasChatUiLaunchTipShown
+} from '../feature-tips/feature-tip-telemetry'
 import { ChatSurfacePreview, TerminalSurfacePreview } from './AgentDefaultSurfacePreviews'
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 import {
@@ -175,7 +179,18 @@ export function AgentDefaultSurfaceSection({
     const writer = { fallbackSettings: settings, updateSettings }
     void mutation.run('default-surface', {
       mutate: () => saveAgentDefaultSurface({ surface: next, ...writer }),
-      onSuccess: () => notify(next, writer),
+      onSuccess: () => {
+        trackAgentDefaultSurfaceChanged({
+          from_mode: surface,
+          to_mode: next,
+          source: 'settings',
+          launch_tip_shown: wasChatUiLaunchTipShown(
+            useAppStore.getState().featureTipsSeenIds,
+            settings
+          )
+        })
+        notify(next, writer)
+      },
       onError: saveFailed
     })
   }

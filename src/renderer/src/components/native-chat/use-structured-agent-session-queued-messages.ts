@@ -7,15 +7,15 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mapSettledWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,
   AgentSessionQueuedMessagesResumeResult,
-  AgentSessionQueuePause,
-  AgentSessionSendResult
-} from '../../../../shared/agent-session-wire'
+  AgentSessionQueuePause
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../../shared/agent-session-wire'
 import {
   useStructuredAgentSessionQueuedEdit,
   type QueuedEditTransport,

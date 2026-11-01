@@ -19,16 +19,16 @@ import type {
   StructuredAgentSessionContinueInput
 } from './structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionNamingError,
-  AgentSessionStatusSummary,
-  AgentSessionWireRefusal
+  AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
@@ -47,7 +47,7 @@ import type { AgentSessionAttachParams } from './structured-agent-session-attach
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from './structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -183,7 +183,7 @@ export type StructuredAgentSessionHostDeps = {
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
-  onSessionTabHidden?: (sessionId: string) => void
+  onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
   assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>
   /** Where every failure the host carries on past is reported. Required: a host without one would

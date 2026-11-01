@@ -6412,15 +6412,17 @@
           "remoteEditorUnsupportedDetail": "Choisissez VS Code, Cursor ou Zed, ou utilisez l'application en local.",
           "remotePathInvalid": "Le chemin n'est pas valide pour l'hôte SSH.",
           "remotePathInvalidDetail": "Actualisez l'espace de travail avant de réessayer.",
-          "remoteLaunchFailed": "Impossible d'ouvrir le chemin dans l'éditeur.",
-          "remoteLaunchFailedDetail": "Vérifiez la commande de l'éditeur configurée sur cette machine.",
+          "pathLaunchFailed": "Impossible d'ouvrir le chemin dans l'éditeur.",
+          "pathLaunchFailedDetail": "Vérifiez la commande de l'éditeur configurée sur cette machine.",
           "1417fd8380": "Personnaliser les applications...",
           "8009ab69a6": "Ouvrir dans",
           "bd0e8159f8": "Vérifiez la commande de l'éditeur ou la configuration du gestionnaire de fichiers sur cette machine.",
           "9a5381eb09": "Impossible d'ouvrir le dossier de l'espace de travail.",
           "0bed8727db": "Il a peut-être été déplacé ou supprimé. Actualisez les espaces de travail ou retirez-le d'Orca.",
           "3921d3d9a5": "Le dossier de l'espace de travail est introuvable.",
+          "pathNotFound": "Fichier ou dossier introuvable. Il a peut-être été déplacé ou supprimé.",
           "f387af445b": "Le chemin de l'espace de travail n'est pas un chemin local valide.",
+          "pathInvalid": "Le chemin n'est pas un chemin local valide.",
           "wsl": "WSL",
           "remoteEditorHint": "Seuls VS Code, Cursor et Zed peuvent ouvrir des dossiers sur un hôte SSH.",
           "remoteRuntimeEditorHint": "Les applications sur cet ordinateur ne peuvent ouvrir les fichiers de ce serveur que si Orca s’y connecte via SSH."
@@ -6999,12 +7001,14 @@
           "added": "Déjà un hôte",
           "running": "En cours",
           "stopped": "Arrêtée",
+          "unverifiable": "Inconnu",
           "title": "Ajouter une distro WSL",
           "description": "Orca exécute son serveur dans la distro, de sorte que git, les fichiers et les terminaux s'exécutent nativement sous Linux. Les projets de cette distro que vous avez ouverts via \\\\wsl.localhost sont déplacés automatiquement vers cet hôte dès que leurs terminaux sont inactifs ; les projets situés sur un lecteur Windows (/mnt/…) restent sur cet ordinateur. Vous pouvez ramener un projet déplacé depuis la barre latérale.",
           "distro": "Distro",
           "loading": "Recherche des distros WSL…",
           "placeholder": "Choisissez une distro",
           "stoppedHint": "{{value0}} est arrêtée. L'ajouter la démarre.",
+          "unverifiableHint": "WSL n’a pas indiqué si {{value0}} est en cours d’exécution. L’ajouter la démarre si nécessaire.",
           "addingHint": "Installation et démarrage du serveur Orca dans la distro. La première fois peut prendre une minute.",
           "adding": "Configuration…",
           "startAndAdd": "Démarrer et ajouter",
@@ -7457,14 +7461,13 @@
           "932ff1fbff": "Thème",
           "leftSidebarAppearance": {
             "title": "Apparence de la barre latérale gauche",
-            "rowDescription": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
             "default": "Par défaut",
-            "matchTerminal": "Comme le terminal",
             "tinted": "Teintée",
             "tintColor": "Teinte de la barre latérale",
             "tintColorDescription": "Couleur mélangée à la surface de la barre latérale gauche.",
             "tintOpacity": "Intensité de la teinte",
-            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale."
+            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale.",
+            "tintDescription": "Gardez la barre latérale gauche par défaut ou teintez-la. Pour suivre le terminal, choisissez Comme le terminal comme thème clair ou sombre."
           },
           "interfaceDefaultFont": "Police par défaut",
           "terminalDefaultFont": "Police par défaut",
@@ -9654,11 +9657,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Apparence de la barre latérale gauche",
-              "description": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
               "project": "projet",
-              "terminal": "Terminal",
               "background": "arrière-plan",
-              "tint": "teinte"
+              "tint": "teinte",
+              "tintDescription": "Gardez la barre latérale gauche par défaut ou teintez-la. Pour suivre le terminal, choisissez Comme le terminal comme thème clair ou sombre."
             },
             "workspaceCardLayout": {
               "title": "Disposition des cartes d'espace de travail",
@@ -9711,7 +9713,8 @@
             "zcodeUsageDescription": "Afficher l'utilisation du quota du plan de codage ZCode dans la barre d'état.",
             "zcode": "code z",
             "zai": "zaï",
-            "glm": "GLM"
+            "glm": "GLM",
+            "matchTerminal": "Comme le terminal"
           }
         },
         "auto": {
@@ -12720,7 +12723,7 @@
         "wslHosts": {
           "title": "Hôtes WSL",
           "experimental": "Expérimental",
-          "description": "Orca exécute un serveur dans chaque distro. Une distro arrêtée ne démarre que lorsque vous ouvrez l'un de ses projets ou la connectez ici.",
+          "description": "Orca exécute un serveur dans chaque distro. Ouvrir un projet ne démarre jamais une distro arrêtée : cliquez sur Démarrer, ouvrez un nouveau terminal ou connectez-la ici.",
           "add": "Ajouter une distro WSL",
           "connect": "Connecter",
           "turnOn": "Activer dans Expérimental",
@@ -12939,7 +12942,9 @@
           "noMatches": "Aucune version correspondante."
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Utiliser ses couleurs de terminal"
+          "useTerminalTheme": "Utiliser ses couleurs de terminal",
+          "matchTerminal": "Comme le terminal",
+          "dynamic": "dynamique"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -13124,7 +13129,9 @@
           "light": "Clair",
           "languageIncomplete": "Traduit à {{value0}} %, trop incomplet pour servir de langue à Orca",
           "languageCoverage": "Langue de l’interface · traduite à {{value0}} %",
-          "newFileMenu": "S’ajoute au menu +"
+          "newFileMenu": "S’ajoute au menu +",
+          "editorReplacesViewer": "Ouvre {{value0}} à la place de la visionneuse d’Orca",
+          "editorMayReplaceViewer": "Peut ouvrir {{value0}} à la place de la visionneuse d’Orca"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Aucun autre accès",
@@ -16139,16 +16146,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom avant",
-          "6c89c73d9f": "Réinitialiser le zoom",
           "be27304574": "Zoom arrière",
-          "77bfc9b35a": "Ouvrir l'image dans une fenêtre indépendante",
           "3ef9551ba2": "Chargement de l'aperçu...",
-          "d9d2944855": "Échec du chargement de l'aperçu du fichier"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Appuyez sur Échap pour fermer",
-          "535f4e2b56": "Fermer",
-          "9e27b2ecaf": "Aperçu de l'image en taille réelle"
+          "d9d2944855": "Échec du chargement de l'aperçu du fichier",
+          "fitToView": "Ajuster à la vue",
+          "actualSize": "Taille réelle",
+          "expand": "Agrandir l’image"
         },
         "IpynbViewer": {
           "859bf9fc21": "Exécuter la cellule",
@@ -16271,7 +16274,10 @@
           "zoomOut": "Zoom arrière",
           "zoomIn": "Zoom avant",
           "fit": "Ajuster à l'écran",
-          "close": "Fermer"
+          "close": "Fermer",
+          "copyPng": "Copier en PNG",
+          "copiedPng": "Copié en PNG",
+          "copyPngFailed": "Impossible de copier l’image"
         },
         "MermaidBlock": {
           "dcc132e691": "Erreur de diagramme :",
@@ -19564,9 +19570,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
-        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
-        "exitUnconfirmedFromTerminal": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions.",
-        "exitUnconfirmed": "{{agent}} exécute déjà cette conversation dans un autre terminal. Quittez {{agent}} là-bas ou fermez ce terminal, puis ouvrez cette conversation depuis l’historique des sessions."
+        "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse."
       },
       "state": {
         "loading": {
@@ -19908,13 +19912,15 @@
         "stopped": "{{distro}} est arrêté",
         "start": "Démarrer",
         "unverifiable": "Orca n'a pas pu vérifier si {{distro}} est en cours d'exécution",
-        "startToSend": "Démarrez {{distro}} pour envoyer."
+        "startToSend": "Démarrez {{distro}} pour envoyer.",
+        "startDistro": "Démarrer {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuer",
         "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
         "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée.",
-        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer."
+        "unconfirmed": "Impossible de confirmer si {{agent}} a reçu Continuer. Vérifiez le chat avant de réessayer.",
+        "usageLimitExplanation": "Demande à l’agent de reprendre là où il s’était arrêté. À utiliser une fois la limite réinitialisée."
       },
       "rewind": {
         "unsupported": "Ce chat ne peut pas revenir à un message antérieur.",
@@ -20092,6 +20098,13 @@
         "effortPickerFailed": "Impossible d’ouvrir le sélecteur d’effort.",
         "modelApplyFailed": "Impossible d’appliquer le modèle {{value}}.",
         "effortApplyFailed": "Impossible d’appliquer l’effort {{value}}."
+      },
+      "usageLimitActions": {
+        "continueNow": "Continuer maintenant",
+        "leadIn": "Continuez cette conversation sans attendre :",
+        "switchAccount": "Changer de compte",
+        "addAccount": "Ajouter un compte…",
+        "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
       }
     },
     "tab": {
@@ -20932,8 +20945,7 @@
       "quitDuringMoveConfirm": "Quitter quand même"
     },
     "startupWorktreeRefresh": {
-      "loading": "Recherche des espaces de travail…",
-      "description": "D'autres espaces de travail peuvent apparaître pendant le chargement des projets locaux et distants."
+      "loading": "Recherche des espaces de travail…"
     },
     "createProject": {
       "errors": {
@@ -20956,6 +20968,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} est déjà un hôte.",
         "distroStopped": "{{distro}} s'est arrêtée depuis la lecture de la liste. Choisissez « Démarrer et ajouter » pour la démarrer.",
+        "distroUnverifiable": "WSL n’a pas répondu si {{distro}} est en cours d’exécution. Actualisez la liste, ou ajoutez-la depuis la boîte de dialogue, qui la démarre si nécessaire.",
         "wsl1": "{{distro}} utilise WSL 1, qu'Orca ne prend plus en charge. Convertissez-la en WSL 2 dans un terminal Windows avec : {{command}}",
         "notRegistered": "{{distro}} n'est pas une distro WSL installée. Exécutez {{command}} dans un terminal Windows pour voir celles qui sont installées, ou réinstallez-la et réessayez.",
         "sshManaged": "{{distro}} exécute déjà le serveur Orca de « {{server}} », auquel cet ordinateur accède via SSH. Supprimez d'abord ce serveur ; son déplacement vers un hôte WSL n'est pas encore pris en charge."
@@ -21068,7 +21081,8 @@
     "wslHostOffer": {
       "title": "Exécuter {{distro}} comme hôte (recommandé)",
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
-      "accept": "Exécuter comme hôte"
+      "accept": "Exécuter comme hôte",
+      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale."
     }
   },
   "editor": {
@@ -21901,12 +21915,8 @@
       "refreshBeforeEnd": "La terminaison n’est pas disponible avant l’actualisation des PTY.",
       "endUnsupported": "La terminaison n’est pas disponible pour ce terminal. Son hôte ne prend pas en charge les vérifications de sécurité requises. Fermez-le depuis son onglet ou sur son hôte.",
       "checkingTabs": "Vérification des onglets…",
-      "endTitle": "Terminer {{terminal}} ?",
-      "endDescription": "Cette action termine le terminal et ses processus enfants. Du travail non enregistré peut être perdu.",
       "lastProcess": "Dernier processus observé : {{process}}",
-      "cancel": "Annuler",
       "ending": "Arrêt…",
-      "end": "Terminer le terminal",
       "unassigned": "Non attribué",
       "thisComputer": "Cet ordinateur",
       "localOwnedCount_one": "{{count}} PTY Orca sur cet ordinateur",

@@ -1,4 +1,4 @@
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 import { isLaunchConfigClaudeAccountId } from './claude/project-claude-account-preference'
 
 export function buildSleepingAgentLaunchConfig(args: {

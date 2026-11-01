@@ -6,10 +6,10 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../shared/agent-status-child-work-view'
 import {
   AGENT_STATUS_STALE_AFTER_MS,

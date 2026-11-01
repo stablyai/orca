@@ -1,4 +1,4 @@
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -13,7 +13,7 @@ import {
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
 import {
@@ -217,6 +217,9 @@ export const SetOptionParams = z.strictObject({
 })
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const RevealParams = OptionsParams.extend({
+  navigation: z.literal('caller').optional()
+}).strict()
 export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({

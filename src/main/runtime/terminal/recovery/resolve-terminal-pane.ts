@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
 import type {

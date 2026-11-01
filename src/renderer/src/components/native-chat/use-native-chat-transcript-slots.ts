@@ -3,7 +3,7 @@ import {
   nativeChatLiveLine,
   type NativeChatLiveLine
 } from '../../../../shared/native-chat/transcript/native-chat-live-line'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscriptSlots,
   type NativeChatTranscriptSlot,

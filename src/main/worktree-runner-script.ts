@@ -8,6 +8,7 @@ import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync } from './git/runner'
 import { isLocalGitRuntimeRouterInstalled } from './git/command-runner/local-git-runtime-route'
 import { readWorktreeGitPath } from './git/worktree-git-path'
+import { resolveWslWorktreeGitPath } from './git/wsl-worktree-git-path'
 import { knownWslAutomountRoots } from './wsl/wsl-automount-root'
 import { isWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
@@ -30,14 +31,14 @@ function getGitPath(cwd: string, relativePath: string): string {
   }).trim()
 }
 
-export function createSetupRunnerScript(
+export async function createSetupRunnerScript(
   repo: Repo,
   worktreePath: string,
   script: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
   setupShell?: SetupRunnerShell,
   projectStartupPolicy?: SetupAgentStartupPolicy
-): WorktreeSetupLaunch {
+): Promise<WorktreeSetupLaunch> {
   return createWorktreeRunnerScript({
     repo,
     worktreePath,
@@ -52,7 +53,7 @@ export function createSetupRunnerScript(
   })
 }
 
-function createWorktreeRunnerScript(args: {
+async function createWorktreeRunnerScript(args: {
   repo: Repo
   worktreePath: string
   script: string
@@ -60,7 +61,7 @@ function createWorktreeRunnerScript(args: {
   runtimeTarget?: HookRuntimeTarget
   waitForAgentStartup?: boolean
   setupShell?: SetupRunnerShell
-}): WorktreeSetupLaunch {
+}): Promise<WorktreeSetupLaunch> {
   const {
     repo,
     worktreePath,
@@ -88,18 +89,13 @@ function createWorktreeRunnerScript(args: {
   // Linked worktrees have .git files; resolve the per-worktree gitdir through Git.
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
-  // Read the link with the D1c Git router (if WSL Git made the worktree, host Git can't), and always
-  // for a worktree inside a distro: Git there would be a synchronous wsl.exe on the main thread.
-  const inDistro = isWslPath(worktreePath)
-  const fromLink =
-    isLocalGitRuntimeRouterInstalled() || inDistro
+  // Read the link with the D1c Git router (if WSL Git made the worktree, host Git can't). A worktree
+  // inside a distro never runs synchronous Git: that would be a synchronous wsl.exe on the main thread.
+  const fromLink = isWslPath(worktreePath)
+    ? await resolveWslWorktreeGitPath(worktreePath, gitRelPath)
+    : isLocalGitRuntimeRouterInstalled()
       ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
       : null
-  if (!fromLink && inDistro) {
-    throw new Error(
-      `Orca couldn't find this WSL worktree's Git folder to write its setup script. Check that ${worktreePath} is a Git worktree.`
-    )
-  }
   let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.

@@ -5,7 +5,7 @@ import { LegacyQueuedCards } from '../agent-session-journal/journal-queue-import
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { loadTestJournal } from '../agent-session-journal/journal-host-database-test-support'
 import { expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { createAgentSessionCatchUpReader } from './agent-session-history-page'

@@ -1,6 +1,8 @@
 import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
+import type { ScrcpyControlTarget } from './android/scrcpy-stream-session'
 
-// Cache metadata, decoder config, and the current GOP for late subscribers.
+// Cache metadata, decoder config, and the current GOP for late subscribers. The entry also
+// holds the session's control channel so input reaches the server that produces the video.
 
 // Bound high-motion replay caches while retaining their leading keyframe.
 const MAX_GOP_FRAMES = 120
@@ -24,6 +26,7 @@ type RegistryEntry = {
   gop: ScrcpyVideoFrameMessage[]
   subscribers: Set<ScrcpyVideoSubscriber>
   close: () => void
+  control?: ScrcpyControlTarget
 }
 
 class ScrcpyVideoRegistry {
@@ -31,6 +34,17 @@ class ScrcpyVideoRegistry {
 
   register(deviceId: string, close: () => void): void {
     this.entries.set(deviceId, { subscribers: new Set(), gop: [], close })
+  }
+
+  attachControl(deviceId: string, control: ScrcpyControlTarget): void {
+    const entry = this.entries.get(deviceId)
+    if (entry) {
+      entry.control = control
+    }
+  }
+
+  control(deviceId: string): ScrcpyControlTarget | null {
+    return this.entries.get(deviceId)?.control ?? null
   }
 
   pushMeta(deviceId: string, meta: ScrcpyVideoMeta): void {

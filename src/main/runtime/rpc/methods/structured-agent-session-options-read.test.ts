@@ -9,9 +9,9 @@ import { createAgentModelCatalogService } from '../../../native-chat/agent-model
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
 import type { runCodexAppServerSession } from '../../../codex/codex-app-server-session'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   agentModelCatalogFingerprintForRecord,

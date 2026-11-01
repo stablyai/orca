@@ -1,4 +1,4 @@
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isPinnableClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 import type { ClaudeManagedAccountSummary } from '../../../shared/managed-account-types'
 

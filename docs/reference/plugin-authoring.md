@@ -9,13 +9,15 @@ live in the generated references: [manifest](plugin-manifest.md), [catalog](plug
 ## 1. Write
 
 A plugin is a folder (in practice its own Git repository) with `orca-plugin.json` at the root.
-Start from `examples/plugins/orca-gleam-syntax`, which carries the JSON Schema for editor
-completion, or from one of:
+Start from one of these, or scaffold one with `orca plugin create` (see [Validate](#3-validate)).
+Add the `$schema` line from `orca-gleam-syntax` to your manifest for editor completion.
 
-| Example                              | Execution        | Shows                                |
-| ------------------------------------ | ---------------- | ------------------------------------ |
-| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                    |
-| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events |
+| Example                              | Execution        | Shows                                                                        |
+| ------------------------------------ | ---------------- | ---------------------------------------------------------------------------- |
+| `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                                                            |
+| `examples/plugins/hello-tsx`         | `sandboxed-ui`   | A [components](plugin-declarative-ui.md) TSX panel with no build step        |
+| `examples/plugins/hello-components`  | `sandboxed-ui`   | The same kind of [components](plugin-declarative-ui.md) panel, bundled first |
+| `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events                                         |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
@@ -50,7 +52,8 @@ asked to approve:
   through `window.orca` (see [Frames](#frames-windoworca)) and can call only the host methods
   whose surfaces list `panel` or `editor`.
   Orca's colors reach frame CSS as `--orca-background`, `--orca-foreground`, `--orca-primary`
-  and the rest of its panel token set, so they never collide with a frame's own variables.
+  and the rest of its [frame variables](plugin-theme-tokens.md#frame-css-variables), so they never
+  collide with a frame's own variables.
 - `trusted-worker`: `main` runs in a separate Node process and can call every host method its
   `capabilities` allow. There is no global switch for these full-access plugins: each one runs
   only after the user approves it on install. An enterprise policy to block full-access plugins
@@ -65,7 +68,7 @@ Before any plugin code runs, the frame shell defines a frozen `window.orca`. It 
 supported way to talk to Orca; the messages underneath are internal and change without notice.
 
 ```js
-orca.api // { major: 1, minor: 0 }: the host API this Orca implements
+orca.api // { major: 1, minor: 1 }: the host API this Orca implements
 if (orca.host.has('workspace.readContext')) {
   // Synchronous: is the method offered to this surface by this Orca?
   const controller = new AbortController()
@@ -79,17 +82,66 @@ const subscription = orca.on('theme', ({ colorScheme }) => {})
 subscription.dispose()
 ```
 
+Two calls need a click or key press in the frame (they reject with `not_permitted` otherwise)
+and work only in the desktop app (in browser clients `orca.shell` and `orca.files` are undefined and
+`orca.host.has` answers false):
+
+```js
+button.onclick = () => orca.shell.openExternal('https://example.com/docs') // http:, https:, mailto:
+// Orca asks the person before a web host this plugin was not allowed; { opened: false } if they cancel.
+const { status } = await orca.files.saveAs({
+  suggestedName: 'chart.png',
+  mimeType: 'image/png',
+  data: arrayBuffer
+})
+// status is 'saved' or 'cancelled' (the person closed the dialog). The plugin never learns the
+// path, and the file is marked as downloaded so the OS warns before opening it. Any mimeType is
+// accepted; the dialog filters by the suggested name's extension. Executable, script, installer,
+// shortcut and disk-image types (.exe, .js, .sh, .app, .lnk, .iso…) are refused.
+```
+
+`orca.locale` is Orca's UI language as a BCP-47 tag (`navigator.language` follows the
+operating system, not Orca). `<input type="file">` opens the system file picker.
+
 Methods, their surfaces and their errors are in the [host API reference](plugin-host-api.md).
 Aborting the `signal` rejects the call with `cancelled`. Treat an error `code` you do not know as
 `action_failed`. Params are strict: a field the running Orca does not know is refused with
 `invalid_params`, so check `orca.host.has` or `orca.api.minor` before using a newer one.
 
+#### Files and assets
+
+Preview: isolated frames are off by default for now (set `ORCA_PLUGIN_ISOLATED_FRAMES=1` to try
+them); until they ship, desktop frames behave like browser clients below. With them on, in the desktop
+app each plugin's frames run in their own isolated process, storage and origin,
+`orca-plugin-frame://<key>/`, served from your plugin folder. Load scripts, styles, images, fonts,
+WASM and workers by relative URL (`<script src="lib/app.js">`, `new Worker('worker.js')`,
+`WebAssembly.instantiateStreaming(fetch('lib/mod.wasm'))`), and `localStorage` and IndexedDB
+persist per plugin. The network is closed: anything not in your plugin folder, `data:` or
+`blob:` fails to load, whatever your own CSP says, and the frame makes no connections, requests or
+DNS lookups of its own. Links to other pages in your folder navigate the frame; for anything else
+use `orca.shell.openExternal`, which needs a click and, for a web host your plugin has not opened
+before, the person's OK in an Orca prompt that shows the URL (they can always allow that host). A file that is a custom editor's
+`entry` gets the editor API; every other HTML page gets the panel API.
+
+With isolated frames, scripts may be TypeScript or JSX with no build step: `<script type="module"
+src="app.tsx">` loads `app.tsx` transpiled, with its relative imports resolved, as described in
+[No build step](plugin-declarative-ui.md#no-build-step). A panel or custom editor `entry` may itself
+be a `.ts` or `.tsx` module (needs `engines.orca` `>=1.4.246`); Orca then serves a page that loads
+it, with an empty `<div id="root">`. Only components panels get JSX for `orca`; a frame that
+uses JSX must bring its own runtime as relative files.
+
+Browser clients (`orca serve` in a web browser) still load a frame as one sandboxed document
+with an opaque origin and `connect-src 'none'`: inline your scripts and styles, use `data:` URLs
+for images and fonts, and do not rely on storage, workers or WASM loaded by URL there.
+
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
 `orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
-both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it. In
-`agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
-and `done`.
+both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it.
+`orca.log(message)` writes to `orca plugin logs`. `orca.grantedCapabilities` is the frozen list of
+capability kinds the user approved (such as `['storage:own']`), fixed when the worker starts; the
+host still checks each call. In `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
+and `done`. Every event's payload is in the [host API reference](plugin-host-api.md#events).
 
 ### Custom editors
 
@@ -154,7 +206,31 @@ Theme, syntax and translation edits show up as you save. Panels and workers are 
 their files in development, so saving does not ask for approval again; adding a capability or
 moving to a higher execution profile does. Shortcuts and recipes are tied to their files, so
 each change to them is reviewed again. Use **Restart** on the plugin row after changing a
-worker, and the plugin's logs to see what it printed.
+worker, and the plugin's logs to see what it printed. `orca plugin dev reload [<dir>]` reloads
+now, for a change the watcher missed (network or WSL folders) or after changing commands or
+shortcuts, which need a new approval (`--approve <fingerprint>`).
+
+For TypeScript, run `orca plugin types <dir>` once (or let `orca plugin dev load` do it): it
+writes Orca's typings and a tsconfig to extend into `.orca/types/`, which ignores itself in Git.
+They cover every surface: the components `orca` module, the global `orca` (`window.orca`) of
+panels and custom editors, and `import type { OrcaWorkerApi } from 'orca/worker'` for a worker's
+`activate(orca)` (in JavaScript, `/** @param {import('orca/worker').OrcaWorkerApi} orca */`).
+`orca.host.call` checks each method's params and result, and only offers the methods your
+surface may call; `orca.events.on` types each [event payload](plugin-host-api.md#events).
+Development folders skip their top-level `.orca/` and `node_modules/` (they never count toward the
+size limits below there, and editing them never re-reviews the plugin or remounts its frames); an install still
+hashes every file it copies, so do not commit them.
+
+A plugin folder holds at most 2,000 files and 50 MiB in total. A panel or custom editor `entry`
+is at most 10 MiB, and each `.ts`, `.tsx`, `.mts` or `.jsx` file Orca transpiles at most 1 MiB;
+bundle or split anything larger.
+
+In the desktop app, a panel's or custom editor's `console.error` and `console.warn`, uncaught
+exceptions and unhandled rejections (and a components panel's render or mount errors) also land
+in `orca plugin logs`, as `[frame] <file>:<line> <message>` with the path relative to the plugin
+folder and stack traces shortened the same way. At most 20 such lines per plugin every 10 s are
+kept; past that one notice is logged and the rest are dropped. `orca plugin dev inspect
+<publisher.id>` opens DevTools for each of the plugin's open frames.
 
 ## 3. Validate
 
@@ -164,15 +240,22 @@ pnpm validate:plugin path/to/plugin
 orca plugin validate path/to/plugin
 ```
 
-`orca plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel>`
+`orca plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel|components>`
 scaffolds a plugin that passes these checks, and `orca plugin inspect <dir>` shows what it would be
 allowed to do and its content hash.
 
 This runs the manifest checks Orca runs, strictly: unknown keys, limits, contributions beyond the
-execution profile, and an `engines.orca` too low for the fields used. On a catalog it also
+execution profile, an `engines.orca` too low for the fields used, and that every file the
+manifest names (icon, panel and editor entries, themes, syntaxes, translations, templates)
+exists inside the plugin and fits its size limit. On a catalog it also
 checks that listed images exist and fit. It warns when the manifest still declares the deprecated
 `publisher`, and, in a Git repository, when that value is not the owner of the `origin` remote.
 Warnings do not fail the check. Run it in CI for the plugin and catalog repositories.
+
+The two report failure with different exit codes. `pnpm validate:plugin` exits `0` when every
+file is valid, `1` when any is invalid or missing, and `2` when no path is given.
+`orca plugin` commands exit `0` ok, `1` error (such as a missing path), `2` the plugin is
+invalid (`plugin_invalid`), and `3` approval is needed.
 
 ## 4. List it in the Orca plugin directory
 
@@ -190,10 +273,13 @@ each release to an exact commit and file hash, so Orca refuses bytes the catalog
 for. Plugins in Orca's official and community catalogs must follow the
 [plugin listing policy](plugin-listing-policy.md), starting with being free to install and use.
 
-1. Commit the plugin and run `pnpm validate:plugin` on its directory. It prints the
+1. Commit the plugin and run `orca plugin release-entry .` in its directory (or
+   `pnpm validate:plugin path/to/plugin` from an Orca checkout). It prints the
    release entry for `HEAD`: version, full commit SHA, `contentHash`, execution profile, minimum
-   Orca, contribution summary, capabilities and file types. Every field must match
-   what Orca finds at install, so paste it rather than writing it by hand.
+   Orca, contribution summary, capabilities and file types, plus the `source.path` when the plugin
+   is a subdirectory of its repository. Every field must match
+   what Orca finds at install, so paste it rather than writing it by hand. Uncommitted changes are
+   not part of the entry.
 2. Add or update the plugin's entry in the catalog's `orca-catalog.json`, newest release first:
 
    ```json
@@ -270,8 +356,8 @@ listed as experimental may change. These parts are stable and change only additi
 
 - manifest format 2, capability names and execution profiles;
 - host API 1 (`"pluginApi": 1`): method names, params, results, surfaces and error codes;
-- the frame API `window.orca` (`api`, `host.call`, `host.has`, `on`, and `document` in custom
-  editors) and the document `version`/`content` shape;
+- the frame API `window.orca` (`api`, `host.call`, `host.has`, `on`, `shell.openExternal`,
+  `files.saveAs`, and `document` in custom editors) and the document `version`/`content` shape;
 - theme token names, and theme ids once published (users' settings store them);
 - catalog format 2 (`orca-catalog.json`).
 
@@ -285,8 +371,8 @@ Experimental; these may still change without a new format:
   and workers may be stopped at any time;
 - language-pack keys, which change when Orca's source moves or its English copy changes; packs
   get best-effort coverage per release;
-- `pnpm validate:plugin` output; only its exit codes (`0` valid, `1` invalid, `2` usage) are
-  stable;
+- `pnpm validate:plugin` output; only its exit codes (`0` valid, `1` invalid, `2` usage, see
+  [Validate](#3-validate)) are stable;
 - `settings:own`, which stores untyped values until plugins can declare settings;
 - manifest format 1, which is deprecated. Catalogs need format 2.
 

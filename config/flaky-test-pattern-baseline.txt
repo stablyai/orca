@@ -39,7 +39,6 @@
 1 test-no-in-test-import-actual:src/main/runtime/mobile-pairing-userdata-path.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/orca-runtime-files-mobile-explorer-reads.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/orca-runtime-files-terminal-artifact-swap-detection.test.ts
-1 test-no-in-test-import-actual:src/main/runtime/structured-agent-cli-writers.test.ts
 1 test-no-in-test-import-actual:src/main/speech/openai-api-key-store.test.ts
 5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
@@ -347,7 +346,6 @@
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-polling.test.ts
 6 test-no-real-time-wait:src/main/ipc/worktree-git-common-watch.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktree-git-status-attribution-real-git.test.ts
-1 test-no-real-time-wait:src/main/ipc/worktree-head-identity-reader-concurrency.test.ts
 2 test-no-real-time-wait:src/main/ipc/worktrees-background-removal.test.ts
 1 test-no-real-time-wait:src/main/ipc/worktrees-detected-scan-cache.test.ts
 1 test-no-real-time-wait:src/main/local-worktree-removal-recovery-live.test.ts
@@ -454,7 +452,6 @@
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev-web.test.ts
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev.test.ts
 2 test-no-real-time-wait:src/main/startup/windows-install-dir-acl-recovery.test.ts
-1 test-no-real-time-wait:src/main/startup/windows-install-dir-package-acl-repair.test.ts
 2 test-no-real-time-wait:src/main/terminal-history-fish-session.node-pty.test.ts
 2 test-no-real-time-wait:src/main/terminal-history-tombstone-scan-cost.test.ts
 1 test-no-real-time-wait:src/main/updater.quit-and-install.test.ts
@@ -541,7 +538,7 @@
 1 test-no-real-time-wait:src/wsl-guest/agent-hook-canonical-status.test.ts
 6 test-no-real-time-wait:src/wsl-guest/agent-hook-server.test.ts
 1 test-no-real-time-wait:tests/e2e/accumulated-workspace-status-fixture.ts
-2 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
+1 test-no-real-time-wait:tests/e2e/agent-session-live-force-exit-resume.spec.ts
 3 test-no-real-time-wait:tests/e2e/agent-session-log-tail-stability.spec.ts
 1 test-no-real-time-wait:tests/e2e/artificial-opencode-pane-interactions.ts
 1 test-no-real-time-wait:tests/e2e/artificial-opencode-revisit-pressure-scenario.ts
@@ -580,13 +577,13 @@
 4 test-no-real-time-wait:tests/e2e/helpers/computer-driver.ts
 1 test-no-real-time-wait:tests/e2e/helpers/daemon-generation-processes.ts
 1 test-no-real-time-wait:tests/e2e/helpers/electron-main-evaluate-retry.ts
-2 test-no-real-time-wait:tests/e2e/helpers/electron-process-shutdown.ts
+1 test-no-real-time-wait:tests/e2e/helpers/electron-process-shutdown.ts
 1 test-no-real-time-wait:tests/e2e/helpers/headless-layout-oracle-hosts.ts
 1 test-no-real-time-wait:tests/e2e/helpers/hold-window-graph-publication.ts
 2 test-no-real-time-wait:tests/e2e/helpers/layout-compat-baseline.ts
 2 test-no-real-time-wait:tests/e2e/helpers/legacy-relay-docker-host.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orca-app.ts
-2 test-no-real-time-wait:tests/e2e/helpers/orca-restart.ts
+1 test-no-real-time-wait:tests/e2e/helpers/orca-restart.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orca-serve-cli-host.ts
 1 test-no-real-time-wait:tests/e2e/helpers/orcad-convert-flow.ts
 1 test-no-real-time-wait:tests/e2e/helpers/packaged-old-orca.ts
@@ -632,7 +629,6 @@
 2 test-no-real-time-wait:tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts
 1 test-no-real-time-wait:tests/e2e/pdf-find-counter.spec.ts
 1 test-no-real-time-wait:tests/e2e/pdf-viewer-rebuild-recovery.spec.ts
-1 test-no-real-time-wait:tests/e2e/persisted-session-production-upgrade.spec.ts
 1 test-no-real-time-wait:tests/e2e/project-group-manual-sort.spec.ts
 2 test-no-real-time-wait:tests/e2e/relaunch-first-terminal.spec.ts
 4 test-no-real-time-wait:tests/e2e/relaunch-sleeping-agents-resume-on-view.spec.ts
@@ -833,12 +829,12 @@
 1 test-no-wall-clock:src/main/fish-history-session.test.ts
 2 test-no-wall-clock:src/main/git/command-runner/git-command-resolution-windows-checkout.test.ts
 1 test-no-wall-clock:src/main/git/command-runner/git-command-timeout-behavior.test.ts
-5 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
+4 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
 1 test-no-wall-clock:src/main/git/pack-refs-lock-ownership.test.ts
 2 test-no-wall-clock:src/main/git/repo-ref-maintenance-real-git.test.ts
 2 test-no-wall-clock:src/main/git/runner-gh-account-binding.test.ts
 6 test-no-wall-clock:src/main/git/runner-gh-rate-limit-breaker.test.ts
-4 test-no-wall-clock:src/main/git/settled-diff-cache-bounds.test.ts
+2 test-no-wall-clock:src/main/git/settled-diff-cache-bounds.test.ts
 1 test-no-wall-clock:src/main/git/source-control/blob-absence-real-git.test.ts
 2 test-no-wall-clock:src/main/git/status-diff-settled-cache.test.ts
 1 test-no-wall-clock:src/main/git/status-upstream-negative-cache.test.ts
@@ -990,9 +986,9 @@
 1 test-no-wall-clock:src/main/runtime/rpc/methods/pairing.test.ts
 1 test-no-wall-clock:src/main/runtime/runtime-agent-row-main-agent-projection.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-client-agent-launch-settings-durability.test.ts
-10 test-no-wall-clock:src/main/runtime/runtime-hook-agent-row-selection.test.ts
+9 test-no-wall-clock:src/main/runtime/runtime-hook-agent-row-selection.test.ts
 9 test-no-wall-clock:src/main/runtime/runtime-mobile-agent-status-builder.test.ts
-5 test-no-wall-clock:src/main/runtime/runtime-mobile-codex-side-title.test.ts
+3 test-no-wall-clock:src/main/runtime/runtime-mobile-codex-side-title.test.ts
 6 test-no-wall-clock:src/main/runtime/runtime-rpc-pairing-mode-persistence.test.ts
 11 test-no-wall-clock:src/main/runtime/runtime-rpc-relay-pairing.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-rpc-websocket-bind-host.test.ts
@@ -1047,7 +1043,6 @@
 13 test-no-wall-clock:src/main/startup/windows-install-dir-acl-recovery.test.ts
 2 test-no-wall-clock:src/main/terminal-history-fish-session.node-pty.test.ts
 2 test-no-wall-clock:src/main/terminal-history-gc-fs-call-count.test.ts
-2 test-no-wall-clock:src/main/updater-sqlite-profile-downgrade.test.ts
 4 test-no-wall-clock:src/main/updater/serve-supervisor-install-park.test.ts
 4 test-no-wall-clock:src/main/windows-live-tree-kill.win32.test.ts
 2 test-no-wall-clock:src/main/windows/windows-host-job.win32.test.ts
@@ -1096,7 +1091,6 @@
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/tab-bar/cli-chat-resume-run.test.ts
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/open-tab-search.test.ts
 4 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 1 test-no-wall-clock:src/renderer/src/components/task-page-jira-saved-filter-load-failure.test.tsx
@@ -1163,7 +1157,6 @@
 2 test-no-wall-clock:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-wall-clock:src/shared/git-binary-compatibility.test.ts
 1 test-no-wall-clock:src/shared/mobile-push-contract.test.ts
-1 test-no-wall-clock:src/shared/plugins/catalog/plugin-kill-list.test.ts
 2 test-no-wall-clock:src/shared/pty-reply-echo-shapes.node-pty.test.ts
 4 test-no-wall-clock:src/shared/sidebar-list/smart-sort.test.ts
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
@@ -1331,7 +1324,6 @@
 2 test-timeout-needs-reason:src/main/ssh/system-transport/system-ssh-forward-process-real-openssh.test.ts
 3 test-timeout-needs-reason:src/main/startup/single-instance-lock-exit.electron.test.ts
 1 test-timeout-needs-reason:src/main/usage/usage-scan-worker-event-loop.test.ts
-1 test-timeout-needs-reason:src/main/window/clipboard-remote-file-cleanup.bench.test.ts
 1 test-timeout-needs-reason:src/main/window/renderer-publication-throttle.electron.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-administrator-restart.win32.test.ts
 1 test-timeout-needs-reason:src/main/windows/windows-host-job.win32.test.ts

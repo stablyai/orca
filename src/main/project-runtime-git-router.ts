@@ -22,7 +22,7 @@ import {
   type LocalGitRuntimeRouter
 } from './git/command-runner/local-git-runtime-route'
 import { isWslDistroRunningForBackgroundWork } from './wsl-background-distro-gate'
-import { wslHostsGateOpen, wslHostsOptedIn } from './wsl/wsl-host-gate'
+import { onWslHostsNewWorkChanged, wslHostsGateOpen, wslHostsOptedIn } from './wsl/wsl-host-gate'
 import {
   followWslAutomountRoots,
   knownWslAutomountRoots,
@@ -283,6 +283,8 @@ export function installProjectRuntimeGitRouter(
     setBackgroundWslGitGate(optedIn() ? isWslDistroRunningForBackgroundWork : null)
   }
   applyOptIn()
+  // A block learned this run uninstalls both at once, as turning the setting off does.
+  onWslHostsNewWorkChanged(applyOptIn)
   // Synchronous with the write, so no Git call can run between a change and the table's drop.
   store.onStateWritten((domains) => {
     if (!domains || domains.some((domain) => ROUTE_DOMAINS.has(domain))) {

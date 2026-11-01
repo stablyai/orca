@@ -1,6 +1,6 @@
 // Additive tombstone fields keep Stop/Resume/reopen marks compatible with older row-kind readers.
 
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import { journalRowBase } from './journal-row-builders'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'

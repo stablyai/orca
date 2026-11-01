@@ -1,4 +1,4 @@
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_SESSION_CLAUDE_ACCOUNT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { isLaunchConfigClaudeAccountId } from '../../../shared/claude/project-claude-account-preference'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'

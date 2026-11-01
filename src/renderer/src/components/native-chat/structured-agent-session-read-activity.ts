@@ -1,5 +1,5 @@
-import { structuredAgentSessionSettledSends } from '../../../../shared/structured-agent-session-send-settlement'
-import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
+import { structuredAgentSessionSettledSends } from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner-contract'
 

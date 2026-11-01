@@ -25,8 +25,8 @@ export type WorkerFollowUp = {
   reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
   acceptedBy?: { callerFingerprint: string; requestId: string }
-  /** Unread mail this follow-up carries as its Task. */
-  consumesMessageIds?: readonly string[]
+  /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
+  takesMailOf?: string
   /** Appended to the Task when a reopen falls back to a fresh agent. */
   earlierWork?: string
 }

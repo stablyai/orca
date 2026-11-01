@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   isPersistedAgentSessionRecord,
   type AgentSessionRecord
-} from '../../shared/agent-session-record'
-import { encodePersistedAgentSessionProviderHandleChain } from '../../shared/agent-session-provider-handle'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import { encodePersistedAgentSessionProviderHandleChain } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 
 const NOW = 9_000

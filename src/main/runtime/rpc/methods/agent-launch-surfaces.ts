@@ -4,7 +4,7 @@ import { terminalImageViewerSupported } from '../../terminal-image-viewer-env'
 
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,

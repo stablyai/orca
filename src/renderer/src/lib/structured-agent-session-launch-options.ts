@@ -12,7 +12,7 @@ import type {
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
@@ -20,7 +20,7 @@ import type {
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../shared/structured-agent-session-mutation'
+} from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -34,7 +34,7 @@ import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
-} from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 

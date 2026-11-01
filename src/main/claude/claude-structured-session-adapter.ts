@@ -32,7 +32,7 @@ import {
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
 import { drainClaudeChildWork } from './claude-child-work-evidence'
 import { emitClaudeStructuredSessionEvent } from './claude-structured-event-delivery'
 import {

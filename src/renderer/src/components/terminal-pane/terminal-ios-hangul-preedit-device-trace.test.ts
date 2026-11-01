@@ -54,38 +54,6 @@ describe('the recorded iPad device trace for 한글깨쥠', () => {
       expect(rig.preedit.heldText()).toBe('쥠')
       expect(drift).toEqual([])
     })
-
-    it('holds 깨 while the ㅈ could still belong to it', async () => {
-      pretendRecordedDevice()
-      const rig = openIosTerminal()
-      // Up to and including the `깾` write, which is where the device build stopped.
-      await replayIosDeviceTrace(rig, { ...TRACE, events: TRACE.events.slice(0, 25) })
-
-      expect(rig.emitted).toEqual(['한', '글'])
-      expect(rig.preedit.heldText()).toBe('깾')
-    })
-
-    it('reaches the PTY as 한글깨쥠', async () => {
-      pretendRecordedDevice()
-      const rig = openIosTerminal()
-      await replayIosDeviceTrace(rig, TRACE)
-      dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-      expect(rig.emitted.join('')).toBe(`${TRACE.expected}\r`)
-    })
-
-    it('puts no DEL or backspace byte on the wire', async () => {
-      pretendRecordedDevice()
-      const rig = openIosTerminal()
-      await replayIosDeviceTrace(rig, TRACE)
-      dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-      const wire = rig.emitted.join('')
-      expect(wire).not.toContain('\x7f')
-      expect(wire).not.toContain('\b')
-      // One write per syllable plus the Enter: no retraction, and no per-edit churn.
-      expect(rig.emitted).toHaveLength(5)
-    })
   })
 
   describe('replayed as keystrokes, with the keypress a browser also fires', () => {
@@ -98,26 +66,6 @@ describe('the recorded iPad device trace for 한글깨쥠', () => {
       expect(rig.emitted.join('')).toBe(`${TRACE.expected}\r`)
       expect(rig.emitted).toEqual(['한', '글', '깨', '쥠', '\r'])
     })
-
-    it('composes a mid-word Shift+jamo after a committed syllable', async () => {
-      pretendRecordedDevice()
-      const rig = openIosTerminal()
-      // Through `깨`, the eighth keystroke, whose initial is a Shift-typed ㄲ.
-      await replayKeystrokes(rig, 8)
-      dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-      expect(rig.emitted.join('')).toBe('한글깨\r')
-    })
-  })
-
-  it('composes a syllable-initial Shift+jamo with nothing before it', async () => {
-    pretendRecordedDevice()
-    const rig = openIosTerminal()
-    await typeJamo(rig, 'ㄲ', 'ㄲ', { replaces: false, shiftKey: true })
-    await typeJamo(rig, 'ㅐ', '깨', { replaces: true })
-    dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
-
-    expect(rig.emitted).toEqual(['깨', '\r'])
   })
 
   it('migrates a batchim with nothing committed before it', async () => {

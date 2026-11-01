@@ -114,3 +114,109 @@ describe('plugin approval over RPC', () => {
     )
   })
 })
+
+describe('plugin system switch over RPC', () => {
+  it('is host-admin and turns the system on without approving anything', async () => {
+    const applyConsent = vi.fn()
+    const setPluginSystemEnabled = vi.fn()
+    const refresh = vi.fn().mockResolvedValue(undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch handler only waits, refreshes and lists.
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      refresh
+    } as unknown as PluginService
+    setPluginServiceForRpc(service, {
+      applyConsent,
+      applyEnablement: vi.fn(),
+      setPluginSystemEnabled
+    })
+    const switchMethod = method('plugins.setSystemEnabled')
+
+    expect(switchMethod.permission).toBe('host-admin')
+    const context: RpcContext = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+      runtime: {} as RpcContext['runtime'],
+      caller: { kind: 'local-cli' }
+    }
+    await expect(switchMethod.handler({ enabled: true }, context)).resolves.toEqual({
+      enabled: true,
+      plugins: []
+    })
+    expect(setPluginSystemEnabled).toHaveBeenCalledWith(true)
+    expect(refresh).toHaveBeenCalledAfter(setPluginSystemEnabled)
+    expect(applyConsent).not.toHaveBeenCalled()
+  })
+})
+
+describe('plugins.devInspect', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: devInspect reads only whenReady.
+  const service = { whenReady: vi.fn().mockResolvedValue(undefined) } as unknown as PluginService
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  it('opens DevTools through the desktop hook and reports the count', async () => {
+    const openFrameDevTools = vi.fn().mockReturnValue(2)
+    setPluginServiceForRpc(service, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn(),
+      openFrameDevTools
+    })
+    await expect(
+      method('plugins.devInspect').handler({ pluginKey: 'acme.notes' }, context)
+    ).resolves.toEqual({ pluginKey: 'acme.notes', opened: 2 })
+    expect(openFrameDevTools).toHaveBeenCalledWith('acme.notes')
+  })
+
+  it('fails on a host without guest frames', async () => {
+    setPluginServiceForRpc(service, { applyConsent: vi.fn(), applyEnablement: vi.fn() })
+    await expect(
+      method('plugins.devInspect').handler({ pluginKey: 'acme.notes' }, context)
+    ).rejects.toThrow(/desktop app/)
+  })
+})
+
+describe('plugins.restart', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+  const context: RpcContext = {
+    runtime: {} as RpcContext['runtime'],
+    caller: { kind: 'local-cli' }
+  }
+
+  function setup(manifest: { main?: string }) {
+    const deactivatePlugin = vi.fn().mockResolvedValue(undefined)
+    const stub = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      findValidPlugin: (key: string) =>
+        key === 'acme.notes' ? { pluginKey: key, manifest } : null,
+      deactivatePlugin
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restart reads only the members stubbed above.
+    setPluginServiceForRpc(stub as unknown as PluginService, {
+      applyConsent: vi.fn(),
+      applyEnablement: vi.fn()
+    })
+    return deactivatePlugin
+  }
+
+  it('stops the worker without touching enablement or approval', async () => {
+    const deactivatePlugin = setup({ main: 'main.mjs' })
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.notes' }, context)
+    ).resolves.toEqual({ pluginKey: 'acme.notes', plugin: null })
+    expect(deactivatePlugin).toHaveBeenCalledWith('acme.notes')
+  })
+
+  it('refuses unknown plugins and plugins without a worker', async () => {
+    const deactivatePlugin = setup({})
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.notes' }, context)
+    ).rejects.toThrow(/no worker/)
+    await expect(
+      method('plugins.restart').handler({ pluginKey: 'acme.other' }, context)
+    ).rejects.toThrow(/not installed/)
+    expect(deactivatePlugin).not.toHaveBeenCalled()
+  })
+})

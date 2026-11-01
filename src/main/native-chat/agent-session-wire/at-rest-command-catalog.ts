@@ -1,10 +1,10 @@
 import { AtRestCommandDemand } from './at-rest-command-demand'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import {
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session-record-launch-directory'
 import type {
   AtRestCommandChange,

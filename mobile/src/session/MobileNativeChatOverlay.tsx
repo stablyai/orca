@@ -16,7 +16,7 @@ import {
   useMobileNativeChatReplyReveals
 } from './native-chat/transcript/mobile-native-chat-reply-reveals'
 import { MobileNativeChatRowOverlaysHost } from './native-chat/transcript/MobileNativeChatRowOverlaysHost'
-import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat-agent-support'
+import { nativeChatAskRequiresTerminal } from '../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './native-chat/visual/mobile-native-chat-image-preview'

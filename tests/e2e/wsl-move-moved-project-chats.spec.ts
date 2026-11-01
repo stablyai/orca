@@ -24,7 +24,7 @@ import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../src/shared/agent-session-record.test-fixture'
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 test.use({ seedTestRepo: false })
 
