@@ -1,6 +1,4 @@
 import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import type { Page } from '@stablyai/playwright-test'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -17,28 +15,6 @@ import {
 
 // #36804: a click on a target=_blank link in a streamed server page opens a new Orca tab.
 
-async function callEnvironment<TResult>(
-  page: Page,
-  environmentId: string,
-  method: string,
-  params: unknown
-): Promise<TResult> {
-  return page.evaluate(
-    async ({ environmentId, method, params }) => {
-      const response = await window.api.runtimeEnvironments.call({
-        selector: environmentId,
-        method,
-        params
-      })
-      if (!response.ok) {
-        throw new Error(`${response.error.code}: ${response.error.message}`)
-      }
-      return response.result
-    },
-    { environmentId, method, params }
-  ) as Promise<TResult>
-}
-
 async function startLinkServer(): Promise<{ server: Server; origin: string }> {
   const server = createServer((request, response) => {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
@@ -52,7 +28,11 @@ async function startLinkServer(): Promise<{ server: Server; origin: string }> {
       <a id="blank-link" href="/destination" target="_blank">Open destination</a>`)
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return { server, origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('link server has no port')
+  }
+  return { server, origin: `http://127.0.0.1:${address.port}` }
 }
 
 test('a target=_blank click in a streamed server page opens a new Orca tab', async ({
@@ -81,78 +61,68 @@ test('a target=_blank click in a streamed server page opens a new Orca tab', asy
       throw new Error('paired client did not receive the host worktree')
     }
 
-    const created = await callEnvironment<{ browserPageId: string }>(
-      page,
-      environmentId,
-      'browser.tabCreate',
-      { worktree: `id:${worktreeId}`, url: `${origin}/`, activate: true }
-    )
+    // Server-side calls carry no paired client, like an agent driving the page.
+    const worktree = `id:${worktreeId}`
+    const created = (
+      await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
+        worktree,
+        url: `${origin}/`
+      })
+    ).result
     const sourceTab = await focusMaterializedRemoteBrowserPane(page, {
       environmentId,
       remotePageId: created.browserPageId,
       worktreeId
     })
     const remoteFrame = page.getByTestId('remote-browser-frame').first()
+    const addressBar = page.locator('[data-orca-browser-address-bar="true"]:visible')
     await expect(remoteFrame).toBeVisible({ timeout: 60_000 })
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            (id) =>
-              Object.values(window.__store?.getState().browserTabsByWorktree[id] ?? {}).some(
-                (tab) => tab.title === 'Link source'
-              ),
-            worktreeId
-          ),
-        { timeout: 60_000 }
-      )
-      .toBe(true)
+    await expect(addressBar).toHaveValue(`${origin}/`, { timeout: 60_000 })
 
-    type TabList = { tabs: { browserPageId: string; url: string }[] }
     const listPages = async (): Promise<string[]> =>
       (
-        await callEnvironment<TabList>(page, environmentId, 'browser.tabList', {
-          worktree: `id:${worktreeId}`
+        await host.client.call<{ tabs: { browserPageId: string }[] }>('browser.tabList', {
+          worktree
         })
-      ).tabs.map((tab) => tab.browserPageId)
-    const waitForOpenedPage = async (before: string[]): Promise<string> => {
+      ).result.tabs.map((tab) => tab.browserPageId)
+    const waitForOpenedTab = async (before: string[]): Promise<string> => {
       await expect
         .poll(async () => (await listPages()).length, {
           timeout: 30_000,
           message: 'the server never opened the link as a tab'
         })
         .toBe(before.length + 1)
-      return (await listPages()).find((id) => !before.includes(id))!
+      const remotePageId = (await listPages()).find((id) => !before.includes(id))!
+      return (
+        await waitForMaterializedRemoteBrowserPane(page, {
+          environmentId,
+          remotePageId,
+          worktreeId
+        })
+      ).tabId
     }
-    const activeTabId = (): Promise<string | null> =>
-      page.evaluate(
-        (id) => window.__store?.getState().activeBrowserTabIdByWorktree[id] ?? null,
-        worktreeId
-      )
 
     // A scripted click names no client, so the tab opens without moving anyone's view.
     let before = await listPages()
-    await callEnvironment(page, environmentId, 'browser.eval', {
-      worktree: `id:${worktreeId}`,
+    await host.client.call('browser.eval', {
+      worktree,
       page: created.browserPageId,
       expression: "document.getElementById('blank-link').click()"
     })
-    await waitForMaterializedRemoteBrowserPane(page, {
-      environmentId,
-      remotePageId: await waitForOpenedPage(before),
-      worktreeId
-    })
-    expect(await activeTabId()).toBe(sourceTab.tabId)
+    await waitForOpenedTab(before)
+    await expect(addressBar).toHaveValue(`${origin}/`)
+    expect(
+      await page.evaluate(
+        (id) => window.__store?.getState().activeBrowserTabIdByWorktree[id] ?? null,
+        worktreeId
+      )
+    ).toBe(sourceTab.tabId)
 
     // The client that clicks gets the new tab in front, as a local page would.
     before = await listPages()
     await remoteFrame.click()
-    const clicked = await waitForMaterializedRemoteBrowserPane(page, {
-      environmentId,
-      remotePageId: await waitForOpenedPage(before),
-      worktreeId
-    })
-    await expect.poll(activeTabId).toBe(clicked.tabId)
+    await waitForOpenedTab(before)
+    await expect(addressBar).toHaveValue(`${origin}/destination`)
     await page.screenshot({ path: testInfo.outputPath('blank-link-opened.png') })
   } finally {
     await client?.dispose()
