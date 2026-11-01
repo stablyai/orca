@@ -1,11 +1,14 @@
 import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { CodexRateLimitHomeResolution } from '../codex-accounts/runtime-home-service-types'
-import { listWslDistrosAsync } from '../wsl'
 import { isWslDistroRunning } from '../wsl-background-distro-gate'
+import { resolveWslDefaultDistro } from '../wsl/wsl-default-distro'
 
 type CodexRateLimitHomeSource = {
-  prepareForRateLimitFetch: (target?: CodexAccountSelectionTarget) => CodexRateLimitHomeResolution
+  prepareForRateLimitFetch: (
+    target?: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ) => CodexRateLimitHomeResolution
 }
 
 type WslHomeGateDeps = {
@@ -14,13 +17,18 @@ type WslHomeGateDeps = {
 }
 
 const defaultDeps: WslHomeGateDeps = {
-  defaultDistro: async () => (await listWslDistrosAsync())[0] ?? null,
+  // The exec gate's default (registry, then `--list`), so a set-default can't split them.
+  defaultDistro: async () => {
+    const distro = await resolveWslDefaultDistro()
+    return typeof distro === 'string' ? distro : null
+  },
   isRunning: (distro) => isWslDistroRunning(distro)
 }
 
 /**
  * A background quota poll never starts a stopped distro (E9). The distro is resolved once, gated,
- * then pinned for the home lookup, so the probe can't run in a different distro than the one read.
+ * then pinned for paths and probes, so the probe can't run in a distro it didn't read; the account
+ * is still looked up in the target's own lane (the default lane stays the default lane).
  */
 export async function resolveCodexRateLimitHomeUnlessStopped(
   source: CodexRateLimitHomeSource,
@@ -37,7 +45,7 @@ export async function resolveCodexRateLimitHomeUnlessStopped(
   if (!distro || !(await deps.isRunning(distro))) {
     return { kind: 'skip' }
   }
-  const resolution = source.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: distro })
+  const resolution = source.prepareForRateLimitFetch(target, distro)
   const home = resolution.kind === 'ready' && resolution.codexHomePath
   const homeDistro = home ? parseWslUncPath(home)?.distro : undefined
   // A home in another distro would boot that one: it was never read.

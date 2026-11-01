@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
 import type { CodexRateLimitHomeResolution } from '../codex-accounts/runtime-home-service-types'
 
-vi.mock('../wsl', () => ({ listWslDistrosAsync: vi.fn(async () => []) }))
+vi.mock('../wsl/wsl-default-distro', () => ({ resolveWslDefaultDistro: vi.fn(async () => null) }))
 
 const { resolveCodexRateLimitHomeUnlessStopped } = await import('./codex-rate-limit-wsl-home-gate')
 
@@ -11,9 +11,12 @@ const homeIn = (distro: string): string => `\\\\wsl.localhost\\${distro}\\home\\
 
 function harness(running: string[], home: (target?: CodexAccountSelectionTarget) => string | null) {
   const prepareForRateLimitFetch = vi.fn(
-    (target?: CodexAccountSelectionTarget): CodexRateLimitHomeResolution => ({
+    (
+      target?: CodexAccountSelectionTarget,
+      pinnedWslDistro?: string
+    ): CodexRateLimitHomeResolution => ({
       kind: 'ready',
-      codexHomePath: home(target)
+      codexHomePath: home(pinnedWslDistro ? { runtime: 'wsl', wslDistro: pinnedWslDistro } : target)
     })
   )
   const deps = {
@@ -58,10 +61,8 @@ describe('Codex quota poll home for a WSL account (E9)', () => {
       h.deps
     )
 
-    expect(h.prepareForRateLimitFetch).toHaveBeenCalledExactlyOnceWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu'
-    })
+    // The account lane stays the default lane; only paths and probes are pinned.
+    expect(h.prepareForRateLimitFetch).toHaveBeenCalledExactlyOnceWith({ runtime: 'wsl' }, 'Ubuntu')
     expect(resolution).toEqual({ kind: 'ready', codexHomePath: homeIn('Ubuntu') })
   })
 
