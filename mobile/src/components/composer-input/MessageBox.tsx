@@ -97,8 +97,9 @@ export function MessageBox({
             inputOverlay !== undefined && styles.hiddenText
           ]}
           {...inputProps}
-          onFocus={focus.onFocus}
-          onBlur={focus.onBlur}
+          // Only a bare box draws a ring, so only it re-renders on focus.
+          onFocus={hasActions ? onFocus : focus.onFocus}
+          onBlur={hasActions ? onBlur : focus.onBlur}
         />
         {inputOverlay}
       </View>

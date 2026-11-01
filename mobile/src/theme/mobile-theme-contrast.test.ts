@@ -41,8 +41,14 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
 
   // WCAG 1.4.11: the edge is what marks a field, so it holds 3:1 on every surface fields sit on, and so does focus.
   it('keeps a text field identifiable on the screen, a sheet and a sheet group', () => {
-    const surfaces = [colors.bgBase, colors.bgPanel, colors.sheetSurface, colors.sheetGroup]
-    for (const surface of [...surfaces, colors.composerSurface]) {
+    const surfaces = [
+      colors.bgBase,
+      colors.bgPanel,
+      colors.sheetSurface,
+      colors.sheetGroup,
+      colors.composerSurface
+    ]
+    for (const surface of surfaces) {
       expect(contrastRatio(colors.inputBorder, surface)).toBeGreaterThanOrEqual(3)
       expect(contrastRatio(colors.accentBlue, surface)).toBeGreaterThanOrEqual(3)
     }
