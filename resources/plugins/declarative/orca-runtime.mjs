@@ -594,6 +594,7 @@ function createOrcaDeclarativeRuntime(options) {
     subscriptions = next;
   }
   function report(error) {
+    console.error(error instanceof Error && error.stack ? error.stack : String(error));
     post(PLUGIN_DECLARATIVE_MESSAGES.error, { document: document2, revision, message: errorMessage(error) });
   }
   function retain(at, callbacks) {

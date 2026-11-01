@@ -72,3 +72,30 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--git-decoration-untracked` | Untracked files | no | Orca's built-in color |
 | `--git-decoration-copied` | Copied files | no | Orca's built-in color |
 | `--git-decoration-ignored` | Git-ignored files | no | Orca's built-in color |
+
+## Frame CSS variables
+
+Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.
+
+| Variable | Orca token |
+| --- | --- |
+| `--orca-background` | `--background` |
+| `--orca-foreground` | `--foreground` |
+| `--orca-card` | `--card` |
+| `--orca-card-foreground` | `--card-foreground` |
+| `--orca-popover` | `--popover` |
+| `--orca-popover-foreground` | `--popover-foreground` |
+| `--orca-primary` | `--primary` |
+| `--orca-primary-foreground` | `--primary-foreground` |
+| `--orca-secondary` | `--secondary` |
+| `--orca-secondary-foreground` | `--secondary-foreground` |
+| `--orca-muted` | `--muted` |
+| `--orca-muted-foreground` | `--muted-foreground` |
+| `--orca-accent` | `--accent` |
+| `--orca-accent-foreground` | `--accent-foreground` |
+| `--orca-destructive` | `--destructive` |
+| `--orca-destructive-foreground` | `--destructive-foreground` |
+| `--orca-border` | `--border` |
+| `--orca-input` | `--input` |
+| `--orca-ring` | `--ring` |
+| `--orca-radius` | `--radius` |

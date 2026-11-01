@@ -35,6 +35,8 @@ export function buildPluginDeclarativeHostBody(entry: string): string {
     '  const runtime = orca.installOrcaDeclarativeRuntime({ post, awaitHydration: true })\n' +
     `  await runtime.boot(await import(${scriptJson(entryPath)}))\n` +
     '} catch (error) {\n' +
+    // Why the console too: main routes guest console errors to `orca plugin logs`.
+    '  console.error((error && error.stack) || String(error))\n' +
     '  report(error)\n' +
     '}\n' +
     '</script>\n'

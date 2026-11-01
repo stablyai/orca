@@ -110,7 +110,8 @@ const SPECIFIC_PLUGIN_ROUTES = [
       `${UI}(?:page\\/PluginContributionAction(?:Panel|Command|Events)|state\\/use-plugin-logs)`,
       `${STORE}panels`,
       'src\\/main\\/plugins\\/(?:panels\\/|workers\\/|plugin-(?:command-|event-delivery|agent-status-event|storage-store|secrets-store|log-buffer))',
-      'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))'
+      'src\\/shared\\/plugins\\/(?:frames\\/|workers\\/|events\\/|capabilities\\/|contributions\\/plugin-(?:command-|event-|panel-|execution-profile))',
+      'examples\\/plugins\\/(?:hello-orca|test-fixtures\\/hostile-panel)\\/'
     ].join('|'),
     'plugin-panel-navigation-observer|plugin-frame-guest'
   ),
@@ -140,6 +141,19 @@ const SPECIFIC_PLUGIN_ROUTES = [
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
       'resources\\/plugins\\/declarative\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  // Build-less TS/TSX: the frame protocol transpiles source modules and resolves their imports.
+  pluginRoute(
+    'plugins.buildless-tsx',
+    ['plugin-buildless-tsx'],
+    [
+      'src\\/main\\/plugins\\/panels\\/plugin-frame-(?:module-|source-serving|protocol\\.ts$)',
+      'src\\/main\\/plugins\\/plugin-content-hash',
+      'src\\/shared\\/plugins\\/frames\\/plugin-frame-source-modules',
+      'src\\/cli\\/plugin-authoring\\/plugin-(?:type-files|components-template)',
+      'examples\\/plugins\\/hello-tsx\\/'
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),

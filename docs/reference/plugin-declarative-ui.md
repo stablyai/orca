@@ -11,19 +11,19 @@ app in light and dark, follows its keyboard and focus rules, and needs no HTML o
   "execution": "sandboxed-ui",
   "engines": { "orca": ">=1.4.246" },
   "contributes": {
-    "panels": [{ "id": "todos", "title": "Todos", "entry": "dist/panel.js", "ui": "components" }]
+    "panels": [{ "id": "todos", "title": "Todos", "entry": "src/panel.tsx", "ui": "components" }]
   }
 }
 ```
 
-`ui` defaults to `html` (a web page in an isolated frame). With `components`, `entry` must be a `.js` or
-`.mjs` ES module. `ui` arrived in Orca 1.4.246, so declare at least that in `engines.orca`; an older Orca
-then says which release the plugin needs.
+`ui` defaults to `html` (a web page in an isolated frame). With `components`, `entry` is an ES module:
+`.tsx`, `.ts`, `.jsx` or `.mts` with no build step, or a bundled `.js`/`.mjs`. `ui` and build-less
+entries arrived in Orca 1.4.246, so declare at least that in `engines.orca`; an older Orca then says
+which release the plugin needs.
 
 ## Writing a panel
 
 ```tsx
-/** @jsxImportSource orca */
 import { atom, read, set, update, Stack, Text, Button } from 'orca'
 
 const count = atom('count', 0, { persist: 'plugin' })
@@ -107,20 +107,47 @@ The `orca` module has the same facade as frame panels:
 - `ui.catalog` is a number that grows with the component catalog; `ui.has(component, prop?)` says
   whether this Orca draws a component or accepts a prop on it.
 
-Types: copy [`resources/plugins/declarative/orca.d.ts`](../../resources/plugins/declarative/orca.d.ts) into
-your project and include it from `tsconfig.json` with `"jsx": "react-jsx"` and `"jsxImportSource": "orca"`.
+## No build step
 
-## Building
+Orca transpiles `.tsx`, `.ts`, `.jsx` and `.mts` files when the panel loads, so a plugin ships its
+source and no `dist/` folder: edit, save, and the panel reloads.
 
-`orca` is provided by Orca at runtime, so leave it out of the bundle:
+- Types are stripped and JSX compiles for `orca` (automatic runtime). Lines are kept, so an error's
+  `file:line` in `orca plugin logs` is the line in your source; an inline source map covers columns
+  in DevTools (`orca plugin dev inspect`).
+- Relative imports resolve to exact files: `./todos` finds `todos.tsx`, `todos.ts`, `todos.jsx`,
+  `todos.js`, then `todos/index.*`, and `./todos.js` finds `todos.ts` as TypeScript expects.
+- Only `orca`, `orca/*` and relative files can be imported. A bare package such as `react` fails with
+  an error naming the file and the import: copy the package's ESM files into the plugin and import
+  them by relative path, or bundle (below).
+- Transpiling is syntax only: it never type-checks. Each source file is capped at 1 MiB and
+  2 s of transpiling, which runs off Orca's main thread.
+- TypeScript features that need type information to compile, such as `const enum` across files and
+  `export =`, are not supported; `isolatedModules` in the generated tsconfig flags them.
+
+Types: `orca plugin types .` writes Orca's typings and a tsconfig to `.orca/types/` (`orca plugin
+dev load` refreshes them), and `.orca/` ignores itself in Git. Extend it:
+
+```json
+{ "extends": "./.orca/types/tsconfig.json", "include": ["src"] }
+```
+
+Then `npx tsc -p .` type-checks. `orca plugin create <dir> --template components` scaffolds all of
+this. [`examples/plugins/hello-tsx`](../../examples/plugins/hello-tsx) is a complete sample.
+
+### Bundling instead
+
+A bundled `.js` entry still works, for example to use npm packages. `orca` is provided by Orca at
+runtime, so leave it out of the bundle:
 
 ```sh
 esbuild src/panel.tsx --bundle --format=esm --jsx=automatic --jsx-import-source=orca \
   --external:orca --external:'orca/*' --outfile=dist/panel.js
 ```
 
-`/** @jsx h */` with `import { h, Fragment } from 'orca'` (classic `jsxFactory`) also works. The sample in
-[`examples/plugins/hello-components`](../../examples/plugins/hello-components) has a build script.
+`/** @jsx h */` with `import { h, Fragment } from 'orca'` (classic `jsxFactory`) also works when you
+bundle. [`examples/plugins/hello-components`](../../examples/plugins/hello-components) has a build
+script.
 
 ## Catalog
 

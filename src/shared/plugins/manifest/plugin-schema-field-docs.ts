@@ -7,6 +7,8 @@ export const PLUGIN_MANIFEST_V2_SINCE = '1.4.245'
 export const PLUGIN_DERIVED_PUBLISHER_SINCE = '1.4.246'
 /** First release that reads panel `ui` (`components` panels) and the extended icon set. */
 export const PLUGIN_PANEL_UI_SINCE = '1.4.246'
+/** Build-less `.ts/.tsx/.mts/.jsx` panel and editor files ship with components panels. */
+export const PLUGIN_SOURCE_MODULES_SINCE = PLUGIN_PANEL_UI_SINCE
 
 type PluginFieldDoc = {
   description: string

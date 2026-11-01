@@ -58,3 +58,11 @@ export const PluginDevUnloadParams = z
 export const PluginGetLogsParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
 })
+
+export const PluginDevInspectParams = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+})
+
+export const PluginRestartParams = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+})

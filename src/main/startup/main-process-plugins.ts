@@ -23,6 +23,10 @@ import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
 import {
+  openPluginFrameGuestDevTools,
+  setPluginFrameGuestLogSink
+} from '../plugins/panels/plugin-frame-guest-diagnostics'
+import {
   normalizePluginConsents,
   normalizePluginIdList
 } from '../../shared/plugins/approval/plugin-consent-state'
@@ -235,8 +239,10 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     setPluginSystemEnabled: (pluginSystemEnabled) =>
       store.updateSettings({ pluginSystemEnabled }, { notifyListeners: true }),
     setDevPluginPaths: (devPluginPaths) =>
-      store.updateSettings({ devPluginPaths }, { notifyListeners: true })
+      store.updateSettings({ devPluginPaths }, { notifyListeners: true }),
+    openFrameDevTools: openPluginFrameGuestDevTools
   })
+  setPluginFrameGuestLogSink((pluginKey) => state.pluginService?.captureLog(pluginKey) ?? null)
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()

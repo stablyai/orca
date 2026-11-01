@@ -85,6 +85,20 @@ Every plugin frame on desktop is an Electron `<webview>`:
   from `stat`), up to 32 MiB a file; a session holds at most 32 requests at once (`503` past that).
   Documents, scripts, styles, JSON, SVG and WASM are read whole (16 MiB cap). A declared HTML entry is a
   document whatever its extension. Path segments ending in a dot or space are refused.
+- **Source modules**: `.ts`, `.tsx`, `.mts` and `.jsx` are read whole (1 MiB cap), digest-checked like
+  any script, then transpiled with sucrase on one shared, lazily started worker thread (types stripped, automatic JSX for `orca`, lines
+  kept, inline source map) and served as `text/javascript`. Relative imports are rewritten to exact
+  files from the verified file list (the disk, for a dev tree); `orca` and URLs are left to the import
+  map and CSP; any other bare import is served as a module that throws, naming the file and import.
+  Results are cached in main by sha256 of the source, transpiler version and options. A transform
+  still running after 2 s is cut short: the worker is terminated and the next file starts a fresh
+  one. A file that fails or times out is served as a throwing module, and that result is cached too
+  (`plugin-frame-module-transform.ts`, `plugin-source-transpile-client.ts`). A declared `.ts`/`.tsx` frame entry is served as a generated
+  page whose only script is that file with `?orca-module`, which gets the JavaScript.
+- **Diagnostics**: each guest's `console-message` errors and warnings (uncaught exceptions included) go to
+  its plugin's log buffer with URLs reduced to plugin-relative paths, capped at 20 lines per plugin per
+  10 s and 2000 characters a line (`plugin-frame-guest-diagnostics.ts`). `plugins.devInspect` (CLI
+  `orca plugin dev inspect`) opens detached DevTools for live guests; headless hosts refuse it.
 - **Integrity**: a navigation re-hashes the plugin tree, at most every 2 s per tree; any other request
   (including `fetch` of an `.html` file) reuses a check from the last 10 s. The hash records each file's
   digest, and documents, scripts, styles, JSON, SVG and WASM are served only if their bytes still match

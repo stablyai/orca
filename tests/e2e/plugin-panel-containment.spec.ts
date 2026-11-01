@@ -87,9 +87,13 @@ async function startPermissiveProbeServer(): Promise<ProbeServer> {
 async function materializeHostilePlugin(origin: string): Promise<string> {
   const tempRoot = await mkdtemp(join(tmpdir(), 'orca-hostile-panel-e2e-'))
   const pluginRoot = join(tempRoot, 'hostile-panel')
-  await cp(join(process.cwd(), 'examples', 'plugins', 'hostile-panel'), pluginRoot, {
-    recursive: true
-  })
+  await cp(
+    join(process.cwd(), 'examples', 'plugins', 'test-fixtures', 'hostile-panel'),
+    pluginRoot,
+    {
+      recursive: true
+    }
+  )
   const panelPath = join(pluginRoot, 'panel.html')
   const panelHtml = await readFile(panelPath, 'utf8')
   await writeFile(panelPath, panelHtml.replaceAll('https://example.com', origin))

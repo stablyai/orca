@@ -25,17 +25,23 @@ describe('panel ui', () => {
     expect(parsed).toEqual({ ...panel, entry: 'panel.html' })
   })
 
-  it.each(['dist/panel.js', 'panel.mjs', 'Panel.JS'])('accepts a components %s module', (entry) => {
-    expect(
-      pluginPanelContributionSchema.safeParse({ ...panel, entry, ui: 'components' }).success
-    ).toBe(true)
-  })
+  it.each(['dist/panel.js', 'panel.mjs', 'Panel.JS', 'src/panel.tsx', 'panel.ts', 'panel.jsx'])(
+    'accepts a components %s module',
+    (entry) => {
+      expect(
+        pluginPanelContributionSchema.safeParse({ ...panel, entry, ui: 'components' }).success
+      ).toBe(true)
+    }
+  )
 
-  it.each(['panel.html', 'panel.tsx', 'panel.js.map'])('refuses a components %s entry', (entry) => {
-    const parsed = pluginPanelContributionSchema.safeParse({ ...panel, entry, ui: 'components' })
-    expect(parsed.success).toBe(false)
-    expect(parsed.error?.issues[0]).toMatchObject({ path: ['entry'] })
-  })
+  it.each(['panel.html', 'panel.d.css', 'panel.js.map'])(
+    'refuses a components %s entry',
+    (entry) => {
+      const parsed = pluginPanelContributionSchema.safeParse({ ...panel, entry, ui: 'components' })
+      expect(parsed.success).toBe(false)
+      expect(parsed.error?.issues[0]).toMatchObject({ path: ['entry'] })
+    }
+  )
 
   it('refuses an unknown ui and the old runtime field', () => {
     expect(

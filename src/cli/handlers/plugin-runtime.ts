@@ -124,7 +124,7 @@ function formatDevLoad(result: DevLoadResult): string {
   return [
     `${result.added ? 'Loaded' : 'Reloaded'} ${result.pluginKey} from ${result.path} (${how}).`,
     result.plugin ? formatPluginRow(result.plugin) : '',
-    'Orca reloads it when its files change; `orca plugin logs` shows what it printed.'
+    'Orca reloads it (and restarts its worker) when its files change; `orca plugin logs` shows what it printed.'
   ]
     .filter(Boolean)
     .join('\n')
@@ -135,7 +135,28 @@ async function devLoad(ctx: HandlerContext, path: string): Promise<void> {
     path,
     approvalFingerprint: stringFlag(ctx, 'approve')
   })
-  printPluginResult(ctx, result, formatDevLoad(result))
+  const typeFiles = await refreshDevTypes(ctx, path)
+  printPluginResult(
+    ctx,
+    { ...result, typeFiles },
+    [formatDevLoad(result), ...typeFiles.map((file) => `Refreshed ${file}`)].join('\n')
+  )
+}
+
+/** Why best effort and local only: typings help the editor; a remote host's folder is not here. */
+async function refreshDevTypes(ctx: HandlerContext, path: string): Promise<string[]> {
+  if (ctx.client.isRemote) {
+    return []
+  }
+  // Lazy: the manifest schema it parses with is heavy for every other runtime command.
+  const types = await import('../plugin-authoring/plugin-type-files.js')
+  if (!(await types.pluginFolderWantsTypes(path))) {
+    return []
+  }
+  return types
+    .writePluginTypeFiles(path)
+    .then((files) => files.filter((file) => file.endsWith('.d.ts')))
+    .catch(() => [])
 }
 
 function requirePluginKey(ctx: HandlerContext): string {
@@ -203,6 +224,18 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
             .join('\n')
     )
   },
+  'plugin restart': async (ctx) => {
+    const result = await callPlugins<{ pluginKey: string; plugin: PluginHostListEntry | null }>(
+      ctx,
+      'plugins.restart',
+      { pluginKey: requirePluginKey(ctx) }
+    )
+    printPluginResult(
+      ctx,
+      result,
+      `Stopped ${result.pluginKey}'s worker; its next command or event starts the current code.`
+    )
+  },
   'plugin enable': (ctx) => setEnabled(ctx, true),
   'plugin disable': (ctx) => setEnabled(ctx, false),
   'plugin system on': (ctx) => setSystemEnabled(ctx, true),
@@ -217,6 +250,20 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
     }
     const plugins = await callPlugins<PluginHostListEntry[]>(ctx, 'plugins.refresh')
     printPluginResult(ctx, { plugins }, `Reloaded ${plugins.length} plugin(s).`)
+  },
+  'plugin dev inspect': async (ctx) => {
+    const result = await callPlugins<{ pluginKey: string; opened: number }>(
+      ctx,
+      'plugins.devInspect',
+      { pluginKey: requirePluginKey(ctx) }
+    )
+    printPluginResult(
+      ctx,
+      result,
+      result.opened === 0
+        ? `${result.pluginKey} has no open panel or editor; open one in Orca, then run this again.`
+        : `Opened DevTools for ${result.opened} ${result.pluginKey} frame(s).`
+    )
   },
   'plugin dev unload': async (ctx) => {
     const target = requirePluginPathArg(ctx, 'target')

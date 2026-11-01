@@ -6,7 +6,11 @@ import {
 } from '../contributions/plugin-execution-profile'
 import { pluginCapabilityReachable } from '../capabilities/plugin-capability-reach'
 import { orcaEngineRangeSchema, satisfiesOrcaEngineRange } from './plugin-manifest-engine-range'
-import { PLUGIN_DERIVED_PUBLISHER_SINCE } from './plugin-schema-field-docs'
+import {
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
+  PLUGIN_SOURCE_MODULES_SINCE
+} from './plugin-schema-field-docs'
+import { isPluginSourceModulePath } from '../frames/plugin-frame-source-modules'
 
 type V2RuleSubject = {
   execution: PluginExecutionProfile
@@ -55,4 +59,32 @@ export function validateOmittedPublisherFloor(
     path: ['engines', 'orca'],
     message: `must be at least >=${PLUGIN_DERIVED_PUBLISHER_SINCE} when publisher is left out, because older Orca requires publisher`
   })
+}
+
+const engineBelow = (range: string, version: string): boolean =>
+  orcaEngineRangeSchema.safeParse(range).success &&
+  !satisfiesOrcaEngineRange(range.slice(2), `>=${version}`)
+
+/** Why authoring only: older Orca serves a `.tsx` entry as raw bytes, so it must not install it. */
+export function validateSourceModuleEntryFloor(
+  manifest: {
+    engines: { orca: string }
+    contributes: {
+      panels: readonly { entry: string }[]
+      customEditors: readonly { entry: string }[]
+    }
+  },
+  ctx: RefinementCtx
+): void {
+  const { panels, customEditors } = manifest.contributes
+  const usesSource = [...panels, ...customEditors].some((item) =>
+    isPluginSourceModulePath(item.entry)
+  )
+  if (usesSource && engineBelow(manifest.engines.orca, PLUGIN_SOURCE_MODULES_SINCE)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['engines', 'orca'],
+      message: `must be at least >=${PLUGIN_SOURCE_MODULES_SINCE} when a panel or editor entry is a .ts, .tsx, .mts or .jsx file, because older Orca does not transpile it`
+    })
+  }
 }

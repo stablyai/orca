@@ -18,14 +18,30 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       'Writes into a new or empty folder (a .git folder is allowed) and never overwrites; it runs no Git, package install or plugin code.',
       'theme, terminal-theme, icon-theme, syntax and language-pack are content only: loading them never needs approval.',
       'editor and panel run code in a sandboxed frame: loading them prints the access they ask for and needs --approve.',
-      'The id defaults to the folder name. Set --publisher to the GitHub or GitLab owner of the repository you will publish from.',
+      'components is a panel written in TSX with Orca components and no build step; it also writes the editor typings to .orca/types (see `orca plugin types`).',
+      'The id defaults to the folder name. Leave out --publisher: Orca names the publisher after the repository owner (or `local` for a folder). Pass it only to support Orca older than 1.4.246, and then it must be that owner.',
       'Runs on the machine that runs this command; it does not reach the Orca app.',
       EXIT_CODES_NOTE
     ],
     examples: [
       'orca plugin create ./dusk-theme --template theme --publisher acme',
-      'orca plugin create ./notes-editor --template editor --publisher acme --name "Notes" --json'
+      'orca plugin create ./notes-editor --template editor --name "Notes" --json',
+      'orca plugin create ./todo-panel --template components'
     ]
+  },
+  {
+    path: ['plugin', 'types'],
+    summary: 'Write the TypeScript typings for Orca plugins into a plugin folder',
+    usage: 'orca plugin types <dir> [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'dir'],
+    positionalArgs: ['dir'],
+    notes: [
+      'Writes .orca/types/orca/index.d.ts and .orca/types/tsconfig.json; extend it from the plugin tsconfig (`"extends": "./.orca/types/tsconfig.json"`). `.orca/` ignores itself in Git, and Orca skips it when loading a development folder.',
+      'The typings match the Orca this CLI belongs to. `orca plugin dev load` rewrites them for folders that use TypeScript or components panels.',
+      'Runs on the machine that runs this command; it does not reach the Orca app.',
+      EXIT_CODES_NOTE
+    ],
+    examples: ['orca plugin types .']
   },
   {
     path: ['plugin', 'validate'],
@@ -52,6 +68,20 @@ export const PLUGIN_AUTHORING_COMMAND_SPECS: CommandSpec[] = [
       EXIT_CODES_NOTE
     ],
     examples: ['orca plugin inspect ./notes-editor --json']
+  },
+  {
+    path: ['plugin', 'release-entry'],
+    summary: "Print the catalog release entry for a plugin folder's committed HEAD",
+    usage: 'orca plugin release-entry <dir> [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'path'],
+    positionalArgs: ['path'],
+    notes: [
+      'Validates like `orca plugin validate`, then hashes the files of HEAD (not the working tree) the way install does, and prints the `releases` entry to paste into orca-catalog.json, plus the `source.path` when the plugin is a subdirectory of its repository.',
+      'Offline; runs only local read-only Git and never runs plugin code. Uncommitted changes are left out, with a note.',
+      'Fails with plugin_invalid when the folder is invalid, and with invalid_argument when it is not committed in a Git repository or HEAD has no installable release.',
+      EXIT_CODES_NOTE
+    ],
+    examples: ['orca plugin release-entry .', 'orca plugin release-entry ./gleam-syntax --json']
   }
 ]
 
@@ -122,6 +152,19 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca plugin system off']
   },
   {
+    path: ['plugin', 'restart'],
+    summary: "Stop a plugin's worker so its next command or event starts it fresh",
+    usage: 'orca plugin restart <plugin-key> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'plugin'],
+    positionalArgs: ['plugin'],
+    notes: [
+      'Never needs approval and keeps the plugin enabled. Also clears a worker stopped for crashing repeatedly.',
+      'Dev folders restart their worker on file changes already; use this to rerun startup code.',
+      EXIT_CODES_NOTE
+    ],
+    examples: ['orca plugin restart acme.notes']
+  },
+  {
     path: ['plugin', 'dev', 'load'],
     summary: 'Load a plugin folder into Orca as a development plugin',
     usage: 'orca plugin dev load <dir> [--approve <fingerprint>] [--json]',
@@ -130,6 +173,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Adds the folder to Settings → Plugins → Development folders on the Orca host; it overrides an installed plugin with the same key.',
       'Orca reloads the plugin when its files change. For an approved panel, editor or worker, later code edits run without asking again; new access does not.',
+      '.ts, .tsx, .mts and .jsx files load without a build step. When the folder uses them (or components panels) and is on this machine, this also refreshes its .orca/types typings, like `orca plugin types`.',
       APPROVE_NOTE,
       'Without approval the folder stays loaded but nothing in it runs.',
       'With --environment the folder is a path on that Orca server; pass it absolute.',
@@ -148,6 +192,18 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       EXIT_CODES_NOTE
     ],
     examples: ['orca plugin dev reload', 'orca plugin dev reload ./notes-editor --json']
+  },
+  {
+    path: ['plugin', 'dev', 'inspect'],
+    summary: "Open DevTools for a plugin's open panels and editors",
+    usage: 'orca plugin dev inspect <plugin-key> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'plugin'],
+    positionalArgs: ['plugin'],
+    notes: [
+      'Desktop app only: opens one detached DevTools window per open frame. Console errors and uncaught exceptions also reach `orca plugin logs` without it.',
+      EXIT_CODES_NOTE
+    ],
+    examples: ['orca plugin dev inspect acme.notes']
   },
   {
     path: ['plugin', 'dev', 'unload'],

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -335,6 +335,22 @@ describe('PluginService worker reconciliation', () => {
     await harness.service.refresh()
     await harness.service.invokeCommand(pluginKey, 'run')
     expect(harness.factory).toHaveBeenCalledTimes(2)
+  })
+
+  it('restarts a dev worker when its code changes, but not for skipped folders', async () => {
+    const root = await pluginRoot()
+    const harness = await createHarness(root)
+    await activate(harness.service)
+    await mkdir(join(root, 'node_modules'))
+    await writeFile(join(root, 'node_modules', 'dep.js'), 'export {}')
+    await harness.service.refresh()
+    expect(harness.workers[0]!.dispose).not.toHaveBeenCalled()
+
+    await writeFile(join(root, 'worker.js'), 'export default async function () { return 2 }')
+    await harness.service.refresh()
+
+    expect(harness.workers[0]!.dispose).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(harness.factory).toHaveBeenCalledTimes(2))
   })
 
   it('cannot reactivate the old revision while refresh awaits worker shutdown', async () => {

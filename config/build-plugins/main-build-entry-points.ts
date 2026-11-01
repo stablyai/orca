@@ -15,6 +15,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
   'plugin-host-entry': resolve('src/main/plugins/workers/plugin-host-entry.ts'),
+  'plugin-source-transpile-worker-entry': resolve(
+    'src/main/plugins/panels/plugin-source-transpile-worker-entry.ts'
+  ),
   'computer-sidecar': resolve('src/main/computer/computer-sidecar.ts'),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),

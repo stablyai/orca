@@ -31,6 +31,8 @@ import { hashPluginTree } from '../plugin-content-hash'
 import { publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from '../plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
+import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
+import { readPluginLockfile } from './plugin-install-lockfile-store'
 
 export type PluginInstallResult =
   | {
@@ -174,6 +176,20 @@ export async function installStagedPluginTree(input: {
   const trustError = pluginInstallTrustError(sourceInspection.pluginKey, input.source)
   if (trustError) {
     return { ok: false, error: trustError }
+  }
+  // Why: marketplace installs check this before checkout; a direct source learns its key only here.
+  if (input.source.kind === 'git' || input.source.kind === 'local-path') {
+    const installed = (await readPluginLockfile(input.pluginsDir)).plugins[
+      sourceInspection.pluginKey
+    ]
+    const takeoverError = pluginCatalogTakeoverError(
+      sourceInspection.pluginKey,
+      installed?.source,
+      null
+    )
+    if (takeoverError) {
+      return { ok: false, error: takeoverError }
+    }
   }
   const blockedReason = input.blockedPluginReason?.(sourceInspection.pluginKey)
   if (blockedReason) {

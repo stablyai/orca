@@ -17,6 +17,7 @@ import { validatePluginManifestContributions } from './plugin-manifest-contribut
 import { validatePluginEngineFloor } from './plugin-engine-floor'
 import {
   validateOmittedPublisherFloor,
+  validateSourceModuleEntryFloor,
   validatePluginManifestV2Rules
 } from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
@@ -208,6 +209,7 @@ function buildPluginManifestSchema(enforceEngineFloor: boolean) {
         if (enforceEngineFloor) {
           validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
           validateOmittedPublisherFloor(manifest, ctx)
+          validateSourceModuleEntryFloor(manifest, ctx)
         }
       })
     ])

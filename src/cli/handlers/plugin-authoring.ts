@@ -11,10 +11,15 @@ import {
   PLUGIN_TEMPLATE_NAMES
 } from '../plugin-authoring/plugin-template-names'
 import {
+  formatPluginReleaseEntry,
+  pluginReleaseEntryForFolder
+} from '../plugin-authoring/plugin-release-entry'
+import {
   printPluginResult,
   requirePluginPathArg,
   resolveLocalPluginPath
 } from '../plugin-authoring/plugin-cli-output'
+import { writePluginTypeFiles } from '../plugin-authoring/plugin-type-files'
 import { RuntimeClientError } from '../runtime/types'
 import { PLUGIN_INVALID_CODE } from '../../shared/plugins/approval/plugin-cli-approval'
 
@@ -111,8 +116,32 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
       [
         `Created ${created.pluginKey} from the ${template} template in ${created.path}`,
         ...created.files.map((file) => `  ${file}`),
+        ...(created.typeFiles.length > 0
+          ? [`  ${created.typeFiles.join(', ')} (generated typings, ignored by Git)`]
+          : []),
         ...formatGrants(report),
         'Next: orca plugin dev load <dir>'
+      ].join('\n')
+    )
+  },
+  'plugin types': async (ctx) => {
+    const dir = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'dir'), 'types')
+    let files: string[]
+    try {
+      files = await writePluginTypeFiles(dir)
+    } catch (error) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `cannot write typings into ${dir}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    printPluginResult(
+      ctx,
+      { path: dir, files },
+      [
+        `Wrote Orca plugin typings into ${dir}:`,
+        ...files.map((file) => `  ${file}`),
+        'Extend them from tsconfig.json: { "extends": "./.orca/types/tsconfig.json" }'
       ].join('\n')
     )
   },
@@ -131,5 +160,27 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
       throw invalidError(report)
     }
     printPluginResult(ctx, report, formatInspection(report))
+  },
+  'plugin release-entry': async (ctx) => {
+    const path = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'path'), 'release-entry')
+    const report = await readTarget(validatePluginTarget, path)
+    if (report.kind !== 'plugin') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `${report.file} is a catalog; pass the plugin folder.`
+      )
+    }
+    if (!report.valid) {
+      throw invalidError(report)
+    }
+    const result = await pluginReleaseEntryForFolder(report)
+    if (!result.entry) {
+      // Why not plugin_invalid: the files are valid; HEAD or the repository is what is missing.
+      throw new RuntimeClientError('invalid_argument', result.note ?? 'no catalog release entry', {
+        ...result,
+        nextSteps: ['Commit the plugin in a Git repository, then run this again.']
+      })
+    }
+    printPluginResult(ctx, result, formatPluginReleaseEntry(result))
   }
 }
