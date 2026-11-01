@@ -205,7 +205,7 @@ export function useEmulatorPaneSession({
           resetVisualOrientation()
         }
         const res = (await callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
-          device: emulatorAttachDevice(list, target),
+          device: await emulatorAttachDevice(list, target, refreshDevices),
           worktree: worktreeId,
           focus: false
         })) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
