@@ -70,7 +70,7 @@ export async function writeMarker(path: string, marker: WorkspaceCopyMarker): Pr
 /** The marker's fields, or null when it is missing or not JSON. */
 export async function readMarker(path: string): Promise<Record<string, unknown> | null> {
   try {
-    const parsed: unknown = JSON.parse((await readFile(path, 'utf8')).replace(/^﻿/, ''))
+    const parsed: unknown = JSON.parse((await readFile(path, 'utf8')).replace(/^\uFEFF/, ''))
     return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
       ? Object.fromEntries(Object.entries(parsed))
       : null
