@@ -79,7 +79,9 @@ export function MobileResourcesScreen() {
         return
       }
       setCapability(
-        status.capabilities.includes(HOST_RESOURCES_RUNTIME_CAPABILITY) ? 'present' : 'absent'
+        (status.capabilities ?? []).includes(HOST_RESOURCES_RUNTIME_CAPABILITY)
+          ? 'present'
+          : 'absent'
       )
     })
   }, [client, connState, hostId])

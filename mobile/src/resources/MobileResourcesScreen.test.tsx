@@ -11,7 +11,7 @@ const transport = vi.hoisted(() => {
   const sendRequest = vi.fn()
   return {
     state: 'connected' as 'connected' | 'disconnected',
-    capabilities: ['host.resources.v1'] as readonly string[] | null,
+    capabilities: ['host.resources.v1'] as readonly string[] | null | undefined,
     sendRequest,
     client: { sendRequest }
   }
@@ -157,6 +157,13 @@ describe('MobileResourcesScreen', () => {
 
   it('asks for a server update when the capability is missing', async () => {
     transport.capabilities = []
+    const tree = await render()
+    expect(text(tree)).toContain('Update the server to see CPU, memory, and disk.')
+    expect(transport.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('asks for a server update when status omits capabilities', async () => {
+    transport.capabilities = undefined
     const tree = await render()
     expect(text(tree)).toContain('Update the server to see CPU, memory, and disk.')
     expect(transport.sendRequest).not.toHaveBeenCalled()
