@@ -5,6 +5,7 @@ import {
   markdownTabDocumentSchema,
   refreshedAgentsSchema,
   runtimeRepoListSchema,
+  sessionProjectNameSchema,
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
   sessionWorktreeRecordSchema,
@@ -151,6 +152,16 @@ export const sessionWorktreeRecordRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('worktree-record', sessionWorktreeRecordSchema)
+  })
+)
+
+export const sessionProjectNameRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.project-name-or-skip',
+    method: 'repo.show',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('project-name', sessionProjectNameSchema)
   })
 )
 

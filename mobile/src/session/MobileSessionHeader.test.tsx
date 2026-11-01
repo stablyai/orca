@@ -125,8 +125,10 @@ it('keeps an escalated page connection visible without offering a native retry',
     terminalSummary: "Can't reach desktop"
   })
   expect(tree!.root.findAllByProps({ accessibilityLabel: 'Reconnect to desktop' })).toHaveLength(0)
-  const status = tree!.root.find((node) => String(node.type) === 'StatusDot')
-  expect(status.parent?.props.disabled).toBe(true)
+  const statusLine = tree!.root.find(
+    (node) => String(node.type) === 'Text' && node.props.children === "Can't reach desktop"
+  )
+  expect(statusLine.parent?.props.disabled).toBe(true)
   expect(tree!.root.find((node) => String(node.type) === 'StatusDot').props.state).toBe(
     'disconnected'
   )
@@ -222,4 +224,43 @@ it('uses the measured header width when a sidebar leaves a wide window with litt
   expect(tree!.root.find((node) => String(node.type) === 'TabStrip').props.actionsCollapsed).toBe(
     false
   )
+})
+
+it.each([
+  { worktreeProjectName: 'orca', worktreeName: 'master', title: 'orca', meta: 'master · 1 tab' },
+  {
+    worktreeProjectName: 'orca',
+    worktreeName: 'Fix login',
+    title: 'orca',
+    meta: 'Fix login · 1 tab'
+  },
+  {
+    worktreeProjectName: 'Notes',
+    worktreeName: 'Notes',
+    title: 'Notes',
+    meta: '1 tab',
+    isFolderWorkspaceRoute: true
+  },
+  {
+    worktreeProjectName: null,
+    worktreeName: 'Legacy workspace',
+    title: 'Legacy workspace',
+    meta: '1 tab'
+  }
+])(
+  'identifies the project without repeating the tab count ($title)',
+  ({ title, meta: _meta, ...context }) => {
+    layout.sideRail = false
+    renderHeader(false, context)
+    expect(nodes('Text').map((node) => node.props.children)).toEqual([title])
+  }
+)
+
+it('prioritizes recovery status under the project title while disconnected', () => {
+  layout.sideRail = false
+  renderHeader(true, { worktreeProjectName: 'orca', worktreeName: 'master' })
+  expect(nodes('Text').map((node) => node.props.children)).toEqual([
+    'orca',
+    'Connection lost — tap to retry'
+  ])
 })
