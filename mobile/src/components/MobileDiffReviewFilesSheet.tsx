@@ -178,7 +178,8 @@ function FileRow({
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={item.filePath}
+        // One path can be both staged and unstaged, so the label names which one this row opens.
+        accessibilityLabel={`${item.filePath}, ${item.subtitle}`}
         accessibilityState={{ selected: current }}
         style={({ pressed }) => [styles.fileMain, pressed && pressedStyle]}
       >

@@ -405,6 +405,21 @@ plugin's panel and only while Orca's window is hidden or minimized, so it never 
 html panels refuse it. An act is not a person's press: a Link's href stays unopened and calls
 that need a gesture (`shell.openExternal`, `files.saveAs`) are refused.
 
+`orca plugin shot <dir> --scenario <name>` shoots the panel in one scenario of its
+`<entry>.check.ts` (see check fixtures) instead of the live panel. The CLI renders that scenario
+the way `orca plugin check` does, with the panel and its worker against a stand-in host, so the
+scenario's data never reaches the plugin's real panel, storage, settings or worker. Orca then
+draws the resulting tree in a preview of its own, apart from the plugin, and captures it; the
+right sidebar is not opened or switched. Like `orca plugin check`, it runs the plugin's code on
+your machine without Orca's sandbox, so use it only on code you trust. Pass the plugin folder,
+or a development plugin's key when you run it inside that folder; installed plugins are refused.
+The result adds `replay: true` and `scenario`, `errors` lists what the render reported, and an
+unknown name fails and lists the panel's scenarios. A replay is a still frame: controls whose
+value Orca owns start from the tree's props, images show their placeholder, it takes no `--act`,
+it works only on this machine (no `--environment`), and it needs Orca's window hidden or
+minimized because the preview is drawn inside it. It writes
+`.orca/shots/<plugin-key>-<panel>.<scenario>.png` in the plugin folder unless you pass `--out`.
+
 `orca plugin dev watch . --shot ./.orca/shots` opens one panel (the first, or
 `--shot-panel <id>`) in the right sidebar once, then after the load and after each reload that
 leaves the plugin running saves a fresh `<plugin-key>-<panel>.png` of it; with `--check`, the

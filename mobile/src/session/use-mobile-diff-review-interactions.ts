@@ -4,12 +4,14 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
-import type { ReviewSheetIntents } from './mobile-diff-review-sheets'
+import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import { sourceFileDiffOpenRun } from '../source-control/mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+import { useMobileDiffReviewRangeNote } from './use-mobile-diff-review-range-note'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 
 type InteractionInput = {
@@ -30,6 +32,7 @@ type InteractionInput = {
   /** Keeps a file open by key, through the reload that follows a mutation. */
   selectKey: (key: string) => void
   moveSelection: (direction: 'next' | 'previous') => void
+  remoteViewed: (item: MobileDiffReviewQueueItem, viewed: boolean) => Promise<boolean> | null
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
@@ -57,6 +60,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     selectIndex,
     selectKey,
     moveSelection,
+    remoteViewed,
     setComposerBody,
     setActionError,
     setBusyAction,
@@ -92,9 +96,18 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     setScreenState,
     selectIndex,
     navigationRef,
+    remoteViewed,
     setComposerBody,
     setActionError,
     sheets
+  })
+
+  const saveRangeNote = useMobileDiffReviewRangeNote({
+    worktreeId,
+    screenState,
+    currentItem,
+    composerBody,
+    saveCommentsAndReviewState
   })
 
   const { runGitMutation } = useMobileDiffReviewGitActions({
@@ -106,17 +119,24 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     loadReviewData
   })
 
-  const { clearSentNotes, copyNotes, createTerminalAndSend, openSendSheet, sendPromptToTerminal } =
-    useMobileDiffReviewSendActions({
-      client,
-      connState,
-      hostCapabilities,
-      worktreeId,
-      screenState,
-      setActionError,
-      sheets,
-      saveCommentsAndReviewState
-    })
+  const {
+    clearSentNotes,
+    copyNotes,
+    createTerminalAndSend,
+    loadTerminals,
+    openSendSheet,
+    sendNoteNow,
+    sendPromptToTerminal
+  } = useMobileDiffReviewSendActions({
+    client,
+    connState,
+    hostCapabilities,
+    worktreeId,
+    screenState,
+    setActionError,
+    sheets,
+    saveCommentsAndReviewState
+  })
 
   return {
     clearSentNotes,
@@ -172,6 +192,20 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     runGitMutation,
     saveComposer,
     sendPromptToTerminal,
+    loadTerminals,
+    // The sheet's own lines and the terminals it already listed; the draft clears when the next sheet opens.
+    sendRange: async (
+      sheet: Extract<ReviewSheet, { kind: 'range' }>,
+      terminals?: readonly MobileReviewTerminalTab[]
+    ) => {
+      const saved = await saveRangeNote(sheet)
+      if (!('comment' in saved)) {
+        return saved.error
+      }
+      sheets.closeSheet('range', sheet)
+      await sendNoteNow(saved.comment, terminals)
+      return null
+    },
     // Staging drops the file from the uncommitted queue; land on the file after it, wrapping from the last.
     stageAndOpenNext: async () => {
       if (!currentItem?.canStage) {

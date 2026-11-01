@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildMobileBranchRemoteAction,
   buildMobileSourceControlPrimaryAction,
   type MobileSourceControlPrimaryActionArgs,
   type MobileSourceControlPrimaryActionHandlers
@@ -189,5 +190,32 @@ describe('buildMobileSourceControlPrimaryAction', () => {
       })
     )
     expect(action.disabled).toBe(false)
+  })
+})
+
+describe('buildMobileBranchRemoteAction', () => {
+  it('offers the branch remote step past local changes, forcing after a rebase', async () => {
+    const h = handlers()
+    const rebased = buildMobileBranchRemoteAction(
+      args({
+        status: status({
+          upstreamStatus: {
+            hasUpstream: true,
+            ahead: 3,
+            behind: 3,
+            behindCommitsArePatchEquivalent: true
+          }
+        }),
+        stagedCount: 1,
+        commitMessage: 'wip',
+        handlers: h
+      })
+    )
+    expect(rebased?.label).toBe('Force Push')
+    await rebased?.run()
+    expect(h.runActionSheetGitSequence).toHaveBeenCalledWith('force-push', [
+      { method: 'git.push', params: { forceWithLease: true } }
+    ])
+    expect(buildMobileBranchRemoteAction(args())).toBeNull()
   })
 })

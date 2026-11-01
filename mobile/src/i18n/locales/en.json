@@ -993,7 +993,13 @@
       "unstageFile": "Unstage",
       "addFileNote": "Add File Note",
       "pullRequest": "Pull Request",
-      "discardChanges": "Discard Changes"
+      "discardChanges": "Discard Changes",
+      "rangeLine": "Line {{line}}",
+      "rangeLines": "Lines {{startLine}}–{{line}}",
+      "sendToAgent": "Send to {{agent}}",
+      "sendToAnAgent": "Send to agent",
+      "rangePlaceholder": "What should change here?",
+      "commentOnGitHub": "Comment on GitHub"
     },
     "diffReviewFileSummary": {
       "changed": "Changed",
@@ -1002,7 +1008,9 @@
       "untracked": "Untracked",
       "notStaged": "Not staged",
       "viewed": "Viewed",
-      "renamedFrom": "Renamed from {{oldPath}}"
+      "renamedFrom": "Renamed from {{oldPath}}",
+      "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
+      "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
     "diffReviewFooter": {
       "previousFile": "Previous file",
@@ -1983,7 +1991,8 @@
     },
     "githubPrMutations": {
       "titleUpdateFailed": "Failed to update title.",
-      "reviewThreadUpdateFailed": "Failed to update review thread."
+      "reviewThreadUpdateFailed": "Failed to update review thread.",
+      "fileViewedFailed": "Failed to update viewed state."
     },
     "githubPrRpc": {
       "requestFailed": "Request failed: {{method}}"
@@ -2615,6 +2624,9 @@
       "diffFailed": "Couldn't load diff preview",
       "fileFailed": "Couldn't load file preview",
       "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
+    },
+    "useDiffReviewGitHub": {
+      "waitingForDesktop": "Waiting for desktop..."
     }
   },
   "chat": {
@@ -3468,6 +3480,35 @@
       "keepFile": "Keep file",
       "keepDeletion": "Keep deletion",
       "completeMergeFailed": "Complete merge failed"
+    },
+    "commitDetail": {
+      "copySha": "Copy SHA",
+      "openOnGitHub": "Open on GitHub",
+      "openOnWeb": "Open on the web",
+      "back": "Back to commits",
+      "title": "Commit",
+      "more": "More commit actions",
+      "author": "Author",
+      "date": "Date",
+      "status": "Status",
+      "onOrigin": "On origin",
+      "notPushed": "Not pushed",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "filesHeader": "Files",
+      "authorWithCoAuthors": "{{author}}, with {{coAuthors}}"
+    },
+    "commits": {
+      "branchedFrom": "Branched from {{baseRef}}",
+      "baseUpToDate": "Up to date",
+      "baseNewer_one": "1 newer commit",
+      "baseNewer_other": "{{count}} newer commits",
+      "updateBranch": "Update branch",
+      "back": "Back to source control",
+      "title": "Commits",
+      "loadMoreFailed": "Couldn’t load more commits. Retry",
+      "notPushed": "Not pushed {{count}}",
+      "onOrigin": "On origin {{count}}"
     }
   },
   "newWorkspace": {

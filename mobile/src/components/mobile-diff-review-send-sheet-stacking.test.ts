@@ -41,6 +41,10 @@ vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('./mobile-diff-review-screen-styles', () => ({
   mobileDiffReviewStyles: new Proxy({}, { get: () => ({}) })
 }))
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('./mounted-bottom-drawer', () => ({ MountedBottomDrawer: 'MountedBottomDrawer' }))
 const loadSnapshot = vi.hoisted(() => vi.fn())
 vi.mock('../session/mobile-diff-review-loaders', () => ({
@@ -48,7 +52,12 @@ vi.mock('../session/mobile-diff-review-loaders', () => ({
   loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
-  useMobilePrSidebarController: () => ({})
+  useMobilePrSidebarController: () => ({
+    prSidebarState: { kind: 'hidden' },
+    prSidebarIsGithubRepo: false,
+    refetchPRSidebar: async () => {},
+    ensurePrSidebarDetails: async () => {}
+  })
 }))
 
 const { MobileDiffReviewDrawers } = await import('./MobileDiffReviewDrawers')

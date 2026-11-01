@@ -12,6 +12,7 @@ import {
   PR_STATE,
   REVIEW_DECISION,
   prCheckList,
+  prFileSchema,
   prCheckSummary,
   prCommentList,
   prCount,
@@ -261,7 +262,9 @@ export const githubWorkItemDetailsSchema = z
     checks: prCheckList('checks'),
     participants: prUserList('participants'),
     // Absent assignees means unreported, distinct from a confirmed empty list.
-    assignees: salvagedOptional('assignees', salvagingArray(z.string()))
+    assignees: salvagedOptional('assignees', salvagingArray(z.string())),
+    // Older hosts send no files; the diff screen then keeps viewed state on the phone.
+    files: salvagedOptional('files', salvagingArray(prFileSchema))
   })
   .transform((details): GitHubWorkItemDetails | null =>
     details.item === null
@@ -275,7 +278,8 @@ export const githubWorkItemDetailsSchema = z
           pullRequestId: details.pullRequestId,
           checks: details.checks ?? [],
           participants: details.participants ?? [],
-          assignees: details.assignees
+          assignees: details.assignees,
+          ...(details.files ? { files: details.files } : {})
         }
   )
   .nullable()

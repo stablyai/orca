@@ -4,6 +4,8 @@ import { Text, View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
+import { useMobilePrCommentActions } from '../session/use-mobile-pr-comment-actions'
+import { usePRCommentCardActions } from './pr-sidebar/PRCommentsSection'
 import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
 import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
@@ -47,6 +49,24 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
     })
   })
   const item = controller.currentItem
+  const github = controller.github
+  const refetchPR = controller.refetchPRSidebar
+  const refetchThreads = useCallback(() => refetchPR({ includeDetails: true }), [refetchPR])
+  const threadCommentActions = useMobilePrCommentActions({
+    client: controller.client,
+    connState: controller.connState,
+    worktreeId: controller.worktreeId,
+    prNumber: github?.prNumber ?? 0,
+    prRepo: github?.prRepo ?? null,
+    refetch: refetchThreads
+  })
+  const threadActions = usePRCommentCardActions(
+    github ? threadCommentActions : undefined,
+    github?.prRepo
+  )
+  const sheet = controller.sheet
+  const selectedRange =
+    sheet?.kind === 'range' ? { startLine: sheet.startLine, line: sheet.line } : null
   // Dock GitHub sidebar only when wide; otherwise showPRSidebar toggles RightDrawer overlay.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
   const gitStatus = controller.screenState.kind === 'ready' ? controller.screenState.status : null
@@ -93,7 +113,14 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               staleCommentIds={controller.staleCommentIds}
               onEditNote={controller.openEditComposer}
               onToggleViewed={(target) => void controller.toggleItemViewed(target)}
+              hiddenThreadCount={controller.hiddenThreadCount}
             />
+          ) : null}
+          {/* Each source keeps its own line, so a newer thread failure is never hidden behind older feedback. */}
+          {threadCommentActions.error ? (
+            <View style={styles.actionError}>
+              <Text style={styles.actionErrorText}>{threadCommentActions.error}</Text>
+            </View>
           ) : null}
           {controller.actionError ? (
             <View style={styles.actionError}>
@@ -107,7 +134,15 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             filteredCount={controller.filteredQueue.length}
             screenState={controller.screenState}
             staleCommentIds={controller.staleCommentIds}
-            onAddNote={controller.openComposer}
+            threadsByLine={controller.threadsByLine}
+            threadActions={threadActions}
+            selectedRange={selectedRange}
+            onPickLines={(range) => {
+              controller.setComposerBody('')
+              controller.openSheet({ kind: 'range', ...range })
+            }}
+            scrollToLine={controller.scrollToLine}
+            onScrolledToLine={controller.clearScrollToLine}
             onEditNote={controller.openEditComposer}
             onRetry={controller.retryAction ?? undefined}
             offline={controller.connState !== 'connected'}

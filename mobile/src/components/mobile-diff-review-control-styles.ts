@@ -92,6 +92,15 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     marginTop: 2
   },
+  rangeField: {
+    minHeight: 96,
+    alignItems: 'flex-start'
+  },
+  rangeError: {
+    marginTop: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
+  },
   drawerButtonRow: {
     flexDirection: 'row',
     gap: spacing.sm,

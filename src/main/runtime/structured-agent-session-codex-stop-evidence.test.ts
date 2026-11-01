@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session-goal-control-copy'
-import { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
+import { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { CODEX_SCRIPTED_THREAD as THREAD } from '../codex/codex-scripted-child.test-fixture'
 import {

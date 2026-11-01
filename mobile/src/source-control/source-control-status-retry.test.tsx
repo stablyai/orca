@@ -26,7 +26,11 @@ vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () =>
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
-vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
+vi.mock('./MobileCommitsScreen', () => ({
+  MobileCommitsScreen: () => null,
+  MobileCommitPageHost: ({ children }: { children: (openCommit: () => void) => unknown }) =>
+    children(() => {})
+}))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
