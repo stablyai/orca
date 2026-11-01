@@ -460,7 +460,7 @@ describe('a new chat picker’s first frame', () => {
   })
 })
 
-it('refuses typed literals while the current fence awaits options, then accepts with an empty catalog', async () => {
+it('accepts typed literals at an attached fence while options refresh with an empty catalog', async () => {
   const pending = deferred<AgentSessionOptionsResult>()
   let reads = 0
   mocks.call.mockImplementation((_target: unknown, method: string) =>
@@ -497,10 +497,21 @@ it('refuses typed literals while the current fence awaits options, then accepts 
   view.rerender({ fence: 2 })
   await waitFor(() => expect(reads).toBe(2))
   await act(async () =>
-    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(false)
+    expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)
   )
   expect(mutate).not.toHaveBeenCalled()
-  expect(mocks.call.mock.calls.filter((call) => call[1] === 'agentSession.setOption')).toEqual([])
+  expect(mocks.call.mock.calls.filter((call) => call[1] === 'agentSession.setOption')).toEqual([
+    [
+      LOCAL_TARGET,
+      'agentSession.setOption',
+      {
+        envelope: expect.objectContaining({ sessionId: 'locked-chat', expectedRuntimeFence: 2 }),
+        key: 'model',
+        value: 'literal'
+      },
+      {}
+    ]
+  ])
   await act(async () => pending.resolve({ models: [], current: {} }))
   await act(async () =>
     expect(await view.result.current.setStructuredOption('model', 'literal')).toBe(true)

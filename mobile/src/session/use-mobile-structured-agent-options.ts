@@ -4,7 +4,6 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentSessionSeedCatalog } from '../../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
-import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
@@ -65,7 +64,6 @@ export function useMobileStructuredAgentOptions(args: {
     updateOptionState,
     conversationSupport,
     imageSupport,
-    awaitingOptions,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -107,16 +105,6 @@ export function useMobileStructuredAgentOptions(args: {
     imageSupport?.sessionId === sessionId &&
     !imageSupport.statesPermissionMode &&
     optionState.permissionMode === null
-  const interactionReadyRef = useRef(!awaitingOptions)
-  const lockSnapshotRef = useRef(
-    (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) => snapshot
-  )
-  const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) =>
-    awaitingOptions ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
-  useLayoutEffect(() => {
-    interactionReadyRef.current = !awaitingOptions
-    lockSnapshotRef.current = lockSnapshot
-  })
   const readOptionState = useCallback(
     () =>
       projectPermission({
@@ -129,7 +117,7 @@ export function useMobileStructuredAgentOptions(args: {
       }),
     [controller, projectPermission, hostSupport?.permissionOwn]
   )
-  const shown = lockSnapshot(structuredAgentSessionShownSnapshot(readOptionState()))
+  const shown = structuredAgentSessionShownSnapshot(readOptionState())
   const optionSnapshot = legacyHostPermissions
     ? [...shown, legacyHostPermissionDescriptor()]
     : shown
@@ -144,8 +132,8 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view)),
-      ready: !awaitingOptions && !!client && !!sessionId && interactionReadyRef.current,
+      snapshot: structuredAgentSessionShownSnapshot(view),
+      ready: !!client && !!sessionId,
       providerStarting,
       isCurrentContext,
       flush: (isCurrent: () => boolean) => {
@@ -199,7 +187,6 @@ export function useMobileStructuredAgentOptions(args: {
     useMobileStructuredOptionSurface({
       optionSnapshot,
       demandModelCatalog,
-      lockSnapshot: (snapshot) => lockSnapshotRef.current(snapshot),
       setStructuredOption,
       readOptionState
     })

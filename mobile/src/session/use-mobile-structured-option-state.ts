@@ -91,7 +91,6 @@ export function useMobileStructuredOptionState(args: {
         ? {
             conversationSupport: {
               sessionId: support.sessionId,
-              fence: support.fence,
               commands: support.result.conversationCommands ?? []
             },
             imageSupport: {
@@ -103,8 +102,6 @@ export function useMobileStructuredOptionState(args: {
         : { conversationSupport: null, imageSupport: null },
     [support]
   )
-  const awaitingOptions =
-    conversationSupport?.sessionId === sessionId && conversationSupport.fence !== fence
   useEffect(
     () =>
       reader.attach({
@@ -171,7 +168,6 @@ export function useMobileStructuredOptionState(args: {
     projectPermission,
     conversationSupport,
     imageSupport,
-    awaitingOptions,
     controller,
     reread,
     receiveCatalog,
