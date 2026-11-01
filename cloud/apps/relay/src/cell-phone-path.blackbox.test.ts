@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
+import { RESERVE_DEAD_MAN_BOOT_GRACE_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from './database.js'
 import { nextFrame, RESERVE_MODE_CELL_ID, startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
 import { StatementRecordingDatabase } from './test-fixtures/statement-recording-database.js'
@@ -108,7 +108,10 @@ describe('the memory phone path', () => {
     expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
     reserve.setAdmitMode('reserve', { phonePath: 'memory' })
     expect(reserve.relay.sessions.phonePathEffective()).toBe('memory')
+    // No director has polled this process yet: past its plain window it is still in its boot grace.
     now += reserveDeadManWindowMs(reserve.config.cellId) + 1_000
+    expect(reserve.relay.sessions.inReserveMode()).toBe(true)
+    now += RESERVE_DEAD_MAN_BOOT_GRACE_MS
     expect(reserve.relay.sessions.inReserveMode()).toBe(false)
     expect(reserve.relay.sessions.phonePathEffective()).toBe('db')
   })
