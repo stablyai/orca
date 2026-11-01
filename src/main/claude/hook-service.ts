@@ -202,19 +202,20 @@ export class ClaudeHookService {
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
     const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
-    let nextConfig = applyManagedHooks(
-      config,
-      (eventName) =>
-        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
-      getManagedScriptFileName(this.options.settings),
-      plan
-    )
     const payload = this.managedScript()
     if (this.usesWindowsEntry) {
       installWindowsClaudeHookFiles(scriptPath, payload)
     } else {
       writeManagedScript(scriptPath, payload)
     }
+    // Why: account refreshes save settings to this file too; apply hooks to its latest content.
+    let nextConfig = applyManagedHooks(
+      readHooksJson(configPath) ?? config,
+      (eventName) =>
+        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
+      getManagedScriptFileName(this.options.settings),
+      plan
+    )
     // Profiles inherit statusLine from the default-home settings copy.
     if (options.configDir === undefined && plan.statusLine === 'install') {
       nextConfig = installClaudeManagedStatusLine(nextConfig, this.options.settings)

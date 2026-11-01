@@ -1,6 +1,10 @@
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
-import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
+import {
+  prepareClaudeProfileForLaunch,
+  refreshClaudeAccountsForSystemDefault,
+  systemDefaultRefreshProfile
+} from './claude-profile-launch-preparation'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -177,6 +181,7 @@ export class ClaudeProfileRouter {
     this.writePointer()
     const profile = this.routedProfile()
     if (!profile) {
+      await refreshClaudeAccountsForSystemDefault(this.args, (value) => this.setUp(value))
       return this.preparation()
     }
     await prepareClaudeProfileForLaunch(
@@ -293,7 +298,7 @@ export class ClaudeProfileRouter {
     try {
       this.writePointer()
       // Refresh without delaying terminal creation.
-      const profile = this.routedProfile()
+      const profile = this.routedProfile() ?? systemDefaultRefreshProfile(this.args)
       if (profile) {
         this.setUpInBackground(profile)
       }

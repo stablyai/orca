@@ -210,7 +210,9 @@ describe('ClaudeProfileRouter', () => {
     mkdirSync(f.home('a'), { recursive: true })
     writeFileSync(join(f.home('a'), '..', 'profile.json'), '{}')
     signIn(f.userHome, 'A@Example.test')
-    await expect(f.router.prepareLaunch()).resolves.toMatchObject({
+    const systemDefaultLaunch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(systemDefaultLaunch, 500)
+    await expect(systemDefaultLaunch).resolves.toMatchObject({
       configDir: join(f.userHome, '.claude'),
       provenance: 'system'
     })
@@ -231,6 +233,23 @@ describe('ClaudeProfileRouter', () => {
     expect(f.router.coveredBySystemDefault('a')).toBe(false)
     expect(f.router.routedHome()).toBe(f.home('a'))
     expect(f.router.routedHome('identity')).toBe(f.home('a'))
+  })
+
+  it('refreshes a set-up account before a System default launch, never creating one', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    f.settings.activeClaudeManagedAccountId = null
+    await expect(f.router.prepareLaunch()).resolves.toMatchObject({ provenance: 'system' })
+    expect(f.setup.calls).toBe(0)
+    expect(existsSync(f.home('a'))).toBe(false)
+
+    mkdirSync(f.home('b'), { recursive: true })
+    writeFileSync(join(f.home('b'), '..', 'profile.json'), '{}')
+    const launch = f.router.prepareLaunch()
+    await advanceRefreshDeadline(launch, 500)
+    await expect(launch).resolves.toMatchObject({ provenance: 'system' })
+    expect(f.setup.calls).toBe(1)
+    expect(existsSync(f.home('a'))).toBe(false)
   })
 
   it('tells whether a terminal opened before routing runs another account than the selected one', () => {
