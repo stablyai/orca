@@ -9,6 +9,7 @@ import {
 } from '../../claude-owed-task-notifications'
 import { readClaudeTaskNotification } from '../../claude-task-notification-text'
 import type { HookListenerState } from '../listener-state'
+import { retireClaudeNotifiedNonAgentTask } from './claude-roster-state'
 import { readString } from '../tool-input-preview'
 
 /** Track main-agent launches only: child-launched task notifications wake that child, not this pane. */
@@ -53,8 +54,12 @@ export function trackClaudeTaskNotificationDelivery(
     // Why: a repeated notification cannot end its still-unfinished foreground cycle.
     const continuesWakeupTurn =
       notification !== null && own?.state !== 'done' && own?.taskWakeupTurn === true
-    if (tasks && notification?.status) {
-      settleClaudeTaskNotification(tasks, notification.taskId)
+    if (notification?.status) {
+      // Why: a failed wake turn's StopFailure has no inventory, so only this can end the shell.
+      retireClaudeNotifiedNonAgentTask(state, paneKey, notification.taskId)
+      if (tasks) {
+        settleClaudeTaskNotification(tasks, notification.taskId)
+      }
     }
     return knownTask || continuesWakeupTurn
   } else if (tasks && (eventName === 'Stop' || eventName === 'StopFailure') && inventory.present) {

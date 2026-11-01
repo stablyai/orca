@@ -18,7 +18,8 @@
     "two-shells-together": "Two background shells end together; a main-agent Stop with an empty inventory precedes the second notification.",
     "shell-ends-mid-turn": "A background shell ends and is notified before the launching turn's Stop.",
     "shell-task-stopped": "The main agent stops its shell with TaskStop: no notification at all.",
-    "monitor-events": "A Monitor task sends `<event>` prompts under its task id while running, then a final one with a `<status>`."
+    "monitor-events": "A Monitor task sends `<event>` prompts under its task id while running, then a final one with a `<status>`.",
+    "shell-wake-turn-fails": "Claude 2.1.316, recorded 2026-11-01 against a stubbed API: a background shell's notification turn fails with a 503; StopFailure carries no background_tasks."
   },
-  "note": "Claude Code driven over a real PTY with every hook logged. Payloads are reduced to the fields the capture hook kept (event name, agent ids, tool name/input/response, prompt, task and cron inventories, stop_hook_active, source, notification_type); a launch response longer than the capture limit is reduced to isAsync/status/agentId. Scrubbed: session ids zeroed, home and scratch paths replaced."
+  "note": "Claude Code driven over a real PTY with every hook logged. Payloads are reduced to the fields the capture hook kept (event name, agent ids, tool name/input/response, prompt, task and cron inventories, stop_hook_active, source, notification_type, and StopFailure's error and last_assistant_message); a launch response longer than the capture limit is reduced to isAsync/status/agentId. Scrubbed: session ids zeroed, home and scratch paths replaced."
 }

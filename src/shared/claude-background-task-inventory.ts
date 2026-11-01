@@ -41,6 +41,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
   hasRunningNonAgentTask: boolean
   /** Ids of the running shell-like entries; one without an id is counted but not listed. */
   runningNonAgentTaskIds: string[]
+  /** No running shell-like entry went unlisted, so the ids account for all of them. */
+  allRunningNonAgentTasksListed: boolean
 } {
   const raw = hookPayload['background_tasks']
   if (!Array.isArray(raw)) {
@@ -49,17 +51,20 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       tasks: [],
       truncated: false,
       hasRunningNonAgentTask: false,
-      runningNonAgentTaskIds: []
+      runningNonAgentTaskIds: [],
+      allRunningNonAgentTasksListed: false
     }
   }
   const tasks: ClaudeBackgroundAgentTask[] = []
   let truncated = false
   let hasRunningNonAgentTask = false
   const runningNonAgentTaskIds: string[] = []
+  let allRunningNonAgentTasksListed = true
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) {
       truncated = true
       hasRunningNonAgentTask = true
+      allRunningNonAgentTasksListed = false
       continue
     }
     const obj = item as Record<string, unknown>
@@ -70,6 +75,7 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal
+      allRunningNonAgentTasksListed &&= isTerminal
       continue
     }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))
@@ -79,6 +85,8 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       const id = typeof obj.id === 'string' ? obj.id.trim() : ''
       if (id.length > 0) {
         runningNonAgentTaskIds.push(id)
+      } else {
+        allRunningNonAgentTasksListed = false
       }
     }
     if (!isAgentTask) {
@@ -96,5 +104,12 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
       teammate: taskType === 'teammate'
     })
   }
-  return { present: true, tasks, truncated, hasRunningNonAgentTask, runningNonAgentTaskIds }
+  return {
+    present: true,
+    tasks,
+    truncated,
+    hasRunningNonAgentTask,
+    runningNonAgentTaskIds,
+    allRunningNonAgentTasksListed
+  }
 }

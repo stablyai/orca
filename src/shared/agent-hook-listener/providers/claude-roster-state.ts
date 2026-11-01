@@ -6,6 +6,7 @@ import type {
 } from '../../agent-status-types'
 import { continueMainAgentStatus, mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
 import type { ClaudeSubagentRoster } from '../../claude-subagent-roster'
+import type { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { ClaudeLeadTurnState, HookListenerState } from '../listener-state'
 import { readString } from '../tool-input-preview'
@@ -99,11 +100,34 @@ export function getOrCreateClaudeSubagentRoster(
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean
+  inventory: Pick<
+    ReturnType<typeof readClaudeBackgroundAgentTasks>,
+    'hasRunningNonAgentTask' | 'runningNonAgentTaskIds' | 'allRunningNonAgentTasksListed'
+  >
 ): void {
-  if (hasRunningNonAgentTask) {
-    state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
-  } else {
+  state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
+  if (!inventory.hasRunningNonAgentTask) {
+    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    return
+  }
+  state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+  if (inventory.allRunningNonAgentTasksListed) {
+    state.claudeRunningNonAgentTaskIdsByPaneKey.set(
+      paneKey,
+      new Set(inventory.runningNonAgentTaskIds)
+    )
+  }
+}
+
+/** A shell's final notification is its end; StopFailure brings no inventory to say so (2.1.316). */
+export function retireClaudeNotifiedNonAgentTask(
+  state: HookListenerState,
+  paneKey: string,
+  taskId: string
+): void {
+  const running = state.claudeRunningNonAgentTaskIdsByPaneKey.get(paneKey)
+  if (running?.delete(taskId) && running.size === 0) {
+    state.claudeRunningNonAgentTaskIdsByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 }
