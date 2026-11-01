@@ -3,7 +3,13 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { makeGroup, makeTerminalTab, makeUnifiedTab } from '../worktree-jump-palette-test-fixtures'
+import {
+  makeGroup,
+  makeRepo,
+  makeWorktree,
+  makeTerminalTab,
+  makeUnifiedTab
+} from '../worktree-jump-palette-test-fixtures'
 import { useNativeChatToggleShortcut } from './use-native-chat-toggle-shortcut'
 import { useGlobalKeybindings } from '@/app-shell/use-global-keybindings'
 import { useAppChromeLayout } from '@/app-shell/use-app-chrome-layout'
@@ -12,6 +18,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-rout
 const plugins = vi.hoisted((): { commands: ActivePluginCommand[] } => ({ commands: [] }))
 vi.mock('@/store/plugin-panels', () => ({ usePluginCommands: () => plugins.commands }))
 vi.mock('@/lib/plugin-command-execution', () => ({ executePluginCommand: vi.fn(async () => {}) }))
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'win32' }))
 vi.mock('@/app-shell/app-window-chrome', () => ({ shortcutPlatform: 'win32' }))
 vi.mock('../../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
@@ -54,6 +61,18 @@ function input(target = document.body, init: KeyboardEventInit = {}, type = 'key
 beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
   useAppStore.setState({
+    repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'local' }],
+    worktreesByRepo: {
+      repo: [
+        makeWorktree('main', 'Main', {
+          repoId: 'repo',
+          hostId: 'local',
+          path: '//wsl.localhost/Ubuntu/work'
+        })
+      ]
+    },
+    activeWorkspaceExecutionHostId: 'local',
+    projects: [],
     activeView: 'terminal',
     activeWorktreeId: 'main',
     activeGroupIdByWorktree: { main: 'group-main' },
@@ -185,3 +204,27 @@ it('yields the reverse held family, frees an unbound family, and refuses repeate
   expect(input().defaultPrevented).toBe(false)
   expect(toggle).toHaveBeenCalledTimes(1)
 })
+
+it.each([true, false, null])(
+  'uses actual runtime facts for shortcut entry and universal Return (%s)',
+  (runtime) => {
+    const worktree = useAppStore.getState().worktreesByRepo.repo[0]
+    useAppStore.setState({
+      worktreesByRepo:
+        runtime === null
+          ? {}
+          : { repo: [{ ...worktree, path: runtime ? '//wsl.localhost/Ubuntu/work' : 'C:/work' }] }
+    })
+    renderHook(() => useNativeChatToggleShortcut('main', true))
+    expect(input().defaultPrevented).toBe(runtime === true)
+    expect(toggle).toHaveBeenCalledTimes(runtime === true ? 1 : 0)
+    act(() =>
+      useAppStore.setState({
+        unifiedTabsByWorktree: {
+          main: [{ ...useAppStore.getState().unifiedTabsByWorktree.main[0], viewMode: 'chat' }]
+        }
+      })
+    )
+    expect(input().defaultPrevented).toBe(true)
+  }
+)

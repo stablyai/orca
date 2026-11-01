@@ -48,7 +48,7 @@ export function structuredChatUnavailableText(reason?: string): string {
     : reason === 'remote'
       ? translate(
           'components.native-chat.explicitChatSsh',
-          'Chat is not available over SSH. Open the agent in a terminal instead.'
+          'This host isn’t on Orca’s server yet. Connect again to set it up, or open the agent in a terminal.'
         )
       : translate(
           'components.native-chat.explicitChatUnavailable',

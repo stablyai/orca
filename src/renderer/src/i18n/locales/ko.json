@@ -3695,7 +3695,7 @@
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",
             "startChat": "{{value0}} 채팅 시작",
-            "chatNotOverSsh": "SSH에서는 채팅을 사용할 수 없음",
+            "chatNotOverSsh": "호스트에 아직 Orca 서버가 없음",
             "chatNotOnHost": "이 호스트에서는 채팅을 사용할 수 없음",
             "chatNotInWsl": "WSL에서는 채팅을 사용할 수 없음",
             "chatNotInSubfolder": "하위 폴더에서는 채팅을 사용할 수 없음",
@@ -19170,7 +19170,7 @@
         "unverified": "Orca가 {{value0}}에 대한 호스트 권한을 확인할 수 없습니다."
       },
       "explicitChatWsl": "WSL에서는 채팅을 사용할 수 없습니다. 대신 터미널에서 에이전트를 여세요.",
-      "explicitChatSsh": "SSH 연결에서는 채팅을 사용할 수 없습니다. 대신 터미널에서 에이전트를 여세요.",
+      "explicitChatSsh": "이 호스트에는 아직 Orca 서버가 설정되지 않았습니다. 다시 연결하여 설정하거나 터미널에서 에이전트를 여세요.",
       "structuredSessionTerminalNotVisible": "Orca가 터미널에서 {{value0}}을(를) 열었지만 실행이 완료된 후 여기에 표시하지 못했습니다. 채팅 초안은 보관되었습니다.",
       "explicitChatUnavailable": "이 워크스페이스에서는 채팅을 실행할 수 없습니다. 에이전트 설치 상태를 확인하거나 터미널에서 여세요.",
       "goalControl": {

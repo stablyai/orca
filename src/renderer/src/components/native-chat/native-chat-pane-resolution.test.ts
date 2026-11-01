@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { resolveNativeChatSession } from './native-chat-pane-resolution'
 
 function entry(
@@ -138,7 +137,7 @@ describe('resolveNativeChatSession', () => {
     })
   })
 
-  it.each(['codex', 'claude', 'openclaude'] as TuiAgent[])(
+  it.each(['codex', 'claude'] as const)(
     'resolves supported title fallback %s when no hook or launch identity exists',
     (resolvedAgent) => {
       const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -159,16 +158,19 @@ describe('resolveNativeChatSession', () => {
     }
   )
 
-  it('does not resolve unsupported title fallback gemini', () => {
-    expect(
-      resolveNativeChatSession({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        launchAgent: null,
-        resolvedAgent: 'gemini',
-        ptyId: 'pty-1'
-      })
-    ).toBeNull()
-  })
+  it.each(['gemini', 'openclaude', 'zcode'] as const)(
+    'does not resolve unsupported title fallback %s',
+    (resolvedAgent) => {
+      expect(
+        resolveNativeChatSession({
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          launchAgent: null,
+          resolvedAgent,
+          ptyId: 'pty-1'
+        })
+      ).toBeNull()
+    }
+  )
 
   it('resolves Grok from title fallback once native chat supports its transcript', () => {
     expect(

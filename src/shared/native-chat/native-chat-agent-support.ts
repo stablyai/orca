@@ -5,13 +5,11 @@ export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'o
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'claude',
-  'openclaude',
   'codex',
   'grok',
   'omp',
   'opencode',
-  'opencode2',
-  'zcode'
+  'opencode2'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(

@@ -41,6 +41,7 @@ import { installPtyInputForward } from './pty-input-forward'
 import { installPtyResizeGeometry } from './pty-resize-geometry'
 import { installSessionReconcileDispose } from './session-reconcile-dispose'
 import { findTerminalTabForPane } from './terminal-tab-id'
+import { canRemountTerminalPaneWithoutChatOwner } from '../terminal-pane-recovery-ownership'
 
 export function connectPanePty(
   pane: ManagedPane,
@@ -55,7 +56,9 @@ export function connectPanePty(
   session.tabGeneration = terminalTab?.generation ?? 0
   // Recovery belongs to this xterm instance; late requests cannot replace its already-remounted successor.
   session.terminalRecoveryGeneration = captureTabRecoveryGeneration(terminalTab)
-  session.terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(session.deps.tabId)
+  session.terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(session.deps.tabId, () =>
+    canRemountTerminalPaneWithoutChatOwner(deps.worktreeId, deps.tabId, manager)
+  )
   session.mountFollowsTerminalPark = session.deps.mountFollowsTerminalPark
   session.authoritativeReattachGeneration = 0
   exposeE2eTerminalPtyOutputDebug()

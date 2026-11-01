@@ -7,7 +7,7 @@ import { Callout } from '@/components/docs/prose'
 
 Chat UI is a conversation view with a transcript, composer, and agent controls. Supported agents you choose to open as chats start new sessions in **structured chat**, which communicates directly with the agent rather than displaying a terminal session. Other agents and unsupported execution environments open in the terminal.
 
-Existing terminal-backed chats use a transcript view over an agent running in a terminal. These keep their original form; changing an agent's Chat or CLI choice does not convert existing sessions.
+The old terminal-backed chat view remains available only for supported agents in WSL projects on desktop. Saved chat-view tabs elsewhere reopen as their terminal once Orca can confirm where the project runs, without restarting the agent. OpenClaude and ZCode no longer support chat on desktop or mobile. Changing an agent's Chat or CLI choice does not convert existing sessions.
 
 ## Choose chat or terminal
 
@@ -38,9 +38,9 @@ If the terminal agent still owns the conversation, Orca asks you to stop or exit
 
 Structured chat tabs have no in-place terminal view; use **Continue with Terminal Agent** above instead.
 
-A terminal-backed chat is a view over a running terminal agent, so switching it does not create a new session. Use the pane header's **Show terminal** button, or **Continue with Terminal Agent** in its tab menu, to return to the terminal. Right-clicking inside a supported terminal pane offers **Continue in Chat UI**, which shows that same terminal session as a transcript instead of creating a structured chat.
+In a WSL project, a supported terminal-backed chat is a view over a running terminal agent, so switching it does not create a new session. Use the pane header's **Show terminal** button, or **Continue with Terminal Agent** in its tab menu, to return to the terminal. Right-clicking inside a supported terminal pane offers **Continue in Chat UI**, which shows that same terminal session as a transcript instead of creating a structured chat.
 
-You can also switch the same terminal-backed session with **Switch between Chat UI and terminal** in **Settings → Shortcuts** (`Cmd+Shift+J` by default on macOS, `Ctrl+Shift+J` on Windows/Linux). On Windows/Linux, **Switch worktree** takes precedence when it uses the same chord. Remap either shortcut to remove the overlap, or use the terminal-first shortcut policy while terminal input is focused. Terminal-first does not free the chord in native-chat input.
+In WSL projects, you can also switch the same terminal-backed session with **Switch between Chat UI and terminal** in **Settings → Shortcuts** (`Cmd+Shift+J` by default on macOS, `Ctrl+Shift+J` on Windows/Linux). On Windows/Linux, **Switch worktree** takes precedence when it uses the same chord. Remap either shortcut to remove the overlap, or use the terminal-first shortcut policy while terminal input is focused. Terminal-first does not free the chord in native-chat input.
 
 ## Composer
 

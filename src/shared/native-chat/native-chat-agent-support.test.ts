@@ -30,9 +30,9 @@ describe('isNativeChatSupportedAgent', () => {
   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
     expect(isNativeChatSupportedAgent('opencode')).toBe(true)
     expect(isNativeChatSupportedAgent('opencode2')).toBe(true)
-    expect(isNativeChatSupportedAgent('zcode')).toBe(true)
+    expect(isNativeChatSupportedAgent('zcode')).toBe(false)
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
-    expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
+    expect(isNativeChatSupportedAgent('openclaude')).toBe(false)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)

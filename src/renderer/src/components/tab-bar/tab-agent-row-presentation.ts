@@ -17,7 +17,7 @@ export function chatUnavailableLabel(reason: ChatUnavailableReason): string {
     case 'ssh':
       return translate(
         'auto.components.tab.bar.QuickLaunchButton.chatNotOverSsh',
-        'No chat over SSH'
+        'Host has no Orca server yet'
       )
     case 'wsl':
       return translate('auto.components.tab.bar.QuickLaunchButton.chatNotInWsl', 'No chat in WSL')

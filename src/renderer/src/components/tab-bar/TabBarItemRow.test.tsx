@@ -11,6 +11,10 @@ import {
 import { i18n } from '@/i18n/i18n'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { AppState } from '@/store/types'
+import { createTestStore } from '@/store/slices/store-test-helpers'
+import { makeRepo, makeWorktree } from '../worktree-jump-palette-test-fixtures'
+import { selectNativeChatWslProject } from '../terminal-pane/terminal-pane-host-state'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   renderTabBarItems,
@@ -20,6 +24,8 @@ import {
 import { useTabBarItemActions } from './use-tab-bar-item-actions'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
+const menuToggle = vi.fn()
 
 type TabProps = {
   tab?: { id: string; title: string }
@@ -30,6 +36,8 @@ type TabProps = {
   onActivate: (id: string) => void
   onDuplicate?: () => void
   gitStatus?: string | null
+  canToggleViewMode?: boolean
+  onToggleViewMode?: () => void
 }
 
 const tabRenders: { id: string; props: TabProps }[] = []
@@ -141,6 +149,9 @@ function buildItems({
 }
 
 type StripInputs = {
+  nativeChatState?: AppState
+  nativeChatAgent?: AgentType
+  chatMode?: boolean
   onActivate?: (id: string) => void
   generatedTabTitlesEnabled?: boolean
   managedBrowserCreationEnabled?: boolean
@@ -154,6 +165,9 @@ type StripInputs = {
 }
 
 function Strip({
+  nativeChatState,
+  nativeChatAgent,
+  chatMode = false,
   onActivate = NOOP,
   generatedTabTitlesEnabled = false,
   managedBrowserCreationEnabled = false,
@@ -177,10 +191,32 @@ function Strip({
   const runtime: TabBarItemSurfaceRuntime = {
     resolvedGroupId: 'group-1',
     generatedTabTitlesEnabled,
-    unifiedTabByVisibleId: new Map(),
-    tabAgentTypesByTabId: {},
+    unifiedTabByVisibleId: nativeChatState
+      ? new Map([
+          [
+            'terminal-1',
+            {
+              id: 'unified-terminal-1',
+              entityId: 'terminal-1',
+              contentType: 'terminal',
+              groupId: 'group-1',
+              worktreeId: 'wt-1',
+              label: 'codex',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 0,
+              viewMode: chatMode ? 'chat' : 'terminal'
+            }
+          ]
+        ])
+      : new Map(),
+    tabAgentTypesByTabId: nativeChatAgent ? { 'terminal-1': nativeChatAgent } : {},
     nativeChatTabWideFallbackUnsafeTabsById: {},
-    nativeChatTranscriptIsLocalReadable: false,
+    nativeChatIsWslProject: nativeChatState
+      ? selectNativeChatWslProject(nativeChatState, 'wt-1')
+      : false,
+    nativeChatTranscriptIsLocalReadable: Boolean(nativeChatState),
     managedBrowserCreationEnabled,
     statusByRelativePath
   }
@@ -200,7 +236,7 @@ function Strip({
       onTogglePaneExpand: NOOP
     },
     togglePinned: NOOP,
-    toggleTabViewMode: NOOP
+    toggleTabViewMode: menuToggle
   })
   return (
     <>
@@ -410,3 +446,37 @@ describe('real tabs while a client-hosted row is selected', () => {
     }
   )
 })
+
+it.each([true, false, null])(
+  'gates the tab menu from addressed runtime facts and keeps Return (%s)',
+  (runtime) => {
+    const state: AppState = {
+      ...createTestStore().getState(),
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'local' }],
+      projects: [],
+      settings: null,
+      worktreesByRepo:
+        runtime === null
+          ? {}
+          : {
+              repo: [
+                makeWorktree('wt-1', 'Main', {
+                  repoId: 'repo',
+                  hostId: 'local',
+                  path: runtime ? '//wsl.localhost/Ubuntu/work' : 'C:/work'
+                })
+              ]
+            }
+    }
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'codex' })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(runtime === true)
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'zcode' })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(false)
+    renderStrip({ nativeChatState: state, nativeChatAgent: 'zcode', chatMode: true })
+    expect(lastRender('terminal-1').canToggleViewMode).toBe(true)
+    lastRender('terminal-1').onToggleViewMode?.()
+    expect(menuToggle).toHaveBeenCalledWith('unified-terminal-1')
+  }
+)

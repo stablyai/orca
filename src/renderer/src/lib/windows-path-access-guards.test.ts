@@ -21,14 +21,15 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 import { isLocalPathOpenBlocked, isRevealOrEditorOpenBlocked } from './local-path-open-guard'
 import { getExternalEditorOpenCapability } from './external-editor-open-capability'
-import { revealInFileManager } from './reveal-in-file-manager'
+import { getWorkspaceFileRevealOwner, revealInFileManager } from './reveal-in-file-manager'
+import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
 import {
   getWindowsPathAccess,
   listWslHostWindowsPathAccess,
   registerWindowsPathAccessEnvironments
 } from './windows-path-access'
 
-const WSL_OWNER = 'runtime:wsl%3AUbuntu'
+const WSL_OWNER = 'runtime:wsl%3AUbuntu' as const
 const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 beforeEach(() => {
@@ -106,6 +107,32 @@ describe('reveal and open-in-editor guards', () => {
         ownerUnresolved: true
       })
     ).toEqual({ allowed: false, reason: 'remote-runtime' })
+  })
+
+  it('keeps an unstamped nested SSH path out of the selected WSL hub’s local shell', async () => {
+    const state = {
+      activeWorktreeId: 'repo::/srv/private',
+      activeWorkspaceExecutionHostId: WSL_OWNER,
+      repos: [{ id: 'repo', executionHostId: WSL_OWNER }],
+      worktreesByRepo: {
+        repo: [
+          {
+            id: 'repo::/srv/private',
+            repoId: 'repo',
+            hostId: 'ssh:private' as const,
+            runtimeOwnerEnvironmentId: 'wsl:Ubuntu'
+          }
+        ]
+      }
+    }
+    expect(getActiveWorkspaceOwnerTarget(state)).toEqual({
+      kind: 'environment',
+      environmentId: 'wsl:Ubuntu'
+    })
+    const owner = getWorkspaceFileRevealOwner(state, state.activeWorktreeId, {})
+    expect(owner).toBe('ssh:private')
+    await revealInFileManager('/srv/private/report.txt', owner)
+    expect(mocks.openInFileManager).not.toHaveBeenCalled()
   })
 
   it('hand main the owner, so main translates the Linux path itself', async () => {

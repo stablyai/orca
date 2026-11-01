@@ -3764,7 +3764,7 @@
             "chatNotInstalled": "No instalado",
             "startChat": "Iniciar un chat con {{value0}}",
             "chatNotInSubfolder": "Chat no disponible en subcarpetas",
-            "chatNotOverSsh": "Chat no disponible por SSH",
+            "chatNotOverSsh": "El host aún no tiene un servidor de Orca",
             "chatNotOnHost": "Chat no disponible en este host",
             "chatNotInWsl": "Chat no disponible en WSL",
             "chatUnavailableAfterSelection": "No se pudo iniciar un chat {{value0}}.",
@@ -19703,7 +19703,7 @@
         "outdatedHost": "Este host ejecuta un Orca antiguo que ignora los permisos de chat, por lo que {{value0}} se ejecutaría aquí sin preguntar. Actualice Orca en este host para usar {{value1}}.",
         "checking": "Comprobando los permisos de chat de este host…"
       },
-      "explicitChatSsh": "El chat no está disponible en SSH. En su lugar, abra el agente en una terminal.",
+      "explicitChatSsh": "Este host aún no usa el servidor de Orca. Vuelva a conectarse para configurarlo o abra el agente en una terminal.",
       "explicitChatWsl": "El chat no está disponible en WSL. En su lugar, abra el agente en una terminal.",
       "structuredSessionTerminalNotVisible": "Orca abrió {{value0}} en una terminal, pero no pudo mostrarlo aquí cuando finalizó el lanzamiento. Se mantuvo el borrador de tu chat.",
       "explicitChatUnavailable": "Este espacio de trabajo no puede ejecutar el chat. Verifique la instalación del agente o ábralo en una terminal.",

@@ -28,6 +28,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     applyNativeChatLeafRoute,
     canToggleChatForLeaf,
     chatLeafId,
+    savedOwnerDisposition,
     contextMenu,
     contextMenuLeafId,
     effectiveChatViewMode,
@@ -35,7 +36,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     getNativeChatLeafIds,
     getTabWideAgentHintLeafId,
     isActive,
-    isChatEligibleForLeaf,
+    presentationPolicyForLeaf,
     isChatViewMode,
     isVisible,
     managerRef,
@@ -115,22 +116,24 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     applyNativeChatLeafRoute(
       resolveNativeChatLeafRoute({
         isChatViewMode,
+        savedOwnerDisposition,
         chatLeafId,
         activeLeafId,
         chatLeafStillMounted,
-        activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
+        activeLeafDisposition: presentationPolicyForLeaf(activeLeafId).saved
       })
     )
   }, [
     isChatViewMode,
+    savedOwnerDisposition,
     chatLeafId,
     activePane?.leafId,
     chatLeafStillMounted,
     applyNativeChatLeafRoute,
-    isChatEligibleForLeaf
+    presentationPolicyForLeaf
   ])
   const chatPane =
-    isChatViewMode && chatLeafId
+    effectiveChatViewMode && chatLeafId
       ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)
       : null
   const chatPanePtyId = chatPane
@@ -149,7 +152,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     leafIds: getNativeChatLeafIds()
   })
   const activePaneIsChatLeaf = Boolean(
-    isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
+    effectiveChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
   const resolveAgentForLeaf = (leafId: string | null): string | null => {
     const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
@@ -190,7 +193,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
         })
     }))
   )
-  const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+  const contextMenuIsChatView =
+    isChatViewMode && (chatLeafId === null || contextMenuLeafId === chatLeafId)
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
     if (!leafId) {

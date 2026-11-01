@@ -109,7 +109,7 @@ it('projects the same CLI label, unavailable reason and stable chat ID as static
     { kind: 'cli', agent: 'codex', chat: true }
   ])
   expect(unavailable).toMatchObject([
-    { id: 'chat:claude', label: 'Claude', reason: 'No chat over SSH', disabled: true },
+    { id: 'chat:claude', label: 'Claude', reason: 'Host has no Orca server yet', disabled: true },
     { id: 'cli:claude', label: 'Claude (CLI)', disabled: false },
     { id: 'cli:codex', label: 'Codex (CLI)', disabled: false }
   ])
