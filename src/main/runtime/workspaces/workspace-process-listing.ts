@@ -25,17 +25,17 @@ import { attachRuntimeWorktreeAgentRowWaits } from '../runtime-worktree-agent-ro
 import { compareWorktreePs } from '../runtime-worktree-status-projection'
 import type { Repo } from '../../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../structured-agent-session-mobile-attention'
+} from '../agent-session/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from '../agent-session/records/agent-session-record-store-slot'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'

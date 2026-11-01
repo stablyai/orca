@@ -2,7 +2,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { expect, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {

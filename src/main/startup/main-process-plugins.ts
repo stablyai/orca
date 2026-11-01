@@ -22,10 +22,8 @@ import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-ena
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
-import {
-  openPluginFrameGuestDevTools,
-  setPluginFrameGuestLogSink
-} from '../plugins/panels/plugin-frame-guest-diagnostics'
+import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
+import { openPluginFrameGuestDevTools } from '../plugins/panels/plugin-frame-guest-diagnostics'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -37,6 +35,11 @@ import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
 import { agentHookServer } from '../agent-hooks/server'
+import {
+  createPluginAgentStatusForwarder,
+  pluginRuntimeDelegate,
+  watchPluginWorkspaceContext
+} from '../plugins/plugin-runtime-binding'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
 import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -229,7 +232,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
-  pluginService.setRuntimeDelegate(runtime)
+  const pluginDelegate = pluginRuntimeDelegate(runtime, () => agentHookServer.getStatusSnapshot())
+  pluginService.setRuntimeDelegate(pluginDelegate)
   // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
@@ -242,7 +246,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       store.updateSettings({ devPluginPaths }, { notifyListeners: true }),
     openFrameDevTools: openPluginFrameGuestDevTools
   })
-  setPluginFrameGuestLogSink((pluginKey) => state.pluginService?.captureLog(pluginKey) ?? null)
+  bindPluginDesktopViews(state.isServeMode, pluginService, () => state.mainWindow)
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()
@@ -290,11 +294,17 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   }, PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS).unref?.()
   // Filter hook/worktree events server-side by each plugin subscription.
+  const forwardAgentStatus = createPluginAgentStatusForwarder(pluginDelegate, pluginService)
   agentHookServer.subscribeEnrichedStatus((enriched) => {
     const payload = projectPluginAgentStatusChangedPayload(enriched)
     if (payload) {
-      state.pluginService?.emitEvent('agent.status.changed', payload)
+      forwardAgentStatus(payload, enriched.terminalHandle)
     }
+  })
+  watchPluginWorkspaceContext({
+    delegate: pluginDelegate,
+    events: pluginService,
+    onSessionWritten: (listener) => store.onWorkspaceSessionWritten(listener)
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
 }

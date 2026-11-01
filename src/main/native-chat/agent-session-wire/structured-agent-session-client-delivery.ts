@@ -78,7 +78,8 @@ export class StructuredAgentSessionClientDelivery {
       sessions,
       now,
       readStatusState: (sessionId, journal) =>
-        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null
+        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null,
+      readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
       this.settlementReading(sessionId, this.requireJournal(sessionId))
@@ -173,7 +174,11 @@ export class StructuredAgentSessionClientDelivery {
     sessionId: string,
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
-  ): void => this.statusFeed.publishChildWork(sessionId, evidence, producer)
+  ): void => {
+    this.statusFeed.publishChildWork(sessionId, evidence, producer)
+    // A drain can be the moment a held turn becomes finished.
+    this.turnCompletionFeed.observe(sessionId)
+  }
 
   readStopping = (sessionId: string): boolean => {
     const projection = this.statusFeed.journalProjection(sessionId)

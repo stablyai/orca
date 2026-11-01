@@ -1,5 +1,5 @@
 import { app, ipcMain, webContents, type BaseWindow, type WebContents } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { isAgentInjectingInput } from '../browser/agent-input-injection'
 import { HoldQuitGesture } from './hold-quit-gesture'
 import { watchMacQuitChord } from './macos-quit-chord-watch'

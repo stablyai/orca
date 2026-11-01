@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'

@@ -28,7 +28,7 @@ import {
   type StructuredAgentSessionHostSupport
 } from './mobile-structured-agent-session-host-support'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
+import { mobileNativeChatUnsentNotices } from './native-chat/mobile-native-chat-unsent-notices'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import {
   useMobileNativeChatSendError,

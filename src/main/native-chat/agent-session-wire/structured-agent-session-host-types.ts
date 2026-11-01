@@ -29,9 +29,9 @@ import type {
   AgentSessionStatusSummary
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
-import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import type { AgentSessionUserNameWrite } from '../../runtime/agent-session/records/agent-session-record-conversation-name'
+import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
 import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'

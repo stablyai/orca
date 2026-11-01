@@ -27,7 +27,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
-vi.mock('@/lib/structured-agent-session-launch-create-call', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: mocks.launch
 }))
 
@@ -66,7 +66,7 @@ import { useAppStore } from '../../store'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
-} from '@/lib/structured-agent-session-launch'
+} from '@/lib/agent-session/launch/structured-agent-session-launch'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
@@ -77,7 +77,7 @@ import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-cat
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
-import { getStructuredAgentSessionLaunchSelection } from '@/lib/structured-agent-session-launch-options'
+import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
 
 const LOCAL_TARGET = { kind: 'local' } as const

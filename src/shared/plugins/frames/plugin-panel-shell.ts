@@ -2,6 +2,7 @@ import { EDITOR_METHODS, FRAME_EVENTS, type PluginFrameTheme } from './plugin-fr
 import { PLUGIN_ERROR_CODES, PLUGIN_PROTOCOL_VERSION } from './plugin-protocol'
 import { PLUGIN_DECLARATIVE_POST_GLOBAL, PLUGIN_FRAME_TRANSPORT_GLOBAL } from './plugin-frame-guest'
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
+import { PLUGIN_FRAME_FACADES_SCRIPT } from './plugin-panel-shell-facades'
 import {
   PLUGIN_FRAME_USER_METHODS,
   pluginFrameMethodsFor,
@@ -170,6 +171,8 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
       applyTheme(m.payload.theme)
     } else if (m.kind === 'evt' && m.event === E.theme) {
       applyTheme(m.payload)
+    } else if (m.kind === 'evt' && m.event === E.push) {
+      receivePush(m.payload)
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
@@ -191,7 +194,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     }),
     on: on
   }
-  if (C.user) {
+${PLUGIN_FRAME_FACADES_SCRIPT}  if (C.user) {
     orca.shell = Object.freeze({
       openExternal: function (url) { return userCall(C.user.openExternal, { url: String(url) }) }
     })

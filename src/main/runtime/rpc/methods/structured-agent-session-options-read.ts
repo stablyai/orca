@@ -14,7 +14,7 @@ import {
   ModelCatalogParams,
   OptionsParams
 } from './structured-agent-session-schemas'
-import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from '../../agent-session/records/agent-session-record-launch-directory'
 import {
   clientRequestsCommands,
   clientReadsOptionsWithoutModel

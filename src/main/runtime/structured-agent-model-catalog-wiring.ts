@@ -1,6 +1,6 @@
 import type { AgentModelCatalogRunningAccountDeps } from '../native-chat/agent-model-catalog/agent-model-catalog-running-account'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { agentSessionPinnedLaunchDirectory } from './agent-session-record-launch-directory'
+import { agentSessionPinnedLaunchDirectory } from './agent-session/records/agent-session-record-launch-directory'
 import {
   agentModelCatalogStore,
   type AgentModelCatalogProbe
@@ -15,7 +15,7 @@ import {
   agentReadsProjectModelConfig,
   workspaceMayOverrideDefaultModel
 } from '../native-chat/agent-model-catalog/agent-project-model-override'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type {
   StructuredAgentModelCatalogContext,
   StructuredAgentRuntimeRegistration

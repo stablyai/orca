@@ -84,7 +84,7 @@ vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({
     clear: () => {}
   })
 }))
-vi.mock('./use-mobile-native-chat-controller', () => ({
+vi.mock('./native-chat/use-mobile-native-chat-controller', () => ({
   useMobileNativeChatController: () => ({
     nativeChatSession: { messages: [] },
     toggleTabChatView: () => {},

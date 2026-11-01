@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
 import type { GitHubRepoContext, LocalGitExecOptions } from './github-repository-identity'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { __resetHostedReviewBranchCacheForTests } from '../source-control/hosted-review-branch-cache'
 
 const mocks = vi.hoisted(() => ({

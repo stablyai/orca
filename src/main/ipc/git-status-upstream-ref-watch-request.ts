@@ -1,4 +1,4 @@
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
