@@ -109,3 +109,65 @@ export const multiline = defineFixture({
     }
   }
 })
+
+export const shortPane = defineFixture({
+  width: 360,
+  render: () => (
+    <div
+      data-short-question-pane
+      className="native-chat-appearance flex h-64 min-h-0 flex-col bg-chat-canvas"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <div className="h-8 shrink-0">Session header</div>
+      <div className="min-h-0 flex-1" />
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: Array.from({ length: 24 }, (_, i) => `Question line ${i + 1}`).join('\n'),
+              multiSelect: true,
+              options: [{ label: 'Local', description: multilineDescription }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  ),
+  interact: (frame) => {
+    const pane = frame.querySelector<HTMLElement>('[data-short-question-pane]')
+    const card = frame.querySelector<HTMLElement>('[role="group"]')
+    const input = frame.querySelector<HTMLInputElement>('[data-native-chat-answer-field]')
+    if (!pane || !card || !input) {
+      throw new Error('Missing short-pane question controls')
+    }
+    const paneBounds = pane.getBoundingClientRect()
+    const cardBounds = card.getBoundingClientRect()
+    if (cardBounds.top < paneBounds.top || cardBounds.bottom > paneBounds.bottom + 1) {
+      throw new Error('Question card overflows the short pane')
+    }
+    card.scrollTop = card.scrollHeight
+    if (card.scrollTop === 0) {
+      throw new Error('Long question cannot scroll to its answer controls')
+    }
+    const answerRow = input.parentElement
+    const submit = answerRow?.querySelector<HTMLButtonElement>('button')
+    if (!submit) {
+      throw new Error('Missing question confirmation button')
+    }
+    for (const control of [input, submit]) {
+      const bounds = control.getBoundingClientRect()
+      if (bounds.top < cardBounds.top || bounds.bottom > cardBounds.bottom + 1) {
+        throw new Error('Answer control is outside the scrolled card')
+      }
+      if (
+        !control.contains(
+          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+        )
+      ) {
+        throw new Error('Answer control is clipped or covered')
+      }
+    }
+  }
+})

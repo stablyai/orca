@@ -199,7 +199,7 @@ export function NativeChatQuestionCard({
       role="group"
       aria-label={q.question}
       tabIndex={-1}
-      className="shrink-0 bg-chat-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="max-h-full min-h-0 overflow-y-auto bg-chat-canvas scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
