@@ -16,6 +16,7 @@ import {
 } from './session-search-index-writer'
 import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
+import { readSessionSearchFileRows } from './session-search-file-records'
 
 export type { SessionSearchFileRow, SessionSearchFileState } from './session-search-file-cursor'
 
@@ -197,33 +198,7 @@ export class SessionSearchStore {
   }
 
   files(): SessionSearchFileRow[] {
-    return (
-      this.db
-        .prepare(
-          // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
-          `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                  mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
-                  content_fingerprint AS contentFingerprint,
-                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
-           FROM files`
-        )
-        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
-        dev: number | null
-        ino: number | null
-      })[]
-    ).map((row) => ({
-      path: row.path,
-      identity:
-        typeof row.dev === 'number' && typeof row.ino === 'number'
-          ? { dev: row.dev, ino: row.ino }
-          : null,
-      mtimeMs: row.mtimeMs,
-      sizeBytes: row.sizeBytes,
-      contentFingerprint: row.contentFingerprint,
-      state: row.state,
-      failCount: row.failCount,
-      failedMtimeMs: row.failedMtimeMs
-    }))
+    return readSessionSearchFileRows(this.db)
   }
 
   setFileState(
