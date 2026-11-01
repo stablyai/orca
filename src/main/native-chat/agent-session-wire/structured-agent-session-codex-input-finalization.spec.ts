@@ -120,9 +120,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       await vi.waitFor(() => expect(codex.connections).toHaveLength(2))
       await vi.waitFor(() => expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true))
       if (failure === 'crash') {
-        await vi.waitFor(() =>
-          expect(continuingStructuredAgentSessionInput(journal, id)).toBe(true)
-        )
         expect(await row(id)).toMatchObject({ dispatchState: 'pending' })
         await assertInputRecoveredAfterSnapshot(id)
       }
