@@ -10,6 +10,7 @@ import {
   type SwapVolumeFreeSpace
 } from './swap-volume-free-space'
 import { samplePreGoneSystemMemory } from './pre-gone-host-memory'
+import { setProcVmstatReaderForTest } from './kernel-oom-kill-count'
 import {
   buildProcessGoneCrashDetails,
   resetPreGoneCrashSamplingForTest,
@@ -81,6 +82,7 @@ describe('pre-gone host memory', () => {
     resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
     setSwapVolumeFreeSpaceReaderForTest(null)
+    setProcVmstatReaderForTest(null)
     appMetricsMock.mockClear()
     appMetricsMock.mockReturnValue(BROWSER_AND_RENDERER)
   })
@@ -334,5 +336,28 @@ describe('pre-gone host memory', () => {
 
     expect(details.processMetricsPreGoneRendererWorkingSetMB).toBe(400)
     expect(Object.keys(details).filter((key) => key.startsWith('systemMemoryPreGone'))).toEqual([])
+  })
+
+  it('tells a kernel OOM kill from an outside SIGKILL by the vmstat oom_kill delta', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    try {
+      let oomKills = 9
+      setProcVmstatReaderForTest(() => `pgfault 1\noom_kill ${oomKills}\nswap_ra 0\n`)
+      setSystemMemoryInfoReaderForTest(() => AFTER_THE_CORPSE_RELEASED)
+      await samplePreGoneSystemMemory(Date.now() - 5_000)
+
+      expect(
+        buildProcessGoneCrashDetails({}, 'renderer').systemMemoryKernelOomKillsSincePreGone
+      ).toBe(0)
+
+      // Memory-cgroup kill measured on omarchy: renderer, GPU, then the hog.
+      oomKills = 12
+      expect(
+        buildProcessGoneCrashDetails({}, 'renderer').systemMemoryKernelOomKillsSincePreGone
+      ).toBe(3)
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
   })
 })
