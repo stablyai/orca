@@ -14,11 +14,8 @@ export function claudeStopHookFeedbackRow(text: string): AgentJournalPlainStatus
   if (!STOP_HOOK_FEEDBACK.test(text)) {
     return null
   }
-  const reasons = text
-    .replace(STOP_HOOK_FEEDBACK, '')
-    .split('\n')
-    .map((line) => line.replace(/^\[[^\]\n]+\]: /, ''))
-  return hookOutcomeRowBody('sent-back', [reasons.join('\n')])
+  const reason = text.replace(STOP_HOOK_FEEDBACK, '').replace(/^\[[^\]\n]+\]: /gm, '')
+  return hookOutcomeRowBody('sent-back', [reason])
 }
 
 /** The same row from a root-agent envelope; it continues the turn, so importers must not treat it as a prompt. */
