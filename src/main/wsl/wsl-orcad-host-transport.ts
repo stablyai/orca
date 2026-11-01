@@ -17,6 +17,7 @@ import { createWslCommandLoopPool } from './wsl-command-loop-pool'
 import { uploadDirectoryIntoWsl, wslGuestSourcePath } from './wsl-directory-upload'
 import { resolveWslExecutablePath } from './wsl-executable-path'
 import { noteWslDistroLaunched } from '../wsl-background-distro-gate'
+import { traceWslSpawn } from './wsl-spawn-trace'
 import { readWslDistroRegistryIdShared } from './wsl-distro-registry-id'
 import { ORCAD_WSL_DISTRO_GUID_ENV } from '../orcad/orcad-migration-wsl-destination'
 import {
@@ -67,6 +68,7 @@ export function createWslOrcadHostTransport(
     // Any launch starts the distro, so an older "stopped" read no longer answers: a user act's
     // connect is never refused its own bridges by the read taken before it booted the distro.
     noteWslDistroLaunched(target.distro)
+    traceWslSpawn('host-transport', program, args)
     return child
   }
   const loops =

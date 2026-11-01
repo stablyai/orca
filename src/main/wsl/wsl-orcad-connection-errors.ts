@@ -1,3 +1,4 @@
+import { traceWslGate } from './wsl-spawn-trace'
 import type { WslRunningDistrosRead } from '../wsl-background-distro-gate'
 import { wslDistroHolderKey } from './wsl-distro-holder-record'
 import type { WslOrcadLaunch } from './wsl-orcad-deploy'
@@ -55,9 +56,11 @@ export async function assertWslDistroMayStart(
   isCurrent: () => boolean
 ): Promise<void> {
   if (!requireRunning) {
+    traceWslGate('connect', distro, 'may boot (no noBoot)')
     return
   }
   const running = await requireRunning(distro)
+  traceWslGate('connect', distro, `noBoot running read: ${running}`)
   // A close during the read supersedes this connect before it deploys anything.
   if (!isCurrent()) {
     throw new WslOrcadConnectionSupersededError(distro)
