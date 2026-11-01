@@ -4,8 +4,7 @@ import { Text, View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
-import { useMobilePrCommentActions } from '../session/use-mobile-pr-comment-actions'
-import { usePRCommentCardActions } from './pr-sidebar/PRCommentsSection'
+import { useMobileDiffReviewThreadKit } from './use-mobile-diff-review-thread-kit'
 import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
 import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
@@ -49,23 +48,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
     })
   })
   const item = controller.currentItem
-  const github = controller.github
-  const refetchPR = controller.refetchPRSidebar
-  const refetchThreads = useCallback(async () => {
-    await refetchPR({ includeDetails: true })
-  }, [refetchPR])
-  const threadCommentActions = useMobilePrCommentActions({
-    client: controller.client,
-    connState: controller.connState,
-    worktreeId: controller.worktreeId,
-    prNumber: github?.prNumber ?? 0,
-    prRepo: github?.prRepo ?? null,
-    refetch: refetchThreads
-  })
-  const threadActions = usePRCommentCardActions(
-    github ? threadCommentActions : undefined,
-    github?.prRepo
-  )
+  const threadKit = useMobileDiffReviewThreadKit(controller)
   const sheet = controller.sheet
   const selectedRange =
     sheet?.kind === 'range' ? { startLine: sheet.startLine, line: sheet.line } : null
@@ -119,9 +102,9 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             />
           ) : null}
           {/* Each source keeps its own line, so a newer thread failure is never hidden behind older feedback. */}
-          {threadCommentActions.error ? (
+          {threadKit.error ? (
             <View style={styles.actionError}>
-              <Text style={styles.actionErrorText}>{threadCommentActions.error}</Text>
+              <Text style={styles.actionErrorText}>{threadKit.error}</Text>
             </View>
           ) : null}
           {controller.actionError ? (
@@ -137,7 +120,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             screenState={controller.screenState}
             staleCommentIds={controller.staleCommentIds}
             threadsByLine={controller.threadsByLine}
-            threadActions={threadActions}
+            threadKit={controller.github ? threadKit : null}
             selectedRange={selectedRange}
             onPickLines={(range) => {
               controller.setComposerBody('')

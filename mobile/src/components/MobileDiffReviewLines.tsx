@@ -14,8 +14,8 @@ import {
 import { colors } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
-import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
-import { CommentGroupView } from './pr-sidebar/PRCommentsSection'
+import { MobileDiffReviewThreadRow } from './MobileDiffReviewThreadRow'
+import type { MobileDiffThreadKit } from './use-mobile-diff-review-thread-kit'
 import { useNow } from '../hooks/use-now'
 import { triggerSelection } from '../platform/haptics'
 
@@ -35,7 +35,7 @@ export function MobileDiffReviewLines({
   commentsByLine,
   staleCommentIds,
   threadsByLine,
-  threadActions,
+  threadKit,
   selectedRange,
   scrollToLine,
   onScrolledToLine,
@@ -47,7 +47,7 @@ export function MobileDiffReviewLines({
   commentsByLine: ReadonlyMap<number, DiffComment[]>
   staleCommentIds: ReadonlySet<string>
   threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
-  threadActions: PRCommentCardActions | undefined
+  threadKit: MobileDiffThreadKit | null
   /** The lines the open note sheet is about, kept highlighted under it. */
   selectedRange: LineRange | null
   scrollToLine: number | null
@@ -248,9 +248,11 @@ export function MobileDiffReviewLines({
                 </Text>
               </Pressable>
             ) : row.kind === 'thread' ? (
-              <View style={styles.threadRow}>
-                <CommentGroupView group={row.thread} actions={threadActions} now={now} />
-              </View>
+              threadKit ? (
+                <View style={styles.threadRow}>
+                  <MobileDiffReviewThreadRow thread={row.thread} kit={threadKit} now={now} />
+                </View>
+              ) : null
             ) : (
               <MobileDiffReviewLine
                 line={row.line}

@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, {
   Easing,
@@ -21,6 +21,7 @@ import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { KeyedBottomDrawer } from './keyed-bottom-drawer'
+import { useCoveredInert } from './use-covered-inert'
 
 type Props = {
   visible: boolean
@@ -126,6 +127,8 @@ export function OptionPager(props: {
     [slide, under]
   )
   const pageOpen = props.page !== null
+  const fillMainRef = useRef<View>(null)
+  useCoveredInert(fillMainRef, Boolean(props.fill) && pageOpen)
   if (props.fill) {
     return (
       <View style={styles.fill} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
@@ -134,7 +137,9 @@ export function OptionPager(props: {
           pointerEvents={pageOpen ? 'none' : 'auto'}
           aria-hidden={pageOpen}
         >
-          {props.main}
+          <View ref={fillMainRef} style={styles.fill}>
+            {props.main}
+          </View>
           {pageOpen && <Animated.View pointerEvents="none" style={[styles.dim, dimStyle]} />}
         </Animated.View>
         {pageOpen && (

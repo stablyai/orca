@@ -26,7 +26,9 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/MobileDiffReviewLine', () => ({ MobileDiffReviewLine: () => null }))
 vi.mock('react-native-gesture-handler', () => ({ Gesture: {}, GestureDetector: () => null }))
-vi.mock('../components/pr-sidebar/PRCommentsSection', () => ({ CommentGroupView: () => null }))
+vi.mock('../components/MobileDiffReviewThreadRow', () => ({
+  MobileDiffReviewThreadRow: () => null
+}))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(),
   notificationAsync: vi.fn(),
@@ -83,7 +85,7 @@ function ReviewWhileUnreachable({
     screenState: controller.screenState,
     staleCommentIds: controller.staleCommentIds,
     threadsByLine: new Map(),
-    threadActions: undefined,
+    threadKit: null,
     selectedRange: null,
     onPickLines: () => {},
     scrollToLine: null,

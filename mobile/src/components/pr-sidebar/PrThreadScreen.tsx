@@ -11,14 +11,13 @@ import { isResolvableComment } from '../../session/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
-import { PrCommentAvatar } from './PrCommentAvatar'
+import { PrCommentAvatar, prCommentAuthorName } from './PrCommentAvatar'
+import { PrCommentFileLink } from './PrCommentFileLink'
 import { PrMiniButton } from './PrMiniButton'
 import { PrThreadCode } from './PrThreadCode'
 import {
   PR_COMMENT_AVATAR,
   PR_COMMENT_INDENT,
-  PrCommentFileLink,
-  prCommentAuthorName,
   prCommentLocation,
   type PrThreadActions
 } from './PrThreadRow'

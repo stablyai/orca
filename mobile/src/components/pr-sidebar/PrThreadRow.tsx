@@ -1,13 +1,6 @@
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  ExternalLink,
-  FileText,
-  MoreHorizontal,
-  Pencil,
-  Sparkles,
-  Trash2
-} from 'lucide-react-native'
+import { ExternalLink, MoreHorizontal, Pencil, Sparkles, Trash2 } from 'lucide-react-native'
 import type { PRComment } from '../../../../src/shared/github/comment-types'
 import {
   getPRCommentGroupRoot,
@@ -15,7 +8,7 @@ import {
 } from '../../../../src/shared/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
 import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
-import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -26,11 +19,14 @@ import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
-import { PrCommentAvatar } from './PrCommentAvatar'
+import { PrCommentAvatar, prCommentAuthorName } from './PrCommentAvatar'
+import { PrCommentFileLink } from './PrCommentFileLink'
+import { PrCommentSeverityPill } from './PrCommentSeverityPill'
+import { PrThreadReplies } from './PrThreadReplies'
 import { PrThreadCode } from './PrThreadCode'
 import { PrTextLink } from './PrTextLink'
 import { commentRelativeTime } from './pr-comment-relative-time'
-import { prCommentSeverity, type PrCommentSeverity } from './pr-comment-severity'
+import { prCommentSeverity } from './pr-comment-severity'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
@@ -61,11 +57,6 @@ export function prCommentLocation(comment: PRComment): string | null {
   return comment.line ? `${file}:${comment.line}` : file
 }
 
-// The bot tag already says it, so "[bot]" would repeat.
-export function prCommentAuthorName(login: string): string {
-  return login.replace(/\[bot\]$/i, '')
-}
-
 // One thread as a message: who, where, what they said, the latest reply in a line, then text links.
 export function PrThreadRow({
   group,
@@ -74,7 +65,8 @@ export function PrThreadRow({
   now,
   onOpenFile,
   onOpenThread,
-  askToFix
+  askToFix,
+  anchored = false
 }: {
   group: PRCommentGroup
   actions?: PrThreadActions
@@ -84,16 +76,19 @@ export function PrThreadRow({
   onOpenThread?: (focusReply: boolean) => void
   /** Bot findings offer the same agent launch as desktop's Resolve comments with AI. */
   askToFix?: PrAskToFix
+  /** Under its own diff line: the file link and code line would repeat what is right above. */
+  anchored?: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [focusReply, setFocusReply] = useState(false)
   const menuRef = useRef<View>(null)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
-  const lastReply = replies.at(-1)
   const bot = isBotPRComment(root, botAuthorOverrides)
   const severity = bot ? prCommentSeverity(root.body) : null
   const location = prCommentLocation(root)
@@ -105,8 +100,16 @@ export function PrThreadRow({
   const openThread = group.kind === 'thread' && onOpenThread ? () => onOpenThread(false) : undefined
   const ask =
     askToFix && bot && group.kind === 'thread' && root.isResolved !== true ? askToFix : null
-  const replyInThread =
-    group.kind === 'thread' && onOpenThread ? () => onOpenThread(true) : undefined
+  // Without a Thread screen (under a diff line) the thread opens in place with its reply box.
+  const inline = group.kind === 'thread' && !onOpenThread && actions !== undefined
+  const reply = openThread
+    ? () => onOpenThread?.(true)
+    : inline
+      ? () => {
+          setFocusReply(true)
+          setExpanded(true)
+        }
+      : undefined
   const menuGroups: ActionSheetAction[][] = [
     root.url
       ? [
@@ -148,7 +151,7 @@ export function PrThreadRow({
           {commentRelativeTime(root.createdAt, now, t)}
         </Text>
         <View style={styles.spacer} />
-        {severity ? <SeverityPill severity={severity} /> : null}
+        {severity ? <PrCommentSeverityPill severity={severity} /> : null}
         {canMutate && actions.isDeleteBusy(root.id) ? (
           <ActivityIndicator size="small" color={colors.textSecondary} />
         ) : null}
@@ -166,13 +169,13 @@ export function PrThreadRow({
         ) : null}
       </View>
       <View style={styles.body}>
-        {location ? (
+        {location && !anchored ? (
           <PrCommentFileLink
             location={location}
             onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : openThread}
           />
         ) : null}
-        {root.diffHunk && root.line ? (
+        {root.diffHunk && root.line && !anchored ? (
           <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line).slice(-1)} />
         ) : null}
         {editing && actions ? (
@@ -194,22 +197,23 @@ export function PrThreadRow({
         ) : (
           <CommentMarkdown content={root.body} />
         )}
-        {lastReply ? (
-          <View style={styles.reply}>
-            <PrCommentAvatar login={lastReply.author} size={16} />
-            <Text style={styles.replyText} numberOfLines={1}>
-              <Text style={styles.replyAuthor}>{prCommentAuthorName(lastReply.author)}</Text>
-              {'  '}
-              {replies.length > 1
-                ? t('pullRequest.screens.replyAndMore', '{{body}} (+{{count}} more)', {
-                    body: lastReply.body.replaceAll('`', '').trim(),
-                    count: replies.length - 1
-                  })
-                : lastReply.body.replaceAll('`', '').trim()}
-            </Text>
-          </View>
-        ) : null}
-        {actions && !editing && (openThread || canResolve) ? (
+        <PrThreadReplies
+          replies={replies}
+          now={now}
+          expanded={inline && expanded}
+          onExpand={inline ? () => setExpanded(true) : undefined}
+          reply={
+            inline && expanded && actions
+              ? {
+                  submitting: actions.isReplyBusy(root.id),
+                  onSubmit: (body) => actions.reply(root, body),
+                  onCancel: () => setExpanded(false),
+                  autoFocus: focusReply
+                }
+              : undefined
+          }
+        />
+        {actions && !editing && (reply || canResolve) ? (
           <View style={styles.links}>
             {ask ? (
               <PrTextLink
@@ -220,11 +224,8 @@ export function PrThreadRow({
                 busy={ask.busy}
                 disabled={ask.disabled}
               />
-            ) : openThread ? (
-              <PrTextLink
-                label={t('pullRequest.commentCard.reply', 'Reply')}
-                onPress={replyInThread ?? openThread}
-              />
+            ) : reply ? (
+              <PrTextLink label={t('pullRequest.commentCard.reply', 'Reply')} onPress={reply} />
             ) : null}
             {canResolve ? (
               <PrTextLink
@@ -282,52 +283,6 @@ export function PrThreadRow({
   )
 }
 
-export function PrCommentFileLink({
-  location,
-  onPress
-}: {
-  location: string
-  onPress?: () => void
-}) {
-  useMobileColorScheme()
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      hitSlop={4}
-      accessibilityRole={onPress ? 'link' : undefined}
-      style={({ pressed }) => [styles.file, pressed && pressedStyle]}
-    >
-      <FileText size={12} color={colors.textMuted} strokeWidth={2} />
-      <Text style={styles.fileText} numberOfLines={1}>
-        {location}
-      </Text>
-    </Pressable>
-  )
-}
-
-function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  const color =
-    severity === 'critical'
-      ? colors.statusRed
-      : severity === 'major'
-        ? colors.statusAmber
-        : colors.textSecondary
-  const label = {
-    critical: t('pullRequest.screens.severityCritical', 'Critical'),
-    major: t('pullRequest.screens.severityMajor', 'Major'),
-    minor: t('pullRequest.screens.severityMinor', 'Minor'),
-    trivial: t('pullRequest.screens.severityTrivial', 'Trivial')
-  }[severity]
-  return (
-    <View style={[styles.severity, { borderColor: color }]}>
-      <Text style={[styles.severityText, { color }]}>{label}</Text>
-    </View>
-  )
-}
-
 const styles = themedStyleSheet(() => ({
   row: {
     paddingHorizontal: spacing.lg,
@@ -358,28 +313,5 @@ const styles = themedStyleSheet(() => ({
   },
   morePressed: { backgroundColor: colors.bgRaised },
   body: { marginLeft: PR_COMMENT_INDENT, gap: spacing.sm },
-  file: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    maxWidth: '100%'
-  },
-  fileText: {
-    color: colors.textSecondary,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    flexShrink: 1
-  },
-  reply: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  replyText: { flex: 1, color: colors.textSecondary, fontSize: 13 },
-  replyAuthor: { color: colors.textPrimary, fontWeight: '600' },
-  links: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, minHeight: 28 },
-  severity: {
-    borderWidth: 1,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 1
-  },
-  severityText: { fontSize: typography.metaSize, fontWeight: '600' }
+  links: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, minHeight: 28 }
 }))

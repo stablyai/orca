@@ -13,9 +13,6 @@ import {
 } from '../../../../src/shared/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
 import { canAddRootComment } from '../../session/pr-comment-actions'
-import { buildPRCommentsResolutionPrompt } from '../../../../src/shared/github/pr-comments-resolution-prompt'
-import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
-import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { useNow } from '../../hooks/use-now'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
@@ -25,7 +22,10 @@ import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import { MobileSegmentedControl } from '../MobileSegmentedControl'
 import { SectionHeader } from '../list/ListGroup'
 import { MobileLoadErrorState, MobileStateView } from '../MobileStateView'
-import { PrThreadRow, type PrAskToFix, type PrThreadActions } from './PrThreadRow'
+import { OptionPager, useOptionPager } from '../BottomDrawer'
+import { PrThreadRow } from './PrThreadRow'
+import { usePrThreadActions } from './use-pr-thread-actions'
+import { usePrAskToFix } from './use-pr-ask-to-fix'
 import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'
 import { NotReady, ScreenFrame, type ScreenProps } from './pr-tab-screen-frame'
@@ -51,19 +51,21 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   const filterRef = useRef<View>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [resolvedLimit, setResolvedLimit] = useState(COMMENT_PAGE)
-  const [openThreadId, setOpenThreadId] = useState<string | null>(null)
+  // The open thread slides over the list on the same pager the hub uses, which also hides what it covers.
+  const threads = useOptionPager<string>()
+  const openThreadId = threads.page
   const [focusReply, setFocusReply] = useState(false)
   const keyboardHeight = useKeyboardOcclusion()
   const [limit, setLimit] = useState(COMMENT_PAGE)
   // A failed refresh leaves no details: close the thread so the list's error and Retry show, and it cannot pop back later.
   if (openThreadId !== null && details === null) {
-    setOpenThreadId(null)
+    threads.forget()
   }
   const threadShown = openThreadId !== null && details !== null
   useBackClaim(
     threadShown
       ? () => {
-          setOpenThreadId(null)
+          threads.close()
           return true
         }
       : null
@@ -78,57 +80,20 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   const shown = open.slice(0, limit)
   const { commentActions } = tab
   const isPr = details?.item.type === 'pr'
-  const rowActions = useMemo<PrThreadActions | undefined>(
-    () =>
-      isPr
-        ? {
-            reply: commentActions.reply,
-            toggleResolve: commentActions.toggleResolve,
-            editComment: commentActions.editComment,
-            deleteComment: commentActions.deleteComment,
-            isReplyBusy: commentActions.isReplyBusy,
-            isResolveBusy: commentActions.isResolveBusy,
-            isEditBusy: commentActions.isEditBusy,
-            isDeleteBusy: commentActions.isDeleteBusy,
-            prRepo: data?.pr.prRepo ?? null
-          }
-        : undefined,
-    [commentActions, data?.pr.prRepo, isPr]
-  )
+  const rowActions = usePrThreadActions(isPr ? commentActions : undefined, data?.pr.prRepo)
   const canComment = isPr && canAddRootComment(data?.pr.state ?? null)
-  const { hostCapabilities } = useHostProtocolGates()
-  const hasBotFindings = unresolved.some((group) =>
-    isBotPRComment(getPRCommentGroupRoot(group), tab.botAuthorOverrides)
-  )
-  const askAgent = useMobileLaunchAgentLabel({
+  const {
+    hasBotFindings,
+    askToFix,
+    notice: askNotice
+  } = usePrAskToFix({
     client: tab.client,
     worktreeId: tab.worktreeId,
-    hostCapabilities,
-    actionId: 'resolveComments',
-    enabled: hasBotFindings
+    review: data ? data.pr : null,
+    groups,
+    triage: tab.triage,
+    botAuthorOverrides: tab.botAuthorOverrides
   })
-  const askNotice = tab.triage.noticeFor('resolve-comments')
-  // One bot finding per launch, through desktop's own Resolve comments prompt.
-  const askToFix = (group: PRCommentGroup): PrAskToFix | undefined =>
-    data
-      ? {
-          label: askAgent
-            ? t('pullRequest.screens.askToFix', 'Ask {{agent}} to fix', { agent: askAgent })
-            : t('pullRequest.screens.askAiToFix', 'Ask AI to fix'),
-          busy: tab.triage.isBusy('resolve-comments'),
-          disabled: tab.triage.availability !== 'available',
-          onPress: () =>
-            void tab.triage.launch('resolve-comments', () =>
-              buildPRCommentsResolutionPrompt({
-                reviewKind: 'PR',
-                reviewNumber: data.pr.number,
-                reviewTitle: data.pr.title,
-                reviewUrl: data.pr.url,
-                groups: [group]
-              })
-            )
-        }
-      : undefined
   const openThread =
     openThreadId === null
       ? null
@@ -148,7 +113,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
         group.kind === 'thread'
           ? (focus) => {
               setFocusReply(focus)
-              setOpenThreadId(group.threadId)
+              threads.open(group.threadId)
             }
           : undefined
       }
@@ -158,145 +123,158 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
 
   return (
     <View style={styles.layer}>
-      {/* Covered by the thread, the list leaves the accessibility tree so VoiceOver reads only the thread. */}
-      <View
-        style={styles.layer}
-        aria-hidden={threadShown}
-        importantForAccessibility={threadShown ? 'no-hide-descendants' : 'auto'}
-      >
-        <ScreenFrame
-          title={t('pullRequest.commentsSection.title', 'Comments')}
-          subtitle={data ? `#${data.pr.number}` : undefined}
-          onBack={onBack}
-          trailing={
-            <NavBarButton
-              ref={filterRef}
-              icon={ListFilter}
-              active={hideBots}
-              onPress={() => setFilterMenuOpen(true)}
-              accessibilityLabel={t('pullRequest.screens.filterComments', 'Filter comments')}
-            />
-          }
-          footer={
-            canComment && data ? (
-              // The box sits outside the scroll view, so it lifts itself over the keyboard.
-              <View
-                style={[
-                  styles.composerBar,
-                  keyboardHeight > 0
-                    ? { marginBottom: keyboardHeight, paddingBottom: spacing.sm }
-                    : { paddingBottom: Math.max(bottomInset, spacing.md) }
-                ]}
-              >
-                <PRCommentComposer
-                  placeholder={t('pullRequest.screens.commentOnPr', 'Comment on #{{number}}…', {
-                    number: data.pr.number
-                  })}
-                  submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
-                  submitting={commentActions.isRootBusy}
-                  onSubmit={commentActions.addRootComment}
-                  inline
-                />
-              </View>
-            ) : null
-          }
-        >
-          {!data ? (
-            <NotReady tab={tab} />
-          ) : data.details === null ? (
-            <MobileStateView
-              loading
-              title={t('components.prSidebar.loading', 'Loading pull request…')}
-            />
-          ) : !details ? (
-            <MobileLoadErrorState
-              error={t(
-                'pullRequest.commentsSection.commentsLoadFailedRetry',
-                'Could not load comments.'
-              )}
-              onRetry={() => tab.refetch({ includeDetails: true })}
-            />
-          ) : (
-            <ScrollView
-              contentContainerStyle={styles.content}
-              keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
-            >
-              <MobileSegmentedControl
-                tabs
-                fill
-                style={styles.segments}
-                segments={[
-                  {
-                    value: 'unresolved',
-                    label: t('pullRequest.screens.unresolvedCount', 'Unresolved {{count}}', {
-                      count: unresolved.length
-                    })
-                  },
-                  {
-                    value: 'all',
-                    label: t('pullRequest.screens.allCount', 'All {{count}}', {
-                      count: groups.length
-                    })
-                  }
-                ]}
-                selected={filter}
-                onSelect={(value) => {
-                  setLimit(COMMENT_PAGE)
-                  setFilter(value)
-                }}
+      <OptionPager
+        fill
+        pager={threads}
+        main={
+          <ScreenFrame
+            title={t('pullRequest.commentsSection.title', 'Comments')}
+            subtitle={data ? `#${data.pr.number}` : undefined}
+            onBack={onBack}
+            trailing={
+              <NavBarButton
+                ref={filterRef}
+                icon={ListFilter}
+                active={hideBots}
+                onPress={() => setFilterMenuOpen(true)}
+                accessibilityLabel={t('pullRequest.screens.filterComments', 'Filter comments')}
               />
-              {shown.length === 0 && resolved.length === 0 ? (
-                <Text style={styles.muted}>
-                  {filter === 'unresolved'
-                    ? t('pullRequest.screens.noUnresolved', 'No unresolved threads.')
-                    : t('pullRequest.commentsSection.noComments', 'No comments yet.')}
-                </Text>
-              ) : null}
-              {shown.map(row)}
-              {open.length > shown.length ? (
-                <ShowMore
-                  count={Math.min(open.length - shown.length, COMMENT_PAGE)}
-                  onPress={() => setLimit((value) => value + COMMENT_PAGE)}
-                />
-              ) : null}
-              {resolved.length > 0 ? (
-                <View>
-                  <SectionHeader
-                    title={t('pullRequest.screens.resolvedCount', 'Resolved {{count}}', {
-                      count: resolved.length
+            }
+            footer={
+              canComment && data ? (
+                // The box sits outside the scroll view, so it lifts itself over the keyboard.
+                <View
+                  style={[
+                    styles.composerBar,
+                    keyboardHeight > 0
+                      ? { marginBottom: keyboardHeight, paddingBottom: spacing.sm }
+                      : { paddingBottom: Math.max(bottomInset, spacing.md) }
+                  ]}
+                >
+                  <PRCommentComposer
+                    placeholder={t('pullRequest.screens.commentOnPr', 'Comment on #{{number}}…', {
+                      number: data.pr.number
                     })}
-                    expanded={showResolved}
-                    onToggle={() => setShowResolved((value) => !value)}
+                    submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
+                    submitting={commentActions.isRootBusy}
+                    onSubmit={commentActions.addRootComment}
+                    inline
                   />
-                  {showResolved ? resolved.slice(0, resolvedLimit).map(row) : null}
-                  {showResolved && resolved.length > resolvedLimit ? (
-                    <ShowMore
-                      count={Math.min(resolved.length - resolvedLimit, COMMENT_PAGE)}
-                      onPress={() => setResolvedLimit((value) => value + COMMENT_PAGE)}
+                </View>
+              ) : null
+            }
+          >
+            {!data ? (
+              <NotReady tab={tab} />
+            ) : data.details === null ? (
+              <MobileStateView
+                loading
+                title={t('components.prSidebar.loading', 'Loading pull request…')}
+              />
+            ) : !details ? (
+              <MobileLoadErrorState
+                error={t(
+                  'pullRequest.commentsSection.commentsLoadFailedRetry',
+                  'Could not load comments.'
+                )}
+                onRetry={() => tab.refetch({ includeDetails: true })}
+              />
+            ) : (
+              <ScrollView
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets
+              >
+                <MobileSegmentedControl
+                  tabs
+                  fill
+                  style={styles.segments}
+                  segments={[
+                    {
+                      value: 'unresolved',
+                      label: t('pullRequest.screens.unresolvedCount', 'Unresolved {{count}}', {
+                        count: unresolved.length
+                      })
+                    },
+                    {
+                      value: 'all',
+                      label: t('pullRequest.screens.allCount', 'All {{count}}', {
+                        count: groups.length
+                      })
+                    }
+                  ]}
+                  selected={filter}
+                  onSelect={(value) => {
+                    setLimit(COMMENT_PAGE)
+                    setFilter(value)
+                  }}
+                />
+                {shown.length === 0 && resolved.length === 0 ? (
+                  <Text style={styles.muted}>
+                    {filter === 'unresolved'
+                      ? t('pullRequest.screens.noUnresolved', 'No unresolved threads.')
+                      : t('pullRequest.commentsSection.noComments', 'No comments yet.')}
+                  </Text>
+                ) : null}
+                {shown.map(row)}
+                {open.length > shown.length ? (
+                  <ShowMore
+                    count={Math.min(open.length - shown.length, COMMENT_PAGE)}
+                    onPress={() => setLimit((value) => value + COMMENT_PAGE)}
+                  />
+                ) : null}
+                {resolved.length > 0 ? (
+                  <View>
+                    <SectionHeader
+                      title={t('pullRequest.screens.resolvedCount', 'Resolved {{count}}', {
+                        count: resolved.length
+                      })}
+                      expanded={showResolved}
+                      onToggle={() => setShowResolved((value) => !value)}
                     />
-                  ) : null}
-                </View>
-              ) : null}
-              {hasBotFindings ? (
-                <View style={styles.notice}>
-                  <AgentLaunchNotice
-                    availability={tab.triage.availability}
-                    success={askNotice.success}
-                    error={askNotice.error}
-                    warning={askNotice.warning}
-                    undeliveredPrompt={askNotice.undeliveredPrompt}
-                    errorStyle={styles.noticeError}
-                  />
-                </View>
-              ) : null}
-              {commentActions.error ? (
-                <Text style={styles.error}>{commentActions.error}</Text>
-              ) : null}
-            </ScrollView>
-          )}
-        </ScreenFrame>
-      </View>
+                    {showResolved ? resolved.slice(0, resolvedLimit).map(row) : null}
+                    {showResolved && resolved.length > resolvedLimit ? (
+                      <ShowMore
+                        count={Math.min(resolved.length - resolvedLimit, COMMENT_PAGE)}
+                        onPress={() => setResolvedLimit((value) => value + COMMENT_PAGE)}
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
+                {hasBotFindings ? (
+                  <View style={styles.notice}>
+                    <AgentLaunchNotice
+                      availability={tab.triage.availability}
+                      success={askNotice.success}
+                      error={askNotice.error}
+                      warning={askNotice.warning}
+                      undeliveredPrompt={askNotice.undeliveredPrompt}
+                      errorStyle={styles.noticeError}
+                    />
+                  </View>
+                ) : null}
+                {commentActions.error ? (
+                  <Text style={styles.error}>{commentActions.error}</Text>
+                ) : null}
+              </ScrollView>
+            )}
+          </ScreenFrame>
+        }
+        page={
+          threadShown ? (
+            <PrThreadScreen
+              thread={openThread}
+              actions={rowActions}
+              error={commentActions.error}
+              focusReply={focusReply}
+              onOpenFile={onOpenFile}
+              now={now}
+              onBack={threads.close}
+              bottomInset={bottomInset}
+            />
+          ) : null
+        }
+      />
       <PullDownMenu
         visible={filterMenuOpen}
         anchorRef={filterRef}
@@ -312,20 +290,6 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
           ]
         ]}
       />
-      {threadShown ? (
-        <View style={styles.threadLayer}>
-          <PrThreadScreen
-            thread={openThread}
-            actions={rowActions}
-            error={commentActions.error}
-            focusReply={focusReply}
-            onOpenFile={onOpenFile}
-            now={now}
-            onBack={() => setOpenThreadId(null)}
-            bottomInset={bottomInset}
-          />
-        </View>
-      ) : null}
     </View>
   )
 }
@@ -356,7 +320,6 @@ function isResolvedGroup(group: PRCommentGroup): boolean {
 
 const styles = themedStyleSheet(() => ({
   layer: { flex: 1 },
-  threadLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   content: { paddingTop: spacing.sm },
   segments: { marginHorizontal: spacing.lg, marginBottom: spacing.xs },
   muted: {

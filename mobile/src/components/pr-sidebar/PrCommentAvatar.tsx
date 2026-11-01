@@ -41,3 +41,8 @@ const styles = themedStyleSheet(() => ({
   avatar: { borderRadius: radii.pill, alignItems: 'center', justifyContent: 'center' },
   initials: { fontWeight: '700' }
 }))
+
+// The bot tag already says it, so "[bot]" would repeat.
+export function prCommentAuthorName(login: string): string {
+  return login.replace(/\[bot\]$/i, '')
+}

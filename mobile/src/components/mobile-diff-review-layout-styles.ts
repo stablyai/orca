@@ -71,11 +71,8 @@ export const mobileDiffReviewLayoutStyles = themedStyleSheet(() => ({
   diffListFrame: {
     flex: 1
   },
-  threadRow: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgBase
-  },
+  // The thread row carries its own padding and hairline, as on the Comments screen.
+  threadRow: { backgroundColor: colors.bgBase },
   diffList: {
     paddingBottom: 140,
     backgroundColor: colors.editorSurface

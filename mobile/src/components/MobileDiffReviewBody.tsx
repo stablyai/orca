@@ -10,7 +10,7 @@ import type {
   MobileDiffReviewQueueItem
 } from '../session/mobile-diff-review-queue'
 import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
-import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
+import type { MobileDiffThreadKit } from './use-mobile-diff-review-thread-kit'
 
 type Props = {
   commentsByLine: ReadonlyMap<number, DiffComment[]>
@@ -20,7 +20,8 @@ type Props = {
   screenState: ReviewScreenState
   staleCommentIds: ReadonlySet<string>
   threadsByLine: ReadonlyMap<number, readonly MobileDiffReviewThread[]>
-  threadActions: PRCommentCardActions | undefined
+  /** Null without a GitHub pull request, which also means no threads to draw. */
+  threadKit: MobileDiffThreadKit | null
   selectedRange: LineRange | null
   onPickLines: (range: LineRange) => void
   /** Scroll to this line once, then report it done. */
@@ -43,7 +44,7 @@ export function MobileDiffReviewBody({
   screenState,
   staleCommentIds,
   threadsByLine,
-  threadActions,
+  threadKit,
   selectedRange,
   onPickLines,
   scrollToLine,
@@ -123,7 +124,7 @@ export function MobileDiffReviewBody({
       commentsByLine={commentsByLine}
       staleCommentIds={staleCommentIds}
       threadsByLine={threadsByLine}
-      threadActions={threadActions}
+      threadKit={threadKit}
       selectedRange={selectedRange}
       scrollToLine={scrollToLine}
       onScrolledToLine={onScrolledToLine}
