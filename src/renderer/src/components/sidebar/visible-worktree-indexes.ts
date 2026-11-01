@@ -4,7 +4,7 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 
 type WorktreesByRepo = Record<string, Worktree[]>
 
-/** Cache non-archived rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
+/** Cache non-archived, non-bare rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
@@ -14,7 +14,7 @@ export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<s
   }
   const index = new Map<string, Worktree>()
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
-    if (!worktree.isArchived) {
+    if (!worktree.isArchived && !worktree.isBare) {
       index.set(getWorktreeHostIdentity(worktree), worktree)
     }
   }
