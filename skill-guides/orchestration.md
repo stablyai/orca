@@ -74,7 +74,8 @@ Never:
   shows mail `check` already handled.
 
 Finished workers close on their own unless `worker-list` gives one a `next`; follow
-it. `send` reopens a closed worker when you need it again.
+it. A `reclaimable` worker with no `next` or `autoReleaseAt` (an older host): release
+it yourself. `send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already
 started, run
