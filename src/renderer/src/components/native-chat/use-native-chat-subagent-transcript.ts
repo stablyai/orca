@@ -8,6 +8,11 @@ import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/nat
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import {
+  useNativeChatSubagentPage,
+  type NativeChatSubagentPageRead
+} from './use-native-chat-subagent-page'
 
 const NO_SUBAGENT_ROWS: ReadonlyMap<string, readonly NativeChatSubagentRow[]> = new Map()
 
@@ -27,6 +32,7 @@ export function useNativeChatSubagentTranscript({
     sessionId: string | null
     taskList?: NativeChatTaskSeedList | null
     subagentSeed?: readonly NativeChatSubagentActivity[] | null
+    readSubagentPage?: NativeChatSubagentPageRead | null
   }
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
@@ -49,12 +55,18 @@ export function useNativeChatSubagentTranscript({
     messages: readonly NativeChatMessage[]
     subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
     focusedSubagentId: string | null
+    focusedTranscriptLoading: boolean
     onFocusSubagent: (agentId: string | null) => void
     taskList: NativeChatTaskSeedList | null
     subagentSeed: readonly NativeChatSubagentActivity[] | null
   }
+  childHistory: {
+    hasMore: boolean
+    loadingEarlier: boolean
+    loadEarlier: () => Promise<NativeChatOlderPageResult>
+  } | null
 } {
-  const { sessionId, taskList = null, subagentSeed = null } = session
+  const { sessionId, taskList = null, subagentSeed = null, readSubagentPage = null } = session
   const [focus, setFocus] = useState<{ sessionId: string | null; agentId: string | null }>({
     sessionId,
     agentId: null
@@ -73,17 +85,35 @@ export function useNativeChatSubagentTranscript({
   if (requestedId && !viewingSubagent) {
     setFocus({ sessionId, agentId: null })
   }
+  const focusedSubagentId = viewingSubagent ? requestedId : null
+  const page = useNativeChatSubagentPage(
+    readSubagentPage ? focusedSubagentId : null,
+    readSubagentPage
+  )
   const transcriptMessages = useMemo(() => {
     if (!viewingSubagent || !requestedId) {
       return messages
     }
+    if (readSubagentPage) {
+      return page.messages ?? []
+    }
     return subagentRows.get(requestedId)?.map((row) => row.message) ?? []
-  }, [messages, requestedId, subagentRows, viewingSubagent])
+  }, [messages, page.messages, readSubagentPage, requestedId, subagentRows, viewingSubagent])
+  const activityRows = useMemo(() => {
+    if (!focusedSubagentId || !page.messages) {
+      return subagentRows
+    }
+    const next = new Map(subagentRows)
+    next.set(
+      focusedSubagentId,
+      page.messages.map((message) => ({ message, turnKey: undefined }))
+    )
+    return next
+  }, [focusedSubagentId, page.messages, subagentRows])
   const onFocusSubagent = useCallback(
     (agentId: string | null) => setFocus({ sessionId, agentId }),
     [sessionId]
   )
-  const focusedSubagentId = viewingSubagent ? requestedId : null
   return {
     transcriptMessages,
     sectionRows: viewingSubagent ? NO_SUBAGENT_ROWS : subagentRows,
@@ -93,10 +123,19 @@ export function useNativeChatSubagentTranscript({
     shownStopping: viewingSubagent ? false : stopping,
     shownActivityText: viewingSubagent ? undefined : activityText,
     shownLifecycleWorking: viewingSubagent ? false : lifecycleWorking,
+    childHistory:
+      readSubagentPage && focusedSubagentId
+        ? {
+            hasMore: page.hasMore && !page.loading,
+            loadingEarlier: page.loadingEarlier,
+            loadEarlier: page.loadEarlier
+          }
+        : null,
     activity: {
       messages,
-      subagentRows,
+      subagentRows: activityRows,
       focusedSubagentId,
+      focusedTranscriptLoading: Boolean(readSubagentPage && focusedSubagentId && page.loading),
       onFocusSubagent,
       taskList,
       subagentSeed

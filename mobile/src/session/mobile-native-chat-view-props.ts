@@ -24,6 +24,7 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { NativeChatSubagentActivity } from '../../../src/shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskSeedList } from '../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import type { OlderPagePhase } from './use-mobile-older-page-loader'
+import type { MobileNativeChatSubagentRead } from './native-chat/input/use-mobile-native-chat-subagent-page'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -35,6 +36,7 @@ type ChatViewProps = MobileNativeChatSendProps & {
   folded: NativeChatMessage[]
   taskList?: NativeChatTaskSeedList | null
   subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  readSubagentPage?: MobileNativeChatSubagentRead | null
   status: MobileNativeChatStatus
   error?: string
   // Permanent read failure replaces the pane because further chat actions cannot succeed.

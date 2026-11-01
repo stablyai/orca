@@ -23,9 +23,14 @@ import type { MobileStructuredQueuedMessageControls } from '../use-mobile-struct
 import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import type { useMobileNativeChatSubagentReader } from './input/read-mobile-native-chat-subagent-page'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+
+export type MobileNativeChatShownSession = ReturnType<typeof useMobileNativeChatSession> & {
+  readSubagentPage: ReturnType<typeof useMobileNativeChatSubagentReader>
+}
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -43,7 +48,7 @@ export type MobileNativeChatController = {
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>
-  nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
+  nativeChatSession: MobileNativeChatShownSession
   nativeChatStructured: boolean
   nativeChatVisualSource: MobileNativeChatVisualSource | null
   nativeChatItemSource: MobileNativeChatVisualSource | null

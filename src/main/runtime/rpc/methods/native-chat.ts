@@ -89,18 +89,19 @@ export const NATIVE_CHAT_METHODS = [
           transcriptPath,
           limit,
           beforeOffset: params.beforeOffset,
-          sourceOrder: params.capabilities?.transcriptSourceOrder === 1
+          sourceOrder: params.capabilities?.transcriptSourceOrder === 1,
+          ...(params.subagentId ? { subagentId: params.subagentId } : {})
         },
         signal
       )
       const taskList =
-        params.capabilities?.taskList === 1
-          ? await scanNativeChatTranscriptTasks(
+        params.subagentId || params.capabilities?.taskList !== 1
+          ? null
+          : await scanNativeChatTranscriptTasks(
               params.agent,
               params.sessionId,
               transcriptPath
             ).catch(() => null)
-          : null
       return 'messages' in result
         ? {
             ...pageForClient(

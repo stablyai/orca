@@ -36,6 +36,10 @@ export type NativeChatReadSessionArgs = {
   transcriptPath?: string
   /** The user opened or paged this chat: may start its stopped WSL distro (E9). Absent never does. */
   wakeWslDistro?: boolean
+  /** Byte offset of an older page. Absent reads the newest window. */
+  beforeOffset?: number
+  /** One child. Absent reads the parent. */
+  subagentId?: string
 }
 
 // Bound parsing and rendering to the recent window; pagination raises the limit.
@@ -51,7 +55,9 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
     sessionId,
     transcriptPath,
     limit,
-    sourceOrder: true
+    sourceOrder: true,
+    ...(args.beforeOffset !== undefined ? { beforeOffset: args.beforeOffset } : {}),
+    ...(args.subagentId ? { subagentId: args.subagentId } : {})
   })
 }
 

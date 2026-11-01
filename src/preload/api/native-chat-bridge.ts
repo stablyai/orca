@@ -13,14 +13,16 @@ export const nativeChatApi = {
     sessionId: string,
     limit?: number,
     transcriptPath?: string,
-    options?: { wakeWslDistro?: boolean }
+    options?: { wakeWslDistro?: boolean; beforeOffset?: number; subagentId?: string }
   ): Promise<NativeChatReadSessionResult> =>
     ipcRenderer.invoke('nativeChat:readSession', {
       agent,
       sessionId,
       limit,
       transcriptPath,
-      wakeWslDistro: options?.wakeWslDistro
+      wakeWslDistro: options?.wakeWslDistro,
+      beforeOffset: options?.beforeOffset,
+      subagentId: options?.subagentId
     }),
   subscribe: (
     args: {

@@ -39,4 +39,12 @@ export type NativeChatLiveSession = NativeChatSession & {
   taskList?: NativeChatTaskSeedList | null
   /** Children from history outside the loaded tail. The visible window still replays on top. */
   subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  /** Page one child. Absent keeps a child view on rows already carried by the parent. */
+  readSubagentPage?: (
+    subagentId: string,
+    limit: number,
+    beforeOffset?: number
+  ) => Promise<
+    { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number } | { error: string }
+  >
 }

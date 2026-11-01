@@ -11,6 +11,8 @@ export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
+      hasMore?: boolean
+      beforeOffset?: number
     }
   | { error: string; notFound?: true }
 
@@ -71,7 +73,7 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string,
     /** The user opened or paged this chat: may start its stopped local WSL distro (E9). */
-    options?: { wakeWslDistro?: boolean }
+    options?: { wakeWslDistro?: boolean; beforeOffset?: number; subagentId?: string }
   ) => Promise<NativeChatReadSessionResult>
   /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (

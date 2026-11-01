@@ -13,6 +13,11 @@ import {
   foldMobileNativeChatAgentMessages,
   type MobileNativeChatPendingItem
 } from '../../mobile-native-chat-render-data'
+import type { OlderPagePhase } from '../../use-mobile-older-page-loader'
+import {
+  useMobileNativeChatSubagentPage,
+  type MobileNativeChatSubagentRead
+} from './use-mobile-native-chat-subagent-page'
 
 /** The open subagent transcript, or the main conversation when none is focused. */
 export function useMobileNativeChatSubagentTranscript({
@@ -23,7 +28,8 @@ export function useMobileNativeChatSubagentTranscript({
   agent,
   sendSurfaceId,
   taskList: sessionTaskList = null,
-  subagentSeed = null
+  subagentSeed = null,
+  readSubagentPage = null
 }: {
   messages: readonly NativeChatMessage[]
   folded: NativeChatMessage[]
@@ -33,6 +39,7 @@ export function useMobileNativeChatSubagentTranscript({
   sendSurfaceId: string
   taskList?: NativeChatTaskSeedList | null
   subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  readSubagentPage?: MobileNativeChatSubagentRead | null
 }): {
   shownFolded: NativeChatMessage[]
   shownStreaming: string | null
@@ -44,6 +51,11 @@ export function useMobileNativeChatSubagentTranscript({
   focused: NativeChatSubagentActivity | null
   focusedTranscriptEmpty: boolean
   onFocusSubagent: (agentId: string | null) => void
+  childHistory: {
+    hasMore: boolean
+    olderPages: OlderPagePhase
+    loadEarlier: () => void
+  } | null
 } {
   const projection = useMemo(() => projectNativeChatTranscript(messages), [messages])
   const subagents = useMemo(
@@ -65,13 +77,19 @@ export function useMobileNativeChatSubagentTranscript({
     setFocus({ surfaceId: sendSurfaceId, agentId: null })
   }
   const focusedId = focused?.id ?? null
-  const rowSource = useMemo(
-    () =>
-      focusedId
-        ? messages.filter((message) => agentJournalItemSubagentId(message) === focusedId)
-        : messages,
-    [focusedId, messages]
+  const page = useMobileNativeChatSubagentPage(
+    readSubagentPage ? focusedId : null,
+    readSubagentPage
   )
+  const rowSource = useMemo(() => {
+    if (!focusedId) {
+      return messages
+    }
+    if (readSubagentPage) {
+      return page.messages ?? []
+    }
+    return messages.filter((message) => agentJournalItemSubagentId(message) === focusedId)
+  }, [focusedId, messages, page.messages, readSubagentPage])
   const childFolded = useMemo(() => {
     if (!focusedId) {
       return null
@@ -101,7 +119,15 @@ export function useMobileNativeChatSubagentTranscript({
     taskList,
     subagents,
     focused,
-    focusedTranscriptEmpty: focusedId != null && (childFolded?.length ?? 0) === 0,
-    onFocusSubagent
+    focusedTranscriptEmpty: focusedId != null && !page.loading && (childFolded?.length ?? 0) === 0,
+    onFocusSubagent,
+    childHistory:
+      readSubagentPage && focusedId
+        ? {
+            hasMore: page.hasMore && !page.loading,
+            olderPages: page.olderPages,
+            loadEarlier: page.loadEarlier
+          }
+        : null
   }
 }

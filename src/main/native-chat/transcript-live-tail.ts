@@ -2,7 +2,6 @@ import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
-import { appendNativeChatChildTranscripts } from './transcript-subagent-children'
 import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
@@ -20,7 +19,6 @@ type LiveTailPage = {
   oversizedRecordCount?: number
 }
 
-/** Parent handle is closed before child files open. Nesting those reads deadlocks the scan slot. */
 export async function readNativeChatLiveTail(
   filePath: string,
   limit: number,
@@ -43,9 +41,5 @@ export async function readNativeChatLiveTail(
     onConsumedBoundary,
     sourceOrder
   )
-  if (endOffset !== undefined || limit <= 0) {
-    return page
-  }
-  const messages = await appendNativeChatChildTranscripts(filePath, decode, page.messages, signal)
-  return messages.length === page.messages.length ? page : { ...page, messages }
+  return page
 }

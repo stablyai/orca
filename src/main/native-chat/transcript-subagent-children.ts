@@ -1,21 +1,36 @@
 import type { Dirent } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
-  isSubagentTranscriptFileName,
   SUBAGENT_TRANSCRIPT_PREFIX,
   subagentTranscriptsDirFor
 } from '../ai-vault/session-scanner-subagent-transcripts'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from './agent-session-wire/agent-session-history-page-bounds'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { decodeTranscriptStream, splitTranscriptStreamLines } from './transcript-stream-lines'
+import { splitTranscriptStreamLines } from './transcript-stream-lines'
 import { openTranscriptReadStream, wslGatedReaddir } from './wsl-transcript-fs-access'
 
 type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
 const CODEX_THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const CLAUDE_CHILD_ID = /^[A-Za-z0-9_-]{1,128}$/
+const CHILD_FIT_ATTEMPTS = 8
+
+export type NativeChatChildPage = {
+  messages: NativeChatMessage[]
+  hasMore: boolean
+  beforeOffset: number
+}
+
+/** Reads one child file. Passed in so this module does not import the tail reader. */
+export type NativeChatChildTailRead = (
+  filePath: string,
+  limit: number,
+  endOffset: number | undefined,
+  signal: AbortSignal | undefined
+) => Promise<NativeChatChildPage>
 
 /** Child rows ride along with the parent window so a short tail cannot drop them. */
 export function windowNativeChatWithChildren(
@@ -36,109 +51,121 @@ export function windowNativeChatWithChildren(
 }
 
 /**
- * Decode child transcripts onto a live parent snapshot.
- * Callers skip historical pages so paging does not repeat these rows.
+ * Page one child transcript. Callers leave the parent snapshot on the roster alone.
  */
-export async function appendNativeChatChildTranscripts(
-  filePath: string,
-  decode: NativeChatLineDecoder,
-  messages: readonly NativeChatMessage[],
+export async function readNativeChatSubagentPage(args: {
+  parentPath: string
+  decode: NativeChatLineDecoder
+  agentId: string
+  limit: number
+  beforeOffset?: number
   signal?: AbortSignal
-): Promise<NativeChatMessage[]> {
-  // A second WSL gate task holds the recovered snapshot until the helper deadline.
-  if (isWslUncPath(filePath)) {
-    return messages.slice()
+  readTail: NativeChatChildTailRead
+}): Promise<NativeChatChildPage | null> {
+  const childPath =
+    args.decode === decodeClaudeTranscriptLine
+      ? claudeChildPath(args.parentPath, args.agentId)
+      : args.decode === decodeCodexTranscriptLine
+        ? await codexChildPath(args.parentPath, args.agentId, args.signal)
+        : null
+  if (!childPath || args.limit <= 0) {
+    return childPath ? { messages: [], hasMore: false, beforeOffset: 0 } : null
   }
-  const children =
-    decode === decodeClaudeTranscriptLine
-      ? await claudeChildren(filePath, decode, signal)
-      : decode === decodeCodexTranscriptLine
-        ? await codexChildren(filePath, decode, signal)
-        : []
-  return children.length > 0 ? [...messages, ...children] : messages.slice()
+  return readFittedPage(
+    childPath,
+    args.agentId,
+    args.limit,
+    args.beforeOffset,
+    args.readTail,
+    args.signal
+  )
 }
 
-async function claudeChildren(
-  filePath: string,
-  decode: NativeChatLineDecoder,
-  signal?: AbortSignal
-): Promise<NativeChatMessage[]> {
-  const directory = subagentTranscriptsDirFor(filePath)
-  const entries = await readDir(directory, signal)
-  if (!entries) {
-    return []
+function claudeChildPath(parentPath: string, agentId: string): string | null {
+  if (!CLAUDE_CHILD_ID.test(agentId)) {
+    return null
   }
-  const files = entries
-    .filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile()))
-    .sort((left, right) => left.name.localeCompare(right.name))
-  const children: NativeChatMessage[] = []
-  for (const entry of files) {
-    const agentId = claudeChildAgentId(entry.name)
-    if (!agentId) {
-      continue
+  return join(
+    subagentTranscriptsDirFor(parentPath),
+    `${SUBAGENT_TRANSCRIPT_PREFIX}${agentId}.jsonl`
+  )
+}
+
+async function readFittedPage(
+  filePath: string,
+  agentId: string,
+  limit: number,
+  beforeOffset: number | undefined,
+  readTail: NativeChatChildTailRead,
+  signal: AbortSignal | undefined
+): Promise<NativeChatChildPage | null> {
+  let window = limit
+  try {
+    let page = await readTail(filePath, window, beforeOffset, signal)
+    let messages = stampChildMessages(page.messages, agentId)
+    for (
+      let attempt = 0;
+      attempt < CHILD_FIT_ATTEMPTS &&
+      pageBytes(messages) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES &&
+      messages.length > 1;
+      attempt += 1
+    ) {
+      window = Math.max(1, Math.floor(messages.length / 2))
+      page = await readTail(filePath, window, beforeOffset, signal)
+      messages = stampChildMessages(page.messages, agentId)
     }
-    const decoded = await readChildFile(join(directory, entry.name), decode, signal)
-    children.push(...stampChildMessages(decoded, agentId))
-  }
-  return children
-}
-
-async function codexChildren(
-  filePath: string,
-  decode: NativeChatLineDecoder,
-  signal?: AbortSignal
-): Promise<NativeChatMessage[]> {
-  const links = await codexChildLinks(filePath, signal)
-  if (links.size === 0) {
-    return []
-  }
-  const dayDir = dirname(filePath)
-  const index: RolloutIndex = {
-    dayDir,
-    dayEntries: await readDir(dayDir, signal),
-    monthDir: dirname(dayDir),
-    monthEntries: undefined
-  }
-  const children: NativeChatMessage[] = []
-  for (const [threadId, agentId] of links) {
-    const childPath = await findCodexRollout(index, threadId, signal)
-    if (!childPath) {
-      continue
+    if (pageBytes(messages) > BOUNDED_FRAME_CONTENT_BUDGET_BYTES) {
+      messages = [oversizedChild(agentId)]
     }
-    const decoded = await readChildFile(childPath, decode, signal)
-    children.push(...stampChildMessages(decoded, agentId))
+    return { messages, hasMore: page.hasMore, beforeOffset: page.beforeOffset }
+  } catch (error) {
+    if (aborted(error, signal)) {
+      throw error
+    }
+    return null
   }
-  return children
 }
 
-type RolloutIndex = {
-  dayDir: string
-  dayEntries: Dirent[] | null
-  monthDir: string
-  monthEntries: Dirent[] | null | undefined
+function pageBytes(messages: readonly NativeChatMessage[]): number {
+  return Buffer.byteLength(JSON.stringify(messages))
 }
 
-async function findCodexRollout(
-  index: RolloutIndex,
-  threadId: string,
+function oversizedChild(agentId: string): NativeChatMessage {
+  return {
+    id: `${agentId}:oversized`,
+    role: 'system',
+    blocks: [{ type: 'text', text: 'This part of the subagent transcript is too large to show.' }],
+    timestamp: null,
+    source: 'transcript',
+    agentId
+  }
+}
+
+async function codexChildPath(
+  filePath: string,
+  agentId: string,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const inDay = matchRollout(index.dayEntries, index.dayDir, threadId)
+  const threadId = await codexThreadId(filePath, agentId, signal)
+  if (!threadId) {
+    return null
+  }
+  const dayDir = dirname(filePath)
+  const inDay = matchRollout(await readDir(dayDir, signal), dayDir, threadId)
   if (inDay) {
     return inDay
   }
-  if (index.monthEntries === undefined) {
-    index.monthEntries = await readDir(index.monthDir, signal)
-  }
-  if (!index.monthEntries) {
+  const monthDir = dirname(dayDir)
+  const monthEntries = await readDir(monthDir, signal)
+  if (!monthEntries) {
     return null
   }
-  for (const entry of index.monthEntries) {
+  for (const entry of monthEntries) {
     if (!entry.isDirectory()) {
       continue
     }
-    const sibling = join(index.monthDir, entry.name)
-    if (sibling === index.dayDir) {
+    const sibling = join(monthDir, entry.name)
+    if (sibling === dayDir) {
       continue
     }
     const found = matchRollout(await readDir(sibling, signal), sibling, threadId)
@@ -147,6 +174,42 @@ async function findCodexRollout(
     }
   }
   return null
+}
+
+async function codexThreadId(
+  filePath: string,
+  agentId: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  let threadId: string | null = null
+  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact', signal)
+  try {
+    for await (const record of splitTranscriptStreamLines(stream)) {
+      const next = codexLinkThread(record.line, agentId)
+      if (next) {
+        threadId = next
+      }
+    }
+  } catch (error) {
+    if (aborted(error, signal)) {
+      throw error
+    }
+  } finally {
+    stream.destroy()
+  }
+  return threadId
+}
+
+function codexLinkThread(line: string, agentId: string): string | null {
+  if (!line.includes('SubAgentActivity')) {
+    return null
+  }
+  const item = asRecord(asRecord(parseJsonObject(line)?.payload)?.item)
+  if (item?.type !== 'SubAgentActivity' || extractString(item.agent_path) !== agentId) {
+    return null
+  }
+  const threadId = extractString(item.agent_thread_id)
+  return threadId && CODEX_THREAD_ID.test(threadId) ? threadId : null
 }
 
 function matchRollout(entries: Dirent[] | null, dir: string, threadId: string): string | null {
@@ -160,48 +223,6 @@ function matchRollout(entries: Dirent[] | null, dir: string, threadId: string): 
   return match ? join(dir, match.name) : null
 }
 
-async function codexChildLinks(
-  filePath: string,
-  signal?: AbortSignal
-): Promise<Map<string, string>> {
-  const links = new Map<string, string>()
-  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact', signal)
-  try {
-    for await (const record of splitTranscriptStreamLines(stream)) {
-      rememberCodexLink(links, record.line)
-    }
-  } catch (error) {
-    if (aborted(error, signal)) {
-      throw error
-    }
-  } finally {
-    stream.destroy()
-  }
-  return links
-}
-
-function rememberCodexLink(links: Map<string, string>, line: string): void {
-  if (!line.includes('SubAgentActivity')) {
-    return
-  }
-  const record = parseJsonObject(line)
-  const item = asRecord(asRecord(record?.payload)?.item)
-  if (item?.type !== 'SubAgentActivity') {
-    return
-  }
-  const threadId = extractString(item.agent_thread_id)
-  if (!threadId || !CODEX_THREAD_ID.test(threadId)) {
-    return
-  }
-  links.set(threadId, extractString(item.agent_path) ?? threadId)
-}
-
-function claudeChildAgentId(name: string): string | null {
-  const extension = extname(name)
-  const agentId = name.slice(SUBAGENT_TRANSCRIPT_PREFIX.length, name.length - extension.length)
-  return agentId.length > 0 ? agentId : null
-}
-
 function stampChildMessages(
   messages: readonly NativeChatMessage[],
   agentId: string
@@ -211,25 +232,6 @@ function stampChildMessages(
     stamped.push({ ...message, id: `${agentId}:${message.id}`, agentId })
   }
   return stamped
-}
-
-async function readChildFile(
-  filePath: string,
-  decode: NativeChatLineDecoder,
-  signal?: AbortSignal
-): Promise<NativeChatMessage[]> {
-  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact', signal)
-  try {
-    const decoded = await decodeTranscriptStream(stream, filePath, 0, decode, true)
-    return decoded.messages
-  } catch (error) {
-    if (aborted(error, signal)) {
-      throw error
-    }
-    return []
-  } finally {
-    stream.destroy()
-  }
 }
 
 async function readDir(path: string, signal?: AbortSignal): Promise<Dirent[] | null> {
