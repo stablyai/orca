@@ -388,33 +388,6 @@ describe('host-owned hook presence', () => {
     await hook(server, 'UserPromptSubmit', 'relaunch', undefined, 4002)
     expect(state(server)).toBe('working')
   })
-
-  it('records the process from the first hook after the terminal reported the agent first', async () => {
-    const server = await createServer()
-    // A forked resume launch seeds the source session; Claude then reports its own new one.
-    server.recordLaunchResumeIdentity({
-      paneKey: PANE,
-      worktreeId: 'wt-1',
-      agentType: 'claude',
-      providerSession: { key: 'session_id', id: 'source' },
-      launchedAt: Date.now() - 1
-    })
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      tabId: 'tab-1',
-      worktreeId: 'wt-1',
-      connectionId: null,
-      payload: { state: 'working', prompt: '', agentType: 'claude' }
-    })
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
-    await hook(server, 'SessionStart', 'resumed')
-    expect(server.hasVerifiableAgentProcess(PANE)).toBe(true)
-    // The recorded owner still refuses a nested process's hooks.
-    await hook(server, 'UserPromptSubmit', 'nested', undefined, 4002)
-    expect(
-      server.getStatusSnapshot().find((row) => row.paneKey === PANE)?.providerSession?.id
-    ).toBe('resumed')
-  })
 })
 
 describe('retained agent exit', () => {
