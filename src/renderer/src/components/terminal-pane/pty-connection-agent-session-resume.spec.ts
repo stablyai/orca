@@ -560,7 +560,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
       )
     })
 
-    it('shows the restored banner when a sleeping resume falls back to a fresh shell', async () => {
+    it('shows no banner when a sleeping resume falls back to a fresh shell', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const staleSessionId = 'wt-1@@stale-session'
       const transport = createMockTransport()
@@ -646,8 +646,7 @@ export function registerPtyConnectionAgentSessionResumeTests(): void {
         expect.stringContaining('--- session restored ---'),
         expect.any(Function)
       )
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
     })
   })

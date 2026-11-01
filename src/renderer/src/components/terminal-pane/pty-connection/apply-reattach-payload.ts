@@ -279,10 +279,8 @@ export function createReattachPayloadHandlers(
         ctx.connectResult.isReattach !== true &&
         session.applyColdRestoreAgentResumeStartup(preparedStartup)
       if (resumeUnavailable) {
-        // Dropped resume argv starts a new session; the restored banner must not claim the old session returned.
+        // Orca refused the saved resume, so the pane started fresh; say so.
         session.showSessionRestoredBanner('resume-unavailable')
-      } else if (didPrepareResume && preparedStartup?.hasSleepingRecord) {
-        session.showSessionRestoredBanner()
       }
       if (didPrepareResume) {
         session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)

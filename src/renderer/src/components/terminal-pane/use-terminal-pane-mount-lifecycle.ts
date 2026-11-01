@@ -65,7 +65,6 @@ export function useTerminalPaneMountLifecycle(
       syncCanExpandState: preparation.syncCanExpandState,
       applyAppearance: preparation.applyAppearance,
       requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
-      onShowSessionRestoredBanner: deps.onShowSessionRestoredBanner,
       releaseWebviewDragPassthrough: releaseWebviewDragPassthrough,
       shouldPersistLayout: () => shouldPersistLayout,
       osc7UncHost: preparation.osc7UncHost

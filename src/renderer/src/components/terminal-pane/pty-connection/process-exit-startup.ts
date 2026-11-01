@@ -12,8 +12,7 @@ export function toProcessExitStartup(
         launchConfig: startup.launchConfig,
         resumeProviderSession: startup.resumeProviderSession,
         launchToken: startup.launchToken,
-        launchAgent: startup.agent,
-        showSessionRestoredBanner: true
+        launchAgent: startup.agent
       }
     : startup
 }

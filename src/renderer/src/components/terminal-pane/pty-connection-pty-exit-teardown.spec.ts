@@ -487,8 +487,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
           command: expect.stringContaining("'resume' 'codex-session-1'"),
           launchConfig,
           resumeProviderSession: { key: 'session_id', id: 'codex-session-1' },
-          launchAgent: 'codex',
-          showSessionRestoredBanner: true
+          launchAgent: 'codex'
         }),
         reason: 'git-bash-console-capacity'
       })

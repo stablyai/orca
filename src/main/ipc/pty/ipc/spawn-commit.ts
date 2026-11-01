@@ -50,7 +50,6 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         migrationUnsupportedPaneKey: ctx.migrationUnsupportedPaneKey,
         opaqueRemintedSpawnPaneKey: ctx.opaqueRemintedSpawnPaneKey
       },
-      resumeArgvDropped: ctx.codexResumeLaunch.droppedResumeArgv,
       codexLaunchEnv: ctx.baseEnv,
       initiallyHidden: ctx.initiallyHidden,
       hiddenDelivery: 'renderer-scoped',
@@ -103,9 +102,7 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
       ? {
           launchAgent: args.launchAgent,
           launchToken: typeof args.launchToken === 'string' ? args.launchToken : undefined,
-          resumeProviderSession: ctx.codexResumeLaunch.droppedResumeArgv
-            ? undefined
-            : args.resumeProviderSession
+          resumeProviderSession: args.resumeProviderSession
         }
       : {}),
     ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
@@ -125,9 +122,7 @@ function resumeDisposition(ctx: PtyIpcSpawnState) {
   }
   const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
   return {
-    ...(ctx.codexResumeLaunch.notifyResumeUnavailable || refusal
-      ? { agentResumeUnavailable: true as const }
-      : {}),
+    ...(refusal ? { agentResumeUnavailable: true as const } : {}),
     ...savedResumeResult(ctx.resumeAdmission)
   }
 }

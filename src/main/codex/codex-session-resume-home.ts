@@ -9,16 +9,13 @@ import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 // Only the dated rollout layout may establish credential provenance.
-const CLAIMED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`
 const TRUSTED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/:]+\.jsonl(?:\.zst)?`
 const ROLLOUT_RELATIVE_PATH = new RegExp(`^${TRUSTED_CODEX_ROLLOUT_TAIL}$`)
-// Match the case folding used for trusted Windows homes.
-const CODEX_ROLLOUT_LAYOUT_PATH = new RegExp(`(?:^|/)sessions/${CLAIMED_CODEX_ROLLOUT_TAIL}$`, 'i')
 
-/** Unverified provenance starts fresh; claimed Codex layout controls the rejection notice. */
+/** Missing provenance leaves the requested resume in its ordinary launch environment. */
 export type CodexSessionResumePreparation =
   | { outcome: 'resume'; codexHomePath: string; reconcileSharedRuntimeAuth?: boolean }
-  | { outcome: 'fresh'; claimedCodexProvenance: boolean }
+  | { outcome: 'unresolved' }
 
 // Only fold extended drive paths; reject device namespaces and extended UNC paths.
 function toCodexTrustedPathComparisonCopy(filePath: string): string | null {
@@ -119,15 +116,6 @@ export function resolveTrustedCodexSessionResumeHome(args: {
   return resolveTrustedCodexSessionResume(args)?.homePath ?? null
 }
 
-/** Recognize rejected Codex provenance even under a removed or untrusted home. */
-export function claimsCodexRolloutLayout(transcriptPath: string | undefined): boolean {
-  const persistedPath = transcriptPath?.trim()
-  if (!persistedPath) {
-    return false
-  }
-  return CODEX_ROLLOUT_LAYOUT_PATH.test(persistedPath.replace(/\\/g, '/'))
-}
-
 export async function resolveCodexSessionResumeProvenance(args: {
   sessionId: string
   transcriptPath: string | undefined
@@ -138,13 +126,10 @@ export async function resolveCodexSessionResumeProvenance(args: {
   fileIsRegular?: (filePath: string) => boolean
   listSessionFiles?: (sessionsRoot: string) => AsyncIterable<string>
 }): Promise<
-  | { outcome: 'resume'; homePath: string; transcriptPath: string }
-  | { outcome: 'fresh'; claimedCodexProvenance: boolean }
+  { outcome: 'resume'; homePath: string; transcriptPath: string } | { outcome: 'unresolved' }
 > {
   const sessionSource = await findTrustedCodexSessionResume(args)
-  return sessionSource
-    ? { outcome: 'resume', ...sessionSource }
-    : { outcome: 'fresh', claimedCodexProvenance: claimsCodexRolloutLayout(args.transcriptPath) }
+  return sessionSource ? { outcome: 'resume', ...sessionSource } : { outcome: 'unresolved' }
 }
 
 // The winning home selects credentials; never let settings order choose the account.
@@ -271,30 +256,38 @@ export async function findTrustedCodexSessionResume(args: {
     }
     seenHomes.add(comparisonHome)
     const sessionsRoot = join(homePath, 'sessions')
-    if (
-      !args.listSessionFiles &&
-      !sessionsTreeIsPresent(sessionsRoot, isSelectedAccountHome(selectedAccountHome, homePath))
-    ) {
-      continue
-    }
-    for await (const filePath of listSessionFiles(sessionsRoot)) {
-      const plainFilePath = filePath.endsWith('.jsonl.zst')
-        ? filePath.slice(0, -'.zst'.length)
-        : filePath
-      // The entry proves the compressed file exists; only probe its preferred plain sibling.
-      const preferredFilePath =
-        plainFilePath !== filePath && (args.fileIsRegular ?? isRegularFile)(plainFilePath)
-          ? plainFilePath
-          : filePath
-      const plainFileName = getRuntimePathBasename(preferredFilePath)
-        .toLowerCase()
-        .replace(/\.zst$/, '')
+    try {
       if (
-        isCodexRolloutInsideSessionsRoot(sessionsRoot, preferredFilePath) &&
-        plainFileName.endsWith(expectedSuffix)
+        !args.listSessionFiles &&
+        !sessionsTreeIsPresent(sessionsRoot, isSelectedAccountHome(selectedAccountHome, homePath))
       ) {
-        return { homePath, transcriptPath: preferredFilePath }
+        continue
       }
+      for await (const filePath of listSessionFiles(sessionsRoot)) {
+        const plainFilePath = filePath.endsWith('.jsonl.zst')
+          ? filePath.slice(0, -'.zst'.length)
+          : filePath
+        // The entry proves the compressed file exists; only probe its preferred plain sibling.
+        const preferredFilePath =
+          plainFilePath !== filePath && (args.fileIsRegular ?? isRegularFile)(plainFilePath)
+            ? plainFilePath
+            : filePath
+        const plainFileName = getRuntimePathBasename(preferredFilePath)
+          .toLowerCase()
+          .replace(/\.zst$/, '')
+        if (
+          isCodexRolloutInsideSessionsRoot(sessionsRoot, preferredFilePath) &&
+          plainFileName.endsWith(expectedSuffix)
+        ) {
+          return { homePath, transcriptPath: preferredFilePath }
+        }
+      }
+    } catch (error) {
+      // Unreadable selected history cannot choose another account or cancel the requested resume.
+      if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
+        return null
+      }
+      throw error
     }
   }
   return null

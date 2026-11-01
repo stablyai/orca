@@ -183,7 +183,7 @@ export function registerMainOwnedResumeDrainTests(
         expect.not.objectContaining({ command: expect.anything() })
       )
       expect(settled.mock.calls.filter(([, , status]) => status === 'success')).toHaveLength(1)
-      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledOnce()
+      expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       expect(getStoreState().clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
       expect(transport.getPtyId()).toBe('main-pty')
       for (const [, pane, source] of attach.mock.calls) {
@@ -269,7 +269,7 @@ export function registerMainOwnedResumeDrainTests(
         expect(visits).toBe(3 * visitsPerLookup)
         expect(transport.getPtyId()).toBe('main-pty')
         expect(transport.connect).toHaveBeenCalledOnce()
-        expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledOnce()
+        expect(deps.onShowSessionRestoredBanner).not.toHaveBeenCalled()
       } else {
         const pending = createDeferred<boolean>()
         mainResume.mockImplementationOnce(() => pending.promise)

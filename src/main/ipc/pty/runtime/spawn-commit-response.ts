@@ -2,10 +2,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 
-type RuntimeResumeOutcomeState = Pick<
-  RuntimePtySpawnState,
-  'args' | 'result' | 'codexResumeArgvDropped'
-> & { codexResumeUnavailable?: boolean }
+type RuntimeResumeOutcomeState = Pick<RuntimePtySpawnState, 'args' | 'result'>
 
 /** Whether a fresh start resumed the agent it was asked to; a reattach ran no launch command. */
 export function resumeOutcomeOf(ctx: RuntimeResumeOutcomeState): PaneResumeOutcome | null {
@@ -13,11 +10,10 @@ export function resumeOutcomeOf(ctx: RuntimeResumeOutcomeState): PaneResumeOutco
     return null
   }
   // Refused saved admission removes the request; the spawned shell still carries its outcome.
-  if (ctx.result.agentResumeUnavailable || ctx.codexResumeUnavailable) {
+  if (ctx.result.agentResumeUnavailable) {
     return 'resume-unavailable'
   }
-  // A resume dropped silently named another agent's session: nothing came back, and nothing is owed.
-  return ctx.args.resumeProviderSession && !ctx.codexResumeArgvDropped ? 'restored' : null
+  return ctx.args.resumeProviderSession ? 'restored' : null
 }
 
 /** Publish resume outcome before binding so the first frame with the new terminal includes it. */

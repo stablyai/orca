@@ -79,8 +79,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const { findTrustedCodexSessionResume } = await import('./codex-session-resume-home')
-const { ManagedCodexHomeTemporarilyUnavailableError } =
-  await import('../codex-accounts/host-codex-managed-home-ownership')
 
 const tempRoots: string[] = []
 const SESSION_ID = '11111111-2222-3333-4444-555555555555'
@@ -107,7 +105,7 @@ afterEach(() => {
 })
 
 describe('STA-4607 session resume under a briefly unreadable sessions tree', () => {
-  it('refuses rather than resuming the selected account under another account home', async () => {
+  it('leaves routing unresolved rather than choosing another account when the selected tree locks', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
@@ -137,9 +135,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
     const selectedSessionsRoot = join(selectedHome, 'sessions')
     statFaults.hold(selectedSessionsRoot)
 
-    await expect(findTrustedCodexSessionResume(args)).rejects.toBeInstanceOf(
-      ManagedCodexHomeTemporarilyUnavailableError
-    )
+    await expect(findTrustedCodexSessionResume(args)).resolves.toBeNull()
     expect(statFaults.readsFor(selectedSessionsRoot)).toBeGreaterThan(0)
   })
 
@@ -165,7 +161,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
     })
   })
 
-  it('refuses when the selected tree locks during listing after stat succeeds', async () => {
+  it('leaves routing unresolved when the selected tree locks during listing', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
@@ -182,10 +178,10 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
         systemCodexHomePath: null,
         sharedRuntimeCodexHomePath: null
       })
-    ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
+    ).resolves.toBeNull()
   })
 
-  it('refuses when a NESTED dated directory locks and the root stats fine', async () => {
+  it('leaves routing unresolved when a nested dated directory locks', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
@@ -201,7 +197,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
         systemCodexHomePath: null,
         sharedRuntimeCodexHomePath: null
       })
-    ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
+    ).resolves.toBeNull()
   })
 
   it('skips an unreadable home that is NOT the selected account', async () => {

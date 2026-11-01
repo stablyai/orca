@@ -17,13 +17,12 @@ export function SessionRestoredBannerPortals({
   return (
     <>
       {panes.map((pane) => {
-        const reason = paneIds.get(pane.id)
-        if (!reason) {
+        if (!paneIds.has(pane.id)) {
           return null
         }
         return createPortal(
           // Put wake markers in pane chrome because resumed TUIs immediately repaint the PTY screen.
-          <SessionRestoredBanner visible reason={reason} />,
+          <SessionRestoredBanner visible />,
           pane.container,
           `session-restored-banner-${pane.id}`
         )

@@ -154,7 +154,6 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       },
       launchToken: coldRestoreLaunchToken,
       useLiveEntry: Boolean(useLiveEntry),
-      hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry
     }
   }

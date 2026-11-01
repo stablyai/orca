@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  claimsCodexRolloutLayout,
   codexDatedRolloutRelativePath,
   findTrustedCodexSessionResume,
   resolveCodexSessionResumeProvenance,
@@ -566,58 +565,6 @@ describe('codexDatedRolloutRelativePath', () => {
   })
 })
 
-describe('claimsCodexRolloutLayout', () => {
-  it('is true for a rollout path even if the file is missing', () => {
-    expect(
-      claimsCodexRolloutLayout('/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl')
-    ).toBe(true)
-  })
-
-  it('is true for compressed rollouts and Windows-separated paths', () => {
-    expect(
-      claimsCodexRolloutLayout(
-        '/Users/example/.codex/sessions/2026/07/20/rollout-session.jsonl.zst'
-      )
-    ).toBe(true)
-    expect(
-      claimsCodexRolloutLayout(
-        'C:\\Users\\example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
-      )
-    ).toBe(true)
-  })
-
-  it('is true for a rollout under a home Orca no longer trusts, so resume cannot silently fall through to the selected account', () => {
-    expect(
-      claimsCodexRolloutLayout('/removed/account/home/sessions/2026/07/20/rollout-a.jsonl')
-    ).toBe(true)
-  })
-
-  it('is true for an ADS-shaped rollout that provenance trust rejects', () => {
-    expect(
-      claimsCodexRolloutLayout(
-        'C:\\Users\\example\\.codex\\sessions\\2026\\07\\20\\rollout-a:stream.jsonl'
-      )
-    ).toBe(true)
-  })
-
-  it('is false for Claude (or other non-Codex) transcript paths', () => {
-    expect(
-      claimsCodexRolloutLayout(
-        '/Users/example/.claude/projects/-Users-example-repo/019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl'
-      )
-    ).toBe(false)
-  })
-
-  it('is false for empty provenance and JSONL misplaced inside a sessions root', () => {
-    expect(claimsCodexRolloutLayout(undefined)).toBe(false)
-    expect(claimsCodexRolloutLayout('   ')).toBe(false)
-    expect(claimsCodexRolloutLayout('/Users/example/.codex/sessions/rollout-a.jsonl')).toBe(false)
-    expect(
-      claimsCodexRolloutLayout('/Users/example/.codex/sessions/2026/07/20/nested/rollout-a.jsonl')
-    ).toBe(false)
-  })
-})
-
 describe('resolveCodexSessionResumeProvenance', () => {
   function writeRollout(sessionId: string): { homePath: string; rolloutPath: string } {
     const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
@@ -635,7 +582,7 @@ describe('resolveCodexSessionResumeProvenance', () => {
     return { homePath, rolloutPath }
   }
 
-  it('starts fresh for a rollout file that really exists under a home Orca no longer trusts', async () => {
+  it('leaves the home unresolved for a rollout under a home Orca no longer trusts', async () => {
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
     const removed = writeRollout(sessionId)
     const trusted = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
@@ -648,7 +595,7 @@ describe('resolveCodexSessionResumeProvenance', () => {
         trustedCodexHomes: [trusted],
         ...withoutHomeRanking
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
+    ).resolves.toEqual({ outcome: 'unresolved' })
   })
 
   it('resumes from the originating home when that home is still trusted', async () => {
@@ -669,7 +616,7 @@ describe('resolveCodexSessionResumeProvenance', () => {
     })
   })
 
-  it('starts fresh silently for cross-agent provenance on a pane relabeled codex', async () => {
+  it('leaves the home unresolved for cross-agent metadata', async () => {
     await expect(
       resolveCodexSessionResumeProvenance({
         sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
@@ -677,10 +624,10 @@ describe('resolveCodexSessionResumeProvenance', () => {
         trustedCodexHomes: ['/Users/example/.codex'],
         ...withoutHomeRanking
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
+    ).resolves.toEqual({ outcome: 'unresolved' })
   })
 
-  it('reports a missing rollout under a trusted home as rejected Codex provenance', async () => {
+  it('leaves the home unresolved for a missing rollout under a trusted home', async () => {
     await expect(
       resolveCodexSessionResumeProvenance({
         sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
@@ -689,6 +636,6 @@ describe('resolveCodexSessionResumeProvenance', () => {
         ...withoutHomeRanking,
         fileIsRegular: () => false
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
+    ).resolves.toEqual({ outcome: 'unresolved' })
   })
 })

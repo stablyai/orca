@@ -218,16 +218,12 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   ) {
     session.armStartupDraftReadinessObservation()
   }
-  let sessionRestoredBannerShown: SessionRestoredBannerReason | null = null
-  session.showSessionRestoredBanner = (reason: SessionRestoredBannerReason = 'restored'): void => {
-    // Allow unavailable outcome to replace restored wording; an earlier plain banner cannot certify a session that failed to resume.
-    if (
-      sessionRestoredBannerShown === reason ||
-      sessionRestoredBannerShown === 'resume-unavailable'
-    ) {
+  let sessionRestoredBannerShown = false
+  session.showSessionRestoredBanner = (reason: SessionRestoredBannerReason): void => {
+    if (sessionRestoredBannerShown) {
       return
     }
-    sessionRestoredBannerShown = reason
+    sessionRestoredBannerShown = true
     session.deps.onShowSessionRestoredBanner(session.pane.id, reason)
   }
 }

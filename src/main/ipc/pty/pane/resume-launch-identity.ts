@@ -13,18 +13,10 @@ export function seedResumeLaunchIdentityFromSpawn(args: {
   connectionId: string | null | undefined
   worktreeId: unknown
   launchedAt: Date | undefined
-  /** The Codex resume fell back to a fresh session, so the pane does not hold this one. */
-  resumeArgvDropped: boolean
   result: PtySpawnResult
 }): void {
   // Reattach already owns identity; SSH status rows belong to the relay.
-  if (
-    !args.paneKey ||
-    args.resumeArgvDropped ||
-    args.result.isReattach === true ||
-    args.connectionId ||
-    !args.launchedAt
-  ) {
+  if (!args.paneKey || args.result.isReattach === true || args.connectionId || !args.launchedAt) {
     return
   }
   seedResumeLaunchIdentity({
