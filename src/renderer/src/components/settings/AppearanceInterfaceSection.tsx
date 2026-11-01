@@ -38,6 +38,7 @@ import {
   CodeEditorThemeSelect
 } from './AppearanceThemeControl'
 import { usePluginIconThemes } from '@/store/plugin-icon-themes'
+import { AppearanceWindowTitleSetting } from './AppearanceWindowTitleSetting'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -327,6 +328,8 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      <AppearanceWindowTitleSetting {...{ settings, updateSettings, forceVisiblePrimary }} />
 
       {showAdvanced ? (
         <AppearanceAdvancedDisclosure showTopBorder={false}>
