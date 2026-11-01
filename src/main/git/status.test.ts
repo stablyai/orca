@@ -5,6 +5,7 @@ import {
   createFsPromisesModuleMock,
   createGitRunnerModuleMock
 } from './status-test-harness'
+import { MAX_IGNORED_PATHS } from '../../shared/git-status-porcelain-parser'
 
 const {
   gitExecFileAsyncMock,
@@ -256,6 +257,18 @@ describe('getStatus', () => {
       '--ignored=matching'
     ])
     expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
+  })
+
+  it('drops an overflowing ignored set without marking the status huge', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    const ignored = Array.from({ length: MAX_IGNORED_PATHS + 1 }, (_, i) => `! build/f${i}.o\n`)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: `? new.txt\n${ignored.join('')}` })
+
+    const result = await getStatus('/repo', { includeIgnored: true })
+
+    expect(result.entries).toEqual([{ path: 'new.txt', status: 'untracked', area: 'untracked' }])
+    expect('ignoredPaths' in result).toBe(false)
+    expect(result.didHitLimit).toBeUndefined()
   })
 
   it('parses branch identity from porcelain v2 branch headers', async () => {
