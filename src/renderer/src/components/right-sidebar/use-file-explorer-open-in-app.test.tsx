@@ -125,6 +125,20 @@ describe('useFileExplorerOpenInApp', () => {
     expect(makePreviewFilePermanent).toHaveBeenCalledWith(openedFileId)
   })
 
+  it('opens the file in the Orca editor when the launch throws', async () => {
+    chooseApp('zed', 'app')
+    openInExternalEditor.mockRejectedValue(new URIError('URI malformed'))
+    const open = renderHook(LOCAL_EXECUTION_HOST_ID)
+
+    await act(async () => {
+      open('/repo/a.ts', { repeated: false, openInOrca })
+      open('/repo/a.ts', { repeated: true, openInOrca })
+    })
+
+    expect(openInOrca).toHaveBeenCalledTimes(1)
+    expect(makePreviewFilePermanent).toHaveBeenCalledWith(openedFileId)
+  })
+
   it('leaves pinning to the double-click handler when the launch failed before the repeated click', async () => {
     chooseApp('zed', 'app')
     openInExternalEditor.mockResolvedValue({ ok: false, reason: 'launch-failed' })

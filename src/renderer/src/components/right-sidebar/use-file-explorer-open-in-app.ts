@@ -20,7 +20,8 @@ export type ChosenAppClick = {
  * (no app chosen, or the app can't reach this workspace) leaves the file to the Orca editor.
  * A repeated click of a double-click is taken without relaunching, since the first one launched.
  * If the launch fails, `openInOrca` opens the file in the Orca editor so the click is never lost,
- * and pins that tab when a double-click already tried to before the file was open.
+ * and pins that tab when a double-click already tried to before the file was open. A launch that
+ * throws (for example a malformed SSH username) counts as a failed launch.
  */
 export function useFileExplorerOpenInApp(
   activeWorktreeId: string | null,
@@ -51,14 +52,7 @@ export function useFileExplorerOpenInApp(
       }
       const launch = { pinOnFallback: false }
       launches.current.set(path, launch)
-      void openWorktreePath({
-        target: 'external-editor',
-        worktreePath: path,
-        ...route,
-        workspace,
-        command: application.command,
-        subject: 'path'
-      }).then((opened) => {
+      const settleLaunch = (opened: boolean): void => {
         if (launches.current.get(path) === launch) {
           launches.current.delete(path)
         }
@@ -68,7 +62,15 @@ export function useFileExplorerOpenInApp(
             makePreviewFilePermanent(openedFileId)
           }
         }
-      })
+      }
+      void openWorktreePath({
+        target: 'external-editor',
+        worktreePath: path,
+        ...route,
+        workspace,
+        command: application.command,
+        subject: 'path'
+      }).then(settleLaunch, () => settleLaunch(false))
       return true
     },
     [application, makePreviewFilePermanent, route, runtimeSshHost, workspace]
