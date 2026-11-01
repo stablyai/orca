@@ -224,6 +224,7 @@ export function buildHardWrappedPathLogicalLineCandidates(
     }
 
     const sourceRows: { row: HardWrappedPathFragmentRow; y: number }[] = [{ row: start, y: startY }]
+    let accumulated = startSuffix?.text ?? start.text
     for (let rowY = startY + 1; rowY < startY + maxRows; rowY++) {
       const line = buffer.getLine(rowY)
       const row = line ? trimHardWrappedPathRow(line) : null
@@ -231,7 +232,8 @@ export function buildHardWrappedPathLogicalLineCandidates(
         break
       }
       sourceRows.push({ row, y: rowY })
-      if (!isHardWrappedPathContinuation(row.text)) {
+      accumulated += row.text
+      if (isClosedPathWrapper(accumulated) || !isHardWrappedPathContinuation(row.text)) {
         break
       }
     }

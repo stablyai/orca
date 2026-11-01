@@ -8,6 +8,43 @@ import {
 } from './wrapped-terminal-link-ranges'
 
 describe('parenthesized hard-wrapped terminal file targets', () => {
+  it('stops after a continuation closes a path wrapper', async () => {
+    const terminal = new Terminal({ cols: 180, rows: 4, allowProposedApi: true })
+    try {
+      await new Promise<void>((resolve) =>
+        terminal.write('文档(/tmp/产物/final-\r\n  排版.html)\r\n  next.md', resolve)
+      )
+      for (const row of [1, 2]) {
+        const candidates = buildHardWrappedPathLogicalLineCandidates(terminal.buffer.active, row)
+        expect(candidates.some((candidate) => candidate.text.includes('next.md'))).toBe(false)
+        expect(
+          candidates
+            .flatMap((candidate) => extractTerminalFileLinks(candidate.text))
+            .map((link) => link.pathText)
+        ).toContain('/tmp/产物/final-排版.html')
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it('continues after filename parentheses inside an unclosed wrapper', async () => {
+    const terminal = new Terminal({ cols: 180, rows: 4, allowProposedApi: true })
+    try {
+      await new Promise<void>((resolve) =>
+        terminal.write('文档(/tmp/产物/final-\r\n  part(1)\r\n  .html)', resolve)
+      )
+      for (const row of [1, 2, 3]) {
+        const paths = buildHardWrappedPathLogicalLineCandidates(terminal.buffer.active, row)
+          .flatMap((candidate) => extractTerminalFileLinks(candidate.text))
+          .map((link) => link.pathText)
+        expect(paths).toContain('/tmp/产物/final-part(1).html')
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
   it.each([
     '(/tmp/产物/file.md)',
     '文档 (/tmp/产物/file.md)',
