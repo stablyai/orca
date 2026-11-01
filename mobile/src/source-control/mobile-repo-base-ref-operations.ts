@@ -1,4 +1,7 @@
+import { z } from 'zod'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
 
 export type MobileRepoBaseRefSummary = {
@@ -63,5 +66,25 @@ export const repoDefaultBaseRefRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: defaultBaseRefReader
+  })
+)
+
+// Both search representations are supported; consumers choose refDetails or refs without requiring both.
+export const repoBaseRefSearchSchema = z.looseObject({
+  refs: salvagedOptional('refs', salvagingArray(z.string())),
+  refDetails: salvagedOptional(
+    'refDetails',
+    salvagingArray(z.looseObject({ refName: z.string(), localBranchName: z.string() }))
+  )
+})
+
+// Callers retain their refDetails-or-refs fallback; neither member is required for older hosts.
+export const repoBaseRefSearchRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.base-ref-search',
+    method: 'repo.searchRefs',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('base-ref-search', repoBaseRefSearchSchema)
   })
 )

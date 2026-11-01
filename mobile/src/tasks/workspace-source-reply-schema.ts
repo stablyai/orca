@@ -87,12 +87,3 @@ export const repoSparsePresetListSchema = z
 export const repoSparsePresetSaveSchema = z
   .looseObject({ preset: salvagedOptional('preset', sparsePreset) })
   .transform((reply) => reply.preset)
-
-// Both search representations are supported; consumers choose refDetails or refs without requiring both.
-export const repoBaseRefSearchSchema = z.looseObject({
-  refs: salvagedOptional('refs', salvagingArray(z.string())),
-  refDetails: salvagedOptional(
-    'refDetails',
-    salvagingArray(z.looseObject({ refName: z.string(), localBranchName: z.string() }))
-  )
-})

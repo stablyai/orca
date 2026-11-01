@@ -14,7 +14,7 @@ import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
-vi.mock('../../claude/agent-view-service', () => ({
+vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
     ready: async () => {},
