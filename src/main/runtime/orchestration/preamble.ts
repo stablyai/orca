@@ -184,10 +184,9 @@ your coordinator's mail.
   ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
 \`\`\`
 
-Once your helpers have started, end your turn; Orca wakes you with their mail.
-Send worker_done, done or failed, only after your own work ends and every helper
-has settled or failed to start; name any that failed. Nesting is capped; your helpers may not be able to start
-helpers of their own.
+Wait until every helper has settled (worker_done, a failed start, stop, or
+abandon) before reporting your own, and name any that failed. Nesting is
+capped; your helpers may not be able to start helpers of their own.
 
 ---`
 }
@@ -204,10 +203,9 @@ If the task asks for sub-workers, create your own Run first, then:
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 \`\`\`
 
-Once your sub-workers have started, end your turn; Orca wakes you with their
-mail. Send worker_done, done or failed, only after your own work ends and every
-sub-worker has settled or failed to start; name any that failed. Nesting is capped; your sub-workers may not be able to
-dispatch further.
+Wait until every sub-worker has settled (worker_done, a failed start, stop, or
+abandon) before reporting your own, and name any that failed. Nesting is
+capped; your sub-workers may not be able to dispatch further.
 
 ---`
 }
