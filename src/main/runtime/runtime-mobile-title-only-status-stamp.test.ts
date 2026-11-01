@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../shared/agent-status-types'
+import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import {
   demoteRuntimeMobileAgentStatus,
   renewRuntimeMobileAgentStatusFromPtyTitle
@@ -90,5 +91,30 @@ describe('title-only status frames are stamped at the PTY status transition', ()
       })
     )
     expect(out).toMatchObject({ state: 'done', updatedAt: idleAt })
+  })
+
+  it('stamps the no-hook fallback at the idle transition, not the older title', () => {
+    const idleAt = titleChangedAt + 90_000
+    const out = buildRuntimeMobileAgentStatus(
+      makeTuiIdlePty({
+        lastOscTitle: '✳ Claude Code',
+        lastOscTitleEpochMs: titleChangedAt,
+        lastAgentStatus: 'idle',
+        lastAgentStatusStartedAtEpochMs: idleAt
+      }),
+      {
+        type: 'terminal',
+        id: 'tab-1::leaf-1',
+        parentTabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'Terminal',
+        isActive: true
+      },
+      null,
+      null,
+      () => [],
+      { getPaneKey: () => 'tab-1:leaf-1', getLeaf: () => null, getTrackedTitle: () => null }
+    )
+    expect(out.agentStatus).toMatchObject({ state: 'done', updatedAt: idleAt })
   })
 })

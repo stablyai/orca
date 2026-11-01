@@ -81,7 +81,10 @@ function completedTurnFields(
 
 // Why: program activity moves the PTY's status without a new title, so a title-only frame dated by
 // the title alone sorts behind rows the client accepted since (#25136).
-function ptyStatusEvidenceAt(pty: RuntimePtyWorktreeRecord, titleEvidenceAt: number): number {
+export function ptyStatusEvidenceAt(
+  pty: RuntimePtyWorktreeRecord,
+  titleEvidenceAt: number
+): number {
   return Math.max(titleEvidenceAt, pty.lastAgentStatusStartedAtEpochMs ?? 0)
 }
 
