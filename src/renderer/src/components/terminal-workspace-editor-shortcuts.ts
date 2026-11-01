@@ -5,6 +5,10 @@ import {
   type EditorRequestCmdSaveDetail
 } from './editor/editor-autosave'
 import { getEditorCmdSaveFileId } from './editor/editor-cmd-save-target'
+import {
+  canUseChangesModeForFile,
+  toggleEditorDiffViewMode
+} from './editor/editor-panel-file-mode'
 import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
@@ -60,6 +64,26 @@ export function handleTerminalWorkspaceEditorShortcut({
         void state.updateSettings({ editorWordWrap: !wrapOn })
       }
       return true
+    }
+  }
+  // Why: Settings → Shortcuts entry for the Edit/Changes toolbar toggle (#11095).
+  if (!event.repeat && matchShortcut('editor.toggleDiffViewer')) {
+    const state = useAppStore.getState()
+    if (state.activeTabType === 'editor' && state.activeFileId) {
+      const activeFile = state.openFiles.find((file) => file.id === state.activeFileId)
+      const nextMode = activeFile
+        ? toggleEditorDiffViewMode(
+            state.editorViewMode[activeFile.id],
+            canUseChangesModeForFile(activeFile)
+          )
+        : null
+      // Why: only consume when changes mode applies (same gate as the toolbar).
+      if (activeFile && nextMode) {
+        event.preventDefault()
+        notifyTerminalCapture('editor.toggleDiffViewer')
+        state.setEditorViewMode(activeFile.id, nextMode)
+        return true
+      }
     }
   }
   return false

@@ -111,6 +111,8 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.editorMarkdownPreview', 'Show Markdown Preview'),
   'editor.toggleWordWrap': () =>
     translate('keybindings.title.editorToggleWordWrap', 'Toggle Word Wrap'),
+  'editor.toggleDiffViewer': () =>
+    translate('keybindings.title.editorToggleDiffViewer', 'Toggle Diff Viewer'),
   'editor.copyContext': () => translate('keybindings.title.editorCopyContext', 'Copy Context'),
   'editor.previousChange': () =>
     translate('keybindings.title.editorPreviousChange', 'Go to Previous Change'),
