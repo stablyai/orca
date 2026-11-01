@@ -88,10 +88,6 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return listSimulatorDevices()
   }
 
-  async listRunningHelpers(): Promise<unknown> {
-    return this.execServeSim(['--list', '-q'], { json: true })
-  }
-
   async checkServeSimAvailable(): Promise<void> {
     await this.execServeSim(['--help'], { timeoutMs: 10_000 })
   }

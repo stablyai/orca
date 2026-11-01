@@ -138,7 +138,7 @@ export async function createReceivingCallerFixture() {
     caller?: OrchestrationSessionCaller
   ) => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
-    if (!method?.params) {
+    if (!method?.params || isStreamingMethod(method)) {
       throw new Error(`registered method missing: ${name}`)
     }
     return method.handler(method.params.parse(values), {
