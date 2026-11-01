@@ -1,4 +1,5 @@
 import type * as GitlabGithubStatusModule from '../../../tasks/use-mobile-tasks-gitlab-github-status-actions'
+import type { ActionableTaskItem } from '../../../tasks/mobile-tasks-project-workspace-types'
 import { useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -248,8 +249,10 @@ export function taskItemChecksStatusMountAdapters(
           'gitlab-status': () => actions().toggleGitLabStatus(mountFixture(item)),
           'github-metadata': () => {
             // The screen edits only the open issue, so open it first as a user does.
-            actions().setActionItem(mountFixture(GITHUB_ISSUE_ITEM))
-            return actions().updateGitHubIssueMetadata(mountFixture(GITHUB_ISSUE_ITEM), {
+            const issue: Extract<ActionableTaskItem, { provider: 'github' }> =
+              mountFixture(GITHUB_ISSUE_ITEM)
+            actions().setActionItem(issue)
+            return actions().updateGitHubIssueMetadata(issue, {
               title: 'Renamed',
               addLabels: ['triage'],
               removeLabels: ['bug']
