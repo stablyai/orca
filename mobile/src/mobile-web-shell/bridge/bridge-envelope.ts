@@ -277,6 +277,9 @@ const BridgeHostMessageSchema = z.union([
     // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
     uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
+    // The status the shell's compatibility gate already read; older shells omit it and the page asks.
+    // Opaque here: the page's status gate validates it with the reader it already loads.
+    hostStatus: salvagedOptional('hostStatus', z.looseObject({})).optional(),
     storage: BridgeInitStorageSchema.optional(),
     refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
     /**

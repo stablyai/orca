@@ -67,6 +67,7 @@ export type BridgeRpcClientOptions = {
 
 export type BridgeRpcClient = RpcClient &
   BridgeConnectionPathSource &
+  Required<Pick<RpcClient, 'getShellHostStatus'>> &
   BridgeShellSessionListeners & {
     /**
      * Asks the shell to draw its key rail, while a terminal and its key row are on screen, until the
@@ -312,6 +313,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     // Clients without migration generation use a constant zero; native screen readers still require a number.
     getGeneration: () => snapshot().generation ?? 0,
     ...cache.pathSource(),
+    getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
     carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
     // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
     onStateChange: (listener) => cache.onStateChange(listener),

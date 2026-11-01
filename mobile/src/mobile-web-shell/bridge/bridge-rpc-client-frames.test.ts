@@ -120,6 +120,8 @@ describe('bridge client handshake', () => {
     expect(page.client.getLastConnectedAt()).toBe(1700)
     expect(page.client.getLastInboundAt?.()).toBe(1800)
     expect(page.client.getGeneration?.()).toBe(5)
+    // An older shell's init names no proven status; the page then asks the host itself.
+    expect(page.client.getShellHostStatus()).toBeNull()
     expect(page.client.getShellSession()).toEqual({
       sessionId: 'session-a',
       buildId: 'build-a',
@@ -138,7 +140,8 @@ describe('bridge client handshake', () => {
       host: null,
       storage: {},
       storageOversize: [],
-      ownsHostArea: false
+      ownsHostArea: false,
+      hostStatus: null
     })
   })
 

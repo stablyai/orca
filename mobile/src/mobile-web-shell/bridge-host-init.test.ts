@@ -438,6 +438,22 @@ describe('init and state', () => {
     expect(bridge.frames()).toHaveLength(sent)
   })
 
+  it("hands the page the shell's proven host status, and nothing while it has none", () => {
+    let hostStatus: { protocolVersion: number; capabilities: string[] } | null = null
+    const bridge = harness({ readHostStatus: () => hostStatus })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const before = bridge.last()
+    hostStatus = { protocolVersion: 3, capabilities: ['a'] }
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    const after = bridge.last()
+
+    expect(before.type === 'init' && 'hostStatus' in before).toBe(false)
+    expect(after.type === 'init' && after.hostStatus).toEqual({
+      protocolVersion: 3,
+      capabilities: ['a']
+    })
+  })
+
   it('drops the state listener on dispose', () => {
     const bridge = harness()
     expect(bridge.client.stateListeners()).toBe(1)

@@ -1,0 +1,41 @@
+import { useEffect } from 'react'
+import type { HostStatusGates } from '../transport/host-status-gates'
+import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import { provenHostStatus } from '../transport/proven-host-status'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
+import type { MobileWebShellGates } from './mobile-web-shell-session-contract'
+
+/** Feeds the host route's gates to the shell session, and returns the status they proved for the page's init. */
+export function useMobileWebShellGates(args: {
+  gates: HostStatusGates
+  connState: ConnectionState
+  client: RpcClient | null
+  // A new host or pathname rebuilds the session, which must hear the gates again.
+  rearmKey: string
+  onGates: (gates: MobileWebShellGates) => void
+}): HostStatusReply | null {
+  const { gates, connState, client, rearmKey, onGates } = args
+  const { statusPending, statusReadable, hostCapabilities, hostProtocolWindow } = gates
+  const reachability = readMobileWebShellReachability(connState, client)
+  useEffect(() => {
+    onGates({
+      statusPending,
+      statusReadable,
+      reachability,
+      hostCapabilities,
+      hostStatus: hostProtocolWindow
+    })
+    // Host and pathname rebuild the session; re-arm even on an unchanged verdict or the fresh session would remain checking.
+  }, [
+    onGates,
+    hostCapabilities,
+    rearmKey,
+    hostProtocolWindow,
+    reachability,
+    statusPending,
+    statusReadable
+  ])
+  return provenHostStatus(gates)
+}
