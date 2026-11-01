@@ -423,7 +423,8 @@ describe('a follow-up to a finished terminal worker', () => {
             agentTerminalHandle: null,
             terminalState: null,
             projection: expect.objectContaining({
-              resource: { state: 'transferred' },
+              // Nothing proves the original's process ended, so liveness stays unverifiable.
+              liveness: { verdict: 'unverifiable', reason: 'missing_status' },
               nextAction: expect.objectContaining({ kind: 'none' })
             })
           }),

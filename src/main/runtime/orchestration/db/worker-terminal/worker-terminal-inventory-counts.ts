@@ -6,7 +6,6 @@ import type {
   WorkerTerminalReleaseState
 } from '../../worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
-import { WORKER_TERMINAL_PRIOR_OWNERS_SQL } from './worker-terminal-handed-on'
 import type { WorkerTerminalListingSnapshot } from './worker-terminal-listing'
 
 export type WorkerTerminalStateRow = {
@@ -44,6 +43,10 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
   return { where, values }
 }
 
+/** With no terminal of its own left, a followed-up Dispatch handed its terminal to that follow-up. */
+export const WORKER_TERMINAL_HANDED_ON_SQL = `r.id IS NULL AND EXISTS (
+  SELECT 1 FROM dispatch_contexts f WHERE f.follow_up_of_dispatch_id = d.id)`
+
 /** Derive all filtering/counting through the single state machine; newest-first order supports paging. */
 export function scanWorkerTerminalStates(
   this: OrchestrationDb,
@@ -56,19 +59,12 @@ export function scanWorkerTerminalStates(
       `SELECT d.id AS dispatch_id,
               d.rowid AS database_id,
               COALESCE(w.state, 'unsupervised') AS worker_state,
-              COALESCE(w.agent_terminal_handle, d.assignee_handle) AS agent_terminal_handle,
-              r.id AS resource_id, r.ownership_state, r.release_state,
-              handed.release_state AS handed_on_release_state
+              CASE WHEN ${WORKER_TERMINAL_HANDED_ON_SQL} THEN NULL
+                ELSE COALESCE(w.agent_terminal_handle, d.assignee_handle) END AS agent_terminal_handle,
+              r.id AS resource_id, r.ownership_state, r.release_state
          FROM dispatch_contexts d
          LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
-         -- The latest hand-off wins: SQLite takes the bare column from the MAX row.
-         LEFT JOIN (
-           SELECT prior.value AS dispatch_id, p.release_state, MAX(p.updated_at)
-             FROM ${WORKER_TERMINAL_PRIOR_OWNERS_SQL}
-            WHERE p.prior_owner_dispatch_ids != '[]'
-            GROUP BY prior.value
-         ) handed ON r.id IS NULL AND handed.dispatch_id = d.id
         ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
         ORDER BY d.rowid DESC`
     )
@@ -80,7 +76,6 @@ export function scanWorkerTerminalStates(
     resource_id: string | null
     ownership_state: WorkerTerminalOwnershipState | null
     release_state: WorkerTerminalReleaseState | null
-    handed_on_release_state: WorkerTerminalReleaseState | null
   }[]
   return rows.map((row) => ({
     dispatchId: row.dispatch_id,
@@ -90,10 +85,7 @@ export function scanWorkerTerminalStates(
       agentTerminalHandle: row.agent_terminal_handle,
       resource:
         row.resource_id === null
-          ? row.handed_on_release_state && {
-              ownership_state: 'transferred',
-              release_state: row.handed_on_release_state
-            }
+          ? null
           : {
               ownership_state: row.ownership_state as WorkerTerminalOwnershipState,
               release_state: row.release_state as WorkerTerminalReleaseState

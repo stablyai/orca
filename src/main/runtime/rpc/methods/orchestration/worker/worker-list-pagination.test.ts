@@ -467,6 +467,40 @@ describe('orchestration worker-list pagination', () => {
     expect(await fetchedBeside(10_000)).toBe(alone)
   })
 
+  it('finds a handed-on terminal through the follow-up index without a table scan', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const run = db.createRun({
+      objective: 'Handed-on lookup plan',
+      coordinatorHandle: 'term-coordinator',
+      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    insertWorkerInventory(db, run.id, 'dispatch-listed', 'succeeded', 'not_requested')
+    const sqlite = sqliteFor(db)
+    const prepare = sqlite.prepare.bind(sqlite)
+    const lookups: string[] = []
+    vi.spyOn(sqlite, 'prepare').mockImplementation((sql) => {
+      if (sql.includes('follow_up_of_dispatch_id')) {
+        lookups.push(sql)
+      }
+      return prepare(sql)
+    })
+    await callWorkerList(runtime, { run: run.id, limit: 100 })
+    vi.mocked(sqlite.prepare).mockRestore()
+
+    // The listing and the counts both ask.
+    expect(lookups).toHaveLength(2)
+    for (const sql of lookups) {
+      const plan = sqlite
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((step) => String(step.detail))
+      expect(plan.filter((detail) => detail.startsWith('SCAN '))).toEqual([])
+      expect(plan).toContainEqual(expect.stringContaining('idx_dispatch_contexts_follow_up_of'))
+    }
+  })
+
   it('aggregates exact inventory counts while preserving filtered totals', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()

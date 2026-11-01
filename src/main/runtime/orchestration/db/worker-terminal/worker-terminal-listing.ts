@@ -14,9 +14,9 @@ import {
 } from './worker-terminal-attention-query'
 import {
   countWorkerTerminalInventory,
-  scanWorkerTerminalStates
+  scanWorkerTerminalStates,
+  WORKER_TERMINAL_HANDED_ON_SQL
 } from './worker-terminal-inventory-counts'
-import { readListedWorkerTerminalResources } from './worker-terminal-handed-on'
 import {
   allowWorkerTerminalAutoClose,
   getWorkerAutoCloseState,
@@ -169,8 +169,10 @@ export function listWorkerTerminalResources(
               d.rowid AS database_id,
               ${orderExpression} AS created_at,
               COALESCE(w.state, 'unsupervised') AS worker_state,
-              COALESCE(w.agent_terminal_handle, d.assignee_handle) AS agent_terminal_handle,
-              COALESCE(r.pane_key, d.assignee_pane_key) AS pane_key,
+              CASE WHEN ${WORKER_TERMINAL_HANDED_ON_SQL} THEN NULL
+                ELSE COALESCE(w.agent_terminal_handle, d.assignee_handle) END AS agent_terminal_handle,
+              CASE WHEN ${WORKER_TERMINAL_HANDED_ON_SQL} THEN NULL
+                ELSE COALESCE(r.pane_key, d.assignee_pane_key) END AS pane_key,
               COALESCE(w.worktree_id, r.worktree_id) AS worktree_id,
               w.stage AS worker_stage,
               t.parent_id AS parent_task_id,
@@ -208,15 +210,20 @@ export function listWorkerTerminalResources(
     created_at: string
     database_id: number
   }[]
-  const { owned: resourceByOwner, handedOn } = readListedWorkerTerminalResources.call(
-    this,
-    rows.map((row) => row.dispatch_id)
+  const resources =
+    rows.length === 0
+      ? []
+      : (this.db
+          .prepare(
+            `SELECT r.* FROM worker_terminal_resources r
+               WHERE r.owner_dispatch_id IN (${rows.map(() => '?').join(',')})`
+          )
+          .all(...rows.map((row) => row.dispatch_id)) as WorkerTerminalResourceRow[])
+  const resourceByOwner = new Map(
+    resources.map((resource) => [resource.owner_dispatch_id, resource])
   )
   return rows.map((row) => {
-    const owned = resourceByOwner.get(row.dispatch_id)
-    const resource = owned ?? handedOn.get(row.dispatch_id) ?? null
-    // A follow-up that took over this terminal now names it; this row no longer does.
-    const handedAway = !owned && resource !== null
+    const resource = resourceByOwner.get(row.dispatch_id) ?? null
     return {
       dispatchId: row.dispatch_id,
       taskId: row.task_id,
@@ -225,8 +232,8 @@ export function listWorkerTerminalResources(
       workerState: row.worker_state,
       dispatchStatus: row.dispatch_status,
       workerStage: row.worker_stage,
-      agentTerminalHandle: handedAway ? null : row.agent_terminal_handle,
-      paneKey: handedAway ? null : row.pane_key,
+      agentTerminalHandle: row.agent_terminal_handle,
+      paneKey: row.pane_key,
       worktreeId: row.worktree_id,
       terminalState: deriveWorkerTerminalListState({
         workerState: row.worker_state,
