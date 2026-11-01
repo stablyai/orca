@@ -329,7 +329,11 @@ describe('browserManager', () => {
   })
 
   // #36804: headless serve pages have no renderer to own Orca's tab model.
-  it('opens a headless serve page new-tab link through the offscreen tab opener', () => {
+  // orcad's Electron browser registers pages without a workspace, so there is no tab list to open into.
+  it.each([
+    ['opens', 'wt-1'],
+    ['keeps denying', undefined]
+  ])('%s a headless serve page new-tab link (workspace %s)', (_outcome, worktreeId) => {
     const openTab = vi.fn()
     browserManager.setOffscreenTabOpener(openTab)
     const guest = {
@@ -347,7 +351,7 @@ describe('browserManager', () => {
     webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : null))
     browserManager.registerOffscreenGuest({
       browserPageId: 'serve-page',
-      worktreeId: 'wt-1',
+      worktreeId,
       sessionProfileId: 'work',
       webContentsId: guest.id
     })
@@ -365,15 +369,14 @@ describe('browserManager', () => {
     }
 
     const request = {
-      openerPageId: 'serve-page',
       worktreeId: 'wt-1',
       profileId: 'work',
-      url: 'https://docs.example.com/guide'
+      url: 'https://docs.example.com/guide',
+      pairedDeviceId: null
     }
-    expect(openTab.mock.calls).toEqual([
-      [{ ...request, activate: true }],
-      [{ ...request, activate: false }]
-    ])
+    expect(openTab.mock.calls).toEqual(
+      worktreeId ? [[{ ...request, activate: true }], [{ ...request, activate: false }]] : []
+    )
     expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })

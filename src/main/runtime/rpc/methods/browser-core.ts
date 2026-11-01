@@ -33,7 +33,6 @@ import {
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
 import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
-import { browserPageInputHandler } from './browser-page-input-handler'
 
 export const BROWSER_CORE_METHODS = [
   defineMethod({
@@ -46,7 +45,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.click',
     permission: 'workspace',
     params: Element,
-    handler: browserPageInputHandler((runtime, params) => runtime.browserClick(params))
+    handler: async (params, { runtime }) => runtime.browserClick(params)
   }),
   defineMethod({
     name: 'browser.goto',
@@ -195,7 +194,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.keypress',
     permission: 'workspace',
     params: Keypress,
-    handler: browserPageInputHandler((runtime, params) => runtime.browserKeypress(params))
+    handler: async (params, { runtime }) => runtime.browserKeypress(params)
   }),
   defineMethod({
     name: 'browser.pdf',
@@ -213,7 +212,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.dblclick',
     permission: 'workspace',
     params: Element,
-    handler: browserPageInputHandler((runtime, params) => runtime.browserDblclick(params))
+    handler: async (params, { runtime }) => runtime.browserDblclick(params)
   }),
   defineMethod({
     name: 'browser.forward',

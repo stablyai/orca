@@ -8,6 +8,8 @@ import {
   type AgentPointerInput
 } from './browser-agent-activity'
 import { BrowserPageEvents, type BrowserPageEvent } from './browser-page-events'
+import { BrowserPageInputCredit } from './browser-page-input-credit'
+import { getActiveRpcCaller } from '../runtime/rpc/rpc-active-caller'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
   private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
@@ -19,6 +21,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   })
 
   protected readonly pageEvents = new BrowserPageEvents()
+  protected readonly pageInputCredit = new BrowserPageInputCredit()
 
   /** Tabs requested, popup outcomes and downloads attributed to the page, as they happen. */
   observePageEvents(
@@ -28,9 +31,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.pageEvents.observe(browserPageId, listener)
   }
 
-  /** Holds the page's agent marking for one queued command, from queueing until it settles. */
+  /** Holds the page's agent marking for one queued command, from queueing until it settles, and credits who ran it. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
-    return this.agentActivity.beginCommand(browserPageId)
+    // A queued command runs under the caller ahead of it, so its own caller is read at enqueue.
+    const caller = getActiveRpcCaller()
+    const lease = this.agentActivity.beginCommand(browserPageId)
+    return {
+      ...lease,
+      run: (execute) => lease.run(() => this.pageInputCredit.during(browserPageId, caller, execute))
+    }
   }
 
   handOverAgentActivity(fromPageId: string, toPageId: string): void {

@@ -29,11 +29,12 @@ import { BrowserGuestDevToolsDock } from './browser-guest-devtools-dock'
 
 /** A link a headless serve page asked to open as an Orca tab beside it. */
 export type OffscreenBrowserTabOpenRequest = {
-  openerPageId: string
-  worktreeId: string | null
+  worktreeId: string
   profileId: string | null
   url: string
   activate: boolean
+  /** The paired client whose click or key press opened it, if one did. */
+  pairedDeviceId: string | null
 }
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {

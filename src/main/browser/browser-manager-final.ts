@@ -5,7 +5,7 @@ import { BrowserManagerEventForwarding } from './browser-manager-event-forwardin
 export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding {
   protected openLinkInOrcaTab(browserTabId: string, rawUrl: string, activate?: boolean): boolean {
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
-    // Headless serve pages have no renderer tab model; the runtime opens their tabs.
+    // Headless serve pages have no renderer tab model; the runtime opens their workspace's tabs.
     const openOffscreen = renderer ? null : this.resolveOffscreenTabOpener(browserTabId)
     if (!renderer && !openOffscreen) {
       return false
@@ -22,22 +22,35 @@ export abstract class BrowserManagerFinal extends BrowserManagerEventForwarding 
         ...(activate === false ? { activate: false } : {})
       })
     } else if (openOffscreen) {
-      openOffscreen({
-        openerPageId: browserTabId,
-        worktreeId: this.worktreeIdByTabId.get(browserTabId) ?? null,
-        profileId: this.sessionProfileIdByPageId.get(browserTabId) ?? null,
-        url: normalizedUrl,
-        activate: activate !== false
-      })
+      openOffscreen(normalizedUrl, activate !== false)
     }
     this.pageEvents.emit(browserTabId, { kind: 'tab', url: normalizedUrl })
     return true
   }
 
-  private resolveOffscreenTabOpener(browserTabId: string): typeof this.offscreenTabOpener {
+  /** A page with no workspace (orcad's Electron browser) has no tab list to open into. */
+  private resolveOffscreenTabOpener(
+    browserTabId: string
+  ): ((url: string, activate: boolean) => void) | null {
+    const opener = this.offscreenTabOpener
     const webContentsId = this.webContentsIdByTabId.get(browserTabId)
-    return webContentsId !== undefined && this.offscreenGuestIds.has(webContentsId)
-      ? this.offscreenTabOpener
-      : null
+    const worktreeId = this.worktreeIdByTabId.get(browserTabId)
+    if (
+      !opener ||
+      !worktreeId ||
+      webContentsId === undefined ||
+      !this.offscreenGuestIds.has(webContentsId)
+    ) {
+      return null
+    }
+    const profileId = this.sessionProfileIdByPageId.get(browserTabId) ?? null
+    return (url, activate) =>
+      opener({
+        worktreeId,
+        profileId,
+        url,
+        activate,
+        pairedDeviceId: this.pageInputCredit.consume(browserTabId)
+      })
   }
 }
