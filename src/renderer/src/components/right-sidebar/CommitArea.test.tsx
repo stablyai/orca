@@ -849,9 +849,9 @@ it('shows waiting feedback without a publish spinner when another workspace publ
     isRemoteOperationInAnotherWorktree: true
   })
   const { container, getByRole } = render(<CommitArea {...props} />)
-  expect(getByRole('button', { name: 'Git busy elsewhere' }).hasAttribute('disabled')).toBe(true)
+  expect(
+    getByRole('button', { name: 'Git operation running elsewhere' }).hasAttribute('disabled')
+  ).toBe(true)
   expect(container.querySelector('.animate-spin')).toBeNull()
-  expect(container.textContent).toContain(
-    'temporarily disabled to avoid overlapping Git operations.'
-  )
+  expect(container.textContent).toContain('Another workspace is running a Git operation.')
 })

@@ -407,8 +407,8 @@
       "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息。与系统默认共享的聊天记录会保留。如果此账户被选中，您下次启动的 Claude 将使用系统默认。"
     },
     "sourceControl": {
-      "gitBusyInAnotherWorkspace": "Git 正在别处运行",
-      "remoteOperationInAnotherWorkspace": "为避免 Git 操作重叠，此操作已暂时禁用。请等待其他工作区中的 Git 操作完成。",
+      "gitOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作",
+      "remoteOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作。请等待其完成后再使用此操作，以免操作重叠。",
       "actionModel": {
         "on": "开启",
         "off": "关闭",
