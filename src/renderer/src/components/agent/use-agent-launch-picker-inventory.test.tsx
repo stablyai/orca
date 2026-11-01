@@ -335,8 +335,10 @@ it('lands catalog reads in subscribers only, replacing just the entry whose cata
 
   await act(async () => reads.get('codex')!.resolve(catalog))
   const afterCodex = subscriber.result.current
-  expect(afterCodex[0].catalog).toEqual(catalog)
-  expect(afterCodex[1]).toBe(before[1])
+  expect(afterCodex.find((entry) => entry.agent === 'codex')?.catalog).toEqual(catalog)
+  const beforeClaude = before.find((entry) => entry.agent === 'claude')
+  expect(beforeClaude).toBeDefined()
+  expect(afterCodex.find((entry) => entry.agent === 'claude')).toBe(beforeClaude)
 
   // A failed read changes nothing, so it must not publish a new snapshot.
   await act(async () => reads.get('claude')!.reject(new Error('listing unavailable')))
