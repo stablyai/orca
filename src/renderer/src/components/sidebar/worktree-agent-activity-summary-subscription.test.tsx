@@ -21,7 +21,10 @@ describe('workspace activity summary subscriptions', () => {
         const work: Work = { statuses: 0, tabs: 0 }
         let counting = false
         // Counts each read of a status entry or chat tab, whichever code scans it.
-        const countReads = (record: object, key: keyof Work) => {
+        const countReads = (
+          record: Readonly<Record<string, unknown>> | readonly unknown[],
+          key: keyof Work
+        ) => {
           for (const property of Object.keys(record)) {
             const descriptor = Object.getOwnPropertyDescriptor(record, property)
             let value = descriptor?.get ? descriptor.get.call(record) : descriptor?.value
