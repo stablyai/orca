@@ -113,7 +113,7 @@ describe('worktree creation chat handoff', () => {
         creationId: 'creation-chat',
         phase: 'creating',
         status: 'creating',
-        startedAt: Date.now(),
+        startedAt: 1,
         indeterminate: false,
         loaderVisible: true,
         request
