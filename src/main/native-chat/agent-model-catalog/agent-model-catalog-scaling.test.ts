@@ -83,7 +83,7 @@ it('re-probes a signed-out Claude scope once per held-reason TTL for N and 10N c
       expect(runListing).toHaveBeenCalledTimes(2)
       for (const result of due) {
         expect(result.unavailable).toMatchObject({ reason: 'notSignedIn' })
-        expect(result.models?.length).toBeGreaterThan(0)
+        expect(result.origin === 'unknown' ? 0 : result.models.length).toBeGreaterThan(0)
       }
       now += AGENT_MODEL_CATALOG_FAILURE_TTL_MS - 1
       await readAll()
