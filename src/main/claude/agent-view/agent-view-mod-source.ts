@@ -1,5 +1,5 @@
-import { CLAUDE_AGENT_VIEW_PATH } from '../../shared/claude-agent-view'
-import { parseAgentHookEndpointFile } from '../../shared/agent-hook-endpoint-file'
+import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
+import { parseAgentHookEndpointFile } from '../../../shared/agent-hook-endpoint-file'
 
 export const CLAUDE_AGENT_VIEW_MOD_SOURCE = String.raw`
 const parseEndpoint = ${parseAgentHookEndpointFile.toString()}
