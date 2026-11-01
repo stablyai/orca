@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
-import { Animated, Easing, Modal, Platform, Pressable } from 'react-native'
+import { Animated, Easing, Modal, Platform, Pressable, useWindowDimensions } from 'react-native'
 import { X } from 'lucide-react-native'
+import { useReservedRegions } from '../../../layout/reserved-regions'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
+import { imageViewerCloseFrame } from './image-viewer-close-frame'
 import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -34,6 +36,14 @@ export function MobileNativeChatImageViewer({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const insets = useWindowSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const { occlusions } = useReservedRegions()
+  const closeFrame = imageViewerCloseFrame({
+    windowWidth: width,
+    windowHeight: height,
+    insets,
+    occlusions
+  })
   const { style, stageStyle, close } = useViewerPresence(onClose)
   return (
     <Modal visible transparent animationType="none" onRequestClose={close}>
@@ -44,7 +54,14 @@ export function MobileNativeChatImageViewer({
         <Pressable
           style={({ pressed }) => [
             styles.close,
-            { top: insets.top + spacing.sm },
+            { top: closeFrame.top, left: closeFrame.left },
+            closeFrame.size !== null && {
+              width: closeFrame.size,
+              height: closeFrame.size,
+              padding: 0,
+              alignItems: 'center' as const,
+              justifyContent: 'center' as const
+            },
             pressed && { opacity: feedback.pressedOpacity }
           ]}
           onPress={close}
@@ -108,7 +125,6 @@ const styles = themedStyleSheet(() => ({
   },
   close: {
     position: 'absolute',
-    right: spacing.lg,
     padding: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.bgRaised

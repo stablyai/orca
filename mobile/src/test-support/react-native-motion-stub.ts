@@ -34,6 +34,7 @@ export function reactNativeMotionStub() {
       in: shaped,
       inOut: shaped,
       out: shaped
-    }
+    },
+    useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 1 })
   }
 }
