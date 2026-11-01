@@ -7,6 +7,7 @@ import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { hostRouteWithNotice } from '../host-route-notice'
+import { useHorizontalEdgePadding } from '../layout/screen-edge-padding'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
@@ -43,6 +44,7 @@ export function MobileHomeScreen() {
   useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
+  const horizontalPadding = useHorizontalEdgePadding()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
@@ -118,7 +120,7 @@ export function MobileHomeScreen() {
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, horizontalPadding]} edges={['top']}>
       <MobileHomeTopBar
         showBrand={!data.hostCatalogLoaded || data.hostCatalog.length > 0}
         onOpenSettings={() => data.router.push('/settings')}
