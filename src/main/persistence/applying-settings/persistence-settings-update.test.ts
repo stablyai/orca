@@ -631,7 +631,7 @@ describe('Store', () => {
     ])
   })
 
-  it('updateSettings keeps the File Explorer Open In app id and reads junk as the Orca editor', async () => {
+  it('updateSettings trims the File Explorer Open In app id and defaults to the Orca editor', async () => {
     const store = await createStore()
     expect(store.getSettings().fileExplorerOpenInApplicationId).toBeNull()
 
@@ -640,7 +640,7 @@ describe('Store', () => {
         .fileExplorerOpenInApplicationId
     ).toBe('zed')
     expect(
-      store.updateSettings({ fileExplorerOpenInApplicationId: 7 as never })
+      store.updateSettings({ fileExplorerOpenInApplicationId: '  ' })
         .fileExplorerOpenInApplicationId
     ).toBeNull()
   })

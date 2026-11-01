@@ -49,7 +49,7 @@ export function FileExplorerOpenInAppSetting({
           })
         }
       >
-        <SelectTrigger size="sm" className="h-8 w-[180px] shrink-0 text-xs">
+        <SelectTrigger size="sm" density="compact" className="h-8 w-[180px] shrink-0">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

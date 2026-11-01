@@ -39,10 +39,13 @@ function renderSetting(
 }
 
 function removeApp(label: string): void {
-  const row = [...container.querySelectorAll('button[aria-label="Remove app"]')].find((button) =>
-    button.closest('.py-3')?.textContent?.includes(label)
-  )
-  act(() => (row as HTMLButtonElement).click())
+  const button = [
+    ...container.querySelectorAll<HTMLButtonElement>('button[aria-label="Remove app"]')
+  ].find((candidate) => candidate.closest('.py-3')?.textContent?.includes(label))
+  if (!button) {
+    throw new Error(`Remove button not found: ${label}`)
+  }
+  act(() => button.click())
 }
 
 function chosenAppLabel(): string | undefined {
