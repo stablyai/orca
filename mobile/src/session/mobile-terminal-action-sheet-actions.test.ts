@@ -159,20 +159,12 @@ describe('getMobileTerminalActionSheetActions', () => {
     expect(actions.find((action) => action.id === 'structuredChatUnavailable')).toBeUndefined()
   })
 
-  it('hides the Hermes chat row when the host registered other agents only', () => {
+  it('still offers a Hermes chat when the registry listed other agents and omitted Hermes', () => {
     const actions = buildActions({
       tabs: [{ type: 'terminal', id: 'tab-h', terminal: 'terminal-1', launchAgent: 'hermes' }],
       structuredAgents: ['claude']
     })
-    expect(
-      actions.some(
-        (action) =>
-          action.id === 'toggleChatView' ||
-          action.id === 'structuredChatUnavailable' ||
-          action.id === 'switchHermesTerminalToChat' ||
-          action.id === 'startHermesChat'
-      )
-    ).toBe(false)
+    expect(actions.find((action) => action.id === 'startHermesChat')?.label).toBe('Start new chat')
   })
 
   it('still explains that another structured terminal cannot become a chat', () => {

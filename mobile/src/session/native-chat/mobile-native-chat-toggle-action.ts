@@ -85,24 +85,17 @@ function hermesNamedTerminal(
   return !named && hostAgentIdentity === 'hermes'
 }
 
-function hermesRegistered(structuredAgents: readonly string[]): boolean {
-  return structuredAgents.length === 0 || structuredAgents.includes('hermes')
-}
-
 function hermesTerminalChatAction(
   tab: ToggleTab,
   args: {
-    structuredAgents?: readonly string[]
     hostAgentIdentity?: string | null
     hermesResumeSupported?: boolean
     onClose: () => void
     onHermesTerminalChat?: (request: { tabId: string; providerSessionId: string | null }) => void
   }
 ): ActionSheetAction | null {
+  // A registry that listed other agents and dropped Hermes still has this terminal to switch.
   if (!hermesNamedTerminal(tab, args.hostAgentIdentity)) {
-    return null
-  }
-  if (!hermesRegistered(args.structuredAgents ?? [])) {
     return null
   }
   const providerSessionId = args.hermesResumeSupported

@@ -183,6 +183,23 @@ describe('loadMobileStructuredChatLaunchContext', () => {
       { agent: 'hermes', label: 'Hermes' }
     ])
 
+    publishPageStorage(
+      {},
+      () => true,
+      'host-1',
+      '/h/host-1/session/wt-1',
+      [],
+      null,
+      async (key) => (key === 'orca:defaultSessionView' ? 'chat' : null)
+    )
+    const fromShell = await loadMobileStructuredChatLaunchContext({
+      client: client(sendRequest),
+      hostCapabilities: null
+    })
+    expect(fromShell.defaultView).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', fromShell)).toBe('chat')
+
+    publishPageStorage({}, () => true, 'host-1', '/h/host-1/session/wt-1')
     refreshPageTerminalShortcuts({ 'orca:defaultSessionView': 'chat' }, [])
     const refreshed = await loadMobileStructuredChatLaunchContext({
       client: client(sendRequest),
