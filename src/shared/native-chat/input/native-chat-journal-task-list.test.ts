@@ -103,4 +103,32 @@ describe('nativeChatTaskSeedFromJournal', () => {
       historyPageTaskList({ ...withTasks, items: [], cursor: { epoch: 'e', sequence: 0 } })
     ).toEqual({})
   })
+
+  it('reads a Grok todo_write call', () => {
+    expect(
+      nativeChatTaskSeedFromJournal([
+        item('plan', 1, {
+          kind: 'tool-call',
+          name: 'todo_write',
+          input: {
+            merge: false,
+            todos: [
+              {
+                id: 'dev-server',
+                content: 'Confirm the dev server is still listening on port 6769',
+                status: 'completed'
+              }
+            ]
+          },
+          state: 'completed'
+        })
+      ])?.tasks
+    ).toEqual([
+      {
+        id: 'dev-server',
+        content: 'Confirm the dev server is still listening on port 6769',
+        status: 'completed'
+      }
+    ])
+  })
 })

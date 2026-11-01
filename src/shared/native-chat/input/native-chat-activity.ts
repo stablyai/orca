@@ -1,5 +1,5 @@
 // Latest task list and subagent roster, read from the transcript both clients already have.
-// A full snapshot replaces the list. Claude's Task* tools edit it one task at a time.
+// A snapshot replaces the list. Grok merges todo_write by id. Claude's Task* tools edit one row.
 
 import { agentJournalItemSubagentId } from '../../agent-session-journal-producer'
 import type { NativeChatMessage, NativeChatSubagentState } from '../native-chat-types'
@@ -11,7 +11,9 @@ import {
 import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-summary'
 import { pairToolBlocks } from '../tools/native-chat-tool-pairs'
 import {
+  applyNativeChatTaskListCall,
   normalizeNativeChatTaskList,
+  readNativeChatTaskListCall,
   type NativeChatTask,
   type NativeChatTaskList,
   type NativeChatTaskStatus
@@ -131,9 +133,12 @@ function fillTaskBook(
       if (!pair?.call || pair.call.state === 'failed' || pair.result?.isError) {
         continue
       }
-      const snapshot = normalizeNativeChatTaskList(pair.call.name, pair.call.input)
-      if (snapshot) {
-        book.replace(snapshot)
+      const call = readNativeChatTaskListCall(pair.call.name, pair.call.input)
+      if (call) {
+        const next = applyNativeChatTaskListCall(book.seed(), call)
+        if (next) {
+          book.replace(next)
+        }
         continue
       }
       book.applyClaude(pair.call.name, pair.call.input, pair.result?.output)

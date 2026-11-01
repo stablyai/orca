@@ -9,15 +9,9 @@ import { CODEX_PLAN_UPDATED_FRAME_KIND } from '../native-chat-provider-frame-sum
 import { projectStructuredItemsToNativeChat } from '../../structured-agent-session-projection'
 import { latestNativeChatTaskSeed } from './native-chat-activity'
 import type { NativeChatTaskSeedList } from './native-chat-claude-task-updates'
+import { nativeChatTaskListTool } from './native-chat-task-list'
 
-const TASK_TOOLS = new Set([
-  'taskcreate',
-  'taskupdate',
-  'tasklist',
-  'taskget',
-  'todowrite',
-  'update_plan'
-])
+const CLAUDE_TASK_TOOLS = new Set(['taskcreate', 'taskupdate', 'tasklist', 'taskget'])
 
 const taskSeedCache = new WeakMap<
   AgentJournalSnapshot,
@@ -30,7 +24,8 @@ function feedsTaskList(item: AgentJournalRenderItem): boolean {
   }
   const body = item.body
   if (body.kind === 'tool-call') {
-    return TASK_TOOLS.has(body.name.trim().toLowerCase())
+    const name = body.name.trim().toLowerCase()
+    return CLAUDE_TASK_TOOLS.has(name) || nativeChatTaskListTool(body.name) !== null
   }
   if (body.kind !== 'status' || body.turnLifecycle) {
     return false
