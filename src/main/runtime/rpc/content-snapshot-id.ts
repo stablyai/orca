@@ -8,11 +8,14 @@ export function contentSnapshotId(serialized: string): string {
   return createHash('sha256').update(serialized).digest('base64url').slice(0, SNAPSHOT_ID_LENGTH)
 }
 
-/** The reply, or `unchanged` when the caller already holds this exact content. */
+/** The reply, or `unchanged` when the caller already holds this exact content; the plain reply when it sent no id. */
 export function resolveReplySnapshot<Reply extends object>(
   reply: Reply,
-  afterSnapshotId: string | null
-): (Reply & { snapshotId: string }) | { unchanged: true; snapshotId: string } {
+  afterSnapshotId: string | null | undefined
+): Reply | (Reply & { snapshotId: string }) | { unchanged: true; snapshotId: string } {
+  if (afterSnapshotId === undefined) {
+    return reply
+  }
   const snapshotId = contentSnapshotId(JSON.stringify(reply))
   return afterSnapshotId === snapshotId ? { unchanged: true, snapshotId } : { ...reply, snapshotId }
 }

@@ -3,7 +3,7 @@ import { LEGACY_MIXED_PARTITIONS } from './journal-lifecycle-batch-partition.tes
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   journalRowSchemaVersion
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   journalLifecycleMutationFitsOneBatch,
   partitionJournalLifecycleMutations

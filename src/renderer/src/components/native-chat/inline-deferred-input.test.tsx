@@ -26,7 +26,7 @@ import {
 import { promptSkillRefs, promptText } from './native-chat-prompt-document'
 import { changePrompt, promptEditor } from './native-chat-prompt-editor.test-support'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import {
   addNativeChatPendingAttachment,

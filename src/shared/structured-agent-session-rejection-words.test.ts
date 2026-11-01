@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionFailureFact } from './agent-session-failure'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentJournalSubmission } from './agent-session/journal/agent-session-journal-types'
 import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
-import { DISPATCH_REJECTED_QUEUE_FULL } from './structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_QUEUE_FULL } from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionRejectionParts

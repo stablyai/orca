@@ -1,6 +1,6 @@
 // Retained roster metadata names windowed-out spawns; place children under loaded roster entries, their parent section or their first conversation row.
 
-import type { AgentJournalPosition } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalPosition } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   isSubagentGroupBlock,
   type NativeChatMessage,

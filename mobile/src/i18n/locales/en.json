@@ -588,7 +588,9 @@
       "pin": "Pin",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
+      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "deleteAnyway": "Delete Anyway"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -1178,7 +1180,12 @@
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
       "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "dontRun": "Don't run",
+      "runArchiveTitle": "Run archive script from {{repoName}}?",
+      "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
+      "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
+      "archiveScriptLabel": "Archive script",
+      "newArchiveScriptLabel": "New archive script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",

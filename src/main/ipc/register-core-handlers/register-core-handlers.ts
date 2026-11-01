@@ -300,9 +300,7 @@ export function registerCoreHandlers(
   registerNativeChatHandlers()
   registerClipboardHandlers(store, {
     localChatAttachmentStore: async () => {
-      await ensureStructuredAgentSessionHostUnlessRefused(() =>
-        runtime.ensureStructuredAgentSessionHost()
-      )
+      await ensureStructuredSessionOwnership()
       return getAgentSessionAttachmentStore()
     }
   })

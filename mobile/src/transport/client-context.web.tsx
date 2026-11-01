@@ -20,6 +20,15 @@ export function RpcClientProvider({
   const acquiredRef = useRef<Set<string>>(new Set())
 
   const value = useMemo<RpcClientContextValue>(() => {
+    // Like native host state, path changes re-notify with the current state so labels re-read.
+    const subscribeHostState = (listener: (next: ConnectionState) => void) => {
+      const unsubscribeState = client.onStateChange(listener)
+      const unsubscribePath = client.onConnectionPathChange(() => listener(client.getState()))
+      return () => {
+        unsubscribeState()
+        unsubscribePath()
+      }
+    }
     return {
       // Every route in this document reaches the one host the shell opened.
       acquire: (hostId: string) => {
@@ -48,24 +57,10 @@ export function RpcClientProvider({
       // A pairing verdict, and pairing happened natively before this document existed.
       isPairingRejected: () => false,
       getRelayHostReachability: () => client.getRelayHostReachability(),
-      // Like native host state, path changes re-notify with the current state so labels re-read.
-      subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) => {
-        const unsubscribeState = client.onStateChange(listener)
-        const unsubscribePath = client.onConnectionPathChange(() => listener(client.getState()))
-        return () => {
-          unsubscribeState()
-          unsubscribePath()
-        }
-      },
+      subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) =>
+        subscribeHostState(listener),
       getAllClients: () => [...acquiredRef.current].map((hostId) => ({ hostId, client })),
-      subscribeAllHosts: (listener: () => void) => {
-        const unsubscribeState = client.onStateChange(() => listener())
-        const unsubscribePath = client.onConnectionPathChange(listener)
-        return () => {
-          unsubscribeState()
-          unsubscribePath()
-        }
-      },
+      subscribeAllHosts: (listener: () => void) => subscribeHostState(() => listener()),
       primeHosts: (_hosts: HostProfile[]) => {}
     }
   }, [client])

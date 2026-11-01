@@ -2,7 +2,7 @@ import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope
 import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat/input/native-chat-ask'
 import type { AskPrompt } from './native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from './native-chat/native-chat-types'

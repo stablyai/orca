@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentSessionHistoryResult } from '../../../src/shared/agent-session-wire'
 import type {
-  AgentSessionHistoryResult,
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
 import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'

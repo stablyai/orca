@@ -18,7 +18,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RpcContext } from '../core'
-import { agentSessionMessagePayload } from '../../../../shared/structured-agent-session-send-mutation'
+import { agentSessionMessagePayload } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 afterEach(() => {
   setStructuredAgentSessionHost(null)

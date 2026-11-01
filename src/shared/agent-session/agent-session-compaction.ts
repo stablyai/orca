@@ -1,4 +1,4 @@
-import { parseAgentJournalItemKey } from '../agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from './journal/agent-session-journal-item-key'
 import { spelledProviderTimelineItemKey } from '../provider-timeline-item-key'
 
 export const AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION = 'compaction-skipped'

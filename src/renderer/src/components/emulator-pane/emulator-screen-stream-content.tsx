@@ -139,10 +139,12 @@ function resolveStreamMediaStyle(
   if (streamRotation === 0 || screenAspectRatio <= 0) {
     return undefined
   }
+  // A half turn keeps the frame's own proportions; only quarter turns swap them.
+  const halfTurn = streamRotation === 180
   return {
-    height: `${100 * screenAspectRatio}%`,
+    height: `${halfTurn ? 100 : 100 * screenAspectRatio}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,
     transformOrigin: 'center',
-    width: `${100 / screenAspectRatio}%`
+    width: `${halfTurn ? 100 : 100 / screenAspectRatio}%`
   }
 }

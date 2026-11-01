@@ -31,7 +31,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalTurnItem
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'

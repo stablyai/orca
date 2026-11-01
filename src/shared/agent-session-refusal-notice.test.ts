@@ -31,7 +31,7 @@ import {
   DISPATCH_REJECTED_NOT_DELIVERED,
   DISPATCH_REJECTED_QUEUE_FULL,
   DISPATCH_REJECTED_WRITE_FAILED
-} from './structured-agent-session-dispatch-rejection'
+} from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionRejectionParts } from './structured-agent-session-rejection-words'
 
 const WRITES: AgentSessionWriteKind[] = [

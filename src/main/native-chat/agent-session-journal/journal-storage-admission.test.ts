@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,

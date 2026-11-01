@@ -20217,8 +20217,7 @@
       "quitDuringMoveConfirm": "仍要退出"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在发现工作区…",
-      "description": "本地和远程项目加载期间，可能会显示更多工作区。"
+      "loading": "正在发现工作区…"
     },
     "createProject": {
       "errors": {

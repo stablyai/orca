@@ -1,9 +1,7 @@
 // Cursors from replaced epochs require a fresh snapshot; partial replay would mix timelines.
 
-import type {
-  AgentJournalCursor,
-  AgentJournalResetReason
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalResetReason } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReadSince } from './journal-store-contracts'
 import type { JournalReadRow } from './journal-read-row'
 
