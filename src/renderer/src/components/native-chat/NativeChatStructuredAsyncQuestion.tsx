@@ -74,7 +74,7 @@ export function nativeChatStructuredAsyncQuestion(
   controller: Pick<ReturnType<typeof useStructuredAgentSession>, 'epoch' | 'prompts'>,
   session: Pick<NativeChatLiveSession, 'messages' | 'readPhase'>,
   transport: Pick<NativeChatStructuredComposerTransport, 'send' | 'sendFollowUp'>,
-  queuedCards: readonly Pick<QueuedMessageCard, 'text'>[]
+  submits: { queuedMessages: { cards: readonly Pick<QueuedMessageCard, 'text'>[] } }
 ): React.JSX.Element {
   const { agent, sessionId } = props
   const { epoch } = controller
@@ -84,7 +84,7 @@ export function nativeChatStructuredAsyncQuestion(
       session={session}
       send={transport.send}
       sendFollowUp={transport.sendFollowUp}
-      queuedCards={queuedCards}
+      queuedCards={submits.queuedMessages.cards}
       blocked={controller.prompts[0] != null}
       sourceKey={JSON.stringify([
         'journal',
