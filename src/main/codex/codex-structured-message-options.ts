@@ -4,7 +4,7 @@ import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types
 import type { CodexTurnHost } from './codex-structured-turn-start'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { StructuredAgentSessionInputNotAdmitted } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'

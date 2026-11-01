@@ -9,7 +9,7 @@ import {
   isRootAgentJournalItem,
   namesAgentJournalProducer
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 
 export function statedOrDerivedTurnScope(

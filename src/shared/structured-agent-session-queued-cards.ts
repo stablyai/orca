@@ -5,17 +5,17 @@ import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
   type UnreadAgentSessionFailureFact
-} from './agent-session-failure'
-import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
-import { agentSessionWriteNotDoneParts } from './agent-session-refusal-notice'
-import type { AgentSessionWriteNoticePart } from './agent-session-write-notice-copy'
+} from './agent-session/failures/agent-session-failure'
+import { agentSessionFailureStatedByRow } from './agent-session/failures/agent-session-visible-failures'
+import { agentSessionWriteNotDoneParts } from './agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionWriteNoticePart } from './agent-session/failures/agent-session-write-notice-copy'
 import { dispatchWasWithdrawn } from './agent-session/requests/structured-agent-session-dispatch-rejection'
-import { structuredAgentSessionAttemptFailureParts } from './structured-agent-session-rejection-words'
+import { structuredAgentSessionAttemptFailureParts } from './agent-session/failures/structured-agent-session-rejection-words'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from './agent-session/journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from './agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from './agent-session/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from './native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
@@ -26,7 +26,7 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from './agent-session/agent-session-message-source'
-import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { handedOffQueuedMessageIds } from './agent-session/view/structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,

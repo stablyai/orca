@@ -1,5 +1,5 @@
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type {

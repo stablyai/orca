@@ -1,7 +1,7 @@
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId

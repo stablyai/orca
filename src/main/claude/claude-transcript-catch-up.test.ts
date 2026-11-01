@@ -10,9 +10,12 @@ import {
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-session-journal-batch'
-import { replacePage, mergeItems } from '../../shared/structured-agent-session-history-state'
+import {
+  replacePage,
+  mergeItems
+} from '../../shared/agent-session/view/structured-agent-session-history-state'
 import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
-import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'

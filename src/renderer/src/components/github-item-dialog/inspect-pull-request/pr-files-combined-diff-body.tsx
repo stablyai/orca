@@ -13,7 +13,6 @@ import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
-import type { DiffSectionItemProps } from '@/components/editor/diff-section-item-props'
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 
 export function PRFilesCombinedDiffBody({
@@ -36,7 +35,6 @@ export function PRFilesCombinedDiffBody({
   virtualizer,
   sections,
   isDark,
-  settings,
   sectionHeights,
   inlineReviewComments,
   loadSection,
@@ -70,7 +68,6 @@ export function PRFilesCombinedDiffBody({
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sections: DiffSection[]
   isDark: boolean
-  settings: DiffSectionItemProps['settings']
   sectionHeights: Record<number, number>
   inlineReviewComments: DecoratedDiffComment[]
   loadSection: (index: number) => void
@@ -138,7 +135,6 @@ export function PRFilesCombinedDiffBody({
                     isBranchMode={false}
                     sideBySide={sideBySide}
                     isDark={isDark}
-                    settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}
                     inlineComments={inlineReviewComments}

@@ -4,7 +4,7 @@
 // this one never did; while a reopened session replays its history, nothing it sends is written
 // except context usage, and afterwards the turns of it the chat never saw are added once.
 
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import {

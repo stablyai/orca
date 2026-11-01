@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
@@ -24,7 +24,7 @@ import {
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 // Existing decoders emit no roster; inject one to exercise import bounds.
 const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({

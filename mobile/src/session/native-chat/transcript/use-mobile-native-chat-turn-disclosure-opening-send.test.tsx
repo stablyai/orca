@@ -3,8 +3,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -16,7 +16,7 @@ import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage
-} from '../../../../../src/shared/structured-agent-session-message-projection'
+} from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages

@@ -214,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
-      "accept": "Ana makine olarak çalıştır"
+      "accept": "Ana makine olarak çalıştır",
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
     }
   },
   "app": {
@@ -6537,15 +6538,17 @@
           "remoteRuntimeEditorHint": "Bu bilgisayardaki uygulamalar, bu sunucunun dosyalarını yalnızca Orca sunucuya SSH üzerinden erişiyorsa açabilir.",
           "remotePathInvalid": "Yol, SSH sunucusu için geçerli değil.",
           "remotePathInvalidDetail": "Tekrar denemeden önce çalışma alanını yenileyin.",
-          "remoteLaunchFailed": "Yol düzenleyicide açılamadı.",
-          "remoteLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
+          "pathLaunchFailed": "Yol düzenleyicide açılamadı.",
+          "pathLaunchFailedDetail": "Bu makinede yapılandırılmış düzenleyici komutunu kontrol edin.",
           "1417fd8380": "Uygulamaları özelleştir...",
           "8009ab69a6": "Şununla aç:",
           "bd0e8159f8": "Bu makinedeki düzenleyici komutunu veya dosya yöneticisi yapılandırmasını kontrol edin.",
           "9a5381eb09": "Çalışma alanı klasörü açılamadı.",
           "0bed8727db": "Taşınmış veya silinmiş olabilir. Çalışma alanlarını yenileyin veya Orca'dan kaldırın.",
           "3921d3d9a5": "Çalışma alanı klasörü bulunamadı.",
+          "pathNotFound": "Dosya veya klasör bulunamadı. Taşınmış veya silinmiş olabilir.",
           "f387af445b": "Çalışma alanı yolu geçerli bir yerel yol değil.",
+          "pathInvalid": "Yol geçerli bir yerel yol değil.",
           "wsl": "WSL"
         },
         "WorktreeTitleInlineRename": {
@@ -7562,14 +7565,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Sol Kenar Çubuğu Görünümü",
-            "rowDescription": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılanda bırakın veya bir renk tonu kullanın.",
             "default": "Varsayılan",
-            "matchTerminal": "Terminalle Eşleştir",
             "tinted": "Renk Tonlu",
             "tintColor": "Kenar Çubuğu Rengi",
             "tintColorDescription": "Sol kenar çubuğu yüzeyine karıştırılan renk.",
             "tintOpacity": "Renk Yoğunluğu",
-            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder."
+            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder.",
+            "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
           },
           "interfaceDefaultFont": "Varsayılan yazı tipi",
           "terminalDefaultFont": "Varsayılan yazı tipi",
@@ -9320,10 +9322,7 @@
           "1afcc1d973": "Dikey Dolgu",
           "25e2f8e8e1": "Terminal ızgarası çevresindeki yatay dolgu, piksel cinsinden.",
           "36b8402015": "Yatay Dolgu",
-          "53ce336e15": "Pencere bulanıklığı değişikliğini uygulamak için Orca'yı yeniden başlatın.",
           "c65bb9ce63": "Yeniden başlatma gerekli",
-          "97950bb087": "Terminal penceresine arka plan bulanıklığı uygular. Yeniden başlatma gerektirir.",
-          "2b82242f43": "Pencere Bulanıklığı",
           "809f37738d": "Terminal arka planının saydamlığını kontrol eder. 1 tamamen opak, 0 tamamen saydamdır.",
           "ea7b1a158e": "Arka Plan Opaklığı",
           "03acb60aa0": "Terminal arka planının saydamlığını kontrol eder.",
@@ -9752,11 +9751,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Sol Kenar Çubuğu Görünümü",
-              "description": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılan bırakın veya bir renk tonu kullanın.",
               "project": "proje",
-              "terminal": "terminal",
               "background": "arka plan",
-              "tint": "renk tonu"
+              "tint": "renk tonu",
+              "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
             },
             "workspaceCardLayout": {
               "title": "Çalışma Alanı Kartı Düzeni",
@@ -9809,7 +9807,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Terminalle Eşleştir"
           }
         },
         "auto": {
@@ -10981,8 +10980,6 @@
             "f6dd9ff606": "arka plan",
             "71eb45e293": "bulanıklık",
             "0838b3717b": "pencere",
-            "bc2054657a": "Terminal penceresine arka plan bulanıklığı uygulayın. Yeniden başlatma gerektirir.",
-            "72d0482137": "Pencere Bulanıklığı",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opaklık",
             "4c643695aa": "Terminal arka planının saydamlığını kontrol eder.",
@@ -13345,6 +13342,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Oluştur"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Terminalle Eşleştir",
+          "dynamic": "dinamik"
         }
       },
       "right": {

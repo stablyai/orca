@@ -1,7 +1,7 @@
 import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

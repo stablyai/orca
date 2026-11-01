@@ -2,7 +2,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { useStructuredAgentSessionCommandMenu } from './structured-agent-session-command-refresh'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { useAppStore } from '@/store'

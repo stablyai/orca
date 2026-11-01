@@ -23,10 +23,10 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import type {
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatLiveSession } from './native-chat-live-session-contract'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'

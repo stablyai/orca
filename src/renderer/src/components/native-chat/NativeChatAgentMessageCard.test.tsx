@@ -30,9 +30,9 @@ import { desktopStructuredTranscript } from './structured-agent-session-message-
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
-} from '../../../../shared/structured-agent-session-reducer'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
+import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
 import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'

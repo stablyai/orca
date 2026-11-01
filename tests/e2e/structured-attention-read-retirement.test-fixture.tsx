@@ -9,13 +9,13 @@ import { join } from 'node:path'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 import type { NotificationSettings } from '../../src/shared/notification-settings-types'
 import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../src/shared/agent-session-wire'
+import type { AgentSessionHistoryPage } from '../../src/shared/agent-session/agent-session-wire'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
-} from '../../src/shared/structured-agent-session-projection'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -211,6 +211,7 @@ beforeEach(() => {
     readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
     readWorkspaceLabels: () => ({}),
     isWorkspaceMuted: () => false,
+    readOrchestration: () => undefined,
     dispatch: (event) => controller.dispatch(event),
     reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
     now: () => 42

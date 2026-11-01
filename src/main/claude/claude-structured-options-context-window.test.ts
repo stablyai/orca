@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
-import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import { selectStructuredAgentContextUsage } from '../../shared/agent-session/structured-agent-session-context-usage'
 import { assistantFrame, journal, userFrame } from './claude-context-usage-test-support'
 import { sessionFor } from './claude-structured-dispatch-test-support'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'

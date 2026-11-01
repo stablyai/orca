@@ -14,7 +14,7 @@ import { expect, it, vi } from 'vitest'
 import {
   claudeProviderHandle,
   agentSessionJournalProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalRow } from './journal-row-schema'
 import type { JournalReducerState } from './journal-reducer'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'

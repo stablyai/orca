@@ -4,7 +4,7 @@ import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
 import type * as RpcClientModule from '@/runtime/runtime-rpc-client'

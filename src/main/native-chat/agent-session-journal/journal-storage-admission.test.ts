@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
@@ -22,7 +22,7 @@ import {
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
 import { admitOutcomeFormat1 } from './journal-outcome-format-1'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { storedFailureFact, storedProviderHandle } from './journal-storage-schema'
 import type { UndeclaredStorageKeys } from './journal-storage-strict'
 import { restoreJournal } from './journal-open'
