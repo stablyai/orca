@@ -52,6 +52,7 @@ const TAB_ID = 'tab1'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
+const GONE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
 function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
@@ -372,5 +373,26 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards).toEqual([])
     expect(runtimeEnumerations).toBe(1)
     expect(contextVisits).toBe(contextCount)
+  })
+
+  it('routes an unread retained done agent to Needs You', () => {
+    const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        retainedAgentsByPaneKey: {
+          [donePaneKey]: {
+            entry: entry({ paneKey: donePaneKey, state: 'done' }),
+            worktreeId: 'w1',
+            tab: tab() as never,
+            agentType: 'claude',
+            startedAt: NOW - 60_000
+          } as never
+        }
+      }),
+      NOW
+    )
+    const done = snapshot.cards.find((c) => c.dotState === 'done')
+    expect(done).toBeDefined()
+    expect(done?.bucket).toBe('attention')
   })
 })
