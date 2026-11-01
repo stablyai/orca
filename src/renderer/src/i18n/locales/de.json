@@ -3143,7 +3143,8 @@
         "42e466b9f1": "Regulärer Ausdruck",
         "90c61387d9": "Groß-/Kleinschreibung beachten",
         "e07012f26e": "Suchen…",
-        "10e039b591": "Keine Ergebnisse"
+        "10e039b591": "Keine Ergebnisse",
+        "wholeWord": "Nur ganzes Wort suchen"
       },
       "UpdateCard": {
         "68b235d264": "Zum Aktualisieren neu starten",

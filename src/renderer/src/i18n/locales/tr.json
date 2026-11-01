@@ -3121,7 +3121,8 @@
         "42e466b9f1": "Regex",
         "90c61387d9": "Büyük/küçük harf duyarlı",
         "e07012f26e": "Ara...",
-        "10e039b591": "Sonuç yok"
+        "10e039b591": "Sonuç yok",
+        "wholeWord": "Tam Sözcük Eşleştir"
       },
       "UpdateCard": {
         "68b235d264": "Güncellemek için Yeniden Başlat",

@@ -154,6 +154,7 @@ describe('runTerminalSearchNavigation', () => {
   const decoratedOptions = expect.objectContaining({
     caseSensitive: true,
     regex: false,
+    wholeWord: false,
     decorations: expect.objectContaining({ activeMatchBackground: expect.any(String) })
   })
 
@@ -179,6 +180,21 @@ describe('runTerminalSearchNavigation', () => {
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
     expect(findPrevious).toHaveBeenCalledWith('hello', decoratedOptions)
     expect(findNext).not.toHaveBeenCalled()
+  })
+
+  it('forwards whole-word matching to the addon', () => {
+    const findNext = vi.fn(() => true)
+    const pane = { searchAddon: { findNext } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    expect(runTerminalSearchNavigation(pane, 'next', { ...searchState, wholeWord: true })).toBe(
+      true
+    )
+    expect(findNext).toHaveBeenCalledWith(
+      'hello',
+      expect.objectContaining({ caseSensitive: true, regex: false, wholeWord: true })
+    )
   })
 
   it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {
