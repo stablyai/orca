@@ -6,6 +6,7 @@ import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import { getTerminalScrollOnUserInputSearchEntry } from './terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
@@ -14,7 +15,8 @@ import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
   DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
   normalizeTerminalFastScrollSensitivity,
-  normalizeTerminalScrollSensitivity
+  normalizeTerminalScrollSensitivity,
+  resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
@@ -181,6 +183,27 @@ export function TerminalInteractionSection({
               />
             </div>
           </div>
+        </SearchableSetting>
+
+        <SearchableSetting {...getTerminalScrollOnUserInputSearchEntry()[0]}>
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalInteraction.scrollOnUserInput',
+              'Scroll to Bottom on Input'
+            )}
+            description={translate(
+              'components.settings.TerminalInteraction.scrollOnUserInputDescription',
+              'When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback.'
+            )}
+            checked={resolveTerminalScrollOnUserInput(settings.terminalScrollOnUserInput)}
+            onChange={() =>
+              updateSettings({
+                terminalScrollOnUserInput: !resolveTerminalScrollOnUserInput(
+                  settings.terminalScrollOnUserInput
+                )
+              })
+            }
+          />
         </SearchableSetting>
 
         {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
