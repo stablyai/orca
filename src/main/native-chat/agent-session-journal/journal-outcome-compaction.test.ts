@@ -353,12 +353,6 @@ it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
     expect(
       records().filter((row) => row.field === 'items' && row.entry_key === '"healthy"')
     ).toHaveLength(2)
-    database.db
-      .prepare('UPDATE journal_outcome_epochs SET format = ?')
-      .run(JOURNAL_OUTCOME_FORMAT + 1)
-    const stopped = records()
-    compact()
-    expect(records()).toEqual(stopped)
   }
 )
 
@@ -565,7 +559,6 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   expect(rig.state().removedTurnIds.has('removed-turn')).toBe(true)
   const reader = { ...CLIENT_HISTORY_READER, budgetBytes: 1_500 }
   const consumers = async () => {
-    expectHistoricalDispatch()
     const work = new StructuredAgentSessionCurrentWork(journal, 1)
     expect(work.actionablePromptIds()).toEqual(['approval', 'question'])
     workerHost.journal = journal

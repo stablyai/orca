@@ -157,7 +157,7 @@ it('does no record work on an unchanged pass at N and 10N, and revisits the form
   expect(measure(1_000)).toEqual(measure(100))
 })
 
-it('retries a failed deletion without advancing its page and preserves sends between pages', async () => {
+it('retries a failed deletion without advancing its page and keeps the chat writable during rests', async () => {
   const database = chat(100)
   const compaction = new JournalOutcomeCompaction()
   compaction.page(database)
@@ -167,7 +167,12 @@ it('retries a failed deletion without advancing its page and preserves sends bet
   expect(() => compaction.page(database)).toThrow('injected deletion failure')
   expect(database.db.prepare('SELECT * FROM journal_outcomes ORDER BY rowid').all()).toEqual(rows)
   database.db.exec('DROP TRIGGER fail_compaction')
-  expect(compaction.page(database)).toBe(true)
+  while (compaction.page(database)) {
+    /* The failed page is retried, not skipped: every middle revision goes. */
+  }
+  expect(
+    database.db.prepare("SELECT COUNT(*) AS n FROM journal_outcomes WHERE field = 'items'").get()?.n
+  ).toBe(2)
   const rig = projectionWriter(database, restoreJournal(database.db, projectionSessionId)!.state)
   let sent = false
   const rested = vi.fn(async () => {
@@ -202,11 +207,13 @@ it('reclaims freed pages incrementally, and leaves non-incremental databases alo
   await sweeper.pass()
   expect(pages()).toBeLessThan(before)
   expect(database.db.pragma('freelist_count', { simple: true })).toBe(0)
-  const older = new Database(':memory:')
+  const older = new Database(join(root, 'non-incremental.db'))
   try {
-    const pragma = vi.spyOn(older, 'pragma')
+    older.exec(`CREATE TABLE t (v TEXT); INSERT INTO t VALUES (zeroblob(1000000)); DELETE FROM t`)
+    const olderPages = Number(older.pragma('page_count', { simple: true }))
+    expect(Number(older.pragma('freelist_count', { simple: true }))).toBeGreaterThan(0)
     expect(vacuumJournalPage({ writeAutocommit: (run) => run(older) })).toBe(false)
-    expect(pragma.mock.calls).toEqual([['auto_vacuum', { simple: true }]])
+    expect(Number(older.pragma('page_count', { simple: true }))).toBe(olderPages)
   } finally {
     older.close()
   }
