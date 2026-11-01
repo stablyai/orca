@@ -215,7 +215,8 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'question_threads',
         'remote_questions',
         'attempt_observation_facts',
-        'structured_pointer_operations'
+        'structured_pointer_operations',
+        'structured_mail_sends'
       ],
       notApplicableDisposition(53, 'Keyed by run, task, dispatch, message or handle ids.')
     ),

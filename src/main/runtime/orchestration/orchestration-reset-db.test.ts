@@ -58,12 +58,13 @@ describe('OrchestrationDb reset scopes', () => {
       messageId: 'question_1',
       remoteQuestion: true
     })
-    db.putStructuredPointerOperation({
+    db.putStructuredMailSend({
       mailbox_handle: `dispatch:${started.dispatch.id}`,
+      message_id: message.id,
       session_id: 'session_1',
       operation_id: '1700000000000-00112233445566778899aabbccddeeff',
-      batch_fingerprint: 'fingerprint_1',
-      minted_at_ms: 1_700_000_000_000
+      minted_at_ms: 1_700_000_000_000,
+      fence: 1
     })
     return { run, task, started, message, localQuestion }
   }
@@ -137,9 +138,7 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toEqual([])
-    expect(
-      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
-    ).toBeUndefined()
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
   })
 
   it('resetTasks preserves Runs and messages while clearing every worker attachment', () => {
@@ -166,9 +165,7 @@ describe('OrchestrationDb reset scopes', () => {
         body: 'Yes'
       })
     ).toThrowError(expect.objectContaining({ code: 'dispatch_inactive' }))
-    expect(
-      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
-    ).toBeUndefined()
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
   })
 
   it('resetTasks records who created each removed Task, Dispatch and worker', () => {
@@ -378,9 +375,7 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toHaveLength(1)
-    // The pointer idempotency row must not survive deletion of its message batch.
-    expect(
-      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
-    ).toBeUndefined()
+    // A chat send record must not survive deletion of its message.
+    expect(db!.getStructuredMailSends(`dispatch:${state.started.dispatch.id}`)).toEqual([])
   })
 })

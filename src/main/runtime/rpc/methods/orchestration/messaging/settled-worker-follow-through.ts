@@ -163,8 +163,10 @@ export function passHeldWorkerMail(
   db: OrchestrationDb,
   followUpId: string
 ): void {
+  // The follow-up's claim and the moves below re-address mail a chat may still hold as a card.
   const custody = custodyOf(db, followUpId)
   if (custody === 'starting') {
+    runtime.withdrawTakenChatMail()
     return
   }
   const worker = db.getWorkerDispatch(followUpId)
@@ -207,6 +209,7 @@ export function passHeldWorkerMail(
     // A follow-up that already finished holds this mail as any finished worker does.
     markUnreadFollowUpMail(db, followUpId)
   }
+  runtime.withdrawTakenChatMail()
   if (custody === 'reported') {
     continueUnreadWorkerMail(runtime, db, followUpId)
   }

@@ -541,7 +541,8 @@ it('worker-abandon settles and fences consumption, releases the existing binding
   const delivery = runtime.pointerDelivery()
   const parked = observeParkedMail(delivery)
   runtime.deliverPendingMessagesForHandle(mailbox)
-  expect(parked.has(mailbox)).toBe(true)
+  // Queued behind the running turn, its card is followed on the session's next journal edge.
+  await vi.waitFor(() => expect(parked.has(mailbox)).toBe(true))
   const originalForget = delivery.forgetSession.bind(delivery)
   const releasedEntries: boolean[] = []
   const forget = vi.spyOn(delivery, 'forgetSession').mockImplementation((sessionId) => {

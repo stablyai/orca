@@ -17,8 +17,6 @@ import {
   testState
 } from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from './orchestration/db'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
@@ -300,12 +298,9 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** Exact PTY mailbox pointer, including CLI spelling. */
-export function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[Reply: orca(-dev)? orchestration reply --id /.test(text)
 }
 
 export function turnText(turn: { text: string }): string {

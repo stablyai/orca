@@ -1,5 +1,5 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-// Worker mail belongs to its Dispatch mailbox; held pointers redrive on the next idle edge, including after restart or clear.
+// Worker mail belongs to its Dispatch mailbox; a message lost with the provider is handed over again once a later turn runs, including after restart or clear.
 
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
@@ -16,6 +16,7 @@ import {
   coordinatorRunAndTask,
   db,
   host,
+  isWholeMail,
   observationClock,
   openChat,
   restartRuntime,
@@ -26,7 +27,6 @@ import {
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 
 const WORKER = formatOrcaSessionAddress(testOrcaSessionId(PEER_CHAT))
-const POINTER = /orchestration message/
 
 async function idleEdges(sessionId: string): Promise<void> {
   runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
@@ -35,7 +35,7 @@ async function idleEdges(sessionId: string): Promise<void> {
   await host.flushStreamedEvents(sessionId)
 }
 
-/** Coordinator mail to the peer chat's Dispatch, its pointer lost with the provider. */
+/** Coordinator mail to the peer chat's Dispatch, handed whole to a provider that died before taking it. */
 async function heldDispatchMail(): Promise<string> {
   await openChat(COORDINATOR)
   const chat = await openChat(PEER_CHAT)
@@ -48,11 +48,12 @@ async function heldDispatchMail(): Promise<string> {
   const mailbox = `dispatch:${idOf(dispatch)}`
   await call('orchestration.send', { to: mailbox, subject: 'more' }, { sessionId: COORDINATOR })
   await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-  expect(turnText(chat.turns[0]!)).toMatch(POINTER)
+  expect(isWholeMail(turnText(chat.turns[0]!))).toBe(true)
   chat.handlers.onExit?.(new Error('provider died before the echo'))
   await idleEdges(PEER_CHAT)
   expect(chat.turns).toHaveLength(1)
-  expect(db.getUndeliveredUnreadMessages(mailbox, undefined, {})).toHaveLength(1)
+  // Delivered but still unread: edges before a later turn send nothing more.
+  expect(db.getUnreadMessages(mailbox)).toHaveLength(1)
   return mailbox
 }
 
@@ -68,7 +69,7 @@ async function nextTurn(sessionId: string): Promise<{ turns: { text: string }[] 
   return revived
 }
 
-describe("a chat worker's held Dispatch mail is pointed again", () => {
+describe("a chat worker's lost Dispatch mail is handed over again", () => {
   // Also covered by the restored-mail repoint a restart schedules; this pins the end result.
   it('after a restart', async () => {
     observationClock.start()
@@ -78,7 +79,7 @@ describe("a chat worker's held Dispatch mail is pointed again", () => {
     const revived = await nextTurn(PEER_CHAT)
 
     await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(turnText(revived.turns[1]!)).toMatch(POINTER)
+    expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
   })
 
   it('in the same chat after /clear', async () => {
@@ -90,6 +91,6 @@ describe("a chat worker's held Dispatch mail is pointed again", () => {
     const revived = await nextTurn(cleared)
 
     await vi.waitFor(() => expect(revived.turns).toHaveLength(2), WAIT)
-    expect(turnText(revived.turns[1]!)).toMatch(POINTER)
+    expect(isWholeMail(turnText(revived.turns[1]!))).toBe(true)
   })
 })

@@ -214,6 +214,13 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
   }
 
+  /** After a check or a follow-up takes mail, delete the cards that still wait to hand it to a chat. */
+  withdrawTakenChatMail(): void {
+    void this.orchestrationStructuredMailboxPointerDelivery.withdrawTaken().catch((error) => {
+      console.warn('[orchestration] withdrawing taken chat mail failed', error)
+    })
+  }
+
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */
   protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
     if (mailboxHandle.startsWith('run:')) {
@@ -286,7 +293,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
       handles = new Set([
         ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+        ...(db?.getPendingMailboxPointerHandles?.() ?? []),
+        // Delivered mail a chat still holds: what became of it is read on this pass.
+        ...(db?.getStructuredMailSendMailboxes?.() ?? [])
       ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)

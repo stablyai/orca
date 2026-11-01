@@ -1,729 +1,259 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
-import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
-import {
-  structuredPointerBatchFingerprint,
-  type StructuredPointerSubmission
-} from './structured-pointer-operation-id'
-import type { StructuredWorkerIdentity } from '../structured-worker-identity'
-import { RuntimeMessageWaiters } from '../runtime-message-waiters'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredMailSendState
+} from './structured-mailbox-pointer-host-contract'
+import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
+import { MAX_PROMPT_BYTES } from '../../../shared/rpc-contract/structured-agent-session-message-params'
 
-import { verifyHeldLocalWorkerDone } from './structured-mailbox-held-worker-report.test-fixture'
-
-const IDENTITY: StructuredWorkerIdentity = {
-  handle: 'structworker_1',
-  sessionId: 'session-1',
-  agent: 'claude',
-  paneKey: 'structured-agent-session-session-1:11111111-1111-4111-a111-111111111111',
-  processIncarnation: 'structured:session-1',
-  worktreeId: 'wt_1',
-  hostScope: { kind: 'local', hostId: 'local' }
+type Mail = {
+  id: string
+  type: string
+  sequence: number
+  from_handle: string
+  to_handle: string
+  run_id: string
+  subject: string
+  body: string
+  payload: string | null
+  priority: string
+  delivery_contract: string
+  read: number
+  delivered_at: string | null
 }
 
-function harness(options: {
-  /** False: the session cannot be read (not attached). */
-  relationReadFails?: boolean
-  attached?: boolean
-  dispatchState?: 'accepted' | 'rejected' | 'unknown'
-  /** The chat was busy: its queue holds the pointer as a card. */
-  queued?: true
-  /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
-  outstandingRunDelivery?: boolean
-  outstandingOwnDelivery?: boolean
-  /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
-  mailbox?: string
-  dispatchId?: string | null
-  waiters?: RuntimeMessageWaiters
-}) {
-  const mailbox = options.mailbox ?? 'dispatch:d1'
-  const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
-  let attached = options.attached ?? true
-  let awaitingHuman = false
-  let working = false
-  let submissions: StructuredPointerSubmission[] = []
-  const mail = [
-    { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
-  ]
-  const pointed = new Set<string>()
-  const consumed = new Set<string>()
-  const turns: string[] = []
-  let journalRead: Promise<void> = Promise.resolve()
-  const markAsDelivered = vi.fn((ids: string[]) => {
-    for (const id of ids) {
-      pointed.add(id)
-    }
-  })
-  const send: StructuredMailboxPointerHost['send'] = vi.fn(async (input) => {
-    if (!input.stillOwed()) {
-      return { kind: 'obsolete' as const }
-    }
-    if (awaitingHuman) {
-      return { kind: 'held' as const }
-    }
-    turns.push(input.operationId)
-    return options.queued
-      ? { kind: 'queued' as const }
-      : { kind: 'sent' as const, state: options.dispatchState ?? ('accepted' as const) }
-  })
-  const sendMock = vi.mocked(send)
-  const readContext = vi.fn<StructuredMailboxPointerHost['currentContextClearOperationId']>(
-    () => undefined
-  )
-  const stored = new Map<string, StructuredPointerOperationRow>()
-  const relationRead = vi.fn(() => {
-    if (options.relationReadFails) {
-      throw new Error('lineage unavailable')
-    }
-    return undefined
-  })
+/** One chat session behind dispatch:d1: idle sends start a turn, busy ones wait as cards. */
+function harness(options: { busy?: boolean; refuse?: boolean } = {}) {
+  const mailbox = 'dispatch:d1'
+  const mail = new Map<string, Mail>()
+  const records = new Map<string, StructuredMailSendRow>()
+  let busy = options.busy ?? false
+  let refuse = options.refuse ?? false
+  /** What the chat holds per operation id: a waiting card, or what its handoff became. */
+  const chat = new Map<string, StructuredMailSendState>()
+  const texts: string[] = []
+  let turnRan = false
   const db = {
-    getRun: relationRead,
+    getRun: () => undefined,
     getDispatchContextById: () => ({ run_id: 'run_1' }),
-    getOutstandingMailboxDelivery: (handle: string) =>
-      ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
-      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:'))
-        ? { id: 'delivery_1', messageIds: ['m1'] }
-        : undefined,
-    getUndeliveredUnreadMessages: (
-      _handle: string,
-      _filter: unknown,
-      input: { excludeTypes: readonly string[]; excludeIds?: readonly string[] }
-    ) =>
-      mail.filter(
-        (message) =>
-          !pointed.has(message.id) &&
-          !consumed.has(message.id) &&
-          !input.excludeTypes.includes(message.type) &&
-          !input.excludeIds?.includes(message.id)
+    getOutstandingMailboxDelivery: () => undefined,
+    getUndeliveredUnreadMessages: (handle: string) =>
+      [...mail.values()].filter(
+        (row) => row.to_handle === handle && !row.read && row.delivered_at === null
       ),
-    areUnreadMessages: (_handle: string, ids: string[]) => ids.every((id) => !consumed.has(id)),
-    markAsDelivered,
-    getStructuredPointerOperation: (key: string) => stored.get(key),
-    putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
-      stored.set(row.mailbox_handle, row),
-    deleteStructuredPointerOperation: (key: string) => stored.delete(key)
+    areUnreadMessages: (_handle: string, ids: string[]) =>
+      ids.every((id) => mail.get(id)?.read === 0),
+    getMessageById: (id: string) => mail.get(id),
+    markAsDelivered: (ids: string[]) => {
+      for (const id of ids) {
+        mail.get(id)!.delivered_at ??= 'now'
+      }
+    },
+    markAsUndelivered: (ids: string[]) => {
+      for (const id of ids) {
+        mail.get(id)!.delivered_at = null
+      }
+    },
+    markAsReadAndDelivered: (ids: string[]) => {
+      for (const id of ids) {
+        Object.assign(mail.get(id)!, { read: 1, delivered_at: 'now' })
+      }
+    },
+    getStructuredMailSends: (handle: string) =>
+      [...records.values()].filter((row) => row.mailbox_handle === handle),
+    getTakenStructuredMailSends: () =>
+      [...records.values()].filter((row) => {
+        const message = mail.get(row.message_id)
+        return !message || message.read === 1 || message.to_handle !== row.mailbox_handle
+      }),
+    putStructuredMailSend: (row: StructuredMailSendRow) => records.set(row.message_id, row),
+    deleteStructuredMailSend: (_handle: string, id: string) => records.delete(id)
+  }
+  const host: StructuredMailboxPointerHost = {
+    currentFence: () => 4,
+    send: vi.fn(async (input) => {
+      if (!input.stillOwed()) {
+        return { kind: 'obsolete' as const }
+      }
+      if (refuse) {
+        return { kind: 'refused' as const }
+      }
+      texts.push(input.body.blocks.map((block) => ('text' in block ? block.text : '')).join(''))
+      chat.set(input.operationId, busy ? 'waiting' : 'handed')
+      return busy
+        ? { kind: 'queued' as const }
+        : { kind: 'sent' as const, state: 'accepted' as const }
+    }),
+    observe: vi.fn(async (_sessionId, operationId) => chat.get(operationId) ?? 'absent'),
+    repeatable: vi.fn(async () => turnRan),
+    withdraw: vi.fn(async (_sessionId, operationId) => {
+      chat.delete(operationId)
+      return true
+    })
   }
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
     getDb: () => db as never,
-    getMessageWaiters: (handle) => options.waiters?.get(handle),
-    resolveStructuredTarget: (mailboxHandle) =>
-      mailboxHandle === mailbox ? { sessionId: IDENTITY.sessionId, dispatchId } : null,
+    getMessageWaiters: () => undefined,
+    resolveStructuredTarget: (handle) =>
+      handle === mailbox ? { sessionId: 'session-1', dispatchId: 'd1' } : null,
     getCliCommand: () => 'orca-dev',
-    senderSnapshot: (party) => ({
-      name: party.address === 'term_coord' ? 'Coordinator' : null,
-      agent: null
-    }),
-    host: {
-      readSessionFacts: async () => {
-        await journalRead
-        return attached ? { submissions } : null
-      },
-      hasActionablePromptNow: () => awaitingHuman,
-      isWorkingNow: () => working,
-      currentFence: () => 4,
-      currentContextClearOperationId: readContext,
-      send
-    }
+    senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
+    host
   })
+  let sequence = 0
   return {
     delivery,
-    relationRead,
-    markAsDelivered,
-    send: sendMock,
-    readContext,
-    stored,
-    setAttached: (next: boolean) => {
-      attached = next
-    },
-    receive: (id: string, sequence: number, type = 'status') => {
-      mail.push({ id, type, sequence, from_handle: 'term_coord', run_id: 'run_1' })
-    },
-    setSubmissions: (next: StructuredPointerSubmission[]) => {
-      submissions = next
-    },
-    setAwaitingHuman: (next: boolean) => {
-      awaitingHuman = next
-    },
-    setWorking: (next: boolean) => {
-      working = next
-    },
-    turns,
-    /** A consuming check: marks the mail read. */
-    consume: (id: string) => consumed.add(id),
-    /** Holds every journal read until the returned release runs. */
-    holdJournalRead: () => {
-      let release = () => {}
-      journalRead = new Promise((resolve) => {
-        release = resolve
+    host,
+    mail,
+    records,
+    chat,
+    texts,
+    receive: (id: string, body = `body of ${id}`) => {
+      mail.set(id, {
+        id,
+        type: 'status',
+        sequence: ++sequence,
+        from_handle: 'term_coord',
+        to_handle: mailbox,
+        run_id: 'run_1',
+        subject: `subject of ${id}`,
+        body,
+        payload: null,
+        priority: 'normal',
+        delivery_contract: 'standard',
+        read: 0,
+        delivered_at: null
       })
-      return () => release()
+    },
+    deliver: async () => {
+      delivery.deliverForHandle(mailbox)
+      await flush()
+    },
+    /** The agent was handed the card waiting under this message's operation id. */
+    handOver: (id: string) => chat.set(records.get(id)!.operation_id, 'handed'),
+    setBusy: (next: boolean) => {
+      busy = next
+    },
+    setRefuse: (next: boolean) => {
+      refuse = next
+    },
+    setTurnRan: (next: boolean) => {
+      turnRan = next
     }
   }
 }
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
-
-describe('structured mailbox pointer delivery', () => {
-  it.each(['rejected', 'unknown', 'throws'] as const)(
-    'attempts an unchanged record context once when its journal has no marker and send is %s',
-    async (outcome) => {
-      const { delivery, send, readContext, stored, markAsDelivered } = harness({})
-      let contextReads = 0
-      readContext.mockImplementation(() => {
-        if (++contextReads > 8) {
-          throw new Error('hard regression-test cap on context reads')
-        }
-        return 'record-clear-1'
-      })
-      send.mockImplementation(async () => {
-        if (outcome === 'throws') {
-          throw new Error('send failed')
-        }
-        return { kind: 'sent', state: outcome }
-      })
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      await flush()
-      expect(send).toHaveBeenCalledTimes(1)
-      expect(contextReads).toBeLessThan(8)
-      expect(markAsDelivered).not.toHaveBeenCalled()
-      expect(stored.get('dispatch:d1')?.batch_fingerprint).toBe(
-        structuredPointerBatchFingerprint(IDENTITY.sessionId, ['m1'], 'record-clear-1')
-      )
-    }
-  )
-
-  it('nudges through the worker`s own handle for direct peer mail outside a dispatch', async () => {
-    const { delivery, send, markAsDelivered } = harness({
-      mailbox: IDENTITY.handle,
-      dispatchId: null
-    })
-    expect(delivery.deliverForHandle(IDENTITY.handle)).toBe(true)
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0]![0].dispatchId).toBeNull()
-    // Direct mail needs an unscoped check; --run would select an empty coordinator mailbox.
-    expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
-      text: expect.not.stringContaining('--run')
-    })
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], IDENTITY.handle)
-  })
-
-  it('releases its in-flight lane when reading the context fails', async () => {
-    const { delivery, send, readContext, markAsDelivered } = harness({})
-    readContext.mockImplementationOnce(() => {
-      throw new Error('record unavailable')
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledOnce()
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
-
-  it('redrives a detached session when the journal replays on re-attach', async () => {
-    // A detached session needs a parked journal-edge retry because workers are told not to poll.
-    const { delivery, send, setAttached, markAsDelivered } = harness({ attached: false })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
-    setAttached(true)
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
-
-  it('starts no turn for mail a check consumed while the journal read was in flight', async () => {
-    const { delivery, markAsDelivered, turns, consume, receive, holdJournalRead } = harness({})
-    const release = holdJournalRead()
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    consume('m1')
-    receive('m2', 4)
-    release()
-    await flush()
-    await flush()
-    expect(turns).toHaveLength(1)
-    expect(markAsDelivered).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m2'], 'dispatch:d1')
-  })
-
-  it.each([false, true])(
-    'rechecks the original dispatch and direct failed-relation held notice (failure=%s)',
-    async (relationReadFails) => {
-      const { delivery, send, markAsDelivered, setAwaitingHuman, relationRead } = harness({
-        relationReadFails,
-        ...(relationReadFails ? { mailbox: 'term_worker' } : {})
-      })
-      setAwaitingHuman(true)
-      send.mockImplementationOnce(async () => {
-        setAwaitingHuman(false)
-        delivery.onJournalActivity('session-1')
-        return { kind: 'held' }
-      })
-      delivery.deliverForHandle(relationReadFails ? 'term_worker' : 'dispatch:d1')
-      await flush()
-      expect(send).toHaveBeenCalledTimes(2)
-      expect(relationRead).toHaveBeenCalledTimes(relationReadFails ? 2 : 0)
-      expect(send.mock.calls[1][0].body.from?.senders[0].relation).toBeUndefined()
-      expect(markAsDelivered).toHaveBeenCalledWith(
-        ['m1'],
-        relationReadFails ? 'term_worker' : 'dispatch:d1'
-      )
-    }
-  )
-
-  it('sends the pointer through the chat, with who it is from, and counts it pointed once queued', async () => {
-    const { delivery, send, markAsDelivered, stored } = harness({ queued: true })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
-      text: expect.stringContaining('orca-dev orchestration check')
-    })
-    expect(send.mock.calls[0]![0].body.from).toMatchObject({
-      kind: 'agent',
-      senders: [{ party: { address: 'term_coord' }, name: 'Coordinator' }],
-      orchestration: {
-        message: 'mail-notice',
-        mailbox: 'dispatch:d1',
-        messages: [{ messageId: 'm1', runId: 'run_1', from: 'term_coord' }]
-      }
-    })
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-    expect(stored.has('dispatch:d1')).toBe(false)
-  })
-
-  it('points mail that arrives while earlier pointed mail is still unread, counting only the new mail', async () => {
-    const { delivery, send, receive } = harness({})
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    receive('m2', 4)
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(2)
-    expect(send.mock.calls[1]![0].body.blocks[0]).toMatchObject({
-      text: expect.stringContaining('You have 1 orchestration message.')
-    })
-  })
-
-  it('points a second report after its filtered waiter expires during first-notice acceptance', async () => {
-    const waiters = new RuntimeMessageWaiters()
-    const { delivery, send, receive, markAsDelivered } = harness({
-      mailbox: 'run:run_1',
-      waiters
-    })
-    const waiting = waiters.wait('run:run_1', { typeFilter: ['worker_done'], timeoutMs: 40 })
-    const accepted = Promise.withResolvers<void>()
-    send.mockImplementationOnce(async () => {
-      await accepted.promise
-      return { kind: 'sent', state: 'accepted' }
-    })
-    delivery.deliverForHandle('run:run_1', new Set(['worker_done']))
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(await waiting).toBe('timed_out')
-    receive('m2', 4, 'worker_done')
-    delivery.deliverForHandle('run:run_1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    accepted.resolve()
-    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2))
-    expect(send.mock.calls[1]![0].body.from).toMatchObject({
-      orchestration: { messages: [{ messageId: 'm2' }] }
-    })
-    expect(markAsDelivered.mock.calls).toEqual([
-      [['m1'], 'run:run_1'],
-      [['m2'], 'run:run_1']
-    ])
-    delivery.onJournalActivity('session-1')
-    delivery.deliverForHandle('run:run_1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(2)
-  })
-
-  it('nudges the worker while its coordinator holds an unacked Run delivery', async () => {
-    // A coordinator's outstanding Run batch must not suppress nudges for the worker's separate mailbox.
-    const { delivery, send, markAsDelivered } = harness({
-      outstandingRunDelivery: true
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-  })
-
-  it('parks a held-batch nudge while the agent works and sends it on the next journal edge', async () => {
-    const { delivery, send, receive, setWorking } = harness({ outstandingOwnDelivery: true })
-    setWorking(true)
-    receive('m2', 4)
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
-
-    setWorking(false)
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries a rejected nudge on the next journal edge, under the same id', async () => {
-    // Park rejected dispatches for retry with the same id; an unrelated mail edge must not be required.
-    const { delivery, send, markAsDelivered } = harness({
-      dispatchState: 'rejected'
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).not.toHaveBeenCalled()
-    const first = send.mock.calls[0]![0].operationId
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(2)
-    expect(send.mock.calls[1]![0].operationId).toBe(first)
-  })
-
-  it('points again under a new id once a later send ran', async () => {
-    const { delivery, send, setSubmissions } = harness({
-      dispatchState: 'unknown'
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    const first = send.mock.calls[0]![0].operationId
-    setSubmissions([
-      { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() },
-      { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
-    ])
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(2)
-    expect(send.mock.calls[1]![0].operationId).not.toBe(first)
-  })
-
-  it('points once more under a new id for a send an earlier process left in doubt', async () => {
-    const { delivery, send, stored, setSubmissions } = harness({
-      dispatchState: 'unknown'
-    })
-    stored.set('dispatch:d1', {
-      mailbox_handle: 'dispatch:d1',
-      session_id: 'session-1',
-      operation_id: 'earlier-process-op',
-      batch_fingerprint: structuredPointerBatchFingerprint('session-1', ['m1']),
-      minted_at_ms: 0
-    })
-    setSubmissions([
-      { clientMessageId: 'earlier-process-op', dispatchState: 'unknown', submittedAt: Date.now() }
-    ])
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    const reminted = send.mock.calls[0]![0].operationId
-    expect(reminted).not.toBe('earlier-process-op')
-    setSubmissions([
-      { clientMessageId: 'earlier-process-op', dispatchState: 'unknown', submittedAt: Date.now() },
-      { clientMessageId: reminted, dispatchState: 'unknown', submittedAt: Date.now() }
-    ])
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send.mock.calls[1]![0].operationId).toBe(reminted)
-  })
-
-  it('keeps replaying its own send across a clock step, and re-mints only for a rewind that ran a turn', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      const { delivery, send, setSubmissions } = harness({
-        dispatchState: 'unknown'
-      })
-      // The wall clock steps back an hour after the lane started: its own row is still its own.
-      vi.setSystemTime(Date.now() - 60 * 60 * 1000)
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      const first = send.mock.calls[0]![0].operationId
-      setSubmissions([
-        { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() }
-      ])
-      delivery.onJournalActivity('session-1')
-      await flush()
-      expect(send.mock.calls[1]![0].operationId).toBe(first)
-      // A rewind dropped that send from the journal, and the person's turn ran after it.
-      setSubmissions([
-        { clientMessageId: 'user-turn', dispatchState: 'accepted', submittedAt: Date.now() + 1 }
-      ])
-      delivery.onJournalActivity('session-1')
-      await flush()
-      expect(send.mock.calls[2]![0].operationId).not.toBe(first)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not read a turn from before a backward clock step as one that ran after its pointer', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      const { delivery, send, setSubmissions } = harness({
-        dispatchState: 'unknown'
-      })
-      const personTurn = {
-        clientMessageId: 'user-turn',
-        dispatchState: 'accepted' as const,
-        submittedAt: Date.now()
-      }
-      setSubmissions([personTurn])
-      vi.setSystemTime(Date.now() - 2 * 60 * 1000)
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      const first = send.mock.calls[0]![0].operationId
-      setSubmissions([
-        personTurn,
-        { clientMessageId: first, dispatchState: 'unknown', submittedAt: Date.now() }
-      ])
-      for (let edge = 0; edge < 3; edge++) {
-        delivery.onJournalActivity('session-1')
-        await flush()
-      }
-      expect(send.mock.calls.map(([input]) => input.operationId)).toEqual([
-        first,
-        first,
-        first,
-        first
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('stamps a pointer whose echo arrived after the lane stopped waiting, sending nothing more', async () => {
-    const { delivery, send, markAsDelivered, stored, setSubmissions } = harness({
-      dispatchState: 'unknown'
-    })
-    delivery.deliverForHandle('dispatch:d1')
-    await flush()
-    const first = send.mock.calls[0]![0].operationId
-    setSubmissions([{ clientMessageId: first, dispatchState: 'pending', submittedAt: Date.now() }])
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    setSubmissions([{ clientMessageId: first, dispatchState: 'accepted', submittedAt: Date.now() }])
-    delivery.onJournalActivity('session-1')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
-    expect(stored.has('dispatch:d1')).toBe(false)
-  })
-})
-
-describe('forgetting one settled worker', () => {
-  /** Two workers, each detached and so each parked on its OWN session's journal edge. */
-  function twoWorkerHarness() {
-    let resolves = true
-    let attached = false
-    const pointed = new Set<string>()
-    const sessionByMailbox: Record<string, string> = {
-      'dispatch:d1': 'session-1',
-      'dispatch:d2': 'session-2'
-    }
-    const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
-      kind: 'sent' as const,
-      state: 'accepted' as const
-    }))
-    const db = {
-      getDispatchContextById: () => ({ run_id: 'run_1' }),
-      getOutstandingMailboxDelivery: () => undefined,
-      getUndeliveredUnreadMessages: () =>
-        pointed.has('m1')
-          ? []
-          : [{ id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }],
-      markAsDelivered: vi.fn((ids: string[]) => ids.forEach((id) => pointed.add(id))),
-      getStructuredPointerOperation: () => undefined,
-      putStructuredPointerOperation: () => {},
-      deleteStructuredPointerOperation: () => {}
-    }
-    const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-      getDb: () => db as never,
-      getMessageWaiters: () => undefined,
-      resolveStructuredTarget: (mailboxHandle) => {
-        const sessionId = sessionByMailbox[mailboxHandle]
-        return resolves && sessionId
-          ? { sessionId, dispatchId: mailboxHandle.slice('dispatch:'.length) }
-          : null
-      },
-      getCliCommand: () => 'orca',
-      senderSnapshot: () => ({ name: null, agent: null }),
-      host: {
-        readSessionFacts: async () => (attached ? { submissions: [] } : null),
-        hasActionablePromptNow: () => false,
-        isWorkingNow: () => false,
-        currentFence: () => 4,
-        currentContextClearOperationId: () => undefined,
-        send
-      }
-    })
-    return {
-      delivery,
-      send: vi.mocked(send),
-      attach: () => {
-        attached = true
-      },
-      stopResolving: () => {
-        resolves = false
-      },
-      resumeResolving: () => {
-        resolves = true
-      }
-    }
+const flush = async () => {
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
   }
+}
 
-  it("keeps a sibling worker's wake-up edge when the target cannot be resolved", async () => {
-    // forgetSession must preserve sibling parks even when target resolution is temporarily unavailable.
-    const { delivery, send, attach, stopResolving, resumeResolving } = twoWorkerHarness()
-    delivery.deliverForHandle('dispatch:d1')
-    delivery.deliverForHandle('dispatch:d2')
-    await flush()
-    expect(send).not.toHaveBeenCalled()
-
-    stopResolving()
-    delivery.forgetSession('session-1')
-    resumeResolving()
-
-    attach()
-    delivery.onJournalActivity('session-2')
-    await flush()
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0]![0].sessionId).toBe('session-2')
+describe('structured mailbox delivery: each message whole', () => {
+  it('hands an idle chat the whole message and marks it read', async () => {
+    const h = harness()
+    h.receive('m1', 'Tests pass; PR #12 is ready.')
+    await h.deliver()
+    expect(h.texts).toHaveLength(1)
+    expect(h.texts[0]).toContain('Subject: subject of m1')
+    expect(h.texts[0]).toContain('Tests pass; PR #12 is ready.')
+    expect(h.texts[0]).toContain('[Reply: orca-dev orchestration reply --id m1')
+    expect(h.mail.get('m1')).toMatchObject({ read: 1 })
+    expect(h.records.size).toBe(0)
   })
 
-  it('still drops what the settled worker itself had parked', async () => {
-    const { delivery, send, attach, stopResolving } = twoWorkerHarness()
-    delivery.deliverForHandle('dispatch:d1')
+  it('queues each message as its own card while the chat works, reading each on handover', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    h.receive('m2')
+    await h.deliver()
+    expect(h.texts).toEqual([
+      expect.stringContaining('body of m1'),
+      expect.stringContaining('body of m2')
+    ])
+    // The chat holds both, so check still shows them until the agent is handed each.
+    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
+    h.handOver('m1')
+    h.delivery.onJournalActivity('session-1')
     await flush()
-    expect(send).not.toHaveBeenCalled()
+    expect(h.mail.get('m1')?.read).toBe(1)
+    expect(h.mail.get('m2')?.read).toBe(0)
+    expect(h.records.has('m2')).toBe(true)
+    expect(h.host.send).toHaveBeenCalledTimes(2)
+  })
 
-    // Settlement forgets identity; prune by the recorded session id, not a fresh resolution.
-    stopResolving()
-    delivery.forgetSession('session-1')
+  it('deletes the waiting card when a check takes its message first', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    const operationId = h.records.get('m1')!.operation_id
+    h.mail.get('m1')!.read = 1
+    await h.delivery.withdrawTaken()
+    expect(h.host.withdraw).toHaveBeenCalledWith('session-1', operationId)
+    expect(h.chat.has(operationId)).toBe(false)
+    expect(h.records.size).toBe(0)
+  })
 
-    attach()
-    delivery.onJournalActivity('session-1')
+  it('never sends a message twice when its card already waits after a restart', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    // A crash before the delivered stamp: the record and the card survive, the stamp does not.
+    h.mail.get('m1')!.delivered_at = null
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(1)
+    expect(h.mail.get('m1')?.delivered_at).toBe('now')
+  })
+
+  it('sends again under a new id when a recorded send never landed', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    const first = h.records.get('m1')!.operation_id
+    h.chat.delete(first)
+    h.mail.get('m1')!.delivered_at = null
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(2)
+    expect(h.records.get('m1')?.operation_id).not.toBe(first)
+  })
+
+  it('repeats a send the agent may never have taken only after a later turn ran', async () => {
+    const h = harness({ busy: true })
+    h.receive('m1')
+    await h.deliver()
+    const first = h.records.get('m1')!.operation_id
+    h.chat.set(first, 'lost')
+    await h.deliver()
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(1)
+    expect(h.mail.get('m1')?.read).toBe(0)
+    h.setTurnRan(true)
+    await h.deliver()
+    expect(h.host.send).toHaveBeenCalledTimes(2)
+    expect(h.records.get('m1')?.operation_id).not.toBe(first)
+  })
+
+  it('keeps refused mail unstamped and retries it on the session’s next edge', async () => {
+    const h = harness({ refuse: true })
+    h.receive('m1')
+    await h.deliver()
+    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: null })
+    expect(h.records.size).toBe(0)
+    h.setRefuse(false)
+    h.delivery.onJournalActivity('session-1')
     await flush()
-    expect(send).not.toHaveBeenCalled()
+    expect(h.mail.get('m1')?.read).toBe(1)
+  })
+
+  it('points a message too large for one chat message at check, leaving it unread', async () => {
+    const h = harness()
+    h.receive('m1', 'x'.repeat(MAX_PROMPT_BYTES))
+    await h.deliver()
+    expect(h.texts).toEqual([
+      'You have 1 orchestration message. Run `orca-dev orchestration check`.'
+    ])
+    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
+    expect(h.records.size).toBe(0)
   })
 })
-
-describe('a mailbox a /clear moves while its nudge is in flight', () => {
-  function clearingHarness(inPlace = false) {
-    let contextClearOperationId: string | undefined
-    let target = 'session-1'
-    const mail = [
-      { id: 'm1', type: 'status', sequence: 3, from_handle: 'term_coord', run_id: 'run_1' }
-    ]
-    const pointed = new Set<string>()
-    const stored = new Map<string, StructuredPointerOperationRow>()
-    const db = {
-      getDispatchContextById: () => ({ run_id: 'run_1' }),
-      getOutstandingMailboxDelivery: () => undefined,
-      getUndeliveredUnreadMessages: () => mail.filter((message) => !pointed.has(message.id)),
-      markAsDelivered: (ids: string[]) => ids.forEach((id) => pointed.add(id)),
-      getStructuredPointerOperation: (key: string) => stored.get(key),
-      putStructuredPointerOperation: (row: StructuredPointerOperationRow) =>
-        stored.set(row.mailbox_handle, row),
-      deleteStructuredPointerOperation: (key: string) => stored.delete(key)
-    }
-    let settleHeld: ((state: 'accepted' | 'rejected' | 'throws') => void) | null = null
-    let sendAttempts = 0
-    const send = vi.fn(
-      (_input: Parameters<StructuredMailboxPointerHost['send']>[0]) =>
-        new Promise<{ kind: 'sent'; state: 'accepted' | 'rejected' }>((resolve, reject) => {
-          if (++sendAttempts === 1) {
-            settleHeld = (state) =>
-              state === 'throws'
-                ? reject(new Error('the operation-admission write failed'))
-                : resolve({ kind: 'sent', state })
-            return
-          }
-          resolve({ kind: 'sent', state: 'accepted' })
-        })
-    )
-    const delivery = new OrchestrationStructuredMailboxPointerDelivery({
-      getDb: () => db as never,
-      getMessageWaiters: () => undefined,
-      resolveStructuredTarget: () => ({ sessionId: target, dispatchId: 'd1' }),
-      getCliCommand: () => 'orca-dev',
-      senderSnapshot: () => ({ name: null, agent: null }),
-      host: {
-        readSessionFacts: async () => ({ submissions: [] }),
-        hasActionablePromptNow: () => false,
-        isWorkingNow: () => false,
-        currentFence: () => 4,
-        currentContextClearOperationId: () => contextClearOperationId,
-        send
-      }
-    })
-    return {
-      delivery,
-      send,
-      pointed,
-      clear: () => {
-        if (inPlace) {
-          contextClearOperationId = 'clear-1'
-        } else {
-          target = 'clear-successor'
-        }
-      },
-      settle: (state: 'accepted' | 'rejected' | 'throws') => settleHeld?.(state)
-    }
-  }
-
-  it.each(['rejected', 'throws'] as const)(
-    'delivers once to the successor when the old send is then %s, with no further edge',
-    async (outcome) => {
-      const { delivery, send, pointed, clear, settle } = clearingHarness()
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      clear()
-      // The successor's first idle edge lands while the old nudge is still in flight.
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      expect(send.mock.calls.map(([input]) => input.sessionId)).toEqual(['session-1'])
-      settle(outcome)
-      await flush()
-      await flush()
-      expect(send.mock.calls.map(([input]) => input.sessionId)).toEqual([
-        'session-1',
-        'clear-successor'
-      ])
-      expect(pointed.has('m1')).toBe(true)
-    }
-  )
-
-  it.each(['rejected', 'throws'] as const)(
-    'delivers once to the fresh context when the in-flight old send is %s',
-    async (outcome) => {
-      const { delivery, send, pointed, clear, settle } = clearingHarness(true)
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      clear()
-      delivery.deliverForHandle('dispatch:d1')
-      await flush()
-      expect(send).toHaveBeenCalledTimes(1)
-      settle(outcome)
-      await flush()
-      await flush()
-      expect(send.mock.calls.map(([input]) => input.sessionId)).toEqual(['session-1', 'session-1'])
-      expect(send.mock.calls[1]![0].operationId).not.toBe(send.mock.calls[0]![0].operationId)
-      expect(pointed.has('m1')).toBe(true)
-    }
-  )
-})
-
-it.each(['gone', 'live-other-kind', 'metadata-read-fails'])(
-  'delivers held local worker_done with exact durable identity after terminal loss (%s)',
-  verifyHeldLocalWorkerDone
-)

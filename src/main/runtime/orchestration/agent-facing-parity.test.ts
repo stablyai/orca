@@ -15,7 +15,6 @@ import {
   type OrchestrationCliCommand
 } from './cli-command'
 import { OrchestrationDb } from './db'
-import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import {
   CHAT_REDISPATCH_PARAGRAPH as CHAT_REDISPATCH,
@@ -108,8 +107,8 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
   return worker === 'chat' ? sent.preambles[0]! : prompts[0]!
 }
 
-/** Render the structured-lane pointer for one mailbox message. */
-async function renderChatPointer(mailbox: string): Promise<string> {
+/** Render what the structured lane hands a chat for one mailbox message. */
+async function renderChatMail(mailbox: string): Promise<{ text: string; id: string }> {
   const texts: string[] = []
   const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
@@ -119,11 +118,10 @@ async function renderChatPointer(mailbox: string): Promise<string> {
     getCliCommand: localOrchestrationCliCommand,
     senderSnapshot: () => ({ name: null, agent: null }),
     host: {
-      readSessionFacts: async () => ({ submissions: [] }),
-      hasActionablePromptNow: () => false,
-      isWorkingNow: () => false,
       currentFence: () => 1,
-      currentContextClearOperationId: () => undefined,
+      observe: async () => 'handed',
+      repeatable: async () => false,
+      withdraw: async () => true,
       send: async (input) => {
         for (const block of input.body.blocks) {
           texts.push(block.type === 'text' ? block.text : '')
@@ -134,9 +132,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   })
   delivery.deliverForHandle(mailbox)
   await vi.waitFor(() => expect(texts).toHaveLength(1))
-  // Mark read as the agent's check does, allowing the next message pointer.
-  db.markAsRead([message.id])
-  return texts[0]!
+  return { text: texts[0]!, id: message.id }
 }
 
 describe('a chat agent and a terminal agent see the same text but for how each is named and called', () => {
@@ -165,7 +161,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     ['a packaged app', true],
     ['a dev build', false]
   ])(
-    'renders the pointer the PTY lane types into a local terminal, in %s',
+    'names the CLI the PTY lane types into a local terminal in a chat message, in %s',
     async (_label, packaged) => {
       installApp(packaged)
       const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
@@ -177,9 +173,8 @@ describe('a chat agent and a terminal agent see the same text but for how each i
       expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
 
       for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
-        expect(await renderChatPointer(mailbox)).toBe(
-          formatMessagePointer(1, mailbox, terminalCli).trim()
-        )
+        const { text, id } = await renderChatMail(mailbox)
+        expect(text).toContain(`[Reply: ${terminalCli} orchestration reply --id ${id}`)
       }
     }
   )
