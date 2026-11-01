@@ -1,0 +1,18 @@
+Captured verbatim with `/usr/bin/pmset -g` on 2026-10-22 01:10 CDT.
+
+macbook-sleep-disabled-1.txt        a MacBook, macOS 26.6.2 (SleepDisabled 1 under the system-wide section).
+mac-mini-no-sleep-disabled-line.txt  a Mac mini, macOS 26.5 (`/usr/bin/pmset -g`): system-wide header, no SleepDisabled line.
+
+Derived by hand from the MacBook sample (not captured):
+derived-sleep-disabled-0.txt       SleepDisabled value changed to 0.
+derived-no-system-section.txt      system-wide header and its SleepDisabled line removed.
+derived-duplicate-key.txt          SleepDisabled line repeated.
+derived-value-2.txt                SleepDisabled value changed to 2.
+derived-header-only.txt            only the system-wide header line (truncated output).
+
+Hand-written:
+empty.txt                          no output.
+headerless-error.txt               error text with no section header.
+hand-error-in-system-section.txt     system-wide header followed by an error line.
+hand-sleep-disabled-in-current-section.txt  SleepDisabled 1 under "Currently in use:" only.
+hand-current-section-unknown-keys.txt  "Currently in use:" with no known pmset key.
