@@ -302,7 +302,6 @@
       "config/scripts/pr-codex-unit-only-selection.test.mjs": 50,
       "config/scripts/pr-e2e-gate-contract.test.mjs": 114,
       "config/scripts/pr-e2e-managed-ssh-harness-route.test.mjs": 297,
-      "config/scripts/pr-e2e-route-contracts.test.mjs": 497,
       "config/scripts/pr-preflight-gates.test.mjs": 655,
       "config/scripts/pr-ready-check-gate.test.mjs": 1110,
       "config/scripts/pr-ready-check-reuse.test.mjs": 161,
