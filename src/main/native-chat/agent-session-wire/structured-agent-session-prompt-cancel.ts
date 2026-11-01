@@ -1,9 +1,10 @@
 // Route Cancel on the host for consistent clients; absent provider routing interrupts the card’s turn.
 
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { refuse, type AgentSessionCancelResult } from '../../../shared/agent-session-wire'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionCancelResult } from '../../../shared/agent-session/agent-session-wire'
 import { AgentSessionPromptUnavailableError } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionChatStopRun } from './structured-agent-session-chat-stop'
 import {

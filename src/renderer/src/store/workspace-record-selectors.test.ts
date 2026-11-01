@@ -3,12 +3,7 @@ import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-iden
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from './types'
 import { makeFolderWorkspace, makeWorktree } from './slices/worktrees-slice-test-fixtures'
-import {
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
-  selectWorktreesByRepo
-} from './workspace-record-selectors'
+import { selectWorkspaceByHostTarget } from './workspace-record-selectors'
 
 const SHARED_ID = 'repo-1::/work/orca'
 const localRow = makeWorktree({ id: SHARED_ID, repoId: 'repo-1', hostId: 'local' })
@@ -26,15 +21,6 @@ function makeState(
     ...overrides
   }
 }
-
-describe('compatibility views', () => {
-  it('return the store fields by reference', () => {
-    const state = makeState()
-    expect(selectWorktreesByRepo(state)).toBe(state.worktreesByRepo)
-    expect(selectFolderWorkspaces(state)).toBe(state.folderWorkspaces)
-    expect(selectDetectedWorktreesByRepo(state)).toBe(state.detectedWorktreesByRepo)
-  })
-})
 
 describe('selectWorkspaceByHostTarget', () => {
   it('resolves the target host only', () => {

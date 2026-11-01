@@ -56,9 +56,9 @@ const statusRoles = [
   '--status-warning',
   '--git-decoration-added',
   '--git-decoration-deleted',
-  '--diff-added-ground',
+  '--diff-added-background',
   '--diff-added-gutter',
-  '--diff-removed-ground',
+  '--diff-removed-background',
   '--diff-removed-gutter'
 ]
 

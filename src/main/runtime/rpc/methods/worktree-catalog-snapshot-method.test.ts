@@ -174,3 +174,54 @@ describe('worktree.ps snapshot polls', () => {
     )
   })
 })
+
+describe('worktree.ps row deltas', () => {
+  const a = psRow({ worktreeId: 'repo-1::/w/a', displayName: 'a' })
+  const b = psRow({ worktreeId: 'repo-1::/w/b', displayName: 'b' })
+  const c = psRow({ worktreeId: 'repo-1::/w/c', displayName: 'c' })
+  const catalog = (...worktrees: RuntimeWorktreePsSummary[]): RuntimeWorktreePsResult => ({
+    worktrees,
+    totalCount: worktrees.length,
+    truncated: false
+  })
+
+  it('sends rows the caller holds as indexes into its base catalog', async () => {
+    const renamed = psRow({ worktreeId: 'repo-1::/w/b', displayName: 'b2' })
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning(catalog(a, b, c), catalog(c, renamed, a)),
+      methods: WORKTREE_METHODS
+    })
+    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
+    const delta = await poll(dispatcher, {
+      limit: 10_000,
+      afterSnapshotId: base.snapshotId,
+      acceptRowDelta: true
+    })
+
+    expect(delta).toMatchObject({ baseSnapshotId: base.snapshotId, totalCount: 3 })
+    expect(delta.rowsFromBase).toEqual([
+      2,
+      { ...renamed, preview: '', lastOutputAt: 1_700_000_010_000 },
+      0
+    ])
+    expect(delta).not.toHaveProperty('worktrees')
+  })
+
+  it('answers a full catalog to callers that did not opt in or hold an unknown base', async () => {
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning(catalog(a), catalog(a, b), catalog(a, b, c)),
+      methods: WORKTREE_METHODS
+    })
+    const base = await poll(dispatcher, { limit: 10_000, afterSnapshotId: null })
+
+    const optedOut = await poll(dispatcher, { limit: 10_000, afterSnapshotId: base.snapshotId })
+    const unknownBase = await poll(dispatcher, {
+      limit: 10_000,
+      afterSnapshotId: 'evicted',
+      acceptRowDelta: true
+    })
+
+    expect(optedOut.worktrees).toHaveLength(2)
+    expect(unknownBase.worktrees).toHaveLength(3)
+  })
+})

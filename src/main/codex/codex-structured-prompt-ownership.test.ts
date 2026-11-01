@@ -7,13 +7,11 @@ import {
   identityFor
 } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session/agent-session-wire'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'

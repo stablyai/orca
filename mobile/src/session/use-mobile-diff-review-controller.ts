@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
-import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -12,17 +11,15 @@ import {
   buildMobileDiffReviewQueue,
   filterMobileDiffReviewQueue,
   mobileDiffReviewCommentMatchesItem,
-  summarizeMobileDiffReviewQueue,
   type MobileDiffReviewQueueFilter
 } from './mobile-diff-review-queue'
-import {
-  findMobileDiffReviewInitialIndex,
-  type MobileDiffReviewInitialTarget
-} from './mobile-diff-review-positioning'
+import { useMobileDiffReviewSelection } from './use-mobile-diff-review-selection'
+import type { MobileDiffReviewInitialTarget } from './mobile-diff-review-positioning'
 import { loadMobileDiffReviewSnapshot } from './mobile-diff-review-loaders'
+import { loadMobileDiffReviewCommitSnapshot } from './mobile-diff-review-commit-loader'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 import { canOpenMobileBranchCompareDiff } from '../source-control/mobile-branch-compare'
-import type { ReviewDiffLine, ReviewScreenState } from './mobile-diff-review-screen-model'
+import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
   NO_REVIEW_SHEETS,
   reduceReviewSheets,
@@ -44,6 +41,8 @@ type ControllerInput = {
   name: string
   initialFilter: MobileDiffReviewQueueFilter
   initialTarget: MobileDiffReviewInitialTarget | null
+  /** Shows this commit's files instead of the worktree's changes. */
+  commitOid: string | null
   onOpenSession: () => void
   /** Null on the page, where the shell owns the connection. */
   onReconnect: ((hostId: string) => void | Promise<void>) | null
@@ -62,17 +61,15 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     name,
     initialFilter,
     initialTarget,
+    commitOid,
     onOpenSession,
     onReconnect
   } = input
-  const listRef = useRef<FlatList<ReviewDiffLine> | null>(null)
   const loadGenerationRef = useRef(0)
-  const seededInitialTargetRef = useRef(false)
-  const initialTargetKey = initialTarget ? `${initialTarget.area}\0${initialTarget.filePath}` : ''
   const [screenState, setScreenState] = useState<ReviewScreenState>({ kind: 'loading' })
-  const [filter, setFilter] = useState<MobileDiffReviewQueueFilter>(initialFilter)
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [activeHunkIndex, setActiveHunkIndex] = useState<number | null>(null)
+  // Bumped by every snapshot load (open, retry, after a git action), so the open file's diff reloads with it.
+  const [snapshotVersion, setSnapshotVersion] = useState(0)
+  const filter = initialFilter
   const [sheets, dispatchSheets] = useReducer(reduceReviewSheets, NO_REVIEW_SHEETS)
   const sheetIntents = useMemo(() => reviewSheetIntents(dispatchSheets), [])
   const composer = reviewComposer(sheets)
@@ -93,6 +90,17 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       })
       return
     }
+    // Shells from before commit diffs drop the commit param when they mount this route themselves.
+    if (initialFilter === 'commit' && !commitOid) {
+      setScreenState({
+        kind: 'unavailable',
+        message: translate(
+          'session.useDiffReviewController.commitMissing',
+          'Update the Orca app to open commit files here.'
+        )
+      })
+      return
+    }
     // Keep an existing review through disconnects; only empty screens need the waiting state.
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
@@ -110,15 +118,14 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     }
     setScreenState(keepReady({ kind: 'loading' }))
     try {
-      const nextState = await loadMobileDiffReviewSnapshot(
-        client,
-        worktreeId,
-        compareAgainstUpstream
-      )
+      const nextState = commitOid
+        ? await loadMobileDiffReviewCommitSnapshot(client, worktreeId, commitOid)
+        : await loadMobileDiffReviewSnapshot(client, worktreeId, compareAgainstUpstream)
       if (!isCurrent()) {
         return
       }
       setScreenState(nextState)
+      setSnapshotVersion((version) => version + 1)
       setActionError(nextState.kind === 'ready' ? (nextState.branchError ?? null) : null)
     } catch (err) {
       if (isCurrent()) {
@@ -134,7 +141,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
         )
       }
     }
-  }, [client, compareAgainstUpstream, connState, worktreeId])
+  }, [client, commitOid, compareAgainstUpstream, connState, initialFilter, worktreeId])
 
   useEffect(() => {
     void loadReviewData()
@@ -154,42 +161,21 @@ export function useMobileDiffReviewController(input: ControllerInput) {
       branchEntries,
       branchHeadOid: screenState.branchCompare?.summary.headOid,
       branchMergeBase: screenState.branchCompare?.summary.mergeBase,
+      commitEntries: screenState.commit?.entries,
       comments: screenState.comments,
       reviewState: screenState.reviewState
     })
   }, [screenState, worktreeId])
 
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
-  const currentItem = filteredQueue[currentIndex] ?? null
-  const { reviewedCount, reviewedUnstagedCount } = useMemo(
-    () => summarizeMobileDiffReviewQueue(queue),
-    [queue]
+  const { currentIndex, currentItem, selectIndex, selectKey, moveSelection } =
+    useMobileDiffReviewSelection(filteredQueue, initialTarget)
+  const reviewedCount = useMemo(
+    () => filteredQueue.filter((item) => item.isReviewed).length,
+    [filteredQueue]
   )
   const unsentComments =
     screenState.kind === 'ready' ? getUnsentMobileDiffComments(screenState.comments) : []
-
-  useEffect(() => {
-    seededInitialTargetRef.current = false
-  }, [initialTargetKey])
-
-  useEffect(() => {
-    if (seededInitialTargetRef.current || filteredQueue.length === 0) {
-      return
-    }
-    seededInitialTargetRef.current = true
-    // Seed the tapped file only once the queue exists or clamping would reset its selection.
-    setCurrentIndex(findMobileDiffReviewInitialIndex(filteredQueue, initialTarget))
-  }, [filteredQueue, initialTarget])
-
-  useEffect(() => {
-    if (filteredQueue.length === 0) {
-      setCurrentIndex(0)
-      return
-    }
-    if (currentIndex >= filteredQueue.length) {
-      setCurrentIndex(filteredQueue.length - 1)
-    }
-  }, [currentIndex, filteredQueue.length])
 
   const diffState = useMobileDiffReviewDiffLoading({
     client,
@@ -197,7 +183,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     worktreeId,
     currentItem,
     screenState,
-    setActiveHunkIndex
+    snapshotVersion
   })
 
   const commentsForCurrentItem = useMemo(() => {
@@ -255,20 +241,16 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     hostId,
     worktreeId,
     screenState,
-    diffState,
     currentItem,
     queue,
     filteredQueue,
-    filter,
     currentIndex,
-    activeHunkIndex,
     composer,
     composerBody,
-    listRef,
     setScreenState,
-    setFilter,
-    setCurrentIndex,
-    setActiveHunkIndex,
+    selectIndex,
+    selectKey,
+    moveSelection,
     setComposerBody,
     setActionError,
     setBusyAction,
@@ -281,6 +263,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   return {
     ...interactions,
     ...prSidebar,
+    // A past commit has no branch context to find its pull request from.
+    prSidebarIsGithubRepo: prSidebar.prSidebarIsGithubRepo && commitOid === null,
     ...sheetIntents,
     agentLaunchAvailability: resolveMobileAgentLaunchAvailability({
       hostCapabilities,
@@ -293,7 +277,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     prSidebarBranch,
     prSidebarHeadSha,
     actionError,
-    activeHunkIndex,
     busyAction,
     commentsByLine,
     composer,
@@ -304,10 +287,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     fileNotes: commentsByLine.get(0) ?? [],
     filter,
     filteredQueue,
-    listRef,
     queue,
     reviewedCount,
-    reviewedUnstagedCount,
     screenState,
     setComposerBody,
     sheet: sheets.requested,

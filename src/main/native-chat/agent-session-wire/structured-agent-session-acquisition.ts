@@ -1,10 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../shared/abort-signal-reason'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError

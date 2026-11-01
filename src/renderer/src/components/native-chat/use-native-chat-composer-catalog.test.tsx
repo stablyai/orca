@@ -9,13 +9,13 @@ import {
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
   structuredSlashCommands
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import capture from '../../../../shared/__fixtures__/omp-native-commands.json'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'

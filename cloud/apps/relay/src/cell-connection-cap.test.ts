@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { encodeMembership, type CellAdmissionMembership } from './cell-admission-selector.js'
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'

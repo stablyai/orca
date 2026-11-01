@@ -1,4 +1,5 @@
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { AgentType } from '../../../shared/agent-status-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from './orchestration-caller-identity'
 
@@ -6,7 +7,13 @@ import type { OrchestrationSessionCaller } from './orchestration-caller-identity
 export function prepareWorkerStartCard(
   runtime: OrcaRuntimeService,
   callerSession: OrchestrationSessionCaller | undefined
-): (args: { dispatchId: string; workerAddress: string; task: string }) => void {
+): (args: {
+  dispatchId: string
+  workerAddress: string
+  task: string
+  /** What this start launched; the only kind known for a worker on another host. */
+  agent: AgentType | null
+}) => void {
   try {
     const host = getStructuredAgentSessionHost()
     const destination = callerSession && host?.captureAgentStartDestination(callerSession.sessionId)
@@ -17,12 +24,16 @@ export function prepareWorkerStartCard(
       const observedAt = Date.now()
       void Promise.resolve()
         .then(async () => {
+          const worker = runtime.orchestrationSenderNames.sender(
+            args.workerAddress,
+            args.dispatchId
+          )
           await host.appendAgentStart(
             destination,
             {
               kind: 'agent-start',
               dispatchId: args.dispatchId,
-              worker: runtime.orchestrationSenderNames.sender(args.workerAddress, args.dispatchId),
+              worker: worker.agent || !args.agent ? worker : { ...worker, agent: args.agent },
               task: args.task
             },
             observedAt

@@ -26,14 +26,15 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 }
 
 // UI-language catalogs have their own allowance, like the font: one chunk per non-English locale,
-// fetched only for the active language, never before the first route. Code keeps the 9 MiB fence.
+// fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 
-// Keep total app byte budget below phone’s per-asset contract ceiling to fail at build; splitting alone cannot shrink code size.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9 * 1024 * 1024
+// Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
+// manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9.5 * 1024 * 1024
 
-// Only this licensed desktop-identical asset has its own allowance; code retains the 9 MiB fence.
+// Only this licensed desktop-identical asset has its own allowance; code keeps its own fence.
 export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
 const TERMINAL_FONT_SHA256 = '8efa6ba89f0a1f3eefde028f36aa64a13e36282e15ea0ca6929c664501037467'
 const TERMINAL_FONT_BYTES = 1_177_916

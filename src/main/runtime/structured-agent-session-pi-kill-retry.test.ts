@@ -10,12 +10,12 @@ import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../provider-process/provider-process-supervisor'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 
 const os = vi.hoisted(() => ({
   capture: vi.fn(),

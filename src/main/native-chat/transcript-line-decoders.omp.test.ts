@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { deriveNativeChatContextUsage } from '../../shared/native-chat/native-chat-context-usage'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { ompModelSelector, parseOmpModelList } from '../../shared/omp-model-list-probe'
 import { decodeOmpTranscriptLine } from './transcript-line-decoders'
 

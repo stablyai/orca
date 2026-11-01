@@ -319,10 +319,8 @@ it('a folder workspace uses its own layout and activates its browser without Git
       result: expect.objectContaining({ worktreeId: folder })
     })
   )
-  expect(['left', 'right']).not.toContain(store.getState().activeGroupIdByWorktree[folder])
-  expect(store.getState().layoutByWorktree[folder]).toMatchObject({
-    first: { type: 'split', first: { groupId: 'left' } }
-  })
+  expect(store.getState().activeGroupIdByWorktree[folder]).toBe('right')
+  expect(store.getState().groupsByWorktree[folder]).toHaveLength(2)
 })
 
 it.each([false, true])(

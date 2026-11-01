@@ -1,6 +1,6 @@
 import { createPatch } from 'diff'
 import { z } from 'zod'
-import type { AgentJournalToolCallItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { BoundedMap } from '../../shared/bounded-map'
 import {
   MAX_PROVIDER_TIMELINE_OPEN_BYTES,

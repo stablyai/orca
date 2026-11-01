@@ -3,7 +3,7 @@
 import type { JSONContent } from '@tiptap/react'
 import { promptTextContent, appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
-import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/structured-agent-session-composer'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { basename } from '@/lib/path'
 import type {
   NativeChatComposerDraft,

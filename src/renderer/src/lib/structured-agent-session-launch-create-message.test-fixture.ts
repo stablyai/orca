@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../shared/agent-session-wire'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionHistoryPage } from '../../../shared/agent-session/agent-session-wire'
 import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
 } from '../../../shared/rpc-contract/structured-agent-session-params'
 
-import type { HostCreateSupport } from './structured-agent-session-host-admission'
+import type { HostCreateSupport } from './agent-session/launch/structured-agent-session-host-admission'
 
 type CreateMessageFixtureMocks = {
   call: Mock<(target: unknown, method: string, params: unknown) => Promise<unknown>>
@@ -47,7 +47,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   supportsStructuredAgentSessionCreateMessage: mocks.supports,
   structuredAgentSessionHostSupports: mocks.exactSupport
 }))
-vi.mock('./structured-agent-session-host-admission', () => ({
+vi.mock('./agent-session/launch/structured-agent-session-host-admission', () => ({
   askHostCreateSupport: mocks.admit
 }))
 vi.mock('@/runtime/structured-session-tab-inventory', () => ({
@@ -79,7 +79,7 @@ import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/l
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
-import { startStructuredAgentLaunch } from './structured-agent-session-launch'
+import { startStructuredAgentLaunch } from './agent-session/launch/structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './agent-launch-request-id'
 
 import {

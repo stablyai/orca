@@ -2,8 +2,8 @@ import {
   reusePromptProjection,
   type PromptProjection
 } from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isHistoricalProviderTimelineItem } from '../agent-session-timeline/provider-timeline-history'
 import { currentRequestsProjection } from './agent-session-current-requests'
@@ -13,14 +13,14 @@ import { currentRequestsProjection } from './agent-session-current-requests'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
-  type AgentJournalSubmission,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
-import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
-import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
+  type AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/agent-session/view/structured-agent-session-main-agent-working'
+import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import {

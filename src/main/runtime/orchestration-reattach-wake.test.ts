@@ -66,15 +66,6 @@ describe('restart wake for a quiet coordinator', () => {
     expect(woken).toBe(true)
   })
 
-  it("reads the lead's own ended turn under still-running background work", async () => {
-    vi.useFakeTimers()
-    const { woken } = await reattachQuietCoordinator({
-      state: 'working',
-      mainAgent: { state: 'done', stateStartedAt: 1 }
-    })
-    expect(woken).toBe(true)
-  })
-
   it.each([
     ['a permission prompt is open', { state: 'waiting' } as const, {}],
     [

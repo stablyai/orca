@@ -1,11 +1,13 @@
+import { createClaudeCatalogOptions } from './agent-session/options/agent-session-option-catalog-claude-codex'
 import {
-  createClaudeCatalogOptions,
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
-  mergeDiscoveredAuthoritativeModels,
-  type AgentSessionOptionCatalog,
-  type CatalogModel
-} from './agent-session-option-catalog'
+  mergeDiscoveredAuthoritativeModels
+} from './agent-session/options/agent-session-option-catalog'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel
+} from './agent-session/options/agent-session-option-catalog-types'
 import type { AgentType } from './agent-status-types'
 import type { CommitMessageModelCapability } from './commit-message-agent-spec'
 

@@ -14,6 +14,8 @@ describe('collectGitStatusLineStatInputs', () => {
     ).toEqual({
       hasStaged: true,
       hasUnstaged: true,
+      hasStagedRenames: false,
+      hasUnstagedRenames: false,
       untrackedPaths: ['first.txt', 'second.txt']
     })
   })
@@ -49,6 +51,8 @@ describe('collectGitStatusLineStatInputs', () => {
     expect(result).toEqual({
       hasStaged: false,
       hasUnstaged: false,
+      hasStagedRenames: false,
+      hasUnstagedRenames: false,
       untrackedPaths: Array.from({ length: 1_000 }, (_, index) => `file-${index}.txt`)
     })
   })

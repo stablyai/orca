@@ -9,9 +9,7 @@ import {
   PickerModal
 } from './mobile-tasks-dependencies'
 import { AutoHeight } from '../components/AutoHeight'
-import { LIST_LEADING_INSET, ListGroup } from '../components/list/ListGroup'
-import { ListRow } from '../components/list/ListRow'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../components/SheetPrimaryButton'
 import {

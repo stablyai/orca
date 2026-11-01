@@ -1,4 +1,5 @@
 import { codeFenceFor } from './markdown-code-fence'
+import { WORKSPACE_IMAGE_PATH_ATTRIBUTE } from './markdown-inline-render'
 
 function renderedText(node: Node): string {
   if (node.nodeType === Node.COMMENT_NODE) {
@@ -165,7 +166,8 @@ export function inlineMarkdown(
     return `[${inlineChildren(node, breaks)}](${node.getAttribute('href') ?? ''})`
   }
   if (tag === 'img') {
-    return `![${node.getAttribute('alt') ?? ''}](${node.getAttribute('src') ?? ''})`
+    const path = node.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? node.getAttribute('src')
+    return `![${node.getAttribute('alt') ?? ''}](${path ?? ''})`
   }
   if (tag === 'label') {
     return ''

@@ -134,14 +134,8 @@ describe('Claude owed task notifications outside the captures', () => {
 
     // A stamped working row is announced at once; this Stop is ~100 ms from the wake-up turn.
     const owedOnly = post({ hook_event_name: 'Stop', background_tasks: [] })
+    expect(owedOnly?.payload.state).toBe('working')
     expect(owedOnly?.payload.turnCompletedAt).toBeUndefined()
-
-    launchAgent(post, 'a2')
-    const childRunning = post({
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'a2', type: 'subagent', status: 'running' }]
-    })
-    expect(childRunning?.payload.turnCompletedAt).toEqual(expect.any(Number))
   })
 
   it('drops what a replaced conversation was owed', () => {

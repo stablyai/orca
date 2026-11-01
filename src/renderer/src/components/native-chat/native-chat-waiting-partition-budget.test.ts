@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import {

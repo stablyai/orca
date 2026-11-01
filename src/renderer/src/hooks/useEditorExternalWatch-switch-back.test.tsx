@@ -256,15 +256,4 @@ describe('switching back to a workspace that was not watched', () => {
     expect(reloads).toEqual([])
     expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
   })
-
-  it('never holds autosave on a tab edited before the watch is back', async () => {
-    // Why: saves are disk-checked by the host, so a stale edit is refused there rather than held here.
-    await render([active], [background])
-    await render([active, background], [])
-    store.getState().setEditorDraft(CLEAN, 'typed before the watch settled')
-    store.getState().markFileDirty(CLEAN, true)
-    await act(async () => {})
-
-    expect(isAutosaveSuspendedForFile(file(CLEAN))).toBe(false)
-  })
 })

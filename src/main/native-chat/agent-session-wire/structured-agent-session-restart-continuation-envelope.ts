@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { restartContinuationMessage } from '../../../shared/agent-session-restart-continuation'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { restartContinuationMessage } from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session/agent-session-wire'
 
 export function restartContinuationBody(
   marker: Pick<AgentSessionResumeMarker, 'activity'>

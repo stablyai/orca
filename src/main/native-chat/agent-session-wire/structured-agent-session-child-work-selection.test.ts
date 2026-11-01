@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   attach,
   hostTestState,
@@ -38,20 +38,6 @@ function finished(id: string, settledAt: number): AgentChildWorkView {
 }
 
 const ids = (views: readonly AgentChildWorkView[]) => views.map((view) => view.id)
-
-describe('the sidebar and the strip list running children only', () => {
-  it('drops finished and failed children, and keeps a finished one whose shell still runs', () => {
-    const failed = { ...finished('failed', 5), outcome: 'failed' as const }
-    const views = [
-      running('working'),
-      finished('done', 4),
-      failed,
-      finished('owner', 3),
-      running('shell', { kind: 'command', parentChildWorkId: 'owner' })
-    ]
-    expect(ids(structuredRunningChildWork(views))).toEqual(['working', 'owner', 'shell'])
-  })
-})
 
 describe("the host's strip channel and summary list the same running children", () => {
   it('sends both the running children, and the strip nothing once none runs', async () => {

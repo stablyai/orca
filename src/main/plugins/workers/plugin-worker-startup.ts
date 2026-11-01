@@ -1,4 +1,5 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
   startPluginWorker,
   type PluginWorkerHandle,
@@ -14,6 +15,8 @@ export type PluginWorkerSpawnSpec = {
   manifestRevision?: string
   /** Tree identity the user approved, so changed bytes count as a new revision. */
   reviewedContentHash?: string | null
+  /** Dev tree hash; reviewed content is null for dev trees, so code edits need their own revision. */
+  devRevision?: string | null
   grantedCapabilities: readonly PluginCapabilityKind[]
 }
 
@@ -31,6 +34,7 @@ export type PluginWorkerFactory = (options: {
   entryPath: string
   grantedCapabilities: readonly PluginCapabilityKind[]
   executeHostCall: PluginWorkerHostCallExecutor
+  onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
   signal: AbortSignal
 }) => Promise<PluginWorkerHandle>
@@ -51,6 +55,7 @@ export async function startPluginWorkerAttempt(options: {
   entryPath: string
   factory?: PluginWorkerFactory
   executeHostCall: PluginWorkerHostCallExecutor
+  onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
   assertActive: () => void
   verifyBeforeSpawn?: () => Promise<void>
@@ -73,6 +78,7 @@ export async function startPluginWorkerAttempt(options: {
       entryPath: options.entryPath,
       grantedCapabilities: options.spec.grantedCapabilities,
       executeHostCall: options.executeHostCall,
+      onPanelPost: options.onPanelPost,
       log: options.log,
       signal: options.signal
     })
