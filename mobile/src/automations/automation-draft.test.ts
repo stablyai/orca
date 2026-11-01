@@ -306,6 +306,7 @@ describe('mobile automation host contracts', () => {
         row('known'),
         row('newer-agent', { agentId: 'future-agent' }),
         row('newer-surface', { surface: 'canvas' }),
+        row('newer-mode', { workspaceMode: 'cloud_per_run' }),
         row('newer-owner'),
         row('duplicate-owner'),
         row('missing-owner')
@@ -313,13 +314,19 @@ describe('mobile automation host contracts', () => {
       items: [
         owner('known'),
         owner('newer-agent'),
-        owner('newer-surface'),
+        { ...owner('newer-surface'), usageSummary: { lastRunAt: 'yesterday' } },
+        owner('newer-mode'),
         owner('newer-owner', { kind: 'cloud' }),
         owner('duplicate-owner'),
         owner('duplicate-owner')
       ]
     })
-    expect(rows.map((entry) => entry.automation.id)).toEqual(['known', 'newer-agent'])
+    expect(rows.map((entry) => entry.automation.id)).toEqual([
+      'known',
+      'newer-agent',
+      'newer-surface'
+    ])
+    expect(rows[2]?.item.usageSummary).toBeUndefined()
     expect(rows[0]?.automation.futureField).toBe('keep me')
     expect(mobileTuiAgentLabel(rows[1]!.automation.agentId)).toBe('future-agent')
     expect(automationListSchema.safeParse({ automations: [] }).success).toBe(false)
@@ -328,21 +335,27 @@ describe('mobile automation host contracts', () => {
       runContext: { hostId: 'cloud:1', repoId: 'r', path: '/r' }
     }
     expect(
-      runsPageSchema.parse({ runs: [savedRun(), newerHost] }).runs.map((run) => run.id)
-    ).toEqual(['run-old'])
+      runsPageSchema
+        .parse({ runs: [savedRun(), newerHost, { id: 'unreadable' }] })
+        .runs.map((run) => run.runContext?.hostId ?? run.id)
+    ).toEqual(['run-old', 'cloud:1'])
   })
 
-  it('edits a newer agent automation without a phone-side argument check or rewriting its agent', () => {
-    const saved = { ...savedAutomation(), agentId: 'future-agent', reuseSession: false }
-    const original = newAutomationDraft(saved)
-    const revised = { ...original, name: 'Renamed', extraAgentArgs: '--future-flag' }
-    expect(validateAutomationDraft(revised, 2, saved)).toBeNull()
-    const params = automationUpdateParams(saved.id, revised, original, automationTargets())
-    expect(AutomationUpdate.parse(params).updates).toEqual({
-      name: 'Renamed',
-      extraAgentArgs: '--future-flag'
-    })
-  })
+  it.each([{ agentId: 'future-agent' }, { surface: 'canvas' }])(
+    'edits a newer host automation (%o) without a phone-side argument check or rewriting it',
+    (newer) => {
+      // Reuse with extras is a Terminal refusal for a known agent and surface; the host decides here.
+      const saved = { ...savedAutomation(), ...newer, reuseSession: true }
+      const original = newAutomationDraft(saved)
+      const revised = { ...original, name: 'Renamed', extraAgentArgs: '--future-flag' }
+      expect(validateAutomationDraft(revised, 2, saved)).toBeNull()
+      const params = automationUpdateParams(saved.id, revised, original, automationTargets())
+      expect(AutomationUpdate.parse(params).updates).toEqual({
+        name: 'Renamed',
+        extraAgentArgs: '--future-flag'
+      })
+    }
+  )
 })
 
 describe('mobile automation run failure copy', () => {

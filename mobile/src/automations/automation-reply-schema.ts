@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
-import { salvagingArray } from '../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 const hostId = z.string().transform((value, ctx) => {
   const parsed = normalizeExecutionHostId(value)
@@ -23,9 +23,10 @@ export const automationSchema = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
   prompt: z.string(),
-  // Open so a newer host's agent keeps its row; the host validates the agent on every write.
+  // Open so a newer host's agent or surface keeps its row: the phone never writes the surface,
+  // and the host validates the agent on every write.
   agentId: z.string().min(1),
-  surface: z.enum(['chat', 'terminal']).optional(),
+  surface: z.string().optional(),
   projectId: z.string(),
   workspaceMode: z.enum(['existing', 'new_per_run']),
   workspaceId: z.string().nullable(),
@@ -54,9 +55,11 @@ export const automationSchema = z.looseObject({
 const ownerItemSchema = z.object({
   automationId: z.string().min(1),
   selector: ownerSelectorSchema,
-  usageSummary: z
-    .object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() })
-    .nullish()
+  // An unreadable summary reads as none, as on desktop, so it never costs the row.
+  usageSummary: salvagedOptional(
+    'usageSummary',
+    z.object({ lastRunStatus: z.string().nullish(), lastRunAt: z.number().nullish() }).nullable()
+  )
 })
 // Read row by row like the desktop reader: a row this build can't read is left out, never the list.
 export const automationListSchema = z
@@ -99,7 +102,8 @@ export const runSchema = z.looseObject({
     .object({ stdout: z.string(), stderr: z.string(), command: z.string() })
     .nullable(),
   usage: z.object({ unavailableMessage: z.string().nullish() }).nullable(),
-  runContext: z.object({ hostId, repoId: z.string(), path: z.string() }).nullish()
+  // Display-only, so a newer host kind shows by its id instead of costing the run.
+  runContext: z.object({ hostId: z.string(), repoId: z.string(), path: z.string() }).nullish()
 })
 export const runsPageSchema = z.object({
   runs: salvagingArray(runSchema),

@@ -59,6 +59,17 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
   }
 }
 
+// The host checks arguments for an agent or surface this build doesn't know.
+function assertKnownExtraAgentArgs(draft: AutomationDraft): void {
+  const { agentId, surface } = draft
+  if (
+    isTuiAgent(agentId) &&
+    (surface === undefined || surface === 'chat' || surface === 'terminal')
+  ) {
+    assertAutomationExtraAgentArgs({ ...draft, agentId, surface })
+  }
+}
+
 export function validateAutomationDraft(
   draft: AutomationDraft,
   step: number,
@@ -76,16 +87,14 @@ export function validateAutomationDraft(
       'Choose an existing workspace.'
     )
   }
-  // The host checks arguments for agents this build doesn't know.
   if (
-    isTuiAgent(draft.agentId) &&
-    (!saved ||
-      draft.agentId !== saved.agentId ||
-      draft.extraAgentArgs !== (saved.extraAgentArgs ?? '') ||
-      draft.reuseSession !== (saved.reuseSession ?? false))
+    !saved ||
+    draft.agentId !== saved.agentId ||
+    draft.extraAgentArgs !== (saved.extraAgentArgs ?? '') ||
+    draft.reuseSession !== (saved.reuseSession ?? false)
   ) {
     try {
-      assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
+      assertKnownExtraAgentArgs(draft)
     } catch (failure) {
       return failure instanceof Error
         ? failure.message
@@ -195,9 +204,7 @@ export function automationCreateParams(
   if (!setup || !draft.agentId) {
     throw new AutomationDraftValidationError('project')
   }
-  if (isTuiAgent(draft.agentId)) {
-    assertAutomationExtraAgentArgs({ ...draft, agentId: draft.agentId })
-  }
+  assertKnownExtraAgentArgs(draft)
   const workspace = targets.workspaces.find(
     (entry) => entry.worktreeId === draft.workspaceId && workspaceMatchesSetup(entry, setup)
   )
