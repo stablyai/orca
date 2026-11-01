@@ -17,8 +17,8 @@ export const ACTIVE_TAB_INDICATOR_CLASSES =
 
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive
-    ? 'bg-tab-active text-tab-active-foreground group-data-[single-tab]/tab-strip:bg-transparent'
-    : 'bg-tab-inactive text-tab-inactive-foreground hover:text-tab-active-foreground group-data-[single-tab]/tab-strip:bg-transparent'
+    ? 'bg-tab-active text-tab-active-foreground'
+    : 'bg-tab-inactive text-tab-inactive-foreground hover:text-tab-active-foreground'
 }
 
 export function getTabStripBorderClasses(
@@ -28,7 +28,7 @@ export function getTabStripBorderClasses(
   const includeTopBorder = options?.includeTopBorder ?? true
   return [
     includeTopBorder ? 'border-t' : '',
-    'border-r border-border group-data-[single-tab]/tab-strip:border-0',
+    'border-r border-border',
     hasTabsToRight ? '' : 'border-r-transparent'
   ]
     .filter(Boolean)

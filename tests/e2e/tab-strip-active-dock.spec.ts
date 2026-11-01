@@ -168,7 +168,7 @@ test.describe('Tab strip active-tab dock', () => {
     await expect(inactiveTab).toHaveAttribute('data-active', 'true')
   })
 
-  test('uses a borderless single title and stable slots through renames and tab-count changes', async ({
+  test('uses consistent single-tab chrome and stable slots through renames and tab-count changes', async ({
     orcaPage
   }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
@@ -186,10 +186,10 @@ test.describe('Tab strip active-tab dock', () => {
     await expect.poll(() => strip.evaluate((el) => el.clientWidth)).toBeGreaterThan(220)
     const single = await geometry()
     expect(single[1]).toBeGreaterThan(220)
-    await expect.poll(() => tab.evaluate((el) => getComputedStyle(el).borderRightWidth)).toBe('0px')
-    await expect
-      .poll(() => tab.evaluate((el) => getComputedStyle(el).backgroundColor))
-      .toBe('rgba(0, 0, 0, 0)')
+    await expect(tab).toHaveCSS('border-top-width', '1px')
+    await expect(strip).toHaveCSS('border-right-width', '1px')
+    await expect(tab.locator('.bg-tab-active-indicator')).toBeHidden()
+    const singleBackground = await tab.evaluate((el) => getComputedStyle(el).backgroundColor)
     const setTitle = (title: string) =>
       orcaPage.evaluate(
         ({ id, title }) => {
@@ -208,6 +208,8 @@ test.describe('Tab strip active-tab dock', () => {
     const added = await createBackgroundTerminalTab(orcaPage, worktreeId)
     await expect(strip.locator('[data-tab-strip-slot]')).toHaveCount(2)
     const multi = await geometry()
+    await expect(tab).toHaveCSS('background-color', singleBackground)
+    await expect(tab.locator('.bg-tab-active-indicator')).toBeVisible()
     const stripWidth = await strip.evaluate((el) => el.clientWidth)
     expect(multi[1]).toBeCloseTo(stripWidth / 2, 0)
     const addedWidth = await orcaPage
@@ -228,6 +230,7 @@ test.describe('Tab strip active-tab dock', () => {
     await orcaPage.locator(`${slotSelector(added)} [data-tab-close-button]`).click()
     await expect(strip.locator('[data-tab-strip-slot]')).toHaveCount(1)
     await expect.poll(geometry).toEqual(single)
+    await expect(tab.locator('.bg-tab-active-indicator')).toBeHidden()
   })
 
   test('holds browser tab geometry when audio controls appear and disappear', async ({
