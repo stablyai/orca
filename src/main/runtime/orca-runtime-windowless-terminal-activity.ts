@@ -19,8 +19,8 @@ import {
 
 type Runtime = OrcaRuntimeWithMigrationCatalog
 
-/** A window stamps Recent when a terminal starts or exits; with no window attached the host does,
- *  so a headless server's phones still sort by it. */
+/** A window stamps Recent when a terminal starts or exits; on a headless host main does, so its
+ *  phones still sort by it. */
 export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRuntimeWithMigrationCatalog {
   // Coalesce bursts (a fleet's terminal starts, streaming titles) into one re-list notice; store writes already landed.
   protected readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
@@ -105,7 +105,8 @@ export abstract class OrcaRuntimeWithWindowlessTerminalActivity extends OrcaRunt
     worktreeId: string,
     hostId: ExecutionHostId | undefined
   ): void {
-    // Switch point: main's sort stamps own Recent. A window (or one still attaching) stamps its own.
+    // Switch point: main's sort stamps own Recent. Only a headless host (serve, orcad) stamps here: a
+    // window stamps its own, and a desktop between windows (null) stays unstamped, as before.
     if (ORCA_SIDEBAR_INPUTS_IS_MAIN || this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID) {
       return
     }
