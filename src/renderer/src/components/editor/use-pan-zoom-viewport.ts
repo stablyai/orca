@@ -184,12 +184,12 @@ export function usePanZoomViewport({
     }
     const onKey = (event: KeyboardEvent): void => setAltHeld(event.altKey)
     const onBlur = (): void => setAltHeld(false)
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('keyup', onKey)
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keyup', onKey, true)
     window.addEventListener('blur', onBlur)
     return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('keyup', onKey)
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keyup', onKey, true)
       window.removeEventListener('blur', onBlur)
     }
   }, [canvas])
@@ -223,6 +223,7 @@ export function usePanZoomViewport({
 
   // Like Chromium's image view: a click flips between the fit and actual size at the cursor.
   const atFit = !view || Math.abs(view.zoom - 1) < FIT_ZOOM_EPSILON
+  const fitIsActualSize = !geometry || Math.abs(geometry.fitScale - 1) < FIT_ZOOM_EPSILON
   const toggleZoomAt = useCallback(
     (anchor: PanZoomPoint) => {
       if (!geometry) {
@@ -232,7 +233,7 @@ export function usePanZoomViewport({
         fit()
         return
       }
-      if (geometry.fitScale === 1) {
+      if (fitIsActualSize) {
         return
       }
       // From the current view: an uncontained fit may already be panned.
@@ -245,7 +246,7 @@ export function usePanZoomViewport({
         })
       )
     },
-    [atFit, fit, geometry]
+    [atFit, fit, fitIsActualSize, geometry]
   )
 
   const endDrag = useCallback(() => {
@@ -311,7 +312,7 @@ export function usePanZoomViewport({
     cursor = 'grabbing'
   } else if (altHeld) {
     cursor = 'grab'
-  } else if (geometry && view && (!atFit || geometry.fitScale !== 1)) {
+  } else if (geometry && view && (!atFit || !fitIsActualSize)) {
     // Zoom is relative to the fit, so a click's target is 1/fitScale from the fit and 1 otherwise.
     const targetZoom = atFit ? 1 / geometry.fitScale : 1
     cursor = targetZoom > view.zoom ? 'zoom-in' : 'zoom-out'
