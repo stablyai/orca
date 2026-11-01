@@ -20,6 +20,7 @@ export type RuntimeFileStatLike = {
   nlink?: number
   mtime?: number | Date
   mtimeMs?: number
+  ctimeMs?: number
   isDirectory?: () => boolean
 }
 
