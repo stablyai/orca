@@ -69,6 +69,20 @@ for (const kind of ['dropdown', 'context'] as const) {
       }
     })
 
+    test('wheel scrolling away from an open submenu follows the row under the cursor', async ({
+      page
+    }) => {
+      const first = page.getByRole('menuitem', { name: 'First', exact: true })
+      const point = await center(first)
+      await page.mouse.move(point.x, point.y)
+      await expect(page.getByRole('menuitem', { name: 'First child', exact: true })).toBeVisible()
+      const menu = page.locator(`[data-slot="${kind}-menu-content"]`)
+      await page.mouse.wheel(0, 96)
+      await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+      await expectFocusedAtPointer(page, point)
+      await expect(first).toHaveAttribute('data-state', 'closed')
+    })
+
     if (kind === 'dropdown') {
       test('keyboard reopening after wheel dismissal preserves the first item', async ({
         page

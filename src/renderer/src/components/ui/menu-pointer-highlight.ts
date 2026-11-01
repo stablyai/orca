@@ -40,8 +40,6 @@ function itemAtPoint(content: HTMLElement, { x, y }: Point): HTMLElement | null 
 export function syncMenuHighlightAtPoint(content: HTMLElement, x: number, y: number): void {
   if (
     content.getAttribute('data-state') === 'closed' ||
-    // Why: an open submenu means Radix's pointer-grace logic owns highlight changes.
-    content.querySelector(OPEN_SUBMENU_TRIGGER_SELECTOR) ||
     isEditableFocused() ||
     content.querySelector(OPEN_POPOVER_TRIGGER_SELECTOR)
   ) {
@@ -105,7 +103,6 @@ type Handlers = {
   onPointerMove?: React.PointerEventHandler<HTMLDivElement>
   onPointerOver?: React.PointerEventHandler<HTMLDivElement>
   onPointerLeave?: React.PointerEventHandler<HTMLDivElement>
-  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   onKeyDownCapture?: React.KeyboardEventHandler<HTMLDivElement>
   onScrollCapture?: React.UIEventHandler<HTMLDivElement>
 }
@@ -191,9 +188,6 @@ export function useMenuPointerHighlight(
       props.onPointerLeave?.(event)
       stateRef.current.pointer = null
       clearRestTimer(stateRef.current)
-    },
-    onKeyDown: (event) => {
-      props.onKeyDown?.(event)
     },
     // Inputs can stop propagation when transferring keyboard focus to a menu item.
     onKeyDownCapture: (event) => {

@@ -1,3 +1,4 @@
+import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
@@ -15,22 +16,6 @@ type Reads = {
 type SupportRead = {
   state: 'queued' | 'pending' | 'settled'
   value?: AgentPickerEntry['structured']
-}
-
-/** Reuse the published entry when a re-projection changed none of its fields, so rows can skip re-rendering. */
-function sameEntryOr(
-  previous: AgentPickerEntry | undefined,
-  next: AgentPickerEntry
-): AgentPickerEntry {
-  if (!previous) {
-    return next
-  }
-  const previousFields = new Map(Object.entries(previous))
-  const nextFields = Object.entries(next)
-  return nextFields.length === previousFields.size &&
-    nextFields.every(([key, value]) => previousFields.has(key) && previousFields.get(key) === value)
-    ? previous
-    : next
 }
 
 class AgentPickerAcquisition {
@@ -97,7 +82,7 @@ class AgentPickerAcquisition {
     return defaults.map((entry, i) => {
       const read = this.supports.get(i)
       const current = read && !(reopen && read.state === 'settled')
-      return sameEntryOr(this.entries[i], {
+      const next = {
         ...entry,
         catalog: this.entries[i].catalog,
         ...(read
@@ -109,7 +94,8 @@ class AgentPickerAcquisition {
                 (!read.value && entry.structuredDefaultsPending !== false)
             }
           : {})
-      })
+      }
+      return shallow(this.entries[i], next) ? this.entries[i] : next
     })
   }
 

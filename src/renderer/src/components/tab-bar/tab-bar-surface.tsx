@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ProjectedAgentMenuItems } from './QuickLaunchButton'
-import TabBarCreateEntry from './TabBarCreateEntry'
+import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
@@ -24,7 +24,6 @@ import type { TabBarItemProjection } from './use-tab-bar-item-projection'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
-import { TabBarAgentPickerScope } from './tab-bar-agent-picker-scope'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
@@ -234,28 +233,23 @@ export function renderTabBarSurface({
         >
           {!terminalOnly && onOpenEntry ? (
             <>
-              <TabBarAgentPickerScope inventory={agentPickerInventory}>
-                {(entries, launchOptions) => (
-                  <TabBarCreateEntry
-                    worktreeId={worktreeId}
-                    groupId={resolvedGroupId}
-                    menuOpen={newTabMenuOpen}
-                    menuOptions={createMenuOptions}
-                    agentOptions={launchOptions}
-                    agentPickerEntries={entries}
-                    onLaunchAgentOption={launchAgentFromNewTabEntry}
-                    onOpenDefaultTerminal={() => {
-                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                      onNewTerminalTab()
-                    }}
-                    onOpenEntry={onOpenEntry}
-                    onQueryChange={setCreateMenuQuery}
-                    onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
-                    onSelectMenuOption={handleSelectCreateMenuOption}
-                    onDidOpenEntry={() => setNewTabMenuOpen(false)}
-                  />
-                )}
-              </TabBarAgentPickerScope>
+              <TabBarAgentPickerEntry
+                inventory={agentPickerInventory}
+                worktreeId={worktreeId}
+                groupId={resolvedGroupId}
+                menuOpen={newTabMenuOpen}
+                menuOptions={createMenuOptions}
+                onLaunchAgentOption={launchAgentFromNewTabEntry}
+                onOpenDefaultTerminal={() => {
+                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                  onNewTerminalTab()
+                }}
+                onOpenEntry={onOpenEntry}
+                onQueryChange={setCreateMenuQuery}
+                onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
+                onSelectMenuOption={handleSelectCreateMenuOption}
+                onDidOpenEntry={() => setNewTabMenuOpen(false)}
+              />
               {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}

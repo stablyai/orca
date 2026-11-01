@@ -1,12 +1,4 @@
-import {
-  memo,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ComponentProps,
-  type PointerEvent
-} from 'react'
+import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -136,10 +128,7 @@ export function AgentLaunchPickerMenu({
   )
 }
 
-/**
- * Subscribes to the picker inventory at the menu itself rather than in its parent, so the catalog
- * and seed reads that land after the menu opens re-render only the picker rows.
- */
+// Subscribe here so inventory updates do not re-render the tab bar.
 export function SubscribedAgentLaunchPickerMenu({
   inventory,
   ...props
@@ -175,20 +164,16 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
   useUiLanguageRevision()
-  const initial = useMemo<AgentPickerDraft | undefined>(
-    () =>
-      initialModel
-        ? {
-            agent: entry.agent,
-            surface: entry.defaultSurface,
-            choices: {
-              model: initialModel,
-              ...(initialEffort ? { options: { effort: initialEffort } } : {})
-            }
-          }
-        : undefined,
-    [entry.agent, entry.defaultSurface, initialModel, initialEffort]
-  )
+  const initial: AgentPickerDraft | undefined = initialModel
+    ? {
+        agent: entry.agent,
+        surface: entry.defaultSurface,
+        choices: {
+          model: initialModel,
+          ...(initialEffort ? { options: { effort: initialEffort } } : {})
+        }
+      }
+    : undefined
   const setupId = useId()
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)

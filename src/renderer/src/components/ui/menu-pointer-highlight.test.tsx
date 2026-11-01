@@ -39,7 +39,14 @@ function Menu({ open = true, forceMount = false, ...props }: MenuProps): React.J
     return null
   }
   return (
-    <div role="menu" data-state={open ? 'open' : 'closed'} tabIndex={-1} id="menu" {...handlers}>
+    <div
+      role="menu"
+      data-state={open ? 'open' : 'closed'}
+      tabIndex={-1}
+      id="menu"
+      {...props}
+      {...handlers}
+    >
       <div role="menuitem" tabIndex={-1} id="a">
         <span id="a-label">A</span>
       </div>
@@ -230,7 +237,7 @@ it.each(['input', 'textarea'])(
   }
 )
 
-it('clears the highlight over disabled rows and separators, and skips closed menus or open submenus', () => {
+it('clears the highlight over disabled rows and separators, follows scrolling past submenus, and skips closed menus', () => {
   const { menu, a, b, c, sep } = render()
   a.focus()
   hit = c
@@ -246,12 +253,12 @@ it('clears the highlight over disabled rows and separators, and skips closed men
   a.setAttribute('aria-haspopup', 'menu')
   a.setAttribute('data-state', 'open')
   syncMenuHighlightAtPoint(menu, 0, 0)
-  expect(document.activeElement).toBe(menu)
+  expect(document.activeElement).toBe(b)
   a.removeAttribute('data-state')
 
   menu.setAttribute('data-state', 'closed')
   syncMenuHighlightAtPoint(menu, 0, 0)
-  expect(document.activeElement).toBe(menu)
+  expect(document.activeElement).toBe(b)
 })
 
 it("ignores a cursor that is not over the menu, such as over a row's portaled popover", () => {
