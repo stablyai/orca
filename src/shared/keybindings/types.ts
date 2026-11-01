@@ -188,6 +188,9 @@ export type KeybindingInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Why: Windows/Linux AltGr reports Ctrl+Alt plus AltGraph; only this state tells AltGr
+  // text input apart from a deliberate Ctrl+Alt chord. DOM events carry it natively.
+  getModifierState?: (key: string) => boolean
   // Set only by the double-tap detector; always a physical token (never 'Mod').
   doubleTapModifier?: PhysicalModifierToken
 }
