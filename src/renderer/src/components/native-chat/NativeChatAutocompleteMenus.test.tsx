@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { buildNativeChatPickerItems } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat-composer-autocomplete'
@@ -202,6 +203,47 @@ describe('NativeChatPickerMenu', () => {
       />
     )
     expect(screen.getAllByText('No matching skills')).toHaveLength(2)
+  })
+})
+
+describe('NativeChatPickerMenu layering', () => {
+  afterEach(() => cleanup())
+
+  const menu = (
+    <NativeChatPickerMenu
+      autocomplete={autocomplete()}
+      activeIndex={0}
+      listboxId="picker"
+      onChoose={vi.fn()}
+      onRetry={vi.fn()}
+    />
+  )
+
+  it('keeps an ordinary chat list in its chat container at the chat layer', () => {
+    const { container } = render(<div className="native-chat-appearance">{menu}</div>)
+    const listbox = screen.getByRole('listbox')
+    expect(listbox.parentElement).toBe(container.querySelector('.native-chat-appearance'))
+    expect(listbox.className).toContain('z-50')
+    expect(listbox.className).not.toContain('z-[70]')
+  })
+
+  it('lifts a list opened inside a popover to the menu layer above that popover', () => {
+    render(
+      <Popover open>
+        <PopoverAnchor>
+          <span />
+        </PopoverAnchor>
+        <PopoverContent>{menu}</PopoverContent>
+      </Popover>
+    )
+    const listbox = screen.getByRole('listbox')
+    const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!
+    // Same fixed list in the document body, so the popover's clipping and transform don't apply.
+    expect(listbox.parentElement).toBe(document.body)
+    expect(popover.contains(listbox)).toBe(false)
+    expect(popover.className).toContain('z-[60]')
+    expect(listbox.className).toContain('z-[70]')
+    expect(listbox.className).not.toContain('z-50')
   })
 })
 

@@ -39,7 +39,7 @@ export function createFolderWorkspaceCatalogActions(
         return current
       }
       applied = true
-      continueFolderLaunchDrafts(catalog.hostId, catalog.folderWorkspaces)
+      continueFolderLaunchDrafts(catalog)
       getFolderWorkspaceUpdateCoordinator(get).recordCatalogReplacement(
         getFolderWorkspaceCatalogReplacementIdentities(
           catalog,

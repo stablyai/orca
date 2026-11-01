@@ -110,10 +110,14 @@ export function inheritLaunchReadoptions(
   }
 }
 
-export function continueFolderLaunchDrafts(
-  origin: string,
-  folders: readonly FolderWorkspace[]
-): void {
+/** Takes the fetched host catalog: its folders are that payload, not a store record read. */
+export function continueFolderLaunchDrafts({
+  hostId: origin,
+  folderWorkspaces: folders
+}: {
+  hostId: string
+  folderWorkspaces: readonly FolderWorkspace[]
+}): void {
   const owners = new Map<string, ExecutionHostId | null>()
   for (const folder of folders) {
     const host = folder.executionHostId

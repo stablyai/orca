@@ -22966,7 +22966,9 @@
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
+    "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos"
   },
   "wslMove": {
     "entry": {

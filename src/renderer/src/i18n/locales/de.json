@@ -23080,6 +23080,8 @@
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
-    "launchTerminal": "Terminal starten"
+    "launchTerminal": "Terminal starten",
+    "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
+    "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien"
   }
 }

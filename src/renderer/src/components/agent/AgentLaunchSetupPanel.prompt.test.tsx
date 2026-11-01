@@ -9,6 +9,8 @@ import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { i18n } from '@/i18n/i18n'
+import de from '../../i18n/locales/de.json'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
 import { changePrompt, promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
 import {
@@ -94,6 +96,30 @@ it('launches with the typed first prompt from Enter or either Launch button, and
     executionHostId: 'local'
   })
   setNativeChatComposerDraftStorageForTests(null)
+})
+
+it('shows the prompt placeholder from the German catalog', async () => {
+  i18n.addResourceBundle('de', 'translation', de, true, true)
+  await act(async () => {
+    await i18n.changeLanguage('de')
+  })
+  try {
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupPanel entry={launchEntry} onUse={onUse} />
+        </TooltipProvider>
+      )
+    )
+    expect(prompt().getAttribute('aria-label')).toBe(de.agentPicker.promptPlaceholder)
+    expect(de.agentPicker.promptPlaceholder).toBe(
+      'Prompt hinzufügen (optional): / für Skills, @ für Dateien'
+    )
+  } finally {
+    await act(async () => {
+      await i18n.changeLanguage('en')
+    })
+  }
 })
 
 it.each(['composer', 'arguments', 'model', 'chat', 'terminal'])(

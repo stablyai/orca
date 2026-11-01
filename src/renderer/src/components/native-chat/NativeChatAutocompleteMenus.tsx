@@ -280,7 +280,8 @@ function PickerListbox({
               width: bounds.width,
               bottom: window.innerHeight - bounds.top + 4
             }}
-            className="scrollbar-sleek z-50 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating"
+            // Inside a popover (the launch setup), take the menu layer Select and DropdownMenu use above popovers.
+            className={`scrollbar-sleek max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-floating ${marker.current?.closest('[data-slot="popover-content"]') ? 'z-[70]' : 'z-50'}`}
           >
             {children}
           </div>,
