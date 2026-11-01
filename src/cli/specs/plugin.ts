@@ -262,14 +262,14 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['plugin', 'dev', 'emit'],
-    summary: "Fire a test event at a development plugin's worker",
+    summary: "Fire a test event at a development plugin's worker and open panels",
     usage: 'orca plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'target', 'event', 'data'],
     positionalArgs: ['target', 'event'],
     notes: [
-      "Runs the worker's `orca.events.on` handlers without the real trigger. The event goes through the normal delivery rules: the plugin must be an approved development plugin that lists the event in contributes.events, and the worker starts if it is not running.",
+      "Runs the worker's `orca.events.on` handlers and the plugin's open panels' `orca.on` handlers without the real trigger, under the normal rules: the plugin must be an approved development plugin granted the event's capability. The worker hears it when it lists the event in contributes.events (it starts if it is not running); an open panel hears it once it has subscribed. It is refused when nothing listens.",
       "--data is the payload as JSON, checked against the event's schema (the host API reference lists them). An unknown event is refused with the list of events.",
-      "Prints `{ pluginKey, event, delivered: { worker, panels } }`; `panels` is 0, since panels only hear Orca's own events such as `theme`. Handler errors go to `orca plugin logs` and `orca plugin dev watch`.",
+      'Prints `{ pluginKey, event, delivered: { worker, panels } }`: whether the worker got it and how many open panels did. Handler errors go to `orca plugin logs` and `orca plugin dev watch`.',
       'Installed plugins are refused; load the folder with `orca plugin dev load` first.'
     ],
     examples: [

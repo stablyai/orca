@@ -164,23 +164,28 @@ export class PluginPanelBridge {
   }
 
   /** A projected workspace or agent event, to panels that subscribed and may read its domain. */
-  publishEvent(event: PluginEventName, raw: unknown): void {
+  /** Returns how many open panels heard it; `pluginKey` limits it to one plugin's panels. */
+  publishEvent(event: PluginEventName, raw: unknown, only?: { pluginKey: string }): number {
     // Why: payloads are bounded projections, so a malformed one never reaches a panel.
     const projected = PLUGIN_EVENT_PAYLOAD_SCHEMAS[event].safeParse(raw)
     if (!projected.success) {
-      return
+      return 0
     }
     const payload = projected.data
     const required = PLUGIN_EVENT_CAPABILITY[event]
+    let delivered = 0
     for (const [panelId, channel] of this.channels) {
       if (
+        (!only || channel.pluginKey === only.pluginKey) &&
         this.subscriptions.get(panelId)?.has(event) === true &&
         this.deps.findApprovedPlugin(channel.pluginKey) &&
         this.deps.grantedCapabilities(channel.pluginKey)?.includes(required)
       ) {
         channel.deliver({ kind: 'event', event, payload })
+        delivered += 1
       }
     }
+    return delivered
   }
 
   /** Storage or settings changed: open panels and a running worker re-read the key. */

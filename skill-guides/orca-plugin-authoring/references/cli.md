@@ -22,7 +22,7 @@
 - `ORCA plugin dev load <dir> [--approve <fingerprint>] [--json]`: Load a plugin folder into Orca as a development plugin
 - `ORCA plugin dev reload [<dir>] [--approve <fingerprint>] [--json]`: Reload development plugins now, or one folder and re-check its approval
 - `ORCA plugin dev inspect <plugin-key> [--json]`: Open DevTools for a plugin's open panels and editors
-- `ORCA plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]`: Fire a test event at a development plugin's worker
+- `ORCA plugin dev emit <dir|plugin-key> <event> [--data <json>] [--json]`: Fire a test event at a development plugin's worker and open panels
 - `ORCA plugin dev unload <dir|plugin-key> [--json]`: Remove a development folder from Orca
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>] [--json]`: Show a plugin's panel in Orca's right sidebar, or open a file in its editor
 - `ORCA plugin shot <plugin-key> [--panel <id>] [--theme <light|dark>] [--width <px>] [--out <file.png>] [--json]`: Save a PNG of a plugin panel exactly as Orca draws it, to look at what you built

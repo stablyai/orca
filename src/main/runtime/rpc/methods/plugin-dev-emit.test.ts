@@ -118,7 +118,7 @@ describe('plugins.devEmit', () => {
         },
         context
       )
-    ).rejects.toThrow(/does not subscribe to workspace.removed/)
+    ).rejects.toThrow(/Nothing in samples.demo listens for workspace.removed/)
     expect(factory).not.toHaveBeenCalled()
   })
 })

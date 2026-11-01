@@ -28,12 +28,15 @@ import {
 export type PluginDevEmitService = PluginDevFolderLookup & {
   options: { isPluginSystemEnabled: () => boolean }
   eventDelivery: PluginEventDeliveryContext
+  panelBridge: {
+    publishEvent(event: PluginEventName, payload: unknown, only: { pluginKey: string }): number
+  }
 }
 
 export type PluginDevEmitResult = {
   pluginKey: string
   event: PluginEventName
-  /** Panels only hear Orca's own frame events (theme, editor.flush), so this is 0 today. */
+  /** `panels`: open panels of this plugin that subscribed with `orca.on(event)`. */
   delivered: { worker: boolean; panels: number }
 }
 
@@ -93,8 +96,11 @@ function skipError(
         }
       )
     case 'no-worker':
-      return new PluginCliError('invalid_argument', `${key} has no worker (\`main\`).`, {
-        nextSteps: ['Events reach workers; add `main` and subscribe in `contributes.events`.']
+    case 'not-subscribed':
+      return new PluginCliError('invalid_argument', `Nothing in ${key} listens for ${event}.`, {
+        nextSteps: [
+          `A worker hears it with { "on": "${event}" } in contributes.events; an open panel hears it once it calls orca.on('${event}', …). Either needs the ${PLUGIN_EVENT_CAPABILITY[event]} capability.`
+        ]
       })
     case 'not-approved':
       return new PluginCliError(
@@ -102,12 +108,6 @@ function skipError(
         `${key} is not approved and enabled, so it receives no events.`,
         { nextSteps: ['Run `orca plugin dev load <dir>` and approve it with `--approve`.'] }
       )
-    case 'not-subscribed':
-      return new PluginCliError('invalid_argument', `${key} does not subscribe to ${event}.`, {
-        nextSteps: [
-          `Add { "on": "${event}" } to contributes.events (with the ${PLUGIN_EVENT_CAPABILITY[event]} capability); Orca only delivers events a plugin declares.`
-        ]
-      })
     case 'not-granted':
       return new PluginCliError(
         'invalid_argument',
@@ -137,8 +137,16 @@ export async function emitPluginDevEvent(input: {
   const event = parseEventName(input.event)
   const plugin = await resolveDevPlugin(service, input.target)
   const reason = pluginEventSkipReason(plugin, event, service.eventDelivery)
-  if (reason || isInvalidDiscoveredPlugin(plugin)) {
-    throw skipError(plugin, event, reason ?? 'invalid')
+  if (isInvalidDiscoveredPlugin(plugin)) {
+    throw skipError(plugin, event, 'invalid')
+  }
+  // Why these first: panels follow the same approval and capability rules as the worker.
+  if (!service.eventDelivery.isRuntimeApproved(plugin)) {
+    throw skipError(plugin, event, 'not-approved')
+  }
+  const granted = service.eventDelivery.grantedCapabilities(plugin.pluginKey)
+  if (!granted?.includes(PLUGIN_EVENT_CAPABILITY[event])) {
+    throw skipError(plugin, event, 'not-granted')
   }
   const projected = PLUGIN_EVENT_PAYLOAD_SCHEMAS[event].safeParse(input.payload ?? {})
   if (!projected.success) {
@@ -150,11 +158,20 @@ export async function emitPluginDevEvent(input: {
       nextSteps: [...issues, 'The host API reference lists every event payload.']
     })
   }
-  try {
-    await deliverPluginEventToWorker(plugin, event, projected.data, service.eventDelivery)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`${plugin.pluginKey}'s worker did not start: ${message}. ${LOGS_HINT}`)
+  const worker = reason === null
+  if (worker) {
+    try {
+      await deliverPluginEventToWorker(plugin, event, projected.data, service.eventDelivery)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`${plugin.pluginKey}'s worker did not start: ${message}. ${LOGS_HINT}`)
+    }
   }
-  return { pluginKey: plugin.pluginKey, event, delivered: { worker: true, panels: 0 } }
+  const panels = service.panelBridge.publishEvent(event, projected.data, {
+    pluginKey: plugin.pluginKey
+  })
+  if (!worker && panels === 0) {
+    throw skipError(plugin, event, reason ?? 'not-subscribed')
+  }
+  return { pluginKey: plugin.pluginKey, event, delivered: { worker, panels } }
 }

@@ -166,12 +166,12 @@ To test a handler without reproducing the real trigger, fire the event at a deve
 orca plugin dev emit . workspace.created --data '{"workspaceId":"wt-1","kind":"worktree","path":"/repo","branch":"main"}'
 ```
 
-It follows the normal rules: the plugin must be approved and list the event in
-`contributes.events` (with its capability), the worker starts if it is not running, and `--data`
-is checked against the event's payload schema. Installed plugins are refused. `--json` prints
-`{ pluginKey, event, delivered: { worker, panels } }`; `panels` is 0, since panels only hear
-Orca's own frame events such as `theme`. A handler's errors land in `orca plugin logs` and
-`orca plugin dev watch`.
+It follows the normal rules: the plugin must be approved and granted the event's capability, and
+`--data` is checked against the event's payload schema. The worker hears it when it lists the
+event in `contributes.events` (it starts if it is not running), and each of the plugin's open
+panels hears it once it has subscribed with `orca.on(event, …)`; with neither, it is refused.
+Installed plugins are refused. `--json` prints `{ pluginKey, event, delivered: { worker, panels } }`.
+A handler's errors land in `orca plugin logs` and `orca plugin dev watch`.
 
 A worker's `main` is an ES module: `.js`/`.mjs`, or `.ts`/`.mts` with no build step (needs
 `engines.orca` `>=1.4.246`). Orca transpiles TypeScript files in your plugin folder as Node loads

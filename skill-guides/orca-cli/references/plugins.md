@@ -54,8 +54,9 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    `check`, `shot`, `shot_skipped`, `warning`, `disconnected`, `unloaded`) as logs arrive and saves reload it;
    run it in a background terminal and read its output. Ctrl-C unloads the folder it loaded.
    `plugin dev emit <dir|plugin-key> <event> --data '<json>'` fires a test event at a
-   development plugin's worker (only events it lists in `contributes.events`; the payload is
-   checked against the event's schema). Handler errors show in `plugin logs` and the watch.
+   development plugin's worker (if it lists the event in `contributes.events`) and its open
+   panels that subscribed with `orca.on`; the payload is checked against the event's schema.
+   Handler errors show in `plugin logs` and the watch.
 5. See what you built: `plugin shot <plugin-key> --json` writes a PNG of a panel exactly as Orca
    draws it (default `.orca/shots/<plugin-key>-<panel>.png`; `--width` applies to that capture
    only, and `--theme` too but only while Orca's window is hidden or minimized, else
