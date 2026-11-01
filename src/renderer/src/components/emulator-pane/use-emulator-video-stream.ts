@@ -50,21 +50,14 @@ export function useEmulatorVideoStream(
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
     const identity = `${deviceId}:${streamKey}:${enabled}`
-    const setError = (message: string | null): void =>
-      setFailure(message === null ? null : { identity, message })
-    if (!enabled || !deviceId) {
-      setError(null)
+    const setError = (message: string): void => setFailure({ identity, message })
+    if (!enabled || !deviceId || !api?.startVideoStream) {
       return
     }
-    if (!api?.startVideoStream) {
-      return
-    }
-    setError(null)
     const DecoderCtor = (globalThis as { VideoDecoder?: typeof VideoDecoder }).VideoDecoder
     const ChunkCtor = (globalThis as { EncodedVideoChunk?: typeof EncodedVideoChunk })
       .EncodedVideoChunk
     if (!DecoderCtor || !ChunkCtor) {
-      setError('This build does not support WebCodecs H.264 decoding.')
       return
     }
 
@@ -231,5 +224,12 @@ export function useEmulatorVideoStream(
     }
   }, [deviceId, streamKey, enabled])
 
+  if (enabled && deviceId && !hasWebCodecs()) {
+    return { canvasRef, error: 'This build does not support WebCodecs H.264 decoding.' }
+  }
   return { canvasRef, error: failure?.identity === streamIdentity ? failure.message : null }
+}
+
+function hasWebCodecs(): boolean {
+  return 'VideoDecoder' in globalThis && 'EncodedVideoChunk' in globalThis
 }

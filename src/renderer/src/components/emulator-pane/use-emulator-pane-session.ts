@@ -204,9 +204,12 @@ export function useEmulatorPaneSession({
           liveTargetRef.current = null
           resetVisualOrientation()
         }
-        const res = (await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
-          callRuntimeRpc({ kind: 'local' }, 'emulator.attach', { device, worktree: worktreeId })
-        )) as { attached?: boolean; info?: EmulatorPaneSession['info'] }
+        const res = await attachWithAvdFallback(list, target, setSelectedUdid, (device) =>
+          callRuntimeRpc({ kind: 'local' }, 'emulator.attach', {
+            device,
+            worktree: worktreeId
+          })
+        )
         if (!mountedRef.current) {
           // Attach may finish after unmount cleanup ran before the session was registered.
           await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)
