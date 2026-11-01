@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type PointerEvent } from 'react'
+import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -6,6 +6,10 @@ import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import {
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './use-agent-launch-picker-inventory'
 import {
   searchAgentPickerSetups,
   type AgentPickerDraft,
@@ -126,7 +130,22 @@ export function AgentLaunchPickerMenu({
   )
 }
 
-function AgentPickerMenuRow({
+/**
+ * Subscribes to the picker inventory at the menu itself rather than in its parent, so the catalog
+ * and seed reads that land after the menu opens re-render only the picker rows.
+ */
+export function SubscribedAgentLaunchPickerMenu({
+  inventory,
+  ...props
+}: Omit<ComponentProps<typeof AgentLaunchPickerMenu>, 'entries'> & {
+  inventory: AgentPickerInventorySource
+}) {
+  const entries = useAgentPickerInventoryEntries(inventory)
+  return <AgentLaunchPickerMenu {...props} entries={entries} />
+}
+
+// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
+const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   entry,
   openSetup,
   onSetupOpenChange,
@@ -212,4 +231,4 @@ function AgentPickerMenuRow({
       )}
     />
   )
-}
+})

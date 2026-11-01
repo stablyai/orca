@@ -24,6 +24,7 @@ import type { TabBarItemProjection } from './use-tab-bar-item-projection'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
+import { TabBarAgentPickerScope } from './tab-bar-agent-picker-scope'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 
@@ -75,8 +76,7 @@ export function renderTabBarSurface({
   } = runtime
   const {
     agentMenu,
-    agentLaunchOptions,
-    agentPickerEntries,
+    agentPickerInventory,
     selectPickerAgent,
     launchAgentRow,
     newTabMenuOpen,
@@ -234,24 +234,28 @@ export function renderTabBarSurface({
         >
           {!terminalOnly && onOpenEntry ? (
             <>
-              <TabBarCreateEntry
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                menuOpen={newTabMenuOpen}
-                menuOptions={createMenuOptions}
-                agentOptions={agentLaunchOptions}
-                agentPickerEntries={agentPickerEntries}
-                onLaunchAgentOption={launchAgentFromNewTabEntry}
-                onOpenDefaultTerminal={() => {
-                  queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                  onNewTerminalTab()
-                }}
-                onOpenEntry={onOpenEntry}
-                onQueryChange={setCreateMenuQuery}
-                onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
-                onSelectMenuOption={handleSelectCreateMenuOption}
-                onDidOpenEntry={() => setNewTabMenuOpen(false)}
-              />
+              <TabBarAgentPickerScope inventory={agentPickerInventory}>
+                {(entries, launchOptions) => (
+                  <TabBarCreateEntry
+                    worktreeId={worktreeId}
+                    groupId={resolvedGroupId}
+                    menuOpen={newTabMenuOpen}
+                    menuOptions={createMenuOptions}
+                    agentOptions={launchOptions}
+                    agentPickerEntries={entries}
+                    onLaunchAgentOption={launchAgentFromNewTabEntry}
+                    onOpenDefaultTerminal={() => {
+                      queueNewActiveTerminalFocusAfterNewTabMenuClose()
+                      onNewTerminalTab()
+                    }}
+                    onOpenEntry={onOpenEntry}
+                    onQueryChange={setCreateMenuQuery}
+                    onQueueSwitchFocus={queueFocusAfterNewTabMenuClose}
+                    onSelectMenuOption={handleSelectCreateMenuOption}
+                    onDidOpenEntry={() => setNewTabMenuOpen(false)}
+                  />
+                )}
+              </TabBarAgentPickerScope>
               {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
@@ -283,7 +287,7 @@ export function renderTabBarSurface({
               <DropdownMenuSeparator />
               <ProjectedAgentMenuItems
                 model={agentMenu}
-                pickerEntries={agentPickerEntries}
+                pickerInventory={agentPickerInventory}
                 onSelectPickerAgent={selectPickerAgent}
                 hidePickerSearch={!terminalOnly && Boolean(onOpenEntry)}
                 runLaunch={launchAgentRow}

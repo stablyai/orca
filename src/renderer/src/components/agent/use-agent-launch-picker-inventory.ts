@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store'
@@ -25,12 +25,68 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
+/**
+ * Live picker entries for one (inventory key, open) generation. Catalog and seed reads land one
+ * at a time for several seconds after the menu opens; holding them here instead of in the
+ * owner's React state lets only the components that render entries re-render as they land.
+ */
+export type AgentPickerInventorySource = {
+  getSnapshot: () => AgentPickerEntry[]
+  subscribe: (listener: () => void) => () => void
+}
+
+type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
+  publish: (entries: readonly AgentPickerEntry[]) => void
+}
+
+function createAgentPickerInventorySource(
+  initial: AgentPickerEntry[]
+): WritableAgentPickerInventorySource {
+  let entries = initial
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => entries,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    publish: (next) => {
+      // Why: a read that changed nothing (e.g. an unavailable catalog) must not re-render the menu.
+      if (next.length === entries.length && next.every((entry, i) => entry === entries[i])) {
+        return
+      }
+      entries = [...next]
+      for (const listener of listeners) {
+        listener()
+      }
+    }
+  }
+}
+
+export function useAgentPickerInventoryEntries(
+  source: AgentPickerInventorySource
+): AgentPickerEntry[] {
+  return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+}
+
 export function useAgentLaunchPickerInventory(
   worktreeId: string | undefined,
   model: NewTabAgentMenuModel,
   open: boolean,
   selected?: AgentPickerEntry['agent']
 ): AgentPickerEntry[] {
+  return useAgentPickerInventoryEntries(
+    useAgentLaunchPickerInventorySource(worktreeId, model, open, selected)
+  )
+}
+
+/** Owns acquisition for the menu without subscribing its caller to the entries it publishes. */
+export function useAgentLaunchPickerInventorySource(
+  worktreeId: string | undefined,
+  model: NewTabAgentMenuModel,
+  open: boolean,
+  selected?: AgentPickerEntry['agent']
+): AgentPickerInventorySource {
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
     selectedRef.current = selected
@@ -70,11 +126,6 @@ export function useAgentLaunchPickerInventory(
       ]),
     [context, worktreeId, executionHostId, model, settings]
   )
-  const generation = useMemo(() => ({ key, open }), [key, open])
-  const [snapshot, setSnapshot] = useState<{
-    generation: object
-    entries: AgentPickerEntry[]
-  } | null>(null)
   const build = (defaults: AgentPickerDefaultSettings | null | undefined) =>
     model.state === 'settled'
       ? agentPickerEntriesFromRows(
@@ -100,6 +151,14 @@ export function useAgentLaunchPickerInventory(
         : build(settings).map((entry) => ({ ...entry, ownerKey: key })),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- The semantic key covers rows, detection, target and defaults without restarting for object identity.
     [key]
+  )
+  // A new generation starts from the shared acquisition (or the fallback) until it publishes.
+  const source = useMemo(
+    () =>
+      createAgentPickerInventorySource(
+        (open ? currentAgentPickerAcquisition(key) : undefined) ?? fallback
+      ),
+    [key, open, fallback]
   )
   useEffect(() => {
     if (!open || !target || !worktreeId || model.state !== 'settled') {
@@ -212,12 +271,10 @@ export function useAgentLaunchPickerInventory(
       },
       {
         selected: () => selectedRef.current,
-        publish: (entries) => setSnapshot({ generation, entries: [...entries] })
+        publish: source.publish
       }
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only semantic inputs and visibility own observation; selected priority publishes independently after commit.
   }, [key, open])
-  return snapshot?.generation === generation
-    ? snapshot.entries
-    : ((open ? currentAgentPickerAcquisition(key) : undefined) ?? fallback)
+  return source
 }

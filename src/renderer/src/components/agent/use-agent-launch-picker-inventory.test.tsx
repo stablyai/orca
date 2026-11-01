@@ -18,7 +18,11 @@ import * as picker from '../../../../shared/agent-launch-picker'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
-import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventory,
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -306,6 +310,38 @@ it('bounds open-time catalog hydration to two agents and discards responses from
   expect(hook.result.current).toHaveLength(1)
   expect(hook.result.current[0].catalog).toEqual(catalog)
   expect(hook.result.current[0].rows[0].executionHostId).toBe('runtime:beta')
+})
+
+it('lands catalog reads in subscribers only, replacing just the entry whose catalog changed', async () => {
+  const reads = new Map<string, PromiseWithResolvers<AgentSessionModelCatalogResult>>()
+  mocks.session.mockImplementation((_target, method, params: { agent: string }) => {
+    if (method !== 'agentSession.modelCatalog') {
+      return Promise.resolve({ supported: true })
+    }
+    const read = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    reads.set(params.agent, read)
+    return read.promise
+  })
+  const menu = model('alpha', ['codex', 'claude'])
+  let ownerRenders = 0
+  const owner = renderHook(() => {
+    ownerRenders += 1
+    return useAgentLaunchPickerInventorySource('wt', menu, true)
+  })
+  const subscriber = renderHook(() => useAgentPickerInventoryEntries(owner.result.current))
+  await act(async () => {})
+  const ownerRendersBeforeReads = ownerRenders
+  const before = subscriber.result.current
+
+  await act(async () => reads.get('codex')!.resolve(catalog))
+  const afterCodex = subscriber.result.current
+  expect(afterCodex[0].catalog).toEqual(catalog)
+  expect(afterCodex[1]).toBe(before[1])
+
+  // A failed read changes nothing, so it must not publish a new snapshot.
+  await act(async () => reads.get('claude')!.reject(new Error('listing unavailable')))
+  expect(subscriber.result.current).toBe(afterCodex)
+  expect(ownerRenders).toBe(ownerRendersBeforeReads)
 })
 
 it.each(['slow', 'failed'] as const)(

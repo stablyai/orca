@@ -17,6 +17,22 @@ type SupportRead = {
   value?: AgentPickerEntry['structured']
 }
 
+/** Reuse the published entry when a re-projection changed none of its fields, so rows can skip re-rendering. */
+function sameEntryOr(
+  previous: AgentPickerEntry | undefined,
+  next: AgentPickerEntry
+): AgentPickerEntry {
+  if (!previous) {
+    return next
+  }
+  const previousFields = new Map(Object.entries(previous))
+  const nextFields = Object.entries(next)
+  return nextFields.length === previousFields.size &&
+    nextFields.every(([key, value]) => previousFields.has(key) && previousFields.get(key) === value)
+    ? previous
+    : next
+}
+
 class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
@@ -81,7 +97,7 @@ class AgentPickerAcquisition {
     return defaults.map((entry, i) => {
       const read = this.supports.get(i)
       const current = read && !(reopen && read.state === 'settled')
-      return {
+      return sameEntryOr(this.entries[i], {
         ...entry,
         catalog: this.entries[i].catalog,
         ...(read
@@ -93,7 +109,7 @@ class AgentPickerAcquisition {
                 (!read.value && entry.structuredDefaultsPending !== false)
             }
           : {})
-      }
+      })
     })
   }
 

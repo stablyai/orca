@@ -1,5 +1,6 @@
 import type { NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { useTabAgentMenuLaunch } from './QuickLaunchButton'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
@@ -7,8 +8,8 @@ import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
 
 export type TabBarCreateMenuController = {
   agentMenu: NewTabAgentMenuModel
-  agentLaunchOptions: TabAgentLaunchOption[]
-  agentPickerEntries: AgentPickerEntry[]
+  /** Read through `useAgentPickerInventoryEntries` in the component that renders the entries. */
+  agentPickerInventory: AgentPickerInventorySource
   selectPickerAgent: (agent: AgentPickerEntry['agent']) => void
   launchAgentRow: ReturnType<typeof useTabAgentMenuLaunch>
   newTabMenuOpen: boolean
