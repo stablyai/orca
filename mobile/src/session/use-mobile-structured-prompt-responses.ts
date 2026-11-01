@@ -1,3 +1,5 @@
+import { validateAgentSessionFormContent } from '../../../src/shared/agent-session-form'
+import type { MobilePermissionResponse } from './native-chat/input/mobile-native-chat-permission'
 import { useCallback } from 'react'
 import type { AgentSessionPromptResult } from '../../../src/shared/agent-session-wire'
 import type { AgentJournalQuestionItem } from '../../../src/shared/agent-session-journal-types'
@@ -27,16 +29,48 @@ export function useMobileStructuredPromptResponses(args: {
   stateRef: { readonly current: StructuredAgentSessionState }
   mutate: StructuredAgentSessionMutate
   // Older hosts require answers packed into optionId.
+  formSubmitEnabled?: boolean
+  sourceKey?: string
   questionAnswersSupported: boolean | null
   onSendError: (message: string) => void
 }): {
-  respondPermission: (optionId: string) => Promise<boolean>
+  respondPermission: MobilePermissionResponse
   respondQuestion: (answer: string, rendered?: MobileChatQuestion['prompt']) => Promise<boolean>
 } {
-  const { mutate, onSendError, questionAnswersSupported, stateRef } = args
+  const { formSubmitEnabled, sourceKey, mutate, onSendError, questionAnswersSupported, stateRef } =
+    args
 
-  const respondPermission = useCallback(
-    async (optionId: string): Promise<boolean> => {
+  const respondPermission = useCallback<MobilePermissionResponse>(
+    async (optionId, content, rendered): Promise<boolean> => {
+      if (content !== undefined) {
+        if (formSubmitEnabled !== true) {
+          return false
+        }
+        const prompt = actionableStructuredApproval(stateRef.current)
+        if (
+          !prompt?.body.form ||
+          rendered?.sourceKey !== sourceKey ||
+          rendered?.itemId !== prompt.itemId ||
+          rendered.expectedRevision !== prompt.revision
+        ) {
+          return false
+        }
+        let checked
+        try {
+          checked = validateAgentSessionFormContent(prompt.body.form, content)
+        } catch {
+          return false
+        }
+        const result = await mutate<AgentSessionPromptResult>(
+          'agentSession.respondToApproval',
+          'agentSession.respondTo:approval',
+          { itemId: prompt.itemId, expectedRevision: prompt.revision, content: checked }
+        )
+        if (result.status === 'unknown') {
+          onSendError('Response unconfirmed — check chat before retrying')
+        }
+        return result.status === 'accepted'
+      }
       const target = structuredApprovalResponseTarget(
         optionId,
         actionableStructuredApproval(stateRef.current)
@@ -55,7 +89,7 @@ export function useMobileStructuredPromptResponses(args: {
       }
       return result.status === 'accepted'
     },
-    [mutate, onSendError, stateRef]
+    [formSubmitEnabled, sourceKey, mutate, onSendError, stateRef]
   )
 
   const sendAnswers = useCallback(

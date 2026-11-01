@@ -1,3 +1,5 @@
+import { sendRemoteRuntimeRequest } from './remote-runtime-request-send'
+import { RemoteRuntimeOrdinarySender } from '../remote-runtime-ordinary-sender'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason } from '../../abort-signal-reason'
@@ -8,7 +10,6 @@ import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handsha
 import {
   prepareRemoteRuntimeRequest,
   releaseRemoteRuntimePreparedRequest,
-  takeRemoteRuntimePreparedRequest,
   toRemoteRuntimeRequestError,
   type RemoteRuntimePendingRequest,
   type RemoteRuntimePreparedRequest
@@ -37,6 +38,7 @@ const IDLE_CLOSE_MS = 60_000
 
 export class RemoteRuntimeRequestConnection {
   private state: ConnectionState = 'closed'
+  private readonly ordinary = new RemoteRuntimeOrdinarySender()
   private ws: WebSocket | null = null
   private handshake: PairedE2EEClientHandshake | null = null
   private socketCleanup: (() => void) | null = null
@@ -102,6 +104,7 @@ export class RemoteRuntimeRequestConnection {
       }, timeoutMs)
       this.pendingRequests.set(requestId, {
         resolve: (response) => {
+          this.ordinary.observe(method, response, true)
           signal?.removeEventListener('abort', onAbort)
           resolve(response as RuntimeRpcResponse<TResult>)
         },
@@ -119,7 +122,7 @@ export class RemoteRuntimeRequestConnection {
       }
 
       void this.ensureReady(signal).then(
-        () => this.sendRequest(requestId),
+        () => void this.sendRequest(requestId, timeoutMs),
         (error) => this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
       )
     })
@@ -128,6 +131,7 @@ export class RemoteRuntimeRequestConnection {
   close(error?: Error): void {
     const ws = this.ws
     const cleanup = this.socketCleanup
+    this.ordinary.close()
     this.ws = this.handshake = null
     this.socketCleanup = null
     this.state = 'closed'
@@ -189,6 +193,7 @@ export class RemoteRuntimeRequestConnection {
       return
     }
     this.ws = opened.socket.ws
+    this.ordinary.open(this.ws, (error) => this.close(error))
     this.handshake = opened.socket.handshake
     this.socketCleanup = opened.socket.cleanup
     this.state = 'awaiting_ready'
@@ -270,27 +275,17 @@ export class RemoteRuntimeRequestConnection {
     }
   }
 
-  private sendRequest(requestId: string): void {
-    const pending = this.pendingRequests.get(requestId)
-    const ws = this.ws
-    const handshake = this.handshake
-    if (!pending) {
-      return
-    }
-    if (this.state !== 'ready' || !ws || ws.readyState !== WebSocket.OPEN || !handshake) {
-      this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
-      return
-    }
-    const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
-    if (serializedRequest === null) {
-      this.rejectPendingRequest(requestId, remoteRuntimeUnavailableError())
-      return
-    }
-    try {
-      ws.send(handshake.channel.sealText(serializedRequest))
-    } catch (error) {
-      this.rejectPendingRequest(requestId, toRemoteRuntimeRequestError(error))
-    }
+  private sendRequest(requestId: string, timeoutMs: number): Promise<void> {
+    return sendRemoteRuntimeRequest({
+      requestId,
+      ready: this.state === 'ready',
+      ws: this.ws,
+      handshake: this.handshake,
+      ordinary: this.ordinary,
+      pending: this.pendingRequests,
+      probe: () => this.request('status.get', undefined, Math.min(timeoutMs, 5000)),
+      reject: (id, error) => this.rejectPendingRequest(id, error)
+    })
   }
 
   private rejectPendingRequest(requestId: string, error: Error): void {

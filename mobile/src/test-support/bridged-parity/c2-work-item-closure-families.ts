@@ -10,12 +10,12 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'schedules-b3': 'identical'
   },
   'tasks.item-checks-files': {
-    'matrix-tasks.item-checks-files-github.addprreviewcomment-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.prfilecontents-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.rerunprchecks-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.resolvereviewthread-1': 'params-undefined',
-    'matrix-tasks.item-checks-files-github.setprfileviewed-1': 'params-undefined',
-    'tk-item-checks-files': 'params-undefined'
+    'matrix-tasks.item-checks-files-github.addprreviewcomment-1': 'result-absent-settlement',
+    'matrix-tasks.item-checks-files-github.prfilecontents-1': 'result-absent-settlement',
+    'matrix-tasks.item-checks-files-github.rerunprchecks-1': 'result-absent-settlement',
+    'matrix-tasks.item-checks-files-github.resolvereviewthread-1': 'result-absent-settlement',
+    'matrix-tasks.item-checks-files-github.setprfileviewed-1': 'result-absent-settlement',
+    'tk-item-checks-files': 'identical'
   },
   'tasks.item-comment-github': {
     'matrix-tasks.item-comment-github-github.addissuecomment-1': 'result-absent-settlement',
@@ -62,8 +62,8 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-item-metadata-gitlab': 'identical'
   },
   'tasks.item-metadata-gitlab-mr': {
-    'matrix-tasks.item-metadata-gitlab-mr-gitlab.updatemr-1': 'params-undefined',
-    'tk-item-metadata-gitlab-mr': 'params-undefined'
+    'matrix-tasks.item-metadata-gitlab-mr-gitlab.updatemr-1': 'result-absent-settlement',
+    'tk-item-metadata-gitlab-mr': 'identical'
   },
   'tasks.item-reply-merge': {
     'matrix-tasks.item-reply-merge-github.addissuecomment-1': 'result-absent-settlement',
@@ -119,12 +119,12 @@ export const C2_WORK_ITEM_CLOSURE_FAMILIES: PageClosurePins = {
     'tk-project-row-fields': 'identical'
   },
   'tasks.project-row-files-merge': {
-    'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.mergepr-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.prfilecontents-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.updateissue-1': 'params-undefined',
-    'matrix-tasks.project-row-files-merge-github.updateprstate-1': 'params-undefined',
-    'tk-project-row-files-merge': 'params-undefined'
+    'matrix-tasks.project-row-files-merge-github.addprreviewcomment-1': 'result-absent-settlement',
+    'matrix-tasks.project-row-files-merge-github.mergepr-1': 'result-absent-settlement',
+    'matrix-tasks.project-row-files-merge-github.prfilecontents-1': 'result-absent-settlement',
+    'matrix-tasks.project-row-files-merge-github.updateissue-1': 'result-absent-settlement',
+    'matrix-tasks.project-row-files-merge-github.updateprstate-1': 'result-absent-settlement',
+    'tk-project-row-files-merge': 'identical'
   },
   'tasks.project-row-metadata-load': {
     'matrix-tasks.project-row-metadata-load-github.project.listassignableusersbyslug-1':

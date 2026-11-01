@@ -2,7 +2,15 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Profiler } from 'react'
+import { NativeChatSettledBodyContext } from './native-chat-settled-body'
+import { createAgentSessionSettledBodyReader } from '../../../../shared/agent-session-settled-body-reader'
+import { agentSessionJsonPiece } from '../../../../shared/agent-session-json-pieces'
+import {
+  AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+  type AgentSessionSettledBodyRead
+} from '../../../../shared/agent-session-settled-body'
 import { i18n } from '@/i18n/i18n'
 import type {
   AgentJournalQuestionItem,
@@ -41,6 +49,211 @@ const approval: NativeChatResolvedPrompt = {
 }
 
 describe('resolution receipts', () => {
+  it.each([2, 20])(
+    'shares exact bodies at N/10N across %s host owners without unrelated consumer commits',
+    async (count) => {
+      const exact: NativeChatResolvedPrompt = {
+        ...approval,
+        title: 'Exact saved form',
+        detail: null,
+        form: {
+          fields: [
+            { name: 'answer', required: true, schema: { type: 'string' } },
+            {
+              name: 'color',
+              required: true,
+              schema: {
+                type: 'string',
+                enum: ['a'.repeat(4000) + 'r'.repeat(4000), 'a'.repeat(4000) + 'b'.repeat(4000)],
+                enumNames: ['Red label', 'Blue label']
+              }
+            }
+          ]
+        },
+        resolution: {
+          ...approval.resolution,
+          selectedOptionId: null,
+          formContent: {
+            answer: `  first\n${'x'.repeat(60000)}\nlast  `,
+            color: 'a'.repeat(4000) + 'b'.repeat(4000)
+          }
+        }
+      }
+      const descriptor = {
+        contract: AGENT_SESSION_SETTLED_BODY_CAPABILITY,
+        version: 'approval-json.v1' as const,
+        state: 'resolved' as const
+      }
+      const hosts = Array.from({ length: count }, (_, index) => {
+        const source = {
+          ...descriptor,
+          sessionId: `host-${index}`,
+          epoch: `epoch-${index}`,
+          itemId: 'item-1',
+          revision: 2
+        }
+        let finish!: () => void
+        const gate = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        const read = vi.fn(async (request: AgentSessionSettledBodyRead) => {
+          await gate
+          return { source, ...agentSessionJsonPiece(JSON.stringify(exact), request.cursor) }
+        })
+        const reader = createAgentSessionSettledBodyReader(read)
+        return {
+          source,
+          reader,
+          read,
+          finish,
+          commits: vi.fn(),
+          owner: Object.freeze({ reader, sessionId: source.sessionId, epoch: source.epoch })
+        }
+      })
+      const view = render(
+        <>
+          {hosts.map((host, index) => (
+            <NativeChatSettledBodyContext.Provider key={index} value={host.owner}>
+              <Profiler id={`host-${index}`} onRender={host.commits}>
+                {[0, 1].map((duplicate) => (
+                  <NativeChatResolutionReceipt
+                    key={duplicate}
+                    body={{
+                      ...approval,
+                      title: 'Saved form',
+                      options: [],
+                      resolution: { ...approval.resolution, selectedOptionId: null },
+                      deferredBody: {
+                        itemId: host.source.itemId,
+                        revision: host.source.revision,
+                        descriptor
+                      }
+                    }}
+                  />
+                ))}
+              </Profiler>
+            </NativeChatSettledBodyContext.Provider>
+          ))}
+        </>
+      )
+      try {
+        await act(async () => {
+          await Promise.resolve()
+        })
+        for (const [index, host] of hosts.entries()) {
+          const before = hosts.map((held) => held.commits.mock.calls.length)
+          // One actual addressed completion per act; no batching hides fan-out.
+          await act(async () => {
+            host.finish()
+            await vi.waitFor(() =>
+              expect(host.reader.getSnapshot(host.source).status).toBe('ready')
+            )
+          })
+          expect(host.read).toHaveBeenCalledTimes(Math.ceil(JSON.stringify(exact).length / 24576))
+          expect(host.commits.mock.calls.length).toBeGreaterThan(before[index])
+          hosts.forEach((other, otherIndex) => {
+            if (other !== host) {
+              expect(other.commits).toHaveBeenCalledTimes(before[otherIndex])
+            }
+          })
+          await act(async () => {
+            hosts.forEach((held) => held.reader.retry())
+            await Promise.resolve()
+          })
+          hosts.forEach((other, otherIndex) => {
+            if (other !== host) {
+              expect(other.commits).toHaveBeenCalledTimes(before[otherIndex])
+            }
+          })
+        }
+        expect(screen.getAllByText('Blue label')).toHaveLength(count * 2)
+        expect(screen.queryByText('Red label')).toBeNull()
+        const answers = view.container.querySelectorAll(
+          '[data-native-chat-receipt="approval"] p.whitespace-pre-wrap'
+        )
+        const fullAnswers = Array.from(answers).filter(
+          (answer) => answer.textContent === exact.resolution.formContent!.answer
+        )
+        expect(fullAnswers).toHaveLength(count * 2)
+        fullAnswers.forEach((answer) => expect(answer).not.toHaveClass('line-clamp-3'))
+      } finally {
+        view.unmount()
+        hosts.forEach((host) => host.reader.dispose())
+      }
+    }
+  )
+
+  it('projects saved whole-form values into the existing receipt without filling omitted fields', () => {
+    const body: NativeChatResolvedPrompt = {
+      ...approval,
+      title: 'Configure report',
+      detail: null,
+      form: {
+        fields: [
+          { name: 'name', required: true, schema: { type: 'string', title: 'Name' } },
+          { name: 'count', required: true, schema: { type: 'integer' } },
+          { name: 'confirmed', required: true, schema: { type: 'boolean' } },
+          {
+            name: 'color',
+            required: true,
+            schema: {
+              type: 'string',
+              enum: ['blue', 'red'],
+              enumNames: ['Blue label', 'Red label']
+            }
+          },
+          { name: 'space', required: true, schema: { type: 'string' } },
+          { name: 'empty', required: false, schema: { type: 'string' } },
+          {
+            name: 'omitted',
+            required: false,
+            schema: { type: 'string', default: 'Do not restore' }
+          }
+        ]
+      },
+      resolution: {
+        ...approval.resolution,
+        selectedOptionId: null,
+        formContent: {
+          name: 'Ada',
+          count: 0,
+          confirmed: false,
+          color: 'red',
+          space: '  ',
+          empty: ''
+        }
+      }
+    }
+    const receipt = structuredQuestionTranscript([
+      { itemId: 'saved-form', revision: 2, sequence: 1, observedAt: 1000, body }
+    ]).receipts.get('saved-form')!
+    expect(receipt).toBe(body)
+    render(<NativeChatResolutionReceipt body={receipt} />)
+    expect(nativeChatReceiptAnswers(receipt)).toEqual([
+      { question: 'Name', answer: 'Ada' },
+      { question: 'count', answer: '0' },
+      { question: 'confirmed', answer: 'No' },
+      { question: 'color', answer: 'Red label' },
+      { question: 'space', answer: '  ' },
+      { question: 'empty', answer: '' }
+    ])
+    for (const text of [
+      'Configure report',
+      'Name',
+      'Ada',
+      '0',
+      'No',
+      'Red label',
+      'Empty answer'
+    ]) {
+      expect(screen.getByText(text)).toBeInTheDocument()
+    }
+    expect(screen.getByText('space').nextElementSibling?.textContent).toBe('  ')
+    expect(screen.queryByText('omitted')).toBeNull()
+    expect(screen.queryByText('Selected answer unavailable')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
   it('localizes the resolved time when the UI language changes', async () => {
     render(<NativeChatResolutionReceipt body={approval} />)
     await act(async () => {

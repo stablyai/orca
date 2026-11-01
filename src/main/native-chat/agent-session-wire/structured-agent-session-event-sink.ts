@@ -10,6 +10,7 @@ import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wir
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
+import { createStructuredAgentSessionLifecycleBatchAppend } from './structured-agent-session-lifecycle-batch-append'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
@@ -132,12 +133,12 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options?: StructuredAgentSessionAppendOptions
+    options?: StructuredAgentSessionAppendOptions & { publish?: boolean }
   ): StructuredAgentSessionSinkAdmission | void
   tryAppendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options?: StructuredAgentSessionAppendOptions
+    options?: StructuredAgentSessionAppendOptions & { publish?: boolean }
   ): StructuredAgentSessionSinkAdmission
   tryPublish?(options?: StructuredAgentSessionPublishOptions): StructuredAgentSessionSinkAdmission
   /** Couples durable-queue pressure to the exact provider stream producing it. */
@@ -215,26 +216,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   })
   const resolvedAppend = createStructuredAgentSessionResolvedAppend(queue)
 
-  const appendLifecycleBatch = (
-    settlementId: string,
-    mutations: readonly JournalLifecycleIdentityMutationInput[],
-    options: StructuredAgentSessionAppendOptions = {}
-  ): StructuredAgentSessionSinkAdmission =>
-    queue.submit(
-      {
-        bytes: Buffer.byteLength(JSON.stringify({ settlementId, mutations }), 'utf8') + 512,
-        run: (bound) =>
-          bound.journal.appendLifecycleBatch({
-            settlementId,
-            mutations,
-            // Preserve per-mutation linkage instead of stamping the whole row.
-            fence: bound.fence,
-            // Provider observations use the bound child’s execution fence.
-            ownerFence: bound.fence
-          })
-      },
-      { ...options, lifecycle: true }
-    )
+  const appendLifecycleBatch = createStructuredAgentSessionLifecycleBatchAppend(queue)
 
   const publish = (
     options: StructuredAgentSessionPublishOptions = {}

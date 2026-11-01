@@ -1,3 +1,4 @@
+import { invalidateSettledBodySerializations } from './agent-session-settled-body'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -54,6 +55,10 @@ export class StructuredAgentSessionConversations extends Map<
     [...this].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
 
   override set(sessionId: string, session: StructuredAgentSessionHostSession): this {
+    const previous = this.get(sessionId)
+    if (previous && previous !== session) {
+      invalidateSettledBodySerializations(previous.journal, true)
+    }
     const { journal } = session
     if (this.get(sessionId)?.journal === journal) {
       this.touch(sessionId)
@@ -75,6 +80,7 @@ export class StructuredAgentSessionConversations extends Map<
       if (!current()) {
         return
       }
+      invalidateSettledBodySerializations(journal)
       this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
       try {
         this.delivery.observe?.(sessionId, journal, rows)
@@ -216,6 +222,10 @@ export class StructuredAgentSessionConversations extends Map<
   }
 
   override delete(sessionId: string): boolean {
+    const session = this.get(sessionId)
+    if (session) {
+      invalidateSettledBodySerializations(session.journal, true)
+    }
     this.attachments.get(sessionId)?.release()
     this.attachments.delete(sessionId)
     this.delivery.forget?.(sessionId)

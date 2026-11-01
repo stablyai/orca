@@ -6,6 +6,7 @@ import {
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import {
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
@@ -26,6 +27,7 @@ import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
 
 // Grant the intersection of implemented capabilities and route declarations, plus protocol fault. Use the same resolved list for init and enforcement; new names need no version bump.
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
+  BRIDGE_EXTERNAL_LINK_FULL_URL,
   BRIDGE_FAULT_GRANT,
   BRIDGE_RPC_ENVELOPE_GRANT,
   ...MOBILE_WEB_SHELL_GRANTS
@@ -33,6 +35,7 @@ export const BRIDGE_NATIVE_GRANTS: readonly string[] = [
 
 export function createBridgeInitFrame(args: {
   sessionId: string
+  inboundMessageBytes?: number
   buildId: string
   connection: BridgeConnectionSnapshot
   route: BridgeInitRoute
@@ -63,6 +66,9 @@ export function createBridgeInitFrame(args: {
     type: 'init',
     sessionId: args.sessionId,
     buildId: args.buildId,
+    ...(args.inboundMessageBytes === undefined
+      ? {}
+      : { inboundMessageBytes: args.inboundMessageBytes }),
     connection: args.connection,
     grants: {
       rpc: {

@@ -137,7 +137,10 @@ bootstrapShellPage({
     })
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
-    publishExternalLinkOpener((url) => client.notifyExternalLink(url))
+    publishExternalLinkOpener((url) => client.notifyExternalLink(url), {
+      read: client.getExternalLinkSupport,
+      subscribe: client.onExternalLinkSupport
+    })
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.
     publishShellKeyboardSource({

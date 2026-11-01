@@ -13,6 +13,7 @@ import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 
 type Projection = { message: NativeChatMessage | null; questionKey: string | null }
 type ItemProjector = (item: AgentJournalRenderItem) => NativeChatMessage | null
+const deferredReceipts = new WeakMap<AgentJournalRenderItem, NativeChatResolvedPrompt>()
 const pendingGroups = new WeakMap<
   AgentJournalQuestionItem,
   {
@@ -161,7 +162,22 @@ function projectQuestions(
         (item.body.kind === 'question' || item.body.kind === 'approval') &&
         item.body.resolution.state !== 'pending'
       ) {
-        receipts.set(item.itemId, item.body)
+        let body: NativeChatResolvedPrompt = item.body
+        if (item.settledBody) {
+          const prior = deferredReceipts.get(item)
+          body = prior ?? {
+            ...body,
+            deferredBody: {
+              itemId: item.itemId,
+              revision: item.revision,
+              descriptor: item.settledBody
+            }
+          }
+          if (!prior) {
+            deferredReceipts.set(item, body)
+          }
+        }
+        receipts.set(item.itemId, body)
       }
     }
     if (projection.message) {

@@ -2,10 +2,7 @@ import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/sh
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import {
-  projectStructuredQuestionMessages,
-  structuredQuestionTranscript
-} from '../../../src/shared/structured-agent-question-projection'
+import * as questions from '../../../src/shared/structured-agent-question-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
@@ -35,10 +32,7 @@ import { useMobileStructuredPromptResponses } from './use-mobile-structured-prom
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
-import {
-  pendingStructuredPromptIdentity,
-  requestMobileStructuredAgentSessionCancel
-} from './mobile-structured-agent-session-cancel'
+import * as promptCancel from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send-with-outcome'
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
@@ -60,8 +54,7 @@ export function useMobileStructuredAgentSession(
     enabled,
     onActionResolved,
     onSendError,
-    hostSupport,
-    onCommandsChanged
+    hostSupport
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
@@ -74,9 +67,14 @@ export function useMobileStructuredAgentSession(
   const commandPendingRef = useRef(false)
   // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
-  const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
-  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
-    useMobileStructuredAgentState(stateArgs)
+  const formSubmitEnabled =
+    hostSupport?.ordinaryMessages === true && (client?.getRequestByteCapacity?.() ?? 0) >= 4194304
+  const { settledBodyOwner, state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier } =
+    useMobileStructuredAgentState({
+      ...args,
+      sessionKey,
+      settledBodiesSupported: hostSupport?.settledBodies
+    })
 
   const mutate = useMobileStructuredAgentMutate({
     client,
@@ -116,9 +114,12 @@ export function useMobileStructuredAgentSession(
     [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
   )
 
+  const promptSourceKey = encodeNativeChatTranscriptIdentity([sessionKey, state.epoch])
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
     mutate,
+    formSubmitEnabled,
+    sourceKey: promptSourceKey,
     questionAnswersSupported: hostSupport?.questionAnswers ?? null,
     onSendError
   })
@@ -143,7 +144,7 @@ export function useMobileStructuredAgentSession(
         transcriptItems,
         sends.optimistic,
         state.submissions,
-        projectStructuredQuestionMessages
+        questions.projectStructuredQuestionMessages
       ),
     [transcriptItems, sends.optimistic, state.submissions]
   )
@@ -240,7 +241,7 @@ export function useMobileStructuredAgentSession(
   // Stop preserves host-held cards under queue pause; only a later user action resumes them.
   const requestCancel = useCallback(
     (prompt?: { itemId: string; expectedRevision: number }): Promise<boolean> =>
-      requestMobileStructuredAgentSessionCancel({
+      promptCancel.requestMobileStructuredAgentSessionCancel({
         client,
         enabled,
         hostAnswersRepeatedStops,
@@ -272,6 +273,7 @@ export function useMobileStructuredAgentSession(
   return {
     ...options,
     visualSource,
+    settledBodyOwner,
     asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
@@ -294,10 +296,10 @@ export function useMobileStructuredAgentSession(
     sendWithOutcome,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
-    receipts: structuredQuestionTranscript(transcriptItems).receipts,
+      requestCancel(prompt ?? promptCancel.pendingStructuredPromptIdentity(stateRef.current)),
+    receipts: questions.structuredQuestionTranscript(transcriptItems).receipts,
     actionablePromptIds: state.actionablePromptIds,
-    permission: projectStructuredPermission(approvalPrompt),
+    permission: projectStructuredPermission(approvalPrompt, formSubmitEnabled, promptSourceKey),
     question: projectStructuredQuestion(questionPrompt),
     respondPermission,
     respondQuestion,

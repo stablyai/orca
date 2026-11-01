@@ -491,7 +491,8 @@ import Foundation
 
   static func checkBridgeByteCap() {
     let cap = MobileWebShellBridge.maxMessageByteCount
-    precondition(cap == 640 * 1024)
+    precondition(cap == 4 * 1024 * 1024)
+    precondition(MobileWebShellBridge.maxOutboundMessageByteCount == 640 * 1024)
     precondition(MobileWebShellBridge.acceptsByteCount(0))
     precondition(MobileWebShellBridge.acceptsByteCount(cap - 1))
     precondition(MobileWebShellBridge.acceptsByteCount(cap))

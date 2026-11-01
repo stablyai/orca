@@ -1,8 +1,11 @@
+import { createAgentSessionFormSubmissions } from '../../../../shared/agent-session-form-submission'
+import { selectAgentSessionCurrentRequests } from '../../../../shared/agent-session-current-requests'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 // Give each press its own operation ID; join pending targeted Stops only for older hosts. Command settlement survives provider changes; late pane presentation does not.
 
 import { AGENT_SESSION_GOAL_CONTROL_COPY as GOAL_COPY } from '../../../../shared/agent-session-goal-control-copy'
 import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
 import {
@@ -79,7 +82,13 @@ export function useStructuredAgentSessionMutate(args: {
   target: RuntimeClientTarget
   enabled?: boolean
   /** Capture the original press fence for host admission, including older hosts. */
-  stateRef: { current: { fence: number | null } }
+  stateRef: {
+    current: {
+      fence: number | null
+      items?: AgentJournalRenderItem[]
+      currentRequests?: AgentJournalRenderItem[]
+    }
+  }
   agentName?: string
 }): {
   write: StructuredAgentSessionWrite
@@ -91,6 +100,8 @@ export function useStructuredAgentSessionMutate(args: {
   const inFlightStops = useRef(new Map<string, Promise<ExecutionResult<unknown>>>())
   const presentation = useRef<object | null>(null)
   const hostKey = structuredAgentSessionHostKey(target)
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Unknown submission identities belong to exactly this host/session lifetime.
+  const formSubmissions = useMemo(() => createAgentSessionFormSubmissions(), [hostKey, sessionId])
   useLayoutEffect(() => {
     presentation.current = enabled ? {} : null
     return () => {
@@ -110,10 +121,28 @@ export function useStructuredAgentSessionMutate(args: {
       /** The fence when the press happened, read before any await, so a write never retargets. */
       pressedFence: number
     ): Promise<ExecutionResult<T>> => {
+      const submission = formSubmissions.capture({
+        method,
+        fingerprintMethod,
+        sessionId,
+        fields,
+        fence: pressedFence,
+        operationId: structuredSessionOperationId,
+        ...(stateRef.current.items
+          ? {
+              liveItemIds: new Set(
+                selectAgentSessionCurrentRequests({
+                  ...stateRef.current,
+                  items: stateRef.current.items
+                }).map((item) => item.itemId)
+              )
+            }
+          : {})
+      })
       let result: AgentSessionMutationResult<T>
       try {
         result = await callStructuredAgentSession<AgentSessionMutationResult<T>>(target, method, {
-          envelope: {
+          envelope: submission?.envelope ?? {
             sessionId,
             clientOperationId: structuredSessionOperationId(),
             expectedRuntimeFence: pressedFence,
@@ -126,16 +155,24 @@ export function useStructuredAgentSessionMutate(args: {
           ...fields
         })
       } catch (error) {
+        const failure = agentSessionThrownFailure(
+          error,
+          error instanceof RuntimeRpcCallError ? error.code : undefined
+        )
+        const unknown = submission?.unknown === true || failure.kind === 'unconfirmed'
+        formSubmissions.settle(fields.itemId, submission, unknown)
         return notDone(
-          agentSessionThrownFailure(
-            error,
-            error instanceof RuntimeRpcCallError ? error.code : undefined
-          ),
+          unknown && submission ? { kind: 'unconfirmed' } : failure,
           fingerprintMethod,
           fields,
           agentName
         )
       }
+      if (submission && !result.ok && result.refusal.code === 'agent_session_operation_unknown') {
+        formSubmissions.settle(fields.itemId, submission, true)
+        return notDone({ kind: 'unconfirmed' }, fingerprintMethod, fields, agentName)
+      }
+      formSubmissions.settle(fields.itemId, submission, false)
       if (!result.ok) {
         const outcome = notDone(
           agentSessionRefusalFailure(result.refusal),
@@ -154,7 +191,7 @@ export function useStructuredAgentSessionMutate(args: {
       }
       return { kind: 'done', value: result.value }
     },
-    [agentName, sessionId, target]
+    [agentName, formSubmissions, sessionId, stateRef, target]
   )
 
   const admit = useCallback((): StructuredAgentSessionAction | null => {

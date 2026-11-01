@@ -1,4 +1,4 @@
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
+import type { RpcClient, SendRequestOptions } from '../transport/rpc-client-contract'
 import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
 import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
 import type { ConnectionState, RpcResponse } from '../transport/types'

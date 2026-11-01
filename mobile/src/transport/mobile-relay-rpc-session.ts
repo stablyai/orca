@@ -1,3 +1,5 @@
+import { preparedMobileRequestSender } from './prepared-mobile-rpc-request'
+import { createMobileOrdinaryMessageSupport } from './mobile-runtime-ordinary-messages'
 import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
@@ -12,7 +14,6 @@ import {
   type RpcEnvelopeFields,
   type RpcRequestFrame
 } from './rpc-envelope-fields'
-import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
@@ -106,13 +107,18 @@ export function connectMobileRelayRpcSession(args: {
     onError: fail
   })
 
+  const ordinaryMessages = createMobileOrdinaryMessageSupport()
+  const requestByteCapacity = ordinaryMessages.capacity
   const client: MobileRelayRpcSession = {
-    async sendRequest(method, params, options) {
-      const budget = openRpcRequestBudget(options)
-      await waitForConnected(budget.timeoutMs)
-      const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
-      return sendRpc(method, params, timeoutMs, false, options?.envelope)
-    },
+    getRequestByteCapacity: requestByteCapacity,
+    sendRequest: preparedMobileRequestSender({
+      getState: () => state,
+      waitForConnected,
+      send: (method, params, timeoutMs, envelope) =>
+        sendRpc(method, params, timeoutMs, false, envelope),
+      observe: ordinaryMessages.observe,
+      requestTimeoutMs
+    }),
 
     subscribe(method, params, listener, options) {
       if (closed) {
@@ -249,7 +255,11 @@ export function connectMobileRelayRpcSession(args: {
 
   function sendFrame({ envelope, ...request }: RpcRequestFrame): boolean {
     const wire = withRpcEnvelopeFields({ ...request, deviceToken: args.deviceToken }, envelope)
-    return link.sendText(JSON.stringify(wire))
+    const serialized = JSON.stringify(wire)
+    return (
+      new TextEncoder().encode(serialized).length <= requestByteCapacity() &&
+      link.sendText(serialized)
+    )
   }
 
   function handleText(plaintext: string): void {

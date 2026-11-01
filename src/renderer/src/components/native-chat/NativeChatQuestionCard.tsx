@@ -110,7 +110,7 @@ export function NativeChatQuestionCard({
       next[qi] = value
       return next
     })
-    if (value.trim().length > 0) {
+    if (askTypedText(value, freeTextInputs?.[index]).length > 0) {
       chooseTypedAnswer(qi)
     }
   }
@@ -323,7 +323,7 @@ export function NativeChatQuestionCard({
                       // Select typed text on click; tabbing toward Submit must not replace a picked option.
                       onClick={() => {
                         autoAdvance.cancel()
-                        if ((otherText[index] ?? '').trim().length > 0) {
+                        if (typedText(index).length > 0) {
                           chooseTypedAnswer(index)
                         }
                       }}

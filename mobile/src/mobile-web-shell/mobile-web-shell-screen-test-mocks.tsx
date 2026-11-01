@@ -159,6 +159,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
           }, [attach])
           return React.createElement('ShellViewProbe', props)
         },
+        nativeBridgeInboundMessageBytes: () => undefined,
         parseMobileWebShellLoadState: parseMobileWebShellLoadState
       }
     },

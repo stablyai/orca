@@ -11,6 +11,7 @@ export type AgentSessionSubscribeInput = {
   /** Bound each frame to the phone bridge’s limit; RPC enables this for every phone. */
   boundedFrames?: boolean
   projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
+  readsSettledBodies?: boolean
   readsCurrentRequests?: boolean
   /** False for desktops that need exact replay to keep send echoes and current requests. */
   snapshotCatchUp?: boolean

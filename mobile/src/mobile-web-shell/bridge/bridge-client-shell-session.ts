@@ -1,11 +1,8 @@
 import { TERMINAL_SHORTCUT_STORAGE_KEYS } from '../page-storage-keys'
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
+import * as externalLink from './bridge-external-link-support'
 import { bridgeRouteMoved } from './bridge-route-update'
-import {
-  sameSafeAreaInsets,
-  ZERO_SAFE_AREA_INSETS,
-  type BridgeSafeAreaInsets
-} from './bridge-safe-area-insets'
+import * as insets from './bridge-safe-area-insets'
 import {
   EMPTY_PAGE_GEOMETRY,
   samePageGeometry,
@@ -26,6 +23,8 @@ type InitMessage = Extract<BridgeHostMessage, { type: 'init' }>
 // Same-session init preserves exchanges; replacement drops prior work before publishing the new session to listeners.
 export type BridgeClientShellSession = {
   current: () => BridgeShellSession | null
+  externalLinkSupport: () => externalLink.BridgeExternalLinkSupport
+  onExternalLinkSupport: (listener: () => void) => () => void
   accept: (message: InitMessage) => void
   onReady: (listener: () => void) => () => void
   /**
@@ -40,7 +39,7 @@ export type BridgeClientShellSession = {
    */
   onStorageUpdate: (listener: () => void) => () => void
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
-  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
+  onSafeAreaInsetsUpdate: (listener: (insets: insets.BridgeSafeAreaInsets) => void) => () => void
   onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   /** Fires when an `init` moved the fold the page holds, including a replacement's. */
   onPageGeometryUpdate: (listener: (geometry: BridgePageGeometry) => void) => () => void
@@ -91,10 +90,22 @@ export function createBridgeClientShellSession(args: {
   prime: (connection: BridgeConnectionSnapshot) => void
 }): BridgeClientShellSession {
   let session: BridgeShellSession | null = null
+  let externalSupport = externalLink.readBridgeExternalLinkSupport(null)
+  const externalListeners = new Set<() => void>()
+  function publishExternalSupport(): void {
+    const next = externalLink.readBridgeExternalLinkSupport(session)
+    if (externalLink.sameBridgeExternalLinkSupport(externalSupport, next)) {
+      return
+    }
+    externalSupport = next
+    for (const listener of externalListeners) {
+      listener()
+    }
+  }
   const storageListeners = new Set<() => void>()
   const readyListeners = new Set<() => void>()
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
-  const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
+  const insetsListeners = new Set<(insets: insets.BridgeSafeAreaInsets) => void>()
   const keyboardListeners = new Set<(height: number) => void>()
   const geometryListeners = new Set<(geometry: BridgePageGeometry) => void>()
   const foldListeners = new Set<(division: BridgeFoldDivision | null) => void>()
@@ -104,6 +115,13 @@ export function createBridgeClientShellSession(args: {
 
   return {
     current: () => session,
+    externalLinkSupport: () => externalSupport,
+    onExternalLinkSupport: (listener) => {
+      externalListeners.add(listener)
+      return () => {
+        externalListeners.delete(listener)
+      }
+    },
     accept: (message) => {
       const held = session
       const update = held !== null && held.sessionId === message.sessionId ? held : null
@@ -131,8 +149,8 @@ export function createBridgeClientShellSession(args: {
           }
         }
       }
-      const sent = message.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
-      const movedInsets = held !== null && !sameSafeAreaInsets(held.safeAreaInsets, sent)
+      const sent = message.safeAreaInsets ?? insets.ZERO_SAFE_AREA_INSETS
+      const movedInsets = held !== null && !insets.sameSafeAreaInsets(held.safeAreaInsets, sent)
       // Reuse equal values’ identity so repeated ready cannot rerender keyed readers.
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
       const keyboardInset = message.keyboardInset ?? 0
@@ -161,6 +179,8 @@ export function createBridgeClientShellSession(args: {
             }
           : {
               ...update,
+              grants: externalLink.refreshBridgeExternalLinkGrants(update.grants, message.grants),
+              inboundMessageBytes: message.inboundMessageBytes,
               storage: storage ?? update.storage,
               storageOversize: storageOversize ?? update.storageOversize,
               route: message.route ?? null,
@@ -172,6 +192,7 @@ export function createBridgeClientShellSession(args: {
               colorScheme,
               uiLocale
             }
+      publishExternalSupport()
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
       // own is newer than, and this frame is what puts the two back in step. A pane update carries
@@ -299,6 +320,8 @@ export function createBridgeClientShellSession(args: {
     },
     close: () => {
       session = null
+      publishExternalSupport()
+      externalListeners.clear()
       readyListeners.clear()
     }
   }

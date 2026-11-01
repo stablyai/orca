@@ -579,6 +579,7 @@ import {
   SshTargetAdd,
   SshTargetUpdate
 } from './ssh-params'
+import { RespondParams } from './structured-agent-session-approval-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
@@ -598,7 +599,6 @@ import {
   OptionsParams,
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
-  RespondParams,
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,

@@ -1,3 +1,4 @@
+import { BRIDGE_EXTERNAL_LINK_FULL_URL } from './bridge/bridge-frame-fields'
 // Inspect desktop requests as well as the native error: a leaked native method would also be refused by the desktop allowlist, masking a broken fence.
 import { describe, expect, it } from 'vitest'
 import { ID, harness } from './bridge-host-test-harness'
@@ -300,7 +301,9 @@ describe('grants scoped to the route the page was opened for', () => {
     const bridge = harness({ routeGrants: navigationOnly, ready: true })
     expect(bridge.last()).toMatchObject({
       type: 'init',
-      grants: { native: ['fault', 'rpcEnvelope', 'navigate', 'storage'] }
+      grants: {
+        native: [BRIDGE_EXTERNAL_LINK_FULL_URL, 'fault', 'rpcEnvelope', 'navigate', 'storage']
+      }
     })
     for (const [method, params] of [
       ['native.clipboard.read', { mime: 'text' }],

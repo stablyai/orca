@@ -1,3 +1,4 @@
+import type { AgentSessionSettledBodyDescriptor } from './agent-session-settled-body-wire'
 import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem
@@ -7,6 +8,7 @@ import {
   legacyAgentSessionQuestionAnswers
 } from './agent-session-question-answer'
 import type { NativeChatAskRowSubject } from './native-chat/input/native-chat-ask-row'
+import { agentSessionFormChoices } from './agent-session-form'
 
 /** Desktop's fallbacks for its translations; the phone's words. */
 export const NATIVE_CHAT_RECEIPT_COPY = {
@@ -18,15 +20,35 @@ export const NATIVE_CHAT_RECEIPT_COPY = {
   cancelledBy: 'Cancelled on {{device}}'
 } as const
 
-export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
+export type NativeChatResolvedPrompt = (AgentJournalApprovalItem | AgentJournalQuestionItem) & {
+  deferredBody?: { itemId: string; revision: number; descriptor: AgentSessionSettledBodyDescriptor }
+}
 /** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
 export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
 
 export function nativeChatReceiptAnswers(
-  body: NativeChatResolvedPrompt
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
 ): NativeChatReceiptAnswer[] {
   if (body.resolution.state !== 'resolved') {
     return []
+  }
+  if (body.kind === 'approval' && body.form && body.resolution.formContent !== undefined) {
+    const content = body.resolution.formContent
+    return body.form.fields.flatMap((field) => {
+      if (!Object.hasOwn(content, field.name)) {
+        return []
+      }
+      const value = content[field.name]
+      return [
+        {
+          question: field.schema.title ?? field.name,
+          answer:
+            agentSessionFormChoices(field, booleanLabels).find((choice) => choice.value === value)
+              ?.label ?? String(value)
+        }
+      ]
+    })
   }
   const selected = body.resolution.selectedOptionId
   if (body.kind === 'question') {
@@ -55,6 +77,28 @@ export function nativeChatReceiptAnswers(
   }
   const option = body.options.find((option) => option.id === selected)
   return [{ question: null, answer: option?.label ?? null }]
+}
+
+export function nativeChatReceiptAnswerEntries(
+  body: NativeChatResolvedPrompt,
+  booleanLabels?: { yes: string; no: string }
+): { key: string | undefined; answer: NativeChatReceiptAnswer }[] {
+  let keys: string[]
+  if (body.kind === 'question') {
+    keys = agentSessionPromptQuestions(body).map((question) => question.id)
+  } else {
+    const content = body.resolution.state === 'resolved' ? body.resolution.formContent : undefined
+    keys =
+      body.form && content !== undefined
+        ? body.form.fields
+            .filter((field) => Object.hasOwn(content, field.name))
+            .map((field) => field.name)
+        : ['answer']
+  }
+  return nativeChatReceiptAnswers(body, booleanLabels).map((answer, index) => ({
+    key: keys[index],
+    answer
+  }))
 }
 
 /** Null for an approval, which shows its title instead. */

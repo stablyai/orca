@@ -1,3 +1,5 @@
+import { AgentSessionSettledBodyDescriptorSchema } from './agent-session-settled-body-wire'
+import { AgentSessionFormSchema, AgentSessionFormContentSchema } from './agent-session-form'
 // Validate replayed JSON deeply before unguarded reducers/renderers read it; malformed rows fail load without deletion.
 // Extend with keys, open-union tags or a new row v; never tighten existing types/bounds/closed sets.
 // Unknown keys and string vocabularies survive; unknown bodies/blocks/goals/subjects remain undrawn and writable.
@@ -137,6 +139,7 @@ const Question = z.object({
 })
 
 const Resolution = z.object({
+  formContent: AgentSessionFormContentSchema.optional(),
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
   answers: z
@@ -214,6 +217,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('diff'), path: z.string(), patch: BoundedPayload }),
   z.object({
     kind: z.literal('approval'),
+    form: AgentSessionFormSchema.optional(),
+    url: z.string().optional(),
     title: z.string(),
     displayName: z.string().optional(),
     description: z.string().optional(),
@@ -281,6 +286,7 @@ export const AgentJournalTurnScopeSchema = z.object({
 })
 
 export const AgentJournalRenderItemSchema = z.object({
+  settledBody: AgentSessionSettledBodyDescriptorSchema.optional(),
   itemId: z.string().min(1),
   revision: z.number().int(),
   body: AgentJournalItemBodySchema,

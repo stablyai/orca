@@ -1,9 +1,10 @@
+import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import WebSocket, { type RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
-const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
+const MAX_RELAY_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
 // Terminate normally closes next tick; cap slow teardown at 5s so dead sockets cannot block stop or quit.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
 const RELAY_SOCKET_CLOSE_WAIT_CONCURRENCY = 32

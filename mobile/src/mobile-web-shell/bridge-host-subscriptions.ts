@@ -15,7 +15,7 @@ import {
 } from './bridge-terminal-output-backlog'
 import type { BridgeBinaryEvent } from './bridge/bridge-screencast-binary'
 import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc-client-contract'
 import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
 
 export type BridgeEndReason = Extract<BridgeHostMessage, { type: 'end' }>['reason']

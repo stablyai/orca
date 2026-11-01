@@ -8,11 +8,12 @@ import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-
 import { useAppStore } from '../../store'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
-import { handleNativeChatWebLink } from './native-chat-web-link-actions'
+import { handleNativeChatWebLink, openNativeChatWebLink } from './native-chat-web-link-actions'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
 export type NativeChatLinkActions = {
+  openUrl: ((url: string) => void) | undefined
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
   linkActionRequest: LinkActionRequest | null
   closeLinkActions: (dismissed?: LinkActionRequest) => void
@@ -71,7 +72,27 @@ export function useNativeChatLinkActions(
     [context, openFileLink, rootRef]
   )
 
+  const openUrl = useCallback(
+    (url: string): void => {
+      if (!context || !/^https?:/i.test(url)) {
+        return
+      }
+      const routing = resolveNativeChatHttpLinkRouting(useAppStore.getState(), context.worktreeId)
+      openNativeChatWebLink(
+        url,
+        {
+          worktreeId: context.worktreeId,
+          sourceTabId: context.sourceTabId,
+          sourceOwner: routing.sourceOwner
+        },
+        routing.destinations.primary
+      )
+    },
+    [context]
+  )
+
   return {
+    openUrl: context ? openUrl : undefined,
     onLinkClick: context ? onLinkClick : undefined,
     linkActionRequest,
     closeLinkActions

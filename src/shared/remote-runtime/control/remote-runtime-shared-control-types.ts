@@ -1,3 +1,4 @@
+export type { PairedRuntimeConnection as Connection } from '../../paired-runtime-connection'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'

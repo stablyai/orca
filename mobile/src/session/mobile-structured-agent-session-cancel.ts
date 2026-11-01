@@ -40,7 +40,10 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const current = stateRef.current
   const turnId = runningStructuredAgentSessionTurnId(current)
   // Check the capability before fields enter the fingerprint.
-  const prompt = args.prompt && args.promptCancelSupported === true ? args.prompt : undefined
+  const prompt =
+    args.prompt && args.promptCancelSupported === true
+      ? { itemId: args.prompt.itemId, expectedRevision: args.prompt.expectedRevision }
+      : undefined
   // Conversation Stop also covers un-echoed sends; card Cancel must still name its originating turn.
   const unnamed = args.hostStopsConversation === true && !args.prompt
   if (!client || !sessionId || !enabled || current.fence === null || (!turnId && !unnamed)) {

@@ -1,7 +1,8 @@
+import { settledBodyPieceReader as makeBodyReader } from './agent-session-settled-body'
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from './structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from './structured-agent-start-journal'
-import { StructuredConversationCommandController } from './structured-conversation-command-controller'
+import { StructuredConversationCommandController as Commands } from './structured-conversation-command-controller'
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
@@ -30,10 +31,7 @@ import { createStructuredAgentSessionWorkspaceSleeper } from './structured-agent
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
-  private readonly conversationCommands = new StructuredConversationCommandController(
-    () => this.mutationContext(),
-    this
-  )
+  private readonly conversationCommands = new Commands(() => this.mutationContext(), this)
   private readonly sessions = createStructuredAgentSessionPublicationWiring({
     client: () => this.clientDelivery,
     delivery: () => this.conversationDelivery,
@@ -303,6 +301,9 @@ export class StructuredAgentSessionHost {
   history: BackgroundTasks['history'] = (...args) => this.backgroundTasks.history(...args)
 
   readonly continuationContext: ReturnType<typeof contextReader>
+
+  /** Full reduction: absence from a bounded page cannot prove a revised/tombstoned item is absent. */
+  settledBodyPiece = makeBodyReader((id) => this.lifetime.conversation(id))
 
   observeConversationPublications: typeof this.sessions.observeConversationPublications = (
     ...args

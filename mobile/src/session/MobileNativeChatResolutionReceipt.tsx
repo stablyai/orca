@@ -1,7 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { agentSessionFormBooleanLabels } from '../../../src/shared/agent-session-form-copy'
+import { useMobileNativeChatSettledBody } from './mobile-native-chat-settled-body'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import {
   nativeChatReceiptAnswerHeading,
-  nativeChatReceiptAnswers,
+  nativeChatReceiptAnswerEntries,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
 } from '../../../src/shared/native-chat-resolution-receipt'
@@ -16,7 +18,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export function MobileNativeChatResolutionReceipt({
-  body,
+  body: presentation,
   awaiting = true,
   fontScale
 }: {
@@ -25,6 +27,10 @@ export function MobileNativeChatResolutionReceipt({
   awaiting?: boolean
   fontScale: number
 }): React.JSX.Element | null {
+  const hydrated = useMobileNativeChatSettledBody(presentation)
+  const body: NativeChatResolvedPrompt =
+    presentation.deferredBody && hydrated.status === 'ready' ? hydrated.body : presentation
+  const incomplete = !!body.deferredBody
   useMobileColorScheme()
   const t = useMobileTranslation()
   const subject = nativeChatReceiptSubject(body)
@@ -42,7 +48,9 @@ export function MobileNativeChatResolutionReceipt({
   const { resolution } = body
   const copy = nativeChatReceiptCopy(t, resolution.resolvedBy ?? undefined)
   const cancelled = resolution.state === 'cancelled'
-  const answers = nativeChatReceiptAnswers(body)
+  const answers = incomplete
+    ? []
+    : nativeChatReceiptAnswerEntries(body, agentSessionFormBooleanLabels(t))
   const outcome = [
     cancelled ? copy.cancelled : copy.resolved,
     resolution.resolvedBy ? (cancelled ? copy.cancelledBy : copy.resolver) : null
@@ -67,14 +75,23 @@ export function MobileNativeChatResolutionReceipt({
           {body.detail}
         </Text>
       ) : null}
-      {answers.map((answer, index) => {
+      {incomplete ? (
+        hydrated.status === 'loading' ? (
+          <ActivityIndicator size="small" />
+        ) : (
+          <Text style={text}>{copy.unavailable}</Text>
+        )
+      ) : null}
+      {answers.map(({ key, answer }) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <View
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
-          >
+          <View key={key}>
             {heading ? <Text style={text}>{heading}</Text> : null}
-            <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>
+            <Text
+              selectable={INLINE_TEXT_SELECTION}
+              style={text}
+              numberOfLines={body.kind === 'approval' && body.form ? undefined : 3}
+            >
               {answer.answer === '' ? copy.emptyAnswer : (answer.answer ?? copy.unavailable)}
             </Text>
           </View>

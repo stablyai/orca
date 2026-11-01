@@ -1,3 +1,4 @@
+import { nativeBridgeInboundMessageBytes } from '../../modules/orca-mobile-web-shell/src'
 import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
@@ -151,6 +152,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     const host = createBridgeHost({
       client,
       buildId,
+      inboundMessageBytes: nativeBridgeInboundMessageBytes(),
       sessionId,
       route: latest.route,
       safeAreaInsets: latest.safeAreaInsets,

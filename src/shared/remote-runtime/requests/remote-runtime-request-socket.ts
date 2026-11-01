@@ -1,3 +1,6 @@
+import { RUNTIME_ORDINARY_MESSAGE_CAPABILITY } from '../../runtime-ordinary-message-capability'
+import { RemoteRuntimeSubscriptionOutbound } from './remote-runtime-subscription-outbound'
+import { remoteRuntimeOutboundAdmission } from '../remote-runtime-outbound-admission'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
@@ -16,6 +19,7 @@ import {
 } from '../remote-runtime-connect-bound'
 import {
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
   serializeRemoteRuntimePayload,
   serializeRemoteRuntimeRpcRequest
 } from '../remote-runtime-memory-limits'
@@ -52,8 +56,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     )
   }
   const requestId = randomUUID()
-  const statusRequestId = validateStatus ? randomUUID() : null
-  const serializedStatusRequest = statusRequestId
+  let statusRequestId = validateStatus ? randomUUID() : null
+  let serializedStatusRequest = statusRequestId
     ? serializeRemoteRuntimePayload({
         id: statusRequestId,
         deviceToken: connection.credential.deviceToken,
@@ -70,18 +74,36 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         envelope
       })
     )
+  const selectedStatusRequest = serializedStatusRequest
   const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
     // Reserve this connection before authentication; select mutation params only after status.
     preparedRequest:
-      requestSelection && serializedStatusRequest
-        ? prepareRemoteRuntimeRequest(new Map(), () => serializedStatusRequest)
+      requestSelection && selectedStatusRequest
+        ? prepareRemoteRuntimeRequest(new Map(), () => selectedStatusRequest)
         : prepare(params)
+  }
+  if (
+    !statusRequestId &&
+    pendingRequest.preparedRequest?.serializedRequest &&
+    Buffer.byteLength(pendingRequest.preparedRequest.serializedRequest) >
+      REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
+  ) {
+    statusRequestId = randomUUID()
+    serializedStatusRequest = serializeRemoteRuntimePayload({
+      id: statusRequestId,
+      deviceToken: connection.credential.deviceToken,
+      method: 'status.get'
+    })
   }
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
     let settled = false
     let ws: WebSocket | null = null
     let router: RemoteRuntimeRequestResponseRouter<TResult>
+    const outbound = new RemoteRuntimeSubscriptionOutbound({
+      memoryBudget: remoteRuntimeOutboundAdmission,
+      fail: (error) => finishError(error)
+    })
 
     const cleanupSocketListeners = (): void => {
       signal?.removeEventListener('abort', onAbort)
@@ -134,6 +156,10 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       clearTimeout(timeout)
       try {
         cleanupSocketListeners()
+        outbound.releaseQueues()
+        if (ws) {
+          outbound.retainSocketMemoryUntilClose(ws)
+        }
         ws?.close()
       } catch {
         // ignore best-effort close
@@ -163,9 +189,29 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
             'Remote Orca runtime request was released before it could be sent.'
           )
         }
+        if (
+          Buffer.byteLength(request) > REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES &&
+          !(
+            typeof status === 'object' &&
+            status !== null &&
+            'capabilities' in status &&
+            Array.isArray(status.capabilities) &&
+            status.capabilities.includes(RUNTIME_ORDINARY_MESSAGE_CAPABILITY)
+          )
+        ) {
+          throw new RemoteRuntimeClientError(
+            'invalid_argument',
+            'This connection cannot carry a request this large.'
+          )
+        }
         const frame = handshake.channel.sealText(request)
         requestSelection?.onDispatch?.()
-        ws?.send(frame)
+        if (!ws || !outbound.enqueueRequest(ws, frame)) {
+          throw new RemoteRuntimeClientError(
+            'remote_runtime_unavailable',
+            'The connection could not take the request.'
+          )
+        }
       } catch (error) {
         finishError(error instanceof Error ? error : new Error(String(error)))
       }
@@ -182,7 +228,17 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       serializedStatusRequest,
       requestId,
       statusRequestId,
-      validateStatus,
+      validateStatus: serializedStatusRequest
+        ? (response) => {
+            validateStatus?.(response)
+            if (!response.ok) {
+              throw new RemoteRuntimeClientError(
+                'remote_runtime_unavailable',
+                'Could not check the connection.'
+              )
+            }
+          }
+        : undefined,
       send: (frame) => ws?.send(frame),
       sendRequestedRpc,
       refreshTimeout,

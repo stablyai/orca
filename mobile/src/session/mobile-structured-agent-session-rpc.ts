@@ -157,11 +157,16 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
         },
         ...fields
       },
-      timeoutMs
+      timeoutMs,
+      method === 'agentSession.respondToApproval' || method === 'agentSession.respondToQuestion'
+        ? { failWhenDisconnected: true }
+        : undefined
     )
     if (
       !result.ok &&
-      (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
+      (method === 'agentSession.cancel' ||
+        method === 'agentSession.conversationCommand' ||
+        (method === 'agentSession.respondToApproval' && fields.content !== undefined)) &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
       return { status: 'unknown' }

@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
+import {
+  legacyAgentSessionQuestionAnswers,
+  type AgentSessionPromptResponse
+} from '../../../shared/agent-session-question-answer'
 import { AcpRpcError } from '../acp-errors'
 import { readAcpPermissionRequest } from '../acp-permission-requests'
 import { acpPermissionPresentation, pendingAcpResolution } from '../acp-timeline-requests'
@@ -21,7 +24,7 @@ function questionRequest(method: string, params: unknown): AcpRequestPresentatio
   }
   return {
     body,
-    reply: (response) => {
+    reply: (response: Exclude<AgentSessionPromptResponse, { kind: 'form' }> | null) => {
       if (response === null) {
         return { outcome: { outcome: 'cancelled' } }
       }

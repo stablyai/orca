@@ -1,3 +1,5 @@
+import { remoteRuntimeOutboundEvidence } from '../remote-runtime-outbound-admission'
+import { EventEmitter } from 'node:events'
 import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
@@ -37,13 +39,17 @@ type FakeOpenedSocket = {
 
 function createFakeOpenedSocket(callbacks: RemoteRuntimeWebSocketCallbacks): FakeOpenedSocket {
   const sent: string[] = []
-  const ws = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this network-free partial socket supplies send/close/state/bufferedAmount and real EventEmitter events at the mocked WebSocket callback boundary.
+  const ws = Object.assign(new EventEmitter(), {
+    bufferedAmount: 0,
     readyState: WebSocket.OPEN,
     send: (frame: string) => {
       sent.push(frame)
     },
-    close: vi.fn()
-  } as unknown as WebSocket
+    close: vi.fn((): void => {
+      Object.assign(ws, { readyState: WebSocket.CLOSING })
+    })
+  }) as unknown as WebSocket
   return {
     ws,
     sharedKey: new Uint8Array(32).fill(opens.length + 1),
@@ -51,6 +57,12 @@ function createFakeOpenedSocket(callbacks: RemoteRuntimeWebSocketCallbacks): Fak
     sent,
     callbacks
   }
+}
+
+function physicalClose(socket: FakeOpenedSocket): void {
+  Object.assign(socket.ws, { readyState: WebSocket.CLOSED, bufferedAmount: 0 })
+  socket.ws.emit('close')
+  socket.callbacks.onClose(socket.ws, 1000, Buffer.alloc(0))
 }
 
 async function authenticate(
@@ -97,12 +109,32 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
 
     const request = connection.request('status.get', undefined, 1000)
     const socket = opens[0]!
+    await authenticate(socket)
+    await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(1))
+    Object.assign(socket.ws, { bufferedAmount: 1234 })
     connection.close()
     connection.close()
 
     await expect(request).rejects.toThrow('Remote Orca runtime closed the connection.')
     expect(socket.cleanup).toHaveBeenCalledTimes(1)
     expect(socket.ws.close).toHaveBeenCalledTimes(1)
+    expect(remoteRuntimeOutboundEvidence()).toEqual({
+      bufferedBytes: 1234,
+      queuedBytes: 0,
+      queuedFrames: 0,
+      sockets: 1
+    })
+    physicalClose(socket)
+    expect(remoteRuntimeOutboundEvidence()).toEqual({
+      bufferedBytes: 0,
+      queuedBytes: 0,
+      queuedFrames: 0,
+      sockets: 0
+    })
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
   })
 
   it('releases a pending request when the cached socket send throws', async () => {
@@ -124,7 +156,19 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
       }) as WebSocket['send']
     })
 
-    await expect(request).rejects.toThrow('send failed')
+    await expect(request).rejects.toMatchObject({
+      code: 'remote_runtime_unavailable',
+      message: 'Remote runtime subscription request buffer overflow; reconnecting.'
+    })
+    expect(socket.cleanup).toHaveBeenCalledOnce()
+    expect(socket.ws.close).toHaveBeenCalledOnce()
+    physicalClose(socket)
+    expect(remoteRuntimeOutboundEvidence()).toEqual({
+      bufferedBytes: 0,
+      queuedBytes: 0,
+      queuedFrames: 0,
+      sockets: 0
+    })
     expect(
       (connection as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests.size
     ).toBe(0)
@@ -158,6 +202,7 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
         pendingRequestCount: 0,
         retainedBytes: 0
       })
+      physicalClose(opens[0]!)
 
       const second = connection.request('status.get', undefined, 1000)
       await authenticate(opens[1]!)
@@ -190,6 +235,14 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
       expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
         pendingRequestCount: 0,
         retainedBytes: 0
+      })
+      connection.close()
+      physicalClose(opens[1]!)
+      expect(remoteRuntimeOutboundEvidence()).toEqual({
+        bufferedBytes: 0,
+        queuedBytes: 0,
+        queuedFrames: 0,
+        sockets: 0
       })
     } finally {
       vi.useRealTimers()

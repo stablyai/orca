@@ -1,3 +1,4 @@
+import { remoteRuntimeOutboundAdmission } from './remote-runtime-outbound-admission'
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../paired-runtime-connection'
 import type { RuntimeCapability } from '../protocol-version'
@@ -63,7 +64,10 @@ export function openRemoteRuntimePassthroughSocket(
       return
     }
     const { ws, handshake, cleanup } = opened.socket
-    const outbound = new RemoteRuntimeSubscriptionOutbound({ fail: (error) => end(error) })
+    const outbound = new RemoteRuntimeSubscriptionOutbound({
+      fail: (error) => end(error),
+      memoryBudget: remoteRuntimeOutboundAdmission
+    })
     const timeout = setTimeout(
       () =>
         end(

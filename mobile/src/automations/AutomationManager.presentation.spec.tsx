@@ -140,8 +140,21 @@ export function registerAutomationPresentationTests({
         }
       } else {
         expect(MOBILE_RPC_METHOD_ROUTES.get(method)).toBe('execution-host')
-        expect(options?.envelope?.executionHost).toBe(executionHost)
+        if (method !== 'status.get') {
+          expect(options?.envelope?.executionHost).toBe(executionHost)
+        }
         if (method === 'status.get') {
+          expect(params).toBeUndefined()
+          const statuses = send.mock.calls.filter(([name]) => name === 'status.get')
+          if (statuses.length % 2 === 1) {
+            expect(options?.envelope?.executionHost).toBe(executionHost)
+          } else {
+            const destinationOptions = statuses.at(-2)?.[2]
+            const { executionHost: destinationHost, ...originEnvelope } =
+              destinationOptions?.envelope ?? {}
+            expect(destinationHost).toBe(executionHost)
+            expect(options).toEqual({ ...destinationOptions, envelope: originEnvelope })
+          }
           result = { capabilities: [AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY] }
         } else if (method === 'automation.list') {
           result = {
@@ -237,6 +250,9 @@ export function registerAutomationPresentationTests({
     })
     expect(desktopRequests).toEqual([])
     expect(JSON.stringify(desktop)).toBe(desktopBefore)
+    const statuses = send.mock.calls.filter(([method]) => method === 'status.get')
+    expect(statuses.length).toBeGreaterThan(0)
+    expect(statuses.length % 2).toBe(0)
   })
 
   const metadata = (label: string) =>
