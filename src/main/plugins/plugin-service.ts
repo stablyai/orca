@@ -43,11 +43,8 @@ import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { invokePluginWorkerCommand } from './plugin-command-invocation'
-import {
-  deliverPluginEvent,
-  pluginWorkersWantEvent,
-  type PluginEventDeliveryContext
-} from './plugin-event-delivery'
+import { deliverPluginEvent, pluginWorkersWantEvent } from './plugin-event-delivery'
+import type { PluginEventDeliveryContext } from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
 
 export class PluginService {
@@ -222,8 +219,7 @@ export class PluginService {
 
   readonly getLogs = (pluginKey: string) => this.installed.logs.get(pluginKey)
 
-  readonly getLogsSince = (pluginKey: string, cursor?: string) =>
-    this.installed.logs.since(pluginKey, cursor)
+  readonly getLogsSince = (key: string, cursor?: string) => this.installed.logs.since(key, cursor)
 
   /** A log writer for one plugin that goes inert once the plugin is removed. */
   readonly captureLog = (pluginKey: string) => this.installed.logs.capture(pluginKey)
@@ -290,11 +286,10 @@ export class PluginService {
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {
-    if (!this.options.isPluginSystemEnabled() || this.disposed) {
-      return
+    if (this.options.isPluginSystemEnabled() && !this.disposed) {
+      deliverPluginEvent({ event, payload, ...this.eventDelivery })
+      this.panelBridge.publishEvent(event, payload)
     }
-    deliverPluginEvent({ event, payload, ...this.eventDelivery })
-    this.panelBridge.publishEvent(event, payload)
   }
 
   /** The real event path; `orca plugin dev emit` reuses it for one development plugin. */

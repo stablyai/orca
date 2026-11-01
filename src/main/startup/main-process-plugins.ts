@@ -22,11 +22,8 @@ import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-ena
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
-import { bindPluginViewForRpc } from '../plugins/view/plugin-view-desktop-binding'
-import {
-  openPluginFrameGuestDevTools,
-  setPluginFrameGuestLogSink
-} from '../plugins/panels/plugin-frame-guest-diagnostics'
+import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
+import { openPluginFrameGuestDevTools } from '../plugins/panels/plugin-frame-guest-diagnostics'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -249,12 +246,7 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
       store.updateSettings({ devPluginPaths }, { notifyListeners: true }),
     openFrameDevTools: openPluginFrameGuestDevTools
   })
-  bindPluginViewForRpc({
-    serveMode: state.isServeMode,
-    service: pluginService,
-    getMainWindow: () => state.mainWindow
-  })
-  setPluginFrameGuestLogSink((pluginKey) => state.pluginService?.captureLog(pluginKey) ?? null)
+  bindPluginDesktopViews(state.isServeMode, pluginService, () => state.mainWindow)
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.
   void state.pluginService
     .initialize()

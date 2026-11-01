@@ -2,29 +2,33 @@ import { nativeImage, type BrowserWindow } from 'electron'
 import { setPluginViewForRpc } from '../../runtime/rpc/methods/plugin-view'
 import { listPluginsForClients } from '../plugin-client-list'
 import type { PluginService } from '../plugin-service'
-import { livePluginFrameGuests } from '../panels/plugin-frame-guest-diagnostics'
+import {
+  livePluginFrameGuests,
+  setPluginFrameGuestLogSink
+} from '../panels/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
 import { isPluginShotWindowShown } from './plugin-shot-policy'
 
-/** `plugins.open` / `plugins.shot` for the desktop app; a headless serve leaves them refusing. */
-export function bindPluginViewForRpc(options: {
-  serveMode: boolean
-  service: PluginService
+/** Guest console lines into plugin logs, and `plugins.open` / `plugins.shot` for the desktop
+ *  app; a headless serve leaves open and shot refusing. */
+export function bindPluginDesktopViews(
+  serveMode: boolean,
+  service: PluginService,
   getMainWindow: () => BrowserWindow | null
-}): void {
-  if (options.serveMode) {
+): void {
+  setPluginFrameGuestLogSink((pluginKey) => service.captureLog(pluginKey))
+  if (serveMode) {
     setPluginViewForRpc(null)
     return
   }
-  const { service } = options
   setPluginViewForRpc(
     createPluginViewDesktop({
       rendererContents: () => {
-        const window = options.getMainWindow()
+        const window = getMainWindow()
         return window && !window.isDestroyed() ? window.webContents : null
       },
       windowShown: () => {
-        const window = options.getMainWindow()
+        const window = getMainWindow()
         return window !== null && isPluginShotWindowShown(window)
       },
       source: {
