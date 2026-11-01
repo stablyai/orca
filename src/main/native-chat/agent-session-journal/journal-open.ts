@@ -5,7 +5,11 @@ import { journalInputOrder } from './journal-input-order'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { readJournalOutcomes } from './journal-outcome-table'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
-import { readJournalOutcomeGroups, type JournalReadRow } from './journal-read-row'
+import {
+  readJournalOutcomeGroups,
+  type JournalReadRow,
+  type JournalRowsRead
+} from './journal-read-row'
 import { AgentSessionJournalError } from './journal-write-guards'
 import type Database from '../../sqlite/sync-database'
 import { journalInputAcceptance } from './journal-input-provenance'
@@ -192,7 +196,7 @@ export function journalRowsAfterReader(
   sessionId: string,
   epoch: string,
   limit?: number
-): (afterSequence: number) => JournalReadRow[] {
+): (afterSequence: number) => JournalRowsRead {
   return (afterSequence) => readJournalRowsAfterCursor(db, sessionId, epoch, afterSequence, limit)
 }
 
@@ -204,34 +208,38 @@ export function readJournalRowsAfterCursor(
   epoch: string,
   afterSequence: number,
   limit?: number
-): JournalReadRow[] {
+): JournalRowsRead {
   const source = journalOutcomeSource(db, sessionId, epoch)
   const prefix = source ? source.prefix : Number.POSITIVE_INFINITY
   const rows: JournalReadRow[] = []
+  // A read that stops early covers only the rows it returned.
+  const stopped = (): JournalRowsRead => ({ rows, through: rows.at(-1)?.seq ?? afterSequence })
   if (afterSequence < prefix) {
     for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
       const parsed = stored.seq <= prefix ? parseJournalRow(stored.rowJson) : null
       if (!parsed?.ok) {
         // An unreadable prefix row ends the page; outcome groups never skip past it.
-        return parsed ? rows : [...rows, ...groupsAfter(prefix)]
+        return parsed ? stopped() : groupsAfter(prefix)
       }
       rows.push(parsed.row)
     }
     if (!source || (limit !== undefined && rows.length >= limit)) {
-      return rows
+      return stopped()
     }
   }
-  return [...rows, ...groupsAfter(Math.max(afterSequence, prefix))]
+  return groupsAfter(Math.max(afterSequence, prefix))
 
-  function groupsAfter(after: number): JournalReadRow[] {
-    return source
-      ? readJournalOutcomeGroups(
-          db,
-          epoch,
-          source,
-          after,
-          limit === undefined ? undefined : limit - rows.length
-        )
-      : []
+  function groupsAfter(after: number): JournalRowsRead {
+    if (!source) {
+      return stopped()
+    }
+    const remaining = limit === undefined ? undefined : limit - rows.length
+    const groups = readJournalOutcomeGroups(db, epoch, source, after, remaining)
+    rows.push(...groups)
+    // A write whose fold changed nothing stores no record, so no group names its sequence; a read
+    // that returned every group still covers the epoch through its newest write.
+    return remaining === undefined || groups.length < remaining
+      ? { rows, through: source.through }
+      : stopped()
   }
 }
