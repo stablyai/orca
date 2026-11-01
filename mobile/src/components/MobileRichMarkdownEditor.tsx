@@ -11,6 +11,11 @@ import {
   type ForwardedRef
 } from 'react'
 import { View } from 'react-native'
+import {
+  GestureDetector,
+  type ComposedGesture,
+  type PinchGesture
+} from 'react-native-gesture-handler'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -38,6 +43,7 @@ export type MobileRichMarkdownEditorComponentProps = Omit<
   'onOpenLink'
 > & {
   onOpenLink?: (url: string) => void
+  pinchGesture?: ComposedGesture | PinchGesture
 }
 
 export type MobileRichMarkdownEditorHandle = {
@@ -48,7 +54,14 @@ export type MobileRichMarkdownEditorHandle = {
 // Link/Image ask TextInputModal because both native shells’ window.prompt returns null (no dialog delegate).
 // Accept but never call onKeyboardInsetChange: page visualViewport and keyboard-occlusion already measure same cover, so callback would double-lift toolbar.
 function MobileRichMarkdownEditorWebInner(
-  { content, editable, onChange, onOpenLink }: MobileRichMarkdownEditorComponentProps,
+  {
+    content,
+    editable,
+    textScale = 1,
+    onChange,
+    onOpenLink,
+    pinchGesture
+  }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const t = useMobileTranslation()
@@ -82,6 +95,10 @@ function MobileRichMarkdownEditorWebInner(
       setEditable: (nextEditable: boolean) =>
         send((api) => {
           api.setEditable(nextEditable)
+        }),
+      setTextScale: (scale: number) =>
+        send((api) => {
+          api.setTextScale(scale)
         }),
       runCommand: (command: Parameters<RichMarkdownEditorApi['runCommand']>[0]) =>
         send((api) => {
@@ -179,6 +196,10 @@ function MobileRichMarkdownEditorWebInner(
     // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
   }, [])
 
+  useEffect(() => {
+    transport.setTextScale(textScale)
+  }, [textScale, transport])
+
   // Layout effect: restore the host's scope class before paint after a themed className swap.
   useLayoutEffect(() => {
     const host = hostRef.current
@@ -187,10 +208,23 @@ function MobileRichMarkdownEditorWebInner(
     }
   }, [colorScheme])
 
+  const host = <View ref={hostRef} style={styles.host} />
+
   return (
     <View style={styles.container}>
       <MobileRichMarkdownToolbar editable={editable} onCommand={runCommand} />
-      <View ref={hostRef} style={styles.host} />
+      {pinchGesture ? (
+        <GestureDetector
+          gesture={pinchGesture}
+          touchAction="pan-y"
+          userSelect="auto"
+          enableContextMenu
+        >
+          <View style={styles.host}>{host}</View>
+        </GestureDetector>
+      ) : (
+        host
+      )}
       <TextInputModal
         visible={urlPromptKind !== null}
         title={

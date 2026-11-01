@@ -7,6 +7,7 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadMarkdownTextScale,
   loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
@@ -575,5 +576,18 @@ describe('terminal link open mode preference', () => {
 
     await expect(loadTerminalLinkOpenMode()).resolves.toBe('phone-browser')
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('markdown text scale preference', () => {
+  it.each([
+    ['1.5', 1.5],
+    ['1.3', 1],
+    ['bogus', 1],
+    [null, 1]
+  ])('loads %s as %s', async (raw, expected) => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(raw)
+    await expect(loadMarkdownTextScale()).resolves.toBe(expected)
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:markdownTextScale')
   })
 })

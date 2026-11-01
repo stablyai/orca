@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
 import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import { subscribeMirroredKey } from '../../storage/mirrored-storage-keys'
+import pageAsyncStorage, { publishPageStorage } from './page-async-storage'
 import { createPageClient as createPage, idOf, readError } from './bridge-page-client-test-harness'
 
 const resources = new Set<ReturnType<typeof createPage>>()
@@ -27,6 +29,25 @@ afterEach(() => {
 })
 
 describe('bridge client refusals and send failures', () => {
+  it('applies storage frames once and notifies mirrored-key listeners', async () => {
+    const page = createPageClient()
+    publishPageStorage({ 'orca:markdownTextScale': '1' }, () => true, 'host-a', '/h/host-a')
+    const listener = vi.fn()
+    const unsubscribe = subscribeMirroredKey('orca:markdownTextScale', listener)
+    page.start()
+    const frame = {
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'storage',
+      key: 'orca:markdownTextScale',
+      value: '1.5'
+    }
+    page.deliver(frame)
+    page.deliver(frame)
+    page.deliver({ ...frame, key: 'orca:pins:other-host' })
+    expect(await pageAsyncStorage.getItem(frame.key)).toBe('1.5')
+    expect(listener).toHaveBeenCalledExactlyOnceWith('1.5', 'persisted')
+    unsubscribe()
+  })
   it('reports a frame its own reader will not take, and changes nothing', () => {
     const page = createPageClient()
     page.start()

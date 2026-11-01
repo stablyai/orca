@@ -17,13 +17,30 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
+vi.mock('../markdown-text-scale/MarkdownTextSizeButton', () => ({
+  MarkdownTextSizeButton: 'MarkdownTextSizeButton'
+}))
+
+vi.mock('../markdown-text-scale/use-markdown-text-scale', () => ({
+  useMarkdownTextScale: () => ({
+    textScale: 1.5,
+    setLiveScale: vi.fn(),
+    commitTextScale: vi.fn()
+  })
+}))
+
 vi.mock('lucide-react-native', () => ({
   Copy: 'Copy',
   Check: 'Check'
 }))
 
-const { writeText, alert } = vi.hoisted(() => ({ writeText: vi.fn(), alert: vi.fn() }))
-vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
+const { writeText, alert } = vi.hoisted(() => ({
+  writeText: vi.fn(),
+  alert: vi.fn()
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText })
+}))
 
 vi.mock('../theme/mobile-theme', () => ({
   colors: { textPrimary: '#fff', textSecondary: '#999' },
@@ -50,7 +67,11 @@ type PreviewProps = {
 // The screen owns the mode and hands it to the bar; this mirrors that wiring.
 function ModeBarHarness({ initialLine, ...props }: PreviewProps) {
   const [mode, setMode] = useMarkdownPreviewMode(props.relativePath, initialLine)
-  return createElement(MobileMarkdownPreviewModeBar, { ...props, mode, onModeChange: setMode })
+  return createElement(MobileMarkdownPreviewModeBar, {
+    ...props,
+    mode,
+    onModeChange: setMode
+  })
 }
 
 async function renderPreview(props: PreviewProps): Promise<ReactTestRenderer> {
@@ -176,10 +197,28 @@ describe('MobileMarkdownPreviewModeBar', () => {
     await updatePreview(renderer, { ...baseProps, content: '# First updated' })
     expect(isSelected(renderer, 'View Markdown source')).toBe(true)
 
-    await updatePreview(renderer, { ...baseProps, relativePath: 'notes/second.md' })
+    await updatePreview(renderer, {
+      ...baseProps,
+      relativePath: 'notes/second.md'
+    })
     expect(isSelected(renderer, 'View rendered Markdown preview')).toBe(true)
 
-    await updatePreview(renderer, { ...baseProps, relativePath: 'notes/second.md', initialLine: 8 })
+    await updatePreview(renderer, {
+      ...baseProps,
+      relativePath: 'notes/second.md',
+      initialLine: 8
+    })
     expect(isSelected(renderer, 'View Markdown source')).toBe(true)
+  })
+
+  it('shows the text size button only in preview mode', async () => {
+    renderer = await renderPreview({
+      relativePath: 'notes/file.md',
+      content: '# Title',
+      truncated: false
+    })
+    expect(findAllByHostType(renderer.root, 'MarkdownTextSizeButton')).toHaveLength(1)
+    await selectMode(renderer, 'View Markdown source')
+    expect(findAllByHostType(renderer.root, 'MarkdownTextSizeButton')).toHaveLength(0)
   })
 })

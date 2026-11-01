@@ -2,6 +2,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('react-native-gesture-handler', () => ({
+  GestureDetector: 'GestureDetector',
+  GestureHandlerRootView: 'GestureHandlerRootView'
+}))
 vi.mock('react-native', async () => {
   const React = await import('react')
   const host =

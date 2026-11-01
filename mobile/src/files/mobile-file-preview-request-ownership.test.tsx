@@ -40,6 +40,9 @@ vi.mock('./MobileFileMediaPreview', () => ({ MobileFileMediaPreview: () => null 
 vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
+vi.mock('../markdown-text-scale/MarkdownTextSizeButton', () => ({
+  MarkdownTextSizeButton: () => null
+}))
 vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({
   MobileFilePreviewSourceText: 'MobileFilePreviewSourceText'

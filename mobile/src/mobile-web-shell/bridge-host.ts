@@ -192,8 +192,20 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     railOwner = claimed ? inputOwner : undefined
     options.onTerminalKeyRailClaim?.(claimed, inputOwner, toolbar)
   }
+  // Page writes note synchronously; skip pushing that note back to the page that wrote it.
+  let applyingPageWrite = false
   const forwardNotify = createBridgeNotifyForwarder({
-    options,
+    options: {
+      ...options,
+      onStorageWrite: (key, value) => {
+        applyingPageWrite = true
+        try {
+          options.onStorageWrite(key, value)
+        } finally {
+          applyingPageWrite = false
+        }
+      }
+    },
     granted,
     initSent: () => initSent,
     route: () => routes.current(),
@@ -305,6 +317,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       dispatch(read.message)
     },
     publishRoute: (next) => routes.publish(next, serving && initSent),
+    publishStorageUpdate: (key, value) => {
+      if (!applyingPageWrite && deliverable() && pageStorageKeys?.includes(key)) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: 'storage', key, value })
+      }
+    },
     publishSafeAreaInsets: (next) => {
       routes.publishSafeAreaInsets(next, deliverable())
     },

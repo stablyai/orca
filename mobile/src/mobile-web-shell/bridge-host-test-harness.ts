@@ -79,6 +79,7 @@ export function harness(
     storage?: Readonly<Record<string, string>>
     readStorage?: () => PageStorageForInit
     readHostStatus?: () => HostStatusReply | null
+    onStorageWrite?: (key: string, value: string | null) => void
     onPageFault?: (error: BridgeErrorCapture) => void
     /** What the mounted route declared; everything this shell implements unless a case narrows it. */
     routeGrants?: readonly string[]
@@ -130,7 +131,10 @@ export function harness(
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
     ...(options.readHostStatus === undefined ? {} : { readHostStatus: options.readHostStatus }),
-    onStorageWrite: (key, value) => storageWrites.push({ key, value }),
+    onStorageWrite: (key, value) => {
+      storageWrites.push({ key, value })
+      options.onStorageWrite?.(key, value)
+    },
     onPageReady: () => {
       pageReadies += 1
     },

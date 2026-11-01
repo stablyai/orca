@@ -89,6 +89,21 @@ describe('negotiated page storage keys across page and shell versions', () => {
     expect(bridge.frames().some((frame) => frame.type === 'init')).toBe(true)
   })
 
+  it('pushes a storage change only to a page whose ready named the key', () => {
+    const key = 'orca:markdownTextScale'
+    const older = harness({ storage: STORAGE })
+    older.host.receive(clientFrame({ type: 'ready' }))
+    older.host.publishStorageUpdate(key, '1.5')
+    expect(older.frames().some((frame) => frame.type === 'storage')).toBe(false)
+
+    const current = harness({ storage: STORAGE })
+    current.host.receive(JSON.stringify(createPageReadyFrame()))
+    current.host.publishStorageUpdate(key, '1.5')
+    expect(current.frames().filter((frame) => frame.type === 'storage')).toEqual([
+      expect.objectContaining({ key, value: '1.5' })
+    ])
+  })
+
   it('sends a ready an older shell still reads', () => {
     const ready: unknown = JSON.parse(JSON.stringify(createPageReadyFrame()))
     expect(LegacyReadySchema.safeParse(ready).success).toBe(true)

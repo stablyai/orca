@@ -1,6 +1,8 @@
 import { MobileMarkdownPreviewImage } from './MobileMarkdownPreviewImage'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ScrollView } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Platform, ScrollView, View } from 'react-native'
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import {
   MobileFilePreviewSourceText,
@@ -8,6 +10,8 @@ import {
 } from './MobileFilePreviewSourceText'
 import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useMarkdownTextScale } from '../markdown-text-scale/use-markdown-text-scale'
+import { useMarkdownTextScalePinchGesture } from '../markdown-text-scale/use-markdown-text-scale-pinch-gesture'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 // Lifts the 13pt base to 14pt body text; headings scale with it.
@@ -37,12 +41,47 @@ export function MobileFileMarkdownPreview({
   onOpenFile
 }: Props) {
   useMobileColorScheme()
-  return mode === 'preview' ? (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
+  const scrollRef = useRef<ScrollView>(null)
+  const { textScale, setLiveScale, commitTextScale } = useMarkdownTextScale()
+  const pinchGesture = useMarkdownTextScalePinchGesture({
+    textScale,
+    onLiveScale: setLiveScale,
+    onCommit: commitTextScale,
+    combineWithNativeScroll: true
+  })
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return
+    }
+    const scroller = scrollRef.current?.getScrollableNode()
+    if (scroller instanceof HTMLElement) {
+      scroller.style.touchAction = 'pan-x pan-y'
+    }
+  }, [mode])
+
+  if (mode !== 'preview') {
+    return (
+      <MobileFilePreviewSourceText
+        relativePath={relativePath}
+        content={content}
+        truncated={truncated}
+        byteLength={byteLength}
+        initialLine={initialLine}
+      />
+    )
+  }
+
+  const preview = (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      contentContainerStyle={styles.markdownContent}
+    >
       {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
       <MobileMarkdown
         content={content}
-        textScale={DOCUMENT_TEXT_SCALE}
+        textScale={DOCUMENT_TEXT_SCALE * textScale}
         onOpenFile={onOpenFile}
         renderImage={
           worktreeId
@@ -60,13 +99,18 @@ export function MobileFileMarkdownPreview({
         }
       />
     </ScrollView>
-  ) : (
-    <MobileFilePreviewSourceText
-      relativePath={relativePath}
-      content={content}
-      truncated={truncated}
-      byteLength={byteLength}
-      initialLine={initialLine}
-    />
+  )
+
+  return (
+    <GestureHandlerRootView style={styles.scroll}>
+      <GestureDetector
+        gesture={pinchGesture}
+        touchAction="pan-y"
+        userSelect="auto"
+        enableContextMenu
+      >
+        {Platform.OS === 'web' ? <View style={styles.scroll}>{preview}</View> : preview}
+      </GestureDetector>
+    </GestureHandlerRootView>
   )
 }

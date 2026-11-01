@@ -45,7 +45,10 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
 }
 
 /** How a paragraph draws in the container holding it. */
-export type ParagraphText = { style: StyleProp<TextStyle>; selectable: boolean }
+export type ParagraphText = {
+  style: StyleProp<TextStyle>
+  selectable: boolean
+}
 
 function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNode {
   // Keep streaming/unclosed Mermaid fences as code; per-tick WebView mounts would reload document up to 20x/sec. Render diagram only once complete.
