@@ -135,6 +135,21 @@ export function validateAgentSessionFormField(field: AgentSessionFormField, valu
   }
 }
 
+function validateAgentSessionFormEntry(
+  field: AgentSessionFormField,
+  content: Record<string, unknown>
+): void {
+  if (!Object.hasOwn(content, field.name)) {
+    if (field.required) {
+      throw new AgentSessionFormValidationError('required', {
+        field: field.schema.title ?? field.name
+      })
+    }
+    return
+  }
+  validateAgentSessionFormField(field, content[field.name])
+}
+
 export function validateAgentSessionFormContent(
   form: AgentSessionForm,
   value: unknown
@@ -145,15 +160,7 @@ export function validateAgentSessionFormContent(
     throw new AgentSessionFormValidationError('unknownField')
   }
   for (const field of form.fields) {
-    if (!Object.hasOwn(content, field.name)) {
-      if (field.required) {
-        throw new AgentSessionFormValidationError('required', {
-          field: field.schema.title ?? field.name
-        })
-      }
-      continue
-    }
-    validateAgentSessionFormField(field, content[field.name])
+    validateAgentSessionFormEntry(field, content)
   }
   return Object.fromEntries(
     Object.entries(content).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -183,29 +190,62 @@ export function initialAgentSessionFormDraft(form: AgentSessionForm): AgentSessi
   )
 }
 
+function agentSessionFormDraftEntry(
+  field: AgentSessionFormField,
+  draft: AgentSessionFormDraft
+): [string, string | number | boolean][] {
+  const value = draft.get(field.name)
+  if (value === undefined) {
+    return []
+  }
+  if (field.schema.type === 'number' || field.schema.type === 'integer') {
+    if (typeof value !== 'string') {
+      throw new AgentSessionFormValidationError('draftNumber', {
+        field: field.schema.title ?? field.name
+      })
+    }
+    if (value.trim() === '') {
+      return []
+    }
+    return [[field.name, Number(value)]]
+  }
+  return [[field.name, value]]
+}
+
 export function agentSessionFormDraftContent(
   form: AgentSessionForm,
   draft: AgentSessionFormDraft
 ): AgentSessionFormContent {
   const content = Object.fromEntries(
-    form.fields.flatMap<[string, string | number | boolean]>((field) => {
-      const value = draft.get(field.name)
-      if (value === undefined) {
-        return []
-      }
-      if (field.schema.type === 'number' || field.schema.type === 'integer') {
-        if (typeof value !== 'string') {
-          throw new AgentSessionFormValidationError('draftNumber', {
-            field: field.schema.title ?? field.name
-          })
-        }
-        if (value.trim() === '') {
-          return []
-        }
-        return [[field.name, Number(value)]]
-      }
-      return [[field.name, value]]
-    })
+    form.fields.flatMap((field) => agentSessionFormDraftEntry(field, draft))
   )
   return validateAgentSessionFormContent(form, content)
+}
+
+/** Client-side check of a draft: every failing field's error, or a form-level error for the rest. */
+export function checkAgentSessionFormDraft(
+  form: AgentSessionForm,
+  draft: AgentSessionFormDraft
+):
+  | { content: AgentSessionFormContent }
+  | { fieldErrors: ReadonlyMap<string, unknown>; formError: unknown } {
+  const fieldErrors = new Map<string, unknown>()
+  for (const field of form.fields) {
+    try {
+      validateAgentSessionFormEntry(
+        field,
+        Object.fromEntries(agentSessionFormDraftEntry(field, draft))
+      )
+    } catch (error) {
+      fieldErrors.set(field.name, error)
+    }
+  }
+  if (fieldErrors.size > 0) {
+    return { fieldErrors, formError: null }
+  }
+  try {
+    return { content: agentSessionFormDraftContent(form, draft) }
+  } catch (error) {
+    return { fieldErrors, formError: error }
+  }
 }

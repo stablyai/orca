@@ -11,18 +11,21 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   agentSessionFormChoices,
-  agentSessionFormDraftContent,
+  checkAgentSessionFormDraft,
   initialAgentSessionFormDraft,
   type AgentSessionForm,
   type AgentSessionFormContent
 } from '../../../../shared/agent-session-form'
 
+/** The card's Submit button sits in its action row and joins this form by `form={id}`. */
 export function NativeChatForm({
+  id: formId,
   form,
   disabled,
   submitDisabled = false,
   onSubmit
 }: {
+  id: string
   form: AgentSessionForm
   submitDisabled?: boolean
   disabled: boolean
@@ -32,7 +35,10 @@ export function NativeChatForm({
   const t = translate
   const id = useId()
   const [draft, setDraft] = useState(() => initialAgentSessionFormDraft(form))
-  const [error, setError] = useState<unknown>(null)
+  const [errors, setErrors] = useState<{
+    fields: ReadonlyMap<string, unknown>
+    form: unknown
+  }>({ fields: new Map(), form: null })
   const edit = (name: string, value: string | boolean | undefined): void => {
     setDraft((current) => {
       const next = new Map(current)
@@ -43,26 +49,40 @@ export function NativeChatForm({
       }
       return next
     })
-    setError(null)
+    setErrors((current) => {
+      const fields = new Map(current.fields)
+      fields.delete(name)
+      return { fields, form: null }
+    })
   }
   return (
     <form
+      id={formId}
       className="min-h-0 space-y-3 overflow-auto scrollbar-sleek"
       onSubmit={(event) => {
         event.preventDefault()
         if (disabled || submitDisabled) {
           return
         }
+        const checked = checkAgentSessionFormDraft(form, draft)
+        if (!('content' in checked)) {
+          setErrors({ fields: checked.fieldErrors, form: checked.formError })
+          return
+        }
+        setErrors({ fields: new Map(), form: null })
         try {
-          onSubmit(agentSessionFormDraftContent(form, draft))
+          onSubmit(checked.content)
         } catch (cause) {
-          setError(cause)
+          setErrors({ fields: new Map(), form: cause })
         }
       }}
     >
       {form.fields.map((field, fieldIndex) => {
         const fieldId = `${id}-${fieldIndex}`
+        const errorId = `${fieldId}-error`
         const value = draft.get(field.name)
+        const error = errors.fields.get(field.name)
+        const invalid = errors.fields.has(field.name)
         const choices = agentSessionFormChoices(field, agentSessionFormBooleanLabels(t))
         return (
           <div key={field.name} className="space-y-2">
@@ -97,6 +117,8 @@ export function NativeChatForm({
               <RadioGroup
                 id={fieldId}
                 aria-label={field.schema.title ?? field.name}
+                aria-invalid={invalid}
+                aria-describedby={invalid ? errorId : undefined}
                 disabled={disabled}
                 value={String(choices.findIndex((choice) => choice.value === value))}
                 onValueChange={(index) => {
@@ -118,21 +140,24 @@ export function NativeChatForm({
                 id={fieldId}
                 value={typeof value === 'string' ? value : ''}
                 disabled={disabled}
-                aria-invalid={error !== null}
+                aria-invalid={invalid}
+                aria-describedby={invalid ? errorId : undefined}
                 onChange={(event) => edit(field.name, event.target.value)}
               />
             )}
+            {invalid ? (
+              <p id={errorId} role="alert" className="text-sm text-destructive">
+                {agentSessionFormErrorMessage(error, t)}
+              </p>
+            ) : null}
           </div>
         )
       })}
-      {error !== null ? (
+      {errors.form !== null ? (
         <p role="alert" className="text-sm text-destructive">
-          {agentSessionFormErrorMessage(error, t)}
+          {agentSessionFormErrorMessage(errors.form, t)}
         </p>
       ) : null}
-      <Button type="submit" disabled={disabled || submitDisabled}>
-        {t('components.native-chat.question.send', 'Submit')}
-      </Button>
     </form>
   )
 }

@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import { NativeChatForm } from './NativeChatForm'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import type { AgentSessionForm } from '../../../../shared/agent-session-form'
@@ -209,10 +208,23 @@ it('submits untouched recorded form defaults from rendered controls through host
   })
 })
 
-it('keeps invalid edits local; selecting a choice replaces its default and Clear omits optional empty text', async () => {
+it('marks only the failing field, keeps invalid edits local, and submits the whole draft once from the action row', async () => {
   const h = await formSession()
+  const submit = screen.getByRole('button', { name: 'Submit' })
+  expect(submit.closest('[data-native-chat-approval-actions]')).not.toBeNull()
+  fireEvent.change(screen.getByLabelText('count'), { target: { value: 'abc' } })
+  fireEvent.click(submit)
+  const alert = screen.getByRole('alert')
+  expect(alert.textContent).toBe('Enter a finite number.')
+  expect(screen.getByLabelText('count').getAttribute('aria-invalid')).toBe('true')
+  expect(screen.getByLabelText('count').getAttribute('aria-describedby')).toBe(alert.id)
+  for (const valid of ['Name', 'note']) {
+    expect(screen.getByLabelText(valid).getAttribute('aria-invalid')).toBe('false')
+    expect(screen.getByLabelText(valid).getAttribute('aria-describedby')).toBeNull()
+  }
   fireEvent.change(screen.getByLabelText('count'), { target: { value: '11' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+  expect(screen.queryByRole('alert')).toBeNull()
+  fireEvent.click(submit)
   expect(screen.getByRole('alert').textContent).toContain('at most 10')
   expect(h.mutate).not.toHaveBeenCalled()
   fireEvent.change(screen.getByLabelText('count'), { target: { value: '0' } })
@@ -252,7 +264,13 @@ it('re-derives pending errors, controls and saved Boolean labels on locale chang
     ]
   }
   const submitted = vi.fn()
-  const view = render(<NativeChatForm form={form} disabled={false} onSubmit={submitted} />)
+  const view = render(
+    <NativeChatApprovalCard
+      approval={{ title: 'Provider title', options: [], form }}
+      onChoose={vi.fn()}
+      onSubmitForm={submitted}
+    />
+  )
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'x' } })
   fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
   expect(screen.getByRole('alert').textContent).toBe('Enter at least 3 characters.')

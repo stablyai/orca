@@ -1,10 +1,11 @@
 import { NativeChatForm } from './NativeChatForm'
 import type { AgentSessionFormContent } from '../../../../shared/agent-session-form'
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { ShieldQuestion, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../shared/agent-session-approval-blocked-path'
@@ -37,7 +38,15 @@ export type NativeChatApprovalCardProps = {
   allowFileUriLinks?: boolean
 }
 
-/** PTY options are literal replies; structured options are journal ids. Style the first option as primary. */
+const optionClassName = (primary: boolean): string =>
+  cn(
+    'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+    primary
+      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
+  )
+
+/** PTY options are literal replies; structured options are journal ids. Style the first option, or a form's Submit, as primary. */
 export function NativeChatApprovalCard({
   approval,
   onChoose,
@@ -51,7 +60,9 @@ export function NativeChatApprovalCard({
   onLinkClick,
   allowFileUriLinks = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
+  useUiLanguageRevision()
   const cardRef = useRef<HTMLDivElement>(null)
+  const formId = useId()
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
@@ -177,6 +188,7 @@ export function NativeChatApprovalCard({
             ) : null}
             {approval.form && onSubmitForm && !newerSubject ? (
               <NativeChatForm
+                id={formId}
                 form={approval.form}
                 disabled={isSubmitting}
                 submitDisabled={!formSubmitEnabled}
@@ -184,6 +196,16 @@ export function NativeChatApprovalCard({
               />
             ) : null}
             <div data-native-chat-approval-actions="true" className="flex shrink-0 flex-wrap gap-2">
+              {approval.form && onSubmitForm && !newerSubject ? (
+                <button
+                  type="submit"
+                  form={formId}
+                  disabled={isSubmitting || !formSubmitEnabled}
+                  className={optionClassName(true)}
+                >
+                  {translate('components.native-chat.question.send', 'Submit')}
+                </button>
+              ) : null}
               {approval.url && onOpenUrl ? (
                 <Button
                   type="button"
@@ -200,12 +222,7 @@ export function NativeChatApprovalCard({
                   type="button"
                   disabled={newerSubject || isSubmitting}
                   onClick={() => onChoose(opt.send)}
-                  className={cn(
-                    'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0 && !approval.form
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
+                  className={optionClassName(i === 0 && !approval.form)}
                 >
                   {opt.label}
                 </button>

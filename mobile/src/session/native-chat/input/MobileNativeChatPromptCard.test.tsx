@@ -19,6 +19,7 @@ import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { openExternalLink, useExternalLinkAvailable } from '../../../platform/external-link'
 import { useMobileStructuredPromptResponses } from '../../use-mobile-structured-prompt-responses'
 import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
+import { TEXT_INPUT_FONT_SIZE } from '../../../platform/text-input-font-size'
 import {
   projectStructuredPermission,
   type StructuredApprovalItem
@@ -302,6 +303,15 @@ it('submits the actual mobile form through its hook with exact defaults, editabl
       act(() => tree!.root.findByProps({ accessibilityLabel: label }).props.onChangeText(value))
     }
     expect(sent).toEqual([])
+    expect(
+      tree!.root
+        .findByProps({ testID: 'native-chat-approval-actions' })
+        .findByProps({ accessibilityLabel: 'Submit' })
+    ).toBeTruthy()
+    const nameStyles = tree!.root.findByProps({ accessibilityLabel: 'name' }).props.style.flat()
+    expect(
+      Math.max(...nameStyles.map((style: { fontSize?: number }) => style?.fontSize ?? 0))
+    ).toBeGreaterThanOrEqual(TEXT_INPUT_FONT_SIZE)
     await press('Submit')
     expect(sent).toEqual([
       {
@@ -311,7 +321,18 @@ it('submits the actual mobile form through its hook with exact defaults, editabl
       }
     ])
     edit('name', 'my draft')
+    edit('count', 'abc')
+    await press('Submit')
+    expect(sent).toHaveLength(1)
+    const field = (label: string) => tree!.root.findByProps({ accessibilityLabel: label }).parent!
+    const alerts = tree!.root.findAllByProps({ accessibilityRole: 'alert' })
+    expect(alerts).toHaveLength(1)
+    expect(field('count').findByProps({ accessibilityRole: 'alert' }).children.join('')).toBe(
+      'Enter a finite number.'
+    )
+    expect(field('name').findAllByProps({ accessibilityRole: 'alert' })).toHaveLength(0)
     edit('count', '11')
+    expect(tree!.root.findAllByProps({ accessibilityRole: 'alert' })).toHaveLength(0)
     await press('Submit')
     expect(sent).toHaveLength(1)
     expect(tree!.root.findByProps({ accessibilityRole: 'alert' }).children.join('')).toContain(
