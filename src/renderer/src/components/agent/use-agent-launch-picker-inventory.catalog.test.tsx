@@ -176,3 +176,28 @@ it('does not mark a skipped no-surface entry busy or queue a catalog on reopen',
     mocks.session.mock.calls.filter(([, method]) => method === 'agentSession.modelCatalog')
   ).toHaveLength(0)
 })
+
+it.each(['claude', 'codex'] as const)(
+  'keeps seeded %s rows usable without unavailable guidance on null-target SSH',
+  (agent) => {
+    const menu = model(`ssh-seeded-${agent}`, [agent])
+    menu.pickerContext!.executionHostId = 'ssh:plain'
+    menu.rows = [{ kind: 'cli', agent, executionHostId: 'ssh:plain' }]
+    const onUse = vi.fn()
+    const view = render(createElement(CatalogBoundaryPanel, { menu, onUse }))
+    expect(view.getByLabelText('Search models')).toHaveProperty('disabled', false)
+    expect(view.getByLabelText('Search models').getAttribute('aria-busy')).toBe('false')
+    expect(view.queryByRole('status')).toBeNull()
+    const row = view.container.querySelector<HTMLElement>(
+      '[cmdk-item]:not([data-disabled="true"])'
+    )!
+    expect(row).not.toBeNull()
+    fireEvent.click(row)
+    expect(view.container.querySelector('[cmdk-item][data-current="true"]')).not.toBeNull()
+    expect(mocks.session).not.toHaveBeenCalled()
+    expect(mocks.settings).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('button', { name: 'Launch terminal' }))
+    expect(onUse).toHaveBeenCalledOnce()
+    expect(onUse.mock.calls[0][0]).toMatchObject({ agent, surface: 'terminal' })
+  }
+)

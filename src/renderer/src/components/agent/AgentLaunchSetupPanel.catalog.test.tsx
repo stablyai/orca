@@ -107,6 +107,7 @@ it('keeps known seed choices usable after catalog failure and preserves an opaqu
     false
   )
   expect(host.textContent).toContain('retired-model')
+  expect(host.querySelector('[role="status"]')).toBeNull()
   draw({
     ...failed,
     catalogRead: 'settled',
@@ -150,4 +151,97 @@ it('renders localized unresolved guidance from the real Spanish catalog', async 
   } finally {
     await i18n.changeLanguage(language)
   }
+})
+
+it.each([
+  ['unsupported', { origin: 'unknown' }],
+  ['settled', { origin: 'unknown', listingInProgress: true }],
+  ['settled', { origin: 'unknown', unavailable: { reason: 'notSignedIn' } }],
+  ['settled', { origin: 'unknown', unavailable: { reason: 'cliMissing' } }]
+] satisfies [AgentPickerEntry['catalogRead'], AgentPickerEntry['catalog']][])(
+  'shows usable seeded rows instead of %s/%j guidance',
+  (catalogRead, catalog) => {
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <AgentLaunchSetupPanel entry={{ ...entry, catalogRead, catalog }} onUse={onUse} />
+        </TooltipProvider>
+      )
+    )
+    expect(host.querySelector('[role="status"]')).toBeNull()
+    expect(host.querySelector('input[aria-label="Search models"]')).toHaveProperty(
+      'disabled',
+      false
+    )
+    expect(host.querySelector('[cmdk-item]:not([data-disabled="true"])')).not.toBeNull()
+  }
+)
+
+it('keeps the actual retained current row usable during an owned read without inventing a catalog model', () => {
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchSetupPanel
+          entry={{
+            ...entry,
+            catalogRead: 'pending',
+            catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+          }}
+          initial={{
+            agent: 'claude',
+            surface: 'terminal',
+            choices: { model: 'retained-team-model' },
+            arguments: '--debug'
+          }}
+          onUse={onUse}
+        />
+      </TooltipProvider>
+    )
+  )
+  expect(host.querySelector('[role="status"]')).toBeNull()
+  expect(host.querySelector('input[aria-label="Search models"]')?.getAttribute('aria-busy')).toBe(
+    'false'
+  )
+  const row = host.querySelector('[cmdk-item][data-current="true"]')!
+  expect(row.textContent).toBe('retained-team-model')
+  expect(row.getAttribute('data-disabled')).not.toBe('true')
+  fireEvent.click(row)
+  fireEvent.click(
+    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+  )
+  expect(onUse).toHaveBeenCalledOnce()
+  expect(onUse.mock.calls[0][0]).toMatchObject({
+    choices: { model: 'retained-team-model' },
+    arguments: '--debug'
+  })
+})
+
+it('keeps failed guidance when opaque Arguments supply no real current model row', () => {
+  const args = '--settings ./team.json --debug'
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchSetupPanel
+          entry={{
+            ...entry,
+            terminal: { permissionMode: 'ask' },
+            catalogRead: 'failed',
+            catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+          }}
+          initial={{ agent: 'claude', surface: 'terminal', choices: {}, arguments: args }}
+          onUse={onUse}
+        />
+      </TooltipProvider>
+    )
+  )
+  expect(host.querySelector('[role="status"]')?.textContent).toContain(
+    'Could not load Claude models.'
+  )
+  expect(host.querySelector('[cmdk-item][data-current="true"]')).toBeNull()
+  expect(host.textContent).not.toContain('No models match your search.')
+  fireEvent.click(
+    [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch terminal')!
+  )
+  expect(onUse).toHaveBeenCalledOnce()
+  expect(onUse.mock.calls[0][0]).toMatchObject({ choices: {}, arguments: args })
 })

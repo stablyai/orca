@@ -1,6 +1,6 @@
 import {
   agentLaunchSetupOptionRows,
-  agentLaunchSetupCatalogState
+  agentLaunchSetupCatalogState as catalogState
 } from './agent-launch-setup-option-rows'
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
@@ -82,7 +82,7 @@ export function AgentLaunchSetupPanel({
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const { hasModels, catalogPending, catalogMessage } = agentLaunchSetupCatalogState(entry, models)
+  const { hasModels, catalogPending, catalogMessage } = catalogState(entry, models, currentModel)
   const modelDisabled = disabled || defaultsPending || catalogPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
