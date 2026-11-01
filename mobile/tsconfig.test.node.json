@@ -1,0 +1,38 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "composite": false,
+    "incremental": false,
+    "noEmit": true,
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node", "react", "react-dom", "electron-vite/node"],
+    "customConditions": [],
+    "paths": {
+      "@orca/test-mobile/*": ["./node_modules/.cache/phone-host-contract-types/mobile/src/*"],
+      "@orca/test-host/*": ["./node_modules/.cache/phone-host-contract-types/src/*"],
+      "@/*": ["./node_modules/.cache/phone-host-contract-types/mobile/src/*"],
+      "@renderer/*": ["./node_modules/.cache/phone-host-contract-types/src/renderer/src/*"],
+      "zod": ["../node_modules/zod"],
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["../node_modules/@types/react-dom"],
+      "react-dom/*": ["../node_modules/@types/react-dom/*"],
+      "@noble/hashes/*": ["./node_modules/@noble/hashes/*"],
+      "tweetnacl": ["./node_modules/tweetnacl"],
+      "ws": ["../node_modules/@types/ws"]
+    }
+  },
+  "files": [
+    "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
+    "src/test-support/rpc-recording/recorded-request-params.test.ts",
+    "../src/types/build-constants.d.ts"
+  ],
+  "include": [],
+  "exclude": ["node_modules"]
+}

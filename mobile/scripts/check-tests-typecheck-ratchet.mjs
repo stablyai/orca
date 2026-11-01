@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { resolveMobileTypecheckCommand } from './mobile-typecheck-compiler.mjs'
+import { printNodeTestsFailure, runNodeTestsTypecheck } from './check-node-tests-typecheck.mjs'
 
 // Mobile release tsconfig excludes tests and Vitest does not typecheck; separate test program freezes existing errors with a shrink-only baseline.
 
@@ -11,39 +12,40 @@ const BASELINE_PATH = 'tests-typecheck-baseline.txt'
 const PROJECT = 'tsconfig.test.json'
 const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
-// Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
+// Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
+// that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
-    'Node-side: renders the mobile consumer of real desktop SQLite assignment projection, against Node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
     'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
-    'Interim, unchecked: imports the desktop runtime RPC registry and GitHub provider, whose Node graph does not check against RN libs; only vitest covers this body until its checked owner replaces this entry'
+    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
   ],
   [
     'src/session/mobile-native-command-discovery.test.tsx',
-    'Node-side: imports the desktop ACP command discovery source, checked against @types/node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports desktop ACP command discovery, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
     'src/tasks/agent-launch-mobile-replay.test.ts',
-    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
     'src/tasks/mobile-agent-launch-architecture.test.ts',
-    'Node-side: imports the desktop main process, checked against @types/node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
     'src/test-support/rpc-recording/recorded-request-params.test.ts',
-    'Node-side: imports the desktop RPC dispatcher, checked against @types/node rather than RN libs'
+    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
   ],
   [
     'src/transport/mobile-relay-browser-cancel-budget.test.ts',
-    'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports @orca/process-host, which does not check against RN libs, and its implementation sources keep their normal checks'
   ],
   [
     'src/transport/mobile-web-bundle-host-slow-link.test.ts',
-    'Node-side: imports the desktop bundle RPC handlers, checked against @types/node rather than RN libs'
+    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop bundle RPC handlers, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])
 
@@ -128,6 +130,29 @@ export function diffCensus(onDisk, inProgram, allowed = TESTS_OUTSIDE_PROGRAM) {
       .filter((entry) => !disk.has(entry) || program.has(entry))
       .sort()
   }
+}
+
+// A reason string never satisfies a transfer: its strict program must have passed with the body in it.
+export function checkTransfers(result, allowed = TESTS_OUTSIDE_PROGRAM, nocheck = []) {
+  const problems = []
+  if (!result.ok) {
+    problems.push('the phone/host contract program did not pass')
+  }
+  if (result.expected.length === 0) {
+    problems.push('tsconfig.test.node.json names no checked transfer')
+  }
+  for (const file of result.expected) {
+    if (!allowed.has(file)) {
+      problems.push(`checked transfer is not excluded from the RN program: ${file}`)
+    }
+    if (!result.programTestFiles.includes(file)) {
+      problems.push(`checked transfer is absent from its program: ${file}`)
+    }
+    if (nocheck.includes(file)) {
+      problems.push(`checked transfer opts out with @ts-nocheck: ${file}`)
+    }
+  }
+  return problems
 }
 
 export function parseBaseline(text) {
@@ -264,7 +289,7 @@ function printCensusFailure(missing, staleAllowance, nocheck = []) {
   }
 }
 
-export function main(root = process.cwd()) {
+export function main(root = process.cwd(), runNodeTests = () => runNodeTestsTypecheck()) {
   const baselineFile = path.join(root, BASELINE_PATH)
   if (!fs.existsSync(baselineFile)) {
     console.error(
@@ -283,6 +308,19 @@ export function main(root = process.cwd()) {
   const baseline = parseBaseline(fs.readFileSync(baselineFile, 'utf8'))
   const current = pass.failing
   const { added, stale } = diffBaseline(current, baseline)
+  // The RN baseline does not apply here: transferred bodies and their declaration producers must be clean.
+  const node = runNodeTests()
+  const transferProblems = checkTransfers(
+    node,
+    TESTS_OUTSIDE_PROGRAM,
+    findTsNocheckFiles(root, node.expected)
+  )
+  if (transferProblems.length > 0) {
+    printNodeTestsFailure(node)
+    for (const problem of transferProblems) {
+      console.error(`::error::${problem}`)
+    }
+  }
 
   if (added.length > 0) {
     printAddedFailure(added)
@@ -298,8 +336,12 @@ export function main(root = process.cwd()) {
     printStaleFailure(stale)
     return 1
   }
+  if (transferProblems.length > 0) {
+    return 1
+  }
+  const legacy = TESTS_OUTSIDE_PROGRAM.size - node.expected.length
   console.log(
-    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) in the program (${TESTS_OUTSIDE_PROGRAM.size} excluded on purpose, none @ts-nocheck), ${current.length} grandfathered file(s), every other test file checks.`
+    `mobile tests typecheck ratchet OK — ${pass.programTestFiles.length} test file(s) checked in the RN program (${current.length} grandfathered), ${node.expected.length} checked in the phone/host contract program, ${legacy} legacy runtime-only allowance(s) whose bodies are not typechecked; none @ts-nocheck.`
   )
   return 0
 }

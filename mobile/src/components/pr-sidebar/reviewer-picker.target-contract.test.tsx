@@ -2,15 +2,18 @@
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
-import { MobilePRSidebar } from '../../components/MobilePRSidebar'
-import { createFakeRpcClient, rpcSuccess } from '../../mobile-web-shell/bridge-host-test-fakes'
-import { createStableLogicalRpcClient } from '../../transport/stable-logical-rpc-client'
-import { RuntimeGitHubRepositoryQueryCommands } from '../../../../src/main/runtime/runtime-github-repository-query-commands'
-import { GITHUB_REPO_WORK_ITEM_METHODS } from '../../../../src/main/runtime/rpc/methods/github-repo-work-item-methods'
-import type { OrcaRuntimeService } from '../../../../src/main/runtime/orca-runtime'
-import { eraseRpcMethods } from '../../../../src/main/runtime/rpc/core'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import type { Repo } from '../../../../src/shared/repo-types'
+import { MobilePRSidebar } from '@orca/test-mobile/components/MobilePRSidebar'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
+import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
+import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/runtime-github-repository-query-commands'
+import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/github-repo-work-item-methods'
+import type { OrcaRuntimeService } from '@orca/test-host/main/runtime/orca-runtime'
+import { eraseRpcMethods } from '@orca/test-host/main/runtime/rpc/core'
+import type { GitHubWorkItemDetails } from '@orca/test-host/shared/github/work-item-types'
+import type { Repo } from '@orca/test-host/shared/repo-types'
 const io = vi.hoisted(() => ({ gh: vi.fn(), resolved: vi.fn(), requestReviewer: vi.fn() }))
 vi.mock('react-native', () => ({
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
@@ -64,7 +67,7 @@ vi.mock('../../i18n/use-mobile-translation', () => ({
 }))
 vi.mock(
   '../../../../src/main/github/client',
-  async () => import('../../../../src/main/github/issue-field-options')
+  async () => import('@orca/test-host/main/github/issue-field-options')
 )
 vi.mock('../../../../src/main/github/gh-utils', () => ({
   ghExecFileAsync: io.gh,

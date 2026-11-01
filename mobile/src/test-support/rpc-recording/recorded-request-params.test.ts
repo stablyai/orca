@@ -2,29 +2,32 @@ import {
   createBridgePortPair,
   disposeBridgePortPair,
   type BridgePortPair
-} from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import type { RpcClient } from '../../transport/rpc-client'
-import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
-import { BridgeClientClosedError } from '../../mobile-web-shell/bridge/bridge-client-errors'
-import { materializeScenario } from './scenario-execution-mode'
-import { pilotMountAdapters } from './pilot-mount-adapters'
-import { RecordingParamsMismatch } from './recording-mismatch'
-import { runRecording } from './run-recording'
-import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import type { MountedOperation, RecordingScenario } from './recording-scenario'
-import { captureValue } from './recording-values'
-import { withReplyMeta } from '../bridged-parity/divergence-evidence'
+} from '@orca/test-mobile/mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import type { RpcClient } from '@orca/test-mobile/transport/rpc-client'
+import { isRpcDeliveryUnknown } from '@orca/test-mobile/transport/rpc-delivery-ambiguity'
+import { BridgeClientClosedError } from '@orca/test-mobile/mobile-web-shell/bridge/bridge-client-errors'
+import { materializeScenario } from '@orca/test-mobile/test-support/rpc-recording/scenario-execution-mode'
+import { pilotMountAdapters } from '@orca/test-mobile/test-support/rpc-recording/pilot-mount-adapters'
+import { RecordingParamsMismatch } from '@orca/test-mobile/test-support/rpc-recording/recording-mismatch'
+import { runRecording } from '@orca/test-mobile/test-support/rpc-recording/run-recording'
+import { vitestRecordingScheduler } from '@orca/test-mobile/test-support/rpc-recording/vitest-recording-scheduler'
+import type {
+  MountedOperation,
+  RecordingScenario
+} from '@orca/test-mobile/test-support/rpc-recording/recording-scenario'
+import { captureValue } from '@orca/test-mobile/test-support/rpc-recording/recording-values'
+import { withReplyMeta } from '@orca/test-mobile/test-support/bridged-parity/divergence-evidence'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   RPC_METHODS_WITHOUT_SHARED_PARAMS,
   RPC_PARAMS_BY_METHOD
-} from '../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
-import { defineMethod } from '../../../../src/main/runtime/rpc/core'
-import { parseRpcRequestParams } from '../../../../src/main/runtime/rpc/dispatcher-request-parsing'
-import { derivedGoldens } from './derived-goldens'
-import { readGolden } from './golden-recording'
-import { readScenarios } from './scenario-input'
+} from '@orca/test-host/shared/rpc-contract/rpc-params-catalog.generated'
+import { defineMethod } from '@orca/test-host/main/runtime/rpc/core'
+import { parseRpcRequestParams } from '@orca/test-host/main/runtime/rpc/dispatcher-request-parsing'
+import { derivedGoldens } from '@orca/test-mobile/test-support/rpc-recording/derived-goldens'
+import { readGolden } from '@orca/test-mobile/test-support/rpc-recording/golden-recording'
+import { readScenarios } from '@orca/test-mobile/test-support/rpc-recording/scenario-input'
 
 // Parse recorded requests with host schemas; scripted successes can otherwise certify params a real host rejects.
 

@@ -4,7 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal'
+import { parseCompilerPass } from './check-node-tests-typecheck.mjs'
 import {
+  checkTransfers,
   diffBaseline,
   diffCensus,
   hasTsNocheckDirective,
@@ -23,6 +25,18 @@ vi.mock('./mobile-typecheck-compiler.mjs', () => ({
     cwd
   })
 }))
+
+const transfers = [
+  'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
+  'src/test-support/rpc-recording/recorded-request-params.test.ts'
+]
+const cleanTransfers = () => ({
+  ok: true,
+  expected: transfers,
+  programTestFiles: transfers,
+  failures: [],
+  problems: []
+})
 
 describe('ratchet failure diagnostics', () => {
   it.each([
@@ -65,8 +79,12 @@ describe('ratchet failure diagnostics', () => {
         stderr: failed ? `${stderrDiagnostic}\n` : ''
       })
 
-      expect(main(root)).toBe(exit)
-      expect(runProcessSync).toHaveBeenCalledExactlyOnceWith({
+      expect(main(root, cleanTransfers)).toBe(exit)
+      // A clean RN pass still fails when the transferred bodies' own program does not pass.
+      if (exit === 0) {
+        expect(main(root, () => ({ ...cleanTransfers(), ok: false }))).toBe(1)
+      }
+      expect(runProcessSync).toHaveBeenCalledWith({
         program: 'compiler',
         args: ['--project', 'tsconfig.test.json', '--listFiles'],
         cwd: root,
@@ -243,5 +261,33 @@ describe('the @ts-nocheck guard', () => {
 
   it('stays quiet for an ordinary header comment', () => {
     expect(hasTsNocheckDirective('// Tests the reply schema.\nexport {}\n')).toBe(false)
+  })
+})
+
+describe('checked transfers', () => {
+  const allowed = new Map(transfers.map((file) => [file, 'checked transfer']))
+
+  it('fails an allowed transfer that is absent from its final program', () => {
+    expect(
+      checkTransfers({ ...cleanTransfers(), programTestFiles: [transfers[1]] }, allowed)
+    ).toEqual([`checked transfer is absent from its program: ${transfers[0]}`])
+  })
+
+  it('never reads a failed declaration producer or final compiler as clean output', () => {
+    expect(parseCompilerPass('/repo/mobile/src/a.test.ts\n', 2).ok).toBe(false)
+    expect(
+      parseCompilerPass('/repo/mobile/src/a.test.ts\nsrc/a.test.ts(1,1): error TS2322: x\n', 0).ok
+    ).toBe(false)
+    expect(checkTransfers({ ...cleanTransfers(), ok: false }, allowed)).toEqual([
+      'the phone/host contract program did not pass'
+    ])
+  })
+
+  it('accepts a complete clean transfer without a baseline entry', () => {
+    expect(parseCompilerPass('/repo/mobile/src/a.test.ts\n', 0)).toMatchObject({
+      ok: true,
+      files: ['/repo/mobile/src/a.test.ts']
+    })
+    expect(checkTransfers(cleanTransfers(), allowed)).toEqual([])
   })
 })
