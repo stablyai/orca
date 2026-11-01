@@ -2,7 +2,7 @@ import { paintBottomRowBackdrop } from './bottom-row-backdrop'
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
-import { getCellWidth, getTotalScale } from './cell-metrics'
+import { getCellWidth, getMeasuredCellHeight, getTotalScale } from './cell-metrics'
 
 // First live output can widen a buffer measured during replay; permit one fresh fit before preserving user zoom.
 
@@ -38,6 +38,9 @@ export function computeFitScale(scope: TerminalDocumentScope) {
 export function updateTransform(scope: TerminalDocumentScope) {
   scope.surface!.style.transform =
     'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
+  if (scope.pixelScrollActive) {
+    scope.term?.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope))
+  }
   updateScrollIndicator(scope, false)
   paintBottomRowBackdrop(scope)
   if (scope.selMode === 'select') {
@@ -68,7 +71,11 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
   }
   const thumbHeight = Math.max(24, (trackHeight * (scope.term.rows || 0)) / totalRows)
   const maxTop = Math.max(0, trackHeight - thumbHeight)
-  const top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0
+  const cellHeight = getMeasuredCellHeight(scope) * getTotalScale(scope)
+  const fraction =
+    scope.pixelScrollActive && cellHeight > 0 ? -scope.smoothScrollOffsetY / cellHeight : 0
+  const viewportY = Math.max(0, Math.min(maxViewportY, buffer.viewportY + fraction))
+  const top = maxViewportY > 0 ? (viewportY / maxViewportY) * maxTop : 0
   scope.scrollThumb.style.height = thumbHeight + 'px'
   scope.scrollThumb.style.transform = 'translateY(' + top + 'px)'
   if (!reveal) {
