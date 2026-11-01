@@ -55,7 +55,11 @@ export function nativeChatComposerSendState(input: {
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   const suggestion =
-    input.messageDelivery && !input.editSession && !input.disabled && input.draft === ''
+    input.messageDelivery &&
+    !input.editSession &&
+    !sendHeld &&
+    input.draft === '' &&
+    input.imageAttachments.length === 0
       ? transport?.promptSuggestion
       : null
   return {

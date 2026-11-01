@@ -57,6 +57,8 @@ describe('Claude prompt suggestions', () => {
     // The first turn clears too: a relaunch may inherit one the host still retains.
     expect(suggestions).toEqual([null])
     const journaled = rows.length
+    // Sent before the suggestion arrived, so it no longer predicts the next prompt.
+    translator.handle({ ...suggestion('late'), startedSend: { clientMessageId: 'send-2' } })
     translator.handle(suggestion('add a test'))
     expect(suggestions).toEqual([null, 'add a test'])
     expect(rows).toHaveLength(journaled)

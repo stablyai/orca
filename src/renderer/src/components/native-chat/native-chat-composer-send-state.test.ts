@@ -44,6 +44,8 @@ describe('native chat composer prompt suggestion', () => {
       { draft: 'fix it' },
       { messageDelivery: false },
       { disabled: true },
+      { pastedTextSaving: true },
+      { imageAttachments: [{ id: 'image', path: '/tmp/shot.png' }] },
       { editSession: { canSave: true } }
     ]) {
       expect(state(blocked).promptSuggestion).toBeNull()
