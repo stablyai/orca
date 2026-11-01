@@ -340,6 +340,7 @@ export function MobileNativeChatPageList({
         keepPlace(s)
       }
       drawAndFetch(s)
+      align.finishPendingAlign(s)
     })
     observer.observe(viewport)
     observer.observe(content)

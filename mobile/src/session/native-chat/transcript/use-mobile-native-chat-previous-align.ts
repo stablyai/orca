@@ -10,6 +10,8 @@ import {
 } from './mobile-native-chat-previous-message'
 
 const ALIGN_MS = 280
+/** Missed measures after a row is drawn. A layout pass can run before the row node exists. */
+const ALIGN_ATTEMPTS = 3
 
 type LatestGeometry = {
   first: number
@@ -50,7 +52,7 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
   argsRef.current = args
   const aligning = useRef(false)
   const alignFrame = useRef(0)
-  const pendingAlign = useRef<{ key: string; animated: boolean } | null>(null)
+  const pendingAlign = useRef<{ key: string; animated: boolean; left: number } | null>(null)
 
   const alignRow = useCallback((s: S, key: string, animated: boolean): boolean => {
     const { write, notePlace, scroller } = argsRef.current
@@ -124,7 +126,7 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
       if (index === undefined) {
         return
       }
-      pendingAlign.current = { key: target.pendingKey, animated }
+      pendingAlign.current = { key: target.pendingKey, animated, left: ALIGN_ATTEMPTS }
       if (index < latest.current.first) {
         revealUndrawn(index)
         return
@@ -142,10 +144,18 @@ export function useMobileNativeChatPreviousAlign<S extends MobileNativeChatScrol
       if (!pending || aligning.current) {
         return
       }
+      if (alignRow(s, pending.key, pending.animated)) {
+        pendingAlign.current = null
+        return
+      }
       const { latest } = argsRef.current
       const at = latest.current.indexOf.get(pending.key)
-      const drawn = alignRow(s, pending.key, pending.animated)
-      if (drawn || (at !== undefined && at >= latest.current.first)) {
+      // Still outside the draw window: wait for reveal instead of spending a retry.
+      if (at === undefined || at < latest.current.first) {
+        return
+      }
+      pending.left -= 1
+      if (pending.left <= 0) {
         pendingAlign.current = null
       }
     },

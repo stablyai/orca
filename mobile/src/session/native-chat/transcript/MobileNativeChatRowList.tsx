@@ -54,6 +54,7 @@ type PreviousMessageCellProps = {
 
 function PreviousMessageCell({
   item,
+  index,
   style,
   onLayout,
   onFocusCapture,
@@ -73,13 +74,14 @@ function PreviousMessageCell({
         }
         const key = bag.keyOf(item)
         const y = event.nativeEvent.layout.y
-        bag.layouts.set(key, y)
-        const pending = bag.retry
-        if (pending?.key === key) {
-          bag.retry = null
-          const index = bag.rows.findIndex((row) => bag.keyOf(row) === key)
-          // A later cell reporting y=0 was not laid out in content coordinates; keep scrollToIndex.
-          if (y > 0 || index <= 0) {
+        // A later cell reporting y=0 is an unplaced frame. Storing it looks like the top of the list.
+        if (y === 0 && index > 0) {
+          bag.layouts.delete(key)
+        } else {
+          bag.layouts.set(key, y)
+          const pending = bag.retry
+          if (pending?.key === key) {
+            bag.retry = null
             bag.flatRef.current?.scrollToOffset({ offset: y, animated: false })
           }
         }
@@ -233,10 +235,13 @@ function MobileNativeChatNativeRowList({
             return
           }
           pending.left -= 1
-          flatRef.current?.scrollToOffset({
-            offset: Math.max(0, info.averageItemLength * info.index),
-            animated: pending.animated
-          })
+          // averageItemLength 0 would scroll to the top and drop the pending row.
+          if (info.averageItemLength > 0) {
+            flatRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: pending.animated
+            })
+          }
           requestAnimationFrame(() => {
             flatRef.current?.scrollToIndex({
               index: info.index,

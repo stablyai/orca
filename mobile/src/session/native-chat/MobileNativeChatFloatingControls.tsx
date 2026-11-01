@@ -55,23 +55,19 @@ function ChatJumpButton({
       pointerEvents={shown ? 'box-none' : 'none'}
       accessibilityElementsHidden={!shown}
       importantForAccessibility={shown ? 'auto' : 'no-hide-descendants'}
-      style={{
-        position: 'absolute',
-        right: 0,
-        bottom,
-        opacity: shownValue,
-        transform: [{ scale }]
-      }}
+      style={{ position: 'absolute', right: 0, bottom }}
     >
-      <Pressable
-        accessibilityLabel={shown ? label : undefined}
-        disabled={!shown}
-        focusable={shown}
-        style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
-        onPress={onPress}
-      >
-        {icon}
-      </Pressable>
+      <Animated.View style={{ opacity: shownValue, transform: [{ scale }] }}>
+        <Pressable
+          accessibilityLabel={shown ? label : undefined}
+          disabled={!shown}
+          focusable={shown}
+          style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
+          onPress={onPress}
+        >
+          {icon}
+        </Pressable>
+      </Animated.View>
     </Animated.View>
   )
 }
