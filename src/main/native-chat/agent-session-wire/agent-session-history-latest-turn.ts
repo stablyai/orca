@@ -2,6 +2,8 @@ import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
 import { latestStructuredAgentSessionTurn } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 
+export { historyPageTaskList as pageTaskList } from '../../../shared/native-chat/input/native-chat-journal-task-list'
+
 // A catch-up run pages one snapshot many times; its scan back to the turn record is paid once.
 const latestTurnBySnapshot = new WeakMap<AgentJournalSnapshot, AgentSessionLatestTurn | null>()
 

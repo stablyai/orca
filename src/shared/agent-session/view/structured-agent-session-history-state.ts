@@ -48,6 +48,7 @@ export function replacePage(
       ? { actionablePromptIds: page.actionablePromptIds }
       : {}),
     ...(page.working !== undefined ? { working: page.working } : {}),
+    ...(page.taskList !== undefined ? { taskList: page.taskList } : {}),
     ...(backgroundTasks !== undefined
       ? { backgroundTasks }
       : page.backgroundTasks !== undefined

@@ -28,7 +28,9 @@ export const NativeChatSession = z.object({
   capabilities: z
     .object({
       transcriptPending: z.literal(1).optional(),
-      transcriptSourceOrder: z.literal(1).optional()
+      transcriptSourceOrder: z.literal(1).optional(),
+      // Ask for the whole-file task list. Older clients omit it and never receive the extra frame.
+      taskList: z.literal(1).optional()
     })
     .optional(),
   beforeOffset: z.number().int().nonnegative().optional()

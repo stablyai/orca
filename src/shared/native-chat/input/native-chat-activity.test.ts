@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../native-chat-types'
 import {
   latestNativeChatTaskList,
+  latestNativeChatTaskSeed,
   nativeChatSubagentActivities,
   nativeChatTaskListFromPlanDocument,
   nativeChatVisibleTaskList
 } from './native-chat-activity'
+import { foldToolMessages } from '../tools/native-chat-tool-fold'
 
 function message(
   id: string,
@@ -61,6 +63,15 @@ describe('latestNativeChatTaskList', () => {
       ]
     })
     expect(nativeChatTaskListFromPlanDocument('# Just a plan')).toBeNull()
+    expect(nativeChatTaskListFromPlanDocument('# Plan\n- step\n- another')).toEqual({
+      tasks: [
+        { content: 'step', status: 'pending' },
+        { content: 'another', status: 'pending' }
+      ]
+    })
+    expect(nativeChatTaskListFromPlanDocument('- [x] Read\n- also')?.tasks).toEqual([
+      { content: 'Read', status: 'completed' }
+    ])
     const list = latestNativeChatTaskList([
       message('plan', [
         {
@@ -139,6 +150,59 @@ describe('latestNativeChatTaskList', () => {
       ])
     ])
     expect(replaced?.tasks).toEqual([{ content: 'Fresh', status: 'pending' }])
+  })
+
+  it('reads the prose TaskCreate result current Claude Code writes', () => {
+    const subject = 'Refuse to serve /api/* without explicit no-auth (U22)'
+    const folded = foldToolMessages([
+      message('create', [
+        {
+          type: 'tool-call',
+          name: 'TaskCreate',
+          input: { subject, activeForm: 'Refusing unauthenticated /api' }
+        }
+      ]),
+      message(
+        'create-result',
+        [{ type: 'tool-result', output: `Task #1 created successfully: ${subject}` }],
+        {
+          role: 'user'
+        }
+      ),
+      message('done', [
+        { type: 'tool-call', name: 'TaskUpdate', input: { taskId: '1', status: 'completed' } }
+      ]),
+      message('done-result', [{ type: 'tool-result', output: 'Updated task #1 status' }], {
+        role: 'user'
+      })
+    ])
+    expect(latestNativeChatTaskList(folded)?.tasks).toEqual([
+      {
+        content: subject,
+        status: 'completed',
+        activeForm: 'Refusing unauthenticated /api'
+      }
+    ])
+    expect(latestNativeChatTaskSeed(folded)?.tasks[0]).toMatchObject({ id: '1', content: subject })
+  })
+
+  it('keeps a seeded list when this window has no task tools, then applies one update', () => {
+    const subject = 'Refuse to serve /api/* without explicit no-auth (U22)'
+    const seed = { tasks: [{ id: '1', content: subject, status: 'pending' as const }] }
+    expect(latestNativeChatTaskList([], seed)?.tasks).toEqual([
+      { content: subject, status: 'pending' }
+    ])
+    expect(
+      latestNativeChatTaskList(
+        [
+          message('done', [
+            { type: 'tool-call', name: 'TaskUpdate', input: { taskId: '1', status: 'completed' } },
+            { type: 'tool-result', output: 'Updated task #1 status' }
+          ])
+        ],
+        seed
+      )?.tasks
+    ).toEqual([{ content: subject, status: 'completed' }])
   })
 
   it('clears on an explicit empty list and stays absent until one exists', () => {

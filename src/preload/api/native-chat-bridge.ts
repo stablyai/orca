@@ -30,6 +30,7 @@ export const nativeChatApi = {
       transcriptPath?: string
       limit?: number
       wakeWslDistro?: boolean
+      capabilities?: { taskList?: 1 }
     },
     onFrame: (frame: NativeChatSubscriptionFrame) => void
   ): (() => void) => {

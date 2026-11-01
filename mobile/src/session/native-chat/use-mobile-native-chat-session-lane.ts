@@ -7,6 +7,7 @@ import { useMobileStructuredAgentSession } from '../use-mobile-structured-agent-
 import { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
 import type { MobileNativeChatResolution } from './mobile-native-chat-eligibility'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import { useMobileTranscriptTaskList } from './use-mobile-transcript-task-list'
 
 // Run both hooks in fixed order and starve the inactive lane’s identity so flips preserve cached transcripts.
 export function useMobileNativeChatSessionLane({
@@ -82,9 +83,19 @@ export function useMobileNativeChatSessionLane({
     onQueuedEditNotice,
     ...(onActionResolved ? { onActionResolved } : {})
   })
+  const fileTaskList = useMobileTranscriptTaskList({
+    client: structured ? client : null,
+    agent,
+    sessionId,
+    transcriptPath: resolution?.transcriptPath ?? null
+  })
+  const baseSession = structured ? structuredSession.session : bridgeSession
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession,
+    session:
+      baseSession.taskList || !fileTaskList
+        ? baseSession
+        : { ...baseSession, taskList: fileTaskList },
     sessionCommands
   }
 }

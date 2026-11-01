@@ -16,9 +16,14 @@ import {
   type NativeChatTaskList,
   type NativeChatTaskStatus
 } from './native-chat-task-list'
-import { createNativeChatTaskBook } from './native-chat-claude-task-updates'
+import {
+  createNativeChatTaskBook,
+  type NativeChatTaskBook,
+  type NativeChatTaskSeedList
+} from './native-chat-claude-task-updates'
 
 const PLAN_CHECKBOX = /^- \[([ xX~-])\] (.*)$/
+const PLAN_BULLET = /^(?:[-*]|\d+[.)])\s+(.+)$/
 const ACTIVITY_LIMIT = 160
 
 export type NativeChatSubagentActivity = {
@@ -29,39 +34,73 @@ export type NativeChatSubagentActivity = {
   activity: string | null
 }
 
-/** Checkbox lines the ACP plan update writes. Prose plans (no boxes) are not a task list. */
+/** Checkbox lines the ACP plan update writes. A plan with no boxes uses its list items as pending tasks. */
 export function nativeChatTaskListFromPlanDocument(text: string): NativeChatTaskList | null {
-  const tasks: NativeChatTask[] = []
+  const boxes: NativeChatTask[] = []
+  const bullets: NativeChatTask[] = []
   let sawBox = false
   for (const line of text.split('\n')) {
-    const match = PLAN_CHECKBOX.exec(line.trim())
-    if (!match) {
+    const trimmed = line.trim()
+    const box = PLAN_CHECKBOX.exec(trimmed)
+    if (box) {
+      sawBox = true
+      const content = box[2]?.trim()
+      if (content) {
+        boxes.push({ content, status: checkboxStatus(box[1]) })
+      }
       continue
     }
-    sawBox = true
-    const content = match[2]?.trim()
-    if (!content) {
+    if (sawBox) {
       continue
     }
-    const mark = match[1]
-    const status: NativeChatTaskStatus =
-      mark === 'x' || mark === 'X'
-        ? 'completed'
-        : mark === '~'
-          ? 'in_progress'
-          : mark === '-'
-            ? 'cancelled'
-            : 'pending'
-    tasks.push({ content, status })
+    const content = PLAN_BULLET.exec(trimmed)?.[1]?.trim()
+    if (content) {
+      bullets.push({ content, status: 'pending' })
+    }
   }
-  return sawBox ? { tasks } : null
+  if (sawBox) {
+    return { tasks: boxes }
+  }
+  return bullets.length > 0 ? { tasks: bullets } : null
 }
 
-/** The list as of the last accepted update. Null when the transcript never named one. */
+function checkboxStatus(mark: string | undefined): NativeChatTaskStatus {
+  if (mark === 'x' || mark === 'X') {
+    return 'completed'
+  }
+  if (mark === '~') {
+    return 'in_progress'
+  }
+  if (mark === '-') {
+    return 'cancelled'
+  }
+  return 'pending'
+}
+
+/** The list as of the last accepted update. A seed is the history outside this window. */
 export function latestNativeChatTaskList(
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  seed?: NativeChatTaskSeedList | null
 ): NativeChatTaskList | null {
+  return fillTaskBook(messages, seed).list()
+}
+
+/** Same list, keeping provider ids so a later TaskUpdate edits the row instead of adding one. */
+export function latestNativeChatTaskSeed(
+  messages: readonly NativeChatMessage[]
+): NativeChatTaskSeedList | null {
+  const seed = fillTaskBook(messages).seed()
+  return seed && seed.tasks.length > 0 ? seed : null
+}
+
+function fillTaskBook(
+  messages: readonly NativeChatMessage[],
+  seed?: NativeChatTaskSeedList | null
+): NativeChatTaskBook {
   const book = createNativeChatTaskBook()
+  if (seed && seed.tasks.length > 0) {
+    book.replace(seed)
+  }
   for (const message of messages) {
     const pairs = new Map(
       pairToolBlocks(message.blocks).flatMap((pair) =>
@@ -100,13 +139,14 @@ export function latestNativeChatTaskList(
       book.applyClaude(pair.call.name, pair.call.input, pair.result?.output)
     }
   }
-  return book.list()
+  return book
 }
 
 /** The open transcript's own list, or the main plan when that transcript has none. */
 export function nativeChatVisibleTaskList(
   sessionMessages: readonly NativeChatMessage[],
-  focusedMessages: readonly NativeChatMessage[] | null
+  focusedMessages: readonly NativeChatMessage[] | null,
+  sessionSeed?: NativeChatTaskSeedList | null
 ): NativeChatTaskList | null {
   if (focusedMessages) {
     const focused = latestNativeChatTaskList(focusedMessages)
@@ -114,7 +154,7 @@ export function nativeChatVisibleTaskList(
       return focused
     }
   }
-  return latestNativeChatTaskList(sessionMessages)
+  return latestNativeChatTaskList(sessionMessages, sessionSeed)
 }
 
 export function nativeChatSubagentActivities(

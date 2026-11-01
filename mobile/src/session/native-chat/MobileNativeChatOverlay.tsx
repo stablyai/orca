@@ -185,6 +185,7 @@ export function MobileNativeChatOverlay({
                   <MobileNativeChatView
                     messages={session.messages}
                     folded={folded}
+                    taskList={session.taskList}
                     status={session.status}
                     error={session.error}
                     readFailedFinally={session.readFailedFinally === true}
