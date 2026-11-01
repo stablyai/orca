@@ -67,6 +67,12 @@ export function Prose({
         </Text>
       )
     }
+    const renderImage = (href: string, alt: string) => {
+      const block = chatMarkdownImageBlock(href, alt)
+      return block ? (
+        <ImageAttachment block={block} fontScale={fontScale} onLongPress={onLongPress} />
+      ) : null
+    }
     if (userMessage) {
       return (
         <MobileMarkdown
@@ -76,6 +82,7 @@ export function Prose({
           textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
           onLongPress={onLongPress}
+          renderImage={renderImage}
         />
       )
     }
@@ -92,6 +99,7 @@ export function Prose({
         textScale={CHAT_PROSE_SCALE * fontScale}
         onOpenFile={onOpenFile}
         onLongPress={onLongPress}
+        renderImage={renderImage}
       />
     )
   }
@@ -99,6 +107,33 @@ export function Prose({
     return <ImageAttachment block={block} fontScale={fontScale} onLongPress={onLongPress} />
   }
   return null
+}
+
+function chatMarkdownImageBlock(href: string, alt: string): NativeChatImageRefBlock | null {
+  const label = alt ? { alt } : {}
+  if (/^https?:\/\//i.test(href)) {
+    return { type: 'image-ref', url: href, ...label }
+  }
+  const path = absoluteMarkdownImagePath(href)
+  return path ? { type: 'image-ref', path, ...label } : null
+}
+
+function absoluteMarkdownImagePath(href: string): string | null {
+  if (href.startsWith('/') && !href.startsWith('//')) {
+    return href
+  }
+  if (/^[A-Za-z]:[\\/]/.test(href)) {
+    return href
+  }
+  if (!href.startsWith('file://')) {
+    return null
+  }
+  try {
+    const pathname = decodeURIComponent(new URL(href).pathname)
+    return pathname.startsWith('/') && pathname.length > 1 ? pathname : null
+  } catch {
+    return null
+  }
 }
 
 // Host paths cannot load on the phone; the chat's host reads them, and a refused read stays a placeholder.

@@ -101,6 +101,8 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
    *  both through `agentJournalToolCallLifecycle`. */
   endedAs?: AgentJournalToolCallEnding
   output?: AgentJournalBoundedPayload
+  /** Screenshots a tool showed. Paths and URLs only, so a snapshot stays small. */
+  images?: { path?: string; url?: string; alt?: string }[]
 }
 
 export type AgentJournalDiffItem = {

@@ -17,7 +17,10 @@ import { FoldedToolResultSources } from './native-chat-folded-tool-results'
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
     message.blocks.length > 0 &&
-    message.blocks.every((block) => isToolCallBlock(block) || isToolResultBlock(block))
+    message.blocks.some((block) => isToolCallBlock(block) || isToolResultBlock(block)) &&
+    message.blocks.every(
+      (block) => isToolCallBlock(block) || isToolResultBlock(block) || block.type === 'image-ref'
+    )
   )
 }
 

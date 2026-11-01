@@ -32,6 +32,7 @@ import {
   transcriptFileStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { attachResolvedToolImages } from './tool-result-images'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
@@ -167,7 +168,7 @@ export async function readNativeChatTranscriptTailFile(
     // slice(-0) returns everything; non-positive limits must explicitly select nothing.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
     return {
-      messages: selected.map((entry) => entry.message),
+      messages: attachResolvedToolImages(selected.map((entry) => entry.message)),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
       hasMore: limit > 0 && chronological.length > limit,

@@ -3,8 +3,10 @@ import type {
   AgentJournalMessageItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
+import type { NativeChatBlock, NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
 import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { collectToolResultImageSources } from '../native-chat/transcript-record-blocks'
+import type { ToolResultImageSource } from '../native-chat/transcript-record-blocks'
 
 export type ClaudeMessageEnvelope = {
   sessionId: string
@@ -18,7 +20,12 @@ export type ClaudeMessageEnvelope = {
 }
 
 export type ClaudeToolUse = { id: string; name: string; input: unknown }
-export type ClaudeToolResult = { toolUseId: string; output: string; failed: boolean }
+export type ClaudeToolResult = {
+  toolUseId: string
+  output: string
+  failed: boolean
+  images?: ToolResultImageSource[]
+}
 
 export function claudeRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -151,15 +158,18 @@ export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolRe
   return envelope.content.flatMap((value) => {
     const part = claudeRecord(value)
     const toolUseId = claudeToolResultId(part)
-    return part && toolUseId
-      ? [
-          {
-            toolUseId,
-            output: resultText(part.content),
-            failed: part.is_error === true
-          }
-        ]
-      : []
+    if (!part || !toolUseId) {
+      return []
+    }
+    const images = collectToolResultImageSources(part.content)
+    return [
+      {
+        toolUseId,
+        output: resultText(part.content),
+        failed: part.is_error === true,
+        ...(images.length > 0 ? { images } : {})
+      }
+    ]
   })
 }
 
@@ -175,15 +185,39 @@ export function claudeThinkingText(envelope: ClaudeMessageEnvelope): string | nu
 export function claudeToolBody(input: {
   tool: ClaudeToolUse
   result?: ClaudeToolResult
+  images?: readonly NativeChatImageRefBlock[]
 }): AgentJournalItemBody {
+  const images = journalToolImages(input.images)
   return {
     kind: 'tool-call',
     name: input.tool.name,
     input: input.tool.input,
     callId: input.tool.id,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
-    ...(input.result ? { output: journalPayload(input.result.output) } : {})
+    ...(input.result ? { output: journalPayload(input.result.output) } : {}),
+    ...(images.length > 0 ? { images } : {})
   }
+}
+
+function journalToolImages(images: readonly NativeChatImageRefBlock[] | undefined): {
+  path?: string
+  url?: string
+  alt?: string
+}[] {
+  if (!images) {
+    return []
+  }
+  return images.flatMap((image) =>
+    image.path || image.url
+      ? [
+          {
+            ...(image.path ? { path: image.path } : {}),
+            ...(image.url ? { url: image.url } : {}),
+            ...(image.alt ? { alt: image.alt } : {})
+          }
+        ]
+      : []
+  )
 }
 
 export function claudeStreamingMessageBody(text: string): AgentJournalMessageItem {

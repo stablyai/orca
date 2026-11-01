@@ -14,7 +14,7 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { toolResultOutput } from './transcript-record-blocks'
+import { toolResultBlocks } from './transcript-record-blocks'
 
 export function decodeOmpTranscriptLine(
   line: string,
@@ -56,16 +56,14 @@ export function decodeOmpTranscriptLine(
   const role = extractString(message.role)
 
   if (role === 'toolResult') {
+    const callId = extractString(message.toolCallId) ?? undefined
     return {
       id,
       role: 'tool',
-      blocks: [
-        {
-          type: 'tool-result',
-          output: toolResultOutput(message.content),
-          ...(message.isError === true ? { isError: true } : {})
-        }
-      ],
+      blocks: toolResultBlocks(message.content, {
+        ...(callId ? { callId } : {}),
+        ...(message.isError === true ? { isError: true } : {})
+      }),
       timestamp,
       source: 'transcript'
     }

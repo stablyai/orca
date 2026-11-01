@@ -209,7 +209,16 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     state: z.string().min(1),
     // Open like `state`: an ending a newer build writes reads as the `state` beside it.
     endedAs: z.string().min(1).optional(),
-    output: BoundedPayload.optional()
+    output: BoundedPayload.optional(),
+    images: z
+      .array(
+        z.object({
+          path: z.string().optional(),
+          url: z.string().optional(),
+          alt: z.string().optional()
+        })
+      )
+      .optional()
   }),
   z.object({ kind: z.literal('diff'), path: z.string(), patch: BoundedPayload }),
   z.object({

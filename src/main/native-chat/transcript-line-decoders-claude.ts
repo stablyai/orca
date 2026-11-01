@@ -12,7 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { claudeContentBlocks } from './transcript-record-blocks'
+import { claudeContentBlocks, movePendingToolResultImages } from './transcript-record-blocks'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
@@ -62,7 +62,9 @@ function withEditPatch(blocks: NativeChatBlock[], patch: NativeChatEditPatch): N
       return block
     }
     attached = true
-    return { ...block, editPatch: patch }
+    const patched = { ...block, editPatch: patch }
+    movePendingToolResultImages(block, patched)
+    return patched
   })
 }
 
@@ -167,8 +169,11 @@ function claudeMessageRole(
   content: unknown
 ): NativeChatMessage['role'] {
   if (role === 'user') {
-    const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
-    return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
+    // Image refs ride with the tool result; an image-only turn stays a user message.
+    const toolCarrier =
+      blocks.some((block) => block.type === 'tool-result') &&
+      blocks.every((block) => block.type === 'tool-result' || block.type === 'image-ref')
+    return toolCarrier ? 'tool' : 'user'
   }
   return isThinkingOnlyContent(content) ? 'reasoning' : role
 }

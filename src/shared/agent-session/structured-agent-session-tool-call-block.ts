@@ -5,7 +5,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalToolCallItem
 } from './journal/agent-session-journal-types'
-import type { NativeChatToolCallBlock } from '../native-chat/native-chat-types'
+import type { NativeChatBlock, NativeChatToolCallBlock } from '../native-chat/native-chat-types'
 
 export type StructuredAgentSessionToolAction = AgentJournalToolCallItem | AgentJournalDiffItem
 
@@ -24,6 +24,26 @@ export function isRunningStructuredAgentSessionToolAction(
 }
 
 /** Use row itemId when provider call ID is absent so the result cannot pair with another row’s oldest unanswered call. */
+export function journalToolImageBlocks(
+  images: readonly { path?: string; url?: string; alt?: string }[] | undefined
+): NativeChatBlock[] {
+  if (!images) {
+    return []
+  }
+  return images.flatMap((image) =>
+    image.path || image.url
+      ? [
+          {
+            type: 'image-ref' as const,
+            ...(image.path ? { path: image.path } : {}),
+            ...(image.url ? { url: image.url } : {}),
+            ...(image.alt ? { alt: image.alt } : {})
+          }
+        ]
+      : []
+  )
+}
+
 export function structuredAgentSessionToolCallBlock(
   action: StructuredAgentSessionToolAction,
   itemId: string

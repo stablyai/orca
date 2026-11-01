@@ -160,7 +160,10 @@ function renderBlock(
         ) : null
       }
       if (node.children.length === 1 && only?.type === 'image' && ctx.renderImage) {
-        return <Fragment key={key}>{ctx.renderImage(only.url, only.alt ?? '')}</Fragment>
+        const rendered = ctx.renderImage(only.url, only.alt ?? '')
+        if (rendered != null) {
+          return <Fragment key={key}>{rendered}</Fragment>
+        }
       }
       if (node.children.length === 1 && only?.type === 'image' && /^https?:\/\//i.test(only.url)) {
         return (

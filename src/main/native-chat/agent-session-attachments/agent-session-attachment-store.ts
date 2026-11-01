@@ -1,6 +1,7 @@
 // Per-upload directories preserve original filenames without collisions; atomic commit hides partial bytes.
 
 import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
@@ -9,7 +10,10 @@ import {
 } from '../../../shared/agent-session-attachments'
 import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
 import { readAuthorizedDocPreviewFile } from '../../../shared/doc-preview-file-access'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import {
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from '../../../shared/windows-retry-file-operations'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
@@ -19,6 +23,7 @@ import {
 import { ChunkedUploadRegistry, nextChunkedUploadLength } from './chunked-upload-registry'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
+  isAgentSessionAttachmentUploadId,
   parseAgentSessionAttachmentStorePath
 } from './agent-session-attachment-references'
 
@@ -53,6 +58,8 @@ export class AgentSessionAttachmentStore {
     notFoundMessage: NOT_FOUND,
     onExpire: (upload) => void removeQuietly(upload.uploadDir)
   })
+
+  private readonly imageOnce = new Map<string, string>()
 
   constructor(
     readonly rootDir: string,
@@ -153,6 +160,27 @@ export class AgentSessionAttachmentStore {
     return this.storeWith(name, (partPath) => writeFile(partPath, bytes, { flag: 'wx' }))
   }
 
+  /** Same committed path for one filename, so a transcript reread does not duplicate the bytes. */
+  storeImageOnce(name: string, bytes: Buffer): string | null {
+    const safe = sanitizeAgentSessionAttachmentName(name)
+    const cached = this.imageOnce.get(safe)
+    if (cached && existsSync(cached)) {
+      return cached
+    }
+    const found = this.findCommittedName(safe)
+    if (found) {
+      this.imageOnce.set(safe, found)
+      return found
+    }
+    try {
+      const stored = this.storeFileSync(safe, bytes)
+      this.imageOnce.set(safe, stored)
+      return stored
+    } catch {
+      return null
+    }
+  }
+
   /** One committed upload whose hidden part file `write` fills, renamed into place; returns its
    *  path. Not in flight meanwhile: the sweep leaves a folder this new alone for an hour. */
   async storeWith(name: string, write: (partPath: string) => Promise<void>): Promise<string> {
@@ -220,6 +248,44 @@ export class AgentSessionAttachmentStore {
 
   clearInFlightForTests(): void {
     this.uploads.clear()
+  }
+
+  private storeFileSync(name: string, bytes: Buffer): string {
+    const uploadDir = join(this.rootDir, randomUUID())
+    const finalPath = join(uploadDir, name)
+    try {
+      mkdirSync(uploadDir, { recursive: true })
+      const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+      writeFileSync(partPath, bytes, { flag: 'wx' })
+      renameFileWithWindowsRetry(partPath, finalPath)
+    } catch (error) {
+      rmSync(uploadDir, { recursive: true, force: true })
+      throw error
+    }
+    return finalPath
+  }
+
+  private findCommittedName(name: string): string | null {
+    let entries: string[]
+    try {
+      entries = readdirSync(this.rootDir)
+    } catch {
+      return null
+    }
+    for (const entry of entries) {
+      if (!isAgentSessionAttachmentUploadId(entry)) {
+        continue
+      }
+      const candidate = join(this.rootDir, entry, name)
+      try {
+        if (statSync(candidate).isFile()) {
+          return candidate
+        }
+      } catch {
+        // A swept or partial directory is not a committed image.
+      }
+    }
+    return null
   }
 
   private requireOwned(uploadId: string, callerKey: string): InFlightUpload {
