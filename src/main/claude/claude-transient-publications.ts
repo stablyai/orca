@@ -13,7 +13,7 @@ export class ClaudeTransientPublications {
       StructuredAgentSessionEventSink,
       'setActivity' | 'setPromptSuggestion'
     >,
-    private readonly turn: Pick<ClaudeOpenTurn, 'id'>
+    private readonly turn: Pick<ClaudeOpenTurn, 'id' | 'sendUnechoed'>
   ) {}
 
   observe(kind: string, payload: unknown): void {
@@ -21,7 +21,7 @@ export class ClaudeTransientPublications {
     if (kind === 'message:prompt_suggestion') {
       const suggestion = claudeText(claudeRecord(payload)?.suggestion)?.trim()
       // Arrives after the result; a send since then makes it stale.
-      if (turnId === null && suggestion) {
+      if (turnId === null && !this.turn.sendUnechoed && suggestion) {
         this.suggesting = true
         this.sink.setPromptSuggestion?.(suggestion)
       }

@@ -84,6 +84,11 @@ export class ClaudeOpenTurn {
     return this.current !== null
   }
 
+  /** A send the host accepted whose echo has not opened its turn yet. */
+  get sendUnechoed(): boolean {
+    return this.startedSend !== null
+  }
+
   /** An open cycle with prior root work can fold a send; its first send remains the opener. */
   get openedInLiveProviderCycle(): boolean {
     return this.current !== null && this.cycleWorkObserved

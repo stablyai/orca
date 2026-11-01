@@ -54,8 +54,13 @@ function boundedHistoryFrame(event: HistoryFrame): HistoryFrame {
     ...(activity !== undefined && within(activity, BOUNDED_FRAME_ACTIVITY_BYTES)
       ? { activity }
       : {}),
-    ...(promptSuggestion !== undefined && within(promptSuggestion, BOUNDED_FRAME_ACTIVITY_BYTES)
-      ? { promptSuggestion }
+    // Clear rather than omit: omission would keep the client's previous suggestion.
+    ...(promptSuggestion !== undefined
+      ? {
+          promptSuggestion: within(promptSuggestion, BOUNDED_FRAME_ACTIVITY_BYTES)
+            ? promptSuggestion
+            : null
+        }
       : {})
   }
   if (frame.type === 'batch') {
