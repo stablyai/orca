@@ -145,7 +145,6 @@ export async function requestAutomationDispatch(
     : automationRunReportingCli(dispatchTarget, () =>
         resolveLocalWorkspaceRuntime(ctx.store, dispatchTarget.repo, dispatchTarget.cwd)
       )
-  const resultReporting = reportingCli ? ('offered' as const) : undefined
   const agentPrompt = automationAgentPrompt(automation.prompt, reportingCli)
   await ctx.runs.updateRun({
     runId: run.id,
@@ -172,8 +171,7 @@ export async function requestAutomationDispatch(
         automation,
         run,
         dispatchToken: createAutomationDispatchToken(automation.id, run.id),
-        agentPrompt,
-        resultReporting
+        agentPrompt
       },
       ctx.runs,
       run
@@ -189,7 +187,6 @@ export async function requestAutomationDispatch(
     run,
     target,
     agentPrompt,
-    resultReporting,
     dispatcher: (request) => {
       if (readRun().status !== 'dispatching') {
         throw new AutomationDispatchCancelledError('The run changed before its agent could launch.')

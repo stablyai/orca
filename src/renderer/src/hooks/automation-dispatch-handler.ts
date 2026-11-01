@@ -31,8 +31,7 @@ export async function handleAutomationDispatchRequest({
   automation,
   run,
   dispatchToken,
-  agentPrompt = automation.prompt,
-  resultReporting
+  agentPrompt = automation.prompt
 }: AutomationDispatchRequest): Promise<void> {
   const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
     // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
@@ -155,7 +154,6 @@ export async function handleAutomationDispatchRequest({
               await markDispatchResult({
                 runId: run.id,
                 status: 'dispatched',
-                ...(resultReporting ? { resultReporting } : {}),
                 workspaceId: worktree.id,
                 workspaceDisplayName: worktree.displayName,
                 terminalSessionId: reusableSession.tabId,
@@ -218,7 +216,6 @@ export async function handleAutomationDispatchRequest({
       await markDispatchResult({
         runId: run.id,
         status: 'dispatched',
-        ...(resultReporting ? { resultReporting } : {}),
         workspaceId: worktree.id,
         workspaceDisplayName: worktree.displayName,
         terminalSessionId: launchedTabId,

@@ -26,7 +26,6 @@ export type HeadlessAutomationDispatchContext = {
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
   agentPrompt: string
-  resultReporting?: 'offered'
   dispatcher: HeadlessAutomationDispatcher
   runs: AutomationRunWriter
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
@@ -91,7 +90,6 @@ export async function runHeadlessAutomationDispatch(
     status: 'dispatched',
     dispatchedAt,
     ...launchRunTarget,
-    ...(ctx.resultReporting ? { resultReporting: ctx.resultReporting } : {}),
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
     error: null

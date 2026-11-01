@@ -201,7 +201,6 @@ describe('AutomationService prechecks', () => {
       status: 'skipped_precheck',
       error: 'Precheck exited with code 1.'
     })
-    expect(store.listAutomationRuns(automation.id)[0].resultReporting).toBeUndefined()
   })
 
   it('holds a Run Now behind a scheduled headless run that is still in its precheck', async () => {

@@ -420,7 +420,6 @@ describe('AutomationService', () => {
           )
         })
       )
-      expect(run?.resultReporting).toBe('offered')
       await vi.waitFor(() =>
         expect(store.listAutomations().find((entry) => entry.id === automation.id)?.nextRunAt).toBe(
           nextRunAt

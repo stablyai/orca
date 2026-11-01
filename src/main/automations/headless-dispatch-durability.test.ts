@@ -42,17 +42,6 @@ const terminal = {
 }
 
 describe('headless automation observation during persistence', () => {
-  it.each([undefined, 'offered'] as const)(
-    'records the explicit reporting offer %s after handoff',
-    async (resultReporting) => {
-      const context = fixture(terminal)
-      await runHeadlessAutomationDispatch({ ...context, resultReporting })
-      const update = context.runs.updateRun.mock.calls[0]?.[0]
-      expect(update).toEqual(expect.objectContaining({ status: 'dispatched' }))
-      expect(update?.resultReporting).toBe(resultReporting)
-    }
-  )
-
   it('handles an early completion rejection while the dispatched write is stalled', async () => {
     const completion = Promise.withResolvers<never>()
     const acknowledgement = Promise.withResolvers<AutomationRun>()
