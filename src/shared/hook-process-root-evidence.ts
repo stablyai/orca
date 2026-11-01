@@ -1,4 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from './agent-process-recognition'
+import { DEADLINE_PASSED, beforeDeadline, monotonicNow } from './deadline-settle-notifier'
 import type { AgentProcessIdentity, AgentProcessVerdict } from './agent-process-presence'
 import { getProcessTableIndex } from './process-table-index'
 import { unreadableArgvName, type ProcessTableRow } from './process-table-snapshot'
@@ -72,18 +73,24 @@ export function classifyHookProcessRoot(
   return 'root'
 }
 
+// The hook's curl gives up after 1.5s and spools its event; answer well before that and let a
+// slow read finish for the next hook to join.
+const HOOK_ROOT_EVIDENCE_WAIT_MS = 500
+
 /** One validated read per attempt; concurrent hooks from one process share it. */
 export function createHookRootEvidenceReader(deps: {
   probe: (process: AgentProcessIdentity) => Promise<AgentProcessVerdict>
   readTable: () => Promise<readonly ProcessTableRow[]>
 }): HookRootEvidenceReader {
   const pending = new Map<string, Promise<HookProcessVerdict>>()
-  return (process) => {
+  return async (process) => {
     const key = hookProcessKey(process)
-    const inFlight = pending.get(key)
-    if (inFlight) {
-      return inFlight
-    }
+    const read = pending.get(key) ?? start(key, process)
+    const verdict = await beforeDeadline(read, monotonicNow() + HOOK_ROOT_EVIDENCE_WAIT_MS)
+    return verdict === DEADLINE_PASSED ? 'unknown' : verdict
+  }
+
+  function start(key: string, process: AgentProcessIdentity): Promise<HookProcessVerdict> {
     const read = (async (): Promise<HookProcessVerdict> => {
       // The probe pins PID reuse to the hook's start identity before the table names its lineage.
       if ((await deps.probe(process)) !== 'live') {

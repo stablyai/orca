@@ -101,4 +101,22 @@ describe('createHookRootEvidenceReader', () => {
     readTable.mockRejectedValueOnce(new Error('capture_over_budget'))
     expect(await read(identity)).toBe('unknown')
   })
+
+  it('answers unknown within the hook budget and lets the next hook join the slow read', async () => {
+    vi.useFakeTimers()
+    try {
+      let finish: (rows: ProcessTableRow[]) => void = () => {}
+      const readTable = vi.fn(() => new Promise<ProcessTableRow[]>((resolve) => (finish = resolve)))
+      const read = createHookRootEvidenceReader({ probe: async () => 'live', readTable })
+      const first = read(identity)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(await first).toBe('unknown')
+      const next = read(identity)
+      finish([host, shell, claude])
+      expect(await next).toBe('root')
+      expect(readTable).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
