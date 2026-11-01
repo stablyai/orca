@@ -14,15 +14,17 @@ const workItemByOwnerRepo = vi.fn(async () => null)
 globalThis.window = { api: { gh: { repoSlug, workItemByOwnerRepo } } }
 
 function repo(id: string): RepoOption {
-  // SAFETY: the resolver only reads id/path/displayName and source-context routing fields.
-  return { id, path: `/repos/${id}`, displayName: id, kind: 'git' } as RepoOption
+  return { id, path: `/repos/${id}`, displayName: id, badgeColor: '#000000', addedAt: 0 }
 }
 
 describe('resolveSmartWorkspaceGithubDirectLink', () => {
   it('offers a project switch when the selected repo has no GitHub origin and the lookup misses', async () => {
     const cloud = repo('repo-cloud')
     const orca = repo('repo-orca')
-    const directLink = parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/pull/36891')!
+    const directLink = parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/pull/36891')
+    if (!directLink) {
+      throw new Error('expected a GitHub PR link')
+    }
     const result = await resolveSmartWorkspaceGithubDirectLink({
       directLink,
       crossRepoSwitchTarget: 'project',
