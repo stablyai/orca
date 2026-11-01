@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { upsertHookTrustEntriesInContent } from './config-toml-trust'
+import { _internals as mirroredTrustInternals } from './codex-mirrored-hook-runtime-trust'
+import {
+  getCodexExplicitHomeHookSourcePath,
+  readHookTrustEntries,
+  upsertHookTrustEntriesInContent
+} from './config-toml-trust'
 import {
   hookTrustHeader,
   isCodexManagedCommand,
@@ -31,6 +36,11 @@ vi.mock('os', async (importOriginal) => {
 import { CodexHookService } from './hook-service'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
+
+afterEach(() => {
+  mirroredTrustInternals.setListRunner(null)
+  mirroredTrustInternals.resetRetryState()
+})
 
 function seedSystemUserHook(command: string): {
   systemHooksPath: string
@@ -577,5 +587,58 @@ describe('CodexHookService', () => {
       `${hookTrustHeader(`${managedHooksPath}:stop:0:0`)}\nenabled = false`
     )
     expect(runtimeToml).not.toContain(':permission_request:0:0')
+  })
+
+  it('writes Codex runtime currentHash for an approved mirrored user hook, not the system hash', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    const systemHash = 'sha256:system-source-hash'
+    const runtimeHash = 'sha256:runtime-current-hash'
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          PreToolUse: [{ hooks: [{ type: 'command', command: 'user-pre-tool-hook' }] }]
+        }
+      })}\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('model = "system-model"\n', [
+        {
+          sourcePath: systemHooksPath,
+          eventLabel: 'pre_tool_use',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'user-pre-tool-hook',
+          trustedHash: systemHash
+        }
+      ]),
+      'utf-8'
+    )
+    mirroredTrustInternals.setListRunner((runtimeHomePath) => {
+      const runtimeHooksPath = getCodexExplicitHomeHookSourcePath(
+        join(runtimeHomePath, 'hooks.json')
+      )
+      return [
+        {
+          key: `${runtimeHooksPath}:pre_tool_use:1:0`,
+          command: 'user-pre-tool-hook',
+          currentHash: runtimeHash
+        }
+      ]
+    })
+
+    expect((await new CodexHookService().install()).state).toBe('installed')
+
+    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+    const runtimeHooksPath = getCodexExplicitHomeHookSourcePath(
+      join(managedCodexHome, 'hooks.json')
+    )
+    const runtimeTrust = readHookTrustEntries(join(managedCodexHome, 'config.toml'))
+    expect(runtimeTrust.get(`${runtimeHooksPath}:pre_tool_use:1:0`)?.trustedHash).toBe(runtimeHash)
+    expect(readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')).not.toContain(systemHash)
   })
 })
