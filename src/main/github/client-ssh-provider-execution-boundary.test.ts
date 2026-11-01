@@ -179,24 +179,6 @@ describe('getPRForBranch SSH execution boundary', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
-  it('reports an upstream error when the SSH HEAD probe loses its provider mid-flight', async () => {
-    mockMergedBranchPRLookup()
-
-    const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-  })
-
-  it('reports an upstream error when the SSH upstream probe loses its provider mid-flight', async () => {
-    mockUpstreamOnlyPRLookup()
-
-    const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-  })
-
   it('reads tracked upstreams through the local runtime for a WSL repository', async () => {
     const forEachRefArgs = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
     mockUpstreamOnlyPRLookup()

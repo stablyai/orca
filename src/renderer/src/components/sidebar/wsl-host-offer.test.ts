@@ -115,18 +115,23 @@ describe('offer actions', () => {
       }),
       addLocalPath: vi.fn(async (path: string) => {
         calls.push(`project ${path}`)
+      }),
+      moveAddedProject: vi.fn((moved: WslHostOffer) => {
+        calls.push(`move ${moved.path}`)
       })
     }
     return { calls, acceptDeps }
   }
 
-  it('accept turns hosts on, adds the distro, then adds the project', async () => {
+  // B3: accepting for one project moves that project, not every bridge project in its distro.
+  it('accept turns hosts on, adds the distro and the project, then moves that one project', async () => {
     const { calls, acceptDeps: d } = deps({ ok: true, environmentId: 'wsl:ubuntu' })
     expect(await acceptWslHostOffer(offer, d)).toBeNull()
     expect(calls).toEqual([
       'settings {"experimentalWslHosts":true}',
       'host Ubuntu',
-      `project ${offer.path}`
+      `project ${offer.path}`,
+      `move ${offer.path}`
     ])
   })
 
@@ -141,6 +146,7 @@ describe('offer actions', () => {
     const { calls, acceptDeps: d } = deps(refusal)
     expect(await acceptWslHostOffer(offer, d)).toEqual(refusal)
     expect(d.addLocalPath).not.toHaveBeenCalled()
+    expect(d.moveAddedProject).not.toHaveBeenCalled()
     expect(calls).toEqual([
       'settings {"experimentalWslHosts":true}',
       'host Ubuntu',

@@ -1,4 +1,4 @@
-import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
 import type { AgentType } from '../../shared/native-chat-types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'

@@ -68,7 +68,8 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
-    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+    cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
+    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stopWslMoveHostCopies, type WslMoveHostCopyPort } from './wsl-move-host-copy-stop'
+import {
+  probeWslMoveHostCopies,
+  stopWslMoveHostCopies,
+  type WslMoveHostCopyPort
+} from './wsl-move-host-copy-stop'
 
 function port(overrides: Partial<WslMoveHostCopyPort> = {}): WslMoveHostCopyPort {
   return {
@@ -52,6 +56,38 @@ describe("undo's stop of the host's copies", () => {
     })
     expect(await stopWslMoveHostCopies([], host)).toEqual(SLEPT)
     expect(host.sleepWorkspace).toHaveBeenCalledWith('wt-host-only')
+  })
+
+  // An automatic bring-back must never end a live terminal, so it reads and refuses instead.
+  describe('refusing live terminals rather than sleeping them', () => {
+    it('probes without sleeping: running, idle, or unanswering', async () => {
+      const running = port({
+        workspacesWithTerminals: vi.fn(async () => ['wt-a']),
+        liveTerminals: vi.fn(async () => 1)
+      })
+      expect(await probeWslMoveHostCopies([], running)).toBe('still-running')
+      expect(await probeWslMoveHostCopies(['wt-a'], port())).toBe('stopped')
+      expect(
+        await probeWslMoveHostCopies([], port({ workspacesWithTerminals: vi.fn(async () => null) }))
+      ).toBe('unreachable')
+      expect(running.sleepWorkspace).not.toHaveBeenCalled()
+    })
+
+    // A sleep after the census would end a terminal started in between, so refuse-live never sleeps.
+    it('never sleeps: refuses a live terminal, and reports an idle host stopped untouched', async () => {
+      const live = port({ liveTerminals: vi.fn(async () => 1) })
+      expect(await stopWslMoveHostCopies(['wt-a'], live, undefined, undefined, 'refuse-live')).toBe(
+        'still-running'
+      )
+      expect(live.sleepWorkspace).not.toHaveBeenCalled()
+
+      const idle = port({ workspacesWithTerminals: vi.fn(async () => ['wt-host-only']) })
+      expect(await stopWslMoveHostCopies(['wt-a'], idle, undefined, undefined, 'refuse-live')).toBe(
+        'stopped'
+      )
+      expect(idle.sleepWorkspace).not.toHaveBeenCalled()
+      expect(idle.wait).not.toHaveBeenCalled()
+    })
   })
 
   describe('on a slow host', () => {
