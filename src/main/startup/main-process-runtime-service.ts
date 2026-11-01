@@ -30,6 +30,7 @@ import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environme
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
@@ -140,7 +141,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
           params,
           timeoutMs
         ),
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId)
+      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
+      resumeVm: async (workspaceId) => {
+        await resumeEphemeralVmWorkspace(store, workspaceId)
+      }
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,

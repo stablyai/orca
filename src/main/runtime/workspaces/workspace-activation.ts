@@ -87,6 +87,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     const targetsClients = navigationTargetsClients(navigation)
 
     const target = this.store ? worktreeRowTarget(this.store, worktree) : undefined
+    // Every caller activates through here: the host wakes a suspended recipe VM itself, mirroring
+    // sleep's host-side suspend, instead of waiting for a window's resume IPC (#36923).
+    void this.queueWorkspaceVmWake(worktree.id)
     if (
       !targetsHost &&
       target &&
