@@ -26,6 +26,10 @@ import type {
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import type {
+  PluginViewReply,
+  PluginViewRequest
+} from '../../shared/plugins/view/plugin-view-protocol'
 import type { PluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import type {
   PluginCatalogGitSource,
@@ -239,6 +243,9 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** `orca plugin open` / `shot`: main asks this window to show a plugin view. Desktop only. */
+  onViewRequest?: (callback: (request: PluginViewRequest) => void) => () => void
+  answerViewRequest?: (reply: PluginViewReply) => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
   /** Held updates not yet told to the user, each returned once per version; never approves. */

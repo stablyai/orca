@@ -7,6 +7,11 @@ import type {
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
+import {
+  PLUGIN_VIEW_REPLY_CHANNEL,
+  PLUGIN_VIEW_REQUEST_CHANNEL,
+  type PluginViewRequest
+} from '../../shared/plugins/view/plugin-view-protocol'
 import type {
   PluginAutoUpdateEvent,
   PluginHostInstallResult,
@@ -83,6 +88,15 @@ export const pluginsApi = {
       ipcRenderer.removeListener('plugins:changed', listener)
     }
   },
+  onViewRequest: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: PluginViewRequest): void =>
+      callback(request)
+    ipcRenderer.on(PLUGIN_VIEW_REQUEST_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(PLUGIN_VIEW_REQUEST_CHANNEL, listener)
+    }
+  },
+  answerViewRequest: (reply) => ipcRenderer.send(PLUGIN_VIEW_REPLY_CHANNEL, reply),
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
   takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
   getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),

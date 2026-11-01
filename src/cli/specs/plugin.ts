@@ -197,15 +197,17 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'dev', 'watch'],
     summary: 'Load a plugin folder, then stream its logs and reloads until Ctrl-C',
-    usage: 'orca plugin dev watch <dir> [--check] [--approve <fingerprint>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'dir', 'approve', 'check'],
+    usage:
+      'orca plugin dev watch <dir> [--check] [--shot <out-dir>] [--approve <fingerprint>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dir', 'approve', 'check', 'shot'],
     positionalArgs: ['dir'],
     notes: [
       'The inner loop: loads the folder like `orca plugin dev load` (refreshing its .orca/types), then prints each log line its panels, editors and worker write, every reload a save causes, and status changes such as errored or invalid with the error.',
       'When an edit asks for new access it prints the `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another shell; this one keeps watching.',
       'Ctrl-C unloads the folder (unless it was loaded before this command) and exits 0; a second Ctrl-C exits at once. If the connection to Orca drops it says so and exits 1.',
       "--check runs `orca plugin check` after the load and after each reload and prints the result inline (one `check` event with --json). Like `orca plugin check` it runs the plugin's code on this machine, unsandboxed, so use it on code you trust; it needs a local folder.",
-      '--json prints one JSON object per line: `loaded`, `log`, `reloaded`, `status`, `approval`, `check`, `warning`, `disconnected`, `unloaded` (field `type`). A failed first load prints the usual error instead.',
+      '--shot <out-dir> saves a PNG of each panel after the load and after each reload that leaves the plugin running, like `orca plugin shot`, to <out-dir>/<plugin-key>-<panel>.png (overwritten each time; one `shot` event each). With --check, the check runs first. It shows each panel in the right sidebar in turn and needs the Orca desktop app.',
+      '--json prints one JSON object per line: `loaded`, `log`, `reloaded`, `status`, `approval`, `check`, `shot`, `warning`, `disconnected`, `unloaded` (field `type`). A failed first load prints the usual error instead.',
       APPROVE_NOTE,
       'With --environment the folder is a path on that Orca server; pass it absolute.',
       EXIT_CODES_NOTE
@@ -213,6 +215,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca plugin dev watch .',
       'orca plugin dev watch ./todo-panel --check',
+      'orca plugin dev watch ./todo-panel --check --shot ./.orca/shots',
       'orca plugin dev watch ./notes-editor --json'
     ]
   },

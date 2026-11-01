@@ -23,7 +23,7 @@ export type LogsResult = {
 
 const APPROVAL_CODES = new Set(['approval_required', 'approval_stale'])
 
-function stringFlag(ctx: HandlerContext, name: string): string | undefined {
+export function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
@@ -93,10 +93,14 @@ export function translatePluginRpcError(
 export async function callPlugins<T>(
   ctx: HandlerContext,
   method: string,
-  params?: unknown
+  params?: unknown,
+  options?: { timeoutMs?: number }
 ): Promise<T> {
   try {
-    return (await ctx.client.call<T>(method, params)).result
+    const reply = options
+      ? await ctx.client.call<T>(method, params, options)
+      : await ctx.client.call<T>(method, params)
+    return reply.result
   } catch (error) {
     throw translatePluginRpcError(ctx, method, error)
   }
@@ -172,7 +176,7 @@ export async function refreshDevTypes(ctx: HandlerContext, path: string): Promis
     .catch(() => [])
 }
 
-function requirePluginKey(ctx: HandlerContext): string {
+export function requirePluginKey(ctx: HandlerContext): string {
   const key = stringFlag(ctx, 'plugin')
   if (!key || !isQualifiedPluginKey(key)) {
     throw new RuntimeClientError(

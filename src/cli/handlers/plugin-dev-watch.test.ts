@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { COMMAND_SPECS } from '../specs'
 import { findCommandSpec, normalizeCommandPositionals, parseArgs, specPaths } from '../args'
@@ -104,5 +107,46 @@ describe('plugin dev watch --check', () => {
     remote.flags.set('check', true)
     expect(() => bindPluginDevWatchHost(remote, '/work/notes')).toThrow(/needs a local folder/)
     expect(bindPluginDevWatchHost(context(vi.fn()), '/work/notes').check).toBeUndefined()
+  })
+})
+
+describe('plugin dev watch --shot', () => {
+  it('shoots each listed panel into the folder, also from a remote host', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-watch-shot-'))
+    try {
+      const png = Buffer.from('png').toString('base64')
+      const call = vi.fn(async (method: string, params?: { panelId?: string }) => ({
+        result:
+          method === 'plugins.list'
+            ? [{ pluginKey: 'acme.notes', panels: [{ id: 'a' }, { id: 'b' }] }]
+            : {
+                pluginKey: 'acme.notes',
+                panelId: params?.panelId,
+                png,
+                width: 300,
+                height: 500,
+                colorScheme: 'dark',
+                themeApplied: false,
+                settled: true,
+                errors: []
+              }
+      }))
+      const ctx = context(call)
+      ctx.flags.set('shot', dir)
+      const host = bindPluginDevWatchHost(ctx, '/work/notes')
+      const shots = await host.shot?.('acme.notes')
+      expect(shots?.map((shot) => shot.path)).toEqual([
+        join(dir, 'acme.notes-a.png'),
+        join(dir, 'acme.notes-b.png')
+      ])
+      expect(await readFile(join(dir, 'acme.notes-b.png'), 'utf8')).toBe('png')
+      expect(call.mock.calls.map(([method]) => method)).toEqual([
+        'plugins.list',
+        'plugins.shot',
+        'plugins.shot'
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

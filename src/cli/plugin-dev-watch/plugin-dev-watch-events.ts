@@ -1,6 +1,7 @@
 import type { PluginHostStatus } from '../../shared/plugins/plugin-list-entry'
 import { formatPluginPanelCheck } from '../plugin-authoring/plugin-panel-check'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
+import type { PluginDevWatchShot } from './plugin-dev-watch-shot'
 
 /** `missing`: the host lists no plugin for the folder (for example, its id changed). */
 export type PluginDevWatchStatus = PluginHostStatus | 'missing'
@@ -37,6 +38,8 @@ export type PluginDevWatchEvent =
   | ({ type: 'approval'; pluginKey: string } & PluginDevWatchApproval)
   /** `--check`: `orca plugin check` after the load and after each reload. */
   | ({ type: 'check'; pluginKey: string } & PluginDevWatchCheckResult)
+  /** `--shot`: a PNG of one panel after the load and after each reload that left it running. */
+  | ({ type: 'shot'; pluginKey: string } & PluginDevWatchShot)
   | { type: 'warning'; message: string }
   | { type: 'disconnected'; message: string }
   | { type: 'unloaded'; pluginKey: string; path: string; removed: boolean }
@@ -76,6 +79,11 @@ export function formatPluginDevWatchEvent(event: PluginDevWatchEvent): string {
           : `✗ check failed for ${event.pluginKey}`,
         ...event.invalid.map((error) => `  invalid: ${error}`),
         ...event.panels.flatMap(formatPluginPanelCheck).map((line) => `  ${line}`)
+      ].join('\n')
+    case 'shot':
+      return [
+        `shot ${event.path} (${event.width}x${event.height})${event.settled ? '' : ', not finished drawing'}`,
+        ...event.errors.map((error) => `  error: ${error}`)
       ].join('\n')
     case 'warning':
       return `warning: ${event.message}`

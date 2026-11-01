@@ -334,11 +334,33 @@ errors arrive as `[frame] <file>:<line> <message>`, at the line in your source f
 `orca plugin dev reload <dir> --approve <fingerprint>` command to run from another terminal.
 Ctrl-C unloads the folder (unless it was loaded before you started) and exits; press it again
 to exit at once. With `--json` it prints one JSON object per line, with a `type` of `loaded`,
-`log`, `reloaded`, `status`, `approval`, `check`, `warning`, `disconnected` or `unloaded`, for
-coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
+`log`, `reloaded`, `status`, `approval`, `check`, `shot`, `warning`, `disconnected` or
+`unloaded`, for coding agents. `--check` also runs `orca plugin check` after the load and after each reload and
 prints what each components panel drew or threw, with `file:line:col`. Like `orca plugin check`,
 it runs your code on this machine outside Orca's sandbox, and it needs a local folder. The first load needs approval like `orca plugin dev load` (it exits with code 3 and
 prints the command to re-run with `--approve`).
+
+### See the panel
+
+`orca plugin shot <plugin-key>` saves a PNG of a panel exactly as Orca draws it, cropped to the
+panel, to `.orca/shots/<plugin-key>-<panel>.png` (or `--out <file>`). It opens the panel in the
+right sidebar, waits until the current code has drawn (a components panel's first tree, an HTML
+panel's page loaded; up to 15 seconds), and captures it even while Orca's window is hidden or
+behind others, without showing, raising or focusing it. `--width <px>` sizes the panel and
+`--theme light|dark` paints Orca in that mode for that capture only; your width and theme
+setting are put back. `--json` prints `{ path, width, height, theme, themeApplied, settled,
+errors }`, where `errors` holds the error banner the panel shows and the errors it logged during
+the capture. `orca plugin dev watch . --shot ./.orca/shots` saves a fresh PNG of each panel after
+the load and after each reload that leaves the plugin running; with `--check`, the check runs
+first. A coding agent reads the image to see what it built.
+
+`orca plugin open <plugin-key> [--panel <id>]` shows a panel to you in the right sidebar, and
+`--editor <file>` opens a file in the plugin's custom editor. It never brings the window forward.
+
+Both need the Orca desktop app with a workspace showing; `orca serve` has no window and refuses
+them. A shot never changes the view, so while Orca shows Settings or another full page it fails
+with `no_workspace`. With `--environment`, the PNG (at most 5 MiB) comes back to the machine
+that ran the command.
 
 To keep a folder loaded without a terminal, use Settings instead:
 

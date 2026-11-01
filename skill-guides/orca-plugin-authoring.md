@@ -117,20 +117,29 @@ secrets or state the worker also uses; a panel alone needs none of it.
 ## The loop
 
 1. `ORCA plugin create ./my-plugin --template components --json`. Leave out `--publisher`.
-2. Start `ORCA plugin dev watch ./my-plugin --check --json` in a background terminal and keep
-   reading it. It loads the folder, refreshes `.orca/types`, then prints one JSON object per
-   line: `loaded`, `log`, `reloaded`, `status` (with `errored` or `invalid` and the error),
-   `approval`, `check` (with `--check`), `warning`, `disconnected`, `unloaded`. A first load that needs consent exits `3`; see
+2. Start `ORCA plugin dev watch ./my-plugin --check --shot ./my-plugin/.orca/shots --json` in a
+   background terminal and keep reading it. It loads the folder, refreshes `.orca/types`, then
+   prints one JSON object per line: `loaded`, `log`, `reloaded`, `status` (with `errored` or
+   `invalid` and the error), `approval`, `check` (with `--check`), `shot` (with `--shot`),
+   `warning`, `disconnected`, `unloaded`. A first load that needs consent exits `3`; see
    [Approval](#approval).
-3. Edit and save. Each save prints `reloaded`, then a `check` with what each panel drew or threw.
-   Console errors and uncaught exceptions arrive as `log` lines `[frame] <file>:<line> <message>`
-   at your source line. Fix every one, and run `ORCA plugin test <dir> --json` after changes.
-4. Off the watch, `ORCA plugin logs <plugin-key> --json` shows the same lines,
+3. Edit and save. Each save prints `reloaded`, then a `check` with what each panel drew or threw,
+   then a `shot` per panel: `{ path, width, height, settled, errors }`. Read the PNG at `path` to
+   see the panel exactly as Orca draws it, and fix what looks wrong. Console errors and uncaught
+   exceptions arrive as `log` lines `[frame] <file>:<line> <message>` at your source line, and in
+   the shot's `errors`. Fix every one, and run `ORCA plugin test <dir> --json` after changes.
+4. Off the watch, `ORCA plugin shot <plugin-key> [--panel <id>] [--theme light|dark] [--width <px>]
+   --json` captures one panel (default `<cwd>/.orca/shots/<plugin-key>-<panel>.png`; check both
+   themes and a narrow width), `ORCA plugin logs <plugin-key> --json` shows the same lines,
    `ORCA plugin restart <plugin-key>` reruns a worker's startup code, and
    `ORCA plugin dev reload <dir>` catches a missed save or re-checks changed commands and shortcuts.
-5. Stop the watch with Ctrl-C (it unloads the folder it loaded) or run `ORCA plugin dev unload <dir>`.
+5. To show the user, `ORCA plugin open <plugin-key> [--panel <id>]` opens the panel in Orca's right
+   sidebar, and `--editor <file>` opens a file in its custom editor. Neither raises the window.
+6. Stop the watch with Ctrl-C (it unloads the folder it loaded) or run `ORCA plugin dev unload <dir>`.
 
-You cannot see the panel. Ask the user to open it, or use the check step below.
+Shots and `open` need the Orca desktop app with a workspace showing; a shot never changes the
+view, so it fails with `no_workspace` while Orca shows Settings or another full page. Without
+them, use the check below.
 
 ## Test and check
 

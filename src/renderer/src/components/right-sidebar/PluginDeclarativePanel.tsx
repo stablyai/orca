@@ -15,6 +15,7 @@ import {
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
+import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
 import { useAppStore } from '@/store'
 import {
   PluginDeclarativeIssueNotice,
@@ -22,6 +23,7 @@ import {
 } from './PluginDeclarativePanelNotices'
 
 type PluginDeclarativePanelProps = {
+  tabKey: string
   panelId: string
   title: string
   guest: PluginFrameGuest
@@ -44,6 +46,7 @@ function subscribeDocumentVisibility(onChange: () => void): () => void {
  * ends the guest, and only persisted atoms carry over.
  */
 export function PluginDeclarativePanel({
+  tabKey,
   panelId,
   title,
   guest,
@@ -93,6 +96,8 @@ export function PluginDeclarativePanel({
   useLayoutEffect(() => {
     sessionTokenRef.current = sessionToken
   })
+
+  useReportDeclarativePanelDraw(tabKey, guest.url, rendered?.document ?? null, issue)
 
   usePluginFrameHost({
     surface: 'panel',

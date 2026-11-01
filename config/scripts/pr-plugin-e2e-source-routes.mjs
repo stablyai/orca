@@ -195,6 +195,21 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
+  // `orca plugin open` / `shot`: renderer reveal, draw wait and main's capture of the panel rect.
+  pluginRoute(
+    'plugins.view-shot',
+    ['plugin-shot'],
+    [
+      `${UI}view\\/`,
+      `${STORE}view-capture`,
+      'src\\/(?:main|shared)\\/plugins\\/view\\/',
+      'src\\/main\\/runtime\\/rpc\\/methods\\/plugin-view',
+      'src\\/cli\\/(?:handlers|specs)\\/plugin-view',
+      'src\\/renderer\\/src\\/hooks\\/(?:ipc-events\\/plugin-view-ipc-bridge|use-document-dark-theme)',
+      'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:plugin-panel-draw-status|use-plugin-panel-draw-report|right-sidebar-panel-content)'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke|compiled-orca-cli'
+  ),
   pluginRoute(
     'plugins.vm-recipes',
     ['plugin-marketplace-content'],

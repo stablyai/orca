@@ -33,7 +33,8 @@ function loadSources() {
     capabilities: 'src/shared/plugins/capabilities/plugin-capabilities.ts',
     schema: 'src/shared/plugins/manifest/plugin-json-schema.ts',
     fieldDocs: 'src/shared/plugins/manifest/plugin-schema-field-docs.ts',
-    cli: 'src/cli/specs/plugin.ts'
+    cli: 'src/cli/specs/plugin.ts',
+    cliView: 'src/cli/specs/plugin-view.ts'
   })
 }
 
@@ -327,8 +328,12 @@ function renderManifest({ schema, fieldDocs }) {
   )
 }
 
-function renderCli({ cli }) {
-  const specs = [...cli.PLUGIN_AUTHORING_COMMAND_SPECS, ...cli.PLUGIN_RUNTIME_COMMAND_SPECS]
+function renderCli({ cli, cliView }) {
+  const specs = [
+    ...cli.PLUGIN_AUTHORING_COMMAND_SPECS,
+    ...cli.PLUGIN_RUNTIME_COMMAND_SPECS,
+    ...cliView.PLUGIN_VIEW_COMMAND_SPECS
+  ]
   const exitCodes = specs
     .flatMap((spec) => spec.notes ?? [])
     .find((note) => note.startsWith('Exit codes'))

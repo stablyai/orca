@@ -5,6 +5,7 @@ import {
   PLUGIN_AUTHORING_COMMAND_SPECS,
   PLUGIN_RUNTIME_COMMAND_SPECS
 } from '../../src/cli/specs/plugin'
+import { PLUGIN_VIEW_COMMAND_SPECS } from '../../src/cli/specs/plugin-view'
 import {
   buildPluginAuthoringReferences,
   findStalePluginAuthoringReferences
@@ -28,14 +29,16 @@ describe('plugin authoring skill references', () => {
     ])
   })
 
-  it('names only plugin commands this CLI defines, outside the pending test/check section', async () => {
+  it('names only plugin commands this CLI defines', async () => {
     const guide = await readFile(
       path.join(projectDir, 'skill-guides', 'orca-plugin-authoring.md'),
       'utf8'
     )
-    const known = [...PLUGIN_AUTHORING_COMMAND_SPECS, ...PLUGIN_RUNTIME_COMMAND_SPECS].map((spec) =>
-      spec.path.join(' ')
-    )
+    const known = [
+      ...PLUGIN_AUTHORING_COMMAND_SPECS,
+      ...PLUGIN_RUNTIME_COMMAND_SPECS,
+      ...PLUGIN_VIEW_COMMAND_SPECS
+    ].map((spec) => spec.path.join(' '))
     const named = [...guide.matchAll(/ORCA (plugin(?: [a-z-]+){1,2})/gu)].map((match) => match[1])
     const unknown = named.filter(
       (command) => !known.some((path) => command === path || command.startsWith(`${path} `))

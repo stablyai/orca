@@ -10,6 +10,11 @@ import {
   createPluginDevWatchCheckQueue,
   type PluginDevWatchCheckResult
 } from './plugin-dev-watch-check'
+import {
+  isLastingShotFailure,
+  PLUGIN_DEV_WATCH_SHOOTABLE,
+  type PluginDevWatchShot
+} from './plugin-dev-watch-shot'
 
 /** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
@@ -22,6 +27,8 @@ export type PluginDevWatchHost = {
   devUnload(): Promise<void>
   /** `--check` only: validates the folder and renders its components panels once. */
   check?: () => Promise<PluginDevWatchCheckResult>
+  /** `--shot` only: a PNG of each of the plugin's panels as Orca draws it now. */
+  shot?: (pluginKey: string) => Promise<PluginDevWatchShot[]>
 }
 
 export type PluginDevWatchDeps = {
@@ -109,16 +116,38 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     stop.abort()
   })
   const runCheck = host.check
-  const checks = runCheck
-    ? createPluginDevWatchCheckQueue(async () => {
-        try {
-          emit({ type: 'check', pluginKey, ...(await runCheck()) })
-        } catch (error) {
-          emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
-        }
-      })
-    : null
-  checks?.request()
+  let runShot = host.shot
+  // Check, then shot: one at a time, and saves during a run coalesce into one more.
+  const afterLoad =
+    runCheck || runShot
+      ? createPluginDevWatchCheckQueue(async () => {
+          if (runCheck) {
+            try {
+              emit({ type: 'check', pluginKey, ...(await runCheck()) })
+            } catch (error) {
+              emit({ type: 'warning', message: `check could not run: ${errorMessage(error)}` })
+            }
+          }
+          if (!runShot || !PLUGIN_DEV_WATCH_SHOOTABLE.has(snapshot.status)) {
+            return
+          }
+          try {
+            for (const shot of await runShot(pluginKey)) {
+              emit({ type: 'shot', pluginKey, ...shot })
+            }
+          } catch (error) {
+            const lasting = isLastingShotFailure(error)
+            emit({
+              type: 'warning',
+              message: `shot could not run${lasting ? ', so --shot is off' : ''}: ${errorMessage(error)}`
+            })
+            if (lasting) {
+              runShot = undefined
+            }
+          }
+        })
+      : null
+  afterLoad?.request()
   const follower = new PluginLogFollower()
   let otherKeys: ReadonlySet<string> | null = null
   let lastWarning: string | null = null
@@ -140,7 +169,6 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     const error = next.error ? { error: next.error } : {}
     if (changes > 0) {
       emit({ type: 'reloaded', pluginKey, changes, status: next.status, ...error })
-      checks?.request()
     } else if (next.status !== snapshot.status || next.error !== snapshot.error) {
       emit({
         type: 'status',
@@ -152,6 +180,9 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
     }
     const newlyNeedsApproval = next.needsApproval && !snapshot.needsApproval
     snapshot = next
+    if (changes > 0) {
+      afterLoad?.request()
+    }
     if (newlyNeedsApproval) {
       const approval = await host.approvalNeeded()
       if (approval) {
@@ -189,8 +220,8 @@ export async function runPluginDevWatch(deps: PluginDevWatchDeps): Promise<numbe
       polls += 1
       await deps.wait(PLUGIN_DEV_WATCH_POLL_MS, stop.signal)
     }
-    // A check that is still rendering reports before the unload line.
-    await checks?.idle()
+    // A check or shot that is still running reports before the unload line.
+    await afterLoad?.idle()
     if (!loaded.added) {
       emit({ type: 'unloaded', pluginKey, path: loaded.path, removed: false })
       return 0

@@ -14,7 +14,7 @@ import {
 import type { PluginFrameGuest } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginFrameSurface } from '../../../shared/plugins/frames/plugin-panel-shell'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import { pluginDevRevision } from '../plugin-dev-revision'
+import { pluginFrameContentRevision } from '../plugin-dev-revision'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import { createPluginFrameRequestHandler } from './plugin-frame-protocol'
 import { pluginFrameAttachKey } from './plugin-frame-request-policy'
@@ -184,14 +184,9 @@ function contributionUrl(
     : pluginFrameUrl(frameKey, panel.entry)
 }
 
-/** Part of the guest URL, so an update or a dev edit (even asset-only) remounts the guest, and
- *  nothing else does. Dev trees change in place: the dev watcher counts their edits. */
-function contentRevision(plugin: ValidDiscoveredPlugin): string {
-  return plugin.contentHash ? plugin.contentHash.slice(0, 16) : pluginDevRevision(plugin.rootDir)
-}
-
+// Part of the guest URL, so an update or a dev edit remounts the guest, and nothing else does.
 function withRevision(url: string, plugin: ValidDiscoveredPlugin): string {
-  const revision = contentRevision(plugin)
+  const revision = pluginFrameContentRevision(plugin)
   return `${url}${url.includes('?') ? '&' : '?'}rev=${encodeURIComponent(revision)}`
 }
 

@@ -164,3 +164,8 @@ export function openPluginFrameGuestDevTools(pluginKey: string): number {
   }
   return opened
 }
+
+/** The plugin's live guests, for `orca plugin shot` to wait on the one it captures. */
+export function livePluginFrameGuests(pluginKey: string): WebContents[] {
+  return [...(guestsByPlugin.get(pluginKey) ?? [])].filter((guest) => !guest.isDestroyed())
+}
