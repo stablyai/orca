@@ -15,7 +15,7 @@ import {
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
 import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-stop-task'
 const SETTINGS = JSON.stringify({ permissions: { allow: ['Bash(sleep:*)'] } })

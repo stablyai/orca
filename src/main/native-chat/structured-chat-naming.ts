@@ -1,8 +1,8 @@
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/structured-agent-session-status-observation'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import {
   clampConversationNameFirstPrompt,
   conversationNameSeed

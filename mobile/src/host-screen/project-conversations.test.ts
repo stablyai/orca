@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { conversationPreferenceKey } from '../../../src/shared/conversation-navigation-preferences'
 import type { ProjectSectionCatalog } from '../worktree/workspace-list-sections'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
   buildProjectConversations,

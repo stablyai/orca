@@ -3,7 +3,7 @@ import { isGenericConversationTitle } from '../../shared/project-conversation-li
 import { conversationNameSeed } from '../../shared/conversation-name-generation'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { structuredConversationJournalPreview } from './structured-conversation-journal-preview'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import {
   isAiVaultAgent,

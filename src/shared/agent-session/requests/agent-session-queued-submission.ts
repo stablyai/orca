@@ -1,4 +1,4 @@
-import { readAgentSessionFailureFact } from '../../agent-session-failure'
+import { readAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
 
 /** Accepted but not handed over proves unwritten; only delivery/rejection can follow, never doubt. */

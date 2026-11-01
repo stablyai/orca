@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConversationRow } from './project-conversations'
 

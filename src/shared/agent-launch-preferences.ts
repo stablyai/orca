@@ -1,5 +1,5 @@
 import { YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
-import type { AgentLaunchPreferences } from './agent-session-host-authority'
+import type { AgentLaunchPreferences } from './agent-session/agent-session-host-authority'
 import type { AgentType } from './agent-status-types'
 import {
   readLaunchPermissionChoice,

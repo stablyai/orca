@@ -16,6 +16,7 @@ const historySchema = z.looseObject({
   model: z.string().nullable().optional(),
   conversationContent: z.enum(['empty', 'present', 'unknown']).optional().catch(undefined),
   firstUserPrompt: z.string().nullable().optional(),
+  lastUserPrompt: z.string().nullable().optional().catch(undefined),
   previewMessagesTruncated: z.boolean().optional(),
   previewMessages: z
     .array(

@@ -4,23 +4,26 @@ import { createElement } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
-import type * as AgentSessionVisibleFailures from '../../../src/shared/agent-session-visible-failures'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
+import type * as AgentSessionVisibleFailures from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 
-vi.mock('../../../src/shared/agent-session-visible-failures', async (importOriginal) => {
-  const original = await importOriginal<typeof AgentSessionVisibleFailures>()
-  return {
-    ...original,
-    agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+vi.mock(
+  '../../../src/shared/agent-session/failures/agent-session-visible-failures',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof AgentSessionVisibleFailures>()
+    return {
+      ...original,
+      agentSessionVisibleFailureFacts: vi.fn(original.agentSessionVisibleFailureFacts)
+    }
   }
-})
+)
 import {
   CAPABLE,
   LEGACY,

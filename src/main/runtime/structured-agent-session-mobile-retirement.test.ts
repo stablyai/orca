@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionPromptAttentionKey } from '../../shared/agent-session-attention'
-import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session-wire'
-import { projectStructuredAgentSessionStatusState } from '../../shared/structured-agent-session-projection'
+import { agentSessionPromptAttentionKey } from '../../shared/agent-session/agent-session-attention'
+import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session/view/agent-session-turn-completion-wire'
+import { projectStructuredAgentSessionStatusState } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,

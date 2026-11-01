@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAgentSessionOperationTimestamp } from '../../../src/shared/agent-session-host-authority'
+import { parseAgentSessionOperationTimestamp } from '../../../src/shared/agent-session/agent-session-host-authority'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'

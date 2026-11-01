@@ -1,10 +1,8 @@
 /** agent.launch.v2 vouches for Claude/Codex chat rendering; other agents need explicit client support, host callers need none, and an agent set to CLI always uses a terminal. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RpcContext } from '../core'
 import {
   CAPABLE_CLIENT,

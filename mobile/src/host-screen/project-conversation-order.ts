@@ -51,7 +51,9 @@ export function orderProjectConversations(
         .filter(
           (row) =>
             !query ||
-            `${project.title} ${row.title} ${row.agent ?? ''}`.toLocaleLowerCase().includes(query)
+            `${project.title} ${row.title} ${row.preview ?? ''} ${row.agent ?? ''}`
+              .toLocaleLowerCase()
+              .includes(query)
         )
     }))
     .filter(

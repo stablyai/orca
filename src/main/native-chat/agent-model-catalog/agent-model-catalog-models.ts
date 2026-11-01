@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AgentModelCatalogListing,
   AgentModelCatalogConfiguredDefault,

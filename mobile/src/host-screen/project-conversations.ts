@@ -6,21 +6,19 @@ import {
   conversationProjectVisibilityKey,
   type ConversationPreferences
 } from '../../../src/shared/conversation-navigation-preferences'
-import {
-  projectConversationTitle,
-  isGenericConversationTitle
-} from '../../../src/shared/project-conversation-list'
+import { projectConversationTitle } from '../../../src/shared/project-conversation-list'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
 } from '../../../src/shared/project-section-grouping'
 import type { ProjectSectionCatalog } from '../worktree/workspace-list-sections'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { agentDotState, agentRowTimeAt } from '../worktree/agent-row-display'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { createConversationHistoryIndex } from './conversation-history-index'
 import { orderProjectConversations } from './project-conversation-order'
+import { conversationTitle, conversationUserPreview } from './conversation-row-content'
 import type { SectionRepo, Worktree } from '../worktree/workspace-list-types'
 
 export { readConversationHistory, readConversationTabs } from './conversation-records'
@@ -29,25 +27,6 @@ import type { ConversationHistory, ConversationTab } from './conversation-record
 import type { ConversationProject } from './conversation-project'
 export { projectConversationTarget } from './conversation-project'
 export type { ConversationRow, ConversationProject } from './conversation-project'
-
-export function conversationTitle(
-  values: readonly (string | null | undefined)[],
-  workspace: Worktree,
-  untitled: string
-): string {
-  return (
-    values
-      .map((value) => value?.trim())
-      .find(
-        (value) =>
-          value &&
-          !isGenericConversationTitle(value) &&
-          value !== workspace.branch &&
-          value !== workspace.path &&
-          value !== workspace.displayName
-      ) ?? untitled
-  )
-}
 
 export function buildProjectConversations(args: {
   workspaces: readonly Worktree[]
@@ -160,10 +139,17 @@ export function buildProjectConversations(args: {
       project.data.push({
         key: `${key}\0${workspace.worktreeId}\0${tab.sessionId ?? paneKey}`,
         title: conversationTitle(
-          [agent?.taskTitle, agent?.prompt, saved ? projectConversationTitle(saved) : tab.title],
+          [
+            agent?.conversationName,
+            tab.type === 'agent-session' ? tab.title : undefined,
+            saved ? projectConversationTitle(saved) : tab.title,
+            agent?.taskTitle,
+            agent?.prompt
+          ],
           workspace,
           args.untitled
         ),
+        preview: conversationUserPreview(agent?.prompt, saved),
         agent: agentType ?? null,
         status: agent ? agentDotState(agent, args.now) : 'idle',
         at: agent ? agentRowTimeAt(agent) : 0,
@@ -188,7 +174,12 @@ export function buildProjectConversations(args: {
       }
       project.data.push({
         key: `${key}\0${workspace.worktreeId}\0${agent.paneKey}`,
-        title: conversationTitle([agent.taskTitle, agent.prompt], workspace, args.untitled),
+        title: conversationTitle(
+          [agent.conversationName, agent.taskTitle, agent.prompt],
+          workspace,
+          args.untitled
+        ),
+        preview: conversationUserPreview(agent.prompt),
         agent: agent.agentType,
         status: agentDotState(agent, args.now),
         at: agentRowTimeAt(agent),
@@ -274,6 +265,7 @@ export function buildProjectConversations(args: {
       title: workspace
         ? conversationTitle([projectConversationTitle(session)], workspace, args.untitled)
         : projectConversationTitle(session) || args.untitled,
+      preview: conversationUserPreview(undefined, session),
       agent: session.agent,
       status: sessionId ? 'saved' : 'transcript',
       at: Date.parse(session.updatedAt ?? session.modifiedAt) || 0,

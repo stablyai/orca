@@ -1,14 +1,14 @@
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import {
   agentSessionAttentionKey,
   agentSessionAttentionNews,
   structuredAttentionOrigin,
   type StructuredAttentionState,
   type AgentSessionAttentionEdge
-} from '../../shared/agent-session-attention'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+} from '../../shared/agent-session/agent-session-attention'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -16,7 +16,7 @@ import type {
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'

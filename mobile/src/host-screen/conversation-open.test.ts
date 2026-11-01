@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { rpcClientForExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'

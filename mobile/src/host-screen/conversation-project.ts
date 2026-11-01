@@ -6,6 +6,7 @@ import type { ConversationHistory } from './conversation-records'
 export type ConversationRow = {
   key: string
   title: string
+  preview?: string
   agent: string | null
   status: AgentDotState | 'saved' | 'transcript'
   at: number

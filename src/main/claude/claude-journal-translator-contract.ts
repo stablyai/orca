@@ -1,4 +1,4 @@
-import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
+import type { AgentSessionContextReport } from '../../shared/agent-session/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
@@ -12,7 +12,7 @@ import type { ClaudeCommandStart } from './claude-command-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink

@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -40,7 +40,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const target = { kind: 'local' } as const
 

@@ -4,7 +4,7 @@ import * as journalReducer from '../native-chat/agent-session-journal/journal-re
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { StatusFeedSession } from '../native-chat/agent-session-wire/structured-agent-session-status-feed-deps'
 import type { StructuredAgentSessionHostSession } from '../native-chat/agent-session-wire/structured-agent-session-host-types'

@@ -14,7 +14,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../../shared/structured-agent-session-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'

@@ -1,4 +1,4 @@
-import type { AgentSessionHistoryPage } from '../../../shared/agent-session-wire'
+import type { AgentSessionHistoryPage } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './agent-session/launch/structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from './structured-agent-session-local-launch-cancel'

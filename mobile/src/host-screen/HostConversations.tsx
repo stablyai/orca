@@ -1,25 +1,23 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
+import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ArrowDownAZ, ChevronLeft, MoreHorizontal, Pin, Settings } from 'lucide-react-native'
+import { ArrowDownAZ, ChevronLeft, Settings } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { AgentStateDot } from '../components/AgentStateDot'
 import { StatusDot } from '../components/StatusDot'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { ConversationAgentSheet } from './conversation-agent-sheet'
 import { ConversationSidebarOptions } from './conversation-sidebar-options'
 import { ConversationHistoryLoadStatus } from './ConversationHistoryLoadStatus'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import type { HostScreenController } from './use-host-screen-controller'
 import { HiddenConversationProjectsSheet } from './hidden-conversation-projects-sheet'
+import { ConversationListRow } from './ConversationListRow'
 import { ConversationProjectHeader } from './ConversationProjectHeader'
 import { ConversationProjectActionsSheet } from './conversation-project-actions-sheet'
 import { buildProjectConversations, type ConversationProject } from './project-conversations'
 import { useConversationActions } from './use-conversation-actions'
-import { conversationCopy, conversationTimeAgo } from './conversation-copy'
+import { conversationCopy } from './conversation-copy'
 import { conversationStyles as styles } from './conversation-styles'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
 import { ConversationProjectOrderSheet } from './conversation-project-order-sheet'
@@ -263,72 +261,18 @@ export function HostConversations({
           </>
         )}
         renderItem={({ item }) => (
-          <View style={styles.row} testID="conversation-row">
-            <Pressable
-              onPress={() => open(item)}
-              onLongPress={() => setDetails(item)}
-              disabled={
-                !connected || Boolean(item.workspace?.hostContextHealthLabel) || busy !== null
-              }
-              style={({ pressed }) => [styles.rowButton, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={item.title}
-            >
-              <MobileAgentIcon agentId={item.agent ?? ''} size={20} />
-              <View style={styles.rowText}>
-                <View style={styles.rowMeta}>
-                  {item.preferenceKey &&
-                  conversationPreferences.preferences?.entries[item.preferenceKey]?.pinned ? (
-                    <Pin size={12} color={colors.textSecondary} />
-                  ) : null}
-                  <Text style={[styles.rowTitle, styles.sectionName]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                </View>
-                <View style={styles.rowMeta}>
-                  <AgentStateDot
-                    state={
-                      !connected || item.workspace?.hostContextHealthLabel
-                        ? 'unverifiable'
-                        : item.status === 'saved' || item.status === 'transcript'
-                          ? 'idle'
-                          : item.status
-                    }
-                  />
-                  <Text style={styles.meta} numberOfLines={1}>
-                    {[
-                      item.agent ? formatAgentTypeLabel(item.agent) : null,
-                      !connected || item.workspace?.hostContextHealthLabel
-                        ? copy.offline
-                        : item.status === 'saved'
-                          ? copy.saved
-                          : item.status === 'transcript'
-                            ? copy.transcript
-                            : item.status === 'failed'
-                              ? copy.failedState
-                              : item.status === 'unverifiable'
-                                ? copy.unconfirmed
-                                : copy[item.status],
-                      item.at ? conversationTimeAgo(item.at, controller.now) : null
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </View>
-              </View>
-              {busy === item.key ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : null}
-            </Pressable>
-            <Pressable
-              onPress={() => setDetails(item)}
-              style={styles.iconButton}
-              accessibilityRole="button"
-              accessibilityLabel={`${copy.details}: ${item.title}`}
-            >
-              <MoreHorizontal size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <ConversationListRow
+            item={item}
+            connected={connected}
+            busy={busy}
+            pinned={Boolean(
+              item.preferenceKey &&
+              conversationPreferences.preferences?.entries[item.preferenceKey]?.pinned
+            )}
+            now={controller.now}
+            onOpen={open}
+            onDetails={setDetails}
+          />
         )}
       />
       <ConversationProjectActionsSheet

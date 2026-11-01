@@ -10,7 +10,7 @@ import {
   nativeChatQueueFollowUps,
   nativeChatSendFollowUp
 } from '../../../../shared/native-chat-follow-up-behavior'
-import type { AgentSessionCancelResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useStructuredLegacyLaunchStop } from '@/lib/structured-agent-session-legacy-launch-stop'
 import {
@@ -18,7 +18,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../shared/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt
@@ -26,7 +26,7 @@ import {
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
-} from '../../../../shared/structured-agent-session-message-projection'
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
 import { useStructuredAgentSessionStop } from './use-structured-agent-session-stop'
@@ -42,8 +42,6 @@ import { hostStatesTurnScopes } from '../../../../shared/native-chat/transcript/
 import { withNativeChatCutTurnNotices } from '../../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from './use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from './use-structured-agent-session-rewind'
-
-export type { StructuredPromptItem } from '../../../../shared/structured-agent-session-message-projection'
 
 export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) {
   const {

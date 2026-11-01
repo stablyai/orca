@@ -1,5 +1,5 @@
 import type { JournalItemEcho } from './journal-item-echo'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemBody,

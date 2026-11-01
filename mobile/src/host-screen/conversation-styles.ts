@@ -56,6 +56,7 @@ export const conversationStyles = themedStyleSheet(() => ({
   row: { flexDirection: 'row', alignItems: 'center', borderRadius: radii.control },
   rowButton: {
     flex: 1,
+    minWidth: 0,
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
@@ -63,8 +64,9 @@ export const conversationStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.md,
     paddingLeft: spacing.sm
   },
-  rowText: { flex: 1, gap: spacing.xs },
-  rowTitle: { fontSize: typography.bodySize, color: colors.textPrimary },
+  rowText: { flex: 1, minWidth: 0, gap: spacing.xs },
+  rowTitle: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
+  rowPreview: { fontSize: typography.metaSize, color: colors.textSecondary },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   notice: {
     paddingHorizontal: spacing.lg,

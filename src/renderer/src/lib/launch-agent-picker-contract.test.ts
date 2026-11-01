@@ -5,7 +5,10 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { createElement } from 'react'
 import { AgentLaunchSetupPanel } from '../components/agent/AgentLaunchSetupPanel'
 import { TooltipProvider } from '../components/ui/tooltip'
-import { useAgentLaunchPickerInventory } from '../components/agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../components/agent/use-agent-launch-picker-inventory'
 import type { NewTabAgentMenuModel } from '../components/tab-bar/new-tab-agent-menu-model'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../shared/agent-launch-picker'
 import {
@@ -391,7 +394,9 @@ it.each(['claude', 'codex'] as const)(
     let current: AgentPickerEntry
     const launches: AgentPickerDraft[] = []
     function Panel({ open }: { open: boolean }) {
-      const entries = useAgentLaunchPickerInventory('wt-1', menu, open)
+      const entries = useAgentPickerInventoryEntries(
+        useAgentLaunchPickerInventorySource('wt-1', menu, open)
+      )
       current = entries[0]
       return open
         ? createElement(

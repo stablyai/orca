@@ -3,8 +3,8 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { readAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
 
 export type ChatRequestError = {

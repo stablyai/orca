@@ -2,7 +2,7 @@ import { journalInputOrder } from './journal-input-order'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
 import { JournalWriteProjection } from './journal-write-projection'
-import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './journal-commit'
 import { createJournalPublicReader } from './journal-public-read'
@@ -20,12 +20,12 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import {
   newestStructuredAgentSessionTurnBySequence,
   runningStructuredAgentSessionTurnItemBySequence
-} from '../../../shared/structured-agent-session-live-turn'
+} from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { journalWroteBeforeOpen, readJournalSince } from './journal-cursor'
 import type { JournalHostDatabase } from './journal-host-database'
 import { journalRowsAfterReader } from './journal-open'

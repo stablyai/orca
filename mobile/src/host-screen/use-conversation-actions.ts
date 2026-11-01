@@ -3,7 +3,7 @@ import { rpcClientForExecutionHost } from '../transport/execution-host-scoped-rp
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   loadMobileNewTabAgentOptions,
   hostRefusesOtherRuntimeWorkspace

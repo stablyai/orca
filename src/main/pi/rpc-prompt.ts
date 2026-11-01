@@ -6,7 +6,7 @@ import {
   agentSessionFailureFact,
   type AgentSessionAttachmentProblem,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   ClaudeDispatchContentError,
   readClaudeImage

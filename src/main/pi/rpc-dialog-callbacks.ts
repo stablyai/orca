@@ -1,4 +1,4 @@
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError

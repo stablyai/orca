@@ -1,4 +1,4 @@
-import type { AgentSessionFastModeSupport } from '../../shared/agent-session-wire'
+import type { AgentSessionFastModeSupport } from '../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { ListedModel } from './claude-structured-model-catalog'
 

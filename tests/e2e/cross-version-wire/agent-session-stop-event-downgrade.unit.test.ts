@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../src/shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../../src/main/sqlite/sync-database'
 import { journalDatabasePath } from '../../../src/main/native-chat/agent-session-journal/journal-host-database'
 import {
@@ -30,8 +30,8 @@ import {
   releaseModuleExport
 } from './release-checkout'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   applyJournalRow,
   createJournalReducerState,
