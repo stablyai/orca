@@ -24,7 +24,6 @@ export function temporaryCodexStartupAnswer(error: CodexAppServerRequestError): 
       return true
     }
     if (
-      error.method === 'thread/start' &&
       'reason' in data &&
       data.reason === 'cloudConfigBundle' &&
       !('action' in data && data.action === 'relogin') &&

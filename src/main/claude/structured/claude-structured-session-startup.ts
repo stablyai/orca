@@ -1,5 +1,4 @@
 import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   startupAcquisitionRefusal,
   providerExitObserved
@@ -32,6 +31,7 @@ import {
   readClaudeSettingsEffort
 } from './launch/claude-structured-session-options'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
+import { claudeStartupAnswerAfterExit } from './claude-structured-session-startup-exit'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeSession,
@@ -100,18 +100,7 @@ export async function readClaudeStartupFacts(input: {
       if (startupAcquisitionRefusal(error) || !providerExitObserved(error)) {
         throw error
       }
-      const outcome = await withTimeout(
-        control.then(
-          () => ({ error }),
-          (error: unknown) => ({ error })
-        ),
-        2_000,
-        { error }
-      )
-      throw (
-        input.connection.startupFailure?.() ??
-        (isClaudeQueryClosed(outcome.error) ? error : outcome.error)
-      )
+      throw await claudeStartupAnswerAfterExit(input.connection, control, error)
     }),
     new Promise<never>((_resolve, reject) => {
       timer = setTimeout(

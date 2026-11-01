@@ -24,10 +24,8 @@ import {
 } from './claude-structured-session-publication'
 import type * as sessionState from './claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
-import {
-  startupAcquisitionRefusal,
-  withObservedProviderExit
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { claudeAcquisitionStartupError } from './claude-structured-session-startup-exit'
 import { readClaudeTranscriptEntryUuid } from '../claude-transcript-entry-uuid'
 import { claudeTurnResumePointWriter } from './claude-structured-resume-point'
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
@@ -296,7 +294,7 @@ export async function acquireClaudeSession({
   } catch (error) {
     unbindReadingControl?.()
     throw await resolveClaudeAcquisitionError({
-      error: startupAcquisitionRefusal(error) ?? attempt.connection?.startupFailure?.() ?? error,
+      error: await claudeAcquisitionStartupError(error, attempt.connection),
       sessionId,
       sessions,
       attempt,

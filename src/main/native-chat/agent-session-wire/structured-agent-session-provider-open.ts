@@ -1,4 +1,5 @@
 import { providerStartupFailureFact } from './structured-agent-session-failure-text'
+import { sameProviderChild } from './structured-agent-session-provider-child'
 import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
@@ -23,8 +24,16 @@ export async function openStructuredAgentSessionProviderChild(
   if (!context.runtimeState.startupAttempts.onClock(sessionId, child)) {
     return
   }
-  // Physical exit ends readiness; it must not erase the outstanding protocol answer.
-  const attempt = context.runtimeState.acquireAborts.begin(sessionId)
+  // A start flight joins the outstanding answer after exit and retires it; a direct attach has no such owner.
+  const attempt = context.runtimeState.acquireAborts.begin(sessionId, false, false, () => {
+    const current = context.sessions.get(sessionId)?.child
+    return (
+      current !== undefined &&
+      current !== null &&
+      sameProviderChild(current, child) &&
+      !context.runtimeState.startFlights.ownsChild(sessionId, child)
+    )
+  })
   const observation = context.runtimeState.startupAttempts.observeOpen(
     sessionId,
     child,

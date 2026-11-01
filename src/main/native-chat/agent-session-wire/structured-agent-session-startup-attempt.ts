@@ -77,7 +77,11 @@ export class StructuredAgentSessionStartupAttempts {
   }
 
   pastCeiling(registeredAt: number): boolean {
-    return this.now() - registeredAt >= this.limits.ceilingMs
+    return this.untilCeiling(registeredAt) <= 0
+  }
+
+  untilCeiling(registeredAt: number): number {
+    return registeredAt + this.limits.ceilingMs - this.now()
   }
 
   childFailed(

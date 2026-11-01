@@ -240,18 +240,20 @@ describe('positive provider startup retry contracts', () => {
       -32600,
       'thread abc is closing; retry thread/resume after the thread is closed'
     ),
-    codex('thread/start', -32600, 'failed to load configuration', {
-      reason: 'cloudConfigBundle',
-      errorCode: 'Timeout'
-    }),
-    ...[undefined, 503, 403].map((statusCode) =>
-      codex('thread/start', -32600, 'failed to load configuration', {
+    ...['thread/start', 'thread/resume'].flatMap((method) => [
+      codex(method, -32600, 'failed to load configuration', {
         reason: 'cloudConfigBundle',
-        errorCode: 'RequestFailed',
-        statusCode,
-        detail: 'Failed to load cloud config bundle (workspace-managed policies).'
-      })
-    ),
+        errorCode: 'Timeout'
+      }),
+      ...[undefined, 503, 403].map((statusCode) =>
+        codex(method, -32600, 'failed to load configuration', {
+          reason: 'cloudConfigBundle',
+          errorCode: 'RequestFailed',
+          statusCode,
+          detail: 'Failed to load cloud config bundle (workspace-managed policies).'
+        })
+      )
+    ]),
     codex(
       'thread/start',
       -32603,
@@ -262,17 +264,19 @@ describe('positive provider startup retry contracts', () => {
   ])('retries only after separately proving absence: $message', expectExitEvidenceRequired)
 
   it.each([
-    ...['Auth', 'InvalidBundle', 'Internal', 'RequestFailed'].map((errorCode) =>
-      codex('thread/start', -32600, 'failed to load configuration', {
+    ...['thread/start', 'thread/resume'].flatMap((method) => [
+      ...['Auth', 'InvalidBundle', 'Internal', 'RequestFailed'].map((errorCode) =>
+        codex(method, -32600, 'failed to load configuration', {
+          reason: 'cloudConfigBundle',
+          errorCode
+        })
+      ),
+      codex(method, -32600, 'failed to load configuration', {
         reason: 'cloudConfigBundle',
-        errorCode
+        errorCode: 'Timeout',
+        action: 'relogin'
       })
-    ),
-    codex('thread/start', -32600, 'failed to load configuration', {
-      reason: 'cloudConfigBundle',
-      errorCode: 'Timeout',
-      action: 'relogin'
-    }),
+    ]),
     codex('thread/start', -32603, 'error creating thread: outcome unknown'),
     codex('thread/start', -32603, 'error creating thread: internal error'),
     codex('thread/resume', -32600, 'please retry this unknown answer')

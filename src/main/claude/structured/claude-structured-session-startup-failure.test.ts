@@ -6,11 +6,15 @@ import { runClaudeControl } from '../claude-agent-sdk-control-requests'
 import { retryableStructuredAgentSessionStart } from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
+  PROVIDER_SESSION_ID,
   adapterAtPublishFor,
   fakeClaude,
   identityFor
 } from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import { retryableStructuredAgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
+import { NDJSON_MAX_LINE_BYTES } from '../../../shared/main-process-ndjson-framer'
 
 afterEach(() => vi.useRealTimers())
 
@@ -136,4 +140,87 @@ it('settles an unanswered Claude startup exit with the same bounded recovery eli
   expect(retryableStructuredAgentSessionStart(await result)).toBe(true)
   claude.dispose()
   await adapter.closeAll()
+})
+
+it('keeps a rejected initialize final when the child exits before acquisition publishes', async () => {
+  const claude = fakeClaude({ holdInit: true })
+  const probing = Promise.withResolvers<void>()
+  const startTime = Promise.withResolvers<number>()
+  const adapter = new ClaudeStructuredSessionAdapter({
+    resolveLaunch: async () => ({
+      pathToClaudeCodeExecutable: 'claude',
+      options: {},
+      cwd: '/work/repo',
+      claudeConfigDir: '/accounts/claude',
+      providerSessionId: PROVIDER_SESSION_ID,
+      resumeLeafUuid: null,
+      resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
+      continuesChain: false
+    }),
+    openConnection: claude.openConnection,
+    readProcessStartTime: async () => {
+      probing.resolve()
+      return startTime.promise
+    }
+  })
+  const result = adapter
+    .acquire({ identity: identityFor(), fence: 7, spawnToken: 'prepublication' })
+    .catch((error) => error)
+  await probing.promise
+  const connection = claude.connections[0]
+  // The SDK's answer to an error control_response for initialize, as the published path sees it.
+  const answer = runClaudeControl(
+    'initialize',
+    () =>
+      Promise.reject(
+        Object.assign(new Error('initialize rejected'), { errorClass: 'control_request_failed' })
+      ),
+    null
+  )
+  connection.initializationResult = () => answer
+  connection.closed = true
+  connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+  connection.close = async () => false
+  connection.handlers.onExit?.(withObservedProviderExit(new Error('claude exited (code 1)')), {
+    expected: false
+  })
+  startTime.resolve(1_700_000_000_000)
+  const error = await result
+  expect(error.cause.cause).toMatchObject({ errorClass: 'control_request_failed' })
+  expect(retryableStructuredAgentSessionAcquisition(error)).toBe(false)
+  claude.dispose()
+  connection.close = async () => true
+  await adapter.closeAll()
+})
+
+it('parses only a failed root result at startup and bounds what it retains', async () => {
+  const child = createFakePipedChild()
+  const observation = claudeStartupAnswerObservation()
+  observation.attach(child)
+  const parse = vi.spyOn(JSON, 'parse')
+  const hook = (output: string) =>
+    `${JSON.stringify({
+      type: 'system',
+      subtype: 'hook_response',
+      hook_name: 'SessionStart:startup',
+      hook_event: 'SessionStart',
+      output,
+      stdout: '',
+      stderr: ''
+    })}\n`
+  const oversized = hook('x'.repeat(NDJSON_MAX_LINE_BYTES + 1))
+  child.stdout.write(oversized.slice(0, NDJSON_MAX_LINE_BYTES / 2))
+  child.stdout.write(oversized.slice(NDJSON_MAX_LINE_BYTES / 2))
+  child.stdout.write(hook(JSON.stringify({ type: 'result', is_error: true })))
+  child.stdout.write(
+    `${JSON.stringify({ type: 'result', subtype: 'error_during_execution', is_error: true })}\n`
+  )
+  await new Promise((resolve) => setImmediate(resolve))
+  const parsed = parse.mock.calls.map(([text]) => String(text))
+  parse.mockRestore()
+  expect(parsed.filter((text) => text.includes('hook_response'))).toEqual([])
+  expect(parsed.filter((text) => text.includes('error_during_execution'))).toHaveLength(1)
+  expect(observation.failure()).toMatchObject({ errorClass: 'error_result' })
+  expect(child.stdout.listenerCount('data')).toBe(0)
 })

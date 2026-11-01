@@ -30,6 +30,7 @@ import {
 } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import { sameProviderChild } from './structured-agent-session-provider-child'
+import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 
 export function registerStructuredAgentSessionStart(
   context: StructuredAgentSessionAttachContext,
@@ -84,19 +85,30 @@ export function registerStructuredAgentSessionStart(
             if (ready === 'ready') {
               return result
             }
-            if (
-              handle.result.opening &&
+            const opening = handle.result.opening
+            const join =
+              opening !== undefined &&
               handle.result.retry !== false &&
               !finalStartupExitFailure(context.sessions.get(sessionId)?.lastEndedChild?.failure)
-            ) {
+            if (join) {
+              // The ended child disarmed the ceiling timer; the join must not outlast it.
               await lock.wait(
                 waitForPromiseWithSignal(
-                  withTimeout(handle.result.opening, 2_000, undefined),
+                  withTimeout(
+                    opening,
+                    Math.max(0, Math.min(2_000, attempts.untilCeiling(registeredAt))),
+                    undefined
+                  ),
                   acquire.signal
                 )
               )
-              handle.result.cancelOpen?.()
-              throwIfSignalAborted(acquire.signal)
+            }
+            // The flight owns this open after exit, whether or not its answer was awaited.
+            handle.result.cancelOpen?.()
+            throwIfSignalAborted(acquire.signal)
+            if (join && attempts.pastCeiling(registeredAt)) {
+              result = { ...failedStructuredAgentSessionStart(), expired: true }
+              break
             }
             result = await lock.commit(async () => {
               const session = context.sessions.get(sessionId)
@@ -117,8 +129,11 @@ export function registerStructuredAgentSessionStart(
               }
               const finalExit = finalStartupExitFailure(ended.failure)
               const openError = handle.result.openError
+              // An elapsed provider deadline keeps its words; the later exit doesn't explain it.
               const openFailure =
-                ended.cause === 'exit' && openError instanceof Error
+                ended.cause === 'exit' &&
+                openError instanceof Error &&
+                !providerRequestTimeoutOf(openError)
                   ? providerStartupFailureFact(withObservedProviderExit(openError))
                   : handle.result.failure
               const failure = structuredAgentSessionStartFailureFact({
