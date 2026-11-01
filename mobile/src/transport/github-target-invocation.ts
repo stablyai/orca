@@ -48,14 +48,29 @@ export function captureGitHubInvocation(client: RpcClient, isCurrent: () => bool
       retired = true
       unsubscribe()
     },
+    // The check runs before the action is sent, so its failures say what the user can do, not which RPC failed.
     async status(options: SendRequestOptions) {
       assertCurrent()
-      const status = statusRead.interpret(
-        await statusRead.request(client, undefined, {
+      let reply: RpcResponse
+      try {
+        reply = await statusRead.request(client, undefined, {
           ...options,
           beforeSend: assertCurrent
         })
-      )
+      } catch (error) {
+        if (error instanceof Error && error.message === GITHUB_CONNECTION_CHANGED) {
+          throw error
+        }
+        // A timeout or lost connection: nothing was sent, so trying again is safe.
+        throw new Error(GITHUB_CONNECTION_CHANGED)
+      }
+      let status: ReturnType<typeof statusRead.interpret>
+      try {
+        status = statusRead.interpret(reply)
+      } catch {
+        // A refused or unreadable answer: this server can't confirm the exact target.
+        throw new Error(GITHUB_EXACT_OPERATION_UNSUPPORTED)
+      }
       assertCurrent()
       return status
     }

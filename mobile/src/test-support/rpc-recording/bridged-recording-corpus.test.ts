@@ -1,4 +1,5 @@
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../../src/shared/github/work-item-target'
+import { GITHUB_CONNECTION_CHANGED } from '../../transport/github-target-invocation'
 import { resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
@@ -146,8 +147,9 @@ async function replay(
 }
 
 const AFTER_PRELUDE_ACTION = 'bridge-only-after-prelude-action'
-const PRELUDE_TEARDOWN_MESSAGE = 'Connection closed'
-const PRELUDE_TEARDOWN_DELIVERY_UNKNOWN = true
+// The native close fails the pending check, which the page sees as a changed connection, safe to retry.
+const PRELUDE_TEARDOWN_MESSAGE = GITHUB_CONNECTION_CHANGED
+const PRELUDE_TEARDOWN_DELIVERY_UNKNOWN = false
 
 // Only a bare typed guard is evidence; capture, scheduler, transparent-call or added cleanup failures stay fatal.
 function admitThrown(run: BridgedReplay): void {
@@ -551,14 +553,10 @@ async function bridgeOnlyVerdict(
         )
         expect(probe.completion!.ordinal).toBeLessThan(child.ordinal)
       } else {
-        const reply = completion.reply
+        // A failed transport check says the connection changed; any answer that isn't capable says to update.
         const message = completion.reject
-          ? completion.reject.message
-          : isKeyedObject(reply) && reply.ok === false && isKeyedObject(reply.error)
-            ? reply.error.message
-            : isKeyedObject(reply) && isKeyedObject(reply.result)
-              ? GITHUB_EXACT_OPERATION_UNSUPPORTED
-              : 'The host sent a reply this app could not read (status.get)'
+          ? GITHUB_CONNECTION_CHANGED
+          : GITHUB_EXACT_OPERATION_UNSUPPORTED
         expect(parent.settlement).toMatchObject({ status: 'rejected', error: { message } })
         expect(post.replies).toHaveLength(1)
         expect(JSON.parse(post.replies[0]!.delivered!)).toMatchObject({

@@ -53,25 +53,21 @@ const probeInputs = [
 
 type ProbePartition = (typeof probeInputs)[number][0]
 type ProbeLifecycle = 'before-probe' | 'during-probe' | 'between-probe-and-operation'
+// The probe's own failure is never shown: a lost or timed-out check says the connection changed, and a refused or
+// unreadable answer says to update the executing server.
 function probeFailure(partition: ProbePartition, lifecycle: ProbeLifecycle): string {
-  if (lifecycle === 'during-probe') {
-    return 'RPC interrupted by connection migration'
+  if (
+    lifecycle === 'during-probe' ||
+    partition === 'transport-throw' ||
+    partition === 'deadline' ||
+    (partition === 'capable' && lifecycle !== 'before-probe')
+  ) {
+    return GITHUB_CONNECTION_CHANGED
   }
-  if (['malformed', 'result-absent', 'result-null'].includes(partition)) {
-    return 'The host sent a reply this app could not read (status.get)'
+  if (partition === 'unsupported' && lifecycle !== 'before-probe') {
+    return GITHUB_CONNECTION_CHANGED
   }
-  if (partition === 'outer-refused') {
-    return 'outer refused'
-  }
-  if (partition === 'transport-throw') {
-    return 'transport failure'
-  }
-  if (partition === 'deadline') {
-    return 'Request timed out: status.get'
-  }
-  return lifecycle === 'before-probe'
-    ? GITHUB_EXACT_OPERATION_UNSUPPORTED
-    : GITHUB_CONNECTION_CHANGED
+  return GITHUB_EXACT_OPERATION_UNSUPPORTED
 }
 
 async function probeCase(
@@ -290,17 +286,19 @@ async function probeCase(
       })
     } else {
       const message = probeFailure(partition, lifecycle)
-      expect(parent.settlement).toMatchObject({
+      // Nothing was sent, so the mapped failure is safe to retry.
+      expect(parent.settlement, context).toMatchObject({
         status: 'rejected',
-        error: {
-          message,
-          isRpcDeliveryUnknown:
-            lifecycle === 'during-probe' ||
-            partition === 'transport-throw' ||
-            partition === 'deadline'
-        }
+        error: { message, isRpcDeliveryUnknown: false }
       })
-      expect(answer).toMatchObject({ type: 'error', id: post.id, error: { message } })
+      expect(answer, context).toMatchObject({ type: 'error', id: post.id, error: { message } })
+      if (partition === 'deadline' && lifecycle !== 'during-probe') {
+        // The transport still times the check out at its own 30-second deadline.
+        expect(post.children[0]!.settlement, context).toMatchObject({
+          status: 'rejected',
+          error: { message: 'Request timed out: status.get' }
+        })
+      }
     }
     const checkpoint = checkpoints.find(
       (row) =>
