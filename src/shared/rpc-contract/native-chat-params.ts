@@ -42,7 +42,9 @@ export const NativeChatSession = z.object({
       timestamp: z.number().nullable()
     })
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // One child. Absent keeps the parent snapshot on the roster and its own tail.
+  subagentId: z.string().min(1).max(512).optional()
 })
 
 export type NativeChatResumePoint = NonNullable<z.infer<typeof NativeChatSession>['resumeAfter']>

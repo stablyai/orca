@@ -47,6 +47,7 @@ export function MobileNativeChatView({
   folded,
   taskList = null,
   subagentSeed = null,
+  readSubagentPage = null,
   status,
   error,
   readFailedFinally = false,
@@ -130,8 +131,12 @@ export function MobileNativeChatView({
     agent,
     sendSurfaceId,
     taskList,
-    subagentSeed
+    subagentSeed,
+    readSubagentPage
   })
+  const historyHasMore = subagent.childHistory?.hasMore ?? hasMore
+  const historyOlderPages = subagent.childHistory?.olderPages ?? olderPages
+  const onHistoryLoadEarlier = subagent.childHistory?.loadEarlier ?? onLoadEarlier
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
   const { data } = useMemo(
@@ -167,9 +172,10 @@ export function MobileNativeChatView({
     [onSend, onClearSendError, jumpToTail]
   )
 
-  const loadEarlier = useCallback(() => onLoadEarlier?.(), [onLoadEarlier])
+  const loadEarlier = useCallback(() => onHistoryLoadEarlier?.(), [onHistoryLoadEarlier])
   // After failure require a tap; automatic near-top retries could spin forever.
-  const loadEarlierNearTop = hasMore && olderPages === 'idle' ? loadEarlier : undefined
+  const loadEarlierNearTop =
+    historyHasMore && historyOlderPages === 'idle' ? loadEarlier : undefined
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -232,7 +238,7 @@ export function MobileNativeChatView({
     />
   ) : null
 
-  const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
+  const header = mobileNativeChatListHeader(historyHasMore, historyOlderPages, loadEarlier)
   // Changing text scale relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
@@ -276,7 +282,7 @@ export function MobileNativeChatView({
               <GestureDetector gesture={pinchGesture}>
                 <MobileNativeChatRowList
                   {...{ tail, rowKeys, renderItem, footer, emptyStateView, onScroll, layoutKey }}
-                  {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                  {...{ header, hasHeader: historyHasMore === true, onNearTop: loadEarlierNearTop }}
                   rows={turns.listMessages}
                   runs={turns.presentation.workRuns.heads}
                   roots={disclosures.roots}

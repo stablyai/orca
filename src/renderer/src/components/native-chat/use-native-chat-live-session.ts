@@ -25,6 +25,8 @@ import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { applyNativeChatLiveFrame, type NativeChatSubagentSeed } from './native-chat-live-frame'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 import { takeNativeChatOpenWake } from './native-chat-open-wake'
+import { useSubagentPageRead } from './native-chat-subagent-page-read'
+import { nextNativeChatSubscriptionId } from './native-chat-subscription-id'
 
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
@@ -47,13 +49,6 @@ const USER_PAGING = { wakeWslDistro: true } as const
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
-
-let subscriptionCounter = 0
-
-function nextSubscriptionId(): string {
-  subscriptionCounter += 1
-  return `native-chat-${subscriptionCounter}-${Date.now()}`
-}
 
 // New transcripts may take minutes to flush (#8401); explicit host-pending frames override this guessed retry window.
 export const NOTFOUND_RETRY_WINDOW_MS = 60_000
@@ -191,7 +186,7 @@ export function useNativeChatLiveSession(
 
     loadSession(0)
 
-    const subscriptionId = nextSubscriptionId()
+    const subscriptionId = nextNativeChatSubscriptionId()
     const closeStream = openNativeChatTranscriptStream(
       transport,
       {
@@ -290,6 +285,8 @@ export function useNativeChatLiveSession(
     return promise
   }, [agent, sessionId, transcriptPath, transport, hasMore, read, transcriptLifecycleControl])
 
+  const readSubagentPage = useSubagentPageRead(transport, agent, sessionId, transcriptPath)
+
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
   const { assembledMessages, normalizedMessages } = useNativeChatAssembledMessages({
@@ -321,7 +318,8 @@ export function useNativeChatLiveSession(
       loadEarlier,
       readPhase: read.phase,
       taskList,
-      subagentSeed
+      subagentSeed,
+      readSubagentPage
     }
   }, [
     normalizedMessages,
@@ -339,6 +337,7 @@ export function useNativeChatLiveSession(
     loadEarlier,
     appended,
     taskList,
-    subagentSeed
+    subagentSeed,
+    readSubagentPage
   ])
 }

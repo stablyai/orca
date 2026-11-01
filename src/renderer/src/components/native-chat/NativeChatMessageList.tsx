@@ -265,11 +265,11 @@ export function NativeChatMessageList({
     transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
-    historyKey: `${session.agent}:${session.sessionId ?? ''}:${session.olderHistoryGeneration}`,
+    historyKey: `${session.agent}:${session.sessionId ?? ''}:${view.activity.focusedSubagentId ?? ''}:${session.olderHistoryGeneration}`,
     isVisible,
-    hasMore: showOlderHistory,
-    loadingEarlier,
-    loadEarlier
+    hasMore: view.childHistory?.hasMore ?? showOlderHistory,
+    loadingEarlier: view.childHistory?.loadingEarlier ?? loadingEarlier,
+    loadEarlier: view.childHistory?.loadEarlier ?? loadEarlier
   })
   const rail = useNativeChatMessageRail({
     scrollRef,
@@ -287,7 +287,7 @@ export function NativeChatMessageList({
     items: rail.items,
     sessionKey: `${session.agent}:${session.sessionId}`,
     isVisible,
-    loadEarlier,
+    loadEarlier: view.childHistory?.loadEarlier ?? loadEarlier,
     jumpToLoaded: requestRailJump
   })
   const { start: startHistoryJump, abort: beginNavigation } = railHistoryJump

@@ -48,6 +48,7 @@ export function NativeChatActivityBar({
   messages,
   subagentRows,
   focusedSubagentId,
+  focusedTranscriptLoading = false,
   onFocusSubagent,
   taskList: sessionTaskList = null,
   subagentSeed = null
@@ -55,6 +56,7 @@ export function NativeChatActivityBar({
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   focusedSubagentId: string | null
+  focusedTranscriptLoading?: boolean
   onFocusSubagent: (agentId: string | null) => void
   taskList?: NativeChatTaskSeedList | null
   subagentSeed?: readonly NativeChatSubagentActivity[] | null
@@ -113,7 +115,9 @@ export function NativeChatActivityBar({
             </p>
           </div>
         ) : null}
-        {focused && (subagentRows.get(focused.id)?.length ?? 0) === 0 ? (
+        {focused &&
+        !focusedTranscriptLoading &&
+        (subagentRows.get(focused.id)?.length ?? 0) === 0 ? (
           <p className="text-xs text-muted-foreground">
             {translate(
               'components.native-chat.activity.noMessages',

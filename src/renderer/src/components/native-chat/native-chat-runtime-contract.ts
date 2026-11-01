@@ -52,7 +52,9 @@ export function parseRuntimeNativeChatReadSessionResult(
     const lifecycle = parseRuntimeNativeChatTurnLifecycle(record.lifecycle)
     return {
       messages: record.messages as NativeChatAppendedMessages,
-      ...(lifecycle ? { lifecycle } : {})
+      ...(lifecycle ? { lifecycle } : {}),
+      ...(typeof record.hasMore === 'boolean' ? { hasMore: record.hasMore } : {}),
+      ...(typeof record.beforeOffset === 'number' ? { beforeOffset: record.beforeOffset } : {})
     }
   }
   if (typeof record.error === 'string') {
