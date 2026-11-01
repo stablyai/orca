@@ -1,12 +1,4 @@
-import {
-  themedStyleSheet,
-  StyleSheet,
-  Platform,
-  colors,
-  radii,
-  spacing,
-  typography
-} from './mobile-tasks-dependencies'
+import { themedStyleSheet, StyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
 import { concentricRadius } from '../theme/mobile-theme'
 import { FIELD_MIN_HEIGHT } from '../components/composer-input/composer-input-styles'
 
@@ -164,63 +156,9 @@ export const mobileTasksProjectPickerStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  pickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  pickerRowSelected: {
-    backgroundColor: colors.borderSubtle
-  },
-  pickerRowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  pickerRowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  pickerRowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  pickerRowWithAction: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  pickerRowMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md
-  },
-  pickerCheck: {
-    width: 18,
-    alignItems: 'center'
-  },
-  pickerContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  pickerLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  monoText: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-  },
-  pickerSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
+  pickerStack: {
+    gap: spacing.md,
+    marginBottom: spacing.md
   },
   iconActionButton: {
     width: 44,

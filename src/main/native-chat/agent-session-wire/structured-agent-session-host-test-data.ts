@@ -12,7 +12,7 @@ import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation
 } from '../../../shared/agent-session-record'
-import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../shared/structured-agent-session-send-mutation'
 import {

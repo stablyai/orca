@@ -6,7 +6,7 @@ import type { JournalItemEcho } from './journal-item-echo'
 // Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
 
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,

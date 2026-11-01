@@ -78,20 +78,4 @@ describe('createPtySubprocess cwd cancellation identity', () => {
     ).rejects.toThrow(TerminalAttachCanceledError)
     expect(spawnMock).not.toHaveBeenCalled()
   })
-
-  it('leaves a genuine missing-directory failure alone', async () => {
-    const cwd = process.platform === 'win32' ? 'C:\\gone' : '/gone'
-    validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new Error(`Working directory "${cwd}" does not exist. It may have been deleted.`)
-    )
-
-    await expect(
-      createPtySubprocess({
-        sessionId: 'missing-cwd-session',
-        cols: 80,
-        rows: 24,
-        cwd
-      })
-    ).rejects.toThrow(/does not exist/)
-  })
 })

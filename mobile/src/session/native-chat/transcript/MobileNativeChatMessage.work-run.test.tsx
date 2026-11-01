@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { MobileNativeChatItemSourceContext } from '../../mobile-native-chat-item-read'

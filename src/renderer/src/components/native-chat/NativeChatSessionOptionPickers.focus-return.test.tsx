@@ -22,16 +22,16 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
-} from '../../../../shared/structured-agent-session-option-view'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 
 const settle = (): Promise<void> =>
   act(async () => new Promise((resolve) => setTimeout(resolve, 30)))

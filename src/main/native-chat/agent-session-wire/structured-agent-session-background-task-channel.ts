@@ -3,10 +3,10 @@ import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import type { AgentSessionCurrentRequestsRead } from '../../../shared/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from '../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../shared/agent-child-work-listing'

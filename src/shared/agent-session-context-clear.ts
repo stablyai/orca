@@ -5,7 +5,7 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import { isAgentSessionProviderContextBoundary } from './agent-session-provider-context'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 
 export function isAgentSessionContextClear(body: AgentJournalItemBody | undefined): boolean {
   return body?.kind === 'status' && isAgentSessionProviderContextBoundary(body.contextClear)

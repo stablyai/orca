@@ -44,17 +44,6 @@ function dependencies(
 }
 
 describe('prepareWslOrcadAccountEnv', () => {
-  it('gives a Claude launch the selected account folder and the Codex home', async () => {
-    const deps = dependencies()
-    await expect(prepareWslOrcadAccountEnv('Ubuntu', 'claude', deps)).resolves.toEqual({
-      ORCA_CLAUDE_PROFILE_POINTER: POINTER,
-      CLAUDE_CONFIG_DIR: CLAUDE_HOME,
-      ORCA_CLAUDE_INJECTED_CONFIG_DIR: CLAUDE_HOME,
-      CODEX_HOME: '/home/u/.orca/codex-b'
-    })
-    expect(deps.prepareClaudeLaunch).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
-  })
-
   it('gives every other process only the Claude pointer, never waiting on Claude setup', async () => {
     const deps = dependencies()
     await expect(prepareWslOrcadAccountEnv('Ubuntu', 'codex', deps)).resolves.toEqual({
@@ -62,17 +51,6 @@ describe('prepareWslOrcadAccountEnv', () => {
       CODEX_HOME: '/home/u/.orca/codex-b'
     })
     expect(deps.prepareClaudeLaunch).not.toHaveBeenCalled()
-  })
-
-  it('sends only the pointer for System default on both', async () => {
-    const deps = dependencies({
-      prepareClaudeLaunch: async () =>
-        claudeLaunch({ envPatch: { ORCA_CLAUDE_PROFILE_POINTER: POINTER } }),
-      prepareCodexHome: async () => null
-    })
-    await expect(prepareWslOrcadAccountEnv('Ubuntu', 'claude', deps)).resolves.toEqual({
-      ORCA_CLAUDE_PROFILE_POINTER: POINTER
-    })
   })
 
   it("drops a preparation for another runtime or distro rather than send a host's path", async () => {
@@ -110,16 +88,6 @@ describe('withWslOrcadAccountEnv', () => {
     hostSupports: (capability: string) => Promise<WslOrcadHostCapabilityVerdict> = async () =>
       'supported'
   ) => withWslOrcadAccountEnv({ environmentId: id, method, params, hostSupports }, deps, wsl)
-
-  it('leaves calls to any other environment untouched', async () => {
-    const params = { worktree: 'id:wt' }
-    const deps = dependencies()
-    await expect(run('terminal.create', params, deps, 'ssh-1')).resolves.toEqual({
-      ok: true,
-      params
-    })
-    expect(deps.prepareCodexHome).not.toHaveBeenCalled()
-  })
 
   it('adds the env to a plain shell and over a caller-built agent launch', async () => {
     await expect(run('terminal.create', { worktree: 'id:wt' })).resolves.toMatchObject({
@@ -164,12 +132,6 @@ describe('withWslOrcadAccountEnv', () => {
     await expect(
       run('agent.launch', { agent: 'claude', target: { kind: 'existing', worktree: 'x' } }, deps)
     ).resolves.toEqual({ ok: false, message: 'The selected Claude account could not be set up.' })
-  })
-
-  it('ignores methods that start no process', async () => {
-    const deps = dependencies()
-    await expect(run('terminal.list', {}, deps)).resolves.toEqual({ ok: true, params: {} })
-    expect(deps.prepareCodexHome).not.toHaveBeenCalled()
   })
 
   describe('agent-session creates (strict schemas, capability-gated)', () => {

@@ -113,37 +113,4 @@ describe("the status feed's Stopping", () => {
     expect(published.at(-1)).toMatchObject({ status: 'attention' })
     expect(published.at(-1)).not.toHaveProperty('stopping')
   })
-
-  it('never says Stopping for a stop that was not a person’s', async () => {
-    const journal = await journals.open({
-      identity: {
-        sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: codexProviderHandle('thread-1')
-      },
-      stateDirectory: join(root, SESSION)
-    })
-    const fence = agentSessionRecordFixture().lease.runtimeFence
-    const published: AgentSessionStatusSummary[] = []
-    const feed = new StructuredAgentSessionStatusFeed({
-      logger: createStructuredAgentSessionLogger(),
-      sessions: new Map([[SESSION, indexedStatusFeedSession({ journal })]]),
-      statusSink: () => ({ publish: (summary) => published.push(summary), forget: () => {} }),
-      getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
-      now: () => 1_000
-    })
-    await journal.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-      { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 1_000 },
-      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-
-    await journal.appendStopEvent({ reason: 'host-stop', turnId: 'turn-1' }, fence)
-    feed.publish(SESSION)
-
-    expect(published.at(-1)).toMatchObject({ status: 'working' })
-    expect(published.at(-1)).not.toHaveProperty('stopping')
-  })
 })

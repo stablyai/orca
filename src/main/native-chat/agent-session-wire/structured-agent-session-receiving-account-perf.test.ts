@@ -310,7 +310,7 @@ it.each([
           dispatchId: null,
           batch: { messages: [message], heldDeliveryId: undefined },
           cliCommand: 'orca-dev',
-          senderName: () => null
+          senderSnapshot: () => ({ name: null, agent: null })
         })
       )
       await decide(RECEIVING_A)

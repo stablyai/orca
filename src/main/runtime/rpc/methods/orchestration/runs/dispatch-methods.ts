@@ -184,8 +184,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               db,
               dispatch: ctx,
               from: params.from,
-              senderName: (party, reported) =>
-                runtime.orchestrationSenderNames.nameOf(party, reported)
+              senderSnapshot: (party, reported) =>
+                runtime.orchestrationSenderNames.snapshotOf(party, reported)
             })
             await sendChatTask({ db, dispatch: ctx, from, preamble })
           } else {

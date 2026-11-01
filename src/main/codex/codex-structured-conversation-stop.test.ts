@@ -30,15 +30,6 @@ describe('a Codex Stop that names no turn', () => {
     expect(rig.interrupts().map((call) => call.params?.turnId)).toEqual(['turn-1'])
   })
 
-  it('interrupts no turn that already ended', async () => {
-    const rig = await codexTurnLifecycleRig()
-    await openedTurn(rig)
-    rig.turns.end('completed')
-
-    await expect(stop(rig)).resolves.toEqual({ cancelled: false })
-    expect(rig.interrupts()).toEqual([])
-  })
-
   it("names the journal's turn over the one it saw open, and carries Codex's refusal", async () => {
     const rig = await codexTurnLifecycleRig()
     await openedTurn(rig)

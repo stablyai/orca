@@ -9,7 +9,8 @@ import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fix
 import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import { locateOrchestrationParty } from './orchestration-party-location'
-
+import { OrchestrationError } from './orchestration-error'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
 import type * as OrchestrationParty from './orchestration-party'
 
 const resolveParty = vi.hoisted(() => vi.fn())
@@ -90,7 +91,43 @@ describe('where a sender opens', () => {
     expect(locate(`orca_session_id:${ROOT}`, { records: clearedChat() })).toEqual({
       location: { kind: 'chat', sessionId: LIVE, worktreeId: 'wt-chat' }
     })
-    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null, lost: 'chat' })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
+  })
+
+  it('distinguishes a missing root from an unreadable record, missing successor or cycle', () => {
+    const records = clearedChat()
+    const getRecord = records.getRecord
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => null, isSessionUnreadable: () => true }
+      })
+    ).toEqual({ location: null })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => null }
+      })
+    ).toEqual({ location: null, lost: 'chat' })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: {
+          ...records,
+          getRecord: () => {
+            throw new Error('unreadable')
+          }
+        }
+      })
+    ).toEqual({ location: null })
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: (id) => (id === ROOT ? getRecord(id) : null) }
+      })
+    ).toEqual({ location: null })
+    const root = getRecord(ROOT)
+    expect(
+      locate(`orca_session_id:${ROOT}`, {
+        records: { ...records, getRecord: () => root }
+      })
+    ).toEqual({ location: null })
   })
 
   it('finds a terminal from an earlier run through the pane its mail was sent from', () => {
@@ -143,5 +180,16 @@ describe('where a sender opens', () => {
       startOptions: {}
     })
     expect(locate(`dispatch:${started.dispatch.id}`)).toEqual({ location: null })
+  })
+
+  it('calls a chat gone only on proof, and leaves any other failure to the caller', () => {
+    resolveParty.mockImplementationOnce(() => {
+      throw new OrchestrationError(CODES.notLive, 'lost its identity')
+    })
+    expect(locate(`orca_session_id:${ROOT}`)).toEqual({ location: null })
+    resolveParty.mockImplementationOnce(() => {
+      throw new Error('database is locked')
+    })
+    expect(() => locate(`orca_session_id:${ROOT}`)).toThrow('database is locked')
   })
 })

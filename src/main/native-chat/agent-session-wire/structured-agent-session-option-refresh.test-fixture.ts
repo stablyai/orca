@@ -2,9 +2,9 @@ import { expect, it } from 'vitest'
 import { piOptionActualContract } from './structured-agent-session-option-actual.test-fixture'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
+  AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {
   PiRefreshHarness,
   PiRefreshMount

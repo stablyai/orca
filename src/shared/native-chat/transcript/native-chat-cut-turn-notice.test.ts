@@ -13,7 +13,7 @@ import type {
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
-import { hostStatesTurnScopes, nativeChatTurnMembership } from '../../native-chat-turn-membership'
+import { hostStatesTurnScopes, nativeChatTurnMembership } from './native-chat-turn-membership'
 import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,

@@ -32,7 +32,7 @@ import { subagentGroupFallbackText } from '../../../../shared/native-chat/transc
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 

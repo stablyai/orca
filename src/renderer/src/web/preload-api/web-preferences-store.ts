@@ -48,6 +48,7 @@ export function getStoredSettings(): GlobalSettings {
       stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !==
         migratedStored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers ||
       stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
+      stored.terminalColorOverridesSplit !== migratedStored.terminalColorOverridesSplit ||
       stored.uiLanguage !== migratedStored.uiLanguage ||
       needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)

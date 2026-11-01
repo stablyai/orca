@@ -1,4 +1,4 @@
-import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
+import { AgentSessionSelectionSchema } from '../agent-session/options/agent-session-execution-options'
 import {
   SendBody,
   MAX_OPTION_LABEL,
@@ -217,6 +217,9 @@ export const SetOptionParams = z.strictObject({
 })
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+export const RevealParams = OptionsParams.extend({
+  navigation: z.literal('caller').optional()
+}).strict()
 export const SwitchToChatParams = OptionsParams.extend({
   execution: z
     .object({

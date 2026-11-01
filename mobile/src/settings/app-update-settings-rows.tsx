@@ -1,10 +1,12 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text } from 'react-native'
+import { ListRow } from '../components/list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { SettingsSection } from './settings-screen-frame'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
 
@@ -80,40 +82,33 @@ export function AppUpdateSettingsRows(props: {
   const checkValue = checkRowValue(t, props.checkStatus, props.lastCheckedAt, props.now)
   const { available, installedVersion, onUpdate } = props
   const versionRow = available ? (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t(
-        'settings.appUpdateSettingsRows.updateToVersion',
-        'Update to Orca {{version}}',
-        {
-          version: available.version
-        }
-      )}
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    <ListRow
+      key="version"
+      title={t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
+        version: available.version
+      })}
+      accessory={
+        <Text style={styles.actionValue}>
+          {t('settings.appUpdateSettingsRows.update', 'Update')}
+        </Text>
+      }
       onPress={() => onUpdate(available.url)}
-    >
-      <Text style={styles.rowLabel}>
-        {t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
-          version: available.version
-        })}
-      </Text>
-      <Text style={styles.actionValue}>{t('settings.appUpdateSettingsRows.update', 'Update')}</Text>
-    </Pressable>
+    />
   ) : installedVersion ? (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>
-        {t('settings.appUpdateSettingsRows.installedVersion', 'Version {{version}}', {
-          version: installedVersion
-        })}
-      </Text>
-    </View>
+    <ListRow
+      key="version"
+      title={t('settings.appUpdateSettingsRows.installedVersion', 'Version {{version}}', {
+        version: installedVersion
+      })}
+    />
   ) : null
   return (
-    <View style={styles.section}>
+    <SettingsSection>
       {versionRow}
-      {versionRow && <View style={styles.separator} />}
-      <Pressable
-        accessibilityRole="button"
+      <ListRow
+        key="check"
+        title={t('settings.appUpdateSettingsRows.checkUpdates', 'Check for updates')}
+        value={checkValue}
         accessibilityLabel={t(
           'settings.appUpdateSettingsRows.checkUpdatesStatus',
           'Check for updates, {{status}}',
@@ -121,46 +116,13 @@ export function AppUpdateSettingsRows(props: {
             status: checkValue
           }
         )}
-        accessibilityState={{ busy: props.checkStatus === 'checking' }}
-        disabled={props.checkStatus === 'checking'}
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        busy={props.checkStatus === 'checking'}
         onPress={props.onCheck}
-      >
-        <Text style={styles.rowLabel}>
-          {t('settings.appUpdateSettingsRows.checkUpdates', 'Check for updates')}
-        </Text>
-        <Text style={styles.rowValue}>{checkValue}</Text>
-      </Pressable>
-    </View>
+      />
+    </SettingsSection>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowValue: { fontSize: typography.metaSize, color: colors.textSecondary },
-  actionValue: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
+  actionValue: { fontSize: 15, fontWeight: '600', color: colors.textPrimary }
 }))

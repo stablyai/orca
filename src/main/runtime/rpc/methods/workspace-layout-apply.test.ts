@@ -356,7 +356,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(page)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(page, ['local'], {})
   })
 
   it('accepts an editor open under the window’s tab id, its promote, and an unrecorded close', async () => {
@@ -495,7 +495,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(open)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(open, ['local'], {})
   })
 
   it('accepts a sleep of one tab’s panes and a wake of exactly one pane', async () => {
@@ -574,7 +574,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(ratios)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(ratios, ['local'], {})
   })
 
   it('takes a terminal tab create under valid window ids, and only an activation initial', async () => {
@@ -613,7 +613,7 @@ describe('layout.apply', () => {
 
     await runtime.applyLayoutCommand(create)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(create, ['local'], {})
   })
 
   it('takes a tab’s titles, color, pin, view and ended launch agent, and no other property', async () => {
@@ -766,7 +766,7 @@ describe('layout.apply', () => {
       result: { leafId: 'minted' },
       frameSeq: 0
     })
-    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'])
+    expect(applyLayoutCommand).toHaveBeenCalledWith(SPLIT, ['ssh:target-1'], {})
   })
 
   it('names the stream position of the frame its write produced, sent before the reply', async () => {

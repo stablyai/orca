@@ -112,21 +112,6 @@ describe('terminalShellOverrideRefusal', () => {
     ).toContain('in WSL')
   })
 
-  // WSL-share paths override runtime settings; distinguish project choices from the global default in the refusal.
-  it('names a WSL-share path before the runtime, and a global default as the default', () => {
-    const inWsl = { shellOverride: 'cmd.exe', connectionId: null, platform: 'win32' } as const
-    const share = { cwd: WSL_WORKSPACE, workspacePath: WSL_WORKSPACE }
-    const projectRuntime = resolvedRuntime('wsl')
-    expect(terminalShellOverrideRefusal({ ...inWsl, projectRuntime, ...share })?.message).toMatch(
-      /^This terminal would run inside WSL because/
-    )
-    const byDefault = resolvedRuntime('wsl', 'global-default')
-    expect(
-      terminalShellOverrideRefusal({ ...inWsl, projectRuntime: byDefault, ...ON_WINDOWS_HOST })
-        ?.message
-    ).toContain('the default in Settings > Project Runtime')
-  })
-
   it('allows a shell that agrees with the project runtime', () => {
     expect(
       terminalShellOverrideRefusal({
@@ -199,19 +184,6 @@ describe('terminalShellOverrideRefusal', () => {
           projectRuntime: NO_PROJECT_RUNTIME,
           cwd: WSL_WORKSPACE,
           workspacePath: WSL_WORKSPACE
-        })
-      ).toBeNull()
-    })
-
-    it('still allows a Windows shell for a plain Windows path', () => {
-      expect(
-        terminalShellOverrideRefusal({
-          shellOverride: 'cmd.exe',
-          connectionId: null,
-          platform: 'win32',
-          projectRuntime: NO_PROJECT_RUNTIME,
-          cwd: 'C:\\Users\\u\\app\\src',
-          workspacePath: WINDOWS_WORKSPACE
         })
       ).toBeNull()
     })

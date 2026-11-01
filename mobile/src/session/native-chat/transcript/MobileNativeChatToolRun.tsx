@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Pressable,
@@ -19,6 +11,8 @@ import {
   type NativeSyntheticEvent
 } from 'react-native'
 import { Check } from 'lucide-react-native'
+import { useWorkingPulse } from '../../../components/use-working-motion'
+import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {
   nativeChatToolActivityCopy,
   nativeChatToolCallCount
@@ -33,9 +27,9 @@ import { buildEditCards } from '../../../../../src/shared/native-chat/tools/nati
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
@@ -69,23 +63,11 @@ function PulsingText({
   style?: React.ComponentProps<typeof Animated.Text>['style']
   children: React.ReactNode
 }): React.JSX.Element {
-  const opacity = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    if (!pulsing) {
-      opacity.setValue(1)
-      return
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.5, duration: 1000, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 1000, useNativeDriver: true })
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [opacity, pulsing])
+  // The transcript's one Reduce Motion read; without it (unknown) the header holds still.
+  const reducedMotion = useContext(MobileNativeChatReplyRevealsContext)?.reducedMotion ?? true
+  const pulse = useWorkingPulse(pulsing && !reducedMotion)
   return (
-    <Animated.Text style={[style, { opacity }]} numberOfLines={2}>
+    <Animated.Text ref={pulse.ref} style={[style, pulse.style]} numberOfLines={2}>
       {children}
     </Animated.Text>
   )
@@ -233,7 +215,7 @@ export function ToolRun({
     <View style={styles.run} testID={mobileNativeChatMemberId('run')}>
       {/* Keep one button through live/settled states so accessibility focus survives. */}
       <Pressable
-        style={styles.header}
+        style={({ pressed }) => [styles.header, pressed && pressedStyle]}
         onPress={() => setOpen(!open)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
