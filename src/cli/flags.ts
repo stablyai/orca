@@ -1,6 +1,15 @@
 import { RuntimeClientError } from './runtime/types'
 import { REPEATED_FLAG_SEPARATOR } from './args'
 import { describeQuoteStrippedJsonFlag } from './quote-stripped-json-flag'
+import type { RepoKind } from '../shared/repo-types'
+
+export function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
+  const kind = getOptionalStringFlag(flags, 'kind')
+  if (kind === undefined || kind === 'git' || kind === 'folder') {
+    return kind
+  }
+  throw new RuntimeClientError('invalid_argument', '--kind must be git or folder')
+}
 
 export function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = flags.get(name)
