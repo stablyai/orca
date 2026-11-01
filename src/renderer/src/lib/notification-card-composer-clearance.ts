@@ -20,15 +20,17 @@ function registerComposer(pane: HTMLElement, column: HTMLElement): () => void {
   composers.add(column)
   composerResizes ??= new ResizeObserver(notifyListeners)
   composerResizes.observe(pane)
+  composerResizes.observe(column)
   notifyListeners()
   return () => {
     composers.delete(column)
     composerResizes?.unobserve(pane)
+    composerResizes?.unobserve(column)
     notifyListeners()
   }
 }
 
-/** Re-measure when a composer mounts, unmounts or resizes (a sidebar toggle resizes it). */
+/** Re-measure when a composer mounts, unmounts or resizes (a sidebar or chat width change). */
 export function subscribeToComposerLayout(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
@@ -64,7 +66,8 @@ export function measureComposerClearance(
 
 /**
  * Keeps the notification cards off this composer's Send and Stop buttons. Measures `columnRef`, the
- * box the user sees; observes `paneRef`, whose resize reports a sidebar toggle moving a centred column.
+ * box the user sees, and observes it for chat width changes; also observes `paneRef`, whose resize
+ * reports a sidebar toggle moving a centred column that keeps its own size.
  */
 export function useNotificationCardComposerClearance(
   paneRef: RefObject<HTMLElement | null>,

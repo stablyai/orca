@@ -12,6 +12,7 @@ import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layo
 import { NotificationCardStack } from './NotificationCardStack'
 
 let resize: (() => void) | null = null
+const observed = new Map<Element, () => void>()
 let height = 0
 let root: Root | null = null
 
@@ -24,6 +25,8 @@ type Box = { left: number; right: number; top: number; bottom: number }
 // happy-dom's viewport is 1024 x 768; the cards' column is x 648-1008 as at 1024 px in Orca.
 const CARD_COLUMN: Box = { left: 648, right: 1008, top: 0, bottom: 0 }
 const rects = new Map<string, Box>()
+const resizeBox = (id: string): void =>
+  observed.get(document.querySelector(`[data-box="${id}"]`) as Element)?.()
 
 function Composer({ id, column }: { id: string; column?: string }): React.JSX.Element {
   const pane = useRef<HTMLDivElement>(null)
@@ -56,16 +59,23 @@ beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      callback: () => void
       constructor(callback: () => void) {
+        this.callback = callback
         resize = callback
       }
-      observe(): void {}
-      unobserve(): void {}
+      observe(target: Element): void {
+        observed.set(target, this.callback)
+      }
+      unobserve(target: Element): void {
+        observed.delete(target)
+      }
       disconnect(): void {}
     }
   )
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(() => height)
   rects.clear()
+  observed.clear()
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement
   ) {
@@ -149,6 +159,29 @@ describe('NotificationCardStack', () => {
     rects.set('beside', { left: 300, right: 1010, top: 650, bottom: 740 })
     height = 0
     act(() => resize?.())
+    expect(clearance()).toBe('')
+  })
+
+  it('re-measures when only the input column changes width, as the chat width setting does', () => {
+    height = 120
+    rects.set('pane', { left: 300, right: 1010, top: 650, bottom: 740 })
+    rects.set('centred', { left: 400, right: 640, top: 660, bottom: 724 })
+    act(() =>
+      root?.render(
+        <>
+          <Composer id="pane" column="centred" />
+          <Corner />
+        </>
+      )
+    )
+    expect(clearance()).toBe('')
+
+    rects.set('centred', { left: 316, right: 1000, top: 660, bottom: 724 })
+    act(() => resizeBox('centred'))
+    expect(clearance()).toBe('calc(108px + 0.5rem)')
+
+    rects.set('centred', { left: 400, right: 640, top: 660, bottom: 724 })
+    act(() => resizeBox('centred'))
     expect(clearance()).toBe('')
   })
 })
