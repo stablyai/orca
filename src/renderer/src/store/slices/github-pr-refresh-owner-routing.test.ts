@@ -224,6 +224,7 @@ describe('GitHub PR refresh owner-host routing', () => {
       runtimeEnvironmentCall.mockClear()
       store.setState({ repos: [{ ...pairedRepo, connectionId: 'another-machine' }] })
       store.getState().refreshGitHubForWorktree(workspace.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
       expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
       expect(enqueuePRRefresh).not.toHaveBeenCalled()
     }

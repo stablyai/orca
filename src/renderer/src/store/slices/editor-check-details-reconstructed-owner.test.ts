@@ -9,6 +9,8 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { buildLayoutFrameSlices } from '../workspace-layout-frame-slices'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -136,5 +138,120 @@ it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN).each(['local', 'ssh:builder'] as const)(
     } finally {
       sourceFrames.close()
     }
+  }
+)
+
+it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN).each([
+  { hostId: 'local', runtimeEnvironmentId: undefined, scope: '' },
+  { hostId: 'runtime:server', runtimeEnvironmentId: 'server', scope: '@runtime:server' },
+  { hostId: 'ssh:builder', runtimeEnvironmentId: 'server', scope: '@ssh:builder>runtime:server' }
+] satisfies { hostId: ExecutionHostId; runtimeEnvironmentId: string | undefined; scope: string }[])(
+  'reuses a legacy $hostId check tab after layout reconstruction',
+  ({ hostId, runtimeEnvironmentId, scope }) => {
+    const worktreeId = 'wt-1'
+    const legacyId = `${worktreeId}::check-details::check-run:42`
+    const expectedId = `${worktreeId}::check-details${scope}::check-run:42`
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+    const previous = {
+      contextKey: 'repo:99',
+      check,
+      requestId: 10,
+      details: null,
+      loading: false,
+      error: 'Restored error'
+    }
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: {
+        [worktreeId]: [
+          {
+            id: legacyId,
+            entityId: legacyId,
+            worktreeId,
+            groupId: 'g1',
+            contentType: 'check-details' as const,
+            label: 'verify',
+            customLabel: null,
+            color: null,
+            createdAt: 1,
+            sortOrder: 0,
+            executionHostId: hostId
+          }
+        ]
+      },
+      tabGroups: {
+        [worktreeId]: [
+          {
+            id: 'g1',
+            worktreeId,
+            tabOrder: [legacyId],
+            activeTabId: legacyId,
+            recentTabIds: [legacyId]
+          }
+        ]
+      }
+    }
+    const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, {
+      ...nameBasedLoadContext(),
+      editorViewsOf: () => ({
+        [legacyId]: {
+          view: { mode: 'check-details', checkRunDetails: previous },
+          file: {
+            filePath: legacyId,
+            relativePath: 'verify',
+            language: 'plaintext',
+            runtimeEnvironmentId
+          }
+        }
+      })
+    })
+    const layouts = publishedLayoutsOf(loaded.layout)
+    const store = createEditorTabsStore()
+    const repo = {
+      ...TEST_REPO,
+      id: 'repo-1',
+      executionHostId: runtimeEnvironmentId ? ('runtime:server' as const) : hostId,
+      connectionId: hostId === 'ssh:builder' ? 'builder' : null
+    }
+    store.setState({
+      ...buildLayoutFrameSlices({ layouts, facts: loaded.facts, view: loaded.desktopView }),
+      repos: [repo],
+      worktreesByRepo: {
+        [repo.id]: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: repo.id,
+            hostId,
+            runtimeOwnerEnvironmentId: runtimeEnvironmentId
+          })
+        ]
+      },
+      activeWorkspaceExecutionHostId: hostId
+    })
+    expect(store.getState().openFiles).toMatchObject([
+      { id: expectedId, filePath: expectedId, checkRunDetails: previous }
+    ])
+    expect(store.getState().unifiedTabsByWorktree[worktreeId]).toMatchObject([
+      { id: legacyId, entityId: expectedId }
+    ])
+    expect(store.getState().groupsByWorktree[worktreeId]).toMatchObject([
+      { tabOrder: [legacyId], activeTabId: legacyId, recentTabIds: [legacyId] }
+    ])
+    store.getState().openCheckRunDetails(worktreeId, previous.contextKey, check, {
+      requestId: 9,
+      details: null,
+      loading: true,
+      error: null
+    })
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]!.checkRunDetails).toEqual(previous)
+    expect(store.getState().activeFileId).toBe(expectedId)
+    expect(store.getState().unifiedTabsByWorktree[worktreeId]).toHaveLength(1)
   }
 )

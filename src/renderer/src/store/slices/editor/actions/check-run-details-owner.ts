@@ -9,6 +9,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { checkRunDetailsOwnerScope } from '../../../../../../shared/check-run-details-owner-scope'
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
@@ -70,13 +71,10 @@ export function getCheckRunDetailsOwnerScope(
   if (!ownership) {
     return null
   }
-  const hostId = getOpenFileExecutionHostId(ownership)
-  const runtimeId = ownership.runtimeEnvironmentId?.trim()
-  const runtimeHostId = runtimeId ? toRuntimeExecutionHostId(runtimeId) : null
-  // Why: a paired server can proxy an SSH host the app also reaches directly; each is its own transport.
-  const scope = runtimeHostId && runtimeHostId !== hostId ? `${hostId}>${runtimeHostId}` : hostId
-  // Local keeps the unscoped id so tabs opened before host scoping still match.
-  return scope === LOCAL_EXECUTION_HOST_ID ? null : scope
+  return checkRunDetailsOwnerScope(
+    getOpenFileExecutionHostId(ownership),
+    ownership.runtimeEnvironmentId
+  )
 }
 
 export function isSameCheckRunDetailsOwner(
