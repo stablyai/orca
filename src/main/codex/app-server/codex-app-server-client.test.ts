@@ -8,6 +8,9 @@ import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError,
   isCodexAppServerUnsupportedError,
+  runCodexAppServerSession
+} from './codex-app-server-session'
+import {
   runCodexHookTrustGrantSession,
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
@@ -15,11 +18,10 @@ import { killCodexAppServerProcessTree } from './codex-app-server-process-tree-k
 import {
   PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
-} from '../provider-process/provider-process-supervisor'
-import { runCodexAppServerSession } from './codex-app-server-session'
+} from '../../provider-process/provider-process-supervisor'
 
 // The orphan guard's process reads add timers of their own; the timer audit below is the session's.
-vi.mock('../provider-process/provider-group-orphan-guard', () => ({
+vi.mock('../../provider-process/provider-group-orphan-guard', () => ({
   guardSupervisedProviderGroup: () => false
 }))
 

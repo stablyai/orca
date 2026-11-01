@@ -21,7 +21,7 @@ import {
   createCodexWslRuntimeHookInstallPlan,
   type CodexWslRuntimeHookInstallPlan
 } from './hook-service'
-import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
+import type { CodexHookTrustGrantRequest } from './app-server/codex-app-server-client'
 import { codexAppServerCapabilityCache } from './app-server/codex-app-server-capability-cache'
 import { _internals as trustGrantInternals } from './codex-hook-trust-grant'
 

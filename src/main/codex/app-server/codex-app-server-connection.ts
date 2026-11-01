@@ -1,25 +1,23 @@
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
-import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
-import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
-import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
-import { buildCodexAppServerExitError } from './app-server/codex-app-server-exit-error'
-import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
-import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
-import { CodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
+import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { createClaudeChildTreeReaper } from '../../claude/claude-agent-sdk-exit-proof'
+import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
+import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
+import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
+import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
+import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
-import { createProviderRecordReader } from '../provider-process/provider-record-reader'
-import { withProviderRequestTimeout } from '../provider-process/provider-request-timeout'
+import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
-} from './app-server/codex-app-server-connection-types'
-
-export { ROOT_ONLY_GRACEFUL_EXIT_MS as GRACEFUL_EXIT_MS } from '../provider-process/provider-process-close'
+} from './codex-app-server-connection-types'
 
 // Structured chat needs a persistent transport for approvals and streamed turns.
 export type CodexAppServerLaunch = ProviderProcessLaunch

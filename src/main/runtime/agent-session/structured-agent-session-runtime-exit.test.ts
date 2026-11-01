@@ -7,7 +7,7 @@ import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
 } from '../../codex/app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
+import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,

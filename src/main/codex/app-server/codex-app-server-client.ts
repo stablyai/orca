@@ -1,15 +1,9 @@
 import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
-import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
+import { normalizeHookTrustKeyForLookup } from '../config-toml-trust'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 
 // Codex owns hook hash computation; its trust RPCs also preserve user config comments.
-export {
-  CodexAppServerTimeoutError,
-  CodexAppServerUnsupportedError,
-  isCodexAppServerUnsupportedError,
-  type CodexAppServerInvocation
-} from './codex-app-server-session'
 
 export type CodexHookTrustGrantRequest = {
   invocation: CodexAppServerInvocation
