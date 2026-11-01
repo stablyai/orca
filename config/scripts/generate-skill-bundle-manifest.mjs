@@ -207,19 +207,13 @@ function tryGit(args, options) {
 
 const SKILL_FILE_RAW_LINE = /^:\d+ \d+ [0-9a-f]+ ([0-9a-f]+) [A-Z]\d*\tskills\/([^/]+)\/SKILL\.md$/u
 
-/** Every `skills/<name>/SKILL.md` blob reachable from HEAD; empty outside a git checkout. */
+/** Every `skills/<name>/SKILL.md` blob reachable from HEAD or a release tag; empty outside a git checkout. */
 function historicalSkillDigests() {
   // One path-limited log plus one batched read: never a per-commit or per-ref fan-out.
-  const log = tryGit([
-    'log',
-    '--format=',
-    '--raw',
-    '--no-abbrev',
-    '--no-renames',
-    'HEAD',
-    '--',
-    'skills'
-  ])
+  const logFrom = (refs) =>
+    tryGit(['log', '--format=', '--raw', '--no-abbrev', '--no-renames', ...refs, '--', 'skills'])
+  // Why tags: a release cut off a branch ships bytes HEAD may never contain; shallow CI simply has none.
+  const log = logFrom(['HEAD', '--tags=v*']) ?? logFrom(['HEAD'])
   if (log === null) {
     return []
   }
