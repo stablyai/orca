@@ -5,7 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
-import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
+import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -68,6 +68,18 @@ export function cliErrorCode(error: unknown): string | undefined {
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   const selector = contextRecovery(cliErrorCode(error), context)
+  const workspaceChoices =
+    error instanceof RuntimeClientError &&
+    !(error instanceof RuntimeRpcFailureError) &&
+    error.code === 'selector_ambiguous'
+      ? ambiguousWorkspaceChoices(error.data)
+      : undefined
+  if (workspaceChoices) {
+    return formatMessageWithNextSteps(
+      `${message}\nWorkspace choices (JSON data):\n${JSON.stringify(workspaceChoices, null, 2)}`,
+      nextStepsFromData(errorData(error))
+    )
+  }
   if (selector) {
     return formatMessageWithNextSteps(
       message,
@@ -129,6 +141,9 @@ function formatRuntimeUnavailableError(message: string, data: unknown): string {
   return `${message}\nOrca is not running. Run 'orca open' first.`
 }
 
+// Streaming commands print one JSON object per line with --json, so their failure is one line too.
+const JSON_LINES_COMMANDS = new Set(['plugin dev watch'])
+
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   const selector = contextRecovery(cliErrorCode(error), context)
   const concise = context.conciseOrchestration
@@ -137,7 +152,9 @@ export function reportCliError(error: unknown, json: boolean, context: CliErrorC
     console.log(
       concise
         ? JSON.stringify({ ok: false, error: response.error })
-        : JSON.stringify(response, null, 2)
+        : JSON_LINES_COMMANDS.has(context.commandPath?.join(' ') ?? '')
+          ? JSON.stringify(response)
+          : JSON.stringify(response, null, 2)
     )
     if (concise) {
       console.error(formatOrchestrationErrorLine(response.error.code, response.error.message))

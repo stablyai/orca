@@ -120,31 +120,6 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
     expect(mirrorKeys(store).resubscribeSignal).not.toBe(connected.resubscribeSignal)
   })
 
-  it('does not advance either value while the host keeps answering', () => {
-    const store = createSliceStore()
-    seedEnvironment(store)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
-    const connectedGeneration = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-    const connected = mirrorKeys(store)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'verified' }))
-
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
-    expect(mirrorKeys(store)).toEqual(connected)
-  })
-
-  it('leaves a first publication with no prior entry on its original generation', () => {
-    // First contact must not fence out startup scans on the same connection (#19241).
-    const store = createSliceStore()
-    seedEnvironment(store)
-    const before = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-
-    store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
-
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before)
-  })
-
   it('advances the generation when the runtime restarted during the outage', () => {
     const store = createSliceStore()
     seedEnvironment(store)

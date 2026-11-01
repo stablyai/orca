@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import {
   selectStructuredAgentContextUsage,
   type StructuredAgentContextUsage
-} from '../../../../shared/structured-agent-session-context-usage'
+} from '../../../../shared/agent-session/structured-agent-session-context-usage'
 
 /** Fill missing loaded-window usage facts from whole-journal host evidence; older hosts leave the window unchanged. */
 export function useStructuredAgentSessionContextUsage(

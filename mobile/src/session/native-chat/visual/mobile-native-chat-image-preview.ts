@@ -1,5 +1,5 @@
 import { buildImageDataUri } from '../../../../../src/shared/image-data-uri'
-import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { PrioritySemaphore } from '../../../../../src/shared/priority-semaphore'
 import { filePreviewImageSchema } from '../../../files/file-preview-reply-schema'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc-operation'

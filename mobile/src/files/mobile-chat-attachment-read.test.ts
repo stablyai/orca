@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { AttachmentTextSource } from '../../../src/shared/attachment-text-source'
-import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../src/shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { RpcClientRequestTracker } from '../transport/rpc-client-request-tracker'
 import { RpcClientConnectionState } from '../transport/rpc-client-connection-state'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'

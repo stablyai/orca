@@ -3,16 +3,14 @@ import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { StructuredAgentSessionAtRestCommands } from '../native-chat/agent-session-wire/structured-agent-session-at-rest-commands'
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type {
-  AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
+import type { AgentJournalAnsweredTurnIdentity } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import type { openCodexAppServerConnection } from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import {
   createCodexTurnOpenWaits,

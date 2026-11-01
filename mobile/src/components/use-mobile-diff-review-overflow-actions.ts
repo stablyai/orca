@@ -1,19 +1,50 @@
 import { useMemo } from 'react'
-import { Check, Copy, FileText, Send, Trash2, X } from 'lucide-react-native'
+import {
+  Copy,
+  FileText,
+  ListChecks,
+  MessageSquarePlus,
+  Send,
+  Trash2,
+  Undo2
+} from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import type { ActionSheetAction } from './ActionSheetModal'
 
-// The review screen's ⋯ menu.
+// The review screen's ⋯ menu: rarer file actions, the notes, and Discard last.
 export function useMobileDiffReviewOverflowActions(
-  controller: ReturnType<typeof useMobileDiffReviewController>
+  controller: ReturnType<typeof useMobileDiffReviewController>,
+  options: { showPullRequest: boolean }
 ) {
   const t = useMobileTranslation()
   const sessionTabsAvailable = useWorkspaceOnPairedHost()
+  const { showPullRequest } = options
   return useMemo<ActionSheetAction[]>(() => {
-    const stageable = controller.reviewedUnstagedCount
+    const item = controller.currentItem
+    const busy = controller.busyAction !== null
     return [
+      ...(item?.canUnstage
+        ? [
+            {
+              id: 'unstage',
+              label: t('components.diffReviewDrawers.unstageFile', 'Unstage'),
+              icon: Undo2,
+              disabled: busy,
+              onPress: () => void controller.runGitMutation('git.unstage', item)
+            }
+          ]
+        : []),
+      {
+        id: 'addFileNote',
+        label: t('components.diffReviewDrawers.addFileNote', 'Add File Note'),
+        icon: MessageSquarePlus,
+        disabled: !item || item.scope === 'commit',
+        // The note composer is a sheet; iOS can't present it over the menu.
+        closeBeforePress: true,
+        onPress: () => controller.openComposer(0)
+      },
       {
         id: 'copyNotes',
         label: t('components.diffReviewDrawers.copyNotes', 'Copy Notes'),
@@ -40,50 +71,42 @@ export function useMobileDiffReviewOverflowActions(
           controller.screenState.comments.every((comment) => comment.sentAt === undefined),
         onPress: () => void controller.clearSentNotes()
       },
-      {
-        id: 'stageReviewedFiles',
-        label: t('components.diffReviewDrawers.stageReviewedFiles', 'Stage Reviewed Files'),
-        icon: Check,
-        disabled: stageable === 0 || controller.busyAction !== null,
-        ...(stageable > 0
-          ? {
-              hint:
-                stageable === 1
-                  ? t(
-                      'components.diffReviewDrawers.stageableFiles_one',
-                      '{{count}} reviewed unstaged files can be staged',
-                      { count: stageable }
-                    )
-                  : t(
-                      'components.diffReviewDrawers.stageableFiles_other',
-                      '{{count}} reviewed unstaged files can be staged',
-                      { count: stageable }
-                    )
+      ...(showPullRequest
+        ? [
+            {
+              id: 'pullRequest',
+              label: t('components.diffReviewDrawers.pullRequest', 'Pull Request'),
+              icon: ListChecks,
+              closeBeforePress: true,
+              onPress: () => controller.openPRSidebar()
             }
-          : {}),
-        onPress: () => void controller.stageReviewedFiles()
-      },
-      {
-        id: 'markUnreviewed',
-        label: t('components.diffReviewDrawers.markUnreviewed', 'Mark Unreviewed'),
-        icon: X,
-        disabled:
-          controller.screenState.kind !== 'ready' ||
-          !controller.currentItem ||
-          !controller.currentItem.isReviewed,
-        onPress: () => void controller.markUnreviewed()
-      },
+          ]
+        : []),
       ...(sessionTabsAvailable
         ? [
             {
               id: 'openInSession',
               label: t('components.diffReviewDrawers.openInSession', 'Open in Session'),
               icon: FileText,
-              disabled: !controller.currentItem || controller.currentItem.scope === 'branch',
+              disabled: !item || item.scope === 'branch' || item.scope === 'commit',
               onPress: () => void controller.openInSession()
+            }
+          ]
+        : []),
+      ...(item?.canDiscard
+        ? [
+            {
+              id: 'discard',
+              label: t('components.diffReviewDrawers.discardChanges', 'Discard Changes'),
+              icon: Trash2,
+              destructive: true,
+              disabled: busy,
+              // The confirm is a sheet; iOS can't present it over the menu.
+              closeBeforePress: true,
+              onPress: () => controller.openSheet({ kind: 'discard', target: item })
             }
           ]
         : [])
     ]
-  }, [controller, sessionTabsAvailable, t])
+  }, [controller, sessionTabsAvailable, showPullRequest, t])
 }

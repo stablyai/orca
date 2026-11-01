@@ -39,7 +39,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   CLAUDE_AT_REST_COMMANDS_TTL_MS,
   ClaudeAtRestCommandCatalog

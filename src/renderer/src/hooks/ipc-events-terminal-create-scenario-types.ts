@@ -1,5 +1,5 @@
 import type { Mock } from 'vitest'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Annotate scenario spy shapes because inferred types cannot be named across module boundaries.

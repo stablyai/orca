@@ -25,8 +25,8 @@ import {
   resolveAgentLaunchPaneVerdict
 } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchPaneVerdict } from '../../../../shared/agent-launch-pane-verdict'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-test-harness'
 import type { RpcContext } from '../core'
 import { DESKTOP_RPC_CALLER } from '../rpc-caller-identity'
 import {

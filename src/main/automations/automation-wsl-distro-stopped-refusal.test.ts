@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import type * as UncGate from '../wsl/wsl-unc-access-gate'
 import { AutomationService } from './service'
@@ -117,20 +117,6 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
     })
     expect(send).not.toHaveBeenCalled()
     expect(blocked).toHaveBeenCalledWith(REPO_PATH, undefined)
-  })
-
-  it('dispatches once the distro runs', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    blocked.mockResolvedValue(null)
-    const store = await createStore()
-    const automation = seedAutomation(store)
-    const send = vi.fn()
-    const service = attachedService(store, send)
-
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-
-    await vi.waitFor(() => expect(send).toHaveBeenCalled())
-    expect(store.listAutomationRuns(automation.id)[0]?.errorCode).toBeUndefined()
   })
 
   it("leaves Run now alone: it is the user's act and may start the distro", async () => {

@@ -8,6 +8,10 @@ import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
+import {
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../shared/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
@@ -36,6 +40,7 @@ export function normalizeLoadedGlobalSettings(
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
+    migratedTerminalColorOverrides,
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds
   } = terminal
@@ -63,6 +68,12 @@ export function normalizeLoadedGlobalSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder
   } = profile
+  const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
+  const matchTerminalSidebarInputs = {
+    pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
+    pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
+    leftSidebarAppearanceMode: parsed.settings?.leftSidebarAppearanceMode
+  }
 
   return {
     ...defaults.settings,
@@ -111,6 +122,7 @@ export function normalizeLoadedGlobalSettings(
     localAccountRuntime: migratedLocalAccountRuntime,
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     ...migratedOsc52Clipboard,
+    ...migratedTerminalColorOverrides,
     floatingTerminalEnabled: migratedFloatingTerminalEnabled,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -120,7 +132,11 @@ export function normalizeLoadedGlobalSettings(
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
-    ...normalizePluginOwnedSettings(parsed.settings ?? {}),
+    ...pluginOwnedSettings,
+    ...syncLegacyMatchTerminalSidebar(
+      matchTerminalSidebarInputs,
+      hasLegacyMatchTerminalSidebar(matchTerminalSidebarInputs)
+    ),
     appIcon: normalizeAppIconId(parsed.settings?.appIcon),
     mobilePairingCustomAddress,
     mobilePairingCustomAddresses,

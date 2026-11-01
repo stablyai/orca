@@ -3,13 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStoreText
-} from '../../agent-session-record-store-test-harness'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+} from '../records/agent-session-record-store-test-harness'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const MATCHED = { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,11 +8,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createStore, closeTestStores, testState } from '../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -21,12 +21,12 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
-import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',
   C = 'chat-c-0003',
@@ -61,9 +61,9 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 
 export async function authorityProfile(
   ids: string[] = [B],
-  options: { visible?: string[]; records?: string[] } = {}
+  options: { visible?: string[]; records?: string[] } = {},
+  profile = createStore()
 ) {
-  const profile = createStore()
   initOrcaProfilePaths()
   const group = profile.createProjectGroup({
     name: 'Chats',
@@ -77,7 +77,7 @@ export async function authorityProfile(
     folderPath: root,
     name: 'Chat owner'
   })
-  const workspace = folderWorkspaceKey(folder.id)
+  const workspace: string = folderWorkspaceKey(folder.id)
   const records = (options.records ?? ids.filter((id) => id !== G)).map((id) => {
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({
@@ -111,7 +111,7 @@ export async function authorityProfile(
   if (saved) {
     profile.setWorkspaceSession(saved)
   }
-  profile.flushOrThrow()
+  await profile.flushPendingOrThrowAsync()
   return { profile, workspace, groupId: group.id, folderId: folder.id }
 }
 
@@ -192,7 +192,11 @@ export function rejectVisibility(rig: AuthorityRig) {
   db.exec(
     "CREATE TEMP TRIGGER reject_tab_delta BEFORE DELETE ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
   )
+  db.exec(
+    "CREATE TEMP TRIGGER reject_tab_insert BEFORE INSERT ON agent_session_tabs BEGIN SELECT RAISE(ABORT, 'visibility rejected'); END"
+  )
   return () => {
+    db.exec('DROP TRIGGER reject_tab_insert')
     db.exec('DROP TRIGGER reject_initial_tabs')
     db.exec('DROP TRIGGER reject_tab_delta')
   }

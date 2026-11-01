@@ -13,7 +13,7 @@ import { seedClaudeSubagentRosterFromSnapshots } from '../../src/shared/agent-ho
 import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster'
 import { decodeAgentSubagentsField } from '../../src/shared/agent-status-subagent-snapshot'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view-bridge'
+import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
@@ -468,10 +468,9 @@ it.each(
         takeAndSettle()
       })
     }
-    // Immutable catalogs were indexed at mount; warm owner revalidation must reuse that work.
-    const warm = { ...visits }
-    expect(warm.worktrees).toBe(0)
-    expect(warm.repos).toBeLessThanOrEqual(passBound)
+    // Owner indexes are warm; clicks must not rescan either catalog.
+    expect(visits.worktrees).toBe(0)
+    expect(visits.repos).toBe(0)
     expect(mocks.owner.mock.calls.length).toBeGreaterThan(ownerCalls)
     expect(mocks.owner).toHaveLastReturnedWith({
       kind: 'resolved',

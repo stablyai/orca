@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai-settings'
-import { normalizeCreateReviewBaseSearchResults } from './create-pull-request-base-ref-normalization'
+import { normalizeCreateReviewBaseSearchResults } from '../../../../shared/hosted-review-refs'
 import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 
 describe('normalizeCreateReviewBaseSearchResults', () => {

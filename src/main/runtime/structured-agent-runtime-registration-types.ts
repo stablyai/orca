@@ -1,5 +1,5 @@
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import type { StructuredAgentCliConversations } from '../native-chat/structured-agent-cli-conversations'
 import type {
@@ -11,9 +11,9 @@ import type { StructuredAgentDefinition } from '../native-chat/agent-session-wir
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
-import type { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
+import type { createStructuredAgentSessionDispatchFollowUps } from './agent-session/structured-agent-session-dispatch-followups'
+import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { createStructuredAgentEnvironmentResolvers } from './structured-agent-shell-environment'
 import type {
   StructuredClaudeAccountHomeDeps,

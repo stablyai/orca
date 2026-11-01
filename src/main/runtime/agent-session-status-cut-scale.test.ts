@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import { orcaShutdownRowClientMessageId } from '../../shared/native-chat/native-chat-orca-stop-cut'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
@@ -15,7 +15,7 @@ import { scaleDirectory, scaleJournal, scaleRecord } from './agent-session-scale
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { countStatusCutWork } from './agent-session-status-cut-work.test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))

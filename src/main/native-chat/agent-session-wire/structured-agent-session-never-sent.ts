@@ -1,5 +1,5 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 /** Prove local unsent history; adoption, prior turns, rewind or a replacement journal defeat proof. */

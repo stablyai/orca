@@ -9,7 +9,7 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import { AgentSessionPromptAnswerRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 describe('CodexStructuredSessionAdapter prompts', () => {
   function askApproval(codex: ReturnType<typeof fakeCodex>): void {

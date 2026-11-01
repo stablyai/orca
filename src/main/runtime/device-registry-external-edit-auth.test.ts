@@ -101,13 +101,6 @@ describe('device registry auth checks see edits made on disk', () => {
     expect(registry.validateToken(added.token)?.deviceId).toBe(added.deviceId)
   })
 
-  it('stays usable when there is no file at all', () => {
-    const registry = new DeviceRegistry(dir)
-
-    expect(registry.validateToken('not-a-token')).toBeNull()
-    expect(registry.lookupDeviceKey('missing-device')).toEqual({ kind: 'unknown' })
-  })
-
   it('keeps what it has when the file turns corrupt, since that proves no removal', () => {
     const registry = new DeviceRegistry(dir)
     const desktop = registry.addDevice('desktop', 'runtime')

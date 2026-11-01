@@ -9,7 +9,7 @@ import {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { AttachmentTextRead } from '../../../../shared/attachment-text-source'
-import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 export function createChatAttachmentReader(
   target: RuntimeClientTarget | null,

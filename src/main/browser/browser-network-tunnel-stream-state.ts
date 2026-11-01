@@ -3,6 +3,8 @@ export const BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS = 10_000
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_BYTES = 256 * 1024
 export const BROWSER_NETWORK_TUNNEL_MAX_PENDING_SOCKET_CHUNKS = 256
 export const BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS = 65_536
+// Chromium's per-session socket pool; a lower cap refuses a heavy page's own connections.
+export const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 256
 
 export function validateBrowserNetworkTunnelGeneration(generation: number): void {
   if (!Number.isInteger(generation) || generation < 1 || generation > 0xffff_ffff) {
@@ -45,7 +47,6 @@ export type BrowserNetworkTunnelStream = {
   id: number
   socket: BrowserNetworkTunnelSocket
   connected: boolean
-  releasePendingOpen: () => void
   closed: boolean
   receiveCredit: number
   sendCredit: number

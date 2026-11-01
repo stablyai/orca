@@ -160,3 +160,41 @@ describe('createWslOrcadHostTransport', () => {
     expect(Buffer.concat(received).length).toBe(20 * 1024 * 1024)
   })
 })
+
+describe('a transport with an abort signal', () => {
+  const target = { kind: 'wsl' as const, id: 'env-1', distro: 'Ubuntu-24.04', label: 'My Ubuntu' }
+
+  it('starts no wsl.exe once aborted, for commands and file writes alike', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const spawn = vi.fn()
+    const transport = createWslOrcadHostTransport({
+      target,
+      commandLoops: false,
+      signal: controller.signal,
+      spawn
+    })
+
+    await expect(transport.exec('true')).rejects.toThrow()
+    await expect(transport.writeFile('/tmp/x', 'y')).rejects.toThrow()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('ends a running wsl.exe when the signal aborts', async () => {
+    const controller = new AbortController()
+    const child = fakeChild()
+    const transport = createWslOrcadHostTransport({
+      target,
+      commandLoops: false,
+      signal: controller.signal,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only the streams, exit state, kill and events the fake provides.
+      spawn: () => child as unknown as PipedChildProcess
+    })
+    const channel = await transport.exec('sleep 60')
+    channel.on('error', () => {})
+
+    controller.abort()
+
+    expect(channel.destroyed).toBe(true)
+  })
+})

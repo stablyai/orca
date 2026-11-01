@@ -10,11 +10,8 @@ import type { AppState } from './types'
 import { resolveIndexedFolderWorkspaceOwner } from '@/lib/worktree-runtime-owner-index'
 import { makeFolderWorkspace, makeWorktree } from './slices/worktrees-slice-test-fixtures'
 import {
-  selectDetectedWorktreesByRepo,
   findFolderWorkspaceRecord,
-  selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
-  selectWorktreesByRepo
+  selectWorkspaceByHostTarget
 } from './workspace-record-selectors'
 
 const SHARED_ID = 'repo-1::/work/orca'
@@ -33,15 +30,6 @@ function makeState(
     ...overrides
   }
 }
-
-describe('compatibility views', () => {
-  it('return the store fields by reference', () => {
-    const state = makeState()
-    expect(selectWorktreesByRepo(state)).toBe(state.worktreesByRepo)
-    expect(selectFolderWorkspaces(state)).toBe(state.folderWorkspaces)
-    expect(selectDetectedWorktreesByRepo(state)).toBe(state.detectedWorktreesByRepo)
-  })
-})
 
 describe('selectWorkspaceByHostTarget', () => {
   it('resolves the target host only', () => {

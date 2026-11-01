@@ -1,4 +1,7 @@
-import type { AgentProviderSessionMetadata, ResumableTuiAgent } from './agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  ResumableTuiAgent
+} from './agent-session/lifecycle/agent-session-resume'
 
 /** Keep per-agent resume argv separate from session metadata; type-only imports avoid runtime cycles. */
 export function getAgentResumeArgv(

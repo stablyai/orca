@@ -1,6 +1,6 @@
 /** Direct SSH wake must wait for connection before declaring panes absent (STA-3500/3498 once forked five Claude writers). Paired-runtime web-terminal guards did not cover this path; retain records while unreachable and wake genuine sleepers after reconnect. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'

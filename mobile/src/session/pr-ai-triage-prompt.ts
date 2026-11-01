@@ -1,7 +1,11 @@
 import {
   buildFixBrokenChecksPrompt,
-  collectFixChecksPromptDetails
+  collectFixChecksPromptDetails,
+  hasGitHubCheckHandle
 } from '../../../src/shared/pr-checks-fix-prompt'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { RpcClient } from '../transport/rpc-client'
+import { fetchPRCheckDetails } from './github-pr-rpc'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
 import { buildResolvePullRequestConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
@@ -23,6 +27,35 @@ export async function buildFixChecksPrompt(input: {
       input.checks,
       input.loadCheckDetails
     )
+  })
+}
+
+// The PR's failing checks with their log tails, read from the host one check at a time.
+export function buildPrFixChecksPrompt(input: {
+  client: RpcClient | null
+  worktreeId: string
+  pr: PRInfo
+  checks: PRCheckDetail[]
+}): Promise<string> {
+  const { client, worktreeId, pr } = input
+  return buildFixChecksPrompt({
+    prNumber: pr.number,
+    prTitle: pr.title,
+    prUrl: pr.url,
+    checks: input.checks,
+    loadCheckDetails: async (check) => {
+      if (!client || !hasGitHubCheckHandle(check)) {
+        return null
+      }
+      const outcome = await fetchPRCheckDetails(client, worktreeId, {
+        checkRunId: check.checkRunId,
+        workflowRunId: check.workflowRunId,
+        checkName: check.name,
+        url: check.url,
+        prRepo: pr.prRepo ?? null
+      })
+      return outcome.ok ? outcome.result : null
+    }
   })
 }
 

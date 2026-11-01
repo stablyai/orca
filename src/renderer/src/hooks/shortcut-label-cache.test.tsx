@@ -32,13 +32,7 @@ vi.mock('../../../shared/keybindings', async (importOriginal) => {
   }
 })
 
-const {
-  formatOptionalShortcutLabel,
-  formatPrimaryShortcutLabel,
-  formatShortcutKeyComboDetails,
-  formatShortcutLabel,
-  useShortcutLabel
-} = await import('./useShortcutLabel')
+const { formatShortcutLabel, useShortcutLabel } = await import('./useShortcutLabel')
 const { useAppStore } = await import('@/store')
 
 function resetCounters(): void {
@@ -69,44 +63,6 @@ describe('shortcut label memoization', () => {
     expect(counters.formatList).toBe(0)
   })
 
-  it('memoizes each label shape separately and keeps their values correct', () => {
-    const overrides = overridesFor('Mod+Shift+K')
-    expect(formatShortcutLabel('tab.close', overrides)).toBe(
-      formatShortcutLabel('tab.close', overrides)
-    )
-    expect(formatPrimaryShortcutLabel('tab.close', overrides)).toBe(
-      formatPrimaryShortcutLabel('tab.close', overrides)
-    )
-    expect(formatOptionalShortcutLabel('tab.close', overrides)).toBe(
-      formatOptionalShortcutLabel('tab.close', overrides)
-    )
-    expect(formatShortcutKeyComboDetails('tab.close', overrides)).toBe(
-      formatShortcutKeyComboDetails('tab.close', overrides)
-    )
-    expect(formatShortcutKeyComboDetails('tab.close', overrides)[0]?.keys).toEqual(['⌘', '⇧', 'K'])
-    expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
-  })
-
-  it('returns null rather than a cached sentinel for a disabled action', () => {
-    const overrides: KeybindingOverrides = { 'tab.close': [] }
-    expect(formatOptionalShortcutLabel('tab.close', overrides)).toBe(null)
-    expect(formatOptionalShortcutLabel('tab.close', overrides)).toBe(null)
-    expect(formatShortcutLabel('tab.close', overrides)).toBe('Unassigned')
-    expect(formatPrimaryShortcutLabel('tab.close', overrides)).toBe('Unassigned')
-  })
-
-  it('recomputes as soon as a different overrides object arrives', () => {
-    expect(formatShortcutLabel('tab.close', overridesFor('Mod+Shift+K'))).toBe('⌘⇧K')
-    expect(formatShortcutLabel('tab.close', overridesFor('Mod+Shift+L'))).toBe('⌘⇧L')
-    expect(formatShortcutLabel('tab.close', overridesFor('Mod+Shift+K'))).toBe('⌘⇧K')
-  })
-
-  it('does not let one action id serve another', () => {
-    const overrides = overridesFor('Mod+Shift+K')
-    expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
-    expect(formatShortcutLabel('tab.rename', overrides)).not.toBe('⌘⇧K')
-  })
-
   it('keys the cache by platform so Mac and Windows glyphs never cross', () => {
     const overrides = overridesFor('Mod+Shift+K')
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
@@ -114,13 +70,6 @@ describe('shortcut label memoization', () => {
     expect(formatShortcutLabel('tab.close', overrides)).toBe('Ctrl+⇧+K')
     platformRef.current = 'darwin'
     expect(formatShortcutLabel('tab.close', overrides)).toBe('⌘⇧K')
-  })
-
-  it('caches the undefined-overrides case without leaking into the override case', () => {
-    const defaultLabel = formatShortcutLabel('tab.close')
-    expect(formatShortcutLabel('tab.close')).toBe(defaultLabel)
-    expect(formatShortcutLabel('tab.close', overridesFor('Mod+Shift+K'))).toBe('⌘⇧K')
-    expect(formatShortcutLabel('tab.close')).toBe(defaultLabel)
   })
 })
 

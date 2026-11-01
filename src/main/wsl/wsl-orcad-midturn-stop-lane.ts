@@ -3,13 +3,13 @@
 import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../shared/agent-session-continue-interrupted-capability'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-continue-interrupted-capability'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'

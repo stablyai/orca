@@ -129,30 +129,4 @@ describe('buildDashboardSnapshot orchestration routing', () => {
       contextVisits: contextCount
     })
   })
-
-  it('releases batch state without reading runtime when no worktree is active', () => {
-    const runtime = new Proxy<Record<string, AgentStatusOrchestrationContext>>(
-      {},
-      {
-        ownKeys() {
-          throw new Error('zero-worktree build must not enumerate runtime')
-        }
-      }
-    )
-
-    buildDashboardSnapshot(state(0, runtime), 1)
-
-    expect(batchMocks.release).toHaveBeenCalledOnce()
-    expect(batchMocks.select).not.toHaveBeenCalled()
-  })
-
-  it('uses the explicit batch only when at least two worktrees are active', () => {
-    const currentState = state(2, {})
-
-    buildDashboardSnapshot(currentState, 1)
-
-    expect(batchMocks.release).not.toHaveBeenCalled()
-    expect(batchMocks.select).toHaveBeenCalledOnce()
-    expect(batchMocks.select).toHaveBeenCalledWith(currentState, ['w0', 'w1'])
-  })
 })

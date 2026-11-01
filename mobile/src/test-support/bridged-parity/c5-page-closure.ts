@@ -69,7 +69,9 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'host.worktree-actions': {
     'host-worktree-actions-pin-open-delete': 'identical',
+    'host-worktree-delete-archive-hook-failed': 'identical',
     'host-worktree-delete-refused': 'identical',
+    'matrix-host.worktree-actions-repo.hooks-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.activate-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.rm-1': 'result-absent-settlement',
     'matrix-host.worktree-actions-worktree.set-1': 'result-absent-settlement'

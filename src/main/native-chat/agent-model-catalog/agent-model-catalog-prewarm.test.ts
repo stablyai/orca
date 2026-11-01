@@ -1,7 +1,7 @@
 import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +10,7 @@ import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentModelCatalogFingerprintForRecord,
   agentModelCatalogSessionAccess
@@ -591,6 +591,18 @@ describe('one account, one catalog key', () => {
       expect(readEntry).not.toHaveBeenCalled()
       expect(readFailure).not.toHaveBeenCalled()
       mkdirSync(router.accountHome('b'), { recursive: true })
+      store.recordSuccess(
+        agentModelCatalogFingerprintForRecord({
+          ...founded,
+          accountHome: HOME('CLAUDE_CONFIG_DIR', router.accountHome('b'))
+        }),
+        'claude',
+        listing('only-b-base'),
+        'discovery'
+      )
+      expect(await scopedRead(read)).toMatchObject({
+        models: [{ id: 'only-b-base', isDefault: false }]
+      })
       expect(await scopedRead({ ...read, waitForListing: true })).toMatchObject({
         origin: 'probe',
         models: [{ id: 'only-b' }]

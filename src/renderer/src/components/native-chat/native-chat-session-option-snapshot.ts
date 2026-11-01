@@ -1,7 +1,7 @@
 import type {
   AgentSessionOptionCatalog,
   CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import type {
   SessionOptionDescriptor,
   NativeChatLiveOptionTransport

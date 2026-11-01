@@ -8,7 +8,7 @@ import {
   SendParams,
   RespondToQuestionParams
 } from './structured-agent-session-params'
-import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session-question-answer'
+import { AGENT_SESSION_QUESTION_ANSWER_MAX_BYTES } from '../agent-session/agent-session-question-answer'
 
 const ENVELOPE = {
   sessionId: 'agent-session-0123456789abcdef0123456789abcdef',

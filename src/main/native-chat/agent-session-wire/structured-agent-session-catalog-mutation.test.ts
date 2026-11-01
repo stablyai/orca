@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
-import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { agentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
-import { createStructuredAgentSessionLifecycleDelivery } from '../../runtime/structured-agent-session-lifecycle-delivery'
+import { createStructuredAgentSessionLifecycleDelivery } from '../../runtime/agent-session/structured-agent-session-lifecycle-delivery'
 import {
   catalogMutationDeadline as settled,
   CLAUDE_MODEL,

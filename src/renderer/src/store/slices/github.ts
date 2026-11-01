@@ -7,6 +7,7 @@ import {
   isExpiredActivePRRefreshState
 } from '../github/pr-refresh-state'
 import { evictStaleEntries } from '../github/cache-policy'
+import { deletePRRefreshStartedEntry } from '../github/pr-result-cache'
 import { persistGitHubCacheChanges } from '../github/cache-persistence'
 import { createProjectActions } from '../github/project-actions'
 import { createProjectRowActions } from '../github/project-row-actions'
@@ -75,6 +76,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (
       }
       const nextStates = { ...s.prRefreshStates }
       delete nextStates[cacheKey]
+      deletePRRefreshStartedEntry(token.sequence, cacheKey)
       return { prRefreshStates: nextStates }
     })
   },

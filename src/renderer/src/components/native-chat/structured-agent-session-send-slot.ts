@@ -1,9 +1,9 @@
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionSendOutcome } from './structured-agent-session-send-runtime'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {

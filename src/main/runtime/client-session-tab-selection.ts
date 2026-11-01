@@ -146,20 +146,47 @@ export class ClientSessionTabSelectionStore {
       closedTabIds: new Set<string>()
     }
     const nextSelection = activateClientSessionTabSelection(snapshot, state.selection, activeTabId)
-    const activeTab = snapshot.tabs.find((tab) => tab.id === activeTabId)
-    const closedTabIds = new Set(state.closedTabIds)
-    closedTabIds.delete(activeTabId)
-    if (activeTab) {
-      closedTabIds.delete(topLevelTabId(activeTab))
-    }
     statesByWorktree.set(snapshot.worktree, {
       ...state,
       selection: nextSelection,
       revision: state.revision + 1,
       shouldPersist: true,
-      closedTabIds
+      closedTabIds: this.reopenedTabIds(snapshot, state.closedTabIds, activeTabId)
     })
     this.persistNow()
+    return this.project(snapshot, clientNavigationId)
+  }
+
+  private reopenedTabIds(
+    snapshot: RuntimeMobileSessionTabsResult,
+    previous: ReadonlySet<string>,
+    tabId: string
+  ): Set<string> {
+    const tab = snapshot.tabs.find((candidate) => candidate.id === tabId)
+    const closedTabIds = new Set(previous)
+    closedTabIds.delete(tabId)
+    if (tab) {
+      closedTabIds.delete(topLevelTabId(tab))
+    }
+    return closedTabIds
+  }
+
+  reopen(
+    snapshot: RuntimeMobileSessionTabsResult,
+    clientNavigationId: string,
+    tabId: string
+  ): RuntimeMobileSessionTabsResult {
+    // Establish the caller's current selection before changing visibility.
+    this.project(snapshot, clientNavigationId)
+    const states = this.getStatesByWorktree(clientNavigationId)
+    const state = states.get(snapshot.worktree)
+    if (state) {
+      states.set(snapshot.worktree, {
+        ...state,
+        revision: state.revision + 1,
+        closedTabIds: this.reopenedTabIds(snapshot, state.closedTabIds, tabId)
+      })
+    }
     return this.project(snapshot, clientNavigationId)
   }
 

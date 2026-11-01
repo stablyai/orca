@@ -7,6 +7,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
+import { runStackMotion } from './host-stack-motion.web'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
@@ -20,12 +21,6 @@ export function HostStack({ animation }: { animation: HostStackAnimation }) {
     </Navigator>
   )
 }
-
-const SLIDE_MS = 300
-// Bound suspended-screen waits so a route with no content can still arrive.
-const CONTENT_WAIT_CAP_MS = 1000
-// Approximate iOS push timing so page/native transitions feel continuous.
-const SLIDE_EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
 
 type NavigatorContext = ReturnType<typeof Navigator.useContext>
 type Descriptors = NavigatorContext['descriptors']
@@ -66,11 +61,12 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
+  const nodes = useRef(new Map<string, HTMLElement>())
 
   // Derive during render so a pop’s first frame still contains its outgoing screen.
   if (shown.routes !== routes) {
     const moved = shown.routes.at(-1)?.key !== routes.at(-1)?.key
-    const slides = moved && animation !== 'none' && !prefersReducedMotion()
+    const slides = moved && animation !== 'none'
     setShown({
       routes,
       descriptors,
@@ -81,8 +77,24 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
   const settle = useCallback(() => setShown((current) => ({ ...current, transition: null })), [])
   const { transition } = shown
   const topKey = routes.at(-1)?.key
+  const underKey = transition?.kind === 'push' ? transition.underKey : null
   // Keep one keyed sibling list so moving the leaving screen to the end preserves its mount.
   const slots = transition?.kind === 'pop' ? [...routes, transition.leaving] : routes
+
+  // Start before paint so screens never flash at rest before sliding.
+  useLayoutEffect(() => {
+    if (transition === null) {
+      return
+    }
+    const push = transition.kind === 'push'
+    return runStackMotion({
+      kind: transition.kind,
+      moving: nodes.current.get(push ? transition.enteringKey : transition.leaving.key) ?? null,
+      under: nodes.current.get((push ? transition.underKey : topKey) ?? '') ?? null,
+      reducedMotion: prefersReducedMotion(),
+      onSettled: settle
+    })
+  }, [transition, topKey, settle])
 
   return (
     // Render descriptors bare like NavigatorSlot; NavigationContent cannot run in this view-only rerender.
@@ -90,15 +102,13 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
     <View style={styles.stack} pointerEvents={transition ? 'none' : 'auto'}>
       {slots.map((route) => {
         const leaving = transition?.kind === 'pop' && route.key === transition.leaving.key
-        const entering = transition?.kind === 'push' && route.key === transition.enteringKey
-        const under = transition?.kind === 'push' && route.key === transition.underKey
         const descriptor = leaving ? transition.descriptors[route.key] : descriptors[route.key]
         return (
           <StackScreen
             key={route.key}
-            visible={route.key === topKey || leaving || under}
-            motion={leaving ? 'exit' : entering ? 'enter' : null}
-            onSettled={settle}
+            routeKey={route.key}
+            nodes={nodes.current}
+            visible={route.key === topKey || leaving || route.key === underKey}
           >
             {descriptor?.render()}
           </StackScreen>
@@ -109,64 +119,27 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
 }
 
 function StackScreen({
+  routeKey,
+  nodes,
   visible,
-  motion,
-  onSettled,
   children
 }: {
+  routeKey: string
+  nodes: Map<string, HTMLElement>
   visible: boolean
-  motion: 'enter' | 'exit' | null
-  onSettled: () => void
   children: ReactNode
 }) {
   useMobileColorScheme()
-  const ref = useRef<View>(null)
   const transparent = isOverlayPageRoute(usePathname())
-  // Resume interrupted offsets when a pop reverses an unfinished push.
-  const stoppedAt = useRef<string | null>(null)
-
-  // Start before paint so screens never flash at rest before sliding.
-  useLayoutEffect(() => {
-    const from = stoppedAt.current
-    stoppedAt.current = null
-    const node: unknown = ref.current
-    if (motion === null || !(node instanceof HTMLElement)) {
-      return
-    }
-    const frames =
-      motion === 'enter'
-        ? [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }]
-        : [{ transform: from ?? 'translateX(0)' }, { transform: 'translateX(100%)' }]
-    // Use compositor animations so expensive screen mounts cannot stall slides.
-    const slide = node.animate(frames, { duration: SLIDE_MS, easing: SLIDE_EASING, fill: 'both' })
-    slide.onfinish = onSettled
-    const stop = () => {
-      stoppedAt.current = getComputedStyle(node).transform
-      slide.cancel()
-    }
-    if (motion === 'exit' || node.childElementCount > 0) {
-      return stop
-    }
-    // Keep suspended chunks off-screen until content commits so the slide cannot reveal an empty pane.
-    slide.pause()
-    const start = () => {
-      observer.disconnect()
-      clearTimeout(cap)
-      slide.play()
-    }
-    const observer = new MutationObserver(start)
-    observer.observe(node, { childList: true, subtree: true })
-    const cap = setTimeout(start, CONTENT_WAIT_CAP_MS)
-    return () => {
-      observer.disconnect()
-      clearTimeout(cap)
-      stop()
-    }
-  }, [motion, onSettled])
-
   return (
     <View
-      ref={ref}
+      ref={(view: unknown) => {
+        if (view instanceof HTMLElement) {
+          nodes.set(routeKey, view)
+        } else {
+          nodes.delete(routeKey)
+        }
+      }}
       style={[styles.screen, transparent && styles.transparent, visible ? null : styles.hidden]}
     >
       {children}

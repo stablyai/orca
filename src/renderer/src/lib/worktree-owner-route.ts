@@ -1,8 +1,5 @@
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { resolveIndexedSshRepositoryHost } from './repository-owner-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorktreeOperationOwnerRecord,
@@ -38,11 +35,6 @@ export function addRoute(
   routes.set(JSON.stringify(route), route)
 }
 
-const sshRepoRouteIndexes = new WeakMap<
-  NonNullable<WorktreeOperationRouteState['repos']>,
-  ReadonlyMap<string, WorktreeOperationRouteResolution>
->()
-
 function resolveRepoRouteForSshOwner(
   repos: WorktreeOperationRouteState['repos'],
   owner: WorktreeOperationOwnerRecord
@@ -50,34 +42,12 @@ function resolveRepoRouteForSshOwner(
   if (!repos || !owner.hostId) {
     return { kind: 'missing' }
   }
-  let index = sshRepoRouteIndexes.get(repos)
-  if (!index) {
-    const routesByHost = new Map<string, Map<string, WorktreeOperationRoute>>()
-    for (const repo of repos) {
-      const hostId = getRepoExecutionHostId(repo)
-      const connectionHostId = repo.connectionId ? toSshExecutionHostId(repo.connectionId) : null
-      for (const host of new Set([hostId, connectionHostId])) {
-        if (!host) {
-          continue
-        }
-        const key = `${repo.id}\0${host}`
-        const routes = routesByHost.get(key) ?? new Map()
-        addRoute(routes, routeForOwner({ hostId }))
-        routesByHost.set(key, routes)
-      }
-    }
-    const next = new Map<string, WorktreeOperationRouteResolution>()
-    for (const [key, routes] of routesByHost) {
-      const route = routes.values().next().value
-      next.set(
-        key,
-        routes.size === 1 && route ? { kind: 'resolved', route } : { kind: 'ambiguous' }
-      )
-    }
-    index = next
-    sshRepoRouteIndexes.set(repos, index)
+  const evidence = resolveIndexedSshRepositoryHost(repos, owner.repoId, owner.hostId)
+  if (evidence.kind !== 'resolved') {
+    return evidence
   }
-  return index.get(`${owner.repoId}\0${owner.hostId}`) ?? { kind: 'missing' }
+  const route = routeForOwner({ hostId: evidence.hostId })
+  return route ? { kind: 'resolved', route } : { kind: 'missing' }
 }
 
 export function resolveExactWorktreeRoute(

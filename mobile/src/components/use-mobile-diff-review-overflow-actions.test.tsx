@@ -7,12 +7,13 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import type { ActionSheetAction } from './ActionSheetModal'
 
 vi.mock('lucide-react-native', () => ({
-  Check: 'Icon',
   Copy: 'Icon',
   FileText: 'Icon',
+  ListChecks: 'Icon',
+  MessageSquarePlus: 'Icon',
   Send: 'Icon',
   Trash2: 'Icon',
-  X: 'Icon'
+  Undo2: 'Icon'
 }))
 
 import { useMobileDiffReviewOverflowActions } from './use-mobile-diff-review-overflow-actions'
@@ -22,14 +23,13 @@ type Controller = Parameters<typeof useMobileDiffReviewOverflowActions>[0]
 async function reviewActions(executionHost?: string): Promise<ActionSheetAction[]> {
   let actions: ActionSheetAction[] = []
   const controller = mountFixture<Controller>({
-    reviewedUnstagedCount: 0,
     screenState: { kind: 'loading' },
     currentItem: null,
     busyAction: null,
     unsentComments: []
   })
   function Probe() {
-    actions = useMobileDiffReviewOverflowActions(controller)
+    actions = useMobileDiffReviewOverflowActions(controller, { showPullRequest: false })
     return null
   }
   await act(async () => {

@@ -1,5 +1,5 @@
 import type { Tab } from '../../../shared/tab-types'
-import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
+import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 
 type DirectoryTab = {
   id: string

@@ -17,10 +17,10 @@ import {
 import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/structured-agent-session-client'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   dispatchStructuredPromptAttention,
   dispatchStructuredTurnCompletionAttention

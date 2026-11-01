@@ -1,23 +1,23 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
-import { sessionFor } from '../../claude/claude-structured-dispatch-test-support'
+import { sessionFor } from '../../claude/structured/claude-structured-dispatch-test-support'
 import type { ClaudeSession } from '../../claude/structured/claude-structured-session-state'
-import { dispatchClaudeMessage } from '../../claude/claude-structured-message-options'
+import { dispatchClaudeMessage } from '../../claude/structured/launch/claude-structured-message-options'
 import { createClaudeUserMessageQueue } from '../../claude/claude-agent-sdk-user-message-queue'
 import { ClaudeControlRequestError } from '../../claude/claude-stream-json-connection'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
+import { AgentJournalSubmissionSchema } from '../../../shared/agent-session/journal/agent-session-journal-submission-schema'
 import {
   structuredAgentSessionRecordedRejectionParts,
   structuredAgentSessionAttemptFailureParts
-} from '../../../shared/structured-agent-session-rejection-words'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
+} from '../../../shared/agent-session/failures/structured-agent-session-rejection-words'
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   providerDiagnostic,
   readWholeAgentSessionFailureFact,
   withProviderDiagnostic
-} from '../../../shared/agent-session-failure'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createQueuedMessageTestRig,
   eventually,

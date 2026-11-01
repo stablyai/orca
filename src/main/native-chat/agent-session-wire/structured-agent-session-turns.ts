@@ -2,19 +2,19 @@
 // Calling the adapter first could lose a turn it accepted.
 
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
-import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
+import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   refuse,
-  type AgentSessionRefusalReason,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+  type AgentSessionWireRefusal,
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'

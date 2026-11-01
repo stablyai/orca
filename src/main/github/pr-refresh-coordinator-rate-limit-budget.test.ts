@@ -200,7 +200,7 @@ describe('pr-refresh-coordinator', () => {
           : { blocked: false }
       )
 
-      const outcome = await refreshPRNow(candidate)
+      const outcome = await refreshPRNow(candidate, 'manual', { userRefresh: true })
 
       expect(outcome).toEqual({
         kind: 'upstream-error',
@@ -225,6 +225,7 @@ describe('pr-refresh-coordinator', () => {
       expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
       expect(getPRForBranchOutcomeMock).toHaveBeenCalledOnce()
+      expect(getPRForBranchOutcomeMock.mock.calls[0]?.[5]).not.toHaveProperty('userRefresh')
     }
   )
 })

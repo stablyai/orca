@@ -25,27 +25,13 @@ function item(filePath: string): MobileDiffReviewQueueItem {
 }
 
 describe('mobile diff review screen model', () => {
-  it('keeps the next unreviewed file selected after the current file leaves the filter', () => {
+  it('moves to the next unviewed file', () => {
     const queue = [item('a.ts'), item('b.ts'), item('c.ts')]
 
     expect(
       nextReviewIndexAfterMarkReviewed({
         currentIndex: 0,
         currentItemKey: queue[0].key,
-        filter: 'unreviewed',
-        filteredQueue: queue
-      })
-    ).toBe(0)
-  })
-
-  it('keeps direct next-file indexing for non-removing filters', () => {
-    const queue = [item('a.ts'), item('b.ts'), item('c.ts')]
-
-    expect(
-      nextReviewIndexAfterMarkReviewed({
-        currentIndex: 0,
-        currentItemKey: queue[0].key,
-        filter: 'all',
         filteredQueue: queue
       })
     ).toBe(1)

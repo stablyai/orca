@@ -8,7 +8,7 @@ import {
 import nacl from 'tweetnacl'
 import { expect, vi, type Mock, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
-import { RelayAssignmentStore } from '../assignment-store.js'
+import { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import { loadRelayConfig } from '../config.js'
 import { RelayCredentialStore } from '../credential-store.js'
 import type { RelayDatabase } from '../database.js'

@@ -7,30 +7,30 @@ import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-sessio
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor,
   type AgentJournalItemBody,
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
-} from '../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../src/shared/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   attachParams,
   NOW,

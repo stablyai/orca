@@ -1,3 +1,9 @@
+import type {
+  TerminalIdentityRawInputs,
+  TerminalIdentityReadContext
+} from '../query/terminal-identity-read-context'
+import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
+import { TerminalIdentitySource } from '../identity/terminal-identity-source'
 import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
@@ -6,7 +12,6 @@ import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
   RuntimePtyTitleTrackerEntry,
-  RuntimePtyWorktreeRecord,
   RuntimeVisibleTerminalState
 } from '../../runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -17,6 +22,55 @@ import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
 export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequestedPtyIds {
+  protected readonly terminalIdentity = new TerminalIdentitySource(this.crewChanges.notify)
+  protected readonly ptysById = this.terminalIdentity.ptys
+  readonly handles = this.terminalIdentity.handles
+  protected readonly handleByLeafKey = this.terminalIdentity.leafHandles
+  protected readonly handleByPtyId = this.terminalIdentity.reverse
+  protected readonly handleByPtyIncarnation = this.terminalIdentity.incarnations
+  protected readonly syntheticTerminalHandles = this.terminalIdentity.synthetic
+  protected get leaves() {
+    return this.terminalIdentity.leaves
+  }
+  protected get tabs() {
+    return this.terminalIdentity.tabs
+  }
+  protected get graphSequence() {
+    return this.terminalIdentity.graphSequence
+  }
+  protected get rendererGraphEpoch() {
+    return this.terminalIdentity.rendererGraphEpoch
+  }
+
+  abstract getLiveTerminalPaneKey(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null
+  abstract createTerminalIdentityRawInputs(): TerminalIdentityRawInputs
+  abstract createTerminalIdentityReadContext(
+    inputs?: TerminalIdentityRawInputs
+  ): TerminalIdentityReadContext
+
+  abstract getNestedWorkerMaxDepth(): number
+
+  protected crewRuntimeReaders(): CrewRuntimeReaders {
+    return {
+      getNestedWorkerMaxDepth: this.getNestedWorkerMaxDepth.bind(this),
+      getOrchestrationDispatchAuthority: this.getOrchestrationDispatchAuthority.bind(this),
+      getLiveTerminalPaneKey: this.getLiveTerminalPaneKey.bind(this),
+      getTerminalWorktreeIdForHandle: this.getTerminalWorktreeIdForHandle.bind(this),
+      getTerminalProcessIncarnation: this.getTerminalProcessIncarnation.bind(this),
+      getTerminalHandleForPaneKey: this.getTerminalHandleForPaneKey.bind(this),
+      getPaneKeyForTerminalHandle: this.getPaneKeyForTerminalHandle.bind(this),
+      getTerminalPaneKey: this.getTerminalPaneKey.bind(this),
+      getOrchestrationFleetAgentStatusSnapshot:
+        this.getOrchestrationFleetAgentStatusSnapshot.bind(this),
+      createTerminalIdentityRawInputs: this.createTerminalIdentityRawInputs.bind(this),
+      createTerminalIdentityReadContext: this.createTerminalIdentityReadContext.bind(this),
+      orchestrationSenderNames: this.orchestrationSenderNames
+    }
+  }
+
   protected abstract notifyRemoteTerminalViewPresenceChanged(ptyId: string): void
 
   // Notify mobile when desktop restores fit, including disconnect and exit paths.
@@ -34,8 +88,6 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 
   protected readonly mobileNotifications = new RuntimeMobileNotificationController()
-
-  protected ptysById = new Map<string, RuntimePtyWorktreeRecord>()
 
   protected readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
 

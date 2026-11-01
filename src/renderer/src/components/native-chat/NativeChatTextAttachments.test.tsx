@@ -12,7 +12,7 @@ import {
   NativeChatTextAttachmentOpener
 } from './NativeChatTextAttachments'
 import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
-import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 

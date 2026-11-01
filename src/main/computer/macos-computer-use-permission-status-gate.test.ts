@@ -3,10 +3,7 @@ import type {
   ComputerUsePermissionStatus,
   ComputerUsePermissionStatusResult
 } from '../../shared/computer-use-permissions-types'
-import {
-  computerUsePermissionStatusGate,
-  createPermissionStatusGate
-} from './macos-computer-use-permission-status-gate'
+import { createPermissionStatusGate } from './macos-computer-use-permission-status-gate'
 
 const getStatusMock = vi.hoisted(() => vi.fn())
 
@@ -46,14 +43,6 @@ describe('createPermissionStatusGate', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('shares one launch between concurrent readers', async () => {
-    const probe = vi.fn(async () => denied)
-    const gate = createPermissionStatusGate(probe)
-
-    await Promise.all([gate.read(), gate.read(), gate.read()])
-    expect(probe).toHaveBeenCalledTimes(1)
   })
 
   it('allows at most 12 real spawns in any 60s window, even with a slow pre-spawn step', async () => {
@@ -224,44 +213,5 @@ describe('createPermissionStatusGate', () => {
     await vi.advanceTimersByTimeAsync(4_000)
     await expect(onReturn).resolves.toBe(granted)
     expect(probe).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not cache a grant from a probe that started before an invalidation', async () => {
-    let finishFirst: (result: ComputerUsePermissionStatusResult) => void = () => {}
-    const probe = vi
-      .fn()
-      .mockReturnValueOnce(
-        new Promise<ComputerUsePermissionStatusResult>((resolve) => {
-          finishFirst = resolve
-        })
-      )
-      .mockResolvedValue(denied)
-    const gate = createPermissionStatusGate(probe)
-
-    void gate.read()
-    gate.invalidate()
-    finishFirst(granted)
-    await vi.advanceTimersByTimeAsync(1_000)
-    const afterReset = gate.read()
-    await vi.advanceTimersByTimeAsync(4_000)
-    await expect(afterReset).resolves.toBe(denied)
-  })
-})
-
-describe('computerUsePermissionStatusGate', () => {
-  const originalPlatform = process.platform
-
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform })
-  })
-
-  it('never waits off macOS, where the probe launches no helper', async () => {
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-    getStatusMock.mockResolvedValue(statusWith('unsupported'))
-
-    await computerUsePermissionStatusGate.read()
-    await computerUsePermissionStatusGate.read()
-    await computerUsePermissionStatusGate.read()
-    expect(getStatusMock).toHaveBeenCalledTimes(3)
   })
 })

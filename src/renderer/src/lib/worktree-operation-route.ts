@@ -12,6 +12,7 @@ import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees,
   findIndexedRepoOwnerForHost,
+  findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -222,7 +223,7 @@ export function getWorktreeOperationOwnerHostIds(
   worktreeId: string
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
-  for (const worktree of findIndexedWorktrees(state.worktreesByRepo, worktreeId)) {
+  for (const worktree of findIndexedWorktreeOwners(state.worktreesByRepo, worktreeId)) {
     const hostId = parseExecutionHostId(worktree.hostId)?.id
     if (hostId) {
       hostIds.add(hostId)

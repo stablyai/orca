@@ -9,8 +9,7 @@ vi.mock('node:child_process', () => ({
 const sdk: AndroidSdkPaths = {
   sdkRoot: 'sdk',
   adb: 'adb',
-  emulator: 'emulator',
-  avdmanager: 'avdmanager'
+  emulator: 'emulator'
 }
 type Device = { serial: string; name: string; booted: boolean }
 const other: Device = { serial: 'emulator-5556', name: 'Other', booted: true }

@@ -3,7 +3,7 @@ import { stat, realpath } from 'node:fs/promises'
 import { openAuthorizedDocPreviewTarget } from '../../../shared/doc-preview-file-access'
 import { validateFileRangeRequest } from '../../../shared/file-range-read'
 import { remoteRpcResultExceedsContentBudget } from '../../../shared/remote-rpc-content-budget'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session-attachments'
+import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import type {
   AttachmentTextChunk,
   AttachmentTextRequest

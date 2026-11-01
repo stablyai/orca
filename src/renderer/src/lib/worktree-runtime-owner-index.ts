@@ -273,3 +273,5 @@ function addMatchingWorktree(
     }
   }
 }
+
+export { findIndexedWorktrees as findIndexedWorktreeOwners }

@@ -49,6 +49,11 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
   return {
     enabled: booleanOr(candidate.enabled, defaults.enabled),
     agentTaskComplete: booleanOr(candidate.agentTaskComplete, defaults.agentTaskComplete),
+    // Upgrades inherit the old shared toggle so turning completions off never starts new alerts.
+    agentNeedsInput: booleanOr(
+      candidate.agentNeedsInput,
+      booleanOr(candidate.agentTaskComplete, defaults.agentNeedsInput)
+    ),
     terminalBell: booleanOr(candidate.terminalBell, defaults.terminalBell),
     suppressWhenFocused: booleanOr(candidate.suppressWhenFocused, defaults.suppressWhenFocused),
     customSoundId,

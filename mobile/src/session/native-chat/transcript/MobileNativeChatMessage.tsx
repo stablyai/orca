@@ -5,26 +5,18 @@ import {
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileNativeChatLongPressContent as Content } from '../../MobileNativeChatLongPressContent'
+import { MobileNativeChatLongPressContent as Content } from '../MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
-import {
-  isImageRefBlock,
-  isSubagentGroupBlock,
-  isTextBlock
-} from '../../../../../src/shared/native-chat-types'
+import * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat-message-copy-text'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
@@ -38,19 +30,19 @@ import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-ove
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
-import { MobileNativeChatResolutionReceipt } from '../../MobileNativeChatResolutionReceipt'
+import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
-import { agentMessageAttribution } from '../../mobile-agent-message-attribution'
+import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
-import { useMobileNativeChatFullMessage } from '../../MobileNativeChatFullContent'
+import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
@@ -88,15 +80,15 @@ function MobileNativeChatMessageImpl({
   userMessageOpen,
   onToggleUserMessage
 }: {
-  message: NativeChatMessage
+  message: Chat.NativeChatMessage
   // Stable placement key survives older messages joining a folded row.
   rowKey?: string
   runOwner?: string
   // Only the newest live assistant row can still grow.
   mayStillGrow?: boolean
   // Compare plan updates against the prior write, not an empty checklist.
-  previousTodoWrite?: NativeChatToolCallBlock
-  previousUpdatePlan?: NativeChatToolCallBlock
+  previousTodoWrite?: Chat.NativeChatToolCallBlock
+  previousUpdatePlan?: Chat.NativeChatToolCallBlock
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
   turnStatus?: NativeChatTurnStatus | null
@@ -107,7 +99,7 @@ function MobileNativeChatMessageImpl({
   activeTurnIsWorking?: boolean
   trailingRun?: boolean
   // The run’s first row draws all members; later members render no duplicate activity.
-  workRun?: readonly NativeChatMessage[]
+  workRun?: readonly Chat.NativeChatMessage[]
   joinsWorkRun?: boolean
   foldedAway?: boolean
   openReasoning?: ReadonlySet<string>
@@ -127,8 +119,8 @@ function MobileNativeChatMessageImpl({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { shown: message, showFull, recovery } = useMobileNativeChatFullMessage(rowMessage)
-  const attribution = agentMessageAttribution('Message from', message.from)
-  const isUser = message.role === 'user' && attribution === null
+  const agentFrom = message.role === 'user' || message.agentStart ? message.from : undefined
+  const isUser = message.role === 'user' && !agentFrom
   const isReasoning = message.role === 'reasoning'
   const { prose, tools: blocksOfTools } = splitNativeChatBlocks(message.blocks)
   const { asks, unansweredAsks, work: ownTools } = nativeChatAskRunBlocks(blocksOfTools)
@@ -139,7 +131,7 @@ function MobileNativeChatMessageImpl({
     if (!run) {
       return undefined
     }
-    const thought = (thoughtMessage: NativeChatMessage): React.JSX.Element => (
+    const thought = (thoughtMessage: Chat.NativeChatMessage): React.JSX.Element => (
       // Key by thought so later calls cannot remount it.
       <MobileNativeChatGroupedThought
         key={`thought:${thoughtMessage.id}`}
@@ -152,12 +144,17 @@ function MobileNativeChatMessageImpl({
         onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openSheet(thoughtMessage)}
       />
     )
-    const before = new Map<NativeChatBlock, React.JSX.Element[]>()
+    const before = new Map<Chat.NativeChatBlock, React.JSX.Element[]>()
     for (const [block, thoughts] of run.thoughtsBefore) {
       before.set(block, thoughts.map(thought))
     }
     return { before, after: run.thoughtsAfter.map(thought) }
   }, [run, fontScale, activeTurnIsWorking, openReasoning, onToggleReasoning, onOpenFile, openSheet])
+  // Asks and prose read no files, so the run's own blocks or this message's give the same images.
+  const viewedImages = useMemo(
+    () => nativeChatToolRunViewedImages(run?.blocks ?? message.blocks),
+    [run, message.blocks]
+  )
   const drawnProse = isReasoning ? [] : withoutSubagentGroupTwins(prose)
   const isSystem = message.role === 'system'
   const showToolRun = tools.length > 0
@@ -242,17 +239,17 @@ function MobileNativeChatMessageImpl({
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
   const copyText = isChatTurn ? nativeChatMessageCopyText(message) : ''
   let proseOffset = 0
-  const proseRow = (block: NativeChatBlock, index: number, text: string, revealing = false) => {
+  const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
     const textKey = `${message.id}:text:${proseOffset}`
     proseOffset += text.length + 1
-    return isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
+    return Chat.isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
         block={block}
         open={subagentGroupsOpen?.has(block.groupId) === true}
         onToggle={onToggleSubagentGroup}
       />
-    ) : isSystem ? null : isUser && structuredActivityUi && isTextBlock(block) ? (
+    ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
       <View key={textKey}>
         <Prose
           block={block}
@@ -270,7 +267,7 @@ function MobileNativeChatMessageImpl({
       </View>
     ) : (
       <Prose
-        key={index}
+        key={key}
         block={block}
         userMessage={isUser}
         fontScale={fontScale}
@@ -283,8 +280,8 @@ function MobileNativeChatMessageImpl({
       />
     )
   }
-  const proseRows = (blocks: NativeChatBlock[]) =>
-    blocks.map((block, index) => proseRow(block, index, isTextBlock(block) ? block.text : ''))
+  const proseRows = (blocks: Chat.NativeChatBlock[]) =>
+    blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
   return (
     <>
       {}
@@ -293,53 +290,55 @@ function MobileNativeChatMessageImpl({
         style={[styles.row, isUser && styles.rowUser]}
         testID={mobileNativeChatRowId(rowKey ?? message.id)}
       >
-        <Content
-          onLongPress={onLongPress}
-          style={[
-            styles.content,
-            isUser && styles.userBubble,
-            attribution !== null && styles.agentMessage
-          ]}
-        >
-          {attribution !== null ? (
-            <Text selectable={INLINE_TEXT_SELECTION} style={styles.agentAttribution}>
-              {attribution}
-            </Text>
-          ) : null}
-          {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-          {isSystem ? (
-            <MobileNativeChatNoticeRow
-              blocks={drawnProse}
+        <Content onLongPress={onLongPress} style={[styles.content, isUser && styles.userBubble]}>
+          {agentFrom ? (
+            <MobileNativeChatAgentMessageCard
+              message={message}
+              from={agentFrom}
               fontScale={fontScale}
+              attachments={proseRows(drawnProse.filter(Chat.isImageRefBlock))}
               onOpenFile={onOpenFile}
               onLongPress={onLongPress}
+              status={showFull}
             />
-          ) : null}
-          {isUser ? (
-            <>
-              {proseRows(drawnProse.filter(isImageRefBlock))}
-              <MobileNativeChatUserMessageFold
-                text={deriveNativeChatRowContent(message.blocks).markdown}
-                fontScale={fontScale}
-                open={userMessageOpen === true}
-                onToggle={() => onToggleUserMessage?.(message.id)}
-                recovery={recovery}
-                status={showFull}
-              >
-                {proseRows(drawnProse.filter((block) => !isImageRefBlock(block)))}
-              </MobileNativeChatUserMessageFold>
-            </>
           ) : (
-            <MobileNativeChatPacedProse
-              rowKey={message.id}
-              blocks={drawnProse}
-              growingBlock={growingBlock}
-              paced={message.role === 'assistant'}
-            >
-              {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
-            </MobileNativeChatPacedProse>
+            <>
+              {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
+              {isSystem ? (
+                <MobileNativeChatNoticeRow
+                  blocks={drawnProse}
+                  fontScale={fontScale}
+                  onOpenFile={onOpenFile}
+                  onLongPress={onLongPress}
+                />
+              ) : null}
+              {isUser ? (
+                <>
+                  {proseRows(drawnProse.filter(Chat.isImageRefBlock))}
+                  <MobileNativeChatUserMessageFold
+                    text={deriveNativeChatRowContent(message.blocks).markdown}
+                    fontScale={fontScale}
+                    open={userMessageOpen === true}
+                    onToggle={() => onToggleUserMessage?.(message.id)}
+                    recovery={recovery}
+                    status={showFull}
+                  >
+                    {proseRows(drawnProse.filter((block) => !Chat.isImageRefBlock(block)))}
+                  </MobileNativeChatUserMessageFold>
+                </>
+              ) : (
+                <MobileNativeChatPacedProse
+                  rowKey={message.id}
+                  blocks={drawnProse}
+                  growingBlock={growingBlock}
+                  paced={message.role === 'assistant'}
+                >
+                  {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
+                </MobileNativeChatPacedProse>
+              )}
+              {isUser ? null : showFull}
+            </>
           )}
-          {isUser ? null : showFull}
           {askRow}
           {showToolRun ? (
             <ToolRun
@@ -353,19 +352,35 @@ function MobileNativeChatMessageImpl({
               previousUpdatePlan={previousUpdatePlan}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
+              viewedImages={
+                viewedImages.length > 0
+                  ? // Keyed by path: a read finishing late inserts above images already loaded.
+                    viewedImages.map((image) => (
+                      <Prose
+                        key={image.path}
+                        block={image}
+                        text=""
+                        fontScale={fontScale}
+                        onLongPress={onLongPress}
+                      />
+                    ))
+                  : undefined
+              }
             />
           ) : null}
         </Content>
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
         {/* Always shown, so the row never shifts when copy appears. */}
-        {isChatTurn ? (
+        {isChatTurn && !agentFrom ? (
           <View style={styles.meta}>
             {copyText.length > 0 ? (
-              <MobileSourceCopyButton
-                key={message.id}
-                text={copyText}
-                accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-              />
+              <View style={styles.metaCopy}>
+                <MobileSourceCopyButton
+                  key={message.id}
+                  text={copyText}
+                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+                />
+              </View>
             ) : null}
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>
@@ -378,15 +393,12 @@ function MobileNativeChatMessageImpl({
 
 export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
 
-const TextAttachmentActions = memo(function TextAttachmentActions({
-  text,
-  pastedText,
-  onOpenFile
-}: {
+const TextAttachmentActions = memo(function TextAttachmentActions(props: {
   text: string
   pastedText: string
   onOpenFile?: (path: string) => void
 }) {
+  const { text, pastedText, onOpenFile } = props
   const paths = useMemo(() => nativeChatTextAttachmentPaths(text), [text])
   return paths.map((path) => (
     <Text
