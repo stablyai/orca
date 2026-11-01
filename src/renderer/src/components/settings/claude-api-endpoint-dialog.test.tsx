@@ -73,6 +73,14 @@ describe('Claude API endpoint dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
     expect(screen.queryByRole('button', { name: 'Sakana AI' })).toBeNull()
     expect(value('Token')).toBe('')
+    // A different host needs its own token.
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://elsewhere.example.test' }
+    })
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Base URL'), {
+      target: { value: 'https://api.sakana.ai/' }
+    })
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'fugu-ultra' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

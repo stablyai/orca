@@ -192,14 +192,26 @@ describe('Claude profile refresh from the default home', () => {
       })
     expect((await run()).surfaces['settings.json']).toBe('synced')
     const target = join(f.profileHome, 'settings.json')
-    expect(f.read(target)).toEqual({ model: 'a', env: { NORMAL: 'yes', ...endpointEnv } })
+    const env = f.read(target).env as Record<string, string>
+    expect(f.read(target).model).toBe('a')
+    expect(f.read(target).apiKeyHelper).toBeUndefined()
+    // Cleared, not omitted, so the same names exported by a shell cannot apply either.
+    expect(env).toMatchObject({
+      NORMAL: 'yes',
+      ...endpointEnv,
+      ANTHROPIC_API_KEY: '',
+      ANTHROPIC_CUSTOM_HEADERS: '',
+      CLAUDE_CODE_USE_BEDROCK: '0',
+      CLAUDE_CODE_USE_ANTHROPIC_AWS: '0'
+    })
     if (process.platform !== 'win32') {
       expect(fs.statSync(target).mode & 0o777).toBe(0o600)
     }
     expect((await run()).surfaces['settings.json']).toBe('unchanged')
     fs.rmSync(join(f.source, 'settings.json'))
     expect((await run()).surfaces['settings.json']).toBe('synced')
-    expect(f.read(target)).toEqual({ env: endpointEnv })
+    expect(Object.keys(f.read(target))).toEqual(['env'])
+    expect(f.read(target).env).toMatchObject(endpointEnv)
   })
   it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()

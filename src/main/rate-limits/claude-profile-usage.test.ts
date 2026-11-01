@@ -52,7 +52,10 @@ import {
   resolveClaudeOAuthCredentialReadOptions
 } from './claude-oauth-credentials'
 import { OAuthUsageError } from './claude-oauth-usage-error'
-import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../shared/claude-profile-routing'
+import {
+  CLAUDE_API_ENDPOINT_FILE,
+  CLAUDE_PROFILE_MISSING_MESSAGE
+} from '../../shared/claude-profile-routing'
 const roots: string[] = []
 afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
@@ -83,6 +86,16 @@ function systemDefault() {
     }
   }
 }
+it('reports an endpoint account as having no plan without reading a login', async () => {
+  const f = profile()
+  writeFileSync(join(f.home, CLAUDE_API_ENDPOINT_FILE), '{}')
+  expect(await fetchActiveClaudeRateLimits(f.options)).toMatchObject({
+    status: 'unavailable',
+    error: 'No subscription plan — API endpoint'
+  })
+  expect(calls.keychain).not.toHaveBeenCalled()
+  expect(calls.usage).not.toHaveBeenCalled()
+})
 it('lets the server decide a locally expired token and never refreshes it', async () => {
   const f = profile()
   const file = join(f.home, '.credentials.json')

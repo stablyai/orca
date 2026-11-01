@@ -11,7 +11,7 @@ import {
   CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE
 } from './claude-account-selection'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
-import { readClaudeApiEndpointToken } from './claude-api-endpoint'
+import { readClaudeApiEndpointEnv, readClaudeApiEndpointToken } from './claude-api-endpoint'
 import { describeClaudeProfile } from './claude-profile-paths'
 import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 import { ClaudeAccountService } from './service'
@@ -64,6 +64,11 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
     publishAll: vi.fn(async () => {}),
     prepareAccountFolder: vi.fn(async (id: string) => {
       mkdirSync(home(id), { recursive: true })
+      // Stand in for profile setup, which puts an endpoint into the folder's settings.
+      const env = readClaudeApiEndpointEnv(home(id))
+      if (env) {
+        writeFileSync(join(home(id), 'settings.json'), JSON.stringify({ env }))
+      }
       return { configDir: home(id), readPath: home(id) }
     }),
     removeAccountFolder: vi.fn(async (id: string) => rmSync(join(root, id), { recursive: true })),
@@ -137,6 +142,33 @@ describe('ClaudeAccountService', () => {
     expect(readClaudeApiEndpointToken(f.home(id))).toBe('test-token')
     await expect(f.service.selectAccount(id)).resolves.toMatchObject({ activeAccountId: id })
     await expect(f.service.saveApiEndpointAccount(endpoint, 'a')).rejects.toThrow('subscription')
+    // The saved token stays with its host, and a Claude login cannot take over the folder.
+    await expect(
+      f.service.saveApiEndpointAccount(
+        { ...endpoint, authToken: '', baseUrl: 'https://elsewhere.example.test' },
+        id
+      )
+    ).rejects.toThrow('token')
+    await expect(f.service.reauthenticateAccount(id)).rejects.toThrow('API endpoint token')
+    expect(f.runLogin).not.toHaveBeenCalled()
+  })
+
+  it('does not save an endpoint account whose settings did not take the endpoint', async () => {
+    const f = fixture([account('a')])
+    f.runtimeAuth.prepareAccountFolder.mockImplementation(async (id: string) => {
+      mkdirSync(f.home(id), { recursive: true })
+      return { configDir: f.home(id), readPath: f.home(id) }
+    })
+    await expect(
+      f.service.saveApiEndpointAccount({
+        label: 'Sakana AI',
+        baseUrl: 'https://api.sakana.ai',
+        authToken: 'test-token',
+        model: 'fugu',
+        smallFastModel: 'fugu'
+      })
+    ).rejects.toThrow('settings.json')
+    expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a'])
   })
 
   it("labels each row with its folder's login and asks a folder without one to sign in", () => {

@@ -19,6 +19,14 @@ import type {
   ClaudeRateLimitAccountsState
 } from '../../../../shared/managed-account-types'
 
+function sameOrigin(saved: string | undefined, next: string): boolean {
+  try {
+    return Boolean(saved) && new URL(saved!).origin === new URL(next.trim()).origin
+  } catch {
+    return false
+  }
+}
+
 type ClaudeApiEndpointDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -67,10 +75,12 @@ export function ClaudeApiEndpointDialog({
   }, [open])
 
   const preset = CLAUDE_API_ENDPOINT_PRESETS.find((entry) => entry.baseUrl === baseUrl.trim())
+  // Main keeps the saved token only for the same host, so a new host needs a new token.
+  const keepsToken = editing && sameOrigin(account?.apiEndpoint?.baseUrl, baseUrl)
   const canSave =
     !saving &&
     Boolean(label.trim() && baseUrl.trim() && model.trim()) &&
-    (editing || Boolean(authToken.trim()))
+    (keepsToken || Boolean(authToken.trim()))
 
   const save = async (): Promise<void> => {
     if (!canSave) {
@@ -194,7 +204,7 @@ export function ClaudeApiEndpointDialog({
             setAuthToken,
             {
               type: 'password',
-              placeholder: editing
+              placeholder: keepsToken
                 ? translate('accounts.claude.apiEndpoint.tokenKeep', 'Leave blank to keep it')
                 : undefined
             }

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { CLAUDE_API_ENDPOINT_FILE } from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type {
   ClaudeApiEndpointAccountRequest,
@@ -8,8 +9,7 @@ import type {
 } from '../../shared/managed-account-types'
 import { writeSecureFile } from '../../shared/secure-file'
 
-// Outside Claude's own file names, so profile setup neither shares nor replaces it.
-export const CLAUDE_API_ENDPOINT_FILE = 'orca-api-endpoint.json'
+export { CLAUDE_API_ENDPOINT_FILE }
 
 const endpointFile = z.object({
   baseUrl: z.string().min(1),

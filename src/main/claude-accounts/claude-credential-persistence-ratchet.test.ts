@@ -62,7 +62,7 @@ const fsAllowances: Record<string, readonly string[]> = {
     'writeFileSync'
   ],
   // An endpoint account's settings.json, which carries its token.
-  'claude-accounts/claude-profile-endpoint-settings.ts': ['writeFileAtomically'],
+  'claude-accounts/claude-profile-endpoint-settings.ts': ['writeSecureFile'],
   // An endpoint account's own token, never a Claude login.
   'claude-accounts/claude-api-endpoint.ts': ['writeSecureFile'],
   'claude-accounts/claude-profile-sharing.ts': [
