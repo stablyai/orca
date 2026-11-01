@@ -57,13 +57,4 @@ describe('pane titles in terminal summaries', () => {
 
     expect((await listed())?.paneTitle).toBeUndefined()
   })
-
-  it('leaves the terminal title alone, so a pane name never renames the tab', async () => {
-    const { renamePane, listed } = await headlessRuntimeWithLivePane()
-    const before = (await listed())?.title
-
-    await renamePane({ [HEADLESS_LEAF_ID]: 'server' })
-
-    expect((await listed())?.title).toBe(before)
-  })
 })

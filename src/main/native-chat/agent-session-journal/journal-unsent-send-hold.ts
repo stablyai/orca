@@ -5,12 +5,12 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionJournal } from './journal-store'
 import type { JournalQueueCardChange } from './journal-queue-events'
 import type { JournalQueuePlan } from './journal-queued-messages'

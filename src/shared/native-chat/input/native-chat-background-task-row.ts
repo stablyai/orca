@@ -1,6 +1,6 @@
 // Build durable task blocks and frozen plain-text twins together so clients without block support read the same report.
 
-import type { AgentJournalMessageItem } from '../../agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../agent-session/journal/agent-session-journal-types'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock,

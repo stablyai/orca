@@ -6,7 +6,7 @@ import { normalizeAgentStatusPayload } from '../../shared/agent-status-types'
 import { resolveWorktreeCatalogSnapshot } from './rpc/worktree-catalog-snapshot'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
 
@@ -90,13 +90,17 @@ describe('worktree ps reports structured sessions', () => {
       children: [child],
       subagentObservation: 'live'
     })
-    const initial = resolveWorktreeCatalogSnapshot(first, null)
-    expect(resolveWorktreeCatalogSnapshot(catalog([child]), initial.snapshotId)).toEqual({
+    const initial = resolveWorktreeCatalogSnapshot(first, { afterSnapshotId: null })
+    expect(
+      resolveWorktreeCatalogSnapshot(catalog([child]), { afterSnapshotId: initial.snapshotId })
+    ).toEqual({
       unchanged: true,
       snapshotId: initial.snapshotId
     })
     expect(
-      resolveWorktreeCatalogSnapshot(catalog([{ ...child, state: 'waiting' }]), initial.snapshotId)
+      resolveWorktreeCatalogSnapshot(catalog([{ ...child, state: 'waiting' }]), {
+        afterSnapshotId: initial.snapshotId
+      })
     ).not.toHaveProperty('unchanged')
     expect(catalog(undefined).worktrees[0]?.agents[0]?.children).toEqual([])
     // Old readers keep the parent fields; hook payloads cannot become a child producer.

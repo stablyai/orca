@@ -15,7 +15,7 @@ import {
 import type { LaunchAgentStartupPromptPlan } from '@/lib/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
+import type { AgentPromptDelivery } from '../../../shared/agent-session/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { AgentTerminalLaunchCompletion } from './structured-agent-session-launch-admission'

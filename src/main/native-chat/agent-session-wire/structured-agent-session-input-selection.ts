@@ -1,8 +1,8 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/agent-session-approval-subject'
 
 export type StructuredInputSelection =
   | { kind: 'card'; card: QueuedMessageRow }

@@ -1,7 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,

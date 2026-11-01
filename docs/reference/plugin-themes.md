@@ -2,7 +2,8 @@
 
 Plugins contribute three kinds of theme through `orca-plugin.json` `contributes`:
 `themes` (app colors), `terminalThemes` (an ANSI palette) and, separately, icon themes.
-Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 KiB.
+Each entry is `{ "id", "title", "path" }` (format 1 manifests used `label`) pointing at a JSON
+file of at most 16 KiB, or 64 KiB for an icon theme.
 
 ## App themes
 
@@ -50,8 +51,12 @@ Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 
 ### Code colors
 
 An app theme also colors the code editor: its background, text, line numbers, cursor and
-selection follow the theme's tokens. To color code itself, add `tokenColors` (Orca 1.4.245 and
-later) in the same shape as a VS Code theme's, so most VS Code theme lists paste in unchanged (`validate:plugin` flags entries without a `scope` and any setting other than these two):
+selection follow the theme's tokens. Users can also pick any app theme, of either base, as just
+their editor theme (Settings → Appearance → Light/Dark editor theme); the editor then takes its
+colors from `--editor-surface` (else `--background`), `--foreground`, `--muted-foreground`,
+`--accent`, `--ring`, `--popover`, `--border` and `tokenColors`, while the rest of Orca keeps the
+app theme. If those tokens can't make a legible editor, it uses Monaco's default colors. To
+color code itself, add `tokenColors` (Orca 1.4.245 and later) in the same shape as a VS Code theme's, so most VS Code theme lists paste in unchanged (`validate:plugin` flags entries without a `scope` and any setting other than these two):
 
 ```json
 {
@@ -106,7 +111,10 @@ An app theme may add one image painted behind the window's translucent surfaces:
   `--background`; `size` is `cover` (default), `contain` or `tile`; `position` is `center`
   (default), `top`, `bottom`, `left` or `right`.
 - The image is one static layer, never blurred. Sidebars, editors and pages stay opaque; it
-  shows through terminals when the user's terminal Background Opacity is below 1.
+  shows through terminals and agent chats when the user's terminal Background Opacity is below 1.
+  Chat text sits on the chat canvas at that opacity (at least 0.8); message bubbles, code blocks,
+  approval and question cards, the composer and menus stay opaque. A chat split beside terminals
+  in one tab stays opaque.
 - Orca releases without background images ignore the field (`validate:plugin` on them reports it).
 
 ## Terminal themes

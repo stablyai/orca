@@ -3,10 +3,10 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { MobileMarkdown } from '../../../components/MobileMarkdown'
 import {
   isImageRefBlock,
-  isTextBlock
+  isTextBlock,
+  type NativeChatBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatBlock } from '../../../../../src/shared/native-chat/native-chat-types'
-import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session-host-status-rows'
+import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
 import { MobileNativeChatImageAttachment } from '../visual/MobileNativeChatImageAttachment'
 import {

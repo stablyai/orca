@@ -4,11 +4,13 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-identity'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import Database from '../../sqlite/sync-database'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {

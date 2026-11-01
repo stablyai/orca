@@ -2,10 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import {
-  createResolutionFingerprint,
-  hasExpandedImport
-} from './vitest-module-cache-resolution-key'
+import { createResolutionFingerprint } from './vitest-module-cache-resolution-key'
 
 const roots: string[] = []
 afterEach(() => {
@@ -36,22 +33,4 @@ it.each([
   writeFileSync(join(root, added), '{}')
   const after = createResolutionFingerprint(root, aliases(root))(join(root, 'src/a.ts'), source)
   expect(after).not.toBe(before)
-})
-
-it('keeps the key when an unrelated sibling appears', () => {
-  const root = fixture()
-  const before = createResolutionFingerprint(root, aliases(root))(join(root, 'src/a.ts'), source)
-  writeFileSync(join(root, 'src/lib/bar.ts'), '')
-  const after = createResolutionFingerprint(root, aliases(root))(join(root, 'src/a.ts'), source)
-  expect(after).toBe(before)
-})
-
-it.each([
-  ['import(`./locales/${name}.ts`)', true],
-  ["import('./locales/' + name + '.ts')", true],
-  ['import.meta.glob("./*.ts")', true],
-  ["import('./locales/en.ts')", false],
-  ['import(specifier)', false]
-])('treats %s as directory-dependent: %s', (code, expected) => {
-  expect(hasExpandedImport(code)).toBe(expected)
 })

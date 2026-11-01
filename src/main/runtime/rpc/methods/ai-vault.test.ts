@@ -30,7 +30,7 @@ import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams
 } from './ai-vault'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../structured-agent-session-host-refusal'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { installCopyingChat } from '../../../ai-vault/structured-session-ownership.test-support'

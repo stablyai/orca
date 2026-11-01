@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'

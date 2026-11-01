@@ -19,7 +19,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
 } from './structured-agent-session-host-test-data'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { adoptedDirectoryProbes } from '../agent-session-journal/adopted-directory-probe'
 import { writeOpenCodeSqliteDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-fixture'
 import { structuredAgentRuntimeRegistration } from '../../runtime/structured-agent-runtime-registrations'

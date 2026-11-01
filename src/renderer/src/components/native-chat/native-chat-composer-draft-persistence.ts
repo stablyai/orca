@@ -3,7 +3,7 @@
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath } from './native-chat-image-paste'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
-import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session-attachments'
+import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import {
   dirtyScopes,
   hasLocalChange,

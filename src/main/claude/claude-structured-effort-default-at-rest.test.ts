@@ -1,8 +1,8 @@
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { getAgentSessionOptionCatalog } from '../../shared/agent-session/options/agent-session-option-catalog'
 import {
   applyStructuredAgentSessionOptions,

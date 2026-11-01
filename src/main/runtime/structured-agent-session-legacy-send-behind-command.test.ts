@@ -1,7 +1,7 @@
 // Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import {
   openStructuredCodexRpcHarness,

@@ -1,4 +1,4 @@
-import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
+import type { AgentSessionFastModeState } from '../../shared/agent-session/agent-session-wire'
 import {
   currentModelIsDefaulted,
   listedModels,

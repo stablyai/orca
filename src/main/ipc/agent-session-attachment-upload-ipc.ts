@@ -2,7 +2,7 @@ import { app, ipcMain } from 'electron'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-attachment-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
-} from '../../../../shared/agent-session-availability'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import {
