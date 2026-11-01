@@ -69,6 +69,33 @@ describe('shouldSuppressForegroundPush', () => {
       notificationEpoch: 'epoch-1'
     })
 
+  it('drops an older host’s finished-agent push but keeps questions, bells and the push test', async () => {
+    storage.set(
+      'orca:notificationDeliveryPreferences',
+      JSON.stringify({ onlyWhenAgentNeedsInput: true })
+    )
+    const alert = (seq: number, agentState: string) =>
+      apnsData({
+        hostFingerprint,
+        notificationSeq: seq,
+        notificationEpoch: 'epoch-1',
+        source: 'agent-task-complete',
+        agentState
+      })
+    await expect(shouldSuppressForegroundPush(alert(1, 'finished'))).resolves.toBe(true)
+    await expect(shouldSuppressForegroundPush(alert(2, 'needs-input'))).resolves.toBe(false)
+    await expect(
+      shouldSuppressForegroundPush(
+        fcmData({
+          hostFingerprint,
+          notificationSeq: 3,
+          notificationEpoch: 'epoch-1',
+          source: 'terminal-bell'
+        })
+      )
+    ).resolves.toBe(false)
+  })
+
   it('allows one eligible native push and suppresses an in-process duplicate', async () => {
     await expect(shouldSuppressForegroundPush(push())).resolves.toBe(false)
     await expect(shouldSuppressForegroundPush(push())).resolves.toBe(true)

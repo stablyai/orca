@@ -85,6 +85,7 @@ function attentionPath(directory: string) {
     readNotificationSettings: () => ({
       enabled: true,
       agentTaskComplete: true,
+      agentNeedsInput: true,
       terminalBell: true,
       suppressWhenFocused: false,
       customSoundId: 'system',
