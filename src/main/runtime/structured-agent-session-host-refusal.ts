@@ -1,7 +1,7 @@
 import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
-} from '../../shared/agent-session-wire-refusals'
+} from '../../shared/agent-session/failures/agent-session-wire-refusals'
 
 let installRefusal: AgentSessionRefusalError | null = null
 

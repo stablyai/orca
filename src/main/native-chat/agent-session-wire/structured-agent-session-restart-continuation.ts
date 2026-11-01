@@ -6,8 +6,9 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionRefusalReference,
-  type AgentSessionRefusalReference
-} from '../../../shared/agent-session-wire-refusals'
+  type AgentSessionRefusalReference,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   refusedBy,
   verdictOf,
@@ -17,8 +18,7 @@ import {
   agentSessionSendSubmission,
   type AgentSessionMutationEnvelope,
   type AgentSessionMutationResult,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
+  type AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'

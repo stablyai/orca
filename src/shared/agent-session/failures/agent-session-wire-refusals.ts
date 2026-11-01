@@ -11,15 +11,6 @@ import {
   type AgentSessionRefusalFacts
 } from './agent-session-refusal-details'
 
-export type {
-  AgentSessionAnyRefusalDetails,
-  AgentSessionAnyRefusalReason,
-  AgentSessionLegacyRefusalFields,
-  AgentSessionRefusalDetails,
-  AgentSessionRefusalDetailsByCode,
-  AgentSessionRefusalReason
-} from './agent-session-refusal-details'
-
 export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
   'structured_agent_session_unsupported',
   'agent_session_checkpoint_stale',

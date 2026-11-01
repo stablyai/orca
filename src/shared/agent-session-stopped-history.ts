@@ -1,6 +1,9 @@
 // Replay proven-unreceived ordinary message text (never images) at the next human turn, at most once. A carrier's carries covers it unless refused before provider delivery; derive from the host journal each handover.
 
-import { readAgentSessionFailureFact, type SubmissionRejectionKind } from './agent-session-failure'
+import {
+  readAgentSessionFailureFact,
+  type SubmissionRejectionKind
+} from './agent-session/failures/agent-session-failure'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,

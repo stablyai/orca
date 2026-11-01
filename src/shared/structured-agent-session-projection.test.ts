@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
-import { agentSessionFailureWords } from './agent-session-failure-words'
+import { agentSessionFailureWords } from './agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission

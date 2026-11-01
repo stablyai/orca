@@ -444,7 +444,7 @@ vi.mock('../native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/structured-agent-session-host-refusal'
 import { registerCoreHandlers } from './register-core-handlers'
 

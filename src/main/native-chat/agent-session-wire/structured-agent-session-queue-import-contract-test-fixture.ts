@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalAnsweredTurnIdentity,

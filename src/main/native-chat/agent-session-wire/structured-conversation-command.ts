@@ -17,11 +17,11 @@ import {
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear

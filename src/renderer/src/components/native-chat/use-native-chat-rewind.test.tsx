@@ -20,7 +20,7 @@ import {
 import {
   parseAgentSessionWriteFailure,
   type AgentSessionWriteFailure
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
 
 type Input = Parameters<typeof useNativeChatRewind>[0]

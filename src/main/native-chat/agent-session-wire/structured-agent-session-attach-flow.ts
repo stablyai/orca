@@ -1,5 +1,5 @@
 import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
-import { refuse } from '../../../shared/agent-session-wire-refusals'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,
   settleUnsupportedReservation

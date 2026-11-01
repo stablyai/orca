@@ -4,8 +4,8 @@ import {
   agentSessionFailureFact,
   providerDiagnostic,
   readProviderRetry
-} from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import {

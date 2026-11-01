@@ -1,6 +1,6 @@
 // Unreadable legacy cards remain on disk and must never appear as empty messages.
 
-import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalMessageBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { readStoredRejectionFact } from './journal-dispatch-reducer'

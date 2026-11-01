@@ -3,7 +3,7 @@ import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -25,7 +25,7 @@ import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subage
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
-} from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import {
   hasStructuredAgentSessionStartFailureRow,

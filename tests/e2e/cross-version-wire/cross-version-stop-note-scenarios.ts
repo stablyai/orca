@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody

@@ -34,7 +34,7 @@ import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
-} from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 

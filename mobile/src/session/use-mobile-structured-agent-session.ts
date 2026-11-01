@@ -8,7 +8,7 @@ import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/tr
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext

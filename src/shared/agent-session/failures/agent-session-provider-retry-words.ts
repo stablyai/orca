@@ -5,7 +5,7 @@ import type {
   AgentSessionFailureCopyValues,
   AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import { joinSentences } from './sentence-joining'
+import { joinSentences } from '../../sentence-joining'
 
 /** The provider's account of what failed goes on the line under the sentence, as it wrote it. */
 export function withRetryCause(sentence: string, cause: string | undefined): string {
