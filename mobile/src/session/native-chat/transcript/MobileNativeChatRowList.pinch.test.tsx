@@ -20,7 +20,7 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-gesture-handler', () => ({
   GestureDetector: 'GestureDetector'
 }))
-vi.mock('../../MobileNativeChatPageList', () => ({
+vi.mock('./MobileNativeChatPageList', () => ({
   MobileNativeChatPageList: 'PageList'
 }))
 
