@@ -170,6 +170,14 @@ function claudeReplayIsFoldReceipt(
   return replayUuid === waiter.sentUuid && session.translator?.openTurnInLiveProviderCycle === true
 }
 
+/** A result naming a user message answered accepted input, even after its waiter was retired. */
+export function claudeResultNamesUserMessage(message: Record<string, unknown>): boolean {
+  return (
+    readClaudeFrameString(message, 'user_message_uuid') !== null ||
+    claudeResultUserMessageUuids(message).length > 0
+  )
+}
+
 function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {
   const uuids = message.user_message_uuids
   return Array.isArray(uuids)

@@ -72,7 +72,12 @@ describe('Claude host-awaited open', () => {
     expect(appendItem.mock.calls.filter(([, body]) => body.kind === 'status')).toHaveLength(0)
   })
 
-  it('keeps the failure row of a result that answers a send before its echo', async () => {
+  // Recorded failure result; the in-doubt and ambiguous-write orderings are constructed.
+  it.each([
+    ['before its echo', 'admitted'],
+    ['after idle left it in doubt', 'admitted'],
+    ['after an ambiguous write', 'unknown']
+  ])('keeps the failure row of a result that answers a send %s', async (path, state) => {
     const result = readFileSync(
       new URL('../__fixtures__/claude-lifecycle-capture-auth-failed.jsonl', import.meta.url),
       'utf8'
@@ -86,6 +91,14 @@ describe('Claude host-awaited open', () => {
     const appendItem = vi.fn()
     await adapter.acquire({ ...ACQUIRE, events: { ...recordingJournalSink(), appendItem } })
     await claudeOpened(adapter, 'session-1')
+    const connection = claude.connections[0]!
+    if (path === 'after an ambiguous write') {
+      const send = connection.send
+      connection.send = async (...args) => {
+        await send(...args)
+        throw new Error('input pump stopped')
+      }
+    }
     await expect(
       adapter.dispatch({
         sessionId: 'session-1',
@@ -93,10 +106,23 @@ describe('Claude host-awaited open', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toMatchObject({ state: 'admitted' })
-    const sentUuid = claude.connections[0]!.sent[0]!.uuid
-    // The recorded failure, correlated to this dispatch with no user or assistant echo first.
-    claudeFrame(claude.connections[0], {
+    ).resolves.toMatchObject({ state })
+    const sentUuid = connection.sent[0]!.uuid
+    if (path === 'after idle left it in doubt') {
+      claudeFrame(connection, {
+        type: 'command_lifecycle',
+        command_uuid: sentUuid,
+        state: 'started'
+      })
+      claudeFrame(connection, {
+        type: 'system',
+        subtype: 'session_state_changed',
+        state: 'idle',
+        uuid: 'idle-1'
+      })
+    }
+    // Correlated to this dispatch with no user or assistant echo first; its waiter may be retired.
+    claudeFrame(connection, {
       ...result,
       session_id: PROVIDER_SESSION_ID,
       user_message_uuid: sentUuid,

@@ -10,6 +10,7 @@ import {
 } from './structured/launch/claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
+import { claudeResultNamesUserMessage } from './claude-replay-turn-resolution'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
 
 export type ClaudeResultJournalContext = Pick<
@@ -96,8 +97,14 @@ export function journalClaudeResult(
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
-  // Without a turn or a started send, the host owns the startup failure.
-  if (failure && settlesTurn && endedTurnIdentity === null && !turn.hasStartedSend) {
+  // Without a turn, a started send or an answered user message, the host owns the startup failure.
+  if (
+    failure &&
+    settlesTurn &&
+    endedTurnIdentity === null &&
+    !turn.hasStartedSend &&
+    !claudeResultNamesUserMessage(message)
+  ) {
     return
   }
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {

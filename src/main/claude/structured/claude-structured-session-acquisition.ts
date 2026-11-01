@@ -118,13 +118,7 @@ export async function acquireClaudeSession({
     const observedAt =
       startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     const requestedAt = turnOrigin?.requestedAt
-    // A result settles its own send before the journal sees it; that send still owns the result.
-    const answered = message.type === 'result' ? settlements[0] : undefined
-    const startedSend = answered
-      ? { clientMessageId: answered.clientMessageId }
-      : !startsTurn && liveSession
-        ? claudeStartedUnechoedSend(liveSession)
-        : null
+    const startedSend = !startsTurn && liveSession ? claudeStartedUnechoedSend(liveSession) : null
     // Retain send ownership during publication until the host receives its settlement.
     const session = liveSession
     const reported = session?.unreportedSettlements
