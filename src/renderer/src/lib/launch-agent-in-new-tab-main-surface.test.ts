@@ -59,6 +59,9 @@ describe('launchAgentInNewTab main-window surface', () => {
       agent: 'opencode',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
@@ -82,6 +85,9 @@ describe('launchAgentInNewTab main-window surface', () => {
       agent: 'opencode',
       worktreeId: MAIN_WORKTREE_ID
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null
     expect(tabId).not.toBeNull()

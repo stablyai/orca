@@ -45,7 +45,7 @@ export type NewTabAgentMenuRow = (
   | { kind: 'chat-unavailable'; agent: TuiAgent; reason: ChatUnavailableReason }
   | { kind: 'cli'; agent: TuiAgent; chat?: true }
   | { kind: 'terminal'; agent: TuiAgent }
-) & { executionHostId?: ExecutionHostId }
+) & { executionHostId?: ExecutionHostId; terminalUnavailable?: string }
 
 export type NewTabAgentMenuSettings = NativeChatDefaultSettings &
   Partial<Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>>
@@ -125,4 +125,9 @@ export function buildNewTabAgentMenuRows(args: {
       ...(chatToo.has(agent) ? { chat: true as const } : {})
     }))
   ]
+}
+
+/** A chat uses host admission; only terminal choices need shell preparation. */
+export function agentMenuRowUnavailable(row: NewTabAgentMenuRow): string | undefined {
+  return row.kind === 'cli' || row.kind === 'terminal' ? row.terminalUnavailable : undefined
 }

@@ -196,8 +196,7 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
   })
-  if (!result) {
-    toast.error(copy.launchCommandUnavailable)
+  if (!result || 'refused' in result) {
     return false
   }
 

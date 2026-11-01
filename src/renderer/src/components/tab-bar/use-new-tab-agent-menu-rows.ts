@@ -1,3 +1,5 @@
+import { readAgentMenuLaunchFacts } from './agent-menu-launch-facts'
+import { translate } from '@/i18n/i18n'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
@@ -5,11 +7,6 @@ import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import {
-  isRuntimeHostContactRevokedVerdict,
-  runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
@@ -23,7 +20,6 @@ import {
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
 } from '@/runtime/host-structured-agents'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -95,26 +91,7 @@ export function useAgentMenuObservation(
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
   const facts = useAppStore(
-    useShallow((state) => {
-      const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-      const host = parseExecutionHostId(input.executionHostId)
-      const status =
-        host?.kind === 'runtime'
-          ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          : undefined
-      const contact = runtimeHostContactForEntry(status)
-      return {
-        executionHostId: input.executionHostId,
-        runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
-        pairingRevision:
-          host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
-        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,
-        checking:
-          contact.verdict === 'unverifiable' &&
-          ['checking', 'transport-connecting'].includes(contact.reason),
-        capabilities: input.hostCapabilities?.join(',')
-      }
-    })
+    useShallow((state) => readAgentMenuLaunchFacts(state, workspace, worktreeId))
   )
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
@@ -234,6 +211,9 @@ export function useAgentMenuObservation(
   const executionHostId = unresolvedTarget
     ? undefined
     : parseExecutionHostId(facts.executionHostId)?.id
+  const terminalUnavailable = facts.terminalPending
+    ? translate('auto.components.tab.bar.QuickLaunchButton.agentsLoading', 'Loading agents')
+    : undefined
   const rows = buildNewTabAgentMenuRows({
     settings,
     detectedOnHost: detection.detectedIds,
@@ -241,26 +221,33 @@ export function useAgentMenuObservation(
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
     hostChatAnswer: answerFor
-  }).map((row) => ({ ...row, executionHostId }))
-  const model: NewTabAgentMenuModel = loading
-    ? {
-        state: 'loading',
-        placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
-      }
-    : {
-        state: 'settled',
-        rows,
-        detection,
-        defaultTuiAgent: settings?.defaultTuiAgent,
-        pickerContext: {
-          workspace,
-          executionHostId: facts.executionHostId,
-          pairingRevision: facts.pairingRevision,
-          runtimeId: facts.runtimeId,
-          settings,
-          key: JSON.stringify([workspace, launchCwd, facts])
+  }).map((row) => ({
+    ...row,
+    executionHostId,
+    ...(terminalUnavailable ? { terminalUnavailable } : {})
+  }))
+  const model: NewTabAgentMenuModel =
+    loading ||
+    (facts.terminalPending &&
+      !rows.some((row) => row.kind === 'chat' || (row.kind === 'cli' && row.chat)))
+      ? {
+          state: 'loading',
+          placeholderCount: Math.max(chatAgents.length, detection.detectedIds?.length ?? 0, 2)
         }
-      }
+      : {
+          state: 'settled',
+          rows,
+          detection,
+          defaultTuiAgent: settings?.defaultTuiAgent,
+          pickerContext: {
+            workspace,
+            executionHostId: facts.executionHostId,
+            pairingRevision: facts.pairingRevision,
+            runtimeId: facts.runtimeId,
+            settings,
+            key: JSON.stringify([workspace, launchCwd, facts])
+          }
+        }
   const { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices } = settings ?? {}
   return {
     model,
@@ -273,7 +260,7 @@ export function useAgentMenuObservation(
       const chatRow = rows.some((row) => row.kind === 'chat' && row.agent === agent)
       const cliMissing =
         target !== null && !inventoryFailed && !!agent && !detection.detectedIds?.includes(agent)
-      return resolveAgentMenuSelection({
+      const selection = resolveAgentMenuSelection({
         agent,
         surface,
         settings,
@@ -298,6 +285,11 @@ export function useAgentMenuObservation(
           (capabilityPending || availability?.state === 'pending' || hostCatalogPending),
         plain
       })
+      return {
+        ...selection,
+        ready:
+          selection.ready && !(terminalUnavailable && selection.choice?.route === 'terminal-tui')
+      }
     }
   }
 }

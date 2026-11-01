@@ -200,6 +200,9 @@ describe('agent launch caller routing', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface.kind).toBe('host-published')
     expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
@@ -229,6 +232,9 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
@@ -265,6 +271,9 @@ describe('agent launch caller routing', () => {
       promptDelivery: 'submit-after-ready',
       agentArgs: '--model sonnet'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(store.createTab).not.toHaveBeenCalled()
@@ -315,6 +324,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       onStructuredHostDeclined
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(onStructuredHostDeclined).toHaveBeenCalledOnce()
@@ -333,6 +345,9 @@ describe('agent launch caller routing', () => {
       agent: 'claude',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(mockBeginHostAdmittedStructuredLaunch).not.toHaveBeenCalled()
@@ -348,6 +363,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'local-terminal' })
@@ -365,6 +383,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -382,6 +403,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).toBeNull()
     expect(beforeSurfaceOpen).toHaveBeenCalledExactlyOnceWith({ kind: 'host-published' })
@@ -399,6 +423,9 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1',
       beforeSurfaceOpen
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface.kind).toBe('local-terminal')
     expect(store.createTab).toHaveBeenCalledTimes(1)

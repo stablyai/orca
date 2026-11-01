@@ -1,3 +1,4 @@
+import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
 import {
   searchAgentPickerSetups,
   type AgentPickerDraft,
@@ -83,8 +84,11 @@ export function buildTabAgentLaunchOptionsFromRows(
       agent: row.agent,
       aliases: base?.aliases ?? [],
       label: rowLabel(row),
-      disabled: row.kind === 'chat-unavailable',
-      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : undefined,
+      disabled: row.kind === 'chat-unavailable' || !!agentMenuRowUnavailable(row),
+      reason:
+        row.kind === 'chat-unavailable'
+          ? chatUnavailableLabel(row.reason)
+          : agentMenuRowUnavailable(row),
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -186,8 +190,11 @@ export function matchingAgentPickerLaunchOptions(
       row: {
         agent: setup.entry.agent,
         kind: surface === 'chat' ? 'chat' : 'cli',
-        executionHostId: setup.entry.rows[0]?.executionHostId
+        executionHostId: setup.entry.rows[0]?.executionHostId,
+        terminalUnavailable: setup.entry.rows[0]?.terminalUnavailable
       },
+      disabled: surface === 'terminal' && !setup.entry.surfaces.includes('terminal'),
+      reason: surface === 'terminal' ? setup.entry.rows[0]?.terminalUnavailable : undefined,
       setup: { agent: setup.entry.agent, surface, choices: setup.choices },
       pickerEntry: setup.entry
     }
@@ -203,8 +210,11 @@ export function configuredAgentPickerLaunchOption(
     row: {
       agent: draft.agent,
       kind: draft.surface === 'chat' ? 'chat' : 'cli',
-      executionHostId: option.row?.executionHostId
+      executionHostId: option.row?.executionHostId,
+      terminalUnavailable: option.row?.terminalUnavailable
     },
+    disabled: draft.surface === 'terminal' && !!option.row?.terminalUnavailable,
+    reason: draft.surface === 'terminal' ? option.row?.terminalUnavailable : undefined,
     setup: draft
   }
 }

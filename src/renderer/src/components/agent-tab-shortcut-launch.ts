@@ -1,7 +1,5 @@
-import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { translate } from '@/i18n/i18n'
 import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -17,7 +15,7 @@ function launchAgentTab(
   agent: TuiAgent,
   { groupId, focusIntent }: AgentTabLaunchContext
 ): void {
-  const result = launchAgentInNewTab({
+  launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
     focusIntent,
     agent,
@@ -25,15 +23,6 @@ function launchAgentTab(
     groupId,
     launchSource: 'shortcut'
   })
-  if (!result) {
-    toast.error(
-      translate(
-        'auto.components.Terminal.e57db40c11',
-        'Could not build launch command for {{value0}}.',
-        { value0: agent }
-      )
-    )
-  }
 }
 
 /** Launch a resolved new-agent-tab shortcut in the pane it was pressed in, waiting on detection if needed. */

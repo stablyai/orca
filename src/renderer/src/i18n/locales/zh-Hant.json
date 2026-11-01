@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "連線至此工作區的 SSH 主機，然後再試一次。",
+    "sshUnavailable": "此 SSH 主機無法啟動終端工作階段。請在工作區中開啟終端，並在該處啟動代理程式。",
+    "reconnectServer": "重新連線至此工作區的 Orca 伺服器，然後再試一次。",
+    "updateServer": "更新此工作區伺服器上的 Orca，然後再試一次。",
+    "checkSettings": "檢查代理程式的啟動設定，然後再試一次。",
     "opencode": {
       "updateRequired": "此版本的 OpenCode 無法使用所選模型安全啟動。請將 OpenCode 更新至受支援的版本，或不要指定模型。",
       "invalidConfig": "OpenCode 無法將所選模型套用至啟動設定。請檢查 OpenCode 的啟動設定後重試，或不要指定模型。",

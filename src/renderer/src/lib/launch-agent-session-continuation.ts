@@ -160,8 +160,7 @@ export async function launchAgentSessionContinuation({
   const workspaceName =
     (workspace && resolveWorktreeDisplayName(workspace)) || initialCwd || worktreeId
   const result = launchAgentInNewTab({ ...delivery, agentSessionLaunchPlan: plan })
-  if (!result) {
-    notifyLaunchFailed(label)
+  if (!result || 'refused' in result) {
     return false
   }
 
@@ -178,16 +177,6 @@ export async function launchAgentSessionContinuation({
       })
   }
   return true
-}
-
-function notifyLaunchFailed(agentLabel: string): void {
-  toast.error(
-    translate(
-      'components.agentSessionContinuation.launchFailed',
-      'Could not start a new {{agent}} session.',
-      { agent: agentLabel }
-    )
-  )
 }
 
 function notifyDeliveryFailed(agentLabel: string, prompt: string): void {

@@ -1,3 +1,4 @@
+import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
 import React, { useState } from 'react'
 import { CommandItem, CommandSeparator } from '@/components/ui/command'
 import { AgentIcon, getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
@@ -65,7 +66,7 @@ export function surfaceCommandValues(
   const rows = visibleSurfaceRows(model, getAgentCatalog(), picker.query)
   const selected =
     surfaceRowValue(visibleSurfaceRows(model, getAgentCatalog(), ''), picker.value) ?? null
-  const first = rows.find((row) => row.kind !== 'chat-unavailable')
+  const first = rows.find((row) => row.kind !== 'chat-unavailable' && !agentMenuRowUnavailable(row))
   const highlighted = !picker.query.trim()
     ? (selected ?? picker.blankValue)
     : picker.blankMatchesQuery
@@ -89,6 +90,7 @@ export function surfaceRowValue(
 /** A chat row's terminal button runs the agent's CLI, so only a detected CLI gets one. */
 const rowOffersTerminal = (model?: NewTabAgentMenuModel, row?: NewTabAgentMenuRow): boolean =>
   row?.kind === 'chat' &&
+  !row.terminalUnavailable &&
   model?.state === 'settled' &&
   model.detection.detectedIds?.includes(row.agent) === true
 
@@ -168,7 +170,7 @@ export function SurfaceAgentItems({
     const id = rowId(row)
     const label = rowLabel(row)
     const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
-    const unavailable = row.kind === 'chat-unavailable'
+    const unavailable = row.kind === 'chat-unavailable' || !!agentMenuRowUnavailable(row)
     const pressed = row.kind === 'chat' && id === pickedValue && terminalPicked
     const agentLabel = rowLabel({ ...row, kind: 'chat' })
     return (
@@ -191,7 +193,9 @@ export function SurfaceAgentItems({
               : terminalPickTitle(agentLabel),
           trailing: unavailable ? (
             <span className="shrink-0 text-muted-foreground">
-              {chatUnavailableLabel(row.reason)}
+              {row.kind === 'chat-unavailable'
+                ? chatUnavailableLabel(row.reason)
+                : agentMenuRowUnavailable(row)}
             </span>
           ) : rowOffersTerminal(model, row) ? (
             <AgentSurfaceLaunchButton

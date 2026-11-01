@@ -55,6 +55,9 @@ describe('launchAgentInNewTab', () => {
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchPlatform: 'win32'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result).not.toBeNull()
     expect(mockIsWebRuntimeSessionActive).toHaveBeenLastCalledWith(null)
@@ -182,6 +185,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'https://github.com/o/r/issues/12',
       promptDelivery: 'draft'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.pasteDraftAfterLaunch).toBe(false)
     expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
@@ -332,6 +338,9 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'draft',
       agentArgs: '--permission-mode plan'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(result?.pasteDraftAfterLaunch).toBe(false)
@@ -371,6 +380,9 @@ describe('launchAgentInNewTab', () => {
       agent: 'codex',
       worktreeId: 'wt-1'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await result?.terminalCompletion
     expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
@@ -447,6 +459,9 @@ describe('launchAgentInNewTab', () => {
       promptDelivery: 'draft',
       launchPlatform: 'win32'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     expect(result?.promptDeliveryResult).toBeDefined()
     expect(queuedStartups()).toContainEqual(
@@ -483,6 +498,9 @@ describe('launchAgentInNewTab', () => {
         promptDelivery: 'draft',
         launchPlatform: 'win32'
       })
+      if (result && 'refused' in result) {
+        throw new Error('Expected an opened launch')
+      }
 
       await expect(result?.promptDeliveryResult).rejects.toBe(error)
       expect(consoleError).toHaveBeenCalledWith('Prompt delivery failed after launch', error)
@@ -500,6 +518,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
     store.terminalLayoutsByTabId = {
       'tab-1': {
         activeLeafId: LEAF_ID,
@@ -560,6 +581,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'pending prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
     store.terminalLayoutsByTabId = {
       'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
     }
@@ -585,6 +609,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
       failureNotified: false
@@ -607,6 +634,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
@@ -630,6 +660,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
@@ -651,6 +684,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
@@ -671,6 +707,9 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,

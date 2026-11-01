@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "이 작업 공간의 SSH 호스트에 연결한 후 다시 시도하세요.",
+    "sshUnavailable": "이 SSH 호스트에서는 터미널 실행을 사용할 수 없습니다. 작업 공간에서 터미널을 열고 에이전트를 시작하세요.",
+    "reconnectServer": "이 작업 공간의 Orca 서버에 다시 연결한 후 다시 시도하세요.",
+    "updateServer": "이 작업 공간의 서버에서 Orca를 업데이트한 후 다시 시도하세요.",
+    "checkSettings": "에이전트의 실행 설정을 확인한 후 다시 시도하세요.",
     "opencode": {
       "updateRequired": "이 버전의 OpenCode는 선택한 모델로 안전하게 시작할 수 없습니다. OpenCode를 지원되는 버전으로 업데이트하거나 모델 선택을 생략하세요.",
       "invalidConfig": "OpenCode가 선택한 모델을 시작 구성에 적용하지 못했습니다. OpenCode 시작 구성을 확인하고 다시 시도하거나 모델 선택을 생략하세요.",

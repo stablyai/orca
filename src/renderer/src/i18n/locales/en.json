@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connect to this workspace’s SSH host, then try again.",
+    "sshUnavailable": "Terminal launch is unavailable on this SSH host. Open a terminal in the workspace and start the agent there.",
+    "reconnectServer": "Reconnect to this workspace’s Orca server, then try again.",
+    "updateServer": "Update Orca on this workspace’s server, then try again.",
+    "checkSettings": "Check the agent’s launch settings, then try again.",
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
     "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {

@@ -354,7 +354,7 @@ describe('startFixChecksAgent', () => {
     )
   })
 
-  it('fails without launching when the execution host has not reported its OS', async () => {
+  it('defers missing terminal platform facts to the selected launch route', async () => {
     mocks.resolveRepoWorktreeLaunchPlatform.mockReturnValue(undefined)
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
 
@@ -365,9 +365,11 @@ describe('startFixChecksAgent', () => {
         basePrompt: 'Fix checks',
         launchSource: 'task_page'
       })
-    ).resolves.toBe(false)
+    ).resolves.toBe(true)
 
-    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ launchPlatform: undefined })
+    )
   })
 
   it('leaves hidden CLI validation to the selected launch route', async () => {

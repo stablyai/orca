@@ -161,7 +161,11 @@ export function AgentLaunchSetupPanel({
       onAction={() => {}}
     />
   )
-  const use = (surface: AgentPickerSurface) => onUse({ ...draft, surface })
+  const use = (surface: AgentPickerSurface) => {
+    if (entry.surfaces.includes(surface)) {
+      onUse({ ...draft, surface })
+    }
+  }
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div

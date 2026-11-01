@@ -4,7 +4,8 @@ import {
 } from '@/lib/launch-agent-new-tab-host-route'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
 import { useAppStore } from '@/store'
-import { validateActionTerminalArgs } from './launch-work-item-direct-messages'
+import { planAgentCliArgsSuffix } from './tui-agent-startup'
+import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from './agent-launch-failure'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -22,8 +23,7 @@ import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
   launchOnceHostAnswered,
   routeNewTabLaunch,
-  type AgentTabLaunchOutcome,
-  type LaunchAgentInNewTabResult
+  type AgentTabLaunchOutcome
 } from '@/lib/launch-agent-in-new-tab-host-agents'
 
 export type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
@@ -38,11 +38,10 @@ export { shouldQueueTerminalFocusAfterMenuClose } from '@/lib/launch-agent-in-ne
  * prompt into the launch command; followup-path agents launch empty and get a
  * post-ready draft paste. Callers can override via `promptDelivery`.
  *
- * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
+ * Returns `null` for cancellation; preparation failures return a notified refusal.
  */
 export function launchAgentInNewTabWithOutcome(
-  args: LaunchAgentInNewTabArgs,
-  notifyFailure = true
+  args: LaunchAgentInNewTabArgs
 ): AgentTabLaunchOutcome {
   const {
     agent,
@@ -63,12 +62,6 @@ export function launchAgentInNewTabWithOutcome(
     activate
   } = args
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
-  if (!executionContext) {
-    args.focusIntent?.cancel()
-    return null
-  }
-  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -117,10 +110,21 @@ export function launchAgentInNewTabWithOutcome(
     return structured
   }
 
-  const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
-  if (!validateActionTerminalArgs(agent, agentArgs, terminalShell, notifyFailure)) {
+  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  if ('unavailable' in executionContext) {
     args.focusIntent?.cancel()
-    return { refused: { delivered: false, failureNotified: notifyFailure } }
+    notifyAgentLaunchFailure(
+      agent,
+      agentLaunchRecoveryMessage(executionContext.unavailable.recovery)
+    )
+    return { refused: { delivered: false, failureNotified: true } }
+  }
+  const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
+  const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
+  if (!planAgentCliArgsSuffix(agentArgs, terminalShell).ok) {
+    args.focusIntent?.cancel()
+    notifyAgentLaunchFailure(agent)
+    return { refused: { delivered: false, failureNotified: true } }
   }
   const buildStartup = (
     agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
@@ -172,7 +176,8 @@ export function launchAgentInNewTabWithOutcome(
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
   if (!startupPlan) {
-    return null
+    notifyAgentLaunchFailure(agent)
+    return { refused: { delivered: false, failureNotified: true } }
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
@@ -274,7 +279,6 @@ export function launchAgentInNewTabWithOutcome(
   }
 }
 
-export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
-  const result = launchAgentInNewTabWithOutcome(args, false)
-  return result && 'refused' in result ? null : result
+export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): AgentTabLaunchOutcome {
+  return launchAgentInNewTabWithOutcome(args)
 }

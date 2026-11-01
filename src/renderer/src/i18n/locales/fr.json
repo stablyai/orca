@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connectez-vous à l’hôte SSH de cet espace de travail, puis réessayez.",
+    "sshUnavailable": "Le lancement dans un terminal est indisponible sur cet hôte SSH. Ouvrez un terminal dans l’espace de travail et démarrez-y l’agent.",
+    "reconnectServer": "Reconnectez-vous au serveur Orca de cet espace de travail, puis réessayez.",
+    "updateServer": "Mettez à jour Orca sur le serveur de cet espace de travail, puis réessayez.",
+    "checkSettings": "Vérifiez les paramètres de lancement de l’agent, puis réessayez.",
     "opencode": {
       "updateRequired": "Cette version d’OpenCode ne peut pas démarrer de façon sûre avec le modèle choisi. Mettez OpenCode à jour vers une version compatible ou ne précisez pas de modèle.",
       "invalidConfig": "OpenCode n’a pas pu appliquer ce modèle à la configuration de lancement. Vérifiez la configuration de lancement d’OpenCode et réessayez, ou ne précisez pas de modèle.",

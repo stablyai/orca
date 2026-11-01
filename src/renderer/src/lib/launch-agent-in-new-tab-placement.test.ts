@@ -1,3 +1,4 @@
+import * as executionContext from './launch-agent-execution-context'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
@@ -103,6 +104,7 @@ describe('launchAgentInNewTab terminal tab activation', () => {
   it('ignores hidden malformed arguments for chat and rejects them before any terminal creation', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const args = { agent: 'codex' as const, worktreeId: 'wt-1', agentArgs: '--model "unfinished' }
+    const resolver = vi.spyOn(executionContext, 'resolveAgentLaunchExecutionContext')
     const result = launchAgentInNewTab({
       ...args,
       agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
@@ -112,9 +114,15 @@ describe('launchAgentInNewTab terminal tab activation', () => {
         worktreeId: 'wt-1'
       })
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
     expect(result?.surface.kind).toBe('host-published')
+    expect(resolver).not.toHaveBeenCalled()
     expect(result?.startupPlan).toBeUndefined()
-    expect(launchAgentInNewTab({ ...args, requestId: 'terminal' })).toBeNull()
+    expect(launchAgentInNewTab({ ...args, requestId: 'terminal' })).toEqual({
+      refused: { delivered: false, failureNotified: true }
+    })
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 

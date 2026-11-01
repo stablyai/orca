@@ -121,3 +121,54 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
     hook.unmount()
   }
 })
+
+it('keeps terminal choices quiet while SSH connects, then settles and recovers from published launch facts', async () => {
+  const worktreeId = 'r1::/remote'
+  const sshState = {
+    targetId: 'box',
+    status: 'connecting' as const,
+    error: null,
+    reconnectAttempt: 0
+  }
+  setLocalRuntimeCapabilitiesForTests([])
+  useAppStore.setState({
+    ...initial,
+    settings: { ...getDefaultSettings('/home/me'), agentDefaultSurface: 'terminal' },
+    activeWorktreeId: worktreeId,
+    repos: [{ ...TEST_REPO, id: 'r1', connectionId: 'box' }],
+    worktreesByRepo: {
+      r1: [makeWorktree({ id: worktreeId, repoId: 'r1', hostId: 'ssh:box', path: '/remote' })]
+    },
+    remoteDetectedAgentIds: { box: ['codex'] },
+    sshConnectionStates: new Map([['box', sshState]]),
+    ensureRemoteDetectedAgents: vi.fn(async () => ['codex'])
+  })
+  const hook = renderHook(() => {
+    const target = useAgentDetectionTargetForWorktree(worktreeId)
+    return useAgentMenuObservation(worktreeId, true, target)
+  })
+  expect(hook.result.current.model.state).toBe('loading')
+  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(false)
+  await act(async () => {
+    useAppStore.setState({
+      sshConnectionStates: new Map([['box', { ...sshState, status: 'connected' }]])
+    })
+  })
+  expect(hook.result.current.model.state).toBe('settled')
+  // A settled missing fact is owned by the launcher; it must not leave a permanent spinner.
+  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(true)
+  await act(async () => {
+    useAppStore.setState({
+      sshConnectionStates: new Map([
+        ['box', { ...sshState, status: 'connected', remotePlatform: 'linux' }]
+      ])
+    })
+  })
+  expect(hook.result.current.model).toMatchObject({
+    state: 'settled',
+    rows: expect.arrayContaining([
+      expect.objectContaining({ agent: 'codex', executionHostId: 'ssh:box' })
+    ])
+  })
+  expect(hook.result.current.selectionFor('codex', 'terminal').ready).toBe(true)
+})

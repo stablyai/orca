@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "Bu çalışma alanının SSH ana bilgisayarına bağlanıp tekrar deneyin.",
+    "sshUnavailable": "Bu SSH ana bilgisayarında terminalden başlatma kullanılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
+    "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
+    "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
+    "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
     "opencode": {
       "updateRequired": "OpenCode bu sürümde seçilen modelle güvenli biçimde başlatılamıyor. OpenCode'u desteklenen bir sürüme güncelleyin veya model seçimini kaldırın.",
       "invalidConfig": "Bu model seçimi OpenCode başlatma yapılandırmasına uygulanamadı. OpenCode başlatma yapılandırmasını kontrol edip yeniden deneyin veya model seçimini kaldırın.",

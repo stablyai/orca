@@ -1,3 +1,4 @@
+import { agentMenuRowUnavailable } from '../../../../shared/agent-launch-picker-rows'
 import { memo, useId, useRef, useState, type ComponentProps, type PointerEvent } from 'react'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
@@ -25,7 +26,8 @@ export function pickerLaunchRow(
   return {
     agent: entry.agent,
     kind: surface === 'chat' ? 'chat' : 'cli',
-    executionHostId: entry.rows[0]?.executionHostId
+    executionHostId: entry.rows[0]?.executionHostId,
+    terminalUnavailable: entry.rows[0]?.terminalUnavailable
   }
 }
 
@@ -178,6 +180,7 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
+  const defaultUnavailable = agentMenuRowUnavailable(pickerLaunchRow(entry, entry.defaultSurface))
   return (
     <AgentLaunchSetupButton
       entry={entry}
@@ -200,10 +203,15 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           ref={item}
           variant="launch"
           disabled={disabled || !entry.surfaces.length}
-          onSelect={() => {
+          aria-disabled={disabled || !entry.surfaces.includes(entry.defaultSurface)}
+          onSelect={(event) => {
             const draft = configured.current ?? initial
             configured.current = undefined
             const surface = draft?.surface ?? entry.defaultSurface
+            if (!entry.surfaces.includes(surface)) {
+              event.preventDefault()
+              return
+            }
             const row = draft
               ? pickerLaunchRow(entry, surface)
               : (entry.rows.find((row) =>
@@ -233,6 +241,9 @@ const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             <span className="text-xs text-muted-foreground">
               {chatUnavailableLabel(unavailable.reason)}
             </span>
+          ) : null}
+          {defaultUnavailable ? (
+            <span className="text-xs text-muted-foreground">{defaultUnavailable}</span>
           ) : null}
           {trigger}
         </DropdownMenuItem>

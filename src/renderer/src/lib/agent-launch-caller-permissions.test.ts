@@ -146,6 +146,9 @@ describe('agent launch caller arguments and permission bypass', () => {
         agent: 'codex',
         worktreeId: 'wt-1'
       })
+      if (result && 'refused' in result) {
+        throw new Error('Expected an opened launch')
+      }
 
       expect(result?.startupPlan?.sessionOptions).toBeUndefined()
       const command = queuedStartupCommand(store)

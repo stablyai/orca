@@ -81,6 +81,21 @@ describe('runSourceControlAgentActionStart', () => {
     mocks.mutationInFlight.mockResolvedValue({ inFlight: false })
   })
 
+  it.each([null, { refused: { delivered: false, failureNotified: true } }])(
+    'keeps the dialog and prompt on cancellation or refusal without another error',
+    async (result) => {
+      mocks.launchAgentInNewTab.mockReturnValue(result)
+      const onLaunchAccepted = vi.fn()
+      await expect(runSourceControlAgentActionStart(buildArgs({ onLaunchAccepted }))).resolves.toBe(
+        false
+      )
+      expect(onLaunchAccepted).not.toHaveBeenCalled()
+      expect(mocks.onClose).not.toHaveBeenCalled()
+      expect(mocks.onLaunched).not.toHaveBeenCalled()
+      expect(mocks.toastError).not.toHaveBeenCalled()
+    }
+  )
+
   it('rejects conflict recovery before creating a tab when Git is still running', async () => {
     const onLaunchAccepted = vi.fn()
     mocks.mutationInFlight.mockResolvedValue({ inFlight: true })

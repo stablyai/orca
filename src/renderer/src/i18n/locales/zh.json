@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "连接到此工作区的 SSH 主机，然后重试。",
+    "sshUnavailable": "此 SSH 主机无法启动终端会话。请在工作区中打开终端，并在那里启动智能体。",
+    "reconnectServer": "重新连接到此工作区的 Orca 服务器，然后重试。",
+    "updateServer": "更新此工作区服务器上的 Orca，然后重试。",
+    "checkSettings": "检查智能体的启动设置，然后重试。",
     "opencode": {
       "updateRequired": "此版本的 OpenCode 无法使用所选模型安全启动。请将 OpenCode 更新到受支持的版本，或不指定模型。",
       "invalidConfig": "OpenCode 无法将所选模型应用到启动配置。请检查 OpenCode 启动配置后重试，或不指定模型。",

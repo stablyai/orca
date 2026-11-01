@@ -177,6 +177,9 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
       promptDelivery: 'draft',
       launchPlatform: 'win32'
     })
+    if (result && 'refused' in result) {
+      throw new Error('Expected an opened launch')
+    }
 
     await result?.terminalCompletion
     expect(mockCreateWebRuntimeAgentSessionTerminal).toHaveBeenCalledWith(

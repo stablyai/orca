@@ -394,11 +394,7 @@ function TabBarCreateEntrySession({
                         })
                     : undefined
                 }
-                disabled={
-                  disabled ||
-                  pending ||
-                  (option.kind === 'agent' && option.option.disabled === true)
-                }
+                disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

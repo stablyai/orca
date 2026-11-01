@@ -157,7 +157,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.' }
+      return { kind: 'withheld', reason: 'Select a project first.', recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },

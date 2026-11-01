@@ -579,3 +579,14 @@ it('orders setups by agent, not by whether each opens as a chat or its CLI', () 
   expect(order('blank')).toEqual(['claude', 'codex', 'grok', 'gemini'])
   expect(order('codex')).toEqual(['codex', 'claude', 'grok', 'gemini'])
 })
+
+it('keeps an explicitly selectable chat while terminal preparation is pending without changing the default', () => {
+  const entries = agentPickerEntriesFromRows(
+    [{ kind: 'cli', agent: 'codex', chat: true, terminalUnavailable: 'Loading agents' }],
+    ['codex'],
+    () => ({ terminal: {}, structured: {} }),
+    () => 'Codex',
+    'codex'
+  )
+  expect(entries[0]).toMatchObject({ defaultSurface: 'terminal', surfaces: ['chat'] })
+})

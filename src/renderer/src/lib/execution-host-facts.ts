@@ -27,7 +27,17 @@ export type ExecutionHostPlatformFact =
       /** A paired server's own Windows terminal shell, when it reported one. */
       terminalWindowsShell?: string | null
     }
-  | { kind: 'withheld'; reason: string }
+  | {
+      kind: 'withheld'
+      reason: string
+      recovery:
+        | 'connectSsh'
+        | 'sshUnavailable'
+        | 'reconnectServer'
+        | 'updateServer'
+        | 'refreshProjects'
+      pending?: boolean
+    }
 
 type HostFactsState = Pick<
   AppState,
@@ -83,7 +93,7 @@ function resolveHostPlatform(
 ): ExecutionHostPlatformFact {
   const { host } = args
   if (!host) {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD, recovery: 'refreshProjects' }
   }
   if (host.kind === 'local') {
     const platform = resolveLocalPlatform(args.projectRuntime(), args.workspacePath)
@@ -98,10 +108,17 @@ function resolveHostPlatform(
       : state.sshConnectionStates.get(sshTargetId)
     return sshState?.remotePlatform
       ? { kind: 'known', platform: sshState.remotePlatform, hostKind: 'ssh' }
-      : { kind: 'withheld', reason: SSH_PLATFORM_WITHHELD }
+      : {
+          kind: 'withheld',
+          reason: SSH_PLATFORM_WITHHELD,
+          recovery: sshState?.status === 'connected' ? 'sshUnavailable' : 'connectSsh',
+          pending:
+            ['connecting', 'reconnecting', 'deploying-relay'].includes(sshState?.status ?? '') ||
+            sshState?.managedServer?.kind === 'setting-up'
+        }
   }
   if (host.kind !== 'runtime') {
-    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD, recovery: 'refreshProjects' }
   }
   const status = lastVerifiedRuntimeStatus(
     state.runtimeStatusByEnvironmentId.get(host.environmentId)
@@ -109,7 +126,7 @@ function resolveHostPlatform(
   const hostPlatform = status?.hostPlatform
   if (!hostPlatform) {
     const reason = status ? RUNTIME_PLATFORM_UPDATE : RUNTIME_PLATFORM_WITHHELD
-    return { kind: 'withheld', reason }
+    return { kind: 'withheld', reason, recovery: status ? 'updateServer' : 'reconnectServer' }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.
   const platform =

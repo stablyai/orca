@@ -1,5 +1,10 @@
 {
   "agentLaunch": {
+    "connectSsh": "Conecte-se ao host SSH deste espaço de trabalho e tente novamente.",
+    "sshUnavailable": "A inicialização no terminal não está disponível neste host SSH. Abra um terminal no espaço de trabalho e inicie o agente nele.",
+    "reconnectServer": "Reconecte-se ao servidor Orca deste espaço de trabalho e tente novamente.",
+    "updateServer": "Atualize o Orca no servidor deste espaço de trabalho e tente novamente.",
+    "checkSettings": "Verifique as configurações de inicialização do agente e tente novamente.",
     "opencode": {
       "updateRequired": "Esta versão do OpenCode não pode iniciar com segurança com o modelo escolhido. Atualize o OpenCode para uma versão compatível ou omita a escolha do modelo.",
       "invalidConfig": "O OpenCode não conseguiu aplicar este modelo à configuração de inicialização. Verifique a configuração de inicialização do OpenCode e tente novamente, ou omita a escolha do modelo.",
