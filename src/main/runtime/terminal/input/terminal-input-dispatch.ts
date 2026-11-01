@@ -4,7 +4,10 @@ import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import type { RuntimeTerminalPromptDelivery } from '../../../../shared/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
-import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal-bracketed-paste-text'
+import {
+  encodeWindowsInputRecordPasteText,
+  wrapTerminalBracketedPasteText
+} from '../../../../shared/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from '../../orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from '../../proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../../../shared/runtime-types'
@@ -20,6 +23,7 @@ import {
   agentPromptTakesLeadLine,
   buildAgentPromptPasteBytes
 } from '../../../../shared/agent-prompt-injection'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
@@ -229,12 +233,21 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
   ): Promise<RuntimeTerminalSend> {
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {
+      const pty = this.ptysById.get(ptyId)
+      const agent = pty?.foregroundAgent ?? pty?.launchAgent
+      const executionPlatform =
+        pty?.isWsl || pty?.wslDistro ? 'linux' : this.getPtyWriteHostPlatform(ptyId)
+      const newline =
+        executionPlatform === 'win32' && isTuiAgent(agent)
+          ? TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
+          : undefined
+      if (newline) {
+        return encodeWindowsInputRecordPasteText(prompt, newline)
+      }
       // Why: a launch prompt replaced the desktop's draft paste, so it sends that paste's bytes.
       if (options.inputKind === 'launch') {
         return wrapTerminalBracketedPasteText(prompt)
       }
-      const pty = this.ptysById.get(ptyId)
-      const agent = pty?.foregroundAgent ?? pty?.launchAgent
       return buildAgentPromptPasteBytes(
         prompt,
         agentPromptTakesLeadLine(agent) ? options.leadLine : undefined

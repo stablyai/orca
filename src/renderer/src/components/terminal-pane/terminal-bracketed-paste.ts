@@ -1,8 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
-import type { WindowsInputRecordNewline } from './terminal-paste-model'
+import type { WindowsInputRecordNewline } from '../../../../shared/terminal-bracketed-paste-text'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
+  encodeWindowsInputRecordPasteText,
   normalizeTerminalPasteLineEndings,
   sanitizeBracketedPasteText,
   wrapTerminalBracketedPasteText
@@ -11,6 +12,7 @@ import {
 export {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
+  encodeWindowsInputRecordPasteText,
   normalizeTerminalPasteLineEndings,
   sanitizeBracketedPasteText,
   wrapTerminalBracketedPasteText
@@ -60,28 +62,6 @@ function hasBracketedPasteModeSequence(data: string): boolean {
 
 export function sanitizeTerminalPasteText(text: string): string {
   return sanitizeBracketedPasteText(text)
-}
-
-export function encodeWindowsInputRecordPasteText(
-  text: string,
-  newline: WindowsInputRecordNewline
-): string {
-  const newlineSequence = newline === 'csi-u' ? '\x1b[13;2u' : '\x1b\r'
-  let encoded = ''
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]
-    if (char === '\r') {
-      encoded += newlineSequence
-      if (text[index + 1] === '\n') {
-        index += 1
-      }
-    } else if (char === '\n') {
-      encoded += newlineSequence
-    } else {
-      encoded += char === ESCAPE ? '\u241b' : char
-    }
-  }
-  return encoded
 }
 
 function forceBracketedPaste(terminal: PasteTerminal, text: string): void {

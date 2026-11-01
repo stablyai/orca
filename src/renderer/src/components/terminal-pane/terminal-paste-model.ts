@@ -1,3 +1,5 @@
+import type { WindowsInputRecordNewline } from '../../../../shared/terminal-bracketed-paste-text'
+
 export type TerminalPasteSource =
   | 'keyboard'
   | 'paste-event'
@@ -53,7 +55,7 @@ export type TerminalPasteTextOptions = {
   recoverImagePasteWebglAtlas?: boolean
 }
 
-export type WindowsInputRecordNewline = 'alt-enter' | 'csi-u'
+export type { WindowsInputRecordNewline } from '../../../../shared/terminal-bracketed-paste-text'
 
 export type TerminalPasteExecutionReason =
   | 'operation-timeout'
