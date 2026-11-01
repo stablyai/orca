@@ -467,6 +467,54 @@ describe('orchestration worker-list pagination', () => {
     expect(await fetchedBeside(10_000)).toBe(alone)
   })
 
+  it('keeps a resource-less worker whose follow-up started fresh in another terminal', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const run = db.createRun({
+      objective: 'Fresh follow-up of a legacy worker',
+      coordinatorHandle: 'term-coordinator',
+      coordinatorPaneKey: 'tab-coordinator:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    })
+    const sqlite = sqliteFor(db)
+    const link = (followUp: string, of: string, incarnation: string) => {
+      sqlite
+        .prepare(
+          'UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ?, process_incarnation = ? WHERE id = ?'
+        )
+        .run(of, incarnation, followUp)
+    }
+    // Legacy Dispatches with no resource: one continued in a fresh terminal, one in its own process.
+    for (const id of ['dispatch-fresh', 'dispatch-same']) {
+      insertDispatch(db, run.id, id)
+      sqlite
+        .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
+        .run(`incarnation-${id}`, id)
+    }
+    insertWorkerInventory(db, run.id, 'dispatch-fresh-next', 'ready', 'not_requested')
+    link('dispatch-fresh-next', 'dispatch-fresh', 'incarnation-other')
+    insertWorkerInventory(db, run.id, 'dispatch-same-next', 'ready', 'not_requested')
+    link('dispatch-same-next', 'dispatch-same', 'incarnation-dispatch-same')
+
+    const page = await callWorkerList(runtime, { run: run.id, limit: 100 })
+
+    expect(page.workers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dispatchId: 'dispatch-fresh',
+          agentTerminalHandle: 'term-dispatch-fresh',
+          terminalState: 'retained'
+        }),
+        expect.objectContaining({
+          dispatchId: 'dispatch-same',
+          agentTerminalHandle: null,
+          terminalState: null
+        })
+      ])
+    )
+    expect(page.counts).toEqual({ active: 2, retained: 1 })
+  })
+
   it('finds a handed-on terminal through the follow-up index without a table scan', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
