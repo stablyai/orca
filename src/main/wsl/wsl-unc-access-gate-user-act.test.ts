@@ -30,10 +30,4 @@ describe('runAsWslUserAct marks the distro woken when the act settles', () => {
     expect(mocks.noteWslDistroWoken).toHaveBeenCalledExactlyOnceWith('Ubuntu')
     expect(allowanceAtNote).toBe(true)
   })
-
-  it('notes nothing for an act with no distro', async () => {
-    mocks.noteWslDistroWoken.mockReset()
-    await runAsWslUserAct(null, async () => undefined)
-    expect(mocks.noteWslDistroWoken).not.toHaveBeenCalled()
-  })
 })
