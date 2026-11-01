@@ -8,6 +8,7 @@ import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
+import RelayedRuntimeHostsSection from './RelayedRuntimeHostsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -202,6 +203,7 @@ function Sidebar({
                   onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
                 />
                 <WslMovedProjectsSection />
+                <RelayedRuntimeHostsSection />
               </>
             )}
 

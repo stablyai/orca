@@ -24,6 +24,7 @@ import { registerPreflightWslRetryIpcBridge } from './preflight-wsl-retry-ipc-br
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
+import { installRelayedRuntimeHostsPolling } from './relayed-runtime-hosts-polling'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { registerSessionTabIpcBridge } from './session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-bridge'
@@ -86,6 +87,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
+  unsubs.push(installRelayedRuntimeHostsPolling())
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,

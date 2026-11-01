@@ -7,6 +7,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { isRelayedRuntimeEnvironmentId } from '../../../shared/relayed-runtime-environment'
 
 export type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   setupController: AbortController
@@ -65,6 +66,12 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
         pendingSubscriptions.has(subscriptionId)
       ) {
         throw new Error('Runtime environment subscription id already exists')
+      }
+      // Streams and abortable calls are not carried through a relay yet; never resolve this to the relaying server.
+      if (isRelayedRuntimeEnvironmentId(args.selector)) {
+        throw new Error(
+          'Subscriptions are not available on a server reached through another server'
+        )
       }
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {

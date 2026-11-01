@@ -57,6 +57,10 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     }
     this.runtime.forgetClientNavigationState(deviceId)
     this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
+    // Resync so every server drops the device it minted for this client.
+    if (this.relayedRuntimeClients.forget([deviceId])) {
+      this.mobileDesktopRelay?.phonesChanged()
+    }
     return true
   }
 
