@@ -22,6 +22,7 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     return null
   }
   const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy('chat-ui-off')
+  const [intro = ''] = paragraphs
 
   const handleUseChatUi = async (): Promise<void> => {
     if (busy) {
@@ -61,38 +62,34 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
       aria-labelledby="chat-ui-here-corner-heading"
       className="gap-0 overflow-hidden py-0"
     >
-      <CardHeader className="px-4 pt-4">
-        <div className="flex items-start justify-between gap-2">
+      <CardHeader className="px-4 pt-3">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle id="chat-ui-here-corner-heading">
             {translate('featureTips.chatUiHere.title', 'Chat UI is here')}
           </CardTitle>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon-xs"
             onClick={handleDismiss}
             aria-label={translate('featureTips.chatUiHere.dismiss', 'Dismiss')}
           >
-            <X />
+            <X className="size-3.5" />
           </Button>
         </div>
       </CardHeader>
 
       <div
         aria-hidden="true"
-        className="mt-3 h-[17rem] border-y border-border bg-[color-mix(in_srgb,var(--foreground)_7%,var(--card))] p-3"
+        className="mt-2 h-[17rem] border-y border-border bg-[color-mix(in_srgb,var(--foreground)_7%,var(--card))] p-3 dark:bg-[color-mix(in_srgb,var(--foreground)_14%,var(--card))]"
       >
         <ChatSurfacePreview />
       </div>
 
       <CardContent className="px-4 pt-4 pb-4">
-        <div className="space-y-4">
+        <div className="space-y-3">
           <CardDescription>
             <span className="block space-y-2">
-              {paragraphs.map((paragraph) => (
-                <span key={paragraph} className="block">
-                  {paragraph}
-                </span>
-              ))}
+              <span className="block">{intro}</span>
               <FeatureTipSettingsLine
                 text={translate(
                   'featureTips.chatUiHere.changeInSettings',
