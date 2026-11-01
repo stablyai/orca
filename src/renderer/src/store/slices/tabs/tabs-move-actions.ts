@@ -1,6 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { createMoveTabToWorktreeAction } from './tabs-cross-worktree-move'
 import {
   findGroupAndWorktree,
   findGroupForTab,
@@ -14,7 +15,7 @@ import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order
 export function createTabsMoveActions(
   set: TabsSliceSet,
   get: TabsSliceGet
-): Pick<TabsSlice, 'moveUnifiedTabToGroup'> {
+): Pick<TabsSlice, 'moveUnifiedTabToGroup' | 'moveTabToWorktree'> {
   return {
     moveUnifiedTabToGroup: (tabId, targetGroupId, opts) => {
       let moved = false
@@ -33,93 +34,109 @@ export function createTabsMoveActions(
         if (!sourceGroup) {
           return state
         }
-        moved = true
 
-        const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
-        const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
-        // Stale target orders may already contain tabId; dedupe to prevent duplicate React keys (also guarded in dropUnifiedTab).
-        const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
-        const targetIndex = Math.max(
+        const dedupedSourceOrder = dedupeTabOrder(sourceGroup.tabOrder)
+        const sourceOrder = dedupeTabOrder(dedupedSourceOrder.filter((id) => id !== tabId))
+        const dedupedTargetOrder = dedupeTabOrder(targetGroup.tabOrder).filter((id) => id !== tabId)
+        const clampedIndex = Math.max(
           0,
-          Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
+          Math.min(opts?.index ?? dedupedTargetOrder.length, dedupedTargetOrder.length)
         )
-        targetOrder.splice(targetIndex, 0, tabId)
-        const nextActiveGroupIdByWorktree = {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
-        }
+        const nextTargetOrder = [...dedupedTargetOrder]
+        nextTargetOrder.splice(clampedIndex, 0, tabId)
+        const targetOrder = dedupeTabOrder(nextTargetOrder)
+        const shouldActivate = opts?.activate !== false
         const sourceRecentTabIds = sanitizeRecentTabIds(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
-        const nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
+        const targetRecentBase = sanitizeRecentTabIds(targetGroup.recentTabIds, targetOrder)
+        const targetRecentTabIds = shouldActivate
+          ? pushRecentTabId(targetRecentBase, tabId)
+          : targetRecentBase
+        const nextSourceActiveTabId =
+          sourceGroup.activeTabId === tabId
+            ? pickNextActiveTab(
+                dedupedSourceOrder,
+                sourceGroup.recentTabIds,
+                tabId,
+                state.unifiedTabsByWorktree[worktreeId]
+              )
+            : sourceGroup.activeTabId
+        const nextTargetActiveTabId = shouldActivate
+          ? tabId
+          : (targetGroup.activeTabId ?? targetOrder[0] ?? null)
+
+        moved = true
+        const nextTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+          candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+        )
+        let nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
           if (group.id === sourceGroup.id) {
             return {
               ...group,
-              activeTabId:
-                group.activeTabId === tabId
-                  ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(
-                      dedupedSourceGroupOrder,
-                      sourceGroup.recentTabIds,
-                      tabId,
-                      state.unifiedTabsByWorktree[worktreeId]
-                    )
-                  : group.activeTabId,
+              activeTabId: nextSourceActiveTabId,
               tabOrder: sourceOrder,
               recentTabIds: sourceRecentTabIds
             }
           }
-          if (group.id === targetGroupId) {
-            const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)
+          if (group.id === targetGroup.id) {
             return {
               ...group,
-              activeTabId: opts?.activate ? tabId : group.activeTabId,
+              activeTabId: nextTargetActiveTabId,
               tabOrder: targetOrder,
-              recentTabIds: opts?.activate
-                ? pushRecentTabId(sanitizedTargetRecent, tabId)
-                : sanitizedTargetRecent
+              recentTabIds: targetRecentTabIds
             }
           }
           return group
         })
+
         let nextLayoutByWorktree = state.layoutByWorktree
-        let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
-        let filteredGroups = nextGroups
-        if (sourceOrder.length === 0) {
-          filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
-          const collapsedState = collapseGroupLayout(
-            nextLayoutByWorktree,
-            nextActiveGroupIdByWorktreeResolved,
+        let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
+        if (sourceOrder.length === 0 && nextGroups.length > 1) {
+          nextGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
+          const collapsed = collapseGroupLayout(
+            state.layoutByWorktree,
+            state.activeGroupIdByWorktree,
             worktreeId,
             sourceGroup.id,
-            targetGroupId
+            targetGroup.id
           )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
-          nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
+          nextLayoutByWorktree = collapsed.layoutByWorktree
+          nextActiveGroupIdByWorktree = collapsed.activeGroupIdByWorktree
         }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: filteredGroups
+
+        const nextActiveGroupId = shouldActivate
+          ? targetGroupId
+          : (nextActiveGroupIdByWorktree[worktreeId] ?? targetGroupId)
+        const nextActiveGroupIdByWorktreeResolved = {
+          ...nextActiveGroupIdByWorktree,
+          [worktreeId]: nextActiveGroupId
         }
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        }
+
         return {
-          unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-          groupsByWorktree: nextGroupsByWorktree,
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            [worktreeId]: nextTabs
+          },
+          groupsByWorktree: {
+            ...state.groupsByWorktree,
+            [worktreeId]: nextGroups
+          },
           layoutByWorktree: nextLayoutByWorktree,
           activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved,
           ...(state.activeWorktreeId === worktreeId
             ? buildActiveSurfacePatch(
                 {
                   ...state,
-                  unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-                  groupsByWorktree: nextGroupsByWorktree,
-                  layoutByWorktree: nextLayoutByWorktree,
+                  unifiedTabsByWorktree: {
+                    ...state.unifiedTabsByWorktree,
+                    [worktreeId]: nextTabs
+                  },
+                  groupsByWorktree: {
+                    ...state.groupsByWorktree,
+                    [worktreeId]: nextGroups
+                  },
                   activeGroupIdByWorktree: nextActiveGroupIdByWorktreeResolved
                 },
                 worktreeId,
@@ -132,6 +149,7 @@ export function createTabsMoveActions(
         get().recordFeatureInteraction?.('tab-splits')
       }
       return moved
-    }
+    },
+    moveTabToWorktree: createMoveTabToWorktreeAction(set, get)
   }
 }
