@@ -252,10 +252,17 @@ async function showUnpairedDeviceToast(app: ElectronApplication): Promise<void> 
   })
 }
 
+type RecordedTelemetryEvent = { name: unknown; props: unknown }
+
+declare global {
+  // Test-only recorder installed in the Electron main process by recordTelemetry.
+  var __toastTelemetry: RecordedTelemetryEvent[] | undefined
+}
+
 async function recordTelemetry(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ ipcMain }) => {
-    const events: { name: unknown; props: unknown }[] = []
-    Object.assign(globalThis, { __toastTelemetry: events })
+    const events: RecordedTelemetryEvent[] = []
+    globalThis.__toastTelemetry = events
     ipcMain.removeHandler('telemetry:track')
     ipcMain.handle('telemetry:track', (_event, name: unknown, props: unknown) => {
       events.push({ name, props })
@@ -265,12 +272,9 @@ async function recordTelemetry(app: ElectronApplication): Promise<void> {
 }
 
 async function recordedToastActions(app: ElectronApplication): Promise<unknown[]> {
-  const events: unknown = await app.evaluate(() => Reflect.get(globalThis, '__toastTelemetry'))
-  if (!Array.isArray(events)) {
-    throw new Error('Telemetry recorder is not installed')
-  }
+  const events = await app.evaluate(() => globalThis.__toastTelemetry ?? [])
   return events
-    .filter((event) => event?.name === 'toast_action_over_modal')
+    .filter((event) => event.name === 'toast_action_over_modal')
     .map((event) => event.props)
 }
 
