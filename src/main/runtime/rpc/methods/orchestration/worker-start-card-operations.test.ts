@@ -217,7 +217,7 @@ it.each([10, 100])(
     await Promise.allSettled(append.mock.results.map((result) => result.value))
     await eventually(() =>
       expect(warn).toHaveBeenCalledWith(
-        '[orchestration] recording a started worker in its caller chat failed',
+        '[orchestration] recording a started agent in its caller chat failed',
         expect.any(Error)
       )
     )

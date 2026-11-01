@@ -9,7 +9,8 @@ import { projectStructuredItemToNativeChat } from './structured-agent-session-pr
 export function projectStructuredAgentStartItem(
   item: AgentJournalRenderItem
 ): NativeChatMessage | null {
-  if (item.body.kind !== 'agent-start') {
+  const { body } = item
+  if (body.kind !== 'agent-start' && body.kind !== 'agent-handoff') {
     return projectStructuredItemToNativeChat(item)
   }
   if (item.shortened) {
@@ -19,11 +20,12 @@ export function projectStructuredAgentStartItem(
     ...agentJournalItemRowOrigin(item),
     ...agentJournalLinkageFields(item),
     role: 'system',
-    blocks: [{ type: 'text', text: item.body.task }],
+    blocks: [{ type: 'text', text: body.task }],
     agentStart: true,
+    ...(body.kind === 'agent-handoff' ? { agentHandoff: true as const } : {}),
     from: readAgentMessageSource({
       kind: 'agent',
-      senders: [item.body.worker],
+      senders: [body.kind === 'agent-handoff' ? body.agent : body.worker],
       orchestration: null
     })
   }

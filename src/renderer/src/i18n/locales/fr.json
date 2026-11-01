@@ -19780,6 +19780,7 @@
         "unnamedSender": "un agent",
         "messageFromCoordinator": "Message du coordinateur",
         "startedWorker": "Worker démarré",
+        "handedOffToAgent": "Confié à un agent",
         "taskFromCoordinator": "Tâche du coordinateur",
         "updateFromWorker": "Nouvelles du worker"
       },

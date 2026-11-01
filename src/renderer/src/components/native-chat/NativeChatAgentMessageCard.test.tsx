@@ -140,6 +140,19 @@ it.each(['', '   ', '<system-reminder>Internal noise</system-reminder>'])(
   }
 )
 
+it('heads an agent its chat launched on its own as a handoff, not a worker', () => {
+  const message = projectStructuredAgentStartItem({
+    itemId: 'handoff',
+    revision: 1,
+    sequence: 2,
+    observedAt: 1,
+    body: { kind: 'agent-handoff', launchId: 'launch-1', agent: from.senders[0], task: 'Fix it' }
+  })!
+  render(<MessageRow message={message} expandSignal={false} onScrollMessageToTop={() => {}} />)
+  expect(screen.getByText('Handed off to agent')).toBeInTheDocument()
+  expect(screen.queryByText('Started worker')).not.toBeInTheDocument()
+})
+
 it('renders unreadable worker metadata with the existing unnamed fallback and no navigation', () => {
   const raw: unknown = {
     itemId: 'future-worker',

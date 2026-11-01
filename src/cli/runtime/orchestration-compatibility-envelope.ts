@@ -14,3 +14,15 @@ export function createOrchestrationCompatibilityEnvelope(
     orchestrationCompatibilityEvidence: agentSessionId ? { ...evidence, agentSessionId } : evidence
   }
 }
+
+/** The chat an agent launch came from, so the host can show the launched agent there.
+ *  Only a same-host session can be named: SSH/WSL environments send nothing. */
+export function createAgentLaunchCallerEvidence(
+  env: NodeJS.ProcessEnv
+): RuntimeOrchestrationEnvelope['orchestrationCompatibilityEvidence'] {
+  const agentSessionId = readInjectedAgentSessionId(env)
+  if (!agentSessionId || readOrchestrationCompatibilityEvidence(env).host) {
+    return undefined
+  }
+  return { agentSessionId }
+}

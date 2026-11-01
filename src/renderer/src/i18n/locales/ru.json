@@ -20417,6 +20417,7 @@
         "unnamedSender": "агента",
         "messageFromCoordinator": "Сообщение от координатора",
         "startedWorker": "Исполнитель запущен",
+        "handedOffToAgent": "Передано агенту",
         "taskFromCoordinator": "Задача от координатора",
         "updateFromWorker": "Обновление от исполнителя"
       },

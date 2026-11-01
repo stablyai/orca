@@ -19735,6 +19735,7 @@
         "unnamedSender": "bir ajan",
         "messageFromCoordinator": "Koordinatörden mesaj",
         "startedWorker": "Çalışan başlatıldı",
+        "handedOffToAgent": "Ajana devredildi",
         "taskFromCoordinator": "Koordinatörden görev",
         "updateFromWorker": "Çalışandan güncelleme"
       },

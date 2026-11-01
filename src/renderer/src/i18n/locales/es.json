@@ -19619,6 +19619,7 @@
         "unnamedSender": "un agente",
         "messageFromCoordinator": "Mensaje del coordinador",
         "startedWorker": "Trabajador iniciado",
+        "handedOffToAgent": "Entregado a un agente",
         "taskFromCoordinator": "Tarea del coordinador",
         "updateFromWorker": "Actualización del trabajador"
       },

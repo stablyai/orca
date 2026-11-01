@@ -19444,6 +19444,7 @@
         "unnamedSender": "一個代理程式",
         "messageFromCoordinator": "來自協調者的訊息",
         "startedWorker": "已啟動工作代理程式",
+        "handedOffToAgent": "已交接給代理程式",
         "taskFromCoordinator": "來自協調者的任務",
         "updateFromWorker": "來自工作代理程式的更新"
       },

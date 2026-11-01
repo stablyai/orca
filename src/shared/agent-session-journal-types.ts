@@ -19,11 +19,16 @@ import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat/tools/native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
-import type {
-  AgentMessageSender,
-  AgentMessageSource
-} from './agent-session/agent-session-message-source'
+import type { AgentMessageSource } from './agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from './agent-session-execution-options'
+import type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
+export type {
+  AgentJournalAgentHandoffItem,
+  AgentJournalAgentStartItem
+} from './agent-journal-creation-facts'
 
 export { type AgentType }
 
@@ -320,16 +325,9 @@ export type AgentJournalStatusItem =
  *  absent whenever nothing told the host one. */
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
-/** Display-only creation fact; survives removal of the orchestration Task and Dispatch. */
-export type AgentJournalAgentStartItem = {
-  kind: 'agent-start'
-  dispatchId: string
-  worker: AgentMessageSender
-  task: string
-}
-
 export type AgentJournalItemBody =
   | AgentJournalAgentStartItem
+  | AgentJournalAgentHandoffItem
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
   | AgentJournalDiffItem

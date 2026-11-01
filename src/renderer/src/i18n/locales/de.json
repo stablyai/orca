@@ -19748,6 +19748,7 @@
         "unnamedSender": "einem Agenten",
         "messageFromCoordinator": "Nachricht vom Koordinator",
         "startedWorker": "Worker gestartet",
+        "handedOffToAgent": "An Agenten übergeben",
         "taskFromCoordinator": "Aufgabe vom Koordinator",
         "updateFromWorker": "Aktualisierung vom Worker"
       },

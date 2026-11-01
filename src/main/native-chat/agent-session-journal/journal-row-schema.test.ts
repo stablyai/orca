@@ -545,6 +545,32 @@ it.each([
   expect(message?.from?.senders).toEqual(senders)
 })
 
+it('stores and replays a handoff to an agent this chat launched on its own', () => {
+  const agent = {
+    party: { address: 'orca_session_id:codex-new', terminalHandle: null, orcaSessionId: null },
+    name: 'Codex'
+  }
+  const body = { kind: 'agent-handoff', launchId: 'launch-1', task: 'Fix the stall', agent }
+  const parsed = parseJournalRow(
+    JSON.stringify({ ...BASE, kind: 'item', itemId: 'handoff', revision: 1, body })
+  )
+  if (!parsed.ok) {
+    throw new Error('this build refused its own handoff card')
+  }
+  const state = createJournalReducerState('session-1', BASE.epoch)
+  applyJournalRow(state, parsed.row)
+  const item = state.items.get('handoff')
+  if (!item) {
+    throw new Error('handoff card was lost during replay')
+  }
+  expect(projectStructuredAgentStartItem(item)).toMatchObject({
+    blocks: [{ type: 'text', text: body.task }],
+    agentStart: true,
+    agentHandoff: true,
+    from: { senders: [agent] }
+  })
+})
+
 it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }])(
   'rejects damaged creation core while worker metadata stays open: %j',
   (damage) => {
