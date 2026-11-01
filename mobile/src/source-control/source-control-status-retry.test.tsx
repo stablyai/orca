@@ -65,8 +65,7 @@ vi.mock('../components/pr-sidebar/PRChecksSection', () => ({ PRChecksSection: ()
 vi.mock('../components/pr-sidebar/PrSidebarCreateEmptyState', () => ({
   PrSidebarCreateEmptyState: () => null
 }))
-vi.mock('../session/use-mobile-pr-actions', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../session/use-mobile-pr-actions', () => ({
   useMobilePrActions: ({ refetch }: { refetch: (options?: PrSidebarLoadOptions) => void }) => {
     doubles.refetchPr = refetch
     return {
@@ -78,8 +77,7 @@ vi.mock('../session/use-mobile-pr-actions', async (importOriginal) => ({
     }
   }
 }))
-vi.mock('../session/use-mobile-pr-comment-actions', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../session/use-mobile-pr-comment-actions', () => ({
   useMobilePrCommentActions: () => ({
     error: null,
     isRootBusy: false,
@@ -94,12 +92,10 @@ vi.mock('../session/use-mobile-pr-comment-actions', async (importOriginal) => ({
     isDeleteBusy: () => false
   })
 }))
-vi.mock('../session/use-mobile-pr-title-action', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../session/use-mobile-pr-title-action', () => ({
   useMobilePrTitleAction: () => ({})
 }))
-vi.mock('../session/use-mobile-pr-ai-triage', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../session/use-mobile-pr-ai-triage', () => ({
   useMobilePrAiTriage: () => ({
     isBusy: () => false,
     noticeFor: () => ({}),
@@ -111,8 +107,7 @@ vi.mock('../components/host-protocol-gates-context', async (importOriginal) => (
   ...(await importOriginal<object>()),
   useHostProtocolGates: () => ({ hostCapabilities: [], statusPending: false, statusReadable: true })
 }))
-vi.mock('../session/use-pr-bot-author-overrides', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+vi.mock('../session/use-pr-bot-author-overrides', () => ({
   usePRBotAuthorOverrides: () => new Set()
 }))
 vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () => null }))
