@@ -294,7 +294,6 @@
         "administratorDialogScope": "Cela modifie les autorisations pour toute l'application. SSH et WSL conservent leurs propres autorisations.",
         "administratorDocumentation": "Lire le guide",
         "administratorLabel": "Mode administrateur",
-        "administratorPromptCancellation": "L'annulation de l'invite de Windows rouvre Orca avec ses terminaux conservés. Les autorisations SSH et WSL restent contrôlées sur leurs hôtes.",
         "administratorRestartConsequences": "Enregistrez d'abord votre travail. Après approbation, les terminaux et les agents sur l'hôte de terminaux local actuel se ferment. Les onglets restaurés ouvrent de nouveaux shells d'administrateur.",
         "administratorRestartFailed": "Orca n'a pas pu redémarrer. Réessayez ou utilisez les instructions manuelles.",
         "administratorScope": "Autorisations pour l'application Orca. Les terminaux existants peuvent différer.",
@@ -321,7 +320,9 @@
         "returnStandardHelp": "Guide du mode standard",
         "runAdministratorHelp": "Guide de l'administrateur",
         "standardStatus": "Utilisateur standard",
-        "unknownAdministrator": "Impossible de déterminer"
+        "unknownAdministrator": "Impossible de déterminer",
+        "administratorPromptCancellationKeepsOpen": "Si vous annulez l'invite de Windows, Orca reste ouvert et conserve ses terminaux. Les autorisations SSH et WSL restent contrôlées sur leurs hôtes.",
+        "administratorRestartCanceled": "L'approbation de Windows a été annulée. Orca et ses terminaux sont toujours en cours d'exécution."
       },
       "limit": {
         "label": "Nombre maximal de terminaux actifs",

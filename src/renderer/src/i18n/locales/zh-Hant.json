@@ -509,7 +509,6 @@
         "confirmAdministratorRestart": "以系統管理員身分重新啟動？",
         "administratorRestartConsequences": "請先儲存您的工作。核准後，目前本機終端機主機上的終端機和代理程式會關閉。還原的分頁會開啟新的系統管理員殼層。",
         "administratorDialogScope": "這會變更整個應用程式的權限。SSH 和 WSL 保留各自的權限。",
-        "administratorPromptCancellation": "取消 Windows 的提示後，Orca 會重新開啟，並保留原有終端機。SSH 和 WSL 的權限仍由其主機控制。",
         "closeLocalSessions": "請儲存您的工作，關閉所有本機終端機工作階段，然後結束 Orca。",
         "launchStandard": "從 Windows 開始選單正常開啟 Orca。",
         "launchAdministrator": "在 Windows 開始選單中，以滑鼠右鍵按一下 Orca，然後選擇「以系統管理員身分執行」。使用您常用的帳戶核准 Windows 提示。",
@@ -522,7 +521,9 @@
         "restartingAdministrator": "正在重新啟動…",
         "openManageSessions": "開啟管理工作階段",
         "administratorSearchDescription": "檢視 Orca 的 Windows 權限，或經系統管理員核准後重新啟動。",
-        "administratorApproval": "Windows 將要求核准。請使用您常用的帳戶。"
+        "administratorApproval": "Windows 將要求核准。請使用您常用的帳戶。",
+        "administratorPromptCancellationKeepsOpen": "如果取消 Windows 的提示，Orca 會保持開啟並保留其終端機。SSH 和 WSL 的權限仍由其主機控制。",
+        "administratorRestartCanceled": "Windows 核准已取消。Orca 及其終端機仍在執行。"
       }
     },
     "appearance": {

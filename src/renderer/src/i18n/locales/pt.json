@@ -1464,7 +1464,6 @@
         "confirmAdministratorRestart": "Reiniciar como administrador?",
         "administratorRestartConsequences": "Salve seu trabalho antes. Após a aprovação, os terminais e agentes no host de terminal local atual serão fechados. As abas restauradas abrirão novos shells de administrador.",
         "administratorDialogScope": "Isso altera as permissões de todo o aplicativo. SSH e WSL mantêm suas próprias permissões.",
-        "administratorPromptCancellation": "Cancelar a solicitação do Windows reabre o Orca com os terminais preservados. As permissões de SSH e WSL continuam sendo controladas nos respectivos hosts.",
         "closeLocalSessions": "Salve seu trabalho, feche todas as sessões de terminal locais e saia do Orca.",
         "launchStandard": "Abra o Orca normalmente pelo menu Iniciar do Windows.",
         "launchAdministrator": "No menu Iniciar do Windows, clique com o botão direito no Orca e escolha Executar como administrador. Aprove a solicitação do Windows usando sua conta habitual.",
@@ -1477,7 +1476,9 @@
         "restartingAdministrator": "Reiniciando…",
         "openManageSessions": "Abrir Gerenciar sessões",
         "administratorSearchDescription": "Veja as permissões do Orca no Windows ou reinicie com aprovação de administrador.",
-        "administratorApproval": "O Windows pedirá aprovação. Use sua conta habitual."
+        "administratorApproval": "O Windows pedirá aprovação. Use sua conta habitual.",
+        "administratorPromptCancellationKeepsOpen": "Se você cancelar a solicitação do Windows, o Orca continua aberto e mantém seus terminais. As permissões de SSH e WSL continuam controladas em seus hosts.",
+        "administratorRestartCanceled": "A aprovação do Windows foi cancelada. O Orca e seus terminais continuam em execução."
       },
       "limit": {
         "savedUnreadable": "Não foi possível ler o limite de terminais salvo neste host. Usando {{value}}. Digite um valor e pressione Enter para substituí-lo."

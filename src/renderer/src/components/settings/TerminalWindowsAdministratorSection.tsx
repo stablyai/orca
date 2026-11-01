@@ -27,6 +27,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const [manualInstructions, setManualInstructions] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [restartError, setRestartError] = useState(false)
+  const [restartCanceled, setRestartCanceled] = useState(false)
   const cancelRef = useRef<HTMLButtonElement>(null)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const setSettingsSearchQuery = useAppStore((state) => state.setSettingsSearchQuery)
@@ -72,6 +73,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
     if (open) {
       setManualInstructions(false)
       setRestartError(false)
+      setRestartCanceled(false)
     }
     setInstructionsOpen(open)
   }
@@ -82,8 +84,12 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
     }
     setRestarting(true)
     setRestartError(false)
+    setRestartCanceled(false)
     try {
-      await window.api.app.restartAsAdministrator()
+      if (!(await window.api.app.restartAsAdministrator())) {
+        setRestarting(false)
+        setRestartCanceled(true)
+      }
     } catch {
       setRestarting(false)
       setRestartError(true)
@@ -175,8 +181,8 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               </p>
               <p className="text-xs text-muted-foreground">
                 {translate(
-                  'settings.terminal.windows.administratorPromptCancellation',
-                  'Canceling Windows’ prompt reopens Orca with its retained terminals. SSH and WSL permissions stay controlled on their hosts.'
+                  'settings.terminal.windows.administratorPromptCancellationKeepsOpen',
+                  'If you cancel Windows’ prompt, Orca stays open and keeps its terminals. SSH and WSL permissions stay controlled on their hosts.'
                 )}
               </p>
             </div>
@@ -209,6 +215,14 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               </p>
             </div>
           )}
+          {restartCanceled && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {translate(
+                'settings.terminal.windows.administratorRestartCanceled',
+                'Windows approval was canceled. Orca and its terminals are still running.'
+              )}
+            </p>
+          )}
           {restartError && (
             <p role="alert" className="text-sm text-destructive">
               {translate(
@@ -226,6 +240,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                 onClick={() => {
                   setManualInstructions(true)
                   setRestartError(false)
+                  setRestartCanceled(false)
                 }}
               >
                 {translate(

@@ -561,7 +561,6 @@
         "confirmAdministratorRestart": "Restart as administrator?",
         "administratorRestartConsequences": "Save your work first. After approval, terminals and agents on the current local terminal host close. Restored tabs open new administrator shells.",
         "administratorDialogScope": "This changes permissions for the whole app. SSH and WSL keep their own permissions.",
-        "administratorPromptCancellation": "Canceling Windows’ prompt reopens Orca with its retained terminals. SSH and WSL permissions stay controlled on their hosts.",
         "closeLocalSessions": "Save your work, close all local terminal sessions, then exit Orca.",
         "launchStandard": "Open Orca normally from the Windows Start menu.",
         "launchAdministrator": "In the Windows Start menu, right-click Orca and choose Run as administrator. Approve the Windows prompt using your usual account.",
@@ -574,7 +573,9 @@
         "restartingAdministrator": "Restarting…",
         "openManageSessions": "Open Manage Sessions",
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
-        "administratorApproval": "Windows will ask for approval. Use your usual account."
+        "administratorApproval": "Windows will ask for approval. Use your usual account.",
+        "administratorPromptCancellationKeepsOpen": "If you cancel Windows’ prompt, Orca stays open and keeps its terminals. SSH and WSL permissions stay controlled on their hosts.",
+        "administratorRestartCanceled": "Windows approval was canceled. Orca and its terminals are still running."
       },
       "limit": {
         "label": "Maximum running terminals",

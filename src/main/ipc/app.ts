@@ -9,7 +9,8 @@ import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../app-relaunch'
-import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { requestWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/process-quit-request'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
@@ -206,13 +207,18 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }, 150)
   })
 
-  ipcMain.handle('app:restartAsAdministrator', async () => {
-    const relaunchOptions = prepareWindowsAdministratorRestart()
+  ipcMain.handle('app:restartAsAdministrator', async (event): Promise<boolean> => {
+    // Windows only shows the approval prompt in front when its owner window is in front.
+    const owner = BrowserWindow.fromWebContents(event.sender)
+    const request = await requestWindowsAdministratorRestart(owner?.getNativeWindowHandle() ?? null)
+    if (request === 'cancelled') {
+      return false
+    }
+    // The elevated launcher starts Orca once this process exits; no Electron relaunch.
+    recordDurableCrashBreadcrumb('app_relaunch_requested', { reason: 'windows-administrator' })
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-    setTimeout(() => {
-      relaunchApp('windows-administrator', undefined, relaunchOptions)
-      quitProcess()
-    }, 150)
+    setTimeout(() => quitProcess(), 150)
+    return true
   })
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)

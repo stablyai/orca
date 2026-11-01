@@ -60,10 +60,6 @@ describe('relaunchApp', () => {
     expect(nativeArgv).toContain(flag)
     relaunchApp('profile-switch')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
-
-    const custom = { execPath: 'administrator-launcher.exe', args: ['restart', flag] }
-    relaunchApp('windows-administrator', undefined, custom)
-    expect(appRelaunchMock).toHaveBeenLastCalledWith(custom)
   })
 
   it('does not carry Orca PATH seeds into the replacement process', () => {

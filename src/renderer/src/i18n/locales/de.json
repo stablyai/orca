@@ -540,7 +540,6 @@
         "confirmAdministratorRestart": "Als Administrator neu starten?",
         "administratorRestartConsequences": "Zuerst die Arbeit speichern. Nach der Bestätigung werden Terminals und Agenten auf dem aktuellen lokalen Terminal-Host geschlossen. Wiederhergestellte Tabs öffnen neue Shells mit Administratorrechten.",
         "administratorDialogScope": "Dies ändert die Berechtigungen für die gesamte App. SSH und WSL behalten ihre eigenen Berechtigungen.",
-        "administratorPromptCancellation": "Beim Abbrechen der Windows-Abfrage wird Orca mit den beibehaltenen Terminals erneut geöffnet. Die Berechtigungen für SSH und WSL werden weiterhin auf deren Hosts verwaltet.",
         "closeLocalSessions": "Die Arbeit speichern, alle lokalen Terminal-Sitzungen schließen und anschließend Orca beenden.",
         "launchStandard": "Orca regulär über das Windows-Startmenü öffnen.",
         "launchAdministrator": "Im Windows-Startmenü mit der rechten Maustaste auf Orca klicken und Run as administrator auswählen. Die Windows-Abfrage mit dem üblichen Konto bestätigen.",
@@ -553,7 +552,9 @@
         "restartingAdministrator": "Wird neu gestartet…",
         "openManageSessions": "„Sitzungen verwalten“ öffnen",
         "administratorSearchDescription": "Windows-Berechtigungen von Orca anzeigen oder mit Administratorbestätigung neu starten.",
-        "administratorApproval": "Windows bittet um Bestätigung. Das übliche Konto verwenden."
+        "administratorApproval": "Windows bittet um Bestätigung. Das übliche Konto verwenden.",
+        "administratorPromptCancellationKeepsOpen": "Wenn die Windows-Abfrage abgebrochen wird, bleibt Orca mit seinen Terminals geöffnet. Die Berechtigungen für SSH und WSL werden weiterhin auf ihren Hosts gesteuert.",
+        "administratorRestartCanceled": "Die Windows-Bestätigung wurde abgebrochen. Orca und seine Terminals laufen weiter."
       },
       "wordSeparators": {
         "description": "Zeichen, die bei der Auswahl per Doppelklick als Wortgrenzen gelten, einschließlich Leerzeichen.",
