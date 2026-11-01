@@ -219,6 +219,9 @@
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
       "accept": "Run as host",
       "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
+    },
+    "projectOrder": {
+      "saveFailed": "Could not save project order"
     }
   },
   "app": {
@@ -20802,7 +20805,8 @@
         "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open"
       }
-    }
+    },
+    "tab-bar": {}
   },
   "dashboardPopout": {
     "recoverableError": {
@@ -20885,7 +20889,10 @@
       "openActivity": "View activity",
       "closeActivity": "Turn off activity view",
       "projects": "Projects",
-      "workspaces": "Workspaces"
+      "workspaces": "Workspaces",
+      "loadingChatAgents": "Loading chat agents…",
+      "noChatAgents": "No chat agents available on this host",
+      "activity": "Activity"
     }
   },
   "runtimeRpc": {
@@ -23418,5 +23425,34 @@
       "message": "{{plugin}} wants to open {{host}}",
       "alwaysAllow": "Always allow {{host}} for this plugin"
     }
+  },
+  "projectConversations": {
+    "defaultGroupName": "{{project}} group",
+    "hideProject": "Hide project from list",
+    "hiddenProjects": "Hidden projects",
+    "keepFiles": "Files and history are kept",
+    "restoreProject": "Restore {{project}}",
+    "projectOptionsFor": "Project options for {{project}}",
+    "visibilityFailed": "Could not save project visibility. Update Orca or try again.",
+    "search": "Search chats",
+    "projectOrder": "Project order",
+    "allChats": "Chats",
+    "archived": "Archived",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "noChats": "No chats yet",
+    "loading": "Loading chats…",
+    "noArchived": "No archived chats",
+    "noMatching": "No matching chats",
+    "untitled": "Untitled chat",
+    "unpin": "Unpin chat",
+    "pin": "Pin chat",
+    "restore": "Restore chat",
+    "archive": "Archive chat",
+    "working": "Working",
+    "needsYou": "Needs you",
+    "showMore": "Show more",
+    "newChatInProject": "New chat in {{project}}",
+    "saveFailed": "Could not save chat preferences. Update Orca or try again."
   }
 }

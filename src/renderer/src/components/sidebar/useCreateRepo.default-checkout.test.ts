@@ -208,6 +208,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     })
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
+      navigationIntent: 'user-open',
       sidebarRevealBehavior: 'auto'
     })
     expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')

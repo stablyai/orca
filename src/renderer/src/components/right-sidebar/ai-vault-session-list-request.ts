@@ -12,6 +12,7 @@ import {
 
 /** Match panel requests so readers share host/renderer caches instead of evicting one another. */
 export type AiVaultSessionListRequest = {
+  includeStructuredSessions?: boolean
   scopePaths: readonly string[]
   executionHostScope: ExecutionHostScope
   sessionLimit: AiVaultSessionLimit
@@ -22,6 +23,7 @@ export function aiVaultSessionListArgs(
   options: { force?: boolean; requestToken: string }
 ): AiVaultListArgs {
   return {
+    ...(request.includeStructuredSessions ? { includeStructuredSessions: true } : {}),
     includeAntigravityIdeSessions: true,
     limit: request.sessionLimit === 'unlimited' ? undefined : request.sessionLimit,
     unlimited: request.sessionLimit === 'unlimited',
@@ -35,8 +37,16 @@ export function aiVaultSessionListArgs(
 export function readCachedAiVaultSessionList(
   request: AiVaultSessionListRequest
 ): AiVaultListResult | null {
+  // Record metadata is projected outside the host's transcript cache on every request.
+  if (request.includeStructuredSessions) {
+    return null
+  }
   return readCachedAiVaultSessionResult({
-    key: aiVaultSessionResultCacheKey(request.executionHostScope, request.scopePaths),
+    key: aiVaultSessionResultCacheKey(
+      request.executionHostScope,
+      request.scopePaths,
+      request.includeStructuredSessions
+    ),
     limit: request.sessionLimit,
     scopePaths: request.scopePaths
   })
@@ -48,7 +58,11 @@ export function cacheAiVaultSessionList(
   options: { replaceHostEntries: boolean }
 ): void {
   cacheAiVaultSessionResult({
-    key: aiVaultSessionResultCacheKey(request.executionHostScope, request.scopePaths),
+    key: aiVaultSessionResultCacheKey(
+      request.executionHostScope,
+      request.scopePaths,
+      request.includeStructuredSessions
+    ),
     executionHostScope: request.executionHostScope,
     limit: request.sessionLimit,
     scopePaths: request.scopePaths,

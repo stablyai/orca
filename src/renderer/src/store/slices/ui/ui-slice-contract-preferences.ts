@@ -26,7 +26,7 @@ import type { UISliceCore } from './ui-slice-contract-core'
 
 export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
-  sidebarBody: 'workspaces' | 'agents'
+  sidebarBody: 'conversations' | 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlicePreferences['groupBy']) => void

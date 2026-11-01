@@ -57,6 +57,7 @@ describe('launchAgentInNewTab main-window surface', () => {
     const result = launchAgentInNewTab({
       requestId: 'request-1',
       agent: 'opencode',
+      requestedSurface: 'terminal',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
 
@@ -80,6 +81,7 @@ describe('launchAgentInNewTab main-window surface', () => {
     const result = launchAgentInNewTab({
       requestId: 'request-2',
       agent: 'opencode',
+      requestedSurface: 'terminal',
       worktreeId: MAIN_WORKTREE_ID
     })
 

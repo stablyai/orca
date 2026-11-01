@@ -47,9 +47,11 @@ function renderSession(
   blocked = false,
   searchHit?: AiVaultSearchHit,
   searchHitHostLabels?: ReadonlyMap<string, string>,
-  logDetails?: { onOpenLog: (session: AiVaultSession) => Promise<void> },
+  detailsOrNavigation: boolean | { onOpenLog: (session: AiVaultSession) => Promise<void> } = false,
   liveState: AgentDotState | null = null
 ) {
+  const conversationNavigation = typeof detailsOrNavigation === 'boolean' && detailsOrNavigation
+  const logDetails = typeof detailsOrNavigation === 'object' ? detailsOrNavigation : undefined
   if (logDetails) {
     Object.defineProperty(window, 'api', { configurable: true, value: { aiVault: {} } })
   }
@@ -57,9 +59,13 @@ function renderSession(
   const onCopyResume = vi.fn()
   const onResume = vi.fn()
   const onResumeInNewCli = vi.fn()
+  const onOpenConversation = vi.fn()
+  const onToggleSessionDetails = vi.fn()
   render(
     <TooltipProvider>
       <AiVaultVirtualRow
+        conversationNavigation={conversationNavigation}
+        onOpenConversation={conversationNavigation ? onOpenConversation : undefined}
         row={{ type: 'session', groupKey: 'today', session }}
         index={0}
         start={0}
@@ -86,7 +92,7 @@ function renderSession(
         })}
         getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
         onToggleGroup={vi.fn()}
-        onToggleSessionDetails={vi.fn()}
+        onToggleSessionDetails={onToggleSessionDetails}
         onJumpToOriginalPane={vi.fn()}
         onJumpToWorktree={vi.fn()}
         onResume={onResume}
@@ -103,8 +109,30 @@ function renderSession(
       />
     </TooltipProvider>
   )
-  return { buildResumeStartup, onCopyResume, onResume, onResumeInNewCli }
+  return {
+    buildResumeStartup,
+    onCopyResume,
+    onResume,
+    onResumeInNewCli,
+    onOpenConversation,
+    onToggleSessionDetails
+  }
 }
+
+it('opens a compact conversation row on a single click and retains its secondary actions', async () => {
+  const { onOpenConversation, onToggleSessionDetails } = renderSession(
+    cliSession,
+    false,
+    undefined,
+    undefined,
+    true
+  )
+  await userEvent.click(screen.getByText('CLI session'))
+  expect(onOpenConversation).toHaveBeenCalledExactlyOnceWith(cliSession)
+  expect(onToggleSessionDetails).not.toHaveBeenCalled()
+  expect(screen.queryByTestId('ai-vault-session-metadata')).toBeNull()
+  expect(screen.getByTestId('ai-vault-session-more-actions')).toBeTruthy()
+})
 
 describe('AiVaultVirtualRow conversation logs', () => {
   it('opens a search-derived companion from the expanded View Log button', async () => {
@@ -198,6 +226,24 @@ describe('AiVaultVirtualRow search hit source host', () => {
 })
 
 describe('AiVaultVirtualRow resume command actions', () => {
+  it('offers no provider path, read, delete, or CLI action for record-only chats', async () => {
+    const saved: AiVaultSession = {
+      ...cliSession,
+      source: 'structured-record',
+      filePath: '',
+      resumeCommand: '',
+      messageCount: 0,
+      previewMessages: [],
+      structuredSession: { sessionId: 'saved-empty', workspaceId: 'folder:notes' }
+    }
+    const { buildResumeStartup } = renderSession(saved, false, undefined, undefined, true)
+    await userEvent.click(screen.getByTestId('ai-vault-session-more-actions'))
+    const menu = await screen.findByRole('menu')
+    expect(menu.textContent).not.toMatch(
+      /Copy Log Path|Open Log|View Log|Reveal Log|Resume in New Terminal|Resume in New Chat|Copy Resume Command|Delete/
+    )
+    expect(buildResumeStartup).not.toHaveBeenCalled()
+  })
   it('renders blocked IDE references without preparing an unsafe startup command', () => {
     const { buildResumeStartup } = renderSession(
       {

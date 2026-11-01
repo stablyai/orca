@@ -144,7 +144,11 @@ describe('Sidebar', () => {
     vi.useFakeTimers()
     try {
       setSidebarState(getDefaultSettings(tmpdir()))
-      mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: false }
+      mocks.state = {
+        ...mocks.state,
+        sidebarBody: 'workspaces',
+        startupWorktreeRefreshCompleted: false
+      }
       const view = render(sidebarElement())
       expect(view.queryByRole('status')).toBeNull()
       act(() => vi.advanceTimersByTime(200))

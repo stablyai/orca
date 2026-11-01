@@ -50,17 +50,20 @@ beforeEach(() => {
 })
 
 describe('sidebar reveal actions', () => {
-  it('skip reveals while the activity view is showing instead of switching bodies', () => {
-    const store = createUIStore()
-    store.getState().setSidebarBody('agents')
+  it.each(['agents', 'conversations'] as const)(
+    'skips incidental reveals while %s is showing',
+    (body) => {
+      const store = createUIStore()
+      store.getState().setSidebarBody(body)
 
-    store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
-    store.getState().revealSidebarRow('repo:r1')
+      store.getState().revealWorktreeInSidebar('wt-1', { highlight: true })
+      store.getState().revealSidebarRow('repo:r1')
 
-    expect(store.getState().sidebarBody).toBe('agents')
-    expect(store.getState().pendingRevealWorktree).toBeNull()
-    expect(store.getState().pendingRevealSidebarRow).toBeNull()
-  })
+      expect(store.getState().sidebarBody).toBe(body)
+      expect(store.getState().pendingRevealWorktree).toBeNull()
+      expect(store.getState().pendingRevealSidebarRow).toBeNull()
+    }
+  )
 
   it('reveal after an explicit switch to the workspace list', () => {
     const store = createUIStore()
@@ -85,8 +88,8 @@ describe('sidebar reveal actions', () => {
 })
 
 describe('createUISlice hydratePersistedUI', () => {
-  it('defaults persisted right sidebar visibility to open', () => {
-    expect(getDefaultUIState().rightSidebarOpen).toBe(true)
+  it('keeps new conversations focused by defaulting the file sidebar closed', () => {
+    expect(getDefaultUIState().rightSidebarOpen).toBe(false)
   })
 
   it('defaults to showing sleeping workspaces', () => {

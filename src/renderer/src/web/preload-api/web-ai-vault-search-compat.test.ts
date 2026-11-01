@@ -80,3 +80,26 @@ describe('web session search preload compatibility', () => {
     expect(callRuntimeResult).not.toHaveBeenCalled()
   })
 })
+
+describe('web project conversation listing', () => {
+  it('forwards unlimited structured history so older browser conversations are not capped', async () => {
+    callRuntimeResult.mockResolvedValue({
+      sessions: [],
+      issues: [],
+      scannedAt: '2026-10-29T00:00:00Z'
+    })
+    await createWebAiVaultApi().listSessions({
+      executionHostScope: 'runtime:owning-host',
+      includeStructuredSessions: true,
+      unlimited: true
+    })
+    expect(callRuntimeResult).toHaveBeenCalledExactlyOnceWith(
+      'aiVault.listSessions',
+      expect.objectContaining({
+        executionHostId: 'runtime:owning-host',
+        includeStructuredSessions: true,
+        unlimited: true
+      })
+    )
+  })
+})

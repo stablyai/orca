@@ -1,5 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { openFileExplorer } from './helpers/file-explorer'
 import { serverCall } from './helpers/orcad-convert-flow'
 import {
   activateManagedWorkspace,
@@ -39,6 +40,7 @@ test('open remote Markdown previews discover host-created documents', async (// 
       captureRendererMessages(page, '[renderer-event]')
     )
     await activateManagedWorkspace(page, seeded.worktreeId, environmentId)
+    await openFileExplorer(page)
     await expect(page.locator('.rich-markdown-editor')).toContainText(marker, { timeout: 30_000 })
     await page.evaluate(
       ({ filePath, worktreeId, environmentId }) => {

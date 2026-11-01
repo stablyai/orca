@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { waitForSessionReady } from './helpers/store'
+import { selectSidebarBody, waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import {
   mutateStoppedProfileState,
@@ -167,6 +167,7 @@ test("a moved project's existing chats stay listed and openable on this computer
     launched = await session.launch()
     const { page } = launched
     await waitForSessionReady(page)
+    await selectSidebarBody(page, 'workspaces')
     // Session History's reveal: the host reads the chat's record and republishes its tab into the
     // moved project's worktree, which only the retained entry lists.
     const revealed = await page.evaluate(
@@ -245,6 +246,7 @@ test('"Use on this computer again" brings a moved project back as it was before 
     launched = await session.launch()
     const { page } = launched
     await waitForSessionReady(page)
+    await selectSidebarBody(page, 'workspaces')
     await page.evaluate(
       (sessionId) =>
         window.api.runtime.call({ method: 'agentSession.reveal', params: { sessionId } }),
@@ -273,6 +275,7 @@ test('"Use on this computer again" brings a moved project back as it was before 
     await dialog.getByRole('button', { name: 'Use on this computer' }).click()
     await reloaded
     await waitForSessionReady(page)
+    await selectSidebarBody(page, 'workspaces')
 
     // The retained row lists again, and the read-only entry goes away.
     await expect.poll(listed, { timeout: 30_000 }).toBe(true)

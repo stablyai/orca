@@ -1,5 +1,6 @@
 // Which live workspace owns a saved session's cwd, on the host that recorded it; shared by desktop and mobile.
 
+import { createNormalizedAiVaultScopeCwdMatcher } from './ai-vault-scope-cwd-match'
 import { parseWslUncPath } from './wsl-paths'
 import { splitWorktreeIdForFilesystem } from './worktree/id'
 import {
@@ -9,7 +10,6 @@ import {
   type ExecutionHostId
 } from './execution-host'
 import {
-  createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
@@ -47,7 +47,7 @@ type WorktreeCandidate = {
   status: Exclude<AiVaultSessionWorktreeStatus, 'current'>
   source: 'current-path' | 'prior-path'
   // Precomputed so a 500-session scan doesn't re-normalize ~500 roots per session.
-  ownsNormalizedCwd: (normalizedCwd: string) => boolean
+  ownsNormalizedCwd: ReturnType<typeof createNormalizedAiVaultScopeCwdMatcher>
   normalizedPathLength: number
   normalizedPath: string
 }
@@ -84,11 +84,27 @@ function resolveWorktreeInfoFromCandidates(
   session: AiVaultSession,
   candidates: readonly WorktreeCandidate[]
 ): AiVaultSessionWorktreeInfo | null {
+  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
+  const owned =
+    session.structuredSession &&
+    candidates.find(
+      (candidate) =>
+        candidate.worktree.id === session.structuredSession?.workspaceId &&
+        candidate.hostId === sessionHostId &&
+        candidate.source === 'current-path'
+    )
+  if (owned) {
+    return {
+      status: owned.status,
+      label: owned.worktree.displayName || aiVaultWorktreeCompactPath(owned.path),
+      path: owned.path,
+      worktreeId: owned.worktree.id
+    }
+  }
   if (!session.cwd) {
     return null
   }
 
-  const sessionHostId = normalizeExecutionHostId(session.executionHostId)
   const matched = matchAiVaultSessionCwdCandidates(
     session,
     session.cwd,
@@ -250,7 +266,7 @@ function makeWorktreeCandidates(
     hostId,
     status: worktree.isArchived ? 'archived' : 'active',
     source,
-    ownsNormalizedCwd: createNormalizedPathInsideOrEqualMatcher(cwdPath),
+    ownsNormalizedCwd: createNormalizedAiVaultScopeCwdMatcher([path]),
     normalizedPath: normalizeRuntimePathForComparison(cwdPath),
     normalizedPathLength: normalizeRuntimePathForComparison(path).length
   }))
