@@ -40,6 +40,7 @@ async function startLinkServer(): Promise<{ server: Server; origin: string }> {
 test('a target=_blank click in a streamed server page opens a new Orca tab', async ({
   testRepoPath
 }, testInfo) => {
+  // Boots a headless host and a paired client, then waits on two streamed tab opens.
   test.setTimeout(300_000)
   const { server, origin } = await startLinkServer()
   const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
