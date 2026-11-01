@@ -25,10 +25,15 @@ type Box = { left: number; right: number; top: number; bottom: number }
 const CARD_COLUMN: Box = { left: 648, right: 1008, top: 0, bottom: 0 }
 const rects = new Map<string, Box>()
 
-function Composer({ id }: { id: string }): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null)
-  useNotificationCardComposerClearance(ref, true)
-  return <div ref={ref} data-box={id} />
+function Composer({ id, column }: { id: string; column?: string }): React.JSX.Element {
+  const pane = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  useNotificationCardComposerClearance(pane, column ? box : pane, true)
+  return (
+    <div ref={pane} data-box={id}>
+      {column ? <div ref={box} data-box={column} /> : null}
+    </div>
+  )
 }
 
 function ToasterStandIn(): React.JSX.Element {
@@ -123,12 +128,16 @@ describe('NotificationCardStack', () => {
   it('leaves the cards in place for composers beside them, above them, hidden, or with no cards', () => {
     height = 120
     rects.set('beside', { left: 0, right: 600, top: 650, bottom: 740 })
+    // A wide chat pane reaching under the cards, with its centred input column clear of them.
+    rects.set('pane', { left: 300, right: 1010, top: 650, bottom: 740 })
+    rects.set('centred', { left: 400, right: 640, top: 660, bottom: 724 })
     rects.set('above', { left: 300, right: 1010, top: 300, bottom: 400 })
     rects.set('hidden', { left: 0, right: 0, top: 0, bottom: 0 })
     act(() =>
       root?.render(
         <>
           <Composer id="beside" />
+          <Composer id="pane" column="centred" />
           <Composer id="above" />
           <Composer id="hidden" />
           <Corner />
