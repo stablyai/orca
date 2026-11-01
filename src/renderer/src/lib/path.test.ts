@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { dirname, getRelativePathInsideRoot, joinPath } from './path'
+import { absolutePathBasename, dirname, getRelativePathInsideRoot, joinPath } from './path'
+
+describe('absolutePathBasename', () => {
+  it('keeps backslashes in POSIX file names', () => {
+    expect(absolutePathBasename('/repo/src/foo\\bar.ts')).toBe('foo\\bar.ts')
+  })
+
+  it('splits Windows drive and UNC paths on either separator', () => {
+    expect(absolutePathBasename('C:\\repo\\src/file.ts')).toBe('file.ts')
+    expect(absolutePathBasename('\\\\server\\share\\file.ts')).toBe('file.ts')
+  })
+})
 
 describe('dirname', () => {
   it('keeps the POSIX root when resolving a file in the filesystem root', () => {

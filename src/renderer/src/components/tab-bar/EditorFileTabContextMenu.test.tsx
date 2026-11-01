@@ -209,16 +209,20 @@ async function renderMenu(
     repoConnectionId?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
-    mode?: 'edit' | 'check-details'
+    mode?: 'edit' | 'check-details' | 'conflict-review' | 'diff'
+    diffSource?: 'combined-uncommitted'
     unifiedTabId?: string
     filePath?: string
+    relativePath?: string
   } = {}
 ): Promise<unknown> {
   const {
     runtimeEnvironmentId,
     externalSshTargetId,
     mode = 'edit',
+    diffSource,
     filePath = '/repo/foo.ts',
+    relativePath = 'foo.ts',
     ...props
   } = overrides
   const module = await import('./EditorFileTabContextMenu')
@@ -227,11 +231,12 @@ async function renderMenu(
       id: 'file-1',
       tabId: 'tab-1',
       filePath,
-      relativePath: 'foo.ts',
+      relativePath,
       worktreeId: 'wt-1',
       language: 'typescript',
       isDirty: false,
       mode,
+      diffSource,
       runtimeEnvironmentId,
       externalSshTargetId
     },
@@ -402,6 +407,42 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    ['/repo/src/foo.ts', 'src/foo.ts', 'foo.ts'],
+    ['/repo/src/foo\\bar.ts', 'src/foo\\bar.ts', 'foo\\bar.ts']
+  ])(
+    'copies the file name of %s without directory prefixes',
+    async (filePath, relativePath, name) => {
+      const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { writeClipboardText } } })
+      const tree = expandNode(await renderMenu({ filePath, relativePath }))
+      const item = findElementsByType(tree, 'ContextMenuItem').find(
+        (candidate) => extractText(candidate.props.children) === 'Copy File Name'
+      )
+      const onSelect = item?.props.onSelect
+      if (typeof onSelect !== 'function') {
+        throw new Error('Missing Copy File Name action')
+      }
+      onSelect()
+      expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith(name)
+    }
+  )
+
+  it.each([
+    ['a conflict review', { mode: 'conflict-review' }],
+    ['a combined diff', { mode: 'diff', diffSource: 'combined-uncommitted' }]
+  ] as const)('hides Copy File Name for %s tab on the worktree root', async (_label, overrides) => {
+    const tree = expandNode(
+      await renderMenu({ ...overrides, filePath: '/repo', relativePath: 'Conflict Review' })
+    )
+    const labels = findElementsByType(tree, 'ContextMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels).not.toContain('Copy File Name')
+    expect(labels).toEqual(expect.arrayContaining(['Copy Path', 'Copy Relative Path']))
+  })
+
   it('reveals a local file through the shared reveal action', async () => {
     const reveal = await renderRevealItem()
 
@@ -461,7 +502,9 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       )
 
       expect(
-        labels.filter((label) => /Copy Path|Copy Relative Path|Reveal in/.test(label))
+        labels.filter((label) =>
+          /Copy Path|Copy Relative Path|Copy File Name|Reveal in/.test(label)
+        )
       ).toEqual([])
       // The two separators that framed the path group go with it.
       const fileTree = expandNode(await renderMenu())
