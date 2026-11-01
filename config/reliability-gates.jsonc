@@ -506,7 +506,7 @@
       "invariant": "A literal sleep followed by && must not cause the later harness to lose hook/account preparation or hidden renderer query delivery. Preparation and typed-command hints are not live process evidence. Fresh agent startup output may request one bounded host confirmation after the initial command read window has expired.",
       "oracle": "Delayed OpenCode 2 installs v2 hooks rather than v1, disabled harnesses do not fall back, selected managed accounts survive, and Pi/OMP/Prime preparation targets the requested harness. A captured Claude startup title at 30 seconds yields process-confirmed routing, never title-authorized routing. A title storm causes at most three additional reads; close and untrackable providers cause none.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/shared/agent-command-line-intent.test.ts",
@@ -514,7 +514,6 @@
         "src/shared/opencode-launch-command.test.ts",
         "src/main/ipc/pty/host-env/opencode-hook-installation.test.ts",
         "src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts",
-        "src/main/managed-data-accounts/launch-environment.test.ts",
         "src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts"
@@ -547,7 +546,7 @@
           "result": "passed",
           "durationSeconds": 1.86,
           "summary": "214 assertions pass across nine files, including all 45 harness classifications, actual hook files, delayed account preparation, late process routing, hidden query delivery and bounded recovery.",
-          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/main/managed-data-accounts/launch-environment.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-command-line-intent.test.ts src/shared/pi-agent-kind.test.ts src/shared/opencode-launch-command.test.ts src/main/ipc/pty/host-env/opencode-hook-installation.test.ts src/main/ipc/pty/pty-spawn-env-terminal-basics.test.ts src/renderer/src/components/terminal-pane/pane-delayed-agent-startup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent.test.ts src/renderer/src/components/terminal-pane/pty-connection-visibility-and-exit.test.ts --maxWorkers=2"
         }
       ],
       "runtimeBudget": {
@@ -2869,21 +2868,20 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh", "remote-runtime"],
-      "coverageNotes": "Shared code-unit and production normalizer/parser tests cover provider-independent behavior on macOS; existing buffer contracts cover normalized output. Native execution, process ownership, wire formats and mobile UI are unchanged. Folder/git identity is not inspected by these string functions.",
+      "coverageNotes": "Shared primitive and status/title parser tests cover provider-independent string behavior on macOS. The removed terminal normalizer suite has no replacement-equivalence claim. Native execution, process ownership, wire formats and mobile UI were not validated by this audit.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/shared/agent-status-osc.test.ts"
       ],
       "invariant": "Small incomplete status, ANSI and title controls must not retain the larger consumed output strings they were sliced from. Every retained control fragment is routed through ownRetainedString, which preserves exact UTF-16, current caps and trimming, payload order and clean-output offsets on both the Buffer and the code-unit fallback copier.",
-      "oracle": "One forced-GC fixture proves the primitive itself: 32 x 1 Mi parents pinned by 32 x 4 Ki slices retain over 16 MiB, and the same tails owned retain under 4 MiB and under an eighth of the sliced figure. Each retention site is then covered deterministically by spying on ownRetainedString: the retained value is routed through it on every chunk, including growing fragments. Large trimmed ANSI/title tails preserve their introducers and newest payload units; lone surrogates and split pairs survive BEL/ST completion; the Buffer-free fallback is byte-identical.",
+      "oracle": "The primitive forced-GC fixture measures retained backing storage. Remaining status/title site spies and UTF-16 parser fidelity checks do not establish terminal normalizer memory retention. The normalizer per-site spy and fidelity suite was removed as low-value during the test audit.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-pending-retention.test.ts src/shared/agent-status-types.test.ts src/main/runtime/terminal-ansi-pending-retention.test.ts src/shared/osc-title-scan-tail-retention.test.ts src/shared/osc-title-scan-tail.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/terminal-tail-whitespace.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-pending-retention.test.ts src/shared/agent-status-types.test.ts src/shared/osc-title-scan-tail-retention.test.ts src/shared/osc-title-scan-tail.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/terminal-tail-whitespace.test.ts"
       ],
       "testFiles": [
         "src/shared/own-retained-string.test.ts",
         "src/shared/agent-status-osc.test.ts",
         "src/shared/agent-status-osc-pending-retention.test.ts",
         "src/shared/agent-status-types.test.ts",
-        "src/main/runtime/terminal-ansi-pending-retention.test.ts",
         "src/shared/osc-title-scan-tail-retention.test.ts",
         "src/shared/osc-title-scan-tail.test.ts",
         "src/main/runtime/terminal-tail-buffer.test.ts",
@@ -2909,16 +2907,6 @@
           ]
         },
         {
-          "file": "src/main/runtime/terminal-ansi-pending-retention.test.ts",
-          "assertions": [
-            "routes every retained pending control through ownRetainedString",
-            "keeps %i-character chunks with %i incomplete statuses byte-exact",
-            "preserves trimming and code units for %j",
-            "preserves split UTF-16 through %j termination",
-            "keeps trimming an owned fragment that grows past the cap"
-          ]
-        },
-        {
           "file": "src/shared/osc-title-scan-tail-retention.test.ts",
           "assertions": [
             "routes every retained title tail through ownRetainedString",
@@ -2934,6 +2922,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-pending-retention.test.ts src/shared/agent-status-types.test.ts src/main/runtime/terminal-ansi-pending-retention.test.ts src/shared/osc-title-scan-tail-retention.test.ts src/shared/osc-title-scan-tail.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/terminal-tail-whitespace.test.ts",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/own-retained-string.test.ts src/shared/agent-status-osc.test.ts src/shared/agent-status-osc-pending-retention.test.ts src/shared/agent-status-types.test.ts src/shared/osc-title-scan-tail-retention.test.ts src/shared/osc-title-scan-tail.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/terminal-tail-whitespace.test.ts",
           "result": "passed",
           "durationSeconds": 11.4,
           "summary": "114 tests passed across nine primitive, parser, payload, normalization, title and terminal-buffer files."
@@ -2959,6 +2948,7 @@
         "No live Electron input-latency or Linux/Windows/WSL/SSH execution measurement; exact string and tail behavior is covered on macOS.",
         "The primitive's GC fixture is experimental with no CI soak. A provider input already sliced from an unseen larger ancestor can retain that ancestor; no universal heap cap or whole-process memory reduction is claimed.",
         "The renderer and mobile fallback copier is covered by a Buffer-free equivalence test, not by a real renderer bundle run.",
+        "The terminal normalizer per-site ownership spy and ANSI fidelity suite was removed; historical evidence runs and red-green observations below remain historical only.",
         "Tail-buffer row retention is a larger instance of the same pattern and is not covered by this gate."
       ],
       "promotionCriteria": [

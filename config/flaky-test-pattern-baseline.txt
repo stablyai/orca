@@ -896,7 +896,6 @@
 1 test-no-wall-clock:src/main/opencode/opencode-launch-model-context-supervision.test.ts
 1 test-no-wall-clock:src/main/opencode/overlay-dir-gc.test.ts
 10 test-no-wall-clock:src/main/orca-profiles/profile-cloud-auth-characterization.test.ts
-1 test-no-wall-clock:src/main/orca-profiles/profile-cloud-auth-status.test.ts
 1 test-no-wall-clock:src/main/orca-profiles/profile-cloud-org-members-service.test.ts
 1 test-no-wall-clock:src/main/orca-profiles/profile-cloud-service-auth-retry.test.ts
 4 test-no-wall-clock:src/main/orca-profiles/profile-cloud-service-connect-overlap.test.ts
@@ -950,10 +949,8 @@
 1 test-no-wall-clock:src/main/runtime/agent-state-rules/agent-state-rules-engine.test.ts
 1 test-no-wall-clock:src/main/runtime/antigravity-readiness-transcripts.test.ts
 1 test-no-wall-clock:src/main/runtime/claude-structured-session-integration.test.ts
-6 test-no-wall-clock:src/main/runtime/mobile-agent-status-permission-renewal.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/mobile-relay-e2ee.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts
-1 test-no-wall-clock:src/main/runtime/mobile-pairing-qr.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-store-orphaned-temp-cleanup.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-subscribe-idle-pane-hydrate.test.ts
 3 test-no-wall-clock:src/main/runtime/orca-runtime-agent-session-operation.test.ts
