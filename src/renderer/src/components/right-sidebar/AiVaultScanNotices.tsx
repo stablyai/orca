@@ -9,8 +9,9 @@ import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 import { aiVaultScanIssueIdentity } from './ai-vault-scan-issue-state'
 
 export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
-  const [dismissed, setDismissed] = useState(false)
-  if (dismissed || issues.length === 0) {
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+  const visibleIssues = issues.filter((issue) => !dismissed.has(aiVaultScanIssueIdentity(issue)))
+  if (visibleIssues.length === 0) {
     return null
   }
   const dismissLabel = translate('aiVault.scanIssues.dismissNotices', 'Dismiss history notices')
@@ -23,7 +24,7 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
               <ChevronDown className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" />
               <span className="truncate">
                 {translate('aiVault.scanIssues.noticesCount', 'History notices · {{count}}', {
-                  count: issues.length
+                  count: visibleIssues.length
                 })}
               </span>
             </Button>
@@ -34,7 +35,12 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
                 variant="ghost"
                 size="icon-xs"
                 aria-label={dismissLabel}
-                onClick={() => setDismissed(true)}
+                onClick={() =>
+                  setDismissed(
+                    (previous) =>
+                      new Set([...previous, ...visibleIssues.map(aiVaultScanIssueIdentity)])
+                  )
+                }
               >
                 <X className="size-3" />
               </Button>
@@ -44,7 +50,7 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
         </div>
         <CollapsibleContent>
           <div className="scrollbar-sleek max-h-32 overflow-y-auto px-3 pb-2">
-            {issues.map((issue) => (
+            {visibleIssues.map((issue) => (
               <div
                 key={aiVaultScanIssueIdentity(issue)}
                 className="space-y-1 py-1 break-words [overflow-wrap:anywhere]"
