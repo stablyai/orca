@@ -3,8 +3,11 @@
 /** Re-reads one host's container rect and repositions its overlay. */
 export type BrowserClientPagePositionSync = () => void
 
-/** Frames keep running this long after the last wake, so layout settling after a commit is seen. */
-export const BROWSER_CLIENT_PAGE_POSITION_SETTLE_MS = 250
+/** Frames synced per wake: wakes follow each DOM change, so a short tail sees settled layout. */
+export const BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES = 2
+
+// Fixed-size widgets that rewrite their own DOM constantly (terminal output, editor typing) never move panes.
+const SELF_CONTAINED_SELECTOR = '.xterm, .monaco-editor'
 
 // Pane moves and overlays need a DOM, style, viewport or input change; each of these can start one.
 const WINDOW_WAKE_EVENTS = [
@@ -35,7 +38,7 @@ const syncs = new Set<BrowserClientPagePositionSync>()
 /** Already-reported syncs, so a host failing every frame is one log line, not sixty a second. */
 const reportedFailures = new WeakSet<BrowserClientPagePositionSync>()
 let frame: number | null = null
-let settleUntil = 0
+let settleFramesLeft = 0
 let stopWakeSources: (() => void) | null = null
 
 /** A finite transition or animation may be moving a pane without firing events per frame. */
@@ -67,7 +70,8 @@ function runFrame(): void {
       }
     }
   } finally {
-    if (performance.now() < settleUntil || hasFiniteAnimationRunning()) {
+    settleFramesLeft -= 1
+    if (settleFramesLeft > 0 || hasFiniteAnimationRunning()) {
       startFrame()
     }
   }
@@ -91,8 +95,19 @@ function stopFrame(): void {
 }
 
 function wakeBrowserClientPagePositionSync(): void {
-  settleUntil = performance.now() + BROWSER_CLIENT_PAGE_POSITION_SETTLE_MS
+  settleFramesLeft = BROWSER_CLIENT_PAGE_POSITION_SETTLE_FRAMES
   startFrame()
+}
+
+function isSelfContainedMutation(record: MutationRecord): boolean {
+  const target = record.target instanceof Element ? record.target : record.target.parentElement
+  return Boolean(target?.closest(SELF_CONTAINED_SELECTOR))
+}
+
+function wakeOnLayoutMutation(records: MutationRecord[]): void {
+  if (!records.every(isSelfContainedMutation)) {
+    wakeBrowserClientPagePositionSync()
+  }
 }
 
 function watchDevicePixelRatio(): () => void {
@@ -118,7 +133,8 @@ function startWakeSources(): () => void {
   }
   document.addEventListener('visibilitychange', wake)
   document.fonts?.addEventListener('loadingdone', wake)
-  const mutations = typeof MutationObserver === 'undefined' ? null : new MutationObserver(wake)
+  const mutations =
+    typeof MutationObserver === 'undefined' ? null : new MutationObserver(wakeOnLayoutMutation)
   mutations?.observe(document.documentElement, {
     subtree: true,
     childList: true,
