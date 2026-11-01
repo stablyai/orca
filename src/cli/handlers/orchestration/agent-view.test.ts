@@ -289,6 +289,25 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it('asks an older host to release only reclaimable finished workers', async () => {
+    const worker = { taskId: 'task_1', runId: 'run_1', workerState: 'succeeded' }
+    const { stdout } = await run(
+      'worker-list',
+      [['run', 'run_1']],
+      {
+        workers: [
+          { ...worker, dispatchId: 'ctx_done', terminalState: 'reclaimable', resource: null },
+          { ...worker, dispatchId: 'ctx_kept', terminalState: 'retained', resource: null }
+        ],
+        counts: {}
+      },
+      true
+    )
+    const [done, kept] = JSON.parse(stdout).result.workers
+    expect(done.next).toContain('orchestration worker-release --dispatch ctx_done')
+    expect(kept.next).toBeUndefined()
+  })
+
   it('keeps --full ask output and exit exactly as before', async () => {
     callMock.mockImplementation(async (method: string) =>
       method === 'status.get'
