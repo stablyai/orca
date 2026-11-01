@@ -97,6 +97,7 @@ export function WorktreeCardSecondaryRows({
           collapsed={lineageCollapsed}
           ariaLabel={lineageChildAriaLabel}
           label={childWorkspaceShortLabel}
+          count={card.lineageChildCount}
           onToggle={onLineageToggle}
         />
       )}
