@@ -103,6 +103,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onCopyPaneId: vi.fn(),
     canCopyAgentSessionId: false,
     onCopyAgentSessionId: vi.fn(),
+    onRestoreTerminalFocus: vi.fn(),
     ...overrides
   }
   return renderToStaticMarkup(React.createElement(TerminalContextMenu, props))

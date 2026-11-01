@@ -28,6 +28,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 import { resetTerminalInputModes } from './terminal-input-mode-reset'
 import { equalizeTerminalPanes } from './terminal-pane-layout-owner-commands'
+import { focusPaneIfFocusUnclaimed } from '@/lib/pane-manager/pane-overlay-focus'
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -57,6 +58,7 @@ type TerminalMenuState = {
   menuOpenedAtRef: React.RefObject<number>
   paneCount: number
   menuPaneId: number | null
+  onRestoreTerminalFocus: () => void
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onMouseDownCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
@@ -302,6 +304,8 @@ export function useTerminalPaneContextMenu({
     menuOpenedAtRef,
     paneCount,
     menuPaneId,
+    // Escape or an item that skips refocus (e.g. an empty paste) unmounts the focused menu onto <body>.
+    onRestoreTerminalFocus: () => focusPaneIfFocusUnclaimed(resolveMenuPane()),
     onContextMenuCapture,
     onMouseDownCapture,
     onPaneTitleContextMenu,

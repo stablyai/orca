@@ -262,6 +262,7 @@ export function TerminalPaneSurface({
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
+        onRestoreTerminalFocus={contextMenu.onRestoreTerminalFocus}
         menuPoint={contextMenu.point}
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
         canClosePane={canCloseTerminalPane({

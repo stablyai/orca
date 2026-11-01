@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PaneManager } from './pane-manager'
 import { createInitialManagedPane } from './pane-manager-pane-creation'
-import { focusPanePreservingOverlays } from './pane-overlay-focus'
+import { focusPaneIfFocusUnclaimed, focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
@@ -177,4 +177,24 @@ it('keeps focus that is already inside the chat covering the pane', () => {
   focusPanePreservingOverlays(f.pane)
   expect(document.activeElement).toBe(composer)
   expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+})
+
+describe('focusPaneIfFocusUnclaimed', () => {
+  it('focuses the pane when focus is on body', () => {
+    const f = fixture()
+    f.root.append(f.container)
+    focusPaneIfFocusUnclaimed(f.pane)
+    expect(document.activeElement).toBe(f.textarea)
+  })
+
+  it('keeps focus on a control the user moved to', () => {
+    const f = fixture()
+    f.root.append(f.container)
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+    focusPaneIfFocusUnclaimed(f.pane)
+    expect(document.activeElement).toBe(input)
+    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+  })
 })
