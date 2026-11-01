@@ -1,3 +1,4 @@
+import { readSourceControlAiActionModelChoice } from './source-control-ai-model-selection'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
 import {
@@ -7,6 +8,7 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   readSourceControlAiModelChoiceForHost,
   resolveSourceControlAiForOperation,
+  resolveSourceControlAiActionModelDefault,
   resolveSourceControlAiPrCreationDefaults,
   selectSourceControlAiModelChoiceForHost,
   sourceControlAiSettingsFromLegacy
@@ -491,6 +493,72 @@ describe('source-control AI resolution', () => {
     const merged = mergeLegacyCommitMessageAiIntoSourceControlAi(source, legacy)
 
     expect(merged.modelOverridesByOperation?.commitMessage).toBeUndefined()
+  })
+
+  it('reads action picks on any host and derives the inherited row through the same resolver', () => {
+    const base = settings()
+    base.sourceControlAi!.modelOverridesByOperation = {
+      branchName: {
+        selectedModelByAgent: { codex: 'gpt-5.4' },
+        selectedModelByAgentByHost: { 'ssh:host': { codex: 'gpt-5.5' } },
+        selectedThinkingByModel: { 'gpt-5.4': 'high' }
+      }
+    }
+    const choice = base.sourceControlAi!.modelOverridesByOperation.branchName
+    expect(readSourceControlAiActionModelChoice(choice, 'ssh:host', 'codex')).toBe('gpt-5.4')
+    expect(readSourceControlAiActionModelChoice(choice, 'ssh:new', 'codex')).toBe('gpt-5.4')
+    expect(
+      readSourceControlAiActionModelChoice(
+        { selectedModelByAgentByHost: { 'ssh:host': { codex: 'gpt-5.5' } } },
+        'ssh:host',
+        'codex'
+      )
+    ).toBe('gpt-5.5')
+    const input = { settings: base, operation: 'branchName' as const, discoveryHostKey: 'ssh:new' }
+    const selected = resolveSourceControlAiForOperation(input)
+    expect(selected.ok && selected.value.params).toMatchObject({
+      model: 'gpt-5.4',
+      thinkingLevel: 'high'
+    })
+    const repo = {
+      sourceControlAi: {
+        modelOverridesByOperation: {
+          branchName: { selectedModelByAgent: { codex: 'gpt-5.4-mini' } }
+        }
+      }
+    }
+    const repoDefault = resolveSourceControlAiActionModelDefault({ ...input, repo }, 'repo')
+    expect(repoDefault.ok && repoDefault.value.params).toMatchObject({
+      model: 'gpt-5.4',
+      thinkingLevel: 'high'
+    })
+    const inherited = resolveSourceControlAiActionModelDefault({ ...input, repo })
+    const withoutPicks = {
+      ...base,
+      sourceControlAi: { ...base.sourceControlAi!, modelOverridesByOperation: undefined }
+    }
+    expect(inherited).toEqual(
+      resolveSourceControlAiForOperation({ ...input, settings: withoutPicks })
+    )
+    expect(base.sourceControlAi!.modelOverridesByOperation.branchName).toBe(choice)
+    base.sourceControlAi!.modelOverridesByOperation.commitMessage = {
+      selectedModelByAgent: { codex: 'gpt-5.4' },
+      selectedThinkingByModel: { 'gpt-5.4': 'high' }
+    }
+    base.commitMessageAi = projectSourceControlAiToLegacyCommitMessageAi(base.sourceControlAi!)
+    const commitDefault = resolveSourceControlAiActionModelDefault({
+      settings: base,
+      operation: 'commitMessage'
+    })
+    expect(commitDefault.ok && commitDefault.value.params).toMatchObject({
+      model: 'gpt-5.5',
+      thinkingLevel: 'medium'
+    })
+    const branchDefault = resolveSourceControlAiActionModelDefault({
+      settings: base,
+      operation: 'branchName'
+    })
+    expect(branchDefault.ok && branchDefault.value.params.model).toBe('gpt-5.5')
   })
 
   it('reads and selects host-scoped model choices with local fallback rules', () => {

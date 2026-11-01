@@ -268,3 +268,32 @@ export function resolveSourceControlAiForOperation(
     }
   }
 }
+
+/** Resolve the inherited choice through the generation path, including legacy compatibility. */
+export function resolveSourceControlAiActionModelDefault(
+  input: ResolveSourceControlAiInput,
+  scope: 'global' | 'repo' = 'global'
+): ResolveSourceControlAiResult {
+  const source = normalizeSettings(input.settings.sourceControlAi, input.settings.commitMessageAi)
+  const modelOverridesByOperation = { ...source.modelOverridesByOperation }
+  if (scope === 'global') {
+    delete modelOverridesByOperation[input.operation]
+  }
+  const repoOverrides = { ...input.repo?.sourceControlAi?.modelOverridesByOperation }
+  if (input.operation !== 'conversationName') {
+    delete repoOverrides[input.operation]
+  }
+  const inheritedSource = { ...source, modelOverridesByOperation }
+  return resolveSourceControlAiForOperation({
+    ...input,
+    settings: {
+      ...input.settings,
+      sourceControlAi: inheritedSource,
+      // Refresh the legacy mirror just as clearing the commit choice in a save would.
+      commitMessageAi: projectLegacySettings(inheritedSource, input.settings.commitMessageAi)
+    },
+    repo: {
+      sourceControlAi: { ...input.repo?.sourceControlAi, modelOverridesByOperation: repoOverrides }
+    }
+  })
+}
