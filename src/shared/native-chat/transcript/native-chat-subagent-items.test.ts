@@ -146,7 +146,7 @@ describe('a turn’s subagents drawn as one row', () => {
     expect(rows.map((row) => row.blocks.map((block) => block.type))).toEqual([
       ['text'],
       ['tool-call', 'tool-result'],
-      ['subagent-group']
+      ['tool-call', 'tool-result', 'subagent-group']
     ])
   })
 })

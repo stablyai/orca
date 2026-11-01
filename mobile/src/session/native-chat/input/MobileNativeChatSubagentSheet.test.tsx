@@ -152,6 +152,40 @@ it('dismisses failed rows, hides the pill when none remain, and keeps the dismis
   ).toHaveLength(1)
 })
 
+it('lists completed children only after the sheet is open and the section is expanded', async () => {
+  const onFocusSubagent = vi.fn()
+  let renderer!: ReactTestRenderer
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatActivityBar, {
+        list: null,
+        subagents: [...roster, agent('done', 'Greeter', 'completed')],
+        focused: null,
+        focusedTranscriptEmpty: false,
+        fontScale: 1,
+        onFocusSubagent
+      })
+    )
+  })
+  expect(renderer.root.findAll((entry) => entry.props.children === '1 subagent').length).toBe(0)
+  expect(
+    renderer.root.findAll((entry) => entry.props.children === '3 subagents').length
+  ).toBeGreaterThan(0)
+  press(renderer, 'native-chat-subagents-pill')
+  const section = renderer.root.find(
+    (entry) => entry.props.testID === 'native-chat-completed-subagents'
+  )
+  expect(renderer.root.findAll((entry) => entry.props.children === 'Greeter')).toHaveLength(0)
+  await act(async () => {
+    section.props.onPress()
+  })
+  expect(
+    renderer.root.findAll((entry) => entry.props.children === 'Greeter').length
+  ).toBeGreaterThan(0)
+  press(renderer, 'native-chat-open-completed')
+  expect(onFocusSubagent).toHaveBeenCalledWith('done')
+})
+
 it('hides the pill after every failed child is dismissed', async () => {
   const failed = [agent('bad', 'Checker', 'failed'), agent('lost', 'Scout', 'unverifiable')]
   let renderer!: ReactTestRenderer

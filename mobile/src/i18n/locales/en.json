@@ -2835,6 +2835,8 @@
       "subagentsTitle": "Subagents",
       "dismissSubagent": "Dismiss {{name}}",
       "dismissAllFailed": "Dismiss all failed",
+      "completedSubagents": "Completed ({{count}})",
+      "openSubagent": "Open {{name}}",
       "viewingSubagent": "Viewing {{name}}",
       "composerStays": "The composer still sends to the main agent.",
       "backToMain": "Main agent",

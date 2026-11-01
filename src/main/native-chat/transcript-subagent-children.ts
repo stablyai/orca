@@ -181,6 +181,10 @@ async function codexThreadId(
   agentId: string,
   signal?: AbortSignal
 ): Promise<string | null> {
+  // The structured roster names the child by its rollout id, not by agent_path.
+  if (CODEX_THREAD_ID.test(agentId)) {
+    return agentId
+  }
   let threadId: string | null = null
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact', signal)
   try {

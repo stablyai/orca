@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NativeChatSubagentActivity } from '../../../../shared/native-chat/input/native-chat-activity'
 import { NativeChatActivityBar } from './NativeChatActivityBar'
 
@@ -19,13 +19,16 @@ const listed = [
   agent('lost', 'Scout', 'unverifiable')
 ]
 
-function bar(seed: readonly NativeChatSubagentActivity[] = listed) {
+function bar(
+  seed: readonly NativeChatSubagentActivity[] = listed,
+  onFocusSubagent: (agentId: string | null) => void = () => {}
+) {
   return (
     <NativeChatActivityBar
       messages={[]}
       subagentRows={new Map()}
       focusedSubagentId={null}
-      onFocusSubagent={() => {}}
+      onFocusSubagent={onFocusSubagent}
       subagentSeed={seed}
       sessionId="sess-1"
     />
@@ -63,6 +66,26 @@ it('dismisses failed children from the sheet, the pill, and the next mount', () 
   openSheet()
   expect(screen.queryByRole('button', { name: 'Dismiss Checker' })).toBeNull()
   expect(screen.getByRole('button', { name: 'Dismiss Scout' })).toBeInTheDocument()
+})
+
+it('keeps completed children off the pill and lists them only inside an open sheet', () => {
+  const onFocusSubagent = vi.fn()
+  render(
+    bar(
+      [
+        ...listed,
+        agent('done', 'Greeter', 'completed'),
+        agent('other', 'Checker two', 'completed')
+      ],
+      onFocusSubagent
+    )
+  )
+  expect(screen.getByRole('button', { name: /3 subagent/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Greeter' })).toBeNull()
+  openSheet()
+  fireEvent.click(screen.getByTestId('native-chat-completed-subagents'))
+  fireEvent.click(screen.getByRole('button', { name: 'Greeter' }))
+  expect(onFocusSubagent).toHaveBeenCalledWith('done')
 })
 
 it('hides the pill when every remaining child is dismissed', () => {

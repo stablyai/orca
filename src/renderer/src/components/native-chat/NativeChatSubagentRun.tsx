@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Bot, ChevronRight } from 'lucide-react'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useNow } from '@/hooks/use-now'
 import {
@@ -15,6 +16,7 @@ import type {
 } from '../../../../shared/native-chat/native-chat-types'
 import { formatNativeChatDuration } from './NativeChatWorkingStatus'
 import { nativeChatSubagentEntryRuns } from './native-chat-subagent-sections'
+import { useNativeChatOpenSubagent } from './native-chat-transcript-frame'
 import { sayNativeChatSubagentGroupTranslated as say } from './native-chat-subagent-group-words-text'
 
 const STATE_DOT_CLASS: Record<NativeChatSubagentState, string> = {
@@ -82,6 +84,7 @@ export function NativeChatSubagentEntries({
   onSetSectionOpen?: (agentId: string, open: boolean) => void
   className?: string
 }): React.JSX.Element {
+  const onOpenSubagent = useNativeChatOpenSubagent()
   return (
     <ul className={cn('space-y-0.5', className)}>
       {agents.map((agent) => {
@@ -104,6 +107,25 @@ export function NativeChatSubagentEntries({
             </span>
           </>
         )
+        if (onOpenSubagent) {
+          return (
+            <li key={agent.id}>
+              <button
+                type="button"
+                data-testid="native-chat-open-subagent"
+                onClick={() => onOpenSubagent(agent.id)}
+                aria-label={translate(
+                  'components.native-chat.activity.openSubagent',
+                  'Open {{name}}',
+                  { name: agent.label }
+                )}
+                className="flex w-full items-center gap-1.5 rounded-md py-0.5 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {entry}
+              </button>
+            </li>
+          )
+        }
         return (
           <li key={agent.id}>
             {sectionOpen === undefined ? (

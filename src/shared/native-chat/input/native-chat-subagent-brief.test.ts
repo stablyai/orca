@@ -1,0 +1,191 @@
+import { describe, expect, it } from 'vitest'
+import type { NativeChatMessage } from '../native-chat-types'
+import {
+  frameNativeChatSubagentTranscript,
+  nativeChatSpawnedSubagentId
+} from './native-chat-subagent-brief'
+
+function text(message: NativeChatMessage): string {
+  return message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+}
+
+function user(id: string, body: string): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: [{ type: 'text', text: body }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
+
+function assistant(id: string, body: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: body }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
+
+describe('native chat subagent brief', () => {
+  it('reads a Claude description and prompt, and ignores the launch ack', () => {
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          input: { description: 'Fix CodeRabbit on #36729', prompt: 'Address the review comment' }
+        },
+        {
+          type: 'tool-result',
+          output: 'Async agent launched successfully.\nagentId: a41bd1a2fa1e0bf60'
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const framed = frameNativeChatSubagentTranscript(
+      'a41bd1a2fa1e0bf60',
+      [
+        user('child-user', 'Address the review comment'),
+        assistant('child-end', 'Fixed and pushed')
+      ],
+      [parent]
+    )
+    expect(text(framed[0]!)).toBe('Fix CodeRabbit on #36729')
+    expect(text(framed[1]!)).toBe('Address the review comment')
+    expect(text(framed.at(-1)!)).toBe('Fixed and pushed')
+    expect(framed.some((message) => message.id.endsWith(':result'))).toBe(false)
+  })
+
+  it('pins the task when the child page is only the tail, and appends a real parent result', () => {
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Task',
+          input: { description: 'Count lines', prompt: 'Count the lines in README.md' }
+        },
+        {
+          type: 'tool-result',
+          output: 'README.md has 12 lines.',
+          subagent: { id: 'child-1', state: 'completed' }
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const framed = frameNativeChatSubagentTranscript(
+      'child-1',
+      [assistant('mid', 'Reading the file')],
+      [parent]
+    )
+    expect(framed.map((message) => text(message))).toEqual([
+      'Count lines\n\nCount the lines in README.md',
+      'Reading the file',
+      'README.md has 12 lines.'
+    ])
+  })
+
+  it('uses a Codex task name and drops the encrypted spawn row', () => {
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'spawn_agent',
+          input: { task_name: 'sample_greeting', message: 'gAAAAAencrypted' }
+        },
+        { type: 'tool-result', output: '{"task_name":"/root/sample_greeting"}' }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const echoed: NativeChatMessage = {
+      id: 'echo',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'spawn_agent', input: { message: 'gAAAAAencrypted' } }],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const framed = frameNativeChatSubagentTranscript(
+      '/root/sample_greeting',
+      [echoed, assistant('hello', 'Hello from Orca')],
+      [parent]
+    )
+    expect(framed.map((message) => text(message))).toEqual(['sample_greeting', 'Hello from Orca'])
+    expect(
+      nativeChatSpawnedSubagentId('spawn_agent', {
+        type: 'tool-result',
+        output: '{"task_name":"/root/sample_greeting"}'
+      })
+    ).toBe('/root/sample_greeting')
+    expect(nativeChatSpawnedSubagentId('Bash', undefined)).toBeNull()
+  })
+
+  it('holds the parent result back while the child page is still loading', () => {
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool-call', name: 'Agent', input: { description: 'Greet', prompt: 'Say hello' } },
+        {
+          type: 'tool-result',
+          output: 'Hello from the parent result.',
+          subagent: { id: 'child', state: 'completed' }
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const framed = frameNativeChatSubagentTranscript('child', [], [parent], undefined, false)
+    expect(framed.map((message) => text(message))).toEqual(['Greet\n\nSay hello'])
+  })
+
+  it('shows the hand-back report once, without the harness frame', () => {
+    const report = 'Hello from the scratch subagent.'
+    const parent: NativeChatMessage = {
+      id: 'spawn',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          input: { description: 'Say hello', prompt: report }
+        },
+        {
+          type: 'tool-result',
+          output: `[Subagent hand-back] The report follows:\n  ${report}\nagentId: child-1\n<usage>subagent_tokens: 1\n</usage>`,
+          subagent: { id: 'child-1', state: 'completed' }
+        }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    const already = frameNativeChatSubagentTranscript(
+      'child-1',
+      [user('child-user', report), assistant('child-end', report)],
+      [parent]
+    )
+    expect(text(already[0]!)).toBe('Say hello')
+    expect(text(already.at(-1)!)).toBe(report)
+    expect(already.some((message) => message.id.endsWith(':result'))).toBe(false)
+
+    const tail = frameNativeChatSubagentTranscript(
+      'child-1',
+      [assistant('mid', 'Reading the file')],
+      [parent]
+    )
+    expect(text(tail[0]!)).toBe(`Say hello\n\n${report}`)
+    expect(text(tail.at(-1)!)).toBe(report)
+    expect(tail.at(-1)?.id).toBe('child-1:result')
+    expect(text(tail.at(-1)!)).not.toContain('Subagent hand-back')
+  })
+})
