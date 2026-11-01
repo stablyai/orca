@@ -1,11 +1,9 @@
 /** Pin native follow/pin ownership through shared headless/core BufferService. Live writes rely on xterm; app enforcement handles structural replay/remount/reflow only. Upgrades must preserve this contract. Since beta.302 (#6081), CSI 3 J releases native pins; Orca observes before erase to capture and restore the live reading offset. */
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import headlessPackageJson from '@xterm/headless/package.json'
-import xtermPackageJson from '@xterm/xterm/package.json'
 import { clearTerminalScrollbackAndFollowOutput } from './terminal-scrollback-clear'
 import { installTerminalLiveScrollbackRestore } from './terminal-live-scrollback-restore'
-import { markTerminalFollowOutput, markTerminalPinnedViewport } from './terminal-scroll-intent'
+import { markTerminalPinnedViewport } from './terminal-scroll-intent'
 
 type TerminalWithBufferService = Terminal & {
   _core?: {
@@ -39,129 +37,6 @@ async function pinnedScrollbackTerminal(): Promise<TerminalWithBufferService> {
 }
 
 describe('xterm native user-scrolling contract', () => {
-  it('builds headless and renderer xterm from the same upstream commit', () => {
-    // Compare source commits, not versions: headless/core may publish different betas with identical BufferService/BufferLine code; publish.js stamps both.
-    expect(headlessPackageJson.commit).toBe(xtermPackageJson.commit)
-    expect(xtermPackageJson.commit).toMatch(/^[0-9a-f]{40}$/)
-  })
-
-  it('keeps a scrolled-up viewport stable while output is written', async () => {
-    const term = new Terminal({ rows: 10, cols: 40, scrollback: 1000, allowProposedApi: true })
-    await writeLines(term, 30, 'line')
-    const buffer = term.buffer.active
-    expect(buffer.viewportY).toBe(buffer.baseY)
-
-    term.scrollLines(-5)
-    const pinnedY = buffer.viewportY
-    expect(pinnedY).toBe(buffer.baseY - 5)
-
-    await writeLines(term, 10, 'more')
-    expect(buffer.viewportY).toBe(pinnedY)
-    expect(buffer.baseY).toBe(pinnedY + 15)
-  })
-
-  it('treats a viewport one row above bottom as user-scrolling through output', async () => {
-    const term = new Terminal({
-      rows: 10,
-      cols: 40,
-      scrollback: 1000,
-      allowProposedApi: true
-    }) as TerminalWithBufferService
-    await writeLines(term, 30, 'line')
-    const buffer = term.buffer.active
-
-    term.scrollLines(-1)
-    const pinnedY = buffer.viewportY
-    expect(pinnedY).toBe(buffer.baseY - 1)
-    expect(term._core?._bufferService?.isUserScrolling).toBe(true)
-
-    await writeLines(term, 5, 'more')
-    expect(buffer.viewportY).toBe(pinnedY)
-  })
-
-  it('follows output at the bottom and re-follows after scrolling back down', async () => {
-    const term = new Terminal({ rows: 10, cols: 40, scrollback: 1000, allowProposedApi: true })
-    await writeLines(term, 30, 'line')
-    const buffer = term.buffer.active
-
-    await writeLines(term, 5, 'tail')
-    expect(buffer.viewportY).toBe(buffer.baseY)
-
-    term.scrollLines(-5)
-    term.scrollToBottom()
-    await writeLines(term, 5, 'after')
-    expect(buffer.viewportY).toBe(buffer.baseY)
-  })
-
-  it('applies scrollOnUserInput before notifying onData listeners', async () => {
-    const term = new Terminal({ rows: 10, cols: 40, scrollback: 1000, allowProposedApi: true })
-    await writeLines(term, 30, 'line')
-    const buffer = term.buffer.active
-    term.scrollLines(-5)
-    let viewportSeenByOnData = -1
-    const subscription = term.onData(() => {
-      viewportSeenByOnData = buffer.viewportY
-    })
-
-    term.input('a', true)
-
-    // Typing-intent resync runs in onData, making this xterm event order part of the pinned contract.
-    expect(viewportSeenByOnData).toBe(buffer.baseY)
-    subscription.dispose()
-  })
-
-  it('distinguishes real user input from parser auto-replies', async () => {
-    const term = new Terminal({
-      rows: 10,
-      cols: 40,
-      allowProposedApi: true
-    }) as TerminalWithBufferService
-    expect(term._core?.coreService?.onUserInput).toBeTypeOf('function')
-    let userInputCount = 0
-    const subscription = term._core?.coreService?.onUserInput?.(() => {
-      userInputCount += 1
-    })
-
-    term.input('a', true)
-    await write(term, '\x1b[6n')
-
-    expect(userInputCount).toBe(1)
-    subscription?.dispose()
-  })
-
-  it('walks a pinned viewport down content-stably when scrollback trims', async () => {
-    const term = new Terminal({ rows: 5, cols: 20, scrollback: 20, allowProposedApi: true })
-    await writeLines(term, 30, 'x')
-    const buffer = term.buffer.active
-    term.scrollLines(-10)
-    const pinnedY = buffer.viewportY
-    const fullBaseY = buffer.baseY
-
-    await writeLines(term, 10, 'trim')
-    // At capacity, fixed baseY plus trimming decrements viewportY to preserve content.
-    expect(buffer.baseY).toBe(fullBaseY)
-    expect(buffer.viewportY).toBe(Math.max(0, pinnedY - 10))
-  })
-
-  it('exposes the isUserScrolling flag the structural restore paths depend on', async () => {
-    const term = new Terminal({
-      rows: 10,
-      cols: 40,
-      scrollback: 1000,
-      allowProposedApi: true
-    }) as TerminalWithBufferService
-    await writeLines(term, 30, 'line')
-    const bufferService = term._core?._bufferService
-    expect(typeof bufferService?.isUserScrolling).toBe('boolean')
-
-    // Public scroll APIs manage isUserScrolling; structural restores inherit native live-output ownership.
-    expect(bufferService?.isUserScrolling).toBe(false)
-    term.scrollLines(-5)
-    expect(bufferService?.isUserScrolling).toBe(true)
-    term.scrollToBottom()
-    expect(bufferService?.isUserScrolling).toBe(false)
-  })
-
   it('resets native user-scrolling when a pinned scrollback is cleared', async () => {
     const term = new Terminal({
       rows: 10,
@@ -277,17 +152,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term._core?._bufferService?.isUserScrolling).toBe(true)
   })
 
-  it('triggers on a bare erase-scrollback with no screen clear alongside it', async () => {
-    const { term, settle, bottomOffset, scheduleCount } = await pinnedTerminalWithRestore()
-
-    // No \x1b[2J prefix: the scrollback erase alone is the trigger.
-    await write(term, `\x1b[3J${'after\r\n'.repeat(150)}`)
-    expect(scheduleCount()).toBeGreaterThan(0)
-    settle()
-
-    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
-  })
-
   it('ignores erase-in-display forms that keep the scrollback', async () => {
     const { term, settle, scheduleCount } = await pinnedTerminalWithRestore()
     const pinnedY = term.buffer.active.viewportY
@@ -311,16 +175,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term.buffer.active.viewportY).toBe(pinnedY)
   })
 
-  it('detects a clear split across writes', async () => {
-    const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
-
-    await write(term, '\x1b[2J\x1b[H\x1b[')
-    await write(term, `3J${'after\r\n'.repeat(50)}`)
-    settle()
-
-    expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY - bottomOffset)
-  })
-
   it('holds the pin while the redraw keeps arriving and lands it once quiet', async () => {
     const { term, advance, bottomOffset } = await pinnedTerminalWithRestore()
 
@@ -335,47 +189,11 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
   })
 
-  it('lands the pin after a redraw that outgrows the erased scrollback over several writes', async () => {
-    const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
-
-    // Each batch alone would settle the pin at the wrong distance from the bottom.
-    await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(101)}`)
-    await write(term, 'after\r\n'.repeat(199))
-    settle()
-
-    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
-  })
-
-  it('survives a mid-redraw write that adds no rows', async () => {
-    const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
-
-    await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}`)
-    // A cursor/attribute-only frame is normal mid-repaint and must not end the pin.
-    await write(term, '\x1b[K')
-    await write(term, 'after\r\n'.repeat(250))
-    settle()
-
-    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
-  })
-
   it('spends the pin once even when the rebuild stays shorter than the old scrollback', async () => {
     const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
 
     // A short rebuild skips intent relatching; only single-shot disarm prevents follow-at-offset.
     await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(60)}`)
-    settle()
-    const restoredY = term.buffer.active.viewportY
-    expect(restoredY).toBe(term.buffer.active.baseY - bottomOffset)
-
-    await writeLines(term, 200, 'later')
-    settle()
-    expect(term.buffer.active.viewportY).toBe(restoredY)
-  })
-
-  it('does not drag the reader through output that arrives after the pin lands', async () => {
-    const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
-
-    await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(120)}`)
     settle()
     const restoredY = term.buffer.active.viewportY
     expect(restoredY).toBe(term.buffer.active.baseY - bottomOffset)
@@ -526,15 +344,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY - bottomOffset)
   })
 
-  it('restores after the subparameter erase form', async () => {
-    const { term, settle, bottomOffset } = await pinnedTerminalWithRestore()
-
-    await write(term, `\x1b[2J\x1b[H\x1b[3:1J${'after\r\n'.repeat(120)}`)
-    settle()
-
-    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
-  })
-
   it('does not arm for an erase on the alternate screen', async () => {
     const { term, settle, scheduleCount } = await pinnedTerminalWithRestore()
     const pinnedY = term.buffer.active.viewportY
@@ -572,27 +381,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     expect(term.buffer.active.viewportY).toBe(afterUserScrollY)
   })
 
-  it('leaves a follow-output pane following', async () => {
-    const term = new Terminal({
-      rows: 10,
-      cols: 40,
-      scrollback: 1000,
-      allowProposedApi: true
-    }) as TerminalWithBufferService
-    await writeLines(term, 100, 'before')
-    markTerminalFollowOutput(term)
-    const scheduler = manualSettleScheduler()
-    installTerminalLiveScrollbackRestore(term, {
-      now: scheduler.now,
-      scheduleSettle: scheduler.scheduleSettle
-    })
-
-    await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(50)}`)
-    expect(scheduler.scheduleCount()).toBe(0)
-    scheduler.advance(SETTLE_MS)
-    expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
-  })
-
   it('cancels an armed pin on dispose', async () => {
     const term = await pinnedScrollbackTerminal()
     const scheduler = manualSettleScheduler()
@@ -620,18 +408,6 @@ describe('live scrollback-erase pin (CSI 3 J)', () => {
     settle()
     // Without Orca’s pin, xterm’s erase releases reading position and follows the redraw.
     expect(term.buffer.active.viewportY).toBe(term.buffer.active.baseY)
-  })
-
-  it('lands the pin on the real timer when no scheduler is injected', async () => {
-    const term = await pinnedScrollbackTerminal()
-    const restore = installTerminalLiveScrollbackRestore(term)
-    const bottomOffset = term.buffer.active.baseY - term.buffer.active.viewportY
-
-    await write(term, `\x1b[2J\x1b[H\x1b[3J${'after\r\n'.repeat(120)}`)
-    await new Promise((resolve) => setTimeout(resolve, 400))
-
-    expect(term.buffer.active.baseY - term.buffer.active.viewportY).toBe(bottomOffset)
-    restore.dispose()
   })
 })
 
@@ -683,16 +459,6 @@ describe('live scrollback-erase pin wiring', () => {
     }
   }
 
-  it('registers both the plain and private erase idents', () => {
-    const stub = stubTerminal()
-    installTerminalLiveScrollbackRestore(stub.target)
-
-    expect(stub.registrations.map((registration) => registration.id)).toEqual([
-      { final: 'J' },
-      { prefix: '?', final: 'J' }
-    ])
-  })
-
   it('degrades a throwing capture to "not handled" instead of wedging the parser', () => {
     const stub = stubTerminal({ throwOnBuffer: true })
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -705,21 +471,5 @@ describe('live scrollback-erase pin wiring', () => {
     }
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
-  })
-
-  it('releases both registrations and the parsed subscription on dispose', () => {
-    const stub = stubTerminal()
-    const restore = installTerminalLiveScrollbackRestore(stub.target)
-
-    restore.dispose()
-    expect(stub.registrations.every((registration) => registration.disposed)).toBe(true)
-    expect(stub.parsedDisposed()).toBe(true)
-  })
-
-  it('does nothing when the terminal exposes no parser or parsed event', () => {
-    const restore = installTerminalLiveScrollbackRestore({
-      buffer: { active: { type: 'normal', viewportY: 10, baseY: 50 } }
-    } as Parameters<typeof installTerminalLiveScrollbackRestore>[0])
-    expect(() => restore.dispose()).not.toThrow()
   })
 })

@@ -37,9 +37,9 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
 
 import { MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS } from './managed-agent-hook-registry'
-import { ClaudeAgentViewService } from '../claude/agent-view-service'
-import { reconcileClaudeAgentViewConfig } from '../claude/agent-view-config'
-import { ensureClaudeAgentViewPluginAsync } from '../claude/agent-view-plugin'
+import { ClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
+import { reconcileClaudeAgentViewConfig } from '../claude/agent-view/agent-view-config'
+import { ensureClaudeAgentViewPluginAsync } from '../claude/agent-view/agent-view-plugin'
 import { listClaudeProfileHomesAsync } from '../claude-accounts/claude-profile-homes'
 
 function syncCallsUnderHome(): string[] {

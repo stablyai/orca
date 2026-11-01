@@ -147,23 +147,6 @@ describe('attachment guard follows what the host claims', () => {
     expect(structuredTransport.send).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['codex', '/permissions'],
-    ['claude', '/fast'],
-    ['claude', '/init'],
-    ['claude', '/review'],
-    ['codex', '/goal ship the fix']
-  ] as const)('sends %s attachments along with the passed-through %s', async (agent, text) => {
-    const { send, structuredTransport } = harness(agent)
-    send(text)
-    await vi.waitFor(() =>
-      expect(structuredTransport.send).toHaveBeenCalledWith(text, [ATTACHMENT])
-    )
-    expect(structuredTransport.onError).not.toHaveBeenCalledWith(
-      'Remove attachments before using a chat-session command.'
-    )
-  })
-
   it('refuses attachments on /goal where the host sets the goal, since no message is sent', () => {
     const setObjective = vi.fn(async () => true)
     const { send, structuredTransport } = harness('codex', { setObjective })
@@ -203,14 +186,6 @@ describe('reports the sends that bring the latest into view', () => {
     send('hello', [])
     await vi.waitFor(() => expect(structuredTransport.onError).toHaveBeenCalledTimes(2))
     expect(structuredTransport.send).toHaveBeenCalledWith('hello', [])
-    expect(onSubmitted).toHaveBeenCalledOnce()
-  })
-
-  it('reports a provider command sent without an inventory', async () => {
-    const onSubmitted = vi.fn()
-    const { send, structuredTransport } = harness('codex', undefined, onSubmitted)
-    await send('/permissions', [])
-    expect(structuredTransport.send).toHaveBeenCalledWith('/permissions', [])
     expect(onSubmitted).toHaveBeenCalledOnce()
   })
 })

@@ -50,8 +50,8 @@ afterEach(() => {
 })
 
 it("runs every agent's real remover, including Claude's agent view and status-line marker", async () => {
-  const { installClaudeAgentView } = await import('../claude/agent-view-install')
-  const { markerName } = await import('../claude/agent-view-binding-plan')
+  const { installClaudeAgentView } = await import('../claude/agent-view/agent-view-install')
+  const { markerName } = await import('../claude/agent-view/agent-view-binding-plan')
   const { CLAUDE_AGENT_VIEW_COMMAND } = await import('../../shared/claude-agent-view')
   const { getStatusLineInstallMarkerPath } = await import('../claude/hook-settings')
   const claudeDir = join(fixture.home, '.claude')
