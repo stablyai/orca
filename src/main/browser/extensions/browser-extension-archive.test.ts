@@ -19,8 +19,6 @@ afterEach(() => {
   rmSync(parent, { recursive: true, force: true })
 })
 
-describe('isSafeArchiveEntryName', () => {})
-
 describe('browser extension archives', () => {
   it('unpacks nested files into the target folder', async () => {
     const archive = zipSync({
