@@ -17,6 +17,7 @@ import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../shared/pr
 import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from './structured-agent-session-client'
+import { createWorkspaceSetupHoldListeners } from './structured-agent-session-setup-hold-listeners'
 
 export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
 
@@ -28,6 +29,8 @@ export type StructuredAgentSessionStatusFeedOwner = {
   getSessionSleepState: (sessionId: string) => number | null | undefined
   getNamingActive: (sessionId: string) => boolean | null
   isWorkspaceSetupHeld: (workspaceId: string) => boolean | undefined
+  /** Wakes only when this workspace's setup hold answer changes, not on other chats' frames. */
+  subscribeWorkspaceSetupHold: (workspaceId: string, listener: () => void) => () => void
   getSessionObservation: (sessionId: string) => 'live' | 'unverifiable'
   subscribe: (listener: () => void) => () => void
 }
@@ -53,6 +56,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   // Disconnect revokes live execution, but each chat's last Sleep answer still holds.
   const knownSleep = new Map<string, number | null>()
   const listeners = new Set<() => void>()
+  const setupHoldListeners = createWorkspaceSetupHoldListeners()
   const activations = new Set<symbol>()
   let sleepResolved = false
   let generation = 0
@@ -65,6 +69,11 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       listener()
     }
   }
+  const setSetupHeld = (next: Set<string> | null): void => {
+    const previous = setupHeldWorkspaceIds
+    setupHeldWorkspaceIds = next
+    setupHoldListeners.notifyChanged(previous, next)
+  }
   const setSnapshot = (next: StructuredAgentSessionStatusSnapshot): void => {
     snapshot = next
     emit()
@@ -72,7 +81,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
       if (event.setupHeldWorkspaceIds !== undefined || setupHeldWorkspaceIds === null) {
-        setupHeldWorkspaceIds = new Set(event.setupHeldWorkspaceIds?.map(worktreeIdentityKey))
+        setSetupHeld(new Set(event.setupHeldWorkspaceIds?.map(worktreeIdentityKey)))
       }
       // Naming metadata precedes the full status snapshot and says nothing about Sleep.
       sleepResolved ||=
@@ -147,7 +156,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     }
     generation += 1
     namingActiveSessionIds = null
-    setupHeldWorkspaceIds = null
+    setSetupHeld(null)
     confirmedSessions.clear()
     revokeSnapshotOwnership()
     emit()
@@ -212,7 +221,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           return
         }
         if (!supported) {
-          setupHeldWorkspaceIds = new Set()
+          setSetupHeld(new Set())
         }
         if (!marksSleep || !supported) {
           sleepResolved = true
@@ -269,6 +278,8 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
+    subscribeWorkspaceSetupHold: (workspaceId, listener) =>
+      setupHoldListeners.subscribe(worktreeIdentityKey(workspaceId), listener),
     stop
   }
 }

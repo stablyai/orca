@@ -18,6 +18,9 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import type * as StructuredClient from '@/runtime/structured-agent-session-client'
+import type * as ResolveOwner from '@/lib/resolve-owner'
+import { useNativeChatSetupHold } from './use-native-chat-setup-hold'
+import { NativeChatSetupNotice } from './NativeChatSetupNotice'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
@@ -46,6 +49,19 @@ vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog'
   }) => <output>{request?.source.sourceTitle}</output>
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
+const ownerLookups = vi.hoisted(() => ({ count: 0 }))
+vi.mock('@/lib/resolve-owner', async (importOriginal) => {
+  const actual = await importOriginal<typeof ResolveOwner>()
+  return {
+    ...actual,
+    runtimeEnvironmentIdForWorkspaceOwner: (
+      ...args: Parameters<typeof actual.runtimeEnvironmentIdForWorkspaceOwner>
+    ) => {
+      ownerLookups.count += 1
+      return actual.runtimeEnvironmentIdForWorkspaceOwner(...args)
+    }
+  }
+})
 
 import {
   resetNativeChatSkillDiscoveryCacheForTests,
@@ -607,5 +623,141 @@ describe('native chat store subscription performance', () => {
       view.unmount()
     }
     console.info('native-chat-dense-subscription-work', JSON.stringify(results))
+  })
+
+  it('renders no unaffected chat and resolves no owner for setup-hold updates at N and 10N', async () => {
+    const results: {
+      mounted: number
+      instances: number
+      mountLookups: number
+      updates: object[]
+    }[] = []
+    for (const scale of [1, 10]) {
+      const data = corpus(scale)
+      const emits = new Map<string, (event: AgentSessionStatusEvent) => void>()
+      handOffTransport.subscribe.mockImplementation(
+        async (target: RuntimeClientTarget, emit: (event: AgentSessionStatusEvent) => void) => {
+          emits.set(target.kind === 'local' ? 'local' : target.environmentId, emit)
+          return { unsubscribe: vi.fn() }
+        }
+      )
+      // Count every wake of the setup readers on this host's feed, however they subscribe.
+      let listenerCalls = 0
+      const local = getStructuredAgentSessionStatusFeed({ kind: 'local' })
+      const subscribe = local.subscribe
+      local.subscribe = (listener) =>
+        subscribe(() => {
+          listenerCalls += 1
+          listener()
+        })
+      const subscribeKeyed = local.subscribeWorkspaceSetupHold
+      local.subscribeWorkspaceSetupHold = (workspaceId, listener) =>
+        subscribeKeyed(workspaceId, () => {
+          listenerCalls += 1
+          listener()
+        })
+      const renders = new Map<string, number>()
+      const counted = (chatId: string) => renders.set(chatId, (renders.get(chatId) ?? 0) + 1)
+      // Structured chats read the hold twice (session, composer); bridge chats three times.
+      function Reader({ chatId }: { chatId: string }) {
+        useNativeChatSetupHold(chatId)
+        counted(chatId)
+        return null
+      }
+      function Chat({ chatId, bridge }: { chatId: string; bridge: boolean }) {
+        const hold = useNativeChatSetupHold(chatId)
+        counted(chatId)
+        return (
+          <section data-chat={chatId}>
+            {hold.held ? (
+              <NativeChatSetupNotice
+                worktreeId={hold.worktreeId}
+                executionHostId={hold.executionHostId}
+              />
+            ) : null}
+            {bridge ? <Reader chatId={chatId} /> : null}
+            <Reader chatId={chatId} />
+          </section>
+        )
+      }
+      ownerLookups.count = 0
+      const view = render(
+        data.chatIds.map((chatId, index) => (
+          <Chat key={chatId} chatId={chatId} bridge={index % 2 === 1} />
+        ))
+      )
+      const instances = data.chatIds.reduce((sum, _, index) => sum + (index % 2 === 1 ? 3 : 2), 0)
+      const mountLookups = ownerLookups.count
+      expect(mountLookups).toBeLessThanOrEqual(instances)
+      const otherFeed = getStructuredAgentSessionStatusFeed({
+        kind: 'environment',
+        environmentId: 'other'
+      })
+      let stopOther: () => void = () => undefined
+      await act(async () => {
+        stopOther = otherFeed.activate()
+      })
+      const frame = (host: string, setupHeldWorkspaceIds: string[]) => {
+        const emit = emits.get(host)
+        if (!emit) {
+          throw new Error(`Missing ${host} status transport`)
+        }
+        act(() => emit({ type: 'snapshot', sessions: [], setupHeldWorkspaceIds }))
+      }
+      // The host's first answer settles every chat from unknown to not held.
+      frame('local', [])
+      const notices = () => view.container.querySelectorAll('[data-chat] [role="status"]').length
+      expect(notices()).toBe(0)
+      const measure = (update: () => void) => {
+        const before = new Map(renders)
+        ownerLookups.count = 0
+        listenerCalls = 0
+        update()
+        const rendered = data.chatIds.filter((chatId) => renders.get(chatId) !== before.get(chatId))
+        return { rendered, lookups: ownerLookups.count, listenerCalls }
+      }
+      const unrelatedWorkspace = workspace(data.workspaces - 1)
+      const updates: object[] = []
+      for (let tick = 0; tick < 3; tick++) {
+        const unaffected = [
+          measure(() =>
+            act(() => useAppStore.setState({ lastTerminalInputAtByPaneKey: { other: tick } }))
+          ),
+          measure(() => frame('local', [unrelatedWorkspace])),
+          measure(() => frame('local', [])),
+          measure(() => frame('other', [workspace(0)]))
+        ]
+        for (const update of unaffected) {
+          expect(update).toEqual({ rendered: [], lookups: 0, listenerCalls: 0 })
+        }
+        updates.push(...unaffected)
+      }
+      const k = data.mounted - 1
+      const chatK = `chat-${k}`
+      const readersK = k % 2 === 1 ? 3 : 2
+      const hold = measure(() => frame('local', [workspace(k)]))
+      expect(hold).toEqual({ rendered: [chatK], lookups: 0, listenerCalls: readersK })
+      expect(notices()).toBe(1)
+      expect(view.container.querySelector(`[data-chat="${chatK}"]`)?.textContent).toContain(
+        'Waiting for setup script to complete'
+      )
+      const release = measure(() => frame('local', []))
+      expect(release).toEqual({ rendered: [chatK], lookups: 0, listenerCalls: readersK })
+      expect(notices()).toBe(0)
+      updates.push(hold, release)
+      results.push({ mounted: data.mounted, instances, mountLookups, updates })
+      view.unmount()
+      stopOther()
+      resetStructuredAgentSessionStatusFeedsForTests()
+    }
+    console.info(
+      'native-chat-setup-hold-subscription-work',
+      JSON.stringify(
+        results.map(({ updates, ...result }) => ({
+          ...result,
+          updates: updates.map((update) => ({ ...update, rendered: undefined }))
+        }))
+      )
+    )
   })
 })
