@@ -142,7 +142,15 @@ export function MobileSessionActiveContent({
     controller
   )
   const { presentedConnState, showOfflineState, forceReconnectHost } = controller
-  const terminalBranch = !(showLoadingState || showEmptyState || showOfflineState || activeMarkdownTab || activeFileTab || activeBrowserTab || activePendingTerminalTab)
+  const terminalBranch = !(
+    showLoadingState ||
+    showEmptyState ||
+    showOfflineState ||
+    activeMarkdownTab ||
+    activeFileTab ||
+    activeBrowserTab ||
+    activePendingTerminalTab
+  )
   const content =
     showLoadingState || showEmptyState || showOfflineState ? (
       <MobileSessionContentState
@@ -262,69 +270,70 @@ export function MobileSessionActiveContent({
     ) : (
       <View style={styles.terminalFrame}>
         <View style={[StyleSheet.absoluteFillObject, sideStripOffset(stripInset)]}>
-        {terminals.map((terminal) => (
-          <TerminalPaneView
-            key={terminal.handle}
-            handle={terminal.handle}
-            active={terminal.handle === activeHandle}
-            visible={
-              visibleTerminalHandles?.includes(terminal.handle) ?? terminal.handle === activeHandle
-            }
-            splitIndex={
-              terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
-                ? visibleTerminalHandles.indexOf(terminal.handle)
-                : undefined
-            }
-            splitDirection={paneDirection}
-            splitFrame={paneFrame}
-            keyboardInset={keyboardLift}
-            title={terminal.title}
-            onFrame={notifyTerminalPaneFrame}
-            keyboardLift={
-              terminal.handle !== activeHandle &&
-              !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
-                ? 0
-                : terminalSplitActive
-                  ? computeActiveTerminalKeyboardLift({
-                      keyboardLift: terminalPaneKeyboardLayout(
-                        paneFrame,
-                        paneDirection,
-                        visibleTerminalHandles.indexOf(terminal.handle),
-                        keyboardLift
-                      ).occlusion,
-                      metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
-                      terminalFrameHeight:
-                        controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef.current
-                          ?.height ?? 0
-                    })
-                  : activeTerminalKeyboardLift
-            }
-            terminalTheme={terminal.terminalTheme}
-            textScale={terminalTextScale}
-            onTextScaleChange={(scale) => {
-              // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-              terminalTextScaleRevisionRef.current += 1
-              setTerminalTextScale(scale)
-              void saveTerminalTextScale(scale)
-            }}
-            onRef={setTerminalWebViewRef}
-            onWebReady={handleTerminalWebReady}
-            onCellBoxChange={notifyTerminalCellBoxChange}
-            onSelectionMode={handleSelectionMode}
-            onSelectionCopy={handleSelectionCopy}
-            onSelectionEvicted={handleSelectionEvicted}
-            onClipboardWrite={handleClipboardWrite}
-            onModesChanged={handleModesChanged}
-            onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-            onHaptic={handleHaptic}
-            onTerminalInput={handleTerminalInput}
-            onTerminalQueryReply={handleTerminalQueryReply}
-            onTerminalInteraction={handleTerminalInteraction}
-            onTerminalTap={handleTerminalTap}
-            onFileTap={handleFileTap}
-            onOpenUrl={handleTerminalOpenUrl}
-          />
-        ))}
+          {terminals.map((terminal) => (
+            <TerminalPaneView
+              key={terminal.handle}
+              handle={terminal.handle}
+              active={terminal.handle === activeHandle}
+              visible={
+                visibleTerminalHandles?.includes(terminal.handle) ??
+                terminal.handle === activeHandle
+              }
+              splitIndex={
+                terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
+                  ? visibleTerminalHandles.indexOf(terminal.handle)
+                  : undefined
+              }
+              splitDirection={paneDirection}
+              splitFrame={paneFrame}
+              keyboardInset={keyboardLift}
+              title={terminal.title}
+              onFrame={notifyTerminalPaneFrame}
+              keyboardLift={
+                terminal.handle !== activeHandle &&
+                !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
+                  ? 0
+                  : terminalSplitActive
+                    ? computeActiveTerminalKeyboardLift({
+                        keyboardLift: terminalPaneKeyboardLayout(
+                          paneFrame,
+                          paneDirection,
+                          visibleTerminalHandles.indexOf(terminal.handle),
+                          keyboardLift
+                        ).occlusion,
+                        metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
+                        terminalFrameHeight:
+                          controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef
+                            .current?.height ?? 0
+                      })
+                    : activeTerminalKeyboardLift
+              }
+              terminalTheme={terminal.terminalTheme}
+              textScale={terminalTextScale}
+              onTextScaleChange={(scale) => {
+                // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
+                terminalTextScaleRevisionRef.current += 1
+                setTerminalTextScale(scale)
+                void saveTerminalTextScale(scale)
+              }}
+              onRef={setTerminalWebViewRef}
+              onWebReady={handleTerminalWebReady}
+              onCellBoxChange={notifyTerminalCellBoxChange}
+              onSelectionMode={handleSelectionMode}
+              onSelectionCopy={handleSelectionCopy}
+              onSelectionEvicted={handleSelectionEvicted}
+              onClipboardWrite={handleClipboardWrite}
+              onModesChanged={handleModesChanged}
+              onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
+              onHaptic={handleHaptic}
+              onTerminalInput={handleTerminalInput}
+              onTerminalQueryReply={handleTerminalQueryReply}
+              onTerminalInteraction={handleTerminalInteraction}
+              onTerminalTap={handleTerminalTap}
+              onFileTap={handleFileTap}
+              onOpenUrl={handleTerminalOpenUrl}
+            />
+          ))}
         </View>
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
           <MobileDictationMeterContext.Provider value={dictation.meter}>
@@ -370,7 +379,6 @@ export function MobileSessionActiveContent({
       </View>
     )
 
-
   return (
     <View
       // Why: one frame under every branch; react-native-web observes onLayout only on a View that mounts with it.
@@ -384,7 +392,11 @@ export function MobileSessionActiveContent({
         )
       }}
     >
-      {terminalBranch ? content : <View style={[styles.contentFrame, sideStripMargin(stripInset)]}>{content}</View>}
+      {terminalBranch ? (
+        content
+      ) : (
+        <View style={[styles.contentFrame, sideStripMargin(stripInset)]}>{content}</View>
+      )}
     </View>
   )
 }
