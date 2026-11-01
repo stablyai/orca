@@ -110,11 +110,10 @@ describe('image viewer dismiss release', () => {
   })
 
   it('leaves the screen along the drag', () => {
-    expect(imageViewerDismissTarget(40, 0, 390, 800)).toEqual({ x: 800, y: 0 })
-    expect(imageViewerDismissTarget(0, -12, 390, 800)).toEqual({ x: 0, y: -800 })
+    expect(imageViewerDismissTarget(40, 0, 390, 800)).toEqual({ x: 890, y: 0 })
+    expect(imageViewerDismissTarget(0, -12, 390, 800)).toEqual({ x: 0, y: -890 })
     expect(imageViewerDismissTarget(900, 0, 390, 800)).toEqual({ x: 900, y: 0 })
     const diagonal = imageViewerDismissTarget(30, 40, 300, 400)
-    expect(diagonal.x).toBeCloseTo(240)
-    expect(diagonal.y).toBeCloseTo(320)
+    expect(diagonal).toEqual({ x: 300, y: 400 })
   })
 })

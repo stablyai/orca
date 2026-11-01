@@ -139,6 +139,7 @@ export function imageViewerDismissTarget(
   if (distance === 0) {
     return { x: 0, y: 0 }
   }
-  const span = Math.max(windowWidth, windowHeight, distance, 1)
+  // The window diagonal is the farthest a full-screen stage must travel to leave in any direction.
+  const span = Math.max(Math.hypot(windowWidth, windowHeight), distance, 1)
   return { x: (translationX / distance) * span, y: (translationY / distance) * span }
 }
