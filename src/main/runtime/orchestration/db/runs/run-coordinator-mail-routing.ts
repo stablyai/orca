@@ -48,11 +48,14 @@ export function rememberRunCoordinatorHandle(
   runId: string,
   terminalHandle: string
 ): void {
-  this.db
+  const changed = this.db
     .prepare(
       `INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)`
     )
     .run(runId, terminalHandle)
+  if (changed.changes) {
+    this.crewChanges.notify(new Set(['topology']))
+  }
 }
 
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')

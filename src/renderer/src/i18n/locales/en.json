@@ -916,6 +916,8 @@
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
+      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {
         "on": "On",
         "off": "Off",
@@ -23309,6 +23311,7 @@
       "serveSimUnavailable": "serve-sim is unavailable.",
       "serveSimNoEndpoints": "serve-sim did not return stream endpoints.",
       "serveSimEndpointUnreachable": "serve-sim started but its stream endpoint is not reachable.",
+      "deviceHubInputBlocked": "Xcode's Device Hub has taken over input for this simulator, so taps and typing won't reach it. Quit Device Hub, then attach the simulator again.",
       "androidSdkMissing": "Android SDK not found. Install Android Studio and set ANDROID_HOME.",
       "adbUnavailable": "adb is unavailable.",
       "noAndroidDevices": "No Android devices or AVDs found. Create one in Android Studio.",

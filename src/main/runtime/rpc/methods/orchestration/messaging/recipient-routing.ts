@@ -1,9 +1,11 @@
+import { selectBareRecipientOwner, runMismatch } from './recipient-owner-selection'
 import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
+import type { OrchestrationCoordinatorKey } from '../../../../orchestration/orchestration-caller-identity'
 import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
 import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
 import {
@@ -37,33 +39,57 @@ export function currentDispatchAssigneeRun(
   db: OrchestrationDb,
   dispatch: DispatchContextRow
 ) {
-  if (
-    dispatch.contract_version !== CURRENT_CONTRACT_VERSION ||
-    db.getFederatedDispatch(dispatch.id)
-  ) {
+  const key = dispatchAssigneeCoordinatorKey(
+    dispatch,
+    () => Boolean(db.getFederatedDispatch(dispatch.id)),
+    (handle) => runtime.getLiveTerminalPaneKey(handle),
+    (handle) => runtime.getTerminalProcessIncarnation(handle)
+  )
+  return !key
+    ? undefined
+    : key.orcaSessionId !== null
+      ? db.getCurrentRunForCoordinator(key)
+      : key.paneKey
+        ? db.getCurrentRunForPane(key.paneKey)
+        : undefined
+}
+
+export function dispatchAssigneeCoordinatorKey(
+  dispatch: Pick<
+    DispatchContextRow,
+    | 'contract_version'
+    | 'assignee_handle'
+    | 'assignee_pane_key'
+    | 'assignee_orca_session_id'
+    | 'process_incarnation'
+  >,
+  federated: () => boolean,
+  livePane: (handle: string) => string | null,
+  process: (handle: string) => string | null
+): OrchestrationCoordinatorKey | undefined {
+  if (dispatch.contract_version !== CURRENT_CONTRACT_VERSION || federated()) {
     return undefined
   }
   if (dispatch.assignee_orca_session_id !== null) {
-    return db.getCurrentRunForCoordinator({
+    return {
       terminalHandle: dispatch.assignee_handle,
       paneKey: null,
       orcaSessionId: dispatch.assignee_orca_session_id
-    })
+    }
   }
   if (dispatch.assignee_handle === null) {
     return undefined
   }
-  const paneKey = runtime.getLiveTerminalPaneKey(dispatch.assignee_handle)
+  const paneKey = livePane(dispatch.assignee_handle)
   if (
     !paneKey ||
     (dispatch.assignee_pane_key && !isEquivalentPaneKey(dispatch.assignee_pane_key, paneKey)) ||
     (dispatch.process_incarnation !== null &&
-      runtime.getTerminalProcessIncarnation(dispatch.assignee_handle) !==
-        dispatch.process_incarnation)
+      process(dispatch.assignee_handle) !== dispatch.process_incarnation)
   ) {
     return undefined
   }
-  return db.getCurrentRunForPane(paneKey)
+  return { terminalHandle: dispatch.assignee_handle, paneKey, orcaSessionId: null }
 }
 
 // Nested coordinators receive new mail where their current Run check waits.
@@ -78,10 +104,18 @@ export function resolveRunBoundDispatchRecipient(
     return undefined
   }
   const boundRun = currentDispatchAssigneeRun(runtime, db, dispatch)
+  return selectRunBoundDispatchRecipient(dispatch, boundRun, explicitRunId)
+}
+
+export function selectRunBoundDispatchRecipient(
+  dispatch: Pick<DispatchContextRow, 'id' | 'run_id'>,
+  boundRun: { id: string } | undefined,
+  explicitRunId?: string
+): { to: string; runId: string; warning: SendRecipientWarning } | undefined {
   if (!boundRun || boundRun.id === dispatch.run_id) {
     return undefined
   }
-  const recipient = `dispatch:${dispatchId}`
+  const recipient = `dispatch:${dispatch.id}`
   // Naming the Dispatch's own Run is equivalent to omitting --run.
   const mismatch =
     explicitRunId === dispatch.run_id
@@ -181,74 +215,47 @@ export function resolveBareOrchestrationRecipient(params: {
     party.terminalHandle === null
       ? undefined
       : (runtime.getLiveTerminalPaneKey(party.terminalHandle) ?? undefined)
-  // A session party's durable Run binding outranks pane liveness.
-  const boundRuns =
-    party.orcaSessionId !== null
-      ? db.runsBoundToCoordinator(party)
-      : paneKey
-        ? db.runsBoundToPane(paneKey)
-        : []
-  // A coordinator of several Runs takes mail in the Run it is addressed from, else its current one.
-  const addressedRunId = params.explicitRunId ?? params.senderRunId
-  const boundRun = boundRuns.find((run) => run.id === addressedRunId) ?? boundRuns[0]
-  if (boundRun) {
-    const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }
-  }
+  return selectBareRecipientOwner({
+    ...params,
+    handle,
+    boundRuns: () =>
+      party.orcaSessionId !== null
+        ? db.runsBoundToCoordinator(party)
+        : paneKey
+          ? db.runsBoundToPane(paneKey)
+          : [],
+    dispatches: () => db.getActiveDispatchMailboxOwners(handle, paneKey),
+    ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
+    fallback: () => {
+      if (session) {
+        const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
+        return refusal
+          ? refused(params.handle, refusal)
+          : { ok: true, to: handle, runId: params.senderRunId }
+      }
 
-  const dispatches = db.getActiveDispatchMailboxOwners(handle, paneKey)
-  const dispatch = selectDispatch(dispatches, params.explicitRunId)
-  if (dispatches.length > 0 && !dispatch) {
-    return ambiguous(
-      handle,
-      dispatches.map((candidate) => `dispatch:${candidate.id}`)
-    )
-  }
-  if (dispatch) {
-    const mismatch = runMismatch(handle, dispatch.run_id, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
-  }
+      if (paneKey) {
+        return {
+          ok: true,
+          to: handle,
+          runId: params.senderRunId,
+          warning: {
+            code: 'legacy_terminal_recipient',
+            recipient: handle,
+            message: `${handle} is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>.`
+          }
+        }
+      }
 
-  const ownerRunIds = db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner)
-  const selectedRunId = selectHistoricalRun(ownerRunIds, params)
-  if (ownerRunIds.length > 0 && !selectedRunId) {
-    return ambiguous(
-      handle,
-      ownerRunIds.map((runId) => `run:${runId}`)
-    )
-  }
-  if (selectedRunId) {
-    const mismatch = runMismatch(handle, selectedRunId, params.explicitRunId)
-    return mismatch ?? { ok: true, to: `run:${selectedRunId}`, runId: selectedRunId }
-  }
-
-  if (session) {
-    const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
-    return refusal
-      ? refused(params.handle, refusal)
-      : { ok: true, to: handle, runId: params.senderRunId }
-  }
-
-  if (paneKey) {
-    return {
-      ok: true,
-      to: handle,
-      runId: params.senderRunId,
-      warning: {
-        code: 'legacy_terminal_recipient',
-        recipient: handle,
-        message: `${handle} is a live terminal-only mailbox. Delivery is not durable after that terminal closes; prefer run:<id> or dispatch:<id>.`
+      const message = `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
+      return {
+        ok: false,
+        code: 'terminal_not_found',
+        message,
+        warning: { code: 'recipient_unreachable', recipient: handle, message }
       }
     }
-  }
-
-  const message = `Terminal ${handle} has no live pane or durable Run/Dispatch mailbox.`
-  return {
-    ok: false,
-    code: 'terminal_not_found',
-    message,
-    warning: { code: 'recipient_unreachable', recipient: handle, message }
-  }
+  })
 }
 
 function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
@@ -260,56 +267,4 @@ function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecip
   }
 }
 
-function selectDispatch(
-  dispatches: DispatchContextRow[],
-  explicitRunId: string | undefined
-): DispatchContextRow | undefined {
-  if (dispatches.length === 1) {
-    return dispatches[0]
-  }
-  if (!explicitRunId) {
-    return undefined
-  }
-  const matches = dispatches.filter((dispatch) => dispatch.run_id === explicitRunId)
-  return matches.length === 1 ? matches[0] : undefined
-}
-
-function selectHistoricalRun(
-  ownerRunIds: string[],
-  params: { senderRunId?: string; explicitRunId?: string }
-): string | undefined {
-  if (params.explicitRunId && ownerRunIds.includes(params.explicitRunId)) {
-    return params.explicitRunId
-  }
-  if (params.senderRunId && ownerRunIds.includes(params.senderRunId)) {
-    return params.senderRunId
-  }
-  return ownerRunIds.length === 1 ? ownerRunIds[0] : undefined
-}
-
-function ambiguous(handle: string, addresses: string[]): BareRecipientResolution {
-  const message = `${handle} resolves to multiple durable mailboxes (${addresses.join(', ')}). Use an explicit canonical address.`
-  return {
-    ok: false,
-    code: 'recipient_ambiguous',
-    message,
-    warning: { code: 'recipient_ambiguous', recipient: handle, message }
-  }
-}
-
-function runMismatch(
-  handle: string,
-  resolvedRunId: string,
-  explicitRunId: string | undefined
-): BareRecipientResolution | undefined {
-  if (!explicitRunId || explicitRunId === resolvedRunId) {
-    return undefined
-  }
-  const message = `${handle} belongs to Run ${resolvedRunId}, not explicitly requested Run ${explicitRunId}.`
-  return {
-    ok: false,
-    code: 'recipient_run_mismatch',
-    message,
-    warning: { code: 'recipient_run_mismatch', recipient: handle, message }
-  }
-}
+export { selectBareRecipientOwner } from './recipient-owner-selection'
