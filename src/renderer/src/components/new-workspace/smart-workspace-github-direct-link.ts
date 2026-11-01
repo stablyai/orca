@@ -90,7 +90,10 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       workItem: lookupGitHubWorkItemForSource,
       workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
     })
-    return { items: item ? [item] : [], prompt: null }
+    // Why: a repo without a GitHub origin (e.g. upstream-only) has no slug, so a miss may be cross-repo.
+    if (item || selectedSlug) {
+      return { items: item ? [item] : [], prompt: null }
+    }
   }
   const matchingTarget = await findMatchingRepoForSlug(
     repos.map((repo) => ({
