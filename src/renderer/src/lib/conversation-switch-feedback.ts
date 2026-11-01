@@ -11,6 +11,7 @@ export function conversationSwitchFailureText(
     source?: unknown
     history?: unknown
     platform?: string
+    sourceInSplit?: boolean
   },
   reasonOverride?: string
 ): string {
@@ -67,7 +68,17 @@ export function conversationSwitchFailureText(
   }
   // From a terminal, the retry is the Switch to Chat UI its pane (or Session History) still offers.
   const fromTerminal = args.direction === 'chat' && args.source !== undefined
+  // A split pane closes when its switch fails after the stop (Brennan 11-01), taking that
+  // control with it, so its retry is Session History.
+  const fromSplitPane = fromTerminal && args.sourceInSplit === true
   if (reason === 'transcriptUnreadable') {
+    if (fromSplitPane) {
+      return translate(
+        'components.tab.bar.switch.historyUnavailableFromSplitPane',
+        "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then open it from Session History.",
+        values
+      )
+    }
     return fromTerminal
       ? translate(
           'components.tab.bar.switch.historyUnavailableFromTerminal',
@@ -79,6 +90,13 @@ export function conversationSwitchFailureText(
           "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
           values
         )
+  }
+  if (fromSplitPane) {
+    return translate(
+      'components.tab.bar.switch.chatSwitchFailedFromSplitPane',
+      '{{agent}} could not switch to chat. Open this conversation from Session History to continue.',
+      values
+    )
   }
   if (fromTerminal) {
     return translate(

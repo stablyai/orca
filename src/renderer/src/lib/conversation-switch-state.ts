@@ -1,4 +1,5 @@
 import { resolveWorktreeExecutionHostPlatform } from './execution-host-facts'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
@@ -23,6 +24,8 @@ export type ConversationSwitch = {
   source?: CliChatResumeSource
   history?: AiVaultSession
   platform?: string
+  /** The source pane shares its tab with other panes, so a failure after the stop closes only it. */
+  sourceInSplit?: boolean
   feedback?: (message: string, kind: 'error' | 'info') => void
 }
 
@@ -32,9 +35,12 @@ export function withConversationSwitchPlatform(args: ConversationSwitch): Conver
     args.workspaceId,
     undefined
   )
+  const state = useAppStore.getState()
+  const sourceLayout = args.source ? state.terminalLayoutsByTabId[args.source.tabId] : undefined
   return {
     ...args,
-    platform: args.platform ?? (platform.kind === 'known' ? platform.platform : undefined)
+    platform: args.platform ?? (platform.kind === 'known' ? platform.platform : undefined),
+    sourceInSplit: args.sourceInSplit ?? collectLeafIds(sourceLayout?.root).length > 1
   }
 }
 
