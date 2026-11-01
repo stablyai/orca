@@ -85,8 +85,8 @@ export function EmulatorDeviceFrame({
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
   const canInteract = isLive && !loading && !streamError
   const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
-  const { cancelKeyboardFrames, reportedOrientation, sendKeyboardFrames, sendTouch } =
-    useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const controlStream = useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
+  const { reportedOrientation, sendTouch } = controlStream
   const visualStreamGeometry = useMemo(
     () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
     [reportedOrientation, streamSize, visualOrientation]
@@ -94,11 +94,7 @@ export function EmulatorDeviceFrame({
   // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
-    useEmulatorScreenKeyboard({
-      cancelKeyboardFrames,
-      canInteract,
-      sendKeyboardFrames
-    })
+    useEmulatorScreenKeyboard({ ...controlStream, canInteract })
 
   useEffect(() => {
     setStreamError(false)

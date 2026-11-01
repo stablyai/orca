@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
@@ -35,9 +35,16 @@ function decodeServeSimOrientation(data: unknown): EmulatorStreamOrientation | u
   }
 }
 
+export type ScrcpyKeyboard = {
+  sendKey: (name: string, shift: boolean) => void
+  sendText: (text: string) => Promise<boolean>
+}
+
 export type EmulatorControlStream = {
   cancelKeyboardFrames: () => void
   connected: boolean
+  /** Android keys and text for main's scrcpy control socket; null for serve-sim sessions. */
+  scrcpyKeyboard: ScrcpyKeyboard | null
   reportedOrientation: EmulatorStreamOrientation | null
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
   sendTouch: (touch: ServeSimTouchFrame) => boolean
@@ -233,7 +240,31 @@ export function useEmulatorControlStream(
     [getOpenSocket, sendKeyboardFrameNow]
   )
 
+  const scrcpyKeyboard = useMemo<ScrcpyKeyboard | null>(
+    () =>
+      scrcpyDeviceId
+        ? {
+            sendKey: (key, shift) =>
+              void window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, key, shift })
+                .catch(() => false),
+            sendText: (text) =>
+              window.api.emulator
+                .sendScrcpyKeyboard({ deviceId: scrcpyDeviceId, text })
+                .catch(() => false)
+          }
+        : null,
+    [scrcpyDeviceId]
+  )
+
   const reportedOrientation =
     reportedConfig && reportedConfig.wsUrl === wsUrl ? reportedConfig.orientation : null
-  return { cancelKeyboardFrames, connected, reportedOrientation, sendKeyboardFrames, sendTouch }
+  return {
+    cancelKeyboardFrames,
+    connected,
+    reportedOrientation,
+    scrcpyKeyboard,
+    sendKeyboardFrames,
+    sendTouch
+  }
 }
