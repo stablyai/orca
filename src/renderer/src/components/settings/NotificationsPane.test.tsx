@@ -32,7 +32,8 @@ function createSettings(): GlobalSettings {
       customSoundPath: null,
       customSoundVolume: 50,
       mutedNotificationSourceIds: [],
-      notifyHiddenWorkspaces: false
+      notifyHiddenWorkspaces: false,
+      hidePhoneNotificationDetails: false
     }
   })
 }

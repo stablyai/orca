@@ -8495,7 +8495,9 @@
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
           "63fc5ec9d2": "Agent Needs Input",
-          "e1b1724793": "A coding agent asks for permission or has a question."
+          "e1b1724793": "A coding agent asks for permission or has a question.",
+          "2992a43817": "Hide Phone Notification Details",
+          "0aee2f67e4": "Phone notifications pass through Orca's push service and Apple or Google. When on, they say only what happened, such as “Agent needs input”, without workspace names or agent messages."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -10772,7 +10774,13 @@
             "c9b2b656e0": "Notify when a coding agent asks for permission or has a question.",
             "b8bf5471d1": "permission",
             "5b9dafd570": "question",
-            "009548060d": "input"
+            "009548060d": "input",
+            "ef658bb250": "Hide Phone Notification Details",
+            "220fd32b71": "Send phone notifications without workspace names or agent messages.",
+            "bc0f863af5": "phone",
+            "52b673dea1": "mobile",
+            "d5d4a87d19": "push",
+            "fce939828f": "privacy"
           }
         },
         "orchestration": {
@@ -21341,6 +21349,12 @@
     "startupRegistration": {
       "title": "Orca is ready to notify you",
       "body": "Allow notifications so Orca can alert you when agents finish or terminals need attention."
+    },
+    "withoutDetails": {
+      "agentNeedsInput": "Agent needs input",
+      "agentFinished": "Agent finished",
+      "terminalBell": "Terminal bell",
+      "plugin": "Plugin notification"
     }
   },
   "sessionSearch": {
