@@ -415,7 +415,7 @@ it('requires definitive first-party account facts, preserving inventory when aut
   for (const { account, settings = signinCapture.settings, endpoint } of cases) {
     const probe = createClaudeModelCatalogProbe({
       ...probeDeps(),
-      resolveEnv: () => (endpoint ? { ANTHROPIC_BASE_URL: endpoint } : {}),
+      resolveEnv: (): Record<string, string> => (endpoint ? { ANTHROPIC_BASE_URL: endpoint } : {}),
       runListing: async () =>
         controlReply('orca-model-discovery', signinCapture.models) +
         controlReply('orca-model-settings', settings) +
