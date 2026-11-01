@@ -30,6 +30,7 @@ import {
 } from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
@@ -280,12 +281,23 @@ export function MobileNativeChatPageList({
     [scroller, write]
   )
 
+  const drawnHead = useRef<string | undefined>(undefined)
   useLayoutEffect(() => {
     const s = scroller()
-    if (s) {
-      keepPlace(s)
-      drawAndFetch(s)
+    if (!s) {
+      return
     }
+    // Chromium keeps a touch scroll's offset from the top, so rows drawn or cut above would carry the reader with them; a write hands the scroll the end-anchored offset.
+    if (keys[first] !== drawnHead.current) {
+      drawnHead.current = keys[first]
+      if (!resting() && !scrollWritesStopMomentum()) {
+        const top = s.scrollTop
+        s.scrollTop = top - 1
+        write(s, top)
+      }
+    }
+    keepPlace(s)
+    drawAndFetch(s)
   })
 
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
