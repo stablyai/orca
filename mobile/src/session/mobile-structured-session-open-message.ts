@@ -5,8 +5,15 @@ import { translate } from '../i18n/mobile-i18n'
 
 export function mobileStructuredSessionOpenMessage(
   reason: StructuredSessionOpenFailure['reason'],
-  displayLabel?: string
+  displayLabel?: string,
+  surface?: StructuredSessionOpenFailure['surface']
 ): string {
+  if (reason === 'gone' && surface === 'terminal') {
+    return translate(
+      'session.structuredOpen.paneUnavailable',
+      "Agent's pane is no longer available."
+    )
+  }
   if (reason === 'workspace-missing') {
     return HOST_ROUTE_NOTICES['worktree-missing']
   }

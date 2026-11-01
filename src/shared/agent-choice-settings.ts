@@ -1,5 +1,8 @@
 import { findOptionOccurrence } from './command-option-occurrence'
-import { agentRequiredValueOptions, removeAgentArgOption } from './agent-session-option-agent-args'
+import {
+  agentRequiredValueOptions,
+  removeAgentArgOption
+} from './agent-session/options/agent-session-option-agent-args'
 import type { AgentType } from './agent-status-types'
 
 export function readAgentChoiceSettings(

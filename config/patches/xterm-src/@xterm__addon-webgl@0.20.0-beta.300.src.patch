@@ -178,7 +178,7 @@ index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..0bd283ea7b2bb72d5d3f20b6e7e11e7c
    /**
     * Incremented whenever cached glyph texture page mappings may be stale, such as after atlas page
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..3543141cede0175e01e9395fda934a944fd3a623 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..86a86162bce43e2560874b4d2088e09891284921 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
 @@ -316,7 +316,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
@@ -202,6 +202,27 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..3543141cede0175e01e9395fda934a94
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+@@ -396,6 +399,20 @@ export class WebglRenderer extends Disposable implements IRenderer {
+     }
+ 
+     // Render
++    // A transparent framebuffer keeps the previous draw, so re-blending translucent
++    // backgrounds accumulated opacity on every redraw and flickered (Orca #6491).
++    if (this._terminal.options.allowTransparency) {
++      // Keep the RGB blend but write source alpha as-is; SRC_ALPHA on alpha
++      // itself would turn the configured opacity `a` into `a²`.
++      this._gl.blendFuncSeparate(
++        this._gl.SRC_ALPHA,
++        this._gl.ONE_MINUS_SRC_ALPHA,
++        this._gl.ONE,
++        this._gl.ONE_MINUS_SRC_ALPHA
++      );
++      this._gl.clearColor(0, 0, 0, 0);
++      this._gl.clear(this._gl.COLOR_BUFFER_BIT);
++    }
+     this._rectangleRenderer.value.renderBackgrounds();
+     this._glyphRenderer.value.render(this._model);
+     if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
 diff --git a/src/renderLayer/BaseRenderLayer.ts b/src/renderLayer/BaseRenderLayer.ts
 index 5b11615328957b6f5d41a174284c11e061910d91..1654e5ae39baf65a7243cbe7b1395c28824b269e 100644
 --- a/src/renderLayer/BaseRenderLayer.ts

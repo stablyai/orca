@@ -10,7 +10,7 @@ import { rpcCallerOperationKey } from '../runtime/rpc/rpc-caller-identity'
 import {
   structuredAgentSessionMessageSendMutation,
   structuredAgentSessionSendBody
-} from '../../shared/structured-agent-session-send-mutation'
+} from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunAcceptedTarget } from './automation-agent-run-result'
 
 export async function reuseAutomationChat(

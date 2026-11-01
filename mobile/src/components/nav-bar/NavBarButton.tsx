@@ -1,6 +1,6 @@
 import type { ComponentType, Ref } from 'react'
 import { Pressable, type View } from 'react-native'
-import { colors, radii } from '../../theme/mobile-theme'
+import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -62,9 +62,9 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.surfaceBright
   },
   pressed: {
-    opacity: 0.7
+    opacity: feedback.pressedOpacity
   },
   disabled: {
-    opacity: 0.4
+    opacity: feedback.disabledOpacity
   }
 }))

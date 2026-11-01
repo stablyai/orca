@@ -2,7 +2,7 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import {
   isCodexAppServerUnsupportedError,
   runCodexAppServerSession
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import {
   buildNativeHealInvocation,
   readCodexThreadsForIndexHeal,

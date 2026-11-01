@@ -1,5 +1,5 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { appUserDataPath, hiddenRetainedSourceTargetIds } from './orcad-retained-source'
 
 /** A hidden source's session goes with its repos: a window adopting it at startup brings closed tabs back (#33539). */

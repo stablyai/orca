@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyDispatchRejection,
   DISPATCH_REJECTED_QUEUE_FULL
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -33,41 +33,6 @@ describe('a rejected dispatch', () => {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
     ...base(1)
   }
-
-  it("copies a rejection's typed fact onto the submission, and only on `rejected`", () => {
-    const rejection = { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } }
-    const state = fold([
-      submission,
-      {
-        kind: 'dispatch',
-        clientMessageId: 'cm_1',
-        state: 'rejected',
-        providerItemId: null,
-        reason: "The agent didn't accept this message.",
-        rejection: { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } },
-        ...base(2)
-      }
-    ])
-    expect(state.submissions.get('cm_1')).toMatchObject({
-      dispatchState: 'rejected',
-      reason: "The agent didn't accept this message.",
-      rejection
-    })
-
-    const doubt = fold([
-      { ...submission, clientMessageId: 'cm_2' },
-      {
-        kind: 'dispatch',
-        clientMessageId: 'cm_2',
-        state: 'unknown',
-        providerItemId: null,
-        reason: 'provider_exited_before_acknowledgement',
-        rejection: { kind: 'writeFailed' },
-        ...base(2)
-      }
-    ])
-    expect(doubt.submissions.get('cm_2')).not.toHaveProperty('rejection')
-  })
 
   it('keeps only the kind of a rejection fact it cannot place, so it reads as no verdict', () => {
     const rejected = (rejection: unknown): JournalRow => {

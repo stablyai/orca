@@ -3,7 +3,7 @@ import {
   aggregateAsyncQuestions,
   scanPendingAsks
 } from '../../../../shared/native-chat/input/native-chat-ask'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-dismissals'
 
 export function useNativeChatAsyncQuestions({
@@ -12,7 +12,8 @@ export function useNativeChatAsyncQuestions({
   sourceScope,
   viewKey,
   messages,
-  settled
+  settled,
+  queuedTexts
 }: {
   paneKey: string
   sourceKey: string
@@ -20,6 +21,8 @@ export function useNativeChatAsyncQuestions({
   viewKey: string | null
   messages: readonly NativeChatMessage[]
   settled: boolean
+  /** Texts waiting in the chat's queue; one quoting a question holds it as answered. */
+  queuedTexts?: readonly string[]
 }) {
   const scopeKey = `${paneKey}:async:${sourceKey}`
   const owner = useMemo(() => ({ scopeKey, viewKey }), [scopeKey, viewKey])
@@ -34,8 +37,8 @@ export function useNativeChatAsyncQuestions({
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
   const scan = useMemo(() => (settled ? scanPendingAsks(messages) : null), [messages, settled])
   const prompt = useMemo(
-    () => aggregateAsyncQuestions(scan?.contributors ?? [], sourceScope, hidden),
-    [scan, sourceScope, hidden]
+    () => aggregateAsyncQuestions(scan?.contributors ?? [], sourceScope, hidden, queuedTexts),
+    [scan, sourceScope, hidden, queuedTexts]
   )
   const dismiss = useCallback(() => {
     if (active.current === owner) {

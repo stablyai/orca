@@ -9,7 +9,7 @@ import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { aiVaultSearchHitToSession } from './ai-vault-search-session'
 import type { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'

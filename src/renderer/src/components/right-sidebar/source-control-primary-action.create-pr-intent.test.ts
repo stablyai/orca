@@ -325,6 +325,57 @@ describe('resolvePrimaryAction Create PR intent', () => {
     })
   })
 
+  it('shows waiting feedback across PR preparation actions when another workspace is busy', () => {
+    const input = inputs({
+      isPrIntentInFlight: true,
+      isRemoteOperationActive: true,
+      isRemoteOperationInAnotherWorktree: true,
+      upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
+    })
+
+    for (const resolveAction of [resolvePrimaryAction, resolveCreatePrHeaderAction]) {
+      expect(resolveAction(input)).toEqual({
+        kind: 'create_pr_intent',
+        label: 'Git operation running elsewhere',
+        title:
+          "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
+        disabled: true,
+        isWaitingForRemoteOperation: true
+      })
+    }
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'publish',
+      label: 'Git operation running elsewhere',
+      title:
+        "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
+      disabled: true,
+      isWaitingForRemoteOperation: true
+    })
+  })
+
+  it.each([
+    { isRemoteOperationActive: false, isRemoteOperationInAnotherWorktree: true },
+    { isRemoteOperationActive: true, isRemoteOperationInAnotherWorktree: false },
+    {
+      isRemoteOperationActive: true,
+      isRemoteOperationInAnotherWorktree: true,
+      isCommitting: true
+    }
+  ])('keeps preparation feedback when the intent is not waiting elsewhere: %j', (busyState) => {
+    const input = inputs({ isPrIntentInFlight: true, ...busyState })
+    const headerAction = resolveCreatePrHeaderAction(input)
+    expect(headerAction).toMatchObject({
+      kind: 'create_pr_intent',
+      label: 'Create PR',
+      title: 'Preparing branch for review…',
+      disabled: true
+    })
+    expect(headerAction?.isWaitingForRemoteOperation).toBeUndefined()
+    const primaryAction = resolvePrimaryAction(input)
+    expect(primaryAction.isWaitingForRemoteOperation).toBeUndefined()
+    expect(primaryAction.title).toBe('Preparing branch for review…')
+  })
+
   it.each(['azure-devops', 'gitea'] as const)(
     'returns Create PR intent for a %s branch that needs a safe push before review',
     (provider) => {

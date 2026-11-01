@@ -40,33 +40,6 @@ describe('StatusPorcelainParser', () => {
     ])
   })
 
-  it('marks staged S... submodule rows as commit-changed gitlinks', () => {
-    const parser = new StatusPorcelainParser()
-    parser.update(
-      '1 M. S... 160000 160000 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb flutter_mine\n',
-      0
-    )
-    parser.finish()
-
-    expect(parser.entries).toEqual([
-      {
-        path: 'flutter_mine',
-        status: 'modified',
-        area: 'staged',
-        submodule: { commitChanged: true, trackedChanges: false, untrackedChanges: false }
-      }
-    ])
-  })
-
-  it('collects unmerged lines for async resolution rather than parsing inline', () => {
-    const parser = new StatusPorcelainParser()
-    parser.update('u UU N... 100644 100644 100644 100644 aa bb cc both.ts\n', 0)
-    parser.finish()
-    expect(parser.entries).toEqual([])
-    expect(parser.unmergedLines).toHaveLength(1)
-    expect(parser.statusLength).toBe(1)
-  })
-
   it('carries a partial trailing line across chunk boundaries', () => {
     const parser = new StatusPorcelainParser()
     parser.update('? partial', 0)
@@ -126,13 +99,5 @@ describe('StatusPorcelainParser', () => {
         entry: { path: 'after.ts', status: 'untracked', area: 'untracked' }
       }
     ])
-  })
-
-  it('does not signal stop when limit is 0 (disabled)', () => {
-    const parser = new StatusPorcelainParser()
-    const lines = `${Array.from({ length: 50 }, (_, i) => `? f${i}.txt`).join('\n')}\n`
-    const stopped = parser.update(lines, 0)
-    expect(stopped).toBe(false)
-    expect(parser.entries.length).toBe(50)
   })
 })

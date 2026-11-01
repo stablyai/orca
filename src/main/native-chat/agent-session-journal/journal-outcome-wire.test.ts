@@ -1,13 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionHistory } from '../agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { readJournalOutcomeGroups } from './journal-read-row'
@@ -20,6 +20,10 @@ import {
   seedOutcomeRows
 } from './journal-projection-test-support'
 import type { JournalRow } from './journal-row-schema'
+import type { AgentSessionJournal } from './journal-store'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
+import { AgentSessionSubscribers } from '../agent-session-wire/structured-agent-session-subscribers'
+import { reusePromptProjection } from '../agent-session-wire/structured-agent-session-actionable-prompts'
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -31,7 +35,17 @@ const identity = {
   providerHandle: codexProviderHandle('thread-1')
 } as const
 const item = (id: string) => ({ provider: 'orca', clientMessageId: id }) as const
+// A queue change naming a missing card folds to nothing, so its sequence stores no record.
+const writeNoOp = (journal: AgentSessionJournal) =>
+  journal['rowWriter'].enqueue((seq, ts) => ({
+    ...base(seq),
+    ts,
+    kind: 'queue',
+    messageId: 'missing',
+    change: { op: 'withdrawn' }
+  }))
 afterEach(async () => {
+  vi.restoreAllMocks()
   await journals.closeAll()
   if (root) {
     await rm(root, { recursive: true, force: true })
@@ -90,6 +104,7 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     { kind: 'status', text: 'later' },
     { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
+  await writeNoOp(journal)
   const first = readAgentSessionHistory(journal, {
     sessionId,
     direction: 'after',
@@ -113,9 +128,14 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     cursor: first.page.window.nextCursor,
     limit: 1
   })
+  // Only a page that read everything moves past the trailing write that saved nothing.
   expect(second).toMatchObject({
     ok: true,
-    page: { hasNewer: false, items: [{ body: { text: 'later' } }] }
+    page: {
+      hasNewer: false,
+      items: [{ body: { text: 'later' } }],
+      window: { nextCursor: journal.cursor() }
+    }
   })
   const bounded = readAgentSessionHistory(
     journal,
@@ -123,4 +143,34 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
     { reader: { budgetBytes: 1, form: (value) => ({ item: value, bytes: 100 }) } }
   )
   expect(bounded).toMatchObject({ ok: false, reset: 'cursor_compacted' })
+})
+
+it('moves subscribers and prompt reuse to the newest write when that write saved nothing', async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-wire-'))
+  const database = openTestJournalHostDatabase(root)
+  seedOutcomeRows(database, [projectionEpochRow])
+  const journal = await journals.open({ identity, stateDirectory: root })
+  const subscribers = new AgentSessionSubscribers()
+  const frames: AgentSessionSubscribeEvent[] = []
+  subscribers.open({ id: 'phone', sessionId, journal, fence: 1, emit: (e) => frames.push(e) })
+  await journal.appendItem(
+    item('material'),
+    { kind: 'status', text: 'material' },
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  const material = journal.cursor()
+  await writeNoOp(journal)
+  expect(journal.cursor().sequence).toBe(material.sequence + 1)
+
+  subscribers.publish(sessionId, journal)
+  expect(frames.findLast((frame) => frame.type === 'batch')).toMatchObject({
+    batch: { cursor: journal.cursor(), items: [{ body: { text: 'material' } }] }
+  })
+  const reads = vi.spyOn(journal, 'readSince')
+  subscribers.publish(sessionId, journal)
+  expect(reads).not.toHaveBeenCalled()
+  reads.mockRestore()
+
+  const prior = { ...material, fence: 1, items: [], dependencies: new Set<string>() }
+  expect(reusePromptProjection(journal, prior, journal.cursor(), 1)).toBe(prior.items)
 })

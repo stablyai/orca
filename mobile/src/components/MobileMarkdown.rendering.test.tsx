@@ -215,7 +215,8 @@ describe('MobileMarkdown tone', () => {
       '> quoted',
       '```\nconst a = 1\n```',
       'Use `code` here.',
-      '| Cell |\n| --- |\n| x |'
+      '| Cell |\n| --- |\n| x |',
+      '7. Item'
     ].join('\n\n')
     act(() => {
       renderer = create(createElement(MobileMarkdown, { content, textScale: 2 }))
@@ -225,6 +226,8 @@ describe('MobileMarkdown tone', () => {
     expect(styleOf(renderer!.root, 'const a = 1').fontSize).toBe(24)
     expect(styleOf(renderer!.root, 'code').fontSize).toBe(24)
     expect(styleOf(renderer!.root, 'Cell').fontSize).toBe(24)
+    expect(styleOf(renderer!.root, 'Item').fontSize).toBe(26)
+    expect(styleOf(renderer!.root, '7.').fontSize).toBe(26)
   })
 })
 
@@ -241,4 +244,22 @@ it('renders document images through the image renderer, including reference synt
   })
   expect(renderImage).toHaveBeenCalledWith('assets/diagram.png', 'Architecture')
   expect(renderImage).toHaveBeenCalledWith('assets/other.png', 'Reference')
+})
+
+it('draws every image in a paragraph and keeps the text around them, leaving declined images as links', () => {
+  const renderImage = vi.fn((href: string, alt: string) =>
+    href.startsWith('/') ? createElement('View', { testID: `image:${href}`, alt }) : null
+  )
+  act(() => {
+    renderer = create(
+      createElement(MobileMarkdown, {
+        content:
+          'Before and after:  \n![one](/tmp/a.png)\n![two](/tmp/b.png)\n![three](rel.png) done',
+        renderImage
+      })
+    )
+  })
+  const images = renderer!.root.findAll((node) => String(node.props.testID).startsWith('image:'))
+  expect(images.map((node) => node.props.testID)).toEqual(['image:/tmp/a.png', 'image:/tmp/b.png'])
+  expect(texts(renderer!)).toEqual(['Before and after:', 'three done'])
 })

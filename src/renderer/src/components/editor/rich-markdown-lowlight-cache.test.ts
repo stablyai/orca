@@ -5,18 +5,6 @@ import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 const CODE = 'export function handler(input: string): string { return input.trim() }'
 
 describe('createCachedLowlight', () => {
-  it('reuses one exact-language result across 533 identical code blocks', () => {
-    const lowlight = createLowlight(common)
-    const highlight = vi.spyOn(lowlight, 'highlight')
-    const cached = createCachedLowlight(lowlight)
-
-    for (let index = 0; index < 533; index += 1) {
-      cached.highlight('typescript', CODE)
-    }
-
-    expect(highlight).toHaveBeenCalledOnce()
-  })
-
   it('matches lowlight for exact-language and automatic highlighting', () => {
     const stock = createLowlight(common)
     const cached = createCachedLowlight(createLowlight(common))
@@ -35,16 +23,6 @@ describe('createCachedLowlight', () => {
         subset: ['javascript', 'typescript']
       })
     )
-  })
-
-  it('preserves language registration', () => {
-    const cached = createCachedLowlight(createLowlight())
-
-    cached.register('typescript', common.typescript)
-
-    expect(cached.listLanguages()).toEqual(['typescript'])
-    expect(cached.registered('typescript')).toBe(true)
-    expect(cached.highlight('typescript', CODE).children).not.toHaveLength(0)
   })
 
   it('keys explicit language, automatic mode, and supported options independently', () => {

@@ -70,10 +70,15 @@ export const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize
   },
+  // Same gap as the tool rows' icon and sentence, so the time starts on their text.
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs
+    gap: 6
+  },
+  // The copy button's 24 pt box centres a 14 pt glyph; pulling the 5 pt back lines the glyph up with the tool icons.
+  metaCopy: {
+    marginHorizontal: -5
   },
   unsentNotice: {
     maxWidth: '88%',

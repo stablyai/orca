@@ -3,7 +3,7 @@ import { projectStructuredAgentStartItem } from '../../../shared/structured-agen
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS,
   parseJournalRow,
@@ -543,6 +543,32 @@ it.each([
   const message = projectStructuredAgentStartItem(item)
   expect(message?.blocks).toEqual([{ type: 'text', text: body.task }])
   expect(message?.from?.senders).toEqual(senders)
+})
+
+it('stores and replays a handoff to an agent this chat launched on its own', () => {
+  const agent = {
+    party: { address: 'orca_session_id:codex-new', terminalHandle: null, orcaSessionId: null },
+    name: 'Codex'
+  }
+  const body = { kind: 'agent-handoff', launchId: 'launch-1', task: 'Fix the stall', agent }
+  const parsed = parseJournalRow(
+    JSON.stringify({ ...BASE, kind: 'item', itemId: 'handoff', revision: 1, body })
+  )
+  if (!parsed.ok) {
+    throw new Error('this build refused its own handoff card')
+  }
+  const state = createJournalReducerState('session-1', BASE.epoch)
+  applyJournalRow(state, parsed.row)
+  const item = state.items.get('handoff')
+  if (!item) {
+    throw new Error('handoff card was lost during replay')
+  }
+  expect(projectStructuredAgentStartItem(item)).toMatchObject({
+    blocks: [{ type: 'text', text: body.task }],
+    agentStart: true,
+    agentHandoff: true,
+    from: { senders: [agent] }
+  })
 })
 
 it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }])(

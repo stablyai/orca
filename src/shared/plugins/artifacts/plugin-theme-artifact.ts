@@ -1,5 +1,11 @@
 import { z } from 'zod'
 import { PLUGIN_MANIFEST_V2_SINCE, pluginFieldDoc } from '../manifest/plugin-schema-field-docs'
+import {
+  tolerantPluginThemeBackgroundRegistration,
+  pluginThemeBackgroundSchema,
+  tolerantPluginThemeBackground,
+  type PluginThemeBackgroundArtifact
+} from './plugin-theme-background'
 
 // Why: this is a public, additive-only theme API. Exposing every main.css
 // variable would make internal renderer refactors plugin-breaking changes.
@@ -247,6 +253,10 @@ function pluginAppThemeArtifactSchema(strictness: PluginArtifactStrictness) {
     tokenColors: (strictness === 'strict'
       ? tokenColorsSchema
       : z.unknown().transform(tolerantTokenColors)
+    ).optional(),
+    background: (strictness === 'strict'
+      ? pluginThemeBackgroundSchema
+      : z.unknown().transform(tolerantPluginThemeBackground)
     ).optional()
   }
   return (strictness === 'strict' ? z.strictObject(fields) : z.object(fields)).refine(
@@ -273,6 +283,7 @@ const pluginThemeRegistrationSchema = z
       registrationTokenValueSchema
     ),
     tokenColors: tokenColorsSchema.optional(),
+    background: tolerantPluginThemeBackgroundRegistration,
     id: pluginContentIdSchema,
     /** Changes whenever the theme's content does, so a cached paint can be checked. */
     revision: z.string().max(128),
@@ -285,7 +296,7 @@ const pluginThemeRegistrationSchema = z
 export type PluginAppThemeArtifact = Pick<
   PluginThemeRegistration,
   'base' | 'tokens' | 'tokenColors'
->
+> & { background?: PluginThemeBackgroundArtifact }
 export type PluginThemeRegistration = z.infer<typeof pluginThemeRegistrationSchema>
 
 /** Parses a theme and fills its omitted tokens. */
@@ -297,7 +308,8 @@ export function parsePluginAppThemeArtifact(
   return {
     base: theme.base,
     tokens: completePluginAppThemeTokens(theme.tokens),
-    ...(theme.tokenColors?.length ? { tokenColors: theme.tokenColors } : {})
+    ...(theme.tokenColors?.length ? { tokenColors: theme.tokenColors } : {}),
+    ...(theme.background ? { background: theme.background } : {})
   }
 }
 

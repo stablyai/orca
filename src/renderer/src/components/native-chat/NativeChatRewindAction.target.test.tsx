@@ -13,11 +13,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
-} from '../../../../shared/structured-agent-session-reducer'
+} from '../../../../shared/agent-session/structured-agent-session-reducer'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MessageRow } from './NativeChatMessageRow'
 
@@ -40,7 +40,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const target = { kind: 'local' } as const
 

@@ -4,16 +4,16 @@
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import { modelRefusalReadStates } from './structured-model-refusal.test-fixture'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import type {
-  AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'

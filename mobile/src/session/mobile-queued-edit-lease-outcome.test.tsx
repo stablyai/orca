@@ -7,7 +7,7 @@ import {
 import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { QueuedEditHostFixtureModule } from '../../../src/shared/queued-edit-host.test-fixture'
-import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionQueuedMessageEditHoldResult } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { mobileQueuedEditHarness, readOrHoldReply } from './mobile-queued-edit-hook.test-fixture'
 import {

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../../shared/hosted-review'
 import { useAppStore } from '@/store'
 import { latestLookupGeneration } from '@/store/lookup-generation-sequence'
@@ -72,6 +73,7 @@ export function refreshHostedReviewForClick(
   return refreshHostedReviewCard(model.fetchHostedReviewForBranch, {
     repoPath: repo.path,
     repoId: repo.id,
+    repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
     branch,
     admissionTier: 'interactive',
     userRefresh: true,
