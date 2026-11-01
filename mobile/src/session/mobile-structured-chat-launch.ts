@@ -4,7 +4,7 @@ import {
   decodeAgentSessionAgentsResult
 } from '../../../src/shared/agent-session/agent-session-registered-agents'
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   hostStatusProbe,

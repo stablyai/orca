@@ -7,7 +7,7 @@ import {
   WORKSPACE_ON_OTHER_RUNTIME
 } from '../../../src/shared/protocol-version'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 
