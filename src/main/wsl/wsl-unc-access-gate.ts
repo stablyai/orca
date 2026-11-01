@@ -14,9 +14,9 @@ import {
 export { noteWslDistroMayHaveStopped } from '../wsl-background-distro-gate'
 
 // Any 9P touch of `\\wsl.localhost\<distro>` boots a stopped distro, so background reads ask first.
-// Stops are signalled (watcher or relay exit, or a read that saw it), so a running read is trusted
-// this long without one, keeping wsl.exe spawns to about one a minute.
-export const WSL_UNC_RUNNING_LEASE_MS = 60_000
+// Most stops are signalled (watcher or relay exit, or a read that saw it), but one with no Orca
+// process in the distro is not, so a running read is trusted only this long: at most four wsl.exe a minute.
+export const WSL_UNC_RUNNING_LEASE_MS = 15_000
 
 /**
  * Runs a user act on `distro`. When it settles, even by throwing, background reads stop trusting a

@@ -126,6 +126,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} is already a host.",
         "distroStopped": "{{distro}} stopped since the list was read. Choose Start and add to start it.",
+        "distroUnverifiable": "WSL didn’t answer whether {{distro}} is running. Refresh the list, or add it from the dialog, which starts it if needed.",
         "wsl1": "{{distro}} runs WSL 1, which Orca no longer supports. Convert it to WSL 2 in a Windows terminal with: {{command}}",
         "notRegistered": "{{distro}} is not an installed WSL distro. Run {{command}} in a Windows terminal to see the installed ones, or reinstall it and try again.",
         "sshManaged": "{{distro}} already runs the Orca server for “{{server}}”, which this computer reaches over SSH. Remove that server first; moving it to a WSL host isn’t supported yet."
@@ -7227,7 +7228,9 @@
           "refresh": "Refresh",
           "wsl1Reason": "WSL 1 can’t run an Orca host; convert with {{command}}",
           "noWsl2Title": "No WSL 2 distros found",
-          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh."
+          "noWsl2Install": "Install one from a Windows terminal with {{command}}, then choose Refresh.",
+          "unverifiable": "Unknown",
+          "unverifiableHint": "WSL didn’t say whether {{value0}} is running. Adding it starts it if needed."
         },
         "wslHostRowStatus": {
           "connecting": "Starting",
@@ -12833,7 +12836,7 @@
         "wslHosts": {
           "title": "WSL hosts",
           "experimental": "Experimental",
-          "description": "Orca runs a server inside each distro. A stopped distro starts only when you open one of its projects or connect it here.",
+          "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
@@ -13264,7 +13267,9 @@
           "light": "Light",
           "languageIncomplete": "{{value0}}% translated, too incomplete to use as Orca’s language",
           "languageCoverage": "Interface language · {{value0}}% translated",
-          "newFileMenu": "Adds to the + menu"
+          "newFileMenu": "Adds to the + menu",
+          "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
+          "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -16258,16 +16263,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Zoom in",
-          "6c89c73d9f": "Reset zoom",
           "be27304574": "Zoom out",
-          "77bfc9b35a": "Open image in popup",
           "3ef9551ba2": "Loading preview...",
-          "d9d2944855": "Failed to load file preview"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Press Esc to close",
-          "535f4e2b56": "Close",
-          "9e27b2ecaf": "Full-size image preview"
+          "d9d2944855": "Failed to load file preview",
+          "fitToView": "Fit to view",
+          "actualSize": "Actual size",
+          "expand": "Expand image"
         },
         "IpynbViewer": {
           "859bf9fc21": "Run cell",
@@ -16389,7 +16390,10 @@
           "zoomOut": "Zoom out",
           "zoomIn": "Zoom in",
           "fit": "Fit to screen",
-          "close": "Close"
+          "close": "Close",
+          "copiedPng": "Copied as PNG",
+          "copyPngFailed": "Could not copy image",
+          "copyPng": "Copy as PNG"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
@@ -22347,12 +22351,8 @@
       "refreshBeforeEnd": "End is unavailable until PTYs are refreshed.",
       "endUnsupported": "End is unavailable for this terminal. Its host does not support the required safety checks. Close it from its tab or on its host.",
       "checkingTabs": "Checking tabs…",
-      "endTitle": "End {{terminal}}?",
-      "endDescription": "This ends the terminal and its child processes. Unsaved work may be lost.",
       "lastProcess": "Last seen process: {{process}}",
-      "cancel": "Cancel",
       "ending": "Ending…",
-      "end": "End terminal",
       "unassigned": "Unassigned",
       "thisComputer": "This computer",
       "localOwnedCount_one": "{{count}} Orca PTY on this computer",
@@ -22369,7 +22369,11 @@
       "endHint": "End this terminal and its child processes.",
       "claimed": "An agent now owns this terminal. Refresh before trying again.",
       "attached": "A client is now attached to this terminal. Refresh before trying again.",
-      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running."
+      "unverifiableEnd": "Unverifiable: the host could not confirm the result. The terminal may still be running.",
+      "selectAll": "Select all terminals",
+      "selectAllShort": "Select all",
+      "endSelected": "End selected ({{count}})",
+      "selectNamed": "Select {{terminal}}"
     },
     "resources": "Resources",
     "ptys": "PTYs",

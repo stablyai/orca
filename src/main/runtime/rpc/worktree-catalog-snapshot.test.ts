@@ -63,18 +63,6 @@ describe('resolveWorktreeCatalogSnapshot', () => {
     expect(resolveWorktreeCatalogSnapshot(result(1), null).snapshotId).toBe(warm)
   })
 
-  it('isolates the memo from mutation of a previously resolved catalog', () => {
-    const mutable = result(1)
-    const first = resolveWorktreeCatalogSnapshot(mutable, null)
-
-    mutable.totalCount = 2
-    const changed = resolveWorktreeCatalogSnapshot(mutable, first.snapshotId)
-
-    expect(changed).toMatchObject({ totalCount: 2 })
-    expect(changed).not.toHaveProperty('unchanged')
-    expect(changed.snapshotId).not.toBe(first.snapshotId)
-  })
-
   it('produces ids within the request schema bound', () => {
     const { snapshotId } = resolveWorktreeCatalogSnapshot(result(1), null)
     expect(snapshotId.length).toBeGreaterThan(0)

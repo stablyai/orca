@@ -115,6 +115,7 @@ describe('resource session inventory request-scoped exits', () => {
       await vi.advanceTimersByTimeAsync(0)
 
       cache.exited({ code: 0, id: original.id, incarnationId, hostId: 'local' })
+      await vi.advanceTimersByTimeAsync(50)
       expect(cache.getSnapshot().sessionInventory.count).toBe(0)
       cache.invalidate()
       await vi.advanceTimersByTimeAsync(100)
@@ -233,5 +234,151 @@ describe('resource session inventory request-scoped exits', () => {
     void cache.refresh()
     await vi.advanceTimersByTimeAsync(100)
     expect(cache.getSnapshot().sessionInventory.sessions).toEqual(rows)
+  })
+
+  it('publishes staggered bulk exits at a bounded cadence', async () => {
+    const rows = Array.from({ length: 10_000 }, (_, index) => session(`pty-${index}`, 'A'))
+    const survivor = session('survivor', 'A')
+    const list = vi.fn().mockResolvedValue([...rows, survivor])
+    const cache = new ResourceSessionInventoryCache(list, true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(0)
+    let previous = cache.getSnapshot().sessionInventory
+    const inventories: number[] = []
+    cache.subscribe(() => {
+      const current = cache.getSnapshot().sessionInventory
+      if (current !== previous) {
+        inventories.push(current.count)
+        previous = current
+      }
+    })
+
+    for (let batch = 0; batch < 100; batch++) {
+      for (let offset = 0; offset < 100; offset++) {
+        const entry = rows[batch * 100 + offset]
+        cache.exited({ code: 0, ...entry, hostId: 'local' })
+      }
+      await vi.advanceTimersByTimeAsync(1)
+    }
+
+    expect(inventories).toEqual([5_001, 1])
+    expect(cache.getSnapshot().sessionInventory.sessions).toEqual([survivor])
+    expect(list).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('flushes pending exits synchronously when duplicate kill acknowledgements arrive', async () => {
+    const rows = [session('one', 'A'), session('two', 'B')]
+    const survivor = session('survivor', 'A')
+    const cache = new ResourceSessionInventoryCache(async () => [...rows, survivor], true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(0)
+    const changed = vi.fn()
+    cache.subscribe(changed)
+    for (const entry of rows) {
+      cache.exited({ code: 0, ...entry, hostId: 'local' })
+    }
+    expect(changed).not.toHaveBeenCalled()
+
+    cache.removeMany(rows)
+    expect(changed).toHaveBeenCalledOnce()
+    expect(cache.getSnapshot().sessionInventory.sessions).toEqual([survivor])
+    await vi.advanceTimersByTimeAsync(100)
+    expect(changed).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('absorbs pending exit publications into an in-flight listing without resurrecting its incarnation', async () => {
+    const original = session('one', 'A')
+    const replacement = session('one', 'B')
+    const slow = deferredListing()
+    const list = vi.fn().mockResolvedValueOnce([original]).mockReturnValueOnce(slow.promise)
+    const cache = new ResourceSessionInventoryCache(list, true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(100)
+    void cache.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+
+    cache.exited({ code: 0, ...original, hostId: 'local' })
+    slow.resolve([original, replacement])
+    await vi.advanceTimersByTimeAsync(0)
+    const settled = cache.getSnapshot().sessionInventory
+    expect(settled.sessions).toEqual([replacement])
+    await vi.advanceTimersByTimeAsync(50)
+    expect(cache.getSnapshot().sessionInventory).toBe(settled)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('lets a newer authoritative listing replace an unpublished idle exit', async () => {
+    const original = session('one', 'A')
+    const cache = new ResourceSessionInventoryCache(async () => [original], true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(100)
+
+    cache.exited({ code: 0, ...original, hostId: 'local' })
+    await cache.refresh()
+    const settled = cache.getSnapshot().sessionInventory
+    expect(settled.sessions).toEqual([original])
+    await vi.advanceTimersByTimeAsync(50)
+    expect(cache.getSnapshot().sessionInventory).toBe(settled)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['unavailable', 'view_not_visible'])(
+    'publishes pending exits after a failed listing without losing error state: %s',
+    async (message) => {
+      const original = session('one', 'A')
+      const survivor = session('survivor', 'B')
+      const slow = deferredListing()
+      const list = vi
+        .fn()
+        .mockResolvedValueOnce([original, survivor])
+        .mockReturnValueOnce(slow.promise)
+      const cache = new ResourceSessionInventoryCache(list, true)
+      cache.setActive(true)
+      await vi.advanceTimersByTimeAsync(100)
+      void cache.refresh()
+      await vi.advanceTimersByTimeAsync(0)
+
+      cache.exited({ code: 0, ...original, hostId: 'local' })
+      slow.reject(new Error(message))
+      await vi.advanceTimersByTimeAsync(50)
+      expect(cache.getSnapshot().sessionInventory.sessions).toEqual([survivor])
+      expect(cache.getSnapshot().sessionsError).toBe(message === 'unavailable')
+      expect(cache.getSnapshot().loading).toBe(false)
+    }
+  )
+
+  it('coalesces inactive exit observations without listing and reconciles a reopened view', async () => {
+    const original = session('one', 'A')
+    const hiddenExit = session('two', 'A')
+    const replacement = session('one', 'B')
+    const slow = deferredListing()
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce([original, hiddenExit])
+      .mockReturnValueOnce(slow.promise)
+    const cache = new ResourceSessionInventoryCache(list, true)
+    cache.setActive(true)
+    await vi.advanceTimersByTimeAsync(100)
+    const observed = cache.getSnapshot().sessionInventory
+
+    cache.exited({ code: 0, ...original, hostId: 'local' })
+    cache.setActive(false)
+    cache.exited({ code: 0, ...hiddenExit, hostId: 'local' })
+    expect(cache.getSnapshot().sessionInventory).toBe(observed)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(cache.getSnapshot().sessionInventory.count).toBe(0)
+    expect(list).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+
+    cache.setActive(true)
+    expect(cache.getSnapshot().sessionInventory.count).toBe(0)
+    await vi.advanceTimersByTimeAsync(0)
+    slow.resolve([replacement])
+    await vi.advanceTimersByTimeAsync(100)
+    expect(cache.getSnapshot().sessionInventory.sessions).toEqual([replacement])
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

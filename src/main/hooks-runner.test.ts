@@ -60,7 +60,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature\\',
         'pnpm install\npnpm build'
@@ -105,7 +105,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
         '#!/usr/bin/env bash\npnpm install',
@@ -150,7 +150,7 @@ describe('createSetupRunnerScript', () => {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
       const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
         await import('../shared/terminal-git-credential-guard')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         makeRepo(),
         'C:\\repo\\feature',
         'pnpm install',
@@ -172,7 +172,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
         'C:\\repo\\feature',
         'pnpm install'
@@ -255,7 +255,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
+      const result = await createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
 
       expect(result.envVars).toEqual(
         expect.objectContaining({
@@ -284,7 +284,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         {
           ...makeRepo(),
           path: 'C:\\Users\\jinwo\\git\\orca'
@@ -338,7 +338,7 @@ describe('createSetupRunnerScript', () => {
 
     try {
       const { createSetupRunnerScript } = await import('./worktree-runner-script')
-      const result = createSetupRunnerScript(
+      const result = await createSetupRunnerScript(
         makeRepo(),
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\feature',
         'pnpm install'

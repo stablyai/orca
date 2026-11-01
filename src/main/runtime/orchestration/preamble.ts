@@ -26,6 +26,8 @@ export type PreambleParams = {
   canDispatchSubWorkers?: boolean
   // Federated workers have no local Dispatch row to parent helpers.
   subWorkersInOwnRun?: boolean
+  // Mail already in the Dispatch's mailbox, which no wake will announce.
+  unreadMail?: boolean
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -70,7 +72,14 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 === CLI COMMANDS ===
 
 \`\`\`sh
-  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${
+  params.unreadMail
+    ? `  # Messages for this task are waiting; read them:
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
+
+`
+    : ''
+}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>" --options "<optional,comma,separated>"
