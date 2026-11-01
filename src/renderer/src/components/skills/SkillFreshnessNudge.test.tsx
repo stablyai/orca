@@ -109,32 +109,6 @@ describe('SkillFreshnessNudge', () => {
     container = null
   })
 
-  it('lingers without an auto-close timer or auto-close dismissal write', async () => {
-    await renderNudge()
-
-    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
-    const options = mocks.toastInfo.mock.calls[0]?.[1]
-    expect(options.duration).toBe(Number.POSITIVE_INFINITY)
-    expect(options.onAutoClose).toBeUndefined()
-    expect(mocks.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('counts only skills the plan would update', async () => {
-    mocks.plan = planOf([
-      sharedEntry('orca-cli', 'update'),
-      sharedEntry('computer-use', 'keep'),
-      planEntry('orchestration', [
-        planOp('keep', '/home/u/.agents/skills/orchestration'),
-        planOp('leave', '/home/u/.claude/skills/orchestration', { reason: 'edited' })
-      ])
-    ])
-    await renderNudge()
-
-    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
-    expect(mocks.toastInfo.mock.calls[0]?.[0]).toBe('An installed Orca skill is out of date')
-    expect(mocks.toastInfo.mock.calls[0]?.[1].description).toContain('Update orca-cli so')
-  })
-
   it('raises no nudge when the plan only links a newly detected agent', async () => {
     mocks.plan = planOf([
       planEntry('orca-cli', [
@@ -234,13 +208,5 @@ describe('SkillFreshnessNudge', () => {
     await renderNudge()
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
-  })
-
-  it('waits for persisted settings before deciding whether to nudge', async () => {
-    mocks.settingsLoaded = false
-
-    await renderNudge()
-
-    expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 })

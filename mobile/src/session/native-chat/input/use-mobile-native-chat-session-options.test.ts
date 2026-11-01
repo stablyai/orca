@@ -6,7 +6,7 @@ import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveNativeChatSessionOptionDefaults
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../../../../src/shared/agent-session/options/agent-session-option-launch'
 import type {
   PersistedNativeChatSessionOptions,
   NativeChatSessionOptionSettingsMutation

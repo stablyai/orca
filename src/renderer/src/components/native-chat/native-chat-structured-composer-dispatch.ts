@@ -7,12 +7,14 @@ import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/t
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
-  skills: readonly AgentJournalSkillRef[] = []
+  skills: readonly AgentJournalSkillRef[] = [],
+  intent: Pick<StructuredAgentSessionSendRequest, 'alternate'> = {}
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
@@ -36,9 +38,10 @@ export async function dispatchNativeChatStructuredComposerText(
       revealsTranscript: false
     }
   }
+  const request = { ...(skills.length > 0 ? { skills } : {}), ...intent }
   const admission =
-    skills.length > 0
-      ? transport.send(prompt, attachments, { skills })
+    Object.keys(request).length > 0
+      ? transport.send(prompt, attachments, request)
       : transport.send(prompt, attachments)
   return { accepted: admission !== false, error: null, revealsTranscript: admission === true }
 }

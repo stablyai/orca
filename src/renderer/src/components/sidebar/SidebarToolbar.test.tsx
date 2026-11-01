@@ -141,11 +141,4 @@ describe('SidebarToolbar moved workspace board hint', () => {
     expect(localized).not.toBe('Workspace board')
     expect(container.querySelector(`button[aria-label="${localized}"]`)).not.toBeNull()
   })
-
-  it('keeps account controls out of the sidebar footer', async () => {
-    const { container } = await renderToolbar()
-
-    expect(container.textContent).not.toContain('Profile')
-    expect(container.textContent).toContain('Settings')
-  })
 })

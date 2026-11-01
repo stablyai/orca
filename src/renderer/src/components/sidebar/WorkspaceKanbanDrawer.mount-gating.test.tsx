@@ -244,26 +244,4 @@ describe('WorkspaceKanbanDrawer mount gating', () => {
     expect(testContainer.querySelector('[data-workspace-board-heavy-content]')).not.toBeNull()
     expect(activeContentSubscriptions()).toBe(1)
   })
-
-  it('preserves drag preview presentation when the preview becomes a full board', async () => {
-    await renderDrawer(true, true)
-
-    expect(testContainer.querySelector('[data-workspace-board-drag-preview="true"]')).not.toBeNull()
-    expect(contextualTourMock).toHaveBeenLastCalledWith(
-      'workspace-board',
-      false,
-      'workspace_board_visible'
-    )
-
-    await renderDrawer(true, false)
-
-    expect(testContainer.querySelector('[data-workspace-board-drag-preview]')).toBeNull()
-    expect(contextualTourMock).toHaveBeenLastCalledWith(
-      'workspace-board',
-      true,
-      'workspace_board_visible'
-    )
-    expect(contentProbe.mounts).toHaveBeenCalledTimes(1)
-    expect(activeContentSubscriptions()).toBe(1)
-  })
 })

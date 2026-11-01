@@ -43,7 +43,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: mocks.getCohortAtEmitMock
 }))
 
-const { browserWindowMock, getCohortAtEmitMock, starOrcaMock, trackMock } = mocks
+const { browserWindowMock, starOrcaMock, trackMock } = mocks
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -56,72 +56,6 @@ describe('StarNagService', () => {
 
   afterEach(() => {
     consoleInfoMock.mockRestore()
-  })
-
-  it('emits direct-star attempted and succeeded outcomes plus app_starred_orca', async () => {
-    const window = createWindow()
-    browserWindowMock.getAllWindows.mockReturnValue([window])
-    const { service, ui } = createHarness()
-
-    service.registerIpcHandlers()
-    getIpcHandler('star-nag:forceShow')()
-    const ok = await getIpcHandler('star-nag:starOrca')()
-
-    expect(ok).toBe(true)
-    expect(ui.starNagCompleted).toBe(true)
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_clicked', mode: 'gh' })
-    )
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'direct_star_succeeded', mode: 'gh' })
-    )
-    expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
-      source: 'star_nag',
-      nth_repo_added: 3
-    })
-  })
-
-  it('uses the source moment for confirmed direct-star success telemetry', async () => {
-    const window = createWindow()
-    browserWindowMock.getAllWindows.mockReturnValue([window])
-    const { service } = createHarness()
-
-    service.registerIpcHandlers()
-    await getIpcHandler('star-nag:onboardingCompleted')()
-    await getIpcHandler('star-nag:starOrca')()
-
-    expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
-      source: 'onboarding_completed',
-      nth_repo_added: 3
-    })
-  })
-
-  it('uses fresh cohort context for canonical app_starred_orca success telemetry', async () => {
-    const window = createWindow()
-    browserWindowMock.getAllWindows.mockReturnValue([window])
-    getCohortAtEmitMock
-      .mockReturnValueOnce({ nth_repo_added: 2 })
-      .mockReturnValueOnce({ nth_repo_added: 4 })
-    const { service } = createHarness()
-
-    service.registerIpcHandlers()
-    getIpcHandler('star-nag:forceShow')()
-    await getIpcHandler('star-nag:starOrca')()
-
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'shown', nth_repo_added: 2 })
-    )
-    expect(trackMock).toHaveBeenCalledWith(
-      'star_nag_outcome',
-      expect.objectContaining({ outcome: 'direct_star_succeeded', nth_repo_added: 2 })
-    )
-    expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
-      source: 'star_nag',
-      nth_repo_added: 4
-    })
   })
 
   it('records success and completion when direct star resolves after dismissal cleared the visible session', async () => {

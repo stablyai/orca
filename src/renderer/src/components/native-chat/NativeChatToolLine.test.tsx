@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { formatToolInput } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))

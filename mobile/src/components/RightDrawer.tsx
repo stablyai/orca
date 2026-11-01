@@ -1,16 +1,8 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { View, Pressable, StyleSheet, Platform, Keyboard } from 'react-native'
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolation
-} from 'react-native-reanimated'
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -18,14 +10,14 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
+import {
+  bottomDrawerOffset,
+  bottomDrawerScrim,
+  bottomDrawerTravel
+} from './bottom-drawer-drag-motion'
+import { hideDrawer, showDrawer, useDrawerDrag } from './use-bottom-drawer-drag'
+import { useDrawerReducedMotion } from './bottom-drawer-constants'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-
-const DISMISS_THRESHOLD = 80
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Damp negative translateX so panel resists pulling inward past docked edge.
-const RUBBER_BAND_FACTOR = 0.25
-const SHOW_DURATION = 180
-const HIDE_DURATION = 150
 
 type Props = {
   visible: boolean
@@ -75,24 +67,26 @@ function MountedRightDrawer({
   widthPx
 }: MountedRightDrawerProps) {
   useMobileColorScheme()
-  const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
+  const fade = useSharedValue(0)
+  const reducedMotion = useDrawerReducedMotion()
+  const motion = useMemo(() => ({ progress, fade, reducedMotion }), [progress, fade, reducedMotion])
   const { width: screenWidth } = useSafeAreaFrame()
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)
+  const extent = useSharedValue(panelWidth)
+  useEffect(() => {
+    extent.value = panelWidth
+  }, [extent, panelWidth])
 
+  // The panel moves like the bottom sheet, on its own axis: one value, the same curve and release.
   useEffect(() => {
     if (visible) {
-      translateX.value = 0
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      showDrawer(motion)
     } else {
       Keyboard.dismiss()
-      progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
-        if (finished) {
-          runOnJS(onHidden)()
-        }
-      })
+      hideDrawer(motion, onHidden)
     }
   }, [onHidden, visible])
 
@@ -106,53 +100,29 @@ function MountedRightDrawer({
       : null
   )
 
-  const dismiss = useCallback(() => {
-    onClose()
-  }, [onClose])
-
+  const drag = useDrawerDrag({ ...motion, extent, screenExtent: screenWidth, onDismiss: onClose })
   const scrollGesture = Gesture.Native()
   // Positive horizontal swipe dismisses; activeOffset leaves vertical ScrollView gestures intact.
   const panGesture = Gesture.Pan()
     .activeOffsetX([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = e.translationX
-      } else {
-        translateX.value = e.translationX * RUBBER_BAND_FACTOR
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > DISMISS_THRESHOLD || e.velocityX > 500) {
-        const velocity = Math.max(e.velocityX, 800)
-        const remaining = panelWidth - e.translationX
-        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
-        translateX.value = withTiming(panelWidth, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
-        })
-      } else {
-        translateX.value = withSpring(0, SPRING_CONFIG)
-      }
-    })
+    .onBegin(() => drag.begin())
+    .onUpdate((e) => drag.follow(e.translationX))
+    .onEnd((e) => drag.release(e.velocityX))
 
-  const drawerStyle = useAnimatedStyle(
-    () => ({
-      transform: [
-        {
-          translateX:
-            interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
-            translateX.value
-        }
-      ]
-    }),
-    [progress, translateX, panelWidth]
-  )
+  // Web has no worklet plugin; mapper hooks need this explicit dependency list.
+  const drawerStyle = useAnimatedStyle(() => {
+    const travel = bottomDrawerTravel(extent.value, screenWidth)
+    return {
+      opacity: fade.value,
+      transform: [{ translateX: bottomDrawerOffset(progress.value, travel) }]
+    }
+  }, [progress, fade, extent, screenWidth])
 
   const backdropStyle = useAnimatedStyle(() => {
-    const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
-    return { opacity: progress.value * dragFade }
-  }, [progress, translateX, panelWidth])
+    const travel = bottomDrawerTravel(extent.value, screenWidth)
+    return { opacity: fade.value * bottomDrawerScrim(progress.value, travel, extent.value) }
+  }, [progress, fade, extent, screenWidth])
 
   return (
     <Animated.View
@@ -163,7 +133,7 @@ function MountedRightDrawer({
     >
       <GestureHandlerRootView style={styles.root}>
         <Animated.View style={[styles.backdrop, backdropStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         </Animated.View>
 
         <View style={styles.anchor} pointerEvents="box-none">

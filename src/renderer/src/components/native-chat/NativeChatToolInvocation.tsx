@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
   formatToolInput,
   MAX_TOOL_DETAIL_LENGTH,

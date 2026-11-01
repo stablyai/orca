@@ -53,8 +53,6 @@ beforeEach(() => {
       }
     }
   )
-  URL.createObjectURL = vi.fn(() => 'blob:diagram')
-  URL.revokeObjectURL = vi.fn()
 })
 
 afterEach(() => {
@@ -73,7 +71,7 @@ describe('DiagramViewerModal', () => {
     expect(screen.getByRole('dialog', { name: 'Diagram' })).toBeInTheDocument()
     sizeCanvas()
     const image = screen.getByRole('img', { name: 'Diagram' })
-    expect(image).toHaveAttribute('src', 'blob:diagram')
+    expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/)
     expect(image.style.width).toBe('400px')
     expect(image.style.transform).toBe('translate(300px, 200px)')
     expect(screen.getByRole('button', { name: 'Fit to screen' })).toBeDisabled()
@@ -81,7 +79,6 @@ describe('DiagramViewerModal', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await waitFor(() => expect(document.activeElement).toBe(opener))
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:diagram')
   })
 
   it('zooms from the toolbar, pans on drag, and fits again', async () => {
@@ -129,19 +126,6 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Diagram' })).toBeNull())
     expect(screen.getByRole('dialog', { name: 'Pull request' })).toBeInTheDocument()
     await waitFor(() => expect(document.activeElement).toBe(opener))
-  })
-
-  it('re-serializes the HTML-serialized sanitizer output as an XML image document', async () => {
-    // Chromium’s sanitizer emits &nbsp; for U+00A0; happy-dom preserves the entity during XML serialization, so assert successful reparsing.
-    const sanitized = '<svg viewBox="0 0 400 200"><text>User&nbsp;A</text></svg>'
-    render(<Host />)
-    act(() => useAppStore.getState().openModal('diagram-viewer', { svg: sanitized }))
-    sizeCanvas()
-
-    expect(screen.getByRole('img', { name: 'Diagram' }).style.width).toBe('400px')
-    const blob = vi.mocked(URL.createObjectURL).mock.calls[0][0]
-    const xml = blob instanceof Blob ? await blob.text() : ''
-    expect(xml).toContain('xmlns="http://www.w3.org/2000/svg"')
   })
 
   it('pans by the wheel distance whatever unit the device reports', async () => {

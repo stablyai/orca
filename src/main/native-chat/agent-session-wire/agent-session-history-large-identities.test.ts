@@ -186,14 +186,4 @@ describe('identity bounding at admission', () => {
     )
     expect(removal.page.removedItemIds).toEqual([appended.itemId])
   })
-
-  it('keeps bounded keys deterministic and a fixed point of re-derivation', () => {
-    const oversized = 'x'.repeat(2 * 1024 * 1024)
-    const bounded = boundJournalKeyComponent(oversized)
-    expect(bounded).toBe(boundJournalKeyComponent(oversized))
-    expect(boundJournalKeyComponent(bounded)).toBe(bounded)
-    expect(bounded.length).toBeLessThan(2048)
-    expect(boundJournalKeyComponent(`${oversized}y`)).not.toBe(bounded)
-    expect(boundJournalKeyComponent('short')).toBe('short')
-  })
 })

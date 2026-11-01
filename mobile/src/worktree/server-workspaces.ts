@@ -2,10 +2,16 @@ import { z } from 'zod'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcClient } from '../transport/rpc-client'
 import { relayHostsFeed } from './relay-hosts-feed'
-import { relayHostWorktreesRead } from './server-workspace-operations'
+import {
+  relayHostWorktreeSnapshotRead,
+  relayHostWorktreesRead
+} from './server-workspace-operations'
+import {
+  WorktreeCatalogSnapshotClient,
+  type WorktreeCatalogRequest
+} from './worktree-catalog-snapshot-client'
 import type { Worktree } from './workspace-list-types'
 import { areWorktreeListsEqual } from './worktree-list-snapshot'
 
@@ -65,19 +71,60 @@ function serverRowSchema(hostId: ExecutionHostId) {
   )
 }
 
-async function fetchHostRows(
-  client: RpcOperationSender,
-  hostId: ExecutionHostId
-): Promise<Worktree[] | null> {
-  try {
+function serverCatalogRequest(hostId: ExecutionHostId): WorktreeCatalogRequest {
+  return async (client, snapshot) => {
+    const reply = relayHostWorktreeSnapshotRead.interpret(
+      await relayHostWorktreeSnapshotRead.request(client, { hostId, ...snapshot })
+    )
+    return reply.accepted
+      ? { accepted: true, value: reply.value }
+      : { accepted: false, code: 'request_failed' }
+  }
+}
+
+/** Per-server snapshots, for a desktop that answers server rows as snapshots and row deltas. */
+export class ServerRowSnapshots {
+  private readonly byHost = new Map<ExecutionHostId, WorktreeCatalogSnapshotClient>()
+
+  forHost(hostId: ExecutionHostId): WorktreeCatalogSnapshotClient {
+    let snapshots = this.byHost.get(hostId)
+    if (!snapshots) {
+      snapshots = new WorktreeCatalogSnapshotClient({ request: serverCatalogRequest(hostId) })
+      this.byHost.set(hostId, snapshots)
+    }
+    return snapshots
+  }
+}
+
+async function readHostRows(
+  client: RpcClient,
+  hostId: ExecutionHostId,
+  snapshots: ServerRowSnapshots | null
+): Promise<readonly unknown[] | null> {
+  if (!snapshots) {
     const reply = relayHostWorktreesRead.interpret(
       await relayHostWorktreesRead.request(client, { hostId })
     )
-    if (!reply.accepted || !reply.value.worktrees) {
+    return reply.accepted ? reply.value.worktrees : null
+  }
+  const hostSnapshots = snapshots.forHost(hostId)
+  const fetched = await hostSnapshots.fetch(client, hostId)
+  // Null (refused, not fetched yet, or a delta that cannot rebuild) keeps the rows shown.
+  return fetched.kind === 'response' ? hostSnapshots.admit(fetched.pending) : null
+}
+
+async function fetchHostRows(
+  client: RpcClient,
+  hostId: ExecutionHostId,
+  snapshots: ServerRowSnapshots | null
+): Promise<Worktree[] | null> {
+  try {
+    const rows = await readHostRows(client, hostId, snapshots)
+    if (!rows) {
       return null
     }
     const schema = serverRowSchema(hostId)
-    return reply.value.worktrees.flatMap((row) => {
+    return rows.flatMap((row) => {
       const parsed = schema.safeParse(row)
       return parsed.success ? [parsed.data] : []
     })
@@ -92,13 +139,17 @@ export type FetchedServerWorkspaces = {
 }
 
 export async function fetchServerWorkspaces(
-  client: RpcClient
+  client: RpcClient,
+  snapshots: ServerRowSnapshots | null = null
 ): Promise<FetchedServerWorkspaces | null> {
   const hosts = await relayHostsFeed(client).read()
   if (!hosts) {
     return null
   }
-  return { hosts, rows: await Promise.all(hosts.map((host) => fetchHostRows(client, host.hostId))) }
+  return {
+    hosts,
+    rows: await Promise.all(hosts.map((host) => fetchHostRows(client, host.hostId, snapshots)))
+  }
 }
 
 // Keep rows when their server read failed; drop them only when the desktop drops the server.

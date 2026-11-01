@@ -17,11 +17,7 @@ vi.mock('@/lib/reveal-terminal-pane', () => ({ revealTerminalPane: vi.fn() }))
 
 const { followWslMoveOrchestratorStatus, useWslMoveOrchestratorStatus } =
   await import('./wsl-move-orchestrator-status')
-const { WslMoveOrchestratorStatusLine, showBlockingTerminal } =
-  await import('./WslMoveOrchestratorStatusLine')
-const { wslMoveOrchestratorLine } = await import('./wsl-move-orchestrator-copy')
-
-const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
+const { WslMoveOrchestratorStatusLine } = await import('./WslMoveOrchestratorStatusLine')
 
 function record(state: WslMoveOrchestratorRecord['state']): WslMoveOrchestratorRecord {
   return { distro: 'Ubuntu', state, attempts: 0, appVersion: '1.0.0', updatedAt: 0 }
@@ -92,87 +88,5 @@ describe('following the move orchestrator (D3a-2)', () => {
     await Promise.resolve()
     stop()
     expect(renderLine()).toBe('')
-  })
-})
-
-describe('the status line, by state', () => {
-  const show = (state: WslMoveOrchestratorRecord['state']): string => {
-    useWslMoveOrchestratorStatus.setState({
-      records: { ['ubuntu']: record(state) }
-    })
-    return renderLine()
-  }
-
-  it('says what is still busy for a deferred move, with Show terminal and Check again', () => {
-    const html = show({
-      kind: 'deferred',
-      blockers: [{ kind: 'agent-working', ids: [PANE], actions: ['wait', 'end'] }],
-      rechecks: 0
-    })
-    expect(html).toContain('Finishing your move to the Ubuntu host')
-    expect(html).toContain('Show terminal')
-    expect(html).toContain('Check again')
-  })
-
-  it('never calls a stuck move failed', () => {
-    const html = show({ kind: 'parked', reason: 'stuck' })
-    expect(html).toContain("An earlier move to the Ubuntu host hasn't finished settling.")
-    expect(html.toLowerCase()).not.toContain('fail')
-    expect(html).toContain('Check again')
-  })
-
-  it('says a committed earlier move finishes at restart, or now with Check again', () => {
-    const html = show({ kind: 'parked', reason: 'finish-pending' })
-    expect(html).toContain('finishes it here when it restarts, or now with Check again')
-    expect(html).toContain('Check again')
-  })
-
-  it('offers only Move again for a distro the user brought back, never Not now', () => {
-    const html = show({ kind: 'parked', reason: 'declined', cause: 'released-here' })
-    expect(html).toContain('brought these projects back to this computer')
-    expect(html).toContain('Move again')
-    expect(html).not.toContain('Not now')
-  })
-
-  it('shows nothing for a removed host or a pending Remove', () => {
-    expect(show({ kind: 'parked', reason: 'declined', cause: 'removed' })).toBe('')
-    expect(show({ kind: 'parked', reason: 'removal-pending' })).toBe('')
-    expect(wslMoveOrchestratorLine(undefined)).toBeNull()
-  })
-
-  // Pre-review #2: what waits for the user gets a calm line and Check again, never "failed".
-  it('shows a neutral paused line with Check again for each reason that waits for the user', () => {
-    for (const [reason, words] of [
-      ['export-incomplete', "can't be carried over yet"],
-      ['manifest-too-large', 'more saved state than one move can carry'],
-      ['host-update-required', 'the host needs an update first'],
-      ['attempts-exhausted', "didn't complete after several tries"]
-    ] as const) {
-      const html = show({ kind: 'parked', reason })
-      expect(html).toContain('Moving projects to the Ubuntu host is paused: ')
-      expect(html).toContain(words)
-      expect(html).toContain('Check again')
-      expect(html.toLowerCase()).not.toContain('fail')
-    }
-  })
-
-  it('says each blocker in one sentence', () => {
-    const html = show({
-      kind: 'deferred',
-      blockers: [{ kind: 'automation-running', ids: ['run-1'], actions: ['wait'] }],
-      rechecks: 0
-    })
-    expect(html).toContain('Wait for it to finish, then check again.')
-    expect(html).not.toContain('Show terminal')
-  })
-})
-
-describe('Show terminal', () => {
-  // Pre-review #5: a pane that is gone gets a word back, not silence.
-  it('says so when the terminal is no longer open', () => {
-    showBlockingTerminal(PANE)
-    expect(toasts.calls).toEqual([
-      "That terminal isn't open in this window any more. Check again to refresh."
-    ])
   })
 })

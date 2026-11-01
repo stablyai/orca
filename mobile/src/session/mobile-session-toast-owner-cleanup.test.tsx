@@ -26,6 +26,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
+  Easing: { bezier: () => 'toast-easing' },
   Animated: {
     timing: (
       _value: unknown,
@@ -342,7 +343,8 @@ it.each([1200, 1500])('keeps exact live fade-in/hide/fade-out timing at %s ms', 
   expect(view.setToastMessage.mock.calls).toEqual([['message']])
   expect(boundary.animationStarts[0].options).toEqual({
     toValue: 1,
-    duration: 150,
+    duration: 200,
+    easing: 'toast-easing',
     useNativeDriver: true
   })
   act(() => boundary.animationStarts[0].complete({ finished: true }))
@@ -357,7 +359,8 @@ it.each([1200, 1500])('keeps exact live fade-in/hide/fade-out timing at %s ms', 
   expect(vi.getTimerCount()).toBe(0)
   expect(boundary.animationStarts[1].options).toEqual({
     toValue: 0,
-    duration: 200,
+    duration: 150,
+    easing: 'toast-easing',
     useNativeDriver: true
   })
   act(() => boundary.animationStarts[1].complete({ finished: true }))
@@ -446,8 +449,8 @@ it('preserves synchronous native completion and natural hide cleanup', () => {
   expect(vi.getTimerCount()).toBe(0)
   expect(view.setToastMessage.mock.calls).toEqual([['sync'], [null]])
   expect(boundary.animationStarts.map((start) => start.options)).toEqual([
-    { toValue: 1, duration: 150, useNativeDriver: true },
-    { toValue: 0, duration: 200, useNativeDriver: true }
+    { toValue: 1, duration: 200, easing: 'toast-easing', useNativeDriver: true },
+    { toValue: 0, duration: 150, easing: 'toast-easing', useNativeDriver: true }
   ])
   act(() => view.root.unmount())
 })

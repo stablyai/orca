@@ -53,10 +53,7 @@ export function MobileFileExplorerRow(props: Props) {
         </Text>
         <Pressable
           style={({ pressed }) => [styles.inlineRetryButton, pressed && styles.rowPressed]}
-          onPress={() => {
-            triggerSelection()
-            onRetryDirectory(item.relativePath)
-          }}
+          onPress={() => onRetryDirectory(item.relativePath)}
           accessibilityLabel={t('files.fileExplorerRow.retryLoading', 'Retry loading {{path}}', {
             path: item.relativePath
           })}
@@ -115,8 +112,9 @@ function TreeRow(props: {
       ]}
       disabled={disabled}
       onPress={() => {
-        triggerSelection()
         if (isDirectory) {
+          // Expanding a folder toggles in place; opening a file navigates and stays quiet.
+          triggerSelection()
           onToggleDirectory(item.relativePath)
         } else if (!disabled) {
           onPreviewFile(item.relativePath, item.name)

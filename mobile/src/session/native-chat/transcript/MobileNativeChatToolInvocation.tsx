@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import type { NativeChatToolCallBlock } from '../../../../../src/shared/native-chat-types'
+import type { NativeChatToolCallBlock } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   formatToolInput,
   MAX_TOOL_DETAIL_LENGTH,

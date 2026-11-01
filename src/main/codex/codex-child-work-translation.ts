@@ -1,7 +1,7 @@
 // Match Codex hook tool names so structured and CLI child rows use the same vocabulary.
 import { ownRetainedString } from '../../shared/own-retained-string'
 import type { AgentChildWorkOutcome } from '../../shared/agent-status-child-work'
-import type { NativeChatSubagentState } from '../../shared/native-chat-types'
+import type { NativeChatSubagentState } from '../../shared/native-chat/native-chat-types'
 import {
   deriveFallbackToolInputPreview,
   deriveToolInputPreview

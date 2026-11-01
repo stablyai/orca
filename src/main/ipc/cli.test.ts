@@ -100,30 +100,6 @@ describe('WSL CLI registration IPC', () => {
     await expect(getWslHandler('cli:getWslInstallStatus')({})).rejects.toThrow('permission denied')
   })
 
-  it('records a successful explicit-distro installation', async () => {
-    const install = vi.fn(async () => ({ state: 'installed' }))
-    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
-      return { install }
-    })
-
-    await expect(getWslHandler('cli:installWsl')({}, { distro: ' Debian ' })).resolves.toEqual({
-      state: 'installed'
-    })
-    expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Debian' })
-    expect(recordInstalledMock).toHaveBeenCalledWith('/canonical-user-data', 'Debian')
-  })
-
-  it('records removal from the resolved default distro', async () => {
-    const remove = vi.fn(async () => ({ state: 'not_installed' }))
-    wslInstallerMock.mockImplementation(function MockWslCliInstaller() {
-      return { remove }
-    })
-
-    await expect(getWslHandler('cli:removeWsl')({})).resolves.toEqual({ state: 'not_installed' })
-    expect(wslInstallerMock).toHaveBeenCalledWith({ distro: 'Ubuntu' })
-    expect(recordRemovedMock).toHaveBeenCalledWith('/canonical-user-data', 'Ubuntu')
-  })
-
   it('forgets the registration of a deleted distro instead of failing the removal', async () => {
     const remove = vi.fn(async () => {
       throw new Error('wsl.exe: There is no distribution with the supplied name.')

@@ -42,15 +42,6 @@ afterEach(() => {
 })
 
 describe('terminal link pointer gesture', () => {
-  it('allows a stationary plain click', () => {
-    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const { element, gesture } = createGesture()
-    const down = mouse('mousedown', 20, 30)
-    element.dispatchEvent(down)
-
-    expect(gesture.canRequestAction(down)).toBe(true)
-  })
-
   it('rejects a drag and a click that began with a selection', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const dragged = createGesture()

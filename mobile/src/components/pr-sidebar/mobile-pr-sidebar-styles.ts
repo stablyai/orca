@@ -29,7 +29,7 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
@@ -40,7 +40,8 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
     gap: spacing.sm
   },
   sectionBody: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   sectionLabel: {
@@ -80,9 +81,9 @@ export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   prTitle: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    lineHeight: 24
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 21
   },
   prMeta: {
     color: colors.textSecondary,

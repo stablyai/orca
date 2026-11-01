@@ -100,11 +100,10 @@ async function harness(
   controllers.push(panels)
   const service = { panels, whenReady: options.whenReady ?? (async () => {}) }
   registerPluginHandlers(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration uses this store only to subscribe to settings updates.
-    { onSettingsChanged: () => () => {} } as unknown as Store,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: panel handlers never read the settings store.
+    {} as unknown as Store,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: panel handlers consume real controller and readiness members only.
-    service as unknown as PluginService,
-    null
+    service as unknown as PluginService
   )
   return { verified }
 }

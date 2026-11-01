@@ -2,6 +2,7 @@ import { Pressable, Text } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
 
 // Offer shell-routed /pair-scan only; web forceReconnect is null and page-host-removal-refusal rejects Remove, so direct users to app for both.
 export function AuthFailedBannerActions({
@@ -16,7 +17,10 @@ export function AuthFailedBannerActions({
   useMobileColorScheme()
   return (
     <>
-      <Pressable style={styles.action} onPress={onRepair}>
+      <Pressable
+        style={({ pressed }) => [styles.action, pressed && pressedStyle]}
+        onPress={onRepair}
+      >
         <Text style={styles.actionText}>
           {t('components.authFailedBannerActions.repair', 'Re-pair')}
         </Text>
