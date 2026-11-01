@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { bundledSkillNudgeKey } from '../../../../shared/bundled-skill-summary'
 import { SkillFreshnessNudge } from './SkillFreshnessNudge'
+import { _resetSkillFreshnessAutoUpdate } from './skill-freshness-auto-update'
 import { planEntry, planOf, planOp, sharedEntry } from './bundled-skill-plan-fixtures.test-support'
 
 const mocks = vi.hoisted(() => ({
@@ -18,12 +19,24 @@ const mocks = vi.hoisted(() => ({
   canUseSkillFreshness: true,
   freshnessEnabled: true,
   plan: ((): BundledSkillPlan | null => null)(),
-  error: null as string | null
+  error: null as string | null,
+  execute: vi.fn(),
+  notifyChanged: vi.fn()
 }))
 
-function updatePlan(): BundledSkillPlan {
-  return planOf([sharedEntry('orca-cli', 'update')])
+/** A hand-edited copy: Orca must ask before replacing it. */
+function editedPlan(digest?: string): BundledSkillPlan {
+  const entry = sharedEntry('orca-cli', 'leave', { reason: 'edited', replaceable: true })
+  return planOf([digest ? { ...entry, digest } : entry])
 }
+
+vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+  executeBundledSkillsOnTarget: mocks.execute
+}))
+
+vi.mock('@/hooks/useInstalledAgentSkills', () => ({
+  notifyInstalledAgentSkillsChanged: mocks.notifyChanged
+}))
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
   useSkillFreshness: (target: unknown) => {
@@ -82,7 +95,7 @@ async function rerenderNudge(): Promise<void> {
   })
 }
 
-const DISMISSAL_KEY = bundledSkillNudgeKey('local', updatePlan()) ?? ''
+const DISMISSAL_KEY = bundledSkillNudgeKey('local', editedPlan()) ?? ''
 
 describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
@@ -90,8 +103,12 @@ describe('SkillFreshnessNudge', () => {
     mocks.settingsLoaded = true
     mocks.canUseSkillFreshness = true
     mocks.freshnessEnabled = true
-    mocks.plan = updatePlan()
+    mocks.plan = editedPlan()
     mocks.error = null
+    mocks.execute.mockReset()
+    mocks.execute.mockResolvedValue({ scope: 'global', skills: [] })
+    mocks.notifyChanged.mockReset()
+    _resetSkillFreshnessAutoUpdate()
     mocks.updateSettings.mockReset()
     mocks.updateSettings.mockResolvedValue(undefined)
     mocks.toastInfo.mockReset()
@@ -187,7 +204,7 @@ describe('SkillFreshnessNudge', () => {
   it('does not repeat the same nudge within a session', async () => {
     await renderNudge()
     // A fresh plan object with identical content re-runs the effect.
-    mocks.plan = updatePlan()
+    mocks.plan = editedPlan()
     await rerenderNudge()
 
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
@@ -203,10 +220,72 @@ describe('SkillFreshnessNudge', () => {
 
   it('nudges again when this build ships different bytes', async () => {
     mocks.dismissed = [DISMISSAL_KEY]
-    mocks.plan = planOf([{ ...sharedEntry('orca-cli', 'update'), digest: 'c'.repeat(64) }])
+    mocks.plan = editedPlan('c'.repeat(64))
 
     await renderNudge()
 
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('silently updates copies that match a shipped release', async () => {
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+
+    await renderNudge()
+    await act(async () => {})
+
+    expect(mocks.execute).toHaveBeenCalledWith({ kind: 'local' }, mocks.plan.planDigest, {})
+    expect(mocks.notifyChanged).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
+  it('asks before replacing an edited copy even when another location auto-updates', async () => {
+    mocks.plan = planOf([
+      planEntry('orca-cli', [
+        planOp('update', '/home/u/.agents/skills/orca-cli'),
+        planOp('leave', '/home/u/.claude/skills/orca-cli', { reason: 'edited', replaceable: true })
+      ])
+    ])
+    await renderNudge()
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+
+    // The re-plan after the silent update leaves only the edited copy.
+    mocks.plan = planOf(
+      [
+        planEntry('orca-cli', [
+          planOp('keep', '/home/u/.agents/skills/orca-cli'),
+          planOp('leave', '/home/u/.claude/skills/orca-cli', {
+            reason: 'edited',
+            replaceable: true
+          })
+        ])
+      ],
+      'c'.repeat(64)
+    )
+    await rerenderNudge()
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to the nudge when a silent update leaves the same plan', async () => {
+    mocks.execute.mockRejectedValue(new Error('busy'))
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+    await renderNudge()
+    await act(async () => {})
+
+    mocks.plan = planOf([sharedEntry('orca-cli', 'update')])
+    await rerenderNudge()
+
+    expect(mocks.execute).toHaveBeenCalledTimes(1)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks before an interrupted update is repaired', async () => {
+    mocks.plan = planOf([sharedEntry('orca-cli', 'restore')])
+
+    await renderNudge()
+
+    expect(mocks.execute).not.toHaveBeenCalled()
     expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 })

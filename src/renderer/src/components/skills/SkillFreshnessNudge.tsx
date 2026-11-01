@@ -7,10 +7,11 @@ import { bundledSkillTargetKey } from '@/lib/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
-  bundledSkillNudgeKey,
-  summarizeBundledSkillPlan
+  bundledSkillNudgeEntries,
+  bundledSkillNudgeKey
 } from '../../../../shared/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
+import { autoUpdateUnmodifiedSkills } from './skill-freshness-auto-update'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
@@ -35,7 +36,7 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
-    if (!targetKey) {
+    if (!target || !targetKey) {
       const active = activeNudgeRef.current
       if (active) {
         active.persistDismissal = false
@@ -52,6 +53,16 @@ export function SkillFreshnessNudge(): null {
       const active = activeNudgeRef.current
       if (state.error && active) {
         // Retract authority based on old bytes after a failed recheck without persisting a user dismissal.
+        active.persistDismissal = false
+        activeNudgeRef.current = null
+        toast.dismiss(active.id)
+      }
+      return
+    }
+    // Unedited Orca copies update without consent; only edited or unrepairable ones reach the nudge.
+    if (autoUpdateUnmodifiedSkills(target, plan)) {
+      const active = activeNudgeRef.current
+      if (active) {
         active.persistDismissal = false
         activeNudgeRef.current = null
         toast.dismiss(active.id)
@@ -95,11 +106,7 @@ export function SkillFreshnessNudge(): null {
         persistedFingerprints.current.delete(fingerprint)
       })
     }
-    const names = new Set(
-      summarizeBundledSkillPlan(plan)
-        .skills.filter((skill) => skill.state === 'update' || skill.state === 'repair')
-        .map((skill) => skill.name)
-    )
+    const names = new Set(bundledSkillNudgeEntries(plan).map((entry) => entry.name))
     // Name outdated skills directly; translate the sentence while interpolating identifiers unchanged.
     const outdatedNames = [...names]
       .sort((left, right) => left.localeCompare(right, 'en'))
@@ -161,7 +168,7 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
+  }, [target, targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
 
   return null
 }

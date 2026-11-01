@@ -147,10 +147,33 @@ export function bundledSkillInstallAgents(
   return [...new Set(agents)].sort()
 }
 
-/** Changes whenever the skills the badge counts, or the bytes they would get, change. */
+const AUTO_UPDATE_OP_KINDS = new Set<string>(['keep', 'update', 'leave'])
+
+/** True when Update would only overwrite copies whose hash matches a shipped release, so it needs no consent. */
+export function bundledSkillPlanAutoUpdates(plan: BundledSkillPlan): boolean {
+  const ops = plan.skills.flatMap((entry) => entry.ops)
+  return (
+    plan.scope === 'global' &&
+    ops.some((op) => op.kind === 'update') &&
+    ops.every(
+      (op) =>
+        AUTO_UPDATE_OP_KINDS.has(op.kind) && op.cleanup.every((item) => item.action === 'delete')
+    )
+  )
+}
+
+/** Skills the nudge asks about: stale or broken copies, plus hand-edited copies Orca won't overwrite unasked. */
+export function bundledSkillNudgeEntries(plan: BundledSkillPlan): BundledSkillPlanEntry[] {
+  return plan.skills.filter(
+    (entry) =>
+      ['update', 'repair'].includes(bundledSkillPlanState(entry)) ||
+      entry.ops.some((op) => op.kind === 'leave' && op.reason === 'edited')
+  )
+}
+
+/** Changes whenever the skills the nudge counts, or the bytes they would get, change. */
 export function bundledSkillNudgeKey(hostId: string, plan: BundledSkillPlan): string | null {
-  const counted = plan.skills
-    .filter((entry) => ['update', 'repair'].includes(bundledSkillPlanState(entry)))
+  const counted = bundledSkillNudgeEntries(plan)
     .map((entry) => `${entry.name}@${entry.digest}`)
     .sort()
   return plan.scope === 'global' && counted.length > 0
