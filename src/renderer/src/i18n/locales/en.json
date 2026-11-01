@@ -5866,6 +5866,14 @@
           "removed": "{{removed}} removed.",
           "removedPreserved_one": "{{removed}} removed · {{count}} modified skill preserved.",
           "removedPreserved_other": "{{removed}} removed · {{count}} modified skills preserved."
+        },
+        "skillFreshnessAutoUpdate": {
+          "strandedTitle": "Orca couldn't back up your edits to {{value0}}",
+          "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
+          "preservedTitle": "Your edits to {{value0}} were saved separately",
+          "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
+          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
         }
       },
       "sidebar": {
