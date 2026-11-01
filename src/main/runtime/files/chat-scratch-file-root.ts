@@ -8,6 +8,7 @@ import {
 import { isENOENT } from '../../ipc/filesystem/filesystem-path-containment'
 import { nativeChatScratchRootFor } from '../../native-chat/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { resolveFloatingTerminalCwd } from '../../ipc/floating-workspace-directory'
 
 const PATH_SELECTOR_PREFIX = 'path:'
 const SCRATCH_FOLDER_NAME = /^[0-9a-f]{32}$/
@@ -16,12 +17,22 @@ function chatScratchRoot(): string {
   return nativeChatScratchRootFor(getProfileUserDataPath())
 }
 
-export function resolveRuntimeAuthorizedPath(
+export async function resolveRuntimeAuthorizedPath(
   targetPath: string,
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
-  return resolveAuthorizedPath(targetPath, store, { ...options, extraRoots: [chatScratchRoot()] })
+  // The floating worktree's path is the resolved floating terminal cwd, so a bare
+  // filename opened from the floating workspace (mobile file chip / `orca file open`)
+  // must be authorized against it. Mirrors the desktop's floating-workspace extra root.
+  const settings = store.getSettings()
+  const floatingCwd = await resolveFloatingTerminalCwd(store, {
+    path: settings.floatingTerminalCwd
+  })
+  return resolveAuthorizedPath(targetPath, store, {
+    ...options,
+    extraRoots: [chatScratchRoot(), floatingCwd]
+  })
 }
 
 export function isChatScratchWorktreeId(worktreeId: string): boolean {
