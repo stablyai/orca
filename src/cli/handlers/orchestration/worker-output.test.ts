@@ -5,7 +5,7 @@ import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
 import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 

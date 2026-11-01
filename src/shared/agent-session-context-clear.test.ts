@@ -16,7 +16,7 @@ import {
 import {
   currentAgentSessionThreadGoal,
   currentAgentSessionThreadGoalSourceBySequence
-} from './agent-session-thread-goal'
+} from './agent-session/agent-session-thread-goal'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn

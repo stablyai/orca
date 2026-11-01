@@ -6,7 +6,7 @@ import { act, cleanup, screen } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import {

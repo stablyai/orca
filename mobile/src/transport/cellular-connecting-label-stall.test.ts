@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/paired-e2ee-handshake-deadline'
 
 // Keep escalation through socket opens/redials until E2EE succeeds; otherwise cellular failures loop on Connecting (#10119).
 
@@ -159,8 +160,8 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     globalThis.WebSocket = originalWebSocket
   })
 
-  it('escalates and stays escalated when the handshake never fits the 5s budget', () => {
-    carrier = { kind: 'slow-handshake', readyAfterMs: 6_000 }
+  it('escalates and stays escalated when the handshake never fits its budget', () => {
+    carrier = { kind: 'slow-handshake', readyAfterMs: PAIRED_E2EE_HANDSHAKE_DEADLINE_MS + 1_000 }
     const samples = observe('ws://192.168.0.56:6769', 900_000)
 
     expect(samples.some((s) => s.state === 'handshaking')).toBe(true)
@@ -214,8 +215,20 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     expect(after.every((s) => s.label === "Can't reach desktop")).toBe(true)
   })
 
-  it('resets the failure counter only once a handshake actually completes', async () => {
+  // The desktop holds an unauthenticated socket open this long, so the phone waits as long.
+  it('connects on the first dial when a slow link takes six seconds to authenticate', async () => {
     carrier = { kind: 'slow-handshake', readyAfterMs: 6_000 }
+    const client = connect('ws://192.168.0.56:6769', 'device-token', 'server-public-key')
+
+    await vi.advanceTimersByTimeAsync(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
+    expect(client.getState()).toBe('connected')
+    expect(sockets).toHaveLength(1)
+
+    client.close()
+  })
+
+  it('resets the failure counter only once a handshake actually completes', async () => {
+    carrier = { kind: 'slow-handshake', readyAfterMs: PAIRED_E2EE_HANDSHAKE_DEADLINE_MS + 1_000 }
     const client = connect('ws://192.168.0.56:6769', 'device-token', 'server-public-key')
 
     // Flush promise jobs between timers because auth is awaited.
@@ -235,7 +248,7 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     carrier = { kind: 'wedged-open-then-silent' }
     const client = connect('ws://192.168.0.56:6769', 'device-token', 'server-public-key')
 
-    vi.advanceTimersByTime(5_400)
+    vi.advanceTimersByTime(PAIRED_E2EE_HANDSHAKE_DEADLINE_MS + 400)
 
     // A missing close callback must not strand handshaking without a retry or foreground recovery.
     expect(sockets).toHaveLength(1)

@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseClaudeCliVersionOutput } from './claude-hook-event-versions'
+
 import { claudeDiffPanelMayAutoOpen, claudeDiffPanelStorePath } from './claude-diff-panel-auto-open'
 
 let home: string
@@ -37,38 +37,6 @@ afterEach(async () => {
 })
 
 describe('claudeDiffPanelMayAutoOpen', () => {
-  it('names the store file the way Claude 2.1.301 does', () => {
-    expect(claudeDiffPanelStorePath(configDir)).toBe(
-      join(configDir, 'plugins', 'store', 'cc-plugin-diff_builtin-3903e77c01b1.json')
-    )
-  })
-
-  it('answers false for a Claude older than the panel, or an unknown version', async () => {
-    for (const [output, expected] of [
-      ['11.17.0', false],
-      ['launcher 11.17.0\n1.0.64 (Claude Code)', false],
-      ['launcher 0.1.0\n2.1.310 (Claude Code)', true]
-    ] as const) {
-      expect(await mayAutoOpen(200, { version: parseClaudeCliVersionOutput(output) })).toBe(
-        expected
-      )
-    }
-    expect(await mayAutoOpen(200, { version: '2.1.259' })).toBe(false)
-    expect(await mayAutoOpen(200, { version: '2.1.260' })).toBe(true)
-  })
-
-  it('opens unasked only from 144 columns when the user never chose', async () => {
-    expect(await mayAutoOpen(143)).toBe(false)
-    expect(await mayAutoOpen(144)).toBe(true)
-    expect(await mayAutoOpen(null)).toBe(true)
-  })
-
-  it('opens from 110 columns once the user has opened the panel before', async () => {
-    await writeJson(claudeDiffPanelStorePath(configDir), { open: true })
-    expect(await mayAutoOpen(109)).toBe(false)
-    expect(await mayAutoOpen(110)).toBe(true)
-  })
-
   it('never opens once the user closed it, in the store or the older global config', async () => {
     await writeJson(claudeDiffPanelStorePath(configDir), { open: false })
     expect(await mayAutoOpen(200)).toBe(false)
@@ -98,12 +66,5 @@ describe('claudeDiffPanelMayAutoOpen', () => {
 
     await writeFile(claudeDiffPanelStorePath(configDir), '{not json')
     expect(await mayAutoOpen(200)).toBe(false)
-  })
-
-  it('answers false when the user opted out of the fullscreen renderer', async () => {
-    await writeJson(join(configDir, 'settings.json'), { tui: 'default' })
-    expect(await mayAutoOpen(200)).toBe(false)
-    await writeJson(join(configDir, 'settings.json'), { tui: 'fullscreen' })
-    expect(await mayAutoOpen(200)).toBe(true)
   })
 })

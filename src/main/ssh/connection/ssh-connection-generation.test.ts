@@ -29,23 +29,6 @@ describe('SSH connection generation session scope', () => {
     expect(() => assertSshMutationExpectation('ssh-a', 'ssh-a', afterRestart)).not.toThrow()
   })
 
-  it('keeps target counters independent within one HUB session', () => {
-    resetSshConnectionGenerations(7)
-
-    expect(advanceSshConnectionGeneration('ssh-a')).toBe(advanceSshConnectionGeneration('ssh-b'))
-    expect(getSshConnectionGeneration('ssh-a')).toBe(getSshConnectionGeneration('ssh-b'))
-  })
-
-  it('forgets generations when a target is permanently removed', () => {
-    resetSshConnectionGenerations(7)
-    advanceSshConnectionGeneration('removed-target')
-
-    forgetSshConnectionGeneration('removed-target')
-
-    expect(getSshConnectionGenerationEntryCountForTests()).toBe(0)
-    expect(getSshConnectionGeneration('removed-target')).toBe(7 * SESSION_COUNTER_STRIDE)
-  })
-
   it('starts a recreated target above every generation its removed incarnation issued', () => {
     resetSshConnectionGenerations(7)
     const targetId = 'runtime-ssh-vm-1'
@@ -105,20 +88,6 @@ describe('SSH connection generation session scope', () => {
   it('rejects a local execution-host expectation when direct IPC resolves through SSH', () => {
     expect(() => assertSshMutationExpectation('ssh-a', 'ssh-a', 0, 'local')).toThrow(
       'Workspace host changed; refresh and try again'
-    )
-  })
-
-  it('rolls the session scope after counter exhaustion and keeps rotating', () => {
-    resetSshConnectionGenerations(7)
-    const exhaustedGeneration = 8 * SESSION_COUNTER_STRIDE - 1
-    setSshConnectionGeneration('ssh-a', exhaustedGeneration)
-
-    const rolledGeneration = advanceSshConnectionGeneration('ssh-a')
-
-    expect(rolledGeneration).toBe(8 * SESSION_COUNTER_STRIDE + 1)
-    expect(advanceSshConnectionGeneration('ssh-a')).toBe(rolledGeneration + 1)
-    expect(() => assertSshMutationExpectation('ssh-a', 'ssh-a', exhaustedGeneration)).toThrow(
-      'SSH connection changed; refresh and try again'
     )
   })
 

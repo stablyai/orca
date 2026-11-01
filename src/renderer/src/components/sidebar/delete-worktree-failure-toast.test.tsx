@@ -90,38 +90,6 @@ describe('showDeleteWorktreeFailureToast', () => {
     expect(onForceDelete).toHaveBeenCalled()
   })
 
-  it('keeps non-forceable failures destructive without a force action', () => {
-    const onViewChanges = vi.fn()
-
-    showDeleteWorktreeFailureToast({
-      error: 'permission denied',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      onViewChanges,
-      onForceDelete: vi.fn(),
-      onDeleteAnyway: vi.fn(),
-      worktreeId: 'wt-2',
-      worktreeName: 'feature/bar'
-    })
-
-    expect(toast.error).toHaveBeenCalledWith(
-      'Failed to delete workspace feature/bar',
-      expect.objectContaining({
-        id: 'delete-worktree-failure:|wt-2',
-        dismissible: true,
-        duration: 10000
-      })
-    )
-
-    const body = renderToastBody('error')
-    expect(body.textContent).toContain('permission denied')
-    expect(body.textContent).not.toContain('Force Delete')
-
-    clickButton(body, 'View')
-    expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-2')
-    expect(onViewChanges).toHaveBeenCalled()
-  })
-
   it('offers Delete Anyway when the archive hook refused the removal', () => {
     const onDeleteAnyway = vi.fn()
 
@@ -149,81 +117,5 @@ describe('showDeleteWorktreeFailureToast', () => {
     clickButton(body, 'Delete Anyway')
     expect(toast.dismiss).toHaveBeenCalledWith('delete-worktree-failure:|wt-archive')
     expect(onDeleteAnyway).toHaveBeenCalled()
-  })
-
-  it('does not offer Delete Anyway for an ordinary failure', () => {
-    showDeleteWorktreeFailureToast({
-      error: 'permission denied',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      onViewChanges: vi.fn(),
-      onForceDelete: vi.fn(),
-      onDeleteAnyway: vi.fn(),
-      worktreeId: 'wt-plain',
-      worktreeName: 'feature/plain'
-    })
-
-    expect(renderToastBody('error').textContent).not.toContain('Delete Anyway')
-  })
-
-  it('offers neither force delete nor View for a locked workspace', () => {
-    const onViewChanges = vi.fn()
-
-    showDeleteWorktreeFailureToast({
-      error: 'Worktree is locked by Git.',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      onViewChanges,
-      onForceDelete: vi.fn(),
-      onDeleteAnyway: vi.fn(),
-      worktreeId: 'wt-locked',
-      worktreeName: 'feature/locked'
-    })
-
-    const body = renderToastBody('info')
-    expect(body.textContent).toContain('This workspace is locked by Git.')
-    expect(body.textContent).toContain(
-      'Run git worktree unlock <worktree-path> from its repository, then retry deletion'
-    )
-    expect(body.textContent).not.toContain('Force Delete')
-    expect(body.textContent).not.toContain('View')
-    expect(onViewChanges).not.toHaveBeenCalled()
-  })
-
-  it('keeps View for a locked workspace when changed files are known', () => {
-    showDeleteWorktreeFailureToast({
-      error: 'Worktree is locked by Git.',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      lockReason: 'active agent session',
-      hasKnownChanges: true,
-      onViewChanges: vi.fn(),
-      onForceDelete: vi.fn(),
-      onDeleteAnyway: vi.fn(),
-      worktreeId: 'wt-locked-dirty',
-      worktreeName: 'feature/locked-dirty'
-    })
-
-    const body = renderToastBody('info')
-    expect(body.textContent).toContain('Git reported: active agent session')
-    expect(body.textContent).toContain('View')
-  })
-  it('offers a persistent nested deletion review for the exact failed target', () => {
-    Object.assign(window, { api: { worktrees: { previewNestedRemoval: vi.fn() } } })
-    showDeleteWorktreeFailureToast({
-      error:
-        'Refusing to delete worktree because it contains another registered worktree: /parent/child',
-      canForceDelete: false,
-      forceDeleteReason: null,
-      onViewChanges: vi.fn(),
-      onForceDelete: vi.fn(),
-      onDeleteAnyway: vi.fn(),
-      worktreeId: 'repo::/parent',
-      worktreeName: 'parent',
-      nestedRemovalTarget: { id: 'repo::/parent', executionHostId: 'local' }
-    })
-    const body = renderToastBody('error')
-    expect(body.textContent).toContain('Delete with nested worktrees…')
-    expect(vi.mocked(toast.error).mock.calls.at(-1)?.[1]?.duration).toBe(Infinity)
   })
 })

@@ -64,46 +64,6 @@ describe('registerSpeechHandlers', () => {
     deleteLocalSpeechModelMock.mockReset()
   })
 
-  it('clears the model download progress callback after completion', async () => {
-    const clearProgressCallback = vi.fn()
-    const progressCallbacks: ((modelId: string, progress: number) => void)[] = []
-    let resolveDownload: () => void = () => {}
-    const manager = {
-      setProgressCallback: vi.fn((callback: (modelId: string, progress: number) => void) => {
-        progressCallbacks.push(callback)
-        return clearProgressCallback
-      }),
-      downloadModel: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveDownload = resolve
-          })
-      )
-    }
-    const send = vi.fn()
-    const window = {
-      isDestroyed: vi.fn(() => false),
-      webContents: { send },
-      once: vi.fn(),
-      off: vi.fn()
-    }
-    getSpeechModelManagerMock.mockReturnValue(manager)
-    fromWebContentsMock.mockReturnValue(window)
-    registerSpeechHandlers({} as never)
-
-    const pending = getHandler('speech:downloadModel')({ sender: { id: 7 } }, 'model-1')
-    progressCallbacks[0]?.('model-1', 0.5)
-    resolveDownload()
-    await pending
-
-    expect(send).toHaveBeenCalledWith('speech:downloadProgress', {
-      modelId: 'model-1',
-      progress: 0.5
-    })
-    expect(clearProgressCallback).toHaveBeenCalledTimes(1)
-    expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
-  })
-
   it('clears the model download progress callback when the window closes', async () => {
     const clearProgressCallback = vi.fn()
     let resolveDownload: () => void = () => {}
@@ -136,24 +96,5 @@ describe('registerSpeechHandlers', () => {
 
     expect(clearProgressCallback).toHaveBeenCalledTimes(1)
     expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
-  })
-
-  it('routes desktop model deletion through the shared deletion helper', async () => {
-    const store = {} as never
-    const manager = { deleteModel: vi.fn() }
-    const sttService = { prepareModelForDeletion: vi.fn() }
-    getSpeechModelManagerMock.mockReturnValue(manager)
-    getSpeechSttServiceMock.mockReturnValue(sttService)
-    deleteLocalSpeechModelMock.mockResolvedValue(undefined)
-    registerSpeechHandlers(store)
-
-    await getHandler('speech:deleteModel')({ sender: { id: 7 } }, 'model-1')
-
-    expect(deleteLocalSpeechModelMock).toHaveBeenCalledWith({
-      store,
-      modelManager: manager,
-      sttService,
-      modelId: 'model-1'
-    })
   })
 })

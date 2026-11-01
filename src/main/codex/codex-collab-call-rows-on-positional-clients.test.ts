@@ -7,8 +7,8 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { pairToolBlocks } from '../../shared/native-chat/tools/native-chat-tool-pairs'
 import { pairNativeChatToolResults } from '../../shared/native-chat/tools/native-chat-tool-pairing'
-import { projectNativeChatTranscript } from '../../shared/native-chat-transcript-projection'
-import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
+import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
+import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import {
   collab,

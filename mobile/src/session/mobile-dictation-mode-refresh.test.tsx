@@ -69,7 +69,7 @@ vi.mock('./native-chat/use-mobile-native-chat-send-error', () => ({
     bannerMountedRef: { current: false }
   })
 }))
-vi.mock('./use-mobile-native-chat-readability', () => ({
+vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
 vi.mock('./native-chat/use-mobile-native-chat-input-lease', () => ({

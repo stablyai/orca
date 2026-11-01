@@ -7,7 +7,8 @@ import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dism
 import { nativeChatAskDismissKey } from '../../../../../src/shared/native-chat-ask-dismiss-key'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },

@@ -1,4 +1,5 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat-follow-up-behavior'
 import {
   recordMobileNativeChatSkillPick,
   useMobileNativeChatDraft
@@ -31,9 +32,14 @@ import type { MobileComposerStructuredCatalog } from './mobile-native-chat-compo
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
+import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
-import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
-import { ComposerSendButton } from '../../../components/composer-input/ComposerSendButton'
+import {
+  COMPOSER_CONTROL_HIT_SLOP,
+  composerInputStyles as inputStyles
+} from '../../../components/composer-input/composer-input-styles'
+import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
+import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
@@ -64,7 +70,9 @@ type Props = MobileNativeChatMicProps & {
   structured?: MobileNativeChatStructuredComposer | null
   value: string
   onChangeText: (text: string) => void
-  onSend: (text: string) => Promise<boolean>
+  onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
+  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+  sendFollowUp?: NativeChatSendFollowUp | null
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
@@ -88,6 +96,9 @@ type Props = MobileNativeChatMicProps & {
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
 }
+
+/** What a chat's composer sends through, which the chat view hands down from its route. */
+export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -122,7 +133,8 @@ export function MobileNativeChatComposer({
   onNeedFiles,
   skillDiscovery,
   onNeedSkills,
-  stop = null
+  stop = null,
+  sendFollowUp = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -216,7 +228,7 @@ export function MobileNativeChatComposer({
     }
   }, [])
 
-  const handleSend = async (): Promise<void> => {
+  const handleSend = async (intent?: MobileNativeChatSendIntent): Promise<void> => {
     if (!canSend || sendingRef.current) {
       return
     }
@@ -228,7 +240,7 @@ export function MobileNativeChatComposer({
     try {
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
-      const accepted = await onSend(value)
+      const accepted = await (intent ? onSend(value, intent) : onSend(value))
       if (
         accepted &&
         mountedRef.current &&
@@ -311,6 +323,7 @@ export function MobileNativeChatComposer({
                 style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
                 onPress={attachPress}
                 disabled={isAttaching || disabled}
+                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
                 {isAttaching ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -351,37 +364,43 @@ export function MobileNativeChatComposer({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.composer.cancelEditing', 'Cancel editing')}
-                style={inputStyles.ghostButton}
+                style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
                 onPress={editSession.cancel}
+                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
                 <Text style={{ color: colors.textSecondary }}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
             ) : null}
-            {showsStop && stop ? (
-              // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-              <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-            ) : editSession ? (
-              <Pressable
-                accessibilityLabel={t('chat.composer.saveEditedMessage', 'Save edited message')}
-                style={({ pressed }) => [
-                  inputStyles.sendButton,
-                  !canSend && inputStyles.sendButtonDisabled,
-                  pressed && canSend && inputStyles.pressed
-                ]}
-                onPress={handleSend}
-                disabled={!canSend}
-              >
-                <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
-                  {t('common.save', 'Save')}
-                </Text>
-              </Pressable>
-            ) : (
-              <ComposerSendButton
-                onPress={handleSend}
-                canSend={canSend}
-                label={t('chat.composer.sendMessage', 'Send message')}
-              />
-            )}
+            <MobileNativeChatControlSwap
+              swapKey={showsStop && stop ? 'stop' : editSession ? 'save' : 'send'}
+            >
+              {showsStop && stop ? (
+                // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
+                <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
+              ) : editSession ? (
+                <Pressable
+                  accessibilityLabel={t('chat.composer.saveEditedMessage', 'Save edited message')}
+                  style={({ pressed }) => [
+                    inputStyles.sendButton,
+                    !canSend && inputStyles.sendButtonDisabled,
+                    pressed && canSend && inputStyles.pressed
+                  ]}
+                  onPress={() => void handleSend()}
+                  disabled={!canSend}
+                  hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+                >
+                  <Text style={{ color: canSend ? colors.bgBase : colors.textMuted }}>
+                    {t('common.save', 'Save')}
+                  </Text>
+                </Pressable>
+              ) : (
+                <MobileNativeChatSendButton
+                  canSend={canSend}
+                  sendFollowUp={sendFollowUp}
+                  onSend={(intent) => void handleSend(intent)}
+                />
+              )}
+            </MobileNativeChatControlSwap>
           </View>
         </View>
       </View>

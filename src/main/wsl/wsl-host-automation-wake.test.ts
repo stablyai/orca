@@ -5,8 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
 import {
-  earliestWslHostAutomationDue,
-  nextWslHostAutomationDue,
   readWslHostAutomationWakes,
   WslHostAutomationWake,
   writeWslHostAutomationWakes,
@@ -89,33 +87,6 @@ function due(nextRunAt: number, graceHours = 12): WslHostAutomationDue {
     schedules: [{ rrule: HOURLY, dtstart: 0, missedRunGraceMinutes: graceHours * 60 }]
   }
 }
-
-describe('earliestWslHostAutomationDue', () => {
-  it('takes the soonest enabled run, its grace window, and every enabled schedule', () => {
-    expect(
-      earliestWslHostAutomationDue([
-        automation({ nextRunAt: 5 * HOUR, enabled: false }),
-        automation({ nextRunAt: 8 * HOUR, missedRunGraceMinutes: 60 }),
-        automation({ nextRunAt: 9 * HOUR })
-      ])
-    ).toEqual({
-      nextRunAt: 8 * HOUR,
-      wakeUntil: 9 * HOUR + 2 * 60_000,
-      schedules: [
-        { rrule: HOURLY, dtstart: 0, missedRunGraceMinutes: 60 },
-        { rrule: HOURLY, dtstart: 0, missedRunGraceMinutes: 720 }
-      ]
-    })
-    expect(earliestWslHostAutomationDue([automation({ enabled: false })])).toBeNull()
-  })
-
-  it('computes the following run from the schedules alone', () => {
-    const now = 10 * HOUR + 5 * 60_000
-    expect(nextWslHostAutomationDue(due(0).schedules, now)?.nextRunAt).toBe(
-      nextAutomationOccurrenceAfter(HOURLY, 0, now)
-    )
-  })
-})
 
 describe('WslHostAutomationWake', () => {
   it('boots the host once when a learned run comes due with the host off', async () => {

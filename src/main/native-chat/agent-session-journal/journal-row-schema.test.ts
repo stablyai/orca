@@ -196,12 +196,16 @@ describe('journal row validation', () => {
     ).toBe(false)
   })
 
-  it('keeps forward compatibility for open string fields and unknown block types', () => {
+  it('keeps open string fields readable and refuses an unknown block type as newer', () => {
     const item = (body: unknown) => ({ ...BASE, kind: 'item', itemId: 'i-1', revision: 1, body })
-    // Renderers skip unknown block types without dereferencing their fields.
+    // A saved row's block types are closed: a newer one refuses as a newer Orca's.
     expect(
-      parse(item({ kind: 'message', role: 'user', blocks: [{ type: 'future-block', data: 1 }] }))
-    ).toBe(true)
+      parseJournalRow(
+        JSON.stringify(
+          item({ kind: 'message', role: 'user', blocks: [{ type: 'future-block', data: 1 }] })
+        )
+      )
+    ).toEqual({ ok: false, unreadable: true })
     expect(
       parse(item({ kind: 'message', role: 'narrator', blocks: [{ type: 'text', text: 'hi' }] }))
     ).toBe(true)
@@ -217,8 +221,7 @@ describe('journal row validation', () => {
             selectedOptionId: null,
             resolvedBy: null,
             resolvedAt: null
-          },
-          futureField: 'ignored'
+          }
         })
       )
     ).toBe(true)
@@ -425,8 +428,8 @@ describe('producer linkage on the persisted row', () => {
     expect(parsed.ok).toBe(true)
   })
 
-  it('reads the same row with linkage put INSIDE a prompt option, ignoring the key there', () => {
-    // Legacy strict prompt bodies rejected unknown keys; linkage must stay on the row base.
+  it("refuses the same row with linkage put INSIDE a prompt option as a newer Orca's", () => {
+    // A key a prompt option does not declare is a newer build's; linkage stays on the row base.
     const smuggled = {
       ...BASE,
       v: 3,
@@ -440,9 +443,7 @@ describe('producer linkage on the persisted row', () => {
         resolution
       }
     }
-    const parsed = parseJournalRow(JSON.stringify(smuggled))
-    expect(parsed.ok && parsed.row.kind === 'item' && parsed.row.body).toEqual(smuggled.body)
-    expect(parsed.ok && 'agentId' in parsed.row).toBe(false)
+    expect(parseJournalRow(JSON.stringify(smuggled))).toEqual({ ok: false, unreadable: true })
   })
 })
 
@@ -523,8 +524,7 @@ it.each([
     worker: { ...startWorker, party: { ...startWorker.party, orcaSessionId: 'invalid' } },
     senders: []
   },
-  { worker: null, senders: [] },
-  { worker: { futureIdentity: 'new shape' }, senders: [] }
+  { worker: null, senders: [] }
 ])('replays open worker metadata without damaging task/core: $worker', ({ worker, senders }) => {
   const body = { kind: 'agent-start', dispatchId: 'dispatch', task: '  Full task\r\nEND  ', worker }
   const parsed = parseJournalRow(
@@ -559,3 +559,66 @@ it.each([{ dispatchId: '' }, { dispatchId: null }, { task: null }, { task: 17 }]
     ).toBe(false)
   }
 )
+
+it('keeps ordering context additive and treats malformed optional facts as legacy annotations', () => {
+  const row = {
+    ...BASE,
+    kind: 'submission',
+    clientMessageId: 'context',
+    payloadFingerprint: 'context',
+    providerHandle: { kind: 'codex', threadId: 't' },
+    body: { kind: 'message', role: 'user', blocks: [] },
+    inputOrderContext: { source: { epoch: 'source', sequence: 2 }, basis: 'observed', cut: 2 }
+  }
+  expect(parseJournalRow(JSON.stringify(row))).toMatchObject({
+    ok: true,
+    row: { inputOrderContext: row.inputOrderContext, body: row.body }
+  })
+  expect(
+    parseJournalRow(
+      JSON.stringify({
+        ...row,
+        inputOrderContext: { ...row.inputOrderContext, basis: 'unreadable' }
+      })
+    )
+  ).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderContext: expect.anything() })
+  })
+  const epoch = {
+    ...BASE,
+    kind: 'epoch',
+    reason: 'unreconcilable_prefix',
+    providerHandle: row.providerHandle,
+    inputOrderLineage: {
+      clock: 10,
+      cards: [{ messageId: 'C', introduced: 1, baseline: { coordinate: null } }]
+    }
+  }
+  expect(parseJournalRow(JSON.stringify(epoch))).toMatchObject({
+    ok: true,
+    row: { inputOrderLineage: epoch.inputOrderLineage }
+  })
+  const overlapping = {
+    ...epoch,
+    inputOrderLineage: {
+      clock: 10,
+      cards: [
+        {
+          messageId: 'C',
+          introduced: 1,
+          baseline: { coordinate: { epoch: 'old', sequence: -1 } }
+        }
+      ]
+    }
+  }
+  expect(parseJournalRow(JSON.stringify(overlapping))).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderLineage: expect.anything() })
+  })
+  const invalid = parseJournalRow(JSON.stringify({ ...epoch, inputOrderLineage: { clock: 'bad' } }))
+  expect(invalid).toEqual({
+    ok: true,
+    row: expect.not.objectContaining({ inputOrderLineage: expect.anything() })
+  })
+})

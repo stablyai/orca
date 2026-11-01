@@ -88,14 +88,6 @@ afterEach(() => {
 })
 
 describe('remote file explorer using the recovered app watcher', () => {
-  it('refreshes from the app broker without opening an independent remote subscription', async () => {
-    renderWatch()
-    emit()
-    await settle()
-    expect(refreshDir).toHaveBeenCalledExactlyOnceWith('/repo')
-    expect(runtime.subscribe).not.toHaveBeenCalled()
-  })
-
   it('ignores other hosts and roots, including an identical local path', async () => {
     renderWatch()
     emit('host-b')

@@ -50,12 +50,13 @@ export async function wakeNativeChatTranscriptDistro(distro: string | null): Pro
 }
 
 /**
- * The host transcript path of a chat the user opened, and the start of its stopped WSL distro.
- * `waking` is null without a distro, so other chats open without an extra await.
+ * The host transcript path of a chat, and the start of its stopped WSL distro when `wake` (the user
+ * opened or paged it; a restore or remount never does). `waking` is null when nothing starts.
  */
 export function openNativeChatTranscript(
   sessionId: string,
-  requestedPath: string | undefined
+  requestedPath: string | undefined,
+  wake: boolean
 ): { transcriptPath: string | undefined; waking: Promise<void> | null } {
   const statusRows = agentHookServer.getStatusSnapshot()
   const transcriptPath = nativeChatTranscriptPathOnExecutionHost(
@@ -63,6 +64,6 @@ export function openNativeChatTranscript(
     sessionId,
     requestedPath
   )
-  const distro = nativeChatTranscriptDistro(statusRows, sessionId, transcriptPath)
+  const distro = wake ? nativeChatTranscriptDistro(statusRows, sessionId, transcriptPath) : null
   return { transcriptPath, waking: distro ? wakeNativeChatTranscriptDistro(distro) : null }
 }

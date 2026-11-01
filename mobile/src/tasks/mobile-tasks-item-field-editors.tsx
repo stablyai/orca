@@ -14,7 +14,8 @@ import {
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { SectionHeader } from '../components/list/ListGroup'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -60,7 +61,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           placeholder={translate('tasks.itemFieldEditors.title', 'Title')}
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={
             mutatingStatus ||
             itemTitleDraft.trim().length === 0 ||
@@ -120,7 +121,11 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                 return (
                   <Pressable
                     key={label}
-                    style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                    style={({ pressed }) => [
+                      styles.detailChip,
+                      selected ? styles.detailChipSelected : undefined,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     onPress={() =>
                       void updateGitHubIssueMetadata(
@@ -160,7 +165,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               autoCapitalize="none"
             />
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={
                 mutatingStatus ||
                 (splitCommaList(itemAddLabelsDraft).length === 0 &&
@@ -223,7 +228,11 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                 return (
                   <Pressable
                     key={user.login}
-                    style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                    style={({ pressed }) => [
+                      styles.detailChip,
+                      selected ? styles.detailChipSelected : undefined,
+                      pressed && pressedStyle
+                    ]}
                     disabled={mutatingStatus}
                     onPress={() =>
                       void updateGitHubIssueMetadata(
@@ -265,7 +274,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               autoCapitalize="none"
             />
             <Pressable
-              style={styles.inlineSaveButton}
+              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
               disabled={
                 mutatingStatus ||
                 (splitCommaList(itemAddAssigneesDraft).length === 0 &&

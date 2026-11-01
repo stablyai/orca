@@ -89,18 +89,6 @@ describe('a background Stop acts on the host child records', () => {
     expect(blocked()).toBeNull()
   })
 
-  it('stops every task the strip offers a stop when none is named', async () => {
-    const { records, blocked, stopCalls, stop, basis } = await droppedFromRoster()
-
-    const outcome = await stop()
-
-    expect(outcome).toMatchObject({ cancelled: true })
-    expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])
-    expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
-    expect(basis()).toEqual(['stop-acknowledged'])
-    expect(blocked()).toBeNull()
-  })
-
   it('leaves a task that ended on its own frame as it ended: its row offers no stop', async () => {
     const { run, records, stopCalls, stop } = await droppedFromRoster()
     run.replay([

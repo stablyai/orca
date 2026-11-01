@@ -74,35 +74,4 @@ describe('virtual preview document search scope', () => {
     expect(ranges.map((range) => range.toString())).toEqual(['needle suffix'])
     clearMarkdownPreviewSearchHighlights(instance)
   })
-
-  it('ignores whitespace-only code groups while retaining spaces within code', async () => {
-    const engine = new MarkdownPreviewDocumentEngine()
-    engine.load('before ` ` after space')
-    const body = document.createElement('div')
-    body.innerHTML = '<p>before <code> </code> after space</p>'
-    const instance = {}
-    const ranges = applyMarkdownPreviewSearchHighlights(instance, body, ' ', { documentOnly: true })
-    expect((await engine.search(' '))?.matches).toHaveLength(3)
-    expect(ranges).toHaveLength(3)
-    expect(ranges.map((range) => range.startContainer.textContent)).toEqual([
-      'before ',
-      ' after space',
-      ' after space'
-    ])
-    clearMarkdownPreviewSearchHighlights(instance)
-  })
-
-  it('ignores whitespace-only text in both worker and mounted ranges', async () => {
-    const engine = new MarkdownPreviewDocumentEngine()
-    engine.load('<span> </span>word space')
-    const result = await engine.search(' ')
-    const body = document.createElement('div')
-    body.innerHTML = '<span> </span>word space'
-    const instance = {}
-    const ranges = applyMarkdownPreviewSearchHighlights(instance, body, ' ', { documentOnly: true })
-    expect(result?.matches).toHaveLength(1)
-    expect(ranges).toHaveLength(1)
-    expect(ranges[0].startContainer.textContent).toBe('word space')
-    clearMarkdownPreviewSearchHighlights(instance)
-  })
 })

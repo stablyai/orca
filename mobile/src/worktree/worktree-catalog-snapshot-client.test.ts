@@ -110,6 +110,52 @@ describe('WorktreeCatalogSnapshotClient', () => {
     expect(second).toEqual(rows)
   })
 
+  it('rebuilds a row delta from the confirmed rows and asks for a full catalog when it cannot', async () => {
+    const a = { worktreeId: 'a' }
+    const b = { worktreeId: 'b' }
+    const c = { worktreeId: 'c' }
+    const client = clientWithResults(
+      { worktrees: [a, b], snapshotId: 'snapshot-1' },
+      { snapshotId: 'snapshot-2', baseSnapshotId: 'snapshot-1', rowsFromBase: [1, c, 0] },
+      { snapshotId: 'snapshot-3', baseSnapshotId: 'snapshot-2', rowsFromBase: [7] },
+      { worktrees: [], snapshotId: 'snapshot-4' }
+    )
+    const snapshots = new WorktreeCatalogSnapshotClient()
+
+    // A caller sorting what it was given must not reorder the base the next delta indexes into.
+    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))?.reverse()
+    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toEqual([b, c, a])
+    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toBeNull()
+    await snapshots.fetch(client, 'host-1')
+
+    expect(client.sendRequest).toHaveBeenNthCalledWith(4, 'worktree.ps', {
+      limit: 10_000,
+      afterSnapshotId: null,
+      acceptRowDelta: true
+    })
+  })
+
+  // An older host coarsens any read that names a snapshot; with no token, exact readers name none.
+  it('reads exact activity without a token until the host proves it keeps snapshots', async () => {
+    const client = clientWithResults(
+      { worktrees: [] },
+      { worktrees: [], snapshotId: 'snapshot-1' },
+      { unchanged: true, snapshotId: 'snapshot-1' }
+    )
+    const snapshots = new WorktreeCatalogSnapshotClient({ exactActivity: true })
+
+    for (let read = 0; read < 3; read += 1) {
+      admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
+    }
+
+    const exact = { limit: 10_000, acceptRowDelta: true, exactActivity: true }
+    expect(vi.mocked(client.sendRequest).mock.calls.map((call) => call[1])).toEqual([
+      exact,
+      exact,
+      { ...exact, afterSnapshotId: 'snapshot-1' }
+    ])
+  })
+
   it('does not advance the token until the caller admits a response', async () => {
     const client = clientWithResults(
       { worktrees: [], snapshotId: 'snapshot-1' },
@@ -122,7 +168,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: null
+      afterSnapshotId: null,
+      acceptRowDelta: true
     })
   })
 
@@ -140,7 +187,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: 'snapshot-1'
+      afterSnapshotId: 'snapshot-1',
+      acceptRowDelta: true
     })
   })
 
@@ -158,7 +206,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: null
+      afterSnapshotId: null,
+      acceptRowDelta: true
     })
   })
 
@@ -172,7 +221,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
 
     expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: null
+      afterSnapshotId: null,
+      acceptRowDelta: true
     })
   })
 
@@ -191,7 +241,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(secondClient, 'host-2')
     expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: 'snapshot-2'
+      afterSnapshotId: 'snapshot-2',
+      acceptRowDelta: true
     })
   })
 
@@ -215,7 +266,8 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(client, 'host-1')
     expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
       limit: 10_000,
-      afterSnapshotId: 'snapshot-1'
+      afterSnapshotId: 'snapshot-1',
+      acceptRowDelta: true
     })
   })
 

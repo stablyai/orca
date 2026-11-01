@@ -9,6 +9,7 @@ import { useCallback } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
 
@@ -184,12 +185,16 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
           worktree: `id:${item.worktreeId}`,
           force: true
         })
-        if (!worktreeRemove.interpret(reply).accepted) {
+        if (worktreeRemove.interpret(reply).accepted) {
+          triggerSuccess()
+        } else {
+          triggerError()
           setWorktrees((prev) => [...prev, item])
           setLastKnownWorktrees((prev) => [...prev, item])
         }
         void fetchWorktrees()
       } catch {
+        triggerError()
         setWorktrees((prev) => [...prev, item])
         setLastKnownWorktrees((prev) => [...prev, item])
       }

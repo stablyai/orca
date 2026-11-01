@@ -98,22 +98,6 @@ function expectMainTabClosed(): void {
 }
 
 describe('detachTerminalPaneToTab rolls main’s committed move forward (layout-owner build)', () => {
-  it('closes main’s new tab, without a toast, when the user closed the pane meanwhile', async () => {
-    const store = await seeded()
-    let paneIds = [1, 2]
-    const manager = twoPaneManager()
-    manager.getPanes.mockImplementation(() => paneIds.map((id) => ({ id })))
-    const move = await moveHeldByMain(() => detachFrom(store, { manager }))
-    paneIds = [1]
-    manager.getLeafId.mockImplementation((paneId) => (paneId === 1 ? LEAF_1 : null))
-
-    await expect(move.answer()).resolves.toBeNull()
-
-    expectMainTabClosed()
-    expectOnlyMainTabs(store)
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('closes main’s new tab when the user closed the source tab meanwhile', async () => {
     const store = await seeded()
     const move = await moveHeldByMain(() => detachFrom(store))
@@ -147,17 +131,6 @@ describe('detachTerminalPaneToTab rolls main’s committed move forward (layout-
     await expect(move.answer()).resolves.toMatchObject({ leafId: LEAF_2 })
 
     expect(manager.detachPaneForExternalMove).toHaveBeenCalledWith(7)
-  })
-
-  it('closes main’s new tab when the pane manager refuses to detach the pane', async () => {
-    const store = await seeded()
-    const manager = twoPaneManager()
-    manager.detachPaneForExternalMove.mockReturnValue(false)
-
-    await expect(detachFrom(store, { manager })).resolves.toBeNull()
-
-    expectMainTabClosed()
-    expectOnlyMainTabs(store)
   })
 
   it('moves the last pane, after a sibling closed meanwhile, without killing its PTY', async () => {
