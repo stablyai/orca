@@ -41,12 +41,12 @@ function publishMobileStructuredChatLaunch(context: MobileStructuredChatLaunchCo
   }
 }
 
-// These agents cannot switch a terminal to chat, and Chat UI defaults to off.
+// Registered agents the transcript overlay can't cover follow Chat UI like the others, via an explicit chat launch.
 export function mobileStructuredChatLaunchSurface(
   agent: string,
   context: MobileStructuredChatLaunchContext | null
 ): 'chat' | undefined {
-  if (!context?.canRequestSurface) {
+  if (!context?.canRequestSurface || context.defaultView !== 'chat') {
     return undefined
   }
   if (isNativeChatSupportedAgent(agent) || !context.registeredAgents.includes(agent)) {

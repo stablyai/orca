@@ -357,7 +357,8 @@ describe('the + menu', () => {
 
     await create_(scope(client, []), 'aider')
 
-    expect(methods(sendRequest)).toEqual(['session.tabs.createTerminal'])
+    // An empty capability list may be the gate's placeholder, so status is read once before today's path.
+    expect(methods(sendRequest)).toEqual(['status.get', 'session.tabs.createTerminal'])
   })
 
   it("keeps today's path when the host refuses the first send as unsupported", async () => {

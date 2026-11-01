@@ -1,3 +1,4 @@
+import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
@@ -68,11 +69,14 @@ export async function launchNewTabAgentThroughHost(args: {
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent)
   // Chat UI lives on the phone. A headless host keeps its terminal default unless the launch asks for chat.
-  const launchContext = await loadMobileStructuredChatLaunchContext({
-    client: args.client,
-    hostCapabilities: args.hostCapabilities
-  })
-  const hostCapabilities = launchContext.hostCapabilities
+  // Overlay agents never request a surface, so only the others pay for the registry and status reads.
+  const launchContext = isNativeChatSupportedAgent(args.agent)
+    ? null
+    : await loadMobileStructuredChatLaunchContext({
+        client: args.client,
+        hostCapabilities: args.hostCapabilities
+      })
+  const hostCapabilities = launchContext?.hostCapabilities ?? args.hostCapabilities
   const surface = mobileStructuredChatLaunchSurface(args.agent, launchContext)
   const afterTabId = hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)

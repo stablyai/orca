@@ -57,7 +57,7 @@ describe('mobileStructuredChatLaunchSurface', () => {
     expect(mobileStructuredChatLaunchSurface('gemini', chatHost)).toBeUndefined()
     expect(
       mobileStructuredChatLaunchSurface('hermes', { ...chatHost, defaultView: 'terminal' })
-    ).toBe('chat')
+    ).toBeUndefined()
     expect(
       mobileStructuredChatLaunchSurface('hermes', { ...chatHost, canRequestSurface: false })
     ).toBeUndefined()
@@ -152,11 +152,13 @@ describe('loadMobileStructuredChatLaunchContext', () => {
     })
     expect(context.canRequestSurface).toBe(true)
     expect(context.registeredAgents).toEqual(['hermes', 'claude'])
-    expect(mobileStructuredChatLaunchSurface('hermes', context)).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', { ...context, defaultView: 'chat' })).toBe(
+      'chat'
+    )
     expect(mobileStructuredChatLaunchSurface('claude', context)).toBeUndefined()
   })
 
-  it('uses the page store for Chat UI and still marks Hermes when that store is empty', async () => {
+  it('uses the page store for Chat UI and marks Hermes only once Chat UI is on', async () => {
     vi.mocked(AsyncStorage.getItem).mockImplementation((key: string) =>
       pageAsyncStorage.getItem(key)
     )
@@ -178,7 +180,7 @@ describe('loadMobileStructuredChatLaunchContext', () => {
     })
     expect(unread.defaultView).toBe('terminal')
     expect(withMobileStructuredChatLaunch([{ agent: 'hermes', label: 'Hermes' }], unread)).toEqual([
-      { agent: 'hermes', label: 'Hermes', opensAsChat: true }
+      { agent: 'hermes', label: 'Hermes' }
     ])
 
     refreshPageTerminalShortcuts({ 'orca:defaultSessionView': 'chat' }, [])
