@@ -198,4 +198,17 @@ describe('Claude Read image tool results', () => {
     ).toEqual([{ type: 'image-ref', path: '/attachments/result.png', alt: 'result.png' }])
     expect(spool).toHaveBeenCalledOnce()
   })
+
+  it('matches file formats that cannot be spooled', () => {
+    directory = mkdtempSync(join(tmpdir(), 'orca-chat-image-'))
+    const shot = join(directory, 'input.svg')
+    const bytes = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    writeFileSync(shot, bytes)
+    expect(
+      resolveToolResultImageRefs({
+        sources: [{ base64: bytes.toString('base64') }],
+        filePath: shot
+      })
+    ).toEqual([{ type: 'image-ref', path: shot, alt: 'input.svg' }])
+  })
 })

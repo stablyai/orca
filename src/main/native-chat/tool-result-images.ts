@@ -49,23 +49,24 @@ export function resolveToolResultImageRefs(args: {
       refs.push(imageRef(undefined, source.url, source.alt))
       continue
     }
-    const decoded = source.base64 ? decodeSpoolableImage(source.base64) : null
+    const bytes = source.base64 ? decodeImageBytes(source.base64) : null
     if (
       paired &&
       !usedPaired &&
       !source.path &&
       !source.url &&
-      decoded &&
-      matchesFile(paired, decoded.bytes)
+      bytes &&
+      matchesFile(paired, bytes)
     ) {
       usedPaired = true
       refs.push(imageRef(paired, undefined, source.alt))
       continue
     }
-    if (!decoded) {
+    const extension = bytes ? imageExtension(bytes) : null
+    if (!bytes || !extension) {
       continue
     }
-    const stored = spoolImage(decoded.bytes, decoded.extension, args.spool)
+    const stored = spoolImage(bytes, extension, args.spool)
     if (stored) {
       refs.push(imageRef(stored, undefined, source.alt))
     }
@@ -190,7 +191,7 @@ function existingImageFile(filePath: string | null | undefined): string | null {
   }
 }
 
-function decodeSpoolableImage(base64: string): { bytes: Buffer; extension: string } | null {
+function decodeImageBytes(base64: string): Buffer | null {
   if (base64.length === 0 || base64.length > SPOOL_BASE64_MAX_CHARS) {
     return null
   }
@@ -198,8 +199,7 @@ function decodeSpoolableImage(base64: string): { bytes: Buffer; extension: strin
   if (bytes.byteLength === 0 || bytes.byteLength > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
     return null
   }
-  const extension = imageExtension(bytes)
-  return extension ? { bytes, extension } : null
+  return bytes
 }
 
 function imageExtension(bytes: Buffer): string | null {
