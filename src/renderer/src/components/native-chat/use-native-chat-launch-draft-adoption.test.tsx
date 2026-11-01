@@ -54,12 +54,14 @@ function setup(args: {
     useNativeChatLaunchDraftAdoption({
       terminalTabId: 'tab-1',
       agent: args.agent ?? 'claude',
-      launchDraft: args.launchDraft,
-      launchDraftResolved: args.launchDraftResolved ?? false,
+      launchSeed: {
+        launchDraft: args.launchDraft,
+        launchDraftResolved: args.launchDraftResolved ?? false,
+        ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true
+      },
       draft: args.draft ?? '',
       setDraft,
-      setCaret,
-      ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft ?? true
+      setCaret
     })
   )
   return { setDraft, setCaret }
@@ -83,8 +85,10 @@ function renderSignal(messages: NativeChatMessage[], transcriptLoading = false) 
       useNativeChatLaunchDraftSignal({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        messages: props.messages,
-        transcriptLoading: props.transcriptLoading === true
+        session: {
+          messages: props.messages,
+          readPhase: props.transcriptLoading === true ? 'loading' : 'ready'
+        }
       }),
     { initialProps }
   )
@@ -96,6 +100,15 @@ describe('useNativeChatLaunchDraftSignal', () => {
     mocks.storeState.nativeChatLaunchDraftByTabId = {
       'tab-1': launchDraft({ createdAt: SEEDED_AT })
     }
+  })
+
+  it('never resolves a draft read off the input line from the transcript', () => {
+    mocks.storeState.nativeChatLaunchDraftByTabId = {
+      'tab-1': launchDraft({ createdAt: SEEDED_AT, fromTerminal: true })
+    }
+    const { result } = renderSignal([userTurn('u1', SEEDED_AT + 60_000)])
+
+    expect(result.current.launchDraftResolved).toBe(false)
   })
 
   it('resolves on an undated user turn (Grok omits row timestamps)', () => {
@@ -228,6 +241,55 @@ describe('useNativeChatLaunchDraftAdoption', () => {
     expect(setDraft).not.toHaveBeenCalled()
   })
 
+  it('swaps the untouched copy of the seed it replaces for the new text', () => {
+    const entry = launchDraft({ text: 'edited in the terminal', replacesText: SEED_TEXT })
+    const { setDraft } = setup({ launchDraft: entry, draft: SEED_TEXT })
+
+    expect(setDraft).toHaveBeenCalledWith('edited in the terminal', { unsaved: true })
+  })
+
+  it('shows a terminal seed under text the user already typed in the composer', () => {
+    const entry = launchDraft({ text: 'typed in the terminal', fromTerminal: true })
+    const { setDraft } = setup({ launchDraft: entry, draft: 'typed in chat' })
+
+    expect(setDraft).toHaveBeenCalledWith('typed in chat\ntyped in the terminal')
+  })
+
+  it('swaps the terminal copy under composer text when the terminal text changes', () => {
+    const entry = launchDraft({ text: 'B edited', replacesText: 'B', fromTerminal: true })
+    const { setDraft } = setup({ launchDraft: entry, draft: 'A\nB' })
+
+    expect(setDraft).toHaveBeenCalledWith('A\nB edited')
+  })
+
+  it('shows a short terminal draft that is only a word of the composer text', () => {
+    const entry = launchDraft({ text: 'PR', fromTerminal: true })
+    const { setDraft } = setup({ launchDraft: entry, draft: 'please review the PR' })
+
+    expect(setDraft).toHaveBeenCalledWith('please review the PR\nPR')
+  })
+
+  it('drops the replaced terminal copy instead of showing the new text twice', () => {
+    const entry = launchDraft({ text: 'A', replacesText: 'B', fromTerminal: true })
+    const { setDraft } = setup({ launchDraft: entry, draft: 'A\nB' })
+
+    expect(setDraft).toHaveBeenCalledWith('A')
+  })
+
+  it('does not show the same terminal text twice', () => {
+    const entry = launchDraft({ text: 'B', fromTerminal: true })
+    const { setDraft } = setup({ launchDraft: entry, draft: 'A\nB' })
+
+    expect(setDraft).not.toHaveBeenCalled()
+  })
+
+  it('drops the terminal copy under composer text once the terminal sent it', () => {
+    const entry = launchDraft({ text: 'B', fromTerminal: true, adopted: true })
+    const { setDraft } = setup({ launchDraft: entry, launchDraftResolved: true, draft: 'A\nB' })
+
+    expect(setDraft).toHaveBeenCalledWith('A')
+  })
+
   it('does nothing for a different agent or a missing seed', () => {
     setup({ launchDraft: launchDraft({ agent: 'codex' }) })
     setup({ launchDraft: null })
@@ -309,18 +371,15 @@ describe('launch draft adoption across a split', () => {
       const signal = useNativeChatLaunchDraftSignal({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        messages: args.messages ?? [],
-        transcriptLoading: false
+        session: { messages: args.messages ?? [], readPhase: 'ready' }
       })
       useNativeChatLaunchDraftAdoption({
         terminalTabId: 'tab-1',
         agent: 'claude',
-        launchDraft: signal.launchDraft,
-        launchDraftResolved: signal.launchDraftResolved,
+        launchSeed: { ...signal, ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft },
         draft: args.draft ?? '',
         setDraft,
-        setCaret,
-        ownsTabWideLaunchDraft: args.ownsTabWideLaunchDraft
+        setCaret
       })
     })
     return { setDraft, setCaret }

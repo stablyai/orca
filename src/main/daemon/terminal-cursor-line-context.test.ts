@@ -2,7 +2,8 @@ import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import {
   detectTerminalComposerDraft,
-  hasTerminalComposerPlaceholder
+  hasTerminalComposerPlaceholder,
+  readTerminalComposerTypedText
 } from '../../shared/terminal-composer-draft'
 import { HeadlessEmulator } from './headless-emulator'
 import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
@@ -55,6 +56,24 @@ function observeCellReads(terminal: Terminal) {
 }
 
 describe('readTerminalCursorLineContext', () => {
+  it('reads input rows below the cursor while the viewport is scrolled into history', () => {
+    const terminal = new Terminal({ cols: 30, rows: 9, scrollback: 100, allowProposedApi: true })
+    try {
+      const history = Array.from({ length: 50 }, (_, row) => `history ${row}`).join('\r\n')
+      writeSync(
+        terminal,
+        `${history}\r\n${'─'.repeat(20)}\r\n\x1b[1m❯\x1b[22m first line\x1b7\r\n  second line\r\n  third line\r\n${'─'.repeat(20)}\x1b8`
+      )
+      terminal.scrollLines(-8)
+      expect(terminal.buffer.active.viewportY).toBeLessThan(terminal.buffer.active.baseY)
+      expect(
+        readTerminalComposerTypedText(readTerminalCursorLineContext(terminal, terminal.rows))
+      ).toBe('first line\nsecond line\nthird line')
+    } finally {
+      terminal.dispose()
+    }
+  })
+
   it('reuses one cell across every scan without retaining it between reads', () => {
     const terminal = new Terminal({ cols: 12, rows: 5, allowProposedApi: true })
     try {

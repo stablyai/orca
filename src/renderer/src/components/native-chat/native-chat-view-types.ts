@@ -20,6 +20,8 @@ export type NativeChatBridgeViewProps = {
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -49,6 +51,8 @@ export type NativeChatResolvedViewProps = {
   ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
+  /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
+  readTerminalDraft?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 

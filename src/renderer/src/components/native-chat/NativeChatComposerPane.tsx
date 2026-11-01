@@ -74,9 +74,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
       agent,
-      launchDraft: launchSeed?.launchDraft,
-      launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      ownsTabWideLaunchDraft: launchSeed?.ownsTabWideLaunchDraft === true,
+      launchSeed,
       draft,
       setDraft,
       setCaret
@@ -273,7 +271,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      readTerminalScreen,
+      readTerminalDraft: launchSeed?.readTerminalDraft,
       classifySend,
       onOptimisticSend,
       optimisticSendOutcome,
