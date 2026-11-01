@@ -11,6 +11,8 @@ export type PluginDevWatchShot = {
   /** False when the panel had not finished drawing by the host's timeout. */
   settled: boolean
   errors: string[]
+  /** Host calls still unanswered at the capture; absent on hosts that predate it. */
+  pendingRequests?: number
 }
 
 /** What `--shot` asks of the Orca host; the handler binds it to RPC. */

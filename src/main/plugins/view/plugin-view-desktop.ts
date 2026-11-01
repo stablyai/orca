@@ -1,4 +1,6 @@
 import type { WebContents } from 'electron'
+import type { z } from 'zod'
+import type { PluginShotReplayParams } from '../../../shared/rpc-contract/plugins-params'
 import {
   PLUGIN_VIEW_NO_WORKSPACE_CODE,
   PLUGIN_VIEW_NOT_SHOWN_CODE,
@@ -15,6 +17,7 @@ import {
 } from './plugin-view-capture'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
 import { pluginShotActRefusal, pluginShotThemeDecision } from './plugin-shot-policy'
+import { shootPluginReplay, type PluginShotReplayResult } from './plugin-view-replay-shot'
 import type {
   PluginShotAct,
   PluginShotActResult
@@ -76,6 +79,8 @@ export type PluginViewDesktop = {
     ifShown?: boolean
     acts?: PluginShotAct[]
   }): Promise<PluginShotResult | PluginShotNotShown>
+  /** `shot --scenario`: captures a CLI-rendered tree without opening the plugin's panel. */
+  shotReplay(params: z.infer<typeof PluginShotReplayParams>): Promise<PluginShotReplayResult>
 }
 
 export type PluginViewDesktopDeps = {
@@ -157,6 +162,9 @@ export function createPluginViewDesktop(deps: PluginViewDesktopDeps): PluginView
       }
       return { pluginKey, kind: 'panel', panelId: panel.panelId, title: panel.title }
     },
+
+    shotReplay: (params) =>
+      shootPluginReplay({ contents: requireContents(), windowShown: deps.windowShown() }, params),
 
     shot: async ({ pluginKey, panelId, colorScheme: requested, width, ifShown, acts }) => {
       const panel = await resolvePluginViewPanel(deps.source, pluginKey, panelId)
