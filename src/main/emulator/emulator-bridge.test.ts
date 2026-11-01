@@ -36,6 +36,7 @@ vi.mock('./simctl-simulator-devices', () => ({
   ensureSimulatorBooted: vi.fn(async () => {}),
   listSimulatorDevices: listSimulatorDevicesMock,
   resolveSimulatorUdid: vi.fn(async (device: string) => device),
+  setConfiguredSimulatorBootCommand: () => {},
   shutdownSimulatorDevice: shutdownSimulatorDeviceMock
 }))
 

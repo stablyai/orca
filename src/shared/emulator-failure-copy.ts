@@ -13,6 +13,8 @@ export const EMULATOR_FAILURE_COPY = {
   requiresMacosXcode: 'iOS Simulator requires macOS with Xcode Command Line Tools.',
   simulatorNotFound:
     'Simulator {{udid}} not found. Create one via Xcode > Window > Devices and Simulators.',
+  simulatorBootCommandFailed:
+    'The simulator boot command `{{command}}` failed. Check it in Settings > Mobile Emulator.\n\n{{detail}}',
   serveSimUnavailable: 'serve-sim is unavailable.',
   serveSimNoEndpoints: 'serve-sim did not return stream endpoints.',
   serveSimEndpointUnreachable: 'serve-sim started but its stream endpoint is not reachable.',
@@ -56,7 +58,7 @@ const COPY_CODES_BY_ERROR_CODE: Readonly<Record<string, readonly EmulatorFailure
     'scrcpyDownloadFailed',
     'scrcpyServerInvalid'
   ],
-  emulator_error: ['androidSdkMissing']
+  emulator_error: ['androidSdkMissing', 'simulatorBootCommandFailed']
 }
 
 const SLOT_PATTERN = /\{\{(\w+)\}\}/g
