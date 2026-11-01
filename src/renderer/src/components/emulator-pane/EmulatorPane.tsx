@@ -22,7 +22,6 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     selectedUdid,
     setSelectedUdid,
     loading,
-    session,
     error,
     attach,
     markStreamLost,
@@ -44,7 +43,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
   })
   const { inputError, checkOnInteraction } = useEmulatorInputCheck(
     worktreeId,
-    session?.attached ? session.info?.deviceUdid || session.info?.device || null : null,
+    isLive ? (previewUrl ?? null) : null,
     streamKey
   )
   const visibleError = error ?? inputError
