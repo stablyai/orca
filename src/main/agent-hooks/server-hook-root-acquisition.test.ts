@@ -51,6 +51,10 @@ class RootTestServer extends AgentHookServer {
     return this.state.lastStatusByPaneKey.get(PANE)?.agentPresence
   }
 
+  foldedPrompt() {
+    return this.state.lastPromptByPaneKey.get(PANE)
+  }
+
   receivedAt() {
     const row = this.state.lastStatusByPaneKey.get(PANE)
     return row && 'receivedAt' in row && typeof row.receivedAt === 'number' ? row.receivedAt : 0
@@ -161,6 +165,16 @@ describe('a pane whose recorded owner never proved a process', () => {
         hook(server, 'UserPromptSubmit', { session: 'session-a', pid: null, prompt: 'old' })
     ],
     [
+      'another agent whose turn was left working when it exited',
+      (server) =>
+        hook(server, 'UserPromptSubmit', {
+          session: 'cx',
+          pid: null,
+          prompt: 'task',
+          source: 'codex'
+        })
+    ],
+    [
       'another agent that left its record in the pane',
       async (server) => {
         await hook(server, 'UserPromptSubmit', {
@@ -182,7 +196,10 @@ describe('a pane whose recorded owner never proved a process', () => {
       process: capture(49969),
       session: 'session-a'
     })
-    expect(server.row()?.providerSession?.id).toBe('session-a')
+    expect(server.row()).toMatchObject({
+      agentType: 'claude',
+      providerSession: { id: 'session-a' }
+    })
     // Once acquired, the owner's exact process keeps a nested run out of its row.
     await hook(server, 'UserPromptSubmit', { session: 'nested', pid: 49980, prompt: 'nested task' })
     expect(server.row()?.providerSession?.id).toBe('session-a')
@@ -247,16 +264,25 @@ describe('a pane whose recorded owner never proved a process', () => {
     expect(server.presence()).toMatchObject({ process: capture(49969), session: 'session-a' })
   })
 
-  it('applies an unreadable acquisition as a hook without a process, then retries on the next hook', async () => {
-    const server = await createServer()
-    await hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'old' })
-    await hook(server, 'UserPromptSubmit', { session: 'older', prompt: 'next' })
-    expect(server.row()).toMatchObject({ state: 'working', prompt: 'next' })
-    expect(server.presence()).toEqual({ agent: 'claude', session: 'older' })
-    runningPane(CLAUDE)
-    await hook(server, 'PostToolUse', { session: 'older' })
-    expect(server.presence()).toMatchObject({ process: capture(49969), session: 'older' })
-  })
+  it.each<[string, (server: RootTestServer) => Promise<void> | void]>([
+    [
+      'an owner whose hooks sent no process',
+      (server) => hook(server, 'UserPromptSubmit', { session: 'older', pid: null, prompt: 'old' })
+    ],
+    ['a trust prompt', (server) => observe(server, 'waiting')]
+  ])(
+    'applies an unreadable acquisition over %s as a hook without a process, then retries',
+    async (_name, setup) => {
+      const server = await createServer()
+      await setup(server)
+      await hook(server, 'UserPromptSubmit', { session: 'older', prompt: 'next' })
+      expect(server.row()).toMatchObject({ state: 'working', prompt: 'next' })
+      expect(server.presence()).toEqual({ agent: 'claude', session: 'older' })
+      runningPane(CLAUDE)
+      await hook(server, 'PostToolUse', { session: 'older' })
+      expect(server.presence()).toMatchObject({ process: capture(49969), session: 'older' })
+    }
+  )
 })
 
 describe('terminal reports and Orca restatements', () => {
@@ -356,6 +382,9 @@ describe('a retired owner', () => {
       observe(server, state, 'claude', origin)
       expect(server.row()?.state).toBe(state)
       // Late and replayed hooks from the exited process change nothing.
+      await hook(server, 'UserPromptSubmit', { session: 'session-a', prompt: 'stale prompt' })
+      // Refused before provider folds, which the successor would otherwise inherit.
+      expect(server.foldedPrompt()).toBeUndefined()
       await hook(server, 'Stop', { session: 'session-a' })
       await hook(server, 'SessionStart', { session: 'session-a' })
       await hook(server, 'SessionEnd', { session: 'session-a', reason: 'prompt_input_exit' })
@@ -363,8 +392,9 @@ describe('a retired owner', () => {
       expect(server.hasVerifiableAgentProcess(PANE)).toBe(false)
       runningPane(row(49970, 100, 49970, 'claude', 'S+'))
       table = table.map((entry) => ({ ...entry, tpgid: 49970 }))
-      await hook(server, 'SessionStart', { session: 'session-b', pid: 49970 })
-      expect(server.presence()).toMatchObject({ process: capture(49970), session: 'session-b' })
+      // The user resumes the same conversation in a new process.
+      await hook(server, 'PostToolUse', { session: 'session-a', pid: 49970 })
+      expect(server.presence()).toMatchObject({ process: capture(49970), session: 'session-a' })
     }
   )
 })
