@@ -113,6 +113,14 @@ export async function launchStructuredAgentSession(
   /** A chat closed while its host was being asked issues no create. */
   isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
+  // Kept on refusal so a retry abandons too; retries after release skip the wait.
+  if (intent.createAfter) {
+    if (!(await intent.createAfter)) {
+      abandonStructuredAgentSessionLaunchIntent(intent)
+      throw new StructuredAgentSessionCreateAbandonedError('Conversation source kept its terminal.')
+    }
+    delete intent.createAfter
+  }
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)

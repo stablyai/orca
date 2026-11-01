@@ -48,6 +48,7 @@ export type StructuredAgentSessionLaunchIntent = {
   createPrepared?: true
   prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
+  createAfter?: Promise<boolean>
   surfaceAddress?: StructuredLaunchSurfaceAddress
   /** The saved selection create seeds, read when the intent is built. */
   explicitLaunchOptions?: Readonly<Record<string, string>>

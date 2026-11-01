@@ -33,6 +33,8 @@ export type StructuredAgentLaunchOptions = {
   launchOptions?: Readonly<Record<string, string>>
   /** Final admission of a source-bound action, immediately before its first create is sent. */
   beforeCreate?: () => boolean
+  /** The create waits for this; false abandons it (a source that must stop before the chat writes). */
+  createAfter?: Promise<boolean>
   surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 

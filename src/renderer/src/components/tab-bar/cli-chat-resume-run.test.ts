@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
-import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import type * as FrameDrawnChatTabPlacementModule from '@/lib/frame-drawn-chat-tab-placement'
 
@@ -12,6 +11,7 @@ const mocks = vi.hoisted(() => {
     sourceCapability: vi.fn(),
     closeCapability: vi.fn(),
     closeTerminal: vi.fn(),
+    probe: vi.fn(),
     createCapability: vi.fn(),
     call: vi.fn(),
     toast: vi.fn(),
@@ -23,6 +23,7 @@ vi.mock('./cli-chat-resume-close-terminal', () => ({
   closeCliChatResumeTerminal: mocks.closeTerminal
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
+vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   structuredAgentSessionHostSupports: mocks.closeCapability,
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
@@ -90,8 +91,6 @@ import {
   stopStructuredLaunchSlotTracking
 } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
-import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
@@ -104,8 +103,7 @@ import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-i
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,
-  peekWebSessionFocusIntent,
-  resetWebSessionFocusIntentForTests
+  peekWebSessionFocusIntent
 } from '@/runtime/web-session-focus-intent'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-bridge'
@@ -114,15 +112,15 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-const SOURCE: CliChatResumeSource = {
-  tabId: 'tab-1',
-  workspaceId: 'wt-1',
-  paneKey: 'tab-1:leaf',
-  agent: 'claude',
-  providerSessionId: 'provider-1',
-  executionHostId: 'local'
-}
-const tabs = () => useAppStore.getState().unifiedTabsByWorktree['wt-1'] ?? []
+import {
+  SOURCE,
+  deferred,
+  held,
+  refuse,
+  resetCliChatResumeRun,
+  tabs
+} from './cli-chat-resume-run.test-fixture'
+
 let main: TabsDrawnFromMain | undefined
 afterEach(() => {
   vi.useRealTimers()
@@ -130,57 +128,8 @@ afterEach(() => {
   main?.close()
   main = undefined
 })
-function deferred<T>() {
-  let resolve: (value: T) => void = () => {}
-  const promise = new Promise<T>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
-}
-function held(owner?: { sessionId: string; workspaceId: string }): AgentSessionWireRefusal {
-  return {
-    code: 'agent_session_conflict',
-    message: 'private host evidence',
-    details: { reason: 'conversationHeldElsewhere', ...(owner ? { owner } : {}) },
-    createAttemptRefusedBeforeCommit: true
-  }
-}
-function refuse(reason: 'transcriptNotFound' | 'transcriptUnreadable'): AgentSessionWireRefusal {
-  return {
-    code: 'agent_session_identity_required',
-    message: 'private host error',
-    details: { reason },
-    createAttemptRefusedBeforeCommit: true
-  }
-}
-
 beforeEach(async () => {
-  vi.clearAllMocks()
-  resetLocalStructuredSessionVersionForTests()
-  resetWebSessionTabsSnapshotFreshnessForTests()
-  stopStructuredLaunchSlotTracking()
-  localStorage.clear()
-  resetStructuredAgentLaunchPersistenceForTests()
-  resetStructuredAgentLaunchRegistryForTests()
-  resetWebSessionFocusIntentForTests()
-  useAppStore.setState(useAppStore.getInitialState(), true)
-  useAppStore.setState({ activeWorktreeId: 'wt-1' })
-  mocks.source = SOURCE
-  mocks.frameDrawn = false
-  mocks.closeCapability.mockResolvedValue(false)
-  mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
-    hooks.prepared()
-    hooks.closing()
-    return true
-  })
-  mocks.sourceCapability.mockResolvedValue(true)
-  mocks.createCapability.mockResolvedValue(true)
-  mocks.call.mockImplementation(
-    async (_target, method, params: StructuredAgentSessionCreateParams) => {
-      expect(method).toBe('agentSession.create')
-      return { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
-    }
-  )
+  resetCliChatResumeRun(mocks)
   main = await drawTabsFromMain(useAppStore)
 })
 
@@ -616,220 +565,5 @@ describe('CLI identity resume through the existing launch owner', () => {
       'original-operation'
     )
     expect(useAppStore.getState().groupsByWorktree['wt-1'][0].recentTabIds ?? []).toEqual([])
-  })
-})
-
-const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
-  agentType: 'claude' as const,
-  paneKey,
-  worktreeId: 'wt-1',
-  providerSession: { key: 'session_id' as const, id: SOURCE.providerSessionId },
-  state: 'done' as const,
-  prompt: '',
-  updatedAt: Date.now(),
-  stateStartedAt: Date.now(),
-  stateHistory: [],
-  ...extra
-})
-// The clicked pane still shows its agent on this conversation, so continuing stops it.
-const showAgentInSource = () =>
-  useAppStore.setState({
-    agentStatusByPaneKey: { [SOURCE.paneKey]: row(SOURCE.paneKey, { tabId: 'tab-1' }) }
-  })
-
-describe('close terminal then continue on capable hosts', () => {
-  beforeEach(() => {
-    mocks.closeCapability.mockResolvedValue(true)
-    showAgentInSource()
-  })
-
-  it('shows the chat in the same worktree after its only terminal closes', async () => {
-    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
-      hooks.prepared()
-      hooks.closing()
-      mocks.source = null
-      return true
-    })
-    await runCliChatResume(SOURCE)
-    await main?.settle()
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({
-      providerSessionId: SOURCE.providerSessionId
-    })
-    const state = useAppStore.getState()
-    expect(state.activeWorktreeId).toBe('wt-1')
-    expect(state.activeTabType).toBe('agent-session')
-    expect(tabs().map((tab) => tab.contentType)).toEqual(['agent-session'])
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('reports an unverified stop once, pointing to Session History, and opens no chat', async () => {
-    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
-      hooks.closing()
-      throw new Error('private negative stop sentinel')
-    })
-    await runCliChatResume(SOURCE)
-    expect(mocks.call).not.toHaveBeenCalled()
-    expect(tabs()).toEqual([])
-    expect(mocks.toast.mock.calls).toEqual([
-      [
-        "Orca closed Claude's terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History."
-      ]
-    ])
-  })
-
-  it('stops counting preparation time once the close waits on the user', async () => {
-    vi.useFakeTimers()
-    const consent = deferred<boolean>()
-    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks, signal) => {
-      hooks.prepared()
-      const closed = await consent.promise
-      expect(signal.aborted).toBe(false)
-      hooks.closing()
-      return closed
-    })
-    const running = runCliChatResume(SOURCE)
-    await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledOnce())
-    await vi.advanceTimersByTimeAsync(60_000)
-    consent.resolve(true)
-    vi.useRealTimers()
-    await running
-    expect(mocks.call).toHaveBeenCalledOnce()
-  })
-
-  // The pane's conversation changes while the close dialog is open, then the user confirms Close.
-  it.each([false, true])('a vetoed confirmed close, newer continuation: %s', async (successor) => {
-    const next = { ...SOURCE, agent: 'codex' as const }
-    const held = deferred<boolean>()
-    let refuse = () => {}
-    mocks.closeTerminal.mockImplementationOnce(async (_source, _current, hooks, signal) => {
-      refuse = hooks.refused
-      return new Promise((resolve) => signal.addEventListener('abort', () => resolve(false)))
-    })
-    const first = runCliChatResume(SOURCE)
-    await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledOnce())
-    mocks.source = next
-    useAppStore.setState({})
-    await first
-    if (successor) {
-      mocks.closeTerminal.mockImplementationOnce(() => held.promise)
-      void runCliChatResume(next)
-      await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledTimes(2))
-    }
-    refuse()
-    expect(mocks.toast).toHaveBeenCalledTimes(successor ? 0 : 1)
-    held.resolve(false)
-  })
-
-  // Only an open chat is answered before the close; the host's create judges terminals.
-  it.each([
-    { name: 'another terminal', row: row('other:leaf'), closes: true },
-    {
-      name: 'an open chat',
-      row: row('chat-tab:leaf', { tabId: 'chat-tab', terminalResumeEligible: false }),
-      closes: false
-    }
-  ])('before the close: $name', async ({ row: holder, closes }) => {
-    useAppStore.setState((state) => ({
-      agentStatusByPaneKey: { ...state.agentStatusByPaneKey, [holder.paneKey]: holder }
-    }))
-    useAppStore.getState().createUnifiedTab('wt-1', 'agent-session', {
-      id: 'chat-tab',
-      entityId: 'owner-chat'
-    })
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
-    expect(mocks.call).toHaveBeenCalledTimes(closes ? 1 : 0)
-    expect(mocks.activate.mock.calls).toEqual(
-      closes
-        ? []
-        : [
-            [
-              { structuredSession: { sessionId: 'owner-chat', workspaceId: 'wt-1' } },
-              undefined,
-              { kind: 'local' }
-            ]
-          ]
-    )
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-})
-
-// The same host refusal on an older host (terminal kept, CLI source sent) and a capable one (closed first).
-// A capable host whose pane agent already quit keeps the terminal, exactly as an older host does.
-describe.each([
-  { host: 'an older host', closeCapable: false, live: false },
-  { host: 'a capable host, agent already quit', closeCapable: true, live: false },
-  { host: 'a capable host, agent running', closeCapable: true, live: true }
-])('the same create outcome on $host', ({ closeCapable, live }) => {
-  const closes = closeCapable && live
-  beforeEach(() => {
-    mocks.closeCapability.mockResolvedValue(closeCapable)
-    if (live) {
-      showAgentInSource()
-    }
-  })
-  const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
-  it.each([
-    { name: 'it opens', refusal: null, older: null, capable: null, opens: true },
-    {
-      name: 'a chat owns it',
-      refusal: held(owner),
-      older: null,
-      capable: null,
-      activates: true
-    },
-    {
-      name: 'a terminal holds it',
-      refusal: held(),
-      older:
-        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
-      capable:
-        "Claude's terminal was closed, but Claude is running this conversation in another terminal. Quit it there or close that terminal, then open the conversation from Session History."
-    },
-    {
-      name: 'nothing saved yet',
-      refusal: refuse('transcriptNotFound'),
-      older: "Claude hasn't saved this conversation yet. Try again after it replies.",
-      capable:
-        "Claude's terminal was closed, but Claude hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead."
-    },
-    {
-      name: 'saved but unreadable',
-      refusal: refuse('transcriptUnreadable'),
-      older: /couldn't open.*history/i,
-      capable:
-        "Claude's terminal was closed, but the chat couldn't open: Orca couldn't read the conversation. Your conversation is saved. Open it from Session History."
-    },
-    {
-      // Not an admission refusal, so the launch keeps its recovery tab on either path.
-      name: 'the agent says a terminal still has it',
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        message: 'private',
-        details: { reason: 'conversationOpenInTerminal' },
-        createAttemptRefusedBeforeCommit: true
-      },
-      older: null,
-      capable: null,
-      recoveryTab: true
-    }
-  ])('$name', async ({ refusal, older, capable, activates, recoveryTab, opens }) => {
-    if (refusal) {
-      mocks.call.mockResolvedValue({ ok: false, refusal })
-    }
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({
-      providerSessionId: SOURCE.providerSessionId,
-      ...(closes ? {} : { cliSource: { workspaceId: 'wt-1', paneKey: 'tab-1:leaf' } })
-    })
-    expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
-    expect(mocks.activate).toHaveBeenCalledTimes(activates ? 1 : 0)
-    const expected = closes ? capable : older
-    expect(mocks.toast.mock.calls.map(([text]) => text)).toEqual(
-      expected === null
-        ? []
-        : [expected instanceof RegExp ? expect.stringMatching(expected) : expected]
-    )
-    expect(tabs()).toHaveLength(recoveryTab || opens ? 1 : 0)
   })
 })
