@@ -22,11 +22,11 @@ import {
   getStatusBarEntries,
   getSystemTrayEntries,
   getThemeEntries,
-  getReduceVisualEffectsEntries,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'

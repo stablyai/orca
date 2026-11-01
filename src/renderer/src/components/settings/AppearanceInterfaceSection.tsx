@@ -4,6 +4,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
+import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { useAppStore } from '../../store'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
@@ -14,7 +16,6 @@ import {
   getCodeEditorThemeEntries,
   getLanguageEntries,
   getMenuBarIconEntries,
-  getReduceVisualEffectsEntries,
   getSystemTrayEntries,
   getThemeEntries,
   getTitlebarEntries,
@@ -350,26 +351,11 @@ export function AppearanceInterfaceSection({
               />
             </SearchableSetting>
 
-            <SearchableSetting
-              title={translate(
-                'settings.appearance.reduceVisualEffects.title',
-                'Reduce Visual Effects'
-              )}
-              description={reduceVisualEffectsEntry?.description}
-              keywords={reduceVisualEffectsEntry?.keywords ?? ['blur', 'transparency']}
-            >
-              <SettingsSwitchRow
-                label={translate(
-                  'settings.appearance.reduceVisualEffects.title',
-                  'Reduce Visual Effects'
-                )}
-                description={reduceVisualEffectsEntry?.description}
-                checked={settings.reduceVisualEffects === true}
-                onChange={() =>
-                  updateSettings({ reduceVisualEffects: settings.reduceVisualEffects !== true })
-                }
-              />
-            </SearchableSetting>
+            <ReduceVisualEffectsSetting
+              entry={reduceVisualEffectsEntry}
+              enabled={settings.reduceVisualEffects === true}
+              updateSettings={updateSettings}
+            />
 
             {isDesktopWindows ? (
               <SearchableSetting
