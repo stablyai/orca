@@ -24,6 +24,9 @@ it('places a coherent measured append directly, but springs a dragged row back i
     root!.root.findAll((node) => node.type === Animated.View && node.props.onLayout)
   const measureRow = (at: number) =>
     rows()[at]!.props.onLayout({ nativeEvent: { layout: { height: 44 } } })
+  // Rows move by their first transform, not by top.
+  const y = ({ transform }: Record<string, unknown>) =>
+    Array.isArray(transform) ? transform[0]?.translateY : undefined
   const frame = () => {
     probe.reactions.forEach((react) => react())
     return [...probe.styles.values()].map((read) => read())
@@ -33,10 +36,10 @@ it('places a coherent measured append directly, but springs a dragged row back i
     measureRow(1)
   })
   await publishLayout()
-  expect(frame().map((style) => style.top)).toEqual([0, 44])
+  expect(frame().map(y)).toEqual([0, 44])
   expect(probe.spring).not.toHaveBeenCalled()
   await act(async () => root!.update(createElement(Harness, { ids: ['a', 'b', 'c'] })))
-  expect(frame().map((style) => [style.position, style.top])).toEqual([
+  expect(frame().map((style) => [style.position, y(style)])).toEqual([
     ['relative', 0],
     ['relative', 0],
     ['relative', 0]
@@ -50,9 +53,9 @@ it('places a coherent measured append directly, but springs a dragged row back i
   const coherent = measurement.value
   // React is ready, but the UI thread still has the previous measurement publication.
   measurement.value = earlier
-  expect(frame().every((style) => style.position === 'relative' && style.top === 0)).toBe(true)
+  expect(frame().every((style) => style.position === 'relative' && y(style) === 0)).toBe(true)
   measurement.value = coherent
-  expect(frame().map((style) => [style.position, style.top])).toEqual([
+  expect(frame().map((style) => [style.position, y(style)])).toEqual([
     ['absolute', 0],
     ['absolute', 44],
     ['absolute', 88]
@@ -63,9 +66,9 @@ it('places a coherent measured append directly, but springs a dragged row back i
     gesture.start!({ absoluteY: 60, translationY: 0 }, true)
     gesture.update!({ absoluteY: 70, translationY: 10 }, true)
   })
-  expect(frame()[1]!.top).toBe(54)
+  expect(y(frame()[1]!)).toBe(54)
   await act(async () => gesture.finalize!({ absoluteY: 70, translationY: 10 }, true))
-  expect(frame()[1]!.top).toBe(44)
+  expect(y(frame()[1]!)).toBe(44)
   expect(probe.spring).toHaveBeenCalledExactlyOnceWith(44, expect.any(Object))
   await act(async () => root!.unmount())
 })

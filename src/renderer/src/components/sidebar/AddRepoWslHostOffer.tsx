@@ -13,6 +13,7 @@ import {
   declineWslHostOffer,
   type WslHostOffer
 } from './wsl-host-offer-actions'
+import { moveWslHostOfferProject } from './wsl-host-offer-move'
 
 /** Inline in the add-project flow: run the `\\wsl.localhost` path's distro as a host instead. */
 export function AddRepoWslHostOffer({
@@ -39,7 +40,8 @@ export function AddRepoWslHostOffer({
         addLocalPath: (path, source) => {
           onSettled()
           return addLocalPath(path, source)
-        }
+        },
+        moveAddedProject: moveWslHostOfferProject
       })
       if (refusal) {
         setError(wslHostAddRefusalMessage(refusal))

@@ -38,7 +38,7 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
     'Node-side: imports @orca/process-host, checked against @types/node rather than RN libs'
   ],
   [
-    'src/transport/mobile-web-bundle-host-slow-link.test.ts',
+    'src/transport/web-bundle/mobile-web-bundle-host-slow-link.test.ts',
     'Node-side: imports the desktop bundle RPC handlers, checked against @types/node rather than RN libs'
   ]
 ])

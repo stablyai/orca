@@ -234,7 +234,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       repoId: repo.id,
       worktreeId: activeWorktreeId ?? undefined,
       linkedPRNumber: linkedPR,
-      fallbackPRNumber: fallbackGitHubPRNumber
+      fallbackPRNumber: fallbackGitHubPRNumber,
+      userRefresh: true
     })
     await refreshHostedReviewCard(fetchHostedReviewForBranch, {
       repoPath: repo.path,

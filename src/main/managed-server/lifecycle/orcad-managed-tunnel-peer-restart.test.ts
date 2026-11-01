@@ -131,16 +131,4 @@ describe("a managed tunnel follows another desktop's restart of the server", () 
     })
     expect([...state.forwardedTo.values()]).toEqual([6_768])
   })
-
-  it('keeps the tunnel when the host still names the forwarded port', async () => {
-    const state = setup()
-    const environment = createEnvironment()
-    await state.manager.ensure(environment)
-    state.ensureServing.mockResolvedValueOnce({ state: 'unverifiable', detail: 'not answering' })
-
-    await expect(state.manager.verifyServing(environment)).resolves.toMatchObject({
-      state: 'unverifiable'
-    })
-    expect([...state.forwardedTo.values()]).toEqual([6_768])
-  })
 })

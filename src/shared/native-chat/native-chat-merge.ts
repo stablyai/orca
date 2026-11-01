@@ -3,7 +3,7 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type NativeChatMessage,
   type NativeChatSource
-} from '../native-chat-types'
+} from './native-chat-types'
 
 export type NativeChatSourcePriority = Record<NativeChatSource, number>
 

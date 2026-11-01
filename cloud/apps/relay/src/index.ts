@@ -3,7 +3,7 @@ import {
   readAssignmentInventorySnapshot
 } from './assignment/assignment-inventory-snapshot.js'
 import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
-import { RelayAssignmentStore } from './assignment-store.js'
+import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import { loadRelayConfig } from './config.js'
 import { startCellHeartbeat } from './cell-heartbeat-client.js'
 import {

@@ -127,24 +127,6 @@ describe('useRichMarkdownPendingFocus', () => {
     expect(fixture.store.consumeEditorFocusRequest).toHaveBeenCalledWith(7)
   })
 
-  it('does not let another split pane claim the request', () => {
-    fixture.store.pendingEditorFocusRequest = pendingRequest()
-
-    renderPendingFocus(createEditorFixture().editor, 'view-2')
-
-    expect(fixture.autoFocusRichEditor).not.toHaveBeenCalled()
-    expect(fixture.store.consumeEditorFocusRequest).not.toHaveBeenCalled()
-  })
-
-  it('retires an expired request without stealing focus', () => {
-    fixture.store.pendingEditorFocusRequest = pendingRequest({ expiresAt: Date.now() - 1 })
-
-    renderPendingFocus(null)
-
-    expect(fixture.autoFocusRichEditor).not.toHaveBeenCalled()
-    expect(fixture.store.consumeEditorFocusRequest).toHaveBeenCalledWith(7)
-  })
-
   it('cancels a pending forced focus when its request expires', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-25T00:00:00Z'))

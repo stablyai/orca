@@ -1,16 +1,16 @@
-import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_SNAPSHOT_CATCH_UP_CLIENT_CAPABILITY,
-  RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'
@@ -33,7 +33,8 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import {
   createQueuedMessageTestRig,
-  eventually
+  eventually,
+  QUEUED_RIG_CALLER
 } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as HOST_SESSION,
@@ -492,6 +493,15 @@ describe('agentSession.send reply timing', () => {
     let release = () => {}
     try {
       const working = await rig.workingSend()
+      const compactId = hostTestOperationId()
+      const compactFields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
+      expect(
+        await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
+          ...compactFields,
+          envelope: rig.envelope(compactFields, 'agentSession.conversationCommand', compactId),
+          userSend: true
+        })
+      ).toMatchObject({ ok: true, value: { queued: { messageId: compactId } } })
       const image = imageSend()
       expect(
         await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
@@ -499,8 +509,12 @@ describe('agentSession.send reply timing', () => {
         ok: true,
         result: { value: { submission: { clientMessageId: image.id } } }
       })
-      expect(await rig.drafts()).toEqual([])
+      expect((await rig.drafts()).map((card) => card.messageId)).toEqual([compactId])
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
       await rig.settleAccepted(working, 'working')
+      await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
+      rig.finishCompact()
       await eventually(async () => {
         expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
         expect(

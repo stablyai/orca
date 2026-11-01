@@ -23,18 +23,16 @@ vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => (
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
+import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
 
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
-import {
-  useStructuredAgentSession,
-  type StructuredPromptItem
-} from './use-structured-agent-session'
+import { useStructuredAgentSession } from './use-structured-agent-session'
+import type { StructuredPromptItem } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const PAIRED_TARGET = { kind: 'environment', environmentId: 'server-1' } as const

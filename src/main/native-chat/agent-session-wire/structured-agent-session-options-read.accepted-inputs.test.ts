@@ -1,9 +1,9 @@
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView
-} from '../../../shared/structured-agent-session-option-view'
-import { claudeOpened } from '../../claude/claude-structured-startup-settled-test-support'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
+import { claudeOpened } from '../../claude/structured/claude-structured-startup-settled-test-support'
 
 import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
 
@@ -12,12 +12,12 @@ import {
   fakeClaude,
   claudeFrame,
   USER_MESSAGE
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 
 import { expect, it, vi } from 'vitest'
 import {
@@ -28,7 +28,7 @@ import {
   hostTestOptionsReadStore
 } from './structured-agent-session-host-test-data'
 
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { readStructuredAgentSessionOptions } from './structured-agent-session-options-read'

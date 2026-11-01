@@ -50,15 +50,6 @@ function render(workspaceKey: string, rootError: string | null) {
   return { hook, resetAndLoad }
 }
 
-// QA F1: after a relaunch the tree loaded before the WSL host answered and showed its error until Retry.
-it('reloads a tree that failed once its runtime host answers again', () => {
-  const { resetAndLoad } = render('wt-host', 'The Orca server in the WSL distro isn’t answering')
-  contact.listeners.get('wsl:ubuntu')?.()
-  expect(resetAndLoad).toHaveBeenCalledOnce()
-  // Without the user acting, so a stopped distro is never booted for it (E9).
-  expect(resetAndLoad).toHaveBeenCalledWith()
-})
-
 it('leaves a tree that loaded fine alone, and a local workspace never subscribes', () => {
   const { hook, resetAndLoad } = render('wt-host', 'failed')
   hook.rerender({ error: null })

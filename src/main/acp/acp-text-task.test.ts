@@ -10,7 +10,7 @@ import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/struc
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { structuredChatNamingDeps } from '../runtime/structured-chat-naming-runtime'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { getDefaultSettings } from '../../shared/constants'
 import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'

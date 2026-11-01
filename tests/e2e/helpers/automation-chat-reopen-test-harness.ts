@@ -6,11 +6,11 @@ import {
   openAuthorityRuntime,
   root
 } from '../../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { editPersistedTestAgentSessionStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
+import { editPersistedTestAgentSessionStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   codexProviderHandle,
   encodePersistedAgentSessionProviderHandle
-} from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTestStore,
   makeUnifiedTab,
@@ -21,7 +21,7 @@ import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/co
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
-import { structuredAgentSessionTabId } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
 
 export const CHAT = 'claude_saved_reopen',

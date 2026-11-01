@@ -21,7 +21,6 @@
     "panel": {
       "all": "Alle",
       "emptyScope": "Keine früheren Agentensitzungen in diesem Bereich.",
-      "loadFailed": "Laden fehlgeschlagen",
       "missingResumeId": "Dieser Sitzung fehlt eine ID zum Fortsetzen.",
       "noSearchResults": "Keine Sitzungen entsprechen der Suche.",
       "noSessions": "Keine Agentensitzungen",
@@ -658,17 +657,14 @@
       "loadingDiff": "Diff wird geladen…",
       "loadingReview": "Review wird geladen…",
       "noReviewableChanges": "Keine Änderungen für ein Review",
-      "retryLabel": "Review erneut laden",
       "reviewUnavailable": "Review nicht verfügbar",
       "selectFile": "Eine Datei für das Review auswählen.",
-      "tooLargeMessage": "Dieser Diff ist zu groß für die mobile Vorschau.",
-      "tryDifferentFilter": "Einen anderen Review-Filter ausprobieren."
+      "tooLargeMessage": "Dieser Diff ist zu groß für die mobile Vorschau."
     },
     "diffReviewDrawers": {
       "addNote": "Notiz hinzufügen",
       "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
-      "completeTitle": "Review abgeschlossen",
       "copyNotes": "Notizen kopieren",
       "deleteNote": "Notiz löschen",
       "discard": "Verwerfen",
@@ -676,13 +672,8 @@
       "discardTitle": "Änderungen verwerfen?",
       "editNote": "Notiz bearbeiten",
       "fileNote": "Dateinotiz",
-      "fileSummary_one": "{{fileCount}} Datei geprüft, {{count}} Notiz",
-      "fileSummary_other": "{{fileCount}} Datei geprüft, {{count}} Notizen",
-      "filesSummary_one": "{{fileCount}} Dateien geprüft, {{count}} Notiz",
-      "filesSummary_other": "{{fileCount}} Dateien geprüft, {{count}} Notizen",
       "lineNumber": "Zeile {{lineNumber}}",
       "loadingSessions": "Agentensitzungen werden geladen…",
-      "markUnreviewed": "Als ungeprüft markieren",
       "newAgentSession": "Neue Agentensitzung",
       "openInSession": "In Sitzung öffnen",
       "reviewNote": "Review-Notiz",
@@ -690,11 +681,6 @@
       "sendNotes": "Notizen senden",
       "sendNotesLabel": "Notizen an den Agenten senden",
       "sendUnsentNotes": "Ungesendete Notizen senden",
-      "stageReviewed": "Geprüfte vormerken",
-      "stageReviewedFiles": "Geprüfte Dateien vormerken",
-      "stageReviewedLabel": "Geprüfte Dateien vormerken",
-      "stageableFiles_one": "{{count}} geprüfte, nicht vorgemerkte Datei kann vorgemerkt werden",
-      "stageableFiles_other": "{{count}} geprüfte, nicht vorgemerkte Dateien können vorgemerkt werden",
       "statusUnreadable": "Der Status dieses Hosts konnte nicht gelesen werden. Erneuter Versuch…",
       "terminal": "Terminal",
       "terminalLabel": "{{title}} ({{id}})",
@@ -703,57 +689,17 @@
       "updateRequired": "Orca auf dem Computer aktualisieren"
     },
     "diffReviewFileSummary": {
-      "branch": "Branch",
-      "branchFrom": "Branch · zuvor {{oldPath}}",
       "changed": "Geändert",
       "editFileNote": "Dateinotiz bearbeiten",
-      "hunk": "Änderungsblock",
-      "nextHunk": "Nächster Änderungsblock",
-      "notes_one": "{{count}} Notiz",
-      "notes_other": "{{count}} Notizen",
-      "previousHunk": "Vorheriger Änderungsblock",
-      "reviewed": "Geprüft",
-      "staged": "Vorgemerkt",
-      "stagedFrom": "Vorgemerkt · zuvor {{oldPath}}",
-      "stale": "Veraltet",
-      "staleCount": "{{count}} veraltet",
-      "unstaged": "Nicht vorgemerkt",
-      "unstagedFrom": "Nicht vorgemerkt · zuvor {{oldPath}}"
+      "stale": "Veraltet"
     },
     "diffReviewFooter": {
-      "addFileNote": "Dateinotiz hinzufügen",
-      "discard": "Verwerfen",
-      "discardFile": "Datei verwerfen",
-      "markFileReviewed": "Datei als geprüft markieren",
-      "markReviewed": "Als geprüft markieren",
       "nextFile": "Nächste Datei",
-      "note": "Notiz",
-      "previousFile": "Vorherige Datei",
-      "reviewed": "Geprüft",
-      "stage": "Vormerken",
-      "stageFile": "Datei vormerken",
-      "unstage": "Vormerkung aufheben",
-      "unstageFile": "Vormerkung der Datei aufheben"
+      "previousFile": "Vorherige Datei"
     },
     "diffReviewHeader": {
-      "filterAll": "Alle",
-      "filterBranch": "Branch",
-      "filterNotes": "Notizen",
-      "filterStaged": "Vorgemerkt",
-      "filterUnreviewed": "Ungeprüft",
-      "filterUnstaged": "Nicht vorgemerkt",
-      "openPullRequestSidebar": "Pull-Request-Seitenleiste öffnen",
       "openReviewActions": "Review-Aktionen öffnen",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} geprüft",
-      "showAllFiles": "Alle Dateien im Review anzeigen",
-      "showBranchFiles": "Dateien des Branches im Review anzeigen",
-      "showNotesFiles": "Dateien mit Notizen im Review anzeigen",
-      "showStagedFiles": "Vorgemerkte Dateien im Review anzeigen",
-      "showUnreviewedFiles": "Ungeprüfte Dateien im Review anzeigen",
-      "showUnstagedFiles": "Nicht vorgemerkte Dateien im Review anzeigen",
-      "title": "Änderungen",
-      "unsentNotes_one": "{{count}} ungesendete Notiz",
-      "unsentNotes_other": "{{count}} ungesendete Notizen"
+      "title": "Änderungen"
     },
     "diffReviewLine": {
       "addNoteOnLine": "Notiz zu Zeile {{number}} hinzufügen",
@@ -852,10 +798,8 @@
       "selectRunTarget": "Ausführungsziel auswählen"
     },
     "prSidebar": {
-      "loadFailed": "Ein Fehler ist aufgetreten.",
       "loading": "Pull Request wird geladen…",
-      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden.",
-      "retryLoading": "Pull Request erneut laden"
+      "notPermitted": "Nicht erlaubt – das GitHub-Konto ist nicht verbunden."
     },
     "protocolBlockScreen": {
       "backToHosts": "Zurück zu Hosts",
@@ -1004,6 +948,16 @@
       "title": "Etwas ist schiefgelaufen",
       "tryAgain": "Erneut versuchen",
       "home": "Startseite"
+    },
+    "svgPreview": {
+      "drawFailed": "Dieses SVG kann nicht dargestellt werden",
+      "label": "Zeichnung {{title}}",
+      "previewDrawing": "Zeichnung anzeigen",
+      "viewSource": "SVG-Quelltext anzeigen"
+    },
+    "mermaidDiagram": {
+      "expand": "Diagramm vergrößern",
+      "label": "Mermaid-Diagramm"
     }
   },
   "connection": {
@@ -2406,9 +2360,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Aktion der Quellcodeverwaltung fehlgeschlagen",
-      "reviewedFilesStaged_one": "{{count}} geprüfte Datei vorgemerkt",
-      "reviewedFilesStaged_other": "{{count}} geprüfte Dateien vorgemerkt",
-      "stageResults": "{{staged}} vorgemerkt, {{failed}} fehlgeschlagen",
       "waitingForDesktop": "Warten auf den Desktop…"
     },
     "useDiffReviewInteractions": {
@@ -2842,12 +2793,6 @@
       "baseBranchUnavailable": "Basis-Branch für den Vergleich konnte nicht ermittelt werden.",
       "loadFailed": "Committete Änderungen konnten nicht geladen werden."
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Diff-Vorschau der committeten Änderungen schließen",
-      "committedOnBranch": "Auf Branch committet",
-      "loadFailed": "Laden des Diffs fehlgeschlagen",
-      "truncated": "Diff für die mobile Vorschau gekürzt."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Vor dem Pushen von Commits einen Branch auschecken",
       "checkOutBranchToSync": "Vor dem Synchronisieren von Commits einen Branch auschecken",
@@ -3063,13 +3008,7 @@
       "prCreatedTitle": "Pull Request erstellt",
       "switchBranchTitle": "Branch wechseln"
     },
-    "openers": {
-      "openDiffFailed": "Diff konnte nicht geöffnet werden.",
-      "tabNotReady": "Die Datei wurde geöffnet, aber ihr Tab ist noch nicht bereit. Erneut versuchen.",
-      "waitingForDesktop": "Warten auf den Desktop…"
-    },
     "panel": {
-      "loadFailedTitle": "Laden fehlgeschlagen",
       "unavailableTitle": "Quellcodeverwaltung nicht verfügbar"
     },
     "prChip": {
@@ -3897,8 +3836,7 @@
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
       "noMatches": "Keine passenden Arbeitsbereiche",
       "reopen": "Zum Aktualisieren erneut öffnen",
-      "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt.",
-      "retrying": "worktree.ps fehlgeschlagen ({{error}}) – wird automatisch erneut versucht"
+      "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt."
     },
     "workspaceListSections": {
       "all": "Alle",

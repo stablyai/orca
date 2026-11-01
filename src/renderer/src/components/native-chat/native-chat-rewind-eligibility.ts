@@ -1,5 +1,5 @@
-import type { AgentSessionRewindSupport } from '../../../../shared/agent-session-rewind'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentSessionRewindSupport } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 /** Keep in-doubt rewind support available; the live status latch resolves it, not this cached read. */
 export function nativeChatRewindOffered(support: AgentSessionRewindSupport | undefined): boolean {

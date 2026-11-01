@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../native-chat-types'
+import type { NativeChatMessage } from './native-chat-types'
 import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
 

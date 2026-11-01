@@ -2,7 +2,10 @@ import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-ca
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 import { resolveCodexStructuredInvocation } from './codex-structured-launch-resolution'
-import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
+import {
+  runCodexAppServerSession,
+  type CodexAppServerInvocation
+} from './app-server/codex-app-server-session'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
 
 const MODEL_ROW = {

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
+import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '../theme/mobile-theme'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { connectionRetryAction } from '../transport/connection-retry-action'
@@ -10,16 +15,21 @@ import { useMobileSourceControlActionSheet } from './use-mobile-source-control-a
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
 import {
+  buildMobileBranchRemoteAction,
   buildMobileSourceControlPrimaryAction,
   resolveMobileSourceControlReviewInputs
 } from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
-import { MobileSourceControlSegments } from './MobileSourceControlSegments'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
-import { MobileGitHistoryList } from './MobileGitHistoryList'
+import { MobileCommitPageHost, MobileCommitsScreen } from './MobileCommitsScreen'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
-import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
+import {
+  SOURCE_CONTROL_HUB_TABS,
+  SOURCE_CONTROL_HUB_TAB_LABELS,
+  type SourceControlHubTab
+} from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
@@ -32,24 +42,18 @@ export type MobileSourceControlPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
-  origin?: string
   embedded?: boolean
   initialTab?: SourceControlHubTab
   onRequestClose?: () => void
-  onFileOpenStart?: () => void
-  onOpenedFileDiff?: (relativePath: string) => void
 }
 
 export function MobileSourceControlPanel({
   hostId,
   worktreeId,
   name = '',
-  origin = '',
   embedded = false,
   initialTab = 'changes',
-  onRequestClose,
-  onFileOpenStart,
-  onOpenedFileDiff
+  onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -90,11 +94,6 @@ export function MobileSourceControlPanel({
     hostId,
     worktreeId,
     name,
-    origin,
-    embedded,
-    onRequestClose,
-    onFileOpenStart,
-    onOpenedFileDiff,
     onOpenHistory: openHistoryTab
   })
   const {
@@ -107,8 +106,6 @@ export function MobileSourceControlPanel({
     worktreeLabel,
     screenState,
     busyAction,
-    openingPath,
-    openingBranchPath,
     loadStatus,
     status,
     branchCompareResult,
@@ -118,9 +115,11 @@ export function MobileSourceControlPanel({
     stagedCount,
     branchEntries,
     abortConflictOperation,
-    completeMerge
+    completeMerge,
+    actionError,
+    runActionSheetRebase
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const ioBusy = busyAction !== null
   const ready = screenState.kind === 'ready'
 
   // Retain branch/head through status unloads so the PR controller does not reset to a cold start.
@@ -160,6 +159,19 @@ export function MobileSourceControlPanel({
   const primaryAction = useMemo(
     () => buildMobileSourceControlPrimaryAction({ ...primaryActionArgs, review }),
     [primaryActionArgs, review, t]
+  )
+  const branchRemoteAction = useMemo(
+    () => buildMobileBranchRemoteAction({ ...primaryActionArgs, review }),
+    [primaryActionArgs, review, t]
+  )
+  // Pass primitives and a stable runner so commit-message keystrokes do not rerender the Commits list.
+  const branchRemoteActionRef = useRef(branchRemoteAction)
+  useEffect(() => {
+    branchRemoteActionRef.current = branchRemoteAction
+  }, [branchRemoteAction])
+  const runBranchRemoteAction = useCallback(
+    () => branchRemoteActionRef.current?.run() ?? Promise.resolve(),
+    []
   )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
@@ -248,6 +260,19 @@ export function MobileSourceControlPanel({
       onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
+      accessory={
+        <MobileSegmentedControl
+          segments={SOURCE_CONTROL_HUB_TABS.map((tab) => ({
+            value: tab,
+            label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+          }))}
+          selected={activeTab}
+          onSelect={selectTab}
+          fill
+          tabs
+          style={hubStyles.segments}
+        />
+      }
     />
   )
 
@@ -260,23 +285,17 @@ export function MobileSourceControlPanel({
   })
   const statusGate =
     screenState.kind === 'loading' ? (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-    ) : screenState.kind === 'error' || screenState.kind === 'unavailable' ? (
-      <View style={styles.state}>
-        <Text style={styles.stateTitle}>
-          {screenState.kind === 'unavailable'
-            ? t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')
-            : t('sourceControl.panel.loadFailedTitle', 'Unable to Load')}
-        </Text>
-        <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' && statusRetry ? (
-          <Pressable style={styles.retryButton} onPress={statusRetry}>
-            <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
+    ) : screenState.kind === 'unavailable' ? (
+      <MobileStateView
+        icon={GitBranch}
+        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
+        message={screenState.message}
+      />
+    ) : screenState.kind === 'error' && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={statusRetry} />
+    ) : screenState.kind === 'error' ? (
+      <MobileLoadErrorState error={screenState.message} onRetry={statusRetry} />
     ) : null
 
   // History needs only RPC; Changes and PR also need branch/file status.
@@ -290,82 +309,105 @@ export function MobileSourceControlPanel({
 
   return (
     <View ref={setRootRef} style={styles.container}>
-      {embedded ? (
-        <View style={styles.header}>{header}</View>
-      ) : (
-        <SafeAreaView style={styles.header} edges={['top']}>
-          {header}
-        </SafeAreaView>
-      )}
+      {/* A commit covers the whole screen, header and segments too, with only its own header. */}
+      <MobileCommitPageHost
+        key={`${hostId}\0${worktreeId}`}
+        client={client}
+        connState={connState}
+        worktreeId={worktreeId}
+        bottomInset={insets.bottom}
+        padTop={!embedded}
+        openDiffForFile={state.openDiffForFile}
+      >
+        {(openCommit) => (
+          <View style={styles.container}>
+            {embedded ? (
+              <View style={styles.header}>{header}</View>
+            ) : (
+              <SafeAreaView style={styles.header} edges={['top']}>
+                {header}
+              </SafeAreaView>
+            )}
 
-      <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
+            {/* Ready PRs duplicate the branch card; retain it only when needed to abort a conflict. */}
+            {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
+              <MobileSourceControlBranchCard
+                branchLabel={branchLabel}
+                syncLabel={syncLabel}
+                unstagedCount={unstagedCount}
+                stagedCount={stagedCount}
+                branchCount={branchEntries.length}
+                conflictOperation={conflictOperation}
+                conflictBusy={busyAction !== null}
+                conflictAborting={conflictAborting}
+                onAbortConflict={(operation) => void abortConflictOperation(operation)}
+                // Failures render in the Changes body, so offer completion only where they can be read.
+                onCompleteMerge={
+                  activeTab === 'changes' &&
+                  conflictOperation === 'merge' &&
+                  !primaryActionArgs.hasUnresolvedConflicts
+                    ? () => void completeMerge()
+                    : null
+                }
+                completingMerge={busyAction === MOBILE_COMPLETE_MERGE_ACTION_ID}
+                prChip={prChip}
+                onOpenPr={openPrTab}
+              />
+            ) : null}
 
-      {/* Ready PRs duplicate the branch card; retain it only when needed to abort a conflict. */}
-      {ready && (activeTab !== 'pr' || hasActiveConflict) ? (
-        <MobileSourceControlBranchCard
-          branchLabel={branchLabel}
-          syncLabel={syncLabel}
-          unstagedCount={unstagedCount}
-          stagedCount={stagedCount}
-          branchCount={branchEntries.length}
-          conflictOperation={conflictOperation}
-          conflictBusy={busyAction !== null}
-          conflictAborting={conflictAborting}
-          onAbortConflict={(operation) => void abortConflictOperation(operation)}
-          // Failures render in the Changes body, so offer completion only where they can be read.
-          onCompleteMerge={
-            activeTab === 'changes' &&
-            conflictOperation === 'merge' &&
-            !primaryActionArgs.hasUnresolvedConflicts
-              ? () => void completeMerge()
-              : null
-          }
-          completingMerge={busyAction === MOBILE_COMPLETE_MERGE_ACTION_ID}
-          prChip={prChip}
-          onOpenPr={openPrTab}
-        />
-      ) : null}
+            {showChanges ? (
+              <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
+                <MobileSourceControlContent state={state} primaryAction={primaryAction} />
+              </View>
+            ) : activeTab === 'changes' ? (
+              statusGate
+            ) : null}
 
-      {showChanges ? (
-        <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileSourceControlContent state={state} primaryAction={primaryAction} />
-        </View>
-      ) : activeTab === 'changes' ? (
-        statusGate
-      ) : null}
+            {showPrBody ? (
+              <View style={hubStyles.tabBody}>
+                <MobilePrViewPanelBody
+                  client={client}
+                  connState={connState}
+                  worktreeId={worktreeId}
+                  branch={prBranch}
+                  headSha={prHeadSha}
+                  gitStatus={status}
+                  isGithubRepo={isHostedRepo}
+                  // Mid-probe false is still loading; do not flash unavailable.
+                  branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
+                  controller={prController}
+                  workspaceLabel={worktreeLabel}
+                />
+              </View>
+            ) : activeTab === 'pr' ? (
+              statusGate
+            ) : null}
 
-      {showPrBody ? (
-        <View style={hubStyles.tabBody}>
-          <MobilePrViewPanelBody
-            client={client}
-            connState={connState}
-            worktreeId={worktreeId}
-            branch={prBranch}
-            headSha={prHeadSha}
-            gitStatus={status}
-            isGithubRepo={isHostedRepo}
-            // Mid-probe false is still loading; do not flash unavailable.
-            branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
-            controller={prController}
-            workspaceLabel={worktreeLabel}
-          />
-        </View>
-      ) : activeTab === 'pr' ? (
-        statusGate
-      ) : null}
-
-      {showHistory ? (
-        <View style={activeTab === 'history' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileGitHistoryList
-            client={client}
-            connState={connState}
-            worktreeId={worktreeId}
-            hostId={hostId}
-            bottomInset={insets.bottom}
-            refreshNonce={historyRefreshNonce}
-          />
-        </View>
-      ) : null}
+            {showHistory ? (
+              <View style={activeTab === 'history' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
+                <MobileCommitsScreen
+                  client={client}
+                  connState={connState}
+                  worktreeId={worktreeId}
+                  hostId={hostId}
+                  bottomInset={insets.bottom}
+                  refreshNonce={historyRefreshNonce}
+                  refreshKey={`${statusHead ?? ''}:${status?.upstreamStatus?.ahead ?? ''}:${status?.upstreamStatus?.behind ?? ''}`}
+                  branchName={branchLabel}
+                  busyAction={busyAction}
+                  actionError={actionError}
+                  pushLabel={branchRemoteAction?.label}
+                  pushDisabled={branchRemoteAction?.disabled}
+                  pushBusy={branchRemoteAction?.loading}
+                  onPush={runBranchRemoteAction}
+                  onUpdateBranch={runActionSheetRebase}
+                  onOpenCommit={openCommit}
+                />
+              </View>
+            ) : null}
+          </View>
+        )}
+      </MobileCommitPageHost>
 
       <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
     </View>

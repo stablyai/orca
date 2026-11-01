@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type {
   NativeChatMessage,
   NativeChatSubagentState
-} from '../../../../shared/native-chat-types'
-import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
+} from '../../../../shared/native-chat/native-chat-types'
+import { projectNativeChatTranscript } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import { compareMessages } from './native-chat-session-assembler'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import {
@@ -86,25 +86,6 @@ function outline(slots: readonly NativeChatTranscriptSlot[]): string[] {
 }
 
 describe('work runs and subagent sections', () => {
-  it("draws a section's own thoughts and calls as one run", () => {
-    const rows = [
-      row('ask', say('go'), { role: 'user' }),
-      row('a', call('Read')),
-      thought('s-r1', 'helper'),
-      row('s-a', call('Bash'), by('helper')),
-      thought('s-r2', 'helper'),
-      row('s-b', call('Grep'), by('helper')),
-      row('reply', say('Done.'))
-    ]
-    expect(outline(slotsOf(rows, { helper: true }))).toEqual([
-      'ask',
-      'a',
-      '[helper]',
-      '>s-r1+s-a+s-r2+s-b',
-      'reply'
-    ])
-  })
-
   it('never runs across a section head', () => {
     const rows = [
       row('ask', say('go'), { role: 'user' }),

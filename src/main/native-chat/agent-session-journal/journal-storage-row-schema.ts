@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
-} from '../../../shared/agent-session-journal-schemas'
+} from '../../../shared/agent-session/journal/agent-session-journal-schemas'
 import type { JournalRow } from './journal-row-schema'
 import {
   storedFailureFact,
@@ -69,6 +69,7 @@ const storedRow = z.discriminatedUnion('kind', [
   z.object({
     ...envelope,
     kind: z.literal('epoch'),
+    inputOrderLineage: value,
     reason: value,
     providerHandle: storedProviderHandle,
     historyOrigin: value
@@ -98,6 +99,7 @@ const storedRow = z.discriminatedUnion('kind', [
   z.object({
     ...envelope,
     kind: z.literal('submission'),
+    inputOrderContext: value,
     clientMessageId: value,
     payloadFingerprint: value,
     providerHandle: storedProviderHandle,

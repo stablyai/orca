@@ -7,7 +7,7 @@ import { REST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session
 import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore
-} from '../../agent-session-record-store-test-harness'
+} from '../../agent-session/records/agent-session-record-store-test-harness'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 

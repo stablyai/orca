@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { colors, typography } from '../theme/mobile-theme'
+import { colors, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { queuedMessageStyles } from './native-chat/input/mobile-native-chat-queued-message-styles'
@@ -32,7 +32,7 @@ export function MobileQueuedCardText({
   )
   if (!clipped && !expanded) {
     return (
-      <View>
+      <View style={styles.probeBounds}>
         {measure}
         <Text style={queuedMessageStyles.bodyText} numberOfLines={2}>
           {text}
@@ -42,6 +42,7 @@ export function MobileQueuedCardText({
   }
   const toggle = (
     <Pressable
+      style={({ pressed }) => pressed && pressedStyle}
       testID="queued-card-text"
       accessibilityRole="button"
       accessibilityState={{ expanded }}
@@ -65,7 +66,7 @@ export function MobileQueuedCardText({
     </Pressable>
   )
   return (
-    <View>
+    <View style={styles.probeBounds}>
       {expanded ? null : measure}
       {toggle}
     </View>
@@ -73,6 +74,10 @@ export function MobileQueuedCardText({
 }
 
 const styles = themedStyleSheet(() => ({
+  // Clip the full-text probe so it cannot stretch the queue's scroll range.
+  probeBounds: {
+    overflow: 'hidden'
+  },
   measure: {
     position: 'absolute',
     left: 0,

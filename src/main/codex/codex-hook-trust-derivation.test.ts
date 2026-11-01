@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type * as AppServerSession from './codex-app-server-session'
+import type * as AppServerSession from './app-server/codex-app-server-session'
 
 const mocks = vi.hoisted(() => ({
   runCodexAppServerSession: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return { ...actual, rm: vi.fn(actual.rm) }
 })
-vi.mock('./codex-app-server-session', async (importOriginal) => ({
+vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
   ...(await importOriginal<typeof AppServerSession>()),
   runCodexAppServerSession: mocks.runCodexAppServerSession
 }))
@@ -24,7 +24,7 @@ vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
-} from './codex-app-server-session'
+} from './app-server/codex-app-server-session'
 import {
   deriveCodexHookHashes,
   probeCodexVersion,

@@ -5,7 +5,7 @@ import type * as NodeProcess from 'node:process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import type * as WorkspaceSpaceScanBudgetModule from '../shared/workspace-space-scan-budget'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 
 const { listRepoWorktreesMock } = vi.hoisted(() => ({
   listRepoWorktreesMock: vi.fn()

@@ -21,7 +21,6 @@
     "panel": {
       "all": "Todos",
       "emptyScope": "Nenhuma sessão anterior de agente neste escopo.",
-      "loadFailed": "Não foi possível carregar",
       "missingResumeId": "Esta sessão não tem um ID de retomada.",
       "noSearchResults": "Nenhuma sessão corresponde à sua busca.",
       "noSessions": "Nenhuma sessão de agente",
@@ -694,17 +693,14 @@
       "loadingDiff": "Carregando diff…",
       "loadingReview": "Carregando revisão…",
       "noReviewableChanges": "Nenhuma alteração para revisar",
-      "retryLabel": "Tentar carregar a revisão novamente",
       "reviewUnavailable": "Revisão indisponível",
       "selectFile": "Selecione um arquivo para revisar.",
-      "tooLargeMessage": "Este diff é grande demais para a prévia no celular.",
-      "tryDifferentFilter": "Tente outro filtro de revisão."
+      "tooLargeMessage": "Este diff é grande demais para a prévia no celular."
     },
     "diffReviewDrawers": {
       "addNote": "Adicionar nota",
       "cancelNote": "Cancelar nota",
       "clearSentNotes": "Limpar notas enviadas",
-      "completeTitle": "Revisão concluída",
       "copyNotes": "Copiar notas",
       "deleteNote": "Excluir nota",
       "discard": "Descartar",
@@ -712,15 +708,8 @@
       "discardTitle": "Descartar arquivo",
       "editNote": "Editar nota",
       "fileNote": "Nota do arquivo",
-      "fileSummary_many": "{{fileCount}} arquivo revisado, {{count}} notas",
-      "fileSummary_one": "{{fileCount}} arquivo revisado, {{count}} nota",
-      "fileSummary_other": "{{fileCount}} arquivo revisado, {{count}} notas",
-      "filesSummary_many": "{{fileCount}} arquivos revisados, {{count}} notas",
-      "filesSummary_one": "{{fileCount}} arquivos revisados, {{count}} nota",
-      "filesSummary_other": "{{fileCount}} arquivos revisados, {{count}} notas",
       "lineNumber": "Linha {{lineNumber}}",
       "loadingSessions": "Carregando sessões de agentes…",
-      "markUnreviewed": "Marcar como não revisado",
       "newAgentSession": "Nova sessão de agente",
       "openInSession": "Abrir na sessão",
       "reviewNote": "Nota de revisão",
@@ -728,12 +717,6 @@
       "sendNotes": "Enviar notas",
       "sendNotesLabel": "Enviar notas ao agente",
       "sendUnsentNotes": "Enviar notas não enviadas",
-      "stageReviewed": "Adicionar revisados ao stage",
-      "stageReviewedFiles": "Adicionar arquivos revisados ao stage",
-      "stageReviewedLabel": "Adicionar arquivos revisados ao stage",
-      "stageableFiles_many": "{{count}} arquivos revisados e não preparados podem ser adicionados ao stage",
-      "stageableFiles_one": "{{count}} arquivo revisado e não preparado pode ser adicionado ao stage",
-      "stageableFiles_other": "{{count}} arquivos revisados e não preparados podem ser adicionados ao stage",
       "statusUnreadable": "Não foi possível ler o status deste host. Tentando novamente…",
       "terminal": "Terminal",
       "terminalLabel": "{{title}} ({{id}})",
@@ -743,59 +726,17 @@
       "updateRequired": "Atualize o Orca no seu computador"
     },
     "diffReviewFileSummary": {
-      "branch": "Branch",
-      "branchFrom": "Branch, origem: {{oldPath}}",
       "changed": "Alterado",
       "editFileNote": "Editar nota do arquivo",
-      "hunk": "Trecho",
-      "nextHunk": "Próximo trecho",
-      "notes_many": "{{count}} notas",
-      "notes_one": "{{count}} nota",
-      "notes_other": "{{count}} notas",
-      "previousHunk": "Trecho anterior",
-      "reviewed": "Revisado",
-      "staged": "Preparado",
-      "stagedFrom": "Preparado, origem: {{oldPath}}",
-      "stale": "Desatualizada",
-      "staleCount": "Desatualizadas: {{count}}",
-      "unstaged": "Não preparado",
-      "unstagedFrom": "Não preparado, origem: {{oldPath}}"
+      "stale": "Desatualizada"
     },
     "diffReviewFooter": {
-      "addFileNote": "Adicionar nota ao arquivo",
-      "discard": "Descartar",
-      "discardFile": "Descartar arquivo",
-      "markFileReviewed": "Marcar arquivo como revisado",
-      "markReviewed": "Marcar como revisado",
       "nextFile": "Próximo arquivo",
-      "note": "Nota",
-      "previousFile": "Arquivo anterior",
-      "reviewed": "Revisado",
-      "stage": "Adicionar ao stage",
-      "stageFile": "Adicionar arquivo ao stage",
-      "unstage": "Remover do stage",
-      "unstageFile": "Remover arquivo do stage"
+      "previousFile": "Arquivo anterior"
     },
     "diffReviewHeader": {
-      "filterAll": "Todos",
-      "filterBranch": "Branch",
-      "filterNotes": "Notas",
-      "filterStaged": "Preparados",
-      "filterUnreviewed": "Não revisados",
-      "filterUnstaged": "Não preparados",
-      "openPullRequestSidebar": "Abrir barra lateral do pull request",
       "openReviewActions": "Abrir ações de revisão",
-      "reviewedProgress": "Revisados: {{reviewedCount}}/{{queueLength}}",
-      "showAllFiles": "Mostrar todos os arquivos da revisão",
-      "showBranchFiles": "Mostrar arquivos da branch nesta revisão",
-      "showNotesFiles": "Mostrar arquivos com notas nesta revisão",
-      "showStagedFiles": "Mostrar arquivos preparados nesta revisão",
-      "showUnreviewedFiles": "Mostrar arquivos ainda não revisados nesta revisão",
-      "showUnstagedFiles": "Mostrar arquivos não preparados nesta revisão",
-      "title": "Alterações",
-      "unsentNotes_many": "{{count}} notas não enviadas",
-      "unsentNotes_one": "{{count}} nota não enviada",
-      "unsentNotes_other": "{{count}} notas não enviadas"
+      "title": "Alterações"
     },
     "diffReviewLine": {
       "addNoteOnLine": "Adicionar nota na linha {{number}}",
@@ -894,10 +835,8 @@
       "selectRunTarget": "Selecione um destino de execução"
     },
     "prSidebar": {
-      "loadFailed": "Algo deu errado.",
       "loading": "Carregando pull request…",
-      "notPermitted": "Não permitido — sua conta do GitHub não está conectada.",
-      "retryLoading": "Tentar carregar o pull request novamente"
+      "notPermitted": "Não permitido — sua conta do GitHub não está conectada."
     },
     "protocolBlockScreen": {
       "backToHosts": "Voltar para hosts",
@@ -1047,6 +986,16 @@
       "title": "Algo deu errado",
       "tryAgain": "Tentar novamente",
       "home": "Início"
+    },
+    "svgPreview": {
+      "drawFailed": "Não foi possível desenhar este SVG",
+      "label": "Desenho {{title}}",
+      "previewDrawing": "Pré-visualizar desenho",
+      "viewSource": "Ver código-fonte SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Expandir diagrama",
+      "label": "Diagrama Mermaid"
     }
   },
   "connection": {
@@ -2480,10 +2429,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "Falha na ação de controle de versão",
-      "reviewedFilesStaged_many": "{{count}} arquivos revisados adicionados ao stage",
-      "reviewedFilesStaged_one": "{{count}} arquivo revisado adicionado ao stage",
-      "reviewedFilesStaged_other": "{{count}} arquivos revisados adicionados ao stage",
-      "stageResults": "No stage: {{staged}}, com falha: {{failed}}",
       "waitingForDesktop": "Aguardando o desktop…"
     },
     "useDiffReviewInteractions": {
@@ -2925,12 +2870,6 @@
       "baseBranchUnavailable": "Não foi possível determinar a branch base para comparação.",
       "loadFailed": "Não foi possível carregar as alterações commitadas"
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "Fechar prévia do diff commitado",
-      "committedOnBranch": "Commitado na branch",
-      "loadFailed": "Não foi possível carregar o diff",
-      "truncated": "Diff truncado para prévia no celular."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "Faça checkout de uma branch antes de fazer push de commits",
       "checkOutBranchToSync": "Faça checkout de uma branch antes de sincronizar commits",
@@ -3158,13 +3097,7 @@
       "prCreatedTitle": "Pull Request Criado",
       "switchBranchTitle": "Trocar Branch"
     },
-    "openers": {
-      "openDiffFailed": "Não foi possível abrir o diff",
-      "tabNotReady": "O arquivo foi aberto, mas a aba ainda não está pronta. Tente novamente.",
-      "waitingForDesktop": "Aguardando o desktop…"
-    },
     "panel": {
-      "loadFailedTitle": "Não foi possível carregar",
       "unavailableTitle": "Controle de Código-Fonte Indisponível"
     },
     "prChip": {
@@ -4005,8 +3938,7 @@
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
       "noMatches": "Nenhum espaço de trabalho encontrado",
       "reopen": "Reabrir para atualizar",
-      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
-      "retrying": "worktree.ps falhou ({{error}}) — tentando novamente automaticamente"
+      "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece."
     },
     "workspaceListSections": {
       "all": "Todos",

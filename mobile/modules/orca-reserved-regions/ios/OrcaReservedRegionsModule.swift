@@ -60,52 +60,32 @@ public class OrcaReservedRegionsModule: Module {
 }
 
 #if canImport(UIKit, _version: 9127.0.85)
-  /// Invisible full-window view: it is laid out on every window resize and safe-area change, and
-  /// its hinge interaction lays it out again when the device folds without changing size.
+  /// Invisible full-window view: it is laid out on every window resize, safe-area change and keyboard
+  /// move, and UIKit lays it out again when the reserved regions it read change (a fold that keeps the size).
   @available(iOS 27.1, *)
   private final class ReservedRegionsProbe: UIView {
     var onChange: (([String: Any]) -> Void)?
     private var reported: ReservedRegionsSnapshot?
-    private weak var keyboardView: UIView?
-    private let keyboardFollower = KeyboardGeometryFollower()
-    private var keyboardConstraints: [NSLayoutConstraint] = []
+    /// The keyboard's latest end frame in screen coordinates; nil until the keyboard first moves.
+    private var keyboardFrame: CGRect?
 
     override init(frame: CGRect) {
       super.init(frame: frame)
       autoresizingMask = [.flexibleWidth, .flexibleHeight]
       isUserInteractionEnabled = false
       isAccessibilityElement = false
-      keyboardFollower.translatesAutoresizingMaskIntoConstraints = false
-      keyboardFollower.onLayout = { [weak self] in self?.setNeedsLayout() }
-      addSubview(keyboardFollower)
-      addInteraction(
-        UIHingeInteraction { [weak self] _, _ in
-          self?.setNeedsLayout()
-        })
+      // Not keyboardLayoutGuide: constraints on it crash UIKit's split keyboard on an unfolded Duo.
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(keyboardWillChangeFrame(_:)),
+        name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     }
 
     required init?(coder: NSCoder) {
       fatalError("init(coder:) is not supported")
     }
 
-    override func didMoveToWindow() {
-      super.didMoveToWindow()
-      NSLayoutConstraint.deactivate(keyboardConstraints)
-      keyboardConstraints = []
-      keyboardView = nil
-      guard let window, let root = window.rootViewController?.view, root.window === window else {
-        return
-      }
-      keyboardView = root
-      let guide = root.keyboardLayoutGuide
-      guide.usesBottomSafeArea = false
-      keyboardConstraints = [
-        keyboardFollower.topAnchor.constraint(equalTo: guide.topAnchor),
-        keyboardFollower.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
-        keyboardFollower.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
-        keyboardFollower.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
-      ]
-      NSLayoutConstraint.activate(keyboardConstraints)
+    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
+      keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
       setNeedsLayout()
     }
 
@@ -117,13 +97,11 @@ public class OrcaReservedRegionsModule: Module {
     override func layoutSubviews() {
       super.layoutSubviews()
       guard let window else { return }
-      let keyboardInset: CGFloat?
-      if let keyboardView, keyboardView.window === window {
-        let frame = keyboardView.convert(keyboardView.keyboardLayoutGuide.layoutFrame, to: window)
-        let overlap = frame.intersection(window.bounds)
+      var keyboardInset: CGFloat = 0
+      if let keyboardFrame {
+        let overlap = window.convert(keyboardFrame, from: window.screen.coordinateSpace)
+          .intersection(window.bounds)
         keyboardInset = overlap.isNull ? 0 : overlap.height
-      } else {
-        keyboardInset = nil
       }
       let snapshot = ReservedRegionsSnapshot(
         divisions: window.reservedRegions(kind: .division).map(\.frame),
@@ -140,29 +118,16 @@ public class OrcaReservedRegionsModule: Module {
     }
   }
 
-  @available(iOS 27.1, *)
-  private final class KeyboardGeometryFollower: UIView {
-    var onLayout: (() -> Void)?
-    private var reportedFrame: CGRect?
-
-    override func layoutSubviews() {
-      super.layoutSubviews()
-      guard frame != reportedFrame else { return }
-      reportedFrame = frame
-      onLayout?()
-    }
-  }
-
   private struct ReservedRegionsSnapshot: Equatable {
     let divisions: [CGRect]
     let hasFoldDivision: Bool
     let occlusions: [CGRect]
     let windowBounds: CGRect
     let windowSafeAreaInsets: UIEdgeInsets
-    let keyboardInset: CGFloat?
+    let keyboardInset: CGFloat
 
     var payload: [String: Any] {
-      var result: [String: Any] = [
+      [
         "divisions": divisions.map(Self.rectPayload),
         "hasFoldDivision": hasFoldDivision,
         "occlusions": occlusions.map(Self.rectPayload),
@@ -175,11 +140,8 @@ public class OrcaReservedRegionsModule: Module {
             "left": Double(windowSafeAreaInsets.left),
           ],
         ],
+        "keyboardInset": Double(keyboardInset),
       ]
-      if let keyboardInset {
-        result["keyboardInset"] = Double(keyboardInset)
-      }
-      return result
     }
 
     private static func rectPayload(_ rect: CGRect) -> [String: Double] {

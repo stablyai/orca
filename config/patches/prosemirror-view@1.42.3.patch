@@ -182,7 +182,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
 +      selectionToDOM(view, true, outgoing)
 +      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +        let projected = view.state
-+        view.scrollToSelection()
++        view.scrollToSelection("focus")
 +        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
 +          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
@@ -277,7 +277,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
        var from = -1,
          to = -1,
          typeOver = false,
-@@ -4560,8 +4716,16 @@
+@@ -4560,12 +4716,20 @@
            }
          }
        }
@@ -296,6 +296,11 @@ diff --git a/dist/index.cjs b/dist/index.cjs
          view.input.lastFocus = 0;
          selectionToDOM(view);
          this.currentSelection.set(sel);
+-        view.scrollToSelection();
++        view.scrollToSelection("focus");
+       } else if (from > -1 || newSel) {
+         if (from > -1) {
+           view.docView.markDirty(from, to);
 @@ -4813,18 +4977,34 @@
    var compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
    view.input.compositionPendingChanges = 0;
@@ -343,6 +348,20 @@ diff --git a/dist/index.cjs b/dist/index.cjs
    }
    var $before = view.state.doc.resolve(from);
    var shared = $before.sharedDepth(to);
+@@ -5195,11 +5375,11 @@
+     }
+   }, {
+     key: "scrollToSelection",
+-    value: function scrollToSelection() {
++    value: function scrollToSelection(reason) {
+       var _this17 = this;
+       var startDOM = this.domSelectionRange().focusNode;
+       if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) ;else if (this.someProp("handleScrollToSelection", function (f) {
+-        return f(_this17);
++        return f(_this17, reason);
+       })) ;else if (this.state.selection instanceof prosemirrorState.NodeSelection) {
+         var target = this.docView.domAfterPos(this.state.selection.from);
+         if (target.nodeType == 1) scrollRectIntoView(this, target.getBoundingClientRect(), startDOM);
 @@ -5282,10 +5462,15 @@
    }, {
      key: "focus",
@@ -392,6 +411,15 @@ diff --git a/dist/index.d.cts b/dist/index.d.cts
      /**
      Can be an object mapping DOM event type names to functions that
      handle them. Such functions will be called before any handling
+@@ -718,7 +720,7 @@
+     indicate that it did not handle the scrolling and further
+     handlers or the default behavior should be tried.
+     */
+-    handleScrollToSelection?: (this: P, view: EditorView) => boolean;
++    handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean;
+     /**
+     Determines whether an in-editor drag event should copy or move
+     the selection. When not given, the event's `altKey` property is
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
@@ -411,6 +439,15 @@ diff --git a/dist/index.d.ts b/dist/index.d.ts
      /**
      Can be an object mapping DOM event type names to functions that
      handle them. Such functions will be called before any handling
+@@ -718,7 +720,7 @@
+     indicate that it did not handle the scrolling and further
+     handlers or the default behavior should be tried.
+     */
+-    handleScrollToSelection?: (this: P, view: EditorView) => boolean;
++    handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean;
+     /**
+     Determines whether an in-editor drag event should copy or move
+     the selection. When not given, the event's `altKey` property is
 diff --git a/dist/index.js b/dist/index.js
 --- a/dist/index.js
 +++ b/dist/index.js
@@ -602,7 +639,7 @@ diff --git a/dist/index.js b/dist/index.js
 +      selectionToDOM(view, true, outgoing)
 +      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +        let projected = view.state
-+        view.scrollToSelection()
++        view.scrollToSelection("focus")
 +        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
 +          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
@@ -699,7 +736,7 @@ diff --git a/dist/index.js b/dist/index.js
          let from = -1, to = -1, typeOver = false, added = [];
          if (view.editable) {
              for (let i = 0; i < mutations.length; i++) {
-@@ -4853,14 +5006,16 @@
+@@ -4853,18 +5006,20 @@
                  }
              }
          }
@@ -724,6 +761,11 @@ diff --git a/dist/index.js b/dist/index.js
              view.input.lastFocus = 0;
              selectionToDOM(view);
              this.currentSelection.set(sel);
+-            view.scrollToSelection();
++            view.scrollToSelection("focus");
+         }
+         else if (from > -1 || newSel) {
+             if (from > -1) {
 @@ -5108,13 +5263,28 @@
      let compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
      view.input.compositionPendingChanges = 0;
@@ -762,6 +804,19 @@ diff --git a/dist/index.js b/dist/index.js
      let $before = view.state.doc.resolve(from);
      let shared = $before.sharedDepth(to);
      from = $before.before(shared + 1);
+@@ -5626,10 +5797,10 @@
+     /**
+     @internal
+     */
+-    scrollToSelection() {
++    scrollToSelection(reason) {
+         let startDOM = this.domSelectionRange().focusNode;
+         if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) ;
+-        else if (this.someProp("handleScrollToSelection", f => f(this))) ;
++        else if (this.someProp("handleScrollToSelection", f => f(this, reason))) ;
+         else if (this.state.selection instanceof NodeSelection) {
+             let target = this.docView.domAfterPos(this.state.selection.from);
+             if (target.nodeType == 1)
 @@ -5726,11 +5897,15 @@
      Focus the editor.
      */
@@ -914,7 +969,7 @@ diff --git a/src/domobserver.ts b/src/domobserver.ts
 +      selectionToDOM(view, true, outgoing)
 +      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +        let projected = view.state
-+        view.scrollToSelection()
++        view.scrollToSelection("focus")
 +        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
 +          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
 +          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
@@ -1007,7 +1062,7 @@ diff --git a/src/domobserver.ts b/src/domobserver.ts
  
      let from = -1, to = -1, typeOver = false, added: Node[] = []
      if (view.editable) {
-@@ -224,14 +334,16 @@
+@@ -224,18 +334,20 @@
        }
      }
  
@@ -1032,6 +1087,11 @@ diff --git a/src/domobserver.ts b/src/domobserver.ts
        view.input.lastFocus = 0
        selectionToDOM(view)
        this.currentSelection.set(sel)
+-      view.scrollToSelection()
++      view.scrollToSelection("focus")
+     } else if (from > -1 || newSel) {
+       if (from > -1) {
+         view.docView.markDirty(from, to)
 diff --git a/src/index.ts b/src/index.ts
 --- a/src/index.ts
 +++ b/src/index.ts
@@ -1044,6 +1104,20 @@ diff --git a/src/index.ts b/src/index.ts
  import {readDOMChange} from "./domchange"
  import {DOMSelection, DOMNode, DOMSelectionRange, deepActiveElement, clearReusedRange} from "./dom"
  import * as browser from "./browser"
+@@ -234,11 +234,11 @@
+   }
+ 
+   /// @internal
+-  scrollToSelection() {
++  scrollToSelection(reason?: "focus") {
+     let startDOM = this.domSelectionRange().focusNode
+     if (!startDOM || !this.dom.contains(startDOM.nodeType == 1 ? startDOM : startDOM.parentNode)) {
+       // Ignore selections outside the editor
+-    } else if (this.someProp("handleScrollToSelection", f => f(this))) {
++    } else if (this.someProp("handleScrollToSelection", f => f(this, reason))) {
+       // Handled
+     } else if (this.state.selection instanceof NodeSelection) {
+       let target = this.docView.domAfterPos(this.state.selection.from)
 @@ -337,9 +337,14 @@
    /// Focus the editor.
    focus() {
@@ -1084,6 +1158,15 @@ diff --git a/src/index.ts b/src/index.ts
    /// Can be an object mapping DOM event type names to functions that
    /// handle them. Such functions will be called before any handling
    /// ProseMirror does of events fired on the editable DOM element.
+@@ -675,7 +688,7 @@
+   /// the selection into view. A handler function may return false to
+   /// indicate that it did not handle the scrolling and further
+   /// handlers or the default behavior should be tried.
+-  handleScrollToSelection?: (this: P, view: EditorView) => boolean
++  handleScrollToSelection?: (this: P, view: EditorView, reason?: "focus") => boolean
+ 
+   /// Determines whether an in-editor drag event should copy or move
+   /// the selection. When not given, the event's `altKey` property is
 diff --git a/src/input.ts b/src/input.ts
 --- a/src/input.ts
 +++ b/src/input.ts

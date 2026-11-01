@@ -49,12 +49,14 @@ export function MobileNativeChatComposerField({
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
     : value || placeholder || ''
   const contentHeight = useTextInputContentHeight(input, shown)
+  // Reserve the placeholder's lines so the first keystroke cannot shrink the box and drop the transcript.
+  const placeholderHeight = useTextInputContentHeight(input, placeholder ?? '')
   const windowHeight = useWindowDimensions().height
   const keyboardHeight = useKeyboardOcclusion()
   // RN Web already shrinks browser dimensions; shell WebViews report the keyboard separately.
   const visibleHeight = Math.min(windowHeight, window.innerHeight - keyboardHeight)
   const sizing = {
-    height: contentHeight,
+    height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
     maxHeight: Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   }
   const copied = Boolean(skillToken || dictationPreview)

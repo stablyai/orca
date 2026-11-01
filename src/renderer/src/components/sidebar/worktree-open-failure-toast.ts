@@ -4,7 +4,8 @@ import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-ope
 
 export function showOpenFailureToast(
   result: Exclude<ShellOpenExternalEditorResult, { ok: true }>,
-  remote: boolean
+  remote: boolean,
+  subject: 'workspace' | 'path' = 'workspace'
 ): void {
   if (result.reason === 'remote-runtime-unsupported') {
     toast.error(
@@ -89,10 +90,15 @@ export function showOpenFailureToast(
             'auto.components.sidebar.WorktreeOpenInMenu.remotePathInvalid',
             'Path is not valid for the SSH host.'
           )
-        : translate(
-            'auto.components.sidebar.WorktreeOpenInMenu.f387af445b',
-            'Workspace path is not a valid local path.'
-          ),
+        : subject === 'path'
+          ? translate(
+              'auto.components.sidebar.WorktreeOpenInMenu.pathInvalid',
+              'Path is not a valid local path.'
+            )
+          : translate(
+              'auto.components.sidebar.WorktreeOpenInMenu.f387af445b',
+              'Workspace path is not a valid local path.'
+            ),
       remote
         ? {
             description: translate(
@@ -101,6 +107,15 @@ export function showOpenFailureToast(
             )
           }
         : undefined
+    )
+    return
+  }
+  if (result.reason === 'not-found' && subject === 'path') {
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.pathNotFound',
+        'File or folder not found. It may have been moved or deleted.'
+      )
     )
     return
   }
@@ -119,15 +134,15 @@ export function showOpenFailureToast(
     )
     return
   }
-  if (remote) {
+  if (remote || subject === 'path') {
     toast.error(
       translate(
-        'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailed',
+        'auto.components.sidebar.WorktreeOpenInMenu.pathLaunchFailed',
         'Could not open the path in the editor.'
       ),
       {
         description: translate(
-          'auto.components.sidebar.WorktreeOpenInMenu.remoteLaunchFailedDetail',
+          'auto.components.sidebar.WorktreeOpenInMenu.pathLaunchFailedDetail',
           'Check the editor command configured on this machine.'
         )
       }

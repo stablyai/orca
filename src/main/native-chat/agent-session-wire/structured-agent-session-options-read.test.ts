@@ -5,37 +5,37 @@ import {
   hostTestRestingOptionsJournal as restingJournal,
   hostTestOptionsReadStore
 } from './structured-agent-session-host-test-data'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { startCodexTurn } from '../../codex/codex-structured-turn-start'
 import { readLiveCodexSessionOptions } from '../../codex/codex-structured-session-options'
 import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
-import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
+import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
-import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
+import { claudeFallbackModelOptions } from '../../claude/structured/launch/claude-structured-session-options'
 import {
   acquired,
   fakeClaude,
   USER_MESSAGE
-} from '../../claude/claude-structured-session-test-support'
-import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
+} from '../../claude/structured/claude-structured-session-test-support'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import {
   createAgentModelCatalogService,
   type AgentModelCatalogService
@@ -53,7 +53,7 @@ import {
   saveStructuredAgentSessionStartReadbackListing,
   type StructuredAgentSessionStartListingContext
 } from './structured-agent-session-start-listing'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import {
   claudeAndCodexAgents,
   NO_STRUCTURED_AGENTS
