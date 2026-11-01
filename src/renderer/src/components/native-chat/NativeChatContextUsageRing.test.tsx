@@ -45,9 +45,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function renderRing(usage = USAGE): Promise<HTMLButtonElement> {
+async function renderRing(usage = USAGE, surface?: 'canvas'): Promise<HTMLButtonElement> {
   const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
-  await act(async () => root.render(<NativeChatContextUsageRing usage={usage} />))
+  await act(async () => root.render(<NativeChatContextUsageRing usage={usage} surface={surface} />))
   const trigger = document.querySelector<HTMLButtonElement>(
     'button[data-native-chat-context-usage]'
   )
@@ -98,6 +98,20 @@ function pointer(type: 'pointerover' | 'pointerout', pointerType: string): Point
 }
 
 describe('NativeChatContextUsageRing', () => {
+  it('uses surface colors and switches to a warning at the critical threshold', async () => {
+    const critical = { ...USAGE, usedTokens: 180_000, percentage: 90, rows: [] }
+    expect((await renderRing()).classList.contains('text-muted-foreground')).toBe(true)
+    expect((await renderRing(critical)).classList.contains('text-destructive')).toBe(true)
+    expect(
+      (await renderRing(USAGE, 'canvas')).classList.contains('text-chat-foreground-faint')
+    ).toBe(true)
+    const canvas = await renderRing(critical, 'canvas')
+    expect(canvas.classList.contains('text-chat-warning')).toBe(true)
+    expect(canvas.classList.contains('text-chat-foreground-faint')).toBe(false)
+    expect(canvas.classList.contains('hover:bg-accent')).toBe(true)
+    expect(canvas.classList.contains('hover:text-accent-foreground')).toBe(true)
+  })
+
   it('writes a million-token window with a capital M, in the label and the card', async () => {
     const trigger = await renderRing({ ...USAGE, usedTokens: 26_400, windowTokens: 1_000_000 })
 
