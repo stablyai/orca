@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '../../store'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { AppearanceChatTextWeightControl } from './AppearanceChatTextWeightControl'
 import { AppearanceChatContrastControls } from './AppearanceChatContrastControls'
 import { ChatFontFamilySetting } from './ChatFontFamilySetting'
 import { Button } from '../ui/button'
@@ -81,6 +82,11 @@ export function AppearanceChatSection({
           onChange={(fontSize) => update({ fontSize })}
         />
       </SearchableSetting>
+      <AppearanceChatTextWeightControl
+        appearance={appearance}
+        onChange={update}
+        forceVisiblePrimary={forceVisiblePrimary}
+      />
       <SearchableSetting
         id={entries.codeTextSize.targetSectionId}
         {...entries.codeTextSize}

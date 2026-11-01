@@ -194,7 +194,12 @@
         "terminalControlledHint": "Lo controla la interfaz del terminal.",
         "terminalControlledTooltip": "Coincide con la interfaz del terminal. Desactiva Usar la interfaz del terminal para cambiarlo.",
         "fontKeywordTypeface": "tipo de letra",
-        "fontKeywordTypography": "tipografía"
+        "fontKeywordTypography": "tipografía",
+        "textWeight": "Grosor del texto",
+        "textWeightDescription": "Mensajes, texto escrito y texto de ejemplo del cuadro de mensaje. La negrita sigue siendo más gruesa.",
+        "weightLight": "Ligero",
+        "weightRegular": "Normal",
+        "weightMedium": "Medio"
       }
     },
     "browser": {

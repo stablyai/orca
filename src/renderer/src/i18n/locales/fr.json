@@ -414,7 +414,12 @@
         "terminalControlledHint": "Défini par l’interface du terminal.",
         "terminalControlledTooltip": "Suit l’interface du terminal. Désactivez Utiliser l’interface du terminal pour le modifier.",
         "fontKeywordTypeface": "police de caractères",
-        "fontKeywordTypography": "typographie"
+        "fontKeywordTypography": "typographie",
+        "textWeight": "Graisse du texte",
+        "textWeightDescription": "Messages, texte saisi et texte indicatif du champ de saisie. Le gras reste plus épais.",
+        "weightLight": "Léger",
+        "weightRegular": "Normal",
+        "weightMedium": "Moyen"
       }
     },
     "browser": {
