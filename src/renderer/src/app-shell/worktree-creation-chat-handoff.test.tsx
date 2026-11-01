@@ -39,7 +39,9 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 
 // Keep the actual shell, pending chat and creation flow; unrelated chrome and heavy pane contents are boundaries.
 vi.mock('../components/Sidebar', () => ({ default: () => null }))
-vi.mock('../components/right-sidebar', () => ({ default: () => null }))
+vi.mock('../components/right-sidebar', () => ({
+  default: () => <aside aria-label="Workspace tools" />
+}))
 vi.mock('./TitlebarLeftControls', () => ({ TitlebarLeftControls: () => null }))
 vi.mock('./TitlebarMainStrip', () => ({
   TitlebarMainStrip: () => null,
@@ -79,85 +81,91 @@ afterEach(() => {
 })
 
 describe('worktree creation chat handoff', () => {
-  it('keeps the pending chat mounted from checkout through host admission until its replacement tab exists', async () => {
-    const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
-    seedEmptyActivatableWorktree(worktree)
-    const request: WorktreeCreationRequest = {
-      repoId: worktree.repoId,
-      name: 'feature',
-      setupDecision: 'skip',
-      agent: 'codex',
-      agentLaunchRoute: 'structured-native-chat',
-      pendingFirstAgentMessageRename: false,
-      note: '',
-      startupPlan: null,
-      quickPrompt: '',
-      quickTelemetry: null
-    }
-    const checkout = Promise.withResolvers<{ worktree: typeof worktree }>()
-    const admission = Promise.withResolvers<{ supported: boolean }>()
-    host.createSupport.mockReturnValue(admission.promise)
-    useAppStore.setState({
-      activeWorktreeId: null,
-      activeView: 'terminal',
-      sidebarOpen: true,
-      createWorktree: vi.fn(() => checkout.promise),
-      pendingWorktreeCreations: {}
-    })
-    useAppStore.getState().beginPendingWorktreeCreation({
-      creationId: 'creation-chat',
-      phase: 'creating',
-      status: 'creating',
-      startedAt: Date.now(),
-      indeterminate: false,
-      loaderVisible: true,
-      request
-    })
+  it.each([true, false])(
+    'keeps the pending chat and sidebar mounted through handoff (sidebar open: %s)',
+    async (rightSidebarOpen) => {
+      const worktree = { ...makeCreatedAgentWorktree(), hostId: 'local' as const }
+      seedEmptyActivatableWorktree(worktree)
+      const request: WorktreeCreationRequest = {
+        repoId: worktree.repoId,
+        name: 'feature',
+        setupDecision: 'skip',
+        agent: 'codex',
+        agentLaunchRoute: 'structured-native-chat',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: '',
+        quickTelemetry: null
+      }
+      const checkout = Promise.withResolvers<{ worktree: typeof worktree }>()
+      const admission = Promise.withResolvers<{ supported: boolean }>()
+      host.createSupport.mockReturnValue(admission.promise)
+      useAppStore.setState({
+        activeWorktreeId: null,
+        activeView: 'terminal',
+        sidebarOpen: true,
+        rightSidebarOpen,
+        createWorktree: vi.fn(() => checkout.promise),
+        pendingWorktreeCreations: {}
+      })
+      useAppStore.getState().beginPendingWorktreeCreation({
+        creationId: 'creation-chat',
+        phase: 'creating',
+        status: 'creating',
+        startedAt: Date.now(),
+        indeterminate: false,
+        loaderVisible: true,
+        request
+      })
 
-    main = await drawTabsFromMain(useAppStore)
-    render(
-      <TooltipProvider>
-        <WorkspaceShell />
-      </TooltipProvider>
-    )
-    const composer = await screen.findByRole('textbox', { name: 'Pending chat message' })
-    expect(screen.getByRole('button', { name: 'Cancel worktree creation' })).toBeTruthy()
-
-    let completion: Promise<void> = Promise.resolve()
-    act(() => {
-      completion = executeWorktreeCreation('creation-chat', request)
-    })
-    expect(screen.getByRole('textbox', { name: 'Pending chat message' })).toBe(composer)
-
-    await act(async () => {
-      checkout.resolve({ worktree })
-    })
-    await waitFor(() => expect(host.createSupport).toHaveBeenCalled())
-    expect(screen.getByRole('textbox', { name: 'Pending chat message' })).toBe(composer)
-    expect(screen.queryByRole('log', { name: 'Created chat' })).toBeNull()
-
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      layoutApplyTestTransport.answerWith((command) =>
-        command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
+      main = await drawTabsFromMain(useAppStore)
+      render(
+        <TooltipProvider>
+          <WorkspaceShell />
+        </TooltipProvider>
       )
-    }
-    await act(async () => {
-      admission.resolve({ supported: true })
-    })
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      await waitFor(() => expect(layoutApplyTestTransport.pendingCount).toBe(1))
+      const composer = await screen.findByRole('textbox', { name: 'Pending chat message' })
+      const sidebar = screen.getByRole('complementary', { name: 'Workspace tools' })
+      expect(screen.getByRole('button', { name: 'Cancel worktree creation' })).toBeTruthy()
+
+      let completion: Promise<void> = Promise.resolve()
+      act(() => {
+        completion = executeWorktreeCreation('creation-chat', request)
+      })
+      expect(screen.getByRole('textbox', { name: 'Pending chat message' })).toBe(composer)
+
+      await act(async () => {
+        checkout.resolve({ worktree })
+      })
+      await waitFor(() => expect(host.createSupport).toHaveBeenCalled())
       expect(screen.getByRole('textbox', { name: 'Pending chat message' })).toBe(composer)
       expect(screen.queryByRole('log', { name: 'Created chat' })).toBeNull()
+
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        layoutApplyTestTransport.answerWith((command) =>
+          command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
+        )
+      }
       await act(async () => {
-        layoutApplyTestTransport.answerWith('apply')
-        layoutApplyTestTransport.answerPending()
+        admission.resolve({ supported: true })
       })
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        await waitFor(() => expect(layoutApplyTestTransport.pendingCount).toBe(1))
+        expect(screen.getByRole('textbox', { name: 'Pending chat message' })).toBe(composer)
+        expect(screen.queryByRole('log', { name: 'Created chat' })).toBeNull()
+        await act(async () => {
+          layoutApplyTestTransport.answerWith('apply')
+          layoutApplyTestTransport.answerPending()
+        })
+      }
+      await act(async () => {
+        await completion
+      })
+      expect(await screen.findByRole('log', { name: 'Created chat' })).toBeTruthy()
+      expect(screen.queryByRole('textbox', { name: 'Pending chat message' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Cancel worktree creation' })).toBeNull()
+      expect(screen.getByRole('complementary', { name: 'Workspace tools' })).toBe(sidebar)
     }
-    await act(async () => {
-      await completion
-    })
-    expect(await screen.findByRole('log', { name: 'Created chat' })).toBeTruthy()
-    expect(screen.queryByRole('textbox', { name: 'Pending chat message' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Cancel worktree creation' })).toBeNull()
-  })
+  )
 })
