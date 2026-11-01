@@ -17,8 +17,10 @@ function OlderToastOverModalSheet(): React.JSX.Element {
       duration: Number.POSITIVE_INFINITY,
       action: { label: 'Open Mobile Settings', onClick: () => setDraft('') }
     })
-    setSheetOpen(true)
+    // Open after the toast has rendered, so it predates the modal.
+    const openTimer = window.setTimeout(() => setSheetOpen(true), 300)
     return () => {
+      window.clearTimeout(openTimer)
       toast.dismiss('older-persistent-toast')
     }
   }, [])
@@ -63,8 +65,12 @@ function assert(condition: boolean, message: string): void {
   }
 }
 
-/** Above a modal Sheet: message and close stay, actions are hidden, close keeps the draft. */
-export const actionsHiddenOverModalSheet = defineFixture({
+const toasterZIndex = (): number =>
+  Number(getComputedStyle(document.querySelector('[data-sonner-toaster]')!).zIndex)
+
+/** Behind a modal Sheet the older toast is dimmed and inert; a press brings it forward and its
+ *  close dismisses only the toast, keeping the sheet's draft and focus. */
+export const olderToastBehindModalSheet = defineFixture({
   width: 900,
   render: () => <OlderToastOverModalSheet />,
   interact: async () => {
@@ -77,14 +83,30 @@ export const actionsHiddenOverModalSheet = defineFixture({
     )
     await waitFor(() => toastElement()?.getAttribute('data-mounted') === 'true', 'the toast')
     draft()!.focus()
+    assert(toasterZIndex() === 49, 'an older toast should sit behind the sheet backdrop')
 
     const action = toastElement()!.querySelector<HTMLElement>('[data-button]')!
-    const close = toastElement()!.querySelector<HTMLElement>('[data-close-button]')!
-    assert(getComputedStyle(action).visibility === 'hidden', 'action should be hidden')
-    assert(getComputedStyle(close).visibility === 'visible', 'close should stay visible')
     action.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    assert(draft()?.value === DRAFT, 'a hidden action click must not run')
+    assert(draft()?.value === DRAFT, 'a lowered toast action must not run')
 
+    const overlay = document.querySelector<HTMLElement>("[data-slot='sheet-overlay']")!
+    const rect = toastElement()!.getBoundingClientRect()
+    overlay.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'mouse',
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    )
+    await waitFor(() => toasterZIndex() === 60, 'the press to bring the toast forward')
+    assert(
+      document.querySelector("[data-slot='sheet-content'][data-state='open']") !== null,
+      'the press must not dismiss the sheet'
+    )
+
+    const close = toastElement()!.querySelector<HTMLElement>('[data-close-button]')!
     close.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
     close.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await waitFor(() => toastElement() === null, 'the toast to be dismissed')

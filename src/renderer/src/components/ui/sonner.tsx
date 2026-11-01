@@ -12,6 +12,7 @@ import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
 import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
 import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
 import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
+import { useToasterModalLayer } from './toaster-modal-layer'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
 export const INLINE_ACTION_CLASS_NAMES = {
@@ -47,10 +48,20 @@ const Toaster = ({ ...props }: ToasterProps) => {
   const theme = useAppStore((s) => s.settings?.theme) || 'system'
   const wrapperRef = useRef<HTMLDivElement>(null)
   useNotificationCardLayoutVarReader(wrapperRef)
+  const { raised, trackActionOverModal } = useToasterModalLayer(wrapperRef)
+  // Lowered behind a modal, toasts keep #32065's close-only gate; raised, their actions run.
+  const gateModalToastInteraction = (event: SyntheticEvent): void => {
+    if (raised) {
+      trackActionOverModal(event)
+    } else {
+      blockModalToastInteraction(event)
+    }
+  }
 
   return (
     <div
       ref={wrapperRef}
+      data-toasts-raised={raised ? '' : undefined}
       onPointerDownCapture={(event) => {
         if (
           event.target instanceof Element &&
@@ -64,9 +75,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           blockModalToastInteraction(event)
         }
       }}
-      onClickCapture={blockModalToastInteraction}
-      onAuxClickCapture={blockModalToastInteraction}
-      onContextMenuCapture={blockModalToastInteraction}
+      onClickCapture={gateModalToastInteraction}
+      onAuxClickCapture={raised ? undefined : blockModalToastInteraction}
+      onContextMenuCapture={raised ? undefined : blockModalToastInteraction}
     >
       <Sonner
         theme={theme as ToasterProps['theme']}

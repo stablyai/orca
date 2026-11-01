@@ -1,5 +1,6 @@
 import path from 'node:path'
-import type { ElectronApplication, Locator, TestInfo } from '@stablyai/playwright-test'
+import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
+import { eventSchemas } from '../../src/shared/telemetry-events'
 import { test, expect } from './helpers/orca-app'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import {
@@ -67,9 +68,6 @@ for (const theme of ['dark', 'light'] as const) {
         .filter({ hasText: 'Cannot open folder on selected runtime' })
         .first()
       await expect(toast).toBeVisible()
-      // A new error raised by the modal stays readable and dismissible above its backdrop.
-      await expect(toast.locator('[data-title]')).toBeVisible()
-      await expect(toast.locator('[data-close-button]')).toBeVisible()
       await expect(pathField).toHaveValue(missingPath)
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
       await page.screenshot({
@@ -137,24 +135,20 @@ for (const theme of ['dark', 'light'] as const) {
             await cdp.detach()
           }
         }
-        // Above a modal only the message and close stay; other controls are hidden and inert.
-        // includeHidden: visibility:hidden also drops the controls from the accessibility tree.
-        const later = customToast.getByRole('button', {
-          name: 'Later',
-          exact: true,
-          includeHidden: true
-        })
-        await expect(later).toHaveCSS('visibility', 'hidden')
-        await expect(
-          customToast.getByRole('button', { name: 'Open GitHub', includeHidden: true })
-        ).toHaveCSS('visibility', 'hidden')
-        await expect(customToast.getByText('Onboarding completed!')).toBeVisible()
+        // A toast raised while the modal is open comes forward, so its actions run above it.
         await pathField.click()
-        await later.dispatchEvent('click')
-        await expect(customToast).toBeVisible()
+        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
+        await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
         await expect(pathField).toHaveValue(missingPath)
         expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
+        await client.app.evaluate(({ BrowserWindow }) => {
+          BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+            mode: 'web',
+            surface: 'toast'
+          })
+        })
+        await expect(customToast).toBeVisible()
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -175,13 +169,8 @@ for (const theme of ['dark', 'light'] as const) {
       const actionToast = page
         .locator('[data-sonner-toast]')
         .filter({ hasText: 'A device tried to connect but is not paired' })
-      const action = actionToast.getByRole('button', {
-        name: 'Open Mobile Settings',
-        includeHidden: true
-      })
-      await expect(actionToast.locator('[data-title]')).toBeVisible()
-      await expect(action).toHaveCSS('visibility', 'hidden')
-      await action.dispatchEvent('click')
+      const action = actionToast.getByRole('button', { name: 'Open Mobile Settings' })
+      await expect(action).toBeVisible()
       await actionToast.locator('[data-title]').click()
       await expect(actionToast).toBeVisible()
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -242,8 +231,6 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => document.body.setAttribute('data-scroll-locked', '1'))
       await expect(toaster).toHaveCSS('z-index', '47')
       await page.evaluate(() => document.body.removeAttribute('data-scroll-locked'))
-      // The action returns once the last modal overlay is gone, and runs normally.
-      await expect(action).toBeVisible()
       await action.click()
       await expect(page.getByPlaceholder('Search settings')).toBeVisible()
       await assertHiddenIsolation(client.app, testInfo, 'client-final-isolation')
@@ -265,11 +252,47 @@ async function showUnpairedDeviceToast(app: ElectronApplication): Promise<void> 
   })
 }
 
+async function recordTelemetry(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    const events: { name: unknown; props: unknown }[] = []
+    Object.assign(globalThis, { __toastTelemetry: events })
+    ipcMain.removeHandler('telemetry:track')
+    ipcMain.handle('telemetry:track', (_event, name: unknown, props: unknown) => {
+      events.push({ name, props })
+      return true
+    })
+  })
+}
+
+async function recordedToastActions(app: ElectronApplication): Promise<unknown[]> {
+  const events = await app.evaluate(
+    () =>
+      (globalThis as unknown as { __toastTelemetry: { name: unknown; props: unknown }[] })
+        .__toastTelemetry
+  )
+  return events.filter((event) => event.name === 'toast_action_over_modal').map((e) => e.props)
+}
+
+async function toasterZIndex(page: Page): Promise<number> {
+  return page
+    .locator('[data-sonner-toaster]')
+    .evaluate((toaster) => Number(getComputedStyle(toaster).zIndex))
+}
+
+async function pressAt(page: Page, target: Locator): Promise<void> {
+  const box = await target.boundingBox()
+  if (!box) {
+    throw new Error('Missing press target')
+  }
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+}
+
 for (const theme of ['dark', 'light'] as const) {
-  test(`a hidden toast action cannot unmount a settings dialog draft (${theme})`, async ({
+  test(`toasts behind a settings dialog come forward on a press and keep its draft (${theme})`, async ({
     electronApp,
     orcaPage: page
   }) => {
+    await recordTelemetry(electronApp)
     await page.evaluate(async (theme) => {
       const store = window.__store!.getState()
       await store.updateSettings({ theme })
@@ -279,51 +302,53 @@ for (const theme of ['dark', 'light'] as const) {
     const unpairedToast = page
       .locator('[data-sonner-toast]')
       .filter({ hasText: 'A device tried to connect but is not paired' })
-    const action = unpairedToast.getByRole('button', {
-      name: 'Open Mobile Settings',
-      includeHidden: true
-    })
+    const action = unpairedToast.getByRole('button', { name: 'Open Mobile Settings' })
     const mobilePane = page.getByText('Control terminals and agents from your phone.')
-
-    // An older persistent toast, raised before the modal opened, stays dismissible over it.
-    await electronApp.evaluate(({ BrowserWindow }) => {
-      BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
-        mode: 'web',
-        surface: 'toast'
-      })
-    })
-    const olderToast = page
-      .locator('[data-sonner-toast]')
-      .filter({ hasText: 'Onboarding completed!' })
-    const olderAction = olderToast.getByRole('button', { name: 'Later', includeHidden: true })
-    await expect(olderAction).toBeVisible()
-    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'New Browser Profile' })
-    await expect(dialog).toBeVisible()
     const nameField = dialog.getByRole('textbox')
-    await nameField.fill('Draft profile name')
-    await expect(olderToast.getByText('Onboarding completed!')).toBeVisible()
-    await expect(olderAction).toHaveCSS('visibility', 'hidden')
-    await olderToast.getByRole('button', { name: 'Dismiss', exact: true }).click()
-    await expect(olderToast).toBeHidden()
-    await expect(dialog).toBeVisible()
-    await expect(nameField).toHaveValue('Draft profile name')
-    await expect(nameField).toBeFocused()
 
-    // Before #36888, this action looked live; letting it run switched panes and dropped the draft.
+    // An older toast drops behind the modal's backdrop: visible but dimmed, and nothing in it is live.
     await showUnpairedDeviceToast(electronApp)
-    await expect(unpairedToast.locator('[data-title]')).toBeVisible()
-    await expect(action).toHaveCSS('visibility', 'hidden')
-    await action.dispatchEvent('click')
+    await expect(action).toBeVisible()
+    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+    await expect(dialog).toBeVisible()
+    await nameField.fill('Draft profile name')
+    await expect.poll(() => toasterZIndex(page)).toBe(49)
+    await expect(
+      unpairedToast.locator('[data-close-button]').click({ trial: true, timeout: 300 })
+    ).rejects.toThrow()
+
+    // A press on the dimmed toast brings it forward without dismissing the modal or moving focus.
+    await pressAt(page, unpairedToast.locator('[data-title]'))
+    await expect.poll(() => toasterZIndex(page)).toBe(60)
     await expect(dialog).toBeVisible()
     await expect(nameField).toHaveValue('Draft profile name')
     await expect(nameField).toBeFocused()
-    await expect(mobilePane).toBeHidden()
+    await unpairedToast.locator('[data-close-button]').click()
+    await expect(unpairedToast).toHaveCount(0)
+    await expect(dialog).toBeVisible()
+    await expect(nameField).toHaveValue('Draft profile name')
+    await expect(nameField).toBeFocused()
 
+    // Each modal starts lowered; a toast raised while it is open comes forward by itself.
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(dialog).toBeHidden()
+    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+    await expect(dialog).toBeVisible()
+    await nameField.fill('Second draft')
+    await showUnpairedDeviceToast(electronApp)
     await expect(action).toBeVisible()
+    await expect.poll(() => toasterZIndex(page)).toBe(60)
+    await expect(nameField).toBeFocused()
+
+    // The escape hatch: a navigating action runs above the modal, and is counted.
+    expect(await recordedToastActions(electronApp)).toEqual([])
     await action.click()
     await expect(mobilePane).toBeVisible()
+    const tracked = await recordedToastActions(electronApp)
+    expect(tracked).toEqual([
+      { toast_id: 'unpaired-device-auth-failure', modal_kind: 'dialog', raised_by: 'new_toast' }
+    ])
+    expect(eventSchemas.toast_action_over_modal.safeParse(tracked[0]).success).toBe(true)
   })
 }

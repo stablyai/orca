@@ -46,7 +46,8 @@ import {
   setupGuideClosedSchema,
   setupGuideOpenedSchema,
   setupGuideStepCompletedSchema,
-  terminalPaneSplitSchema
+  terminalPaneSplitSchema,
+  toastActionOverModalSchema
 } from './telemetry-feature-education-event-schemas'
 import {
   chatUiFeatureTipActionSchema,
@@ -224,6 +225,7 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+  toast_action_over_modal: toastActionOverModalSchema,
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,
