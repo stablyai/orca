@@ -39,13 +39,17 @@ function cardSearchText(card: DashboardCard): string {
 export function filterDashboardCards(
   cards: DashboardCard[],
   query: string,
-  filters: DashboardFilters
+  filters: DashboardFilters,
+  extraSearchText: (card: DashboardCard) => string = () => ''
 ): DashboardCard[] {
   const normalizedQuery = query.trim().toLowerCase()
   return cards.filter((card) => {
     const reviewState = card.review?.state ?? (card.hasReview ? null : 'none')
     return (
-      (normalizedQuery.length === 0 || cardSearchText(card).includes(normalizedQuery)) &&
+      (normalizedQuery.length === 0 ||
+        `${cardSearchText(card)} ${extraSearchText(card).toLocaleLowerCase()}`.includes(
+          normalizedQuery
+        )) &&
       (filters.projects.length === 0 || filters.projects.includes(card.repoId)) &&
       (filters.workspaceStatuses.length === 0 ||
         (card.workspaceStatusId !== undefined &&

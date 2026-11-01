@@ -96,7 +96,7 @@ describe('AgentKanbanCard', () => {
   })
 
   it('does not render an invented age when the start time is unknown', () => {
-    renderCard({ card: card({ startedAt: 0 }), now: 2_000_000_000 })
+    renderCard({ card: card({ startedAt: 0, stateChangedAt: 0 }), now: 2_000_000_000 })
 
     expect(screen.queryByText(/\d+d/)).not.toBeInTheDocument()
   })
@@ -200,7 +200,7 @@ describe('AgentKanbanCard', () => {
     expect(screen.queryByRole('img', { name: 'In review' })).not.toBeInTheDocument()
   })
 
-  it('tints unseen Done green and keeps acknowledged Done neutral as Idle', () => {
+  it('reserves the green result tint for explicit verification instead of an unseen agent reply', () => {
     const { container: attention } = renderCard({
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
@@ -212,7 +212,8 @@ describe('AgentKanbanCard', () => {
       card: card({ bucket: 'done', dotState: 'done', unseen: true }),
       now: 2_000
     })
-    expect(done.firstElementChild?.className).toContain('border-emerald-500/40')
+    expect(done.firstElementChild?.className).not.toContain('border-emerald-500/40')
+    expect(screen.getByText('Responded · not reviewed')).toBeInTheDocument()
 
     cleanup()
     const { container: idle } = renderCard({
@@ -237,7 +238,7 @@ describe('AgentKanbanCard', () => {
     expect(header).toHaveTextContent('Sparse-checkout parser')
     expect(header).not.toHaveTextContent('dashboard-review')
     expect(footer).toHaveTextContent('dashboard-review')
-    expect(screen.getByText('You')).toBeInTheDocument()
+    expect(screen.getByText('You: ship it')).not.toBeVisible()
   })
 
   it('heads the card with the worktree when no name resolves, without repeating it', () => {
@@ -249,7 +250,7 @@ describe('AgentKanbanCard', () => {
     )
   })
 
-  it('shows the repo as an icon labelled with its name instead of inline text', () => {
+  it('shows the project name as visible text as well as an icon', () => {
     renderCard({
       card: card(),
       now: 2_000,
@@ -257,6 +258,7 @@ describe('AgentKanbanCard', () => {
     })
 
     expect(screen.getByLabelText('Orca')).toBeInTheDocument()
+    expect(screen.getByText('Orca')).toBeInTheDocument()
     expect(screen.getByText('🐳')).toBeInTheDocument()
   })
 
@@ -278,7 +280,7 @@ describe('AgentKanbanCard', () => {
       </TooltipProvider>
     )
     expect(agentIconRender).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('1m')).toBeInTheDocument()
+    expect(screen.getByText('State 1m ago')).toBeInTheDocument()
 
     // A fresh structured clone of identical data — including the repo icon.
     rerender(
@@ -304,7 +306,7 @@ describe('AgentKanbanCard', () => {
       </TooltipProvider>
     )
     expect(agentIconRender).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('2m')).toBeInTheDocument()
+    expect(screen.getByText('State 2m ago')).toBeInTheDocument()
   })
 
   it('rerenders when a working card enters monitoring', () => {
@@ -355,12 +357,12 @@ describe('AgentKanbanCard', () => {
 
   it('updates the relative age when the UI language changes', async () => {
     renderCard({ card: card({ startedAt: 1_000 }), now: 121_500 })
-    expect(screen.getByText('2m')).toBeInTheDocument()
+    expect(screen.getByText('State 2m ago')).toBeInTheDocument()
 
     await act(async () => {
       await i18n.changeLanguage('ja')
     })
 
-    expect(screen.getByText('2分')).toBeInTheDocument()
+    expect(screen.getByText('State 2分 ago')).toBeInTheDocument()
   })
 })

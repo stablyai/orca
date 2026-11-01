@@ -11,6 +11,7 @@ import type {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
+import { taskNoteIdentity, taskObservation } from './agent-task-status'
 
 // Stub card/dialog internals while retaining the board’s dialog wiring.
 vi.mock('./AgentKanbanCard', () => ({
@@ -110,10 +111,15 @@ describe('AgentKanbanBoard', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the three default columns in order', () => {
+  it('separates waiting input and responses without calling an agent reply completed work', () => {
     renderBoard([])
-    const headers = screen.getAllByText(/Needs You|Working|Done/)
-    expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
+    const headers = screen.getAllByRole('region')
+    expect(headers.map((h) => h.getAttribute('aria-label'))).toEqual([
+      'Needs You',
+      'Working',
+      'Waiting for input',
+      'Responses'
+    ])
   })
 
   it('hides the agent map from dashboard chrome', () => {
@@ -130,7 +136,7 @@ describe('AgentKanbanBoard', () => {
 
     expect(
       screen.getAllByRole('region').map((region) => region.getAttribute('aria-label'))
-    ).toEqual(['Needs You', 'Working', 'Done'])
+    ).toEqual(['Needs You', 'Working', 'Waiting for input', 'Responses'])
     expect(
       within(screen.getByRole('region', { name: 'Needs You' })).getByText('needs-review')
     ).toBeInTheDocument()
@@ -141,8 +147,8 @@ describe('AgentKanbanBoard', () => {
     await i18n.changeLanguage('zh')
     renderBoard([], { showIdle: true })
 
-    expect(screen.getAllByRole('region')).toHaveLength(4)
-    for (const name of ['需要你', '工作中', '已完成', '空闲']) {
+    expect(screen.getAllByRole('region')).toHaveLength(5)
+    for (const name of ['需要你', '工作中', 'Waiting for input', 'Responses', '空闲']) {
       const region = screen.getByRole('region', { name })
       expect(within(region).getByText(name)).toBeInTheDocument()
     }
@@ -210,7 +216,7 @@ describe('AgentKanbanBoard', () => {
 
   it('shows "None" for empty columns', () => {
     renderBoard([card({ bucket: 'working' })])
-    expect(screen.getAllByText('None')).toHaveLength(2)
+    expect(screen.getAllByText('None')).toHaveLength(3)
   })
 
   it('shows the idle column only when enabled', () => {
@@ -218,6 +224,85 @@ describe('AgentKanbanBoard', () => {
 
     expect(screen.getByText('Idle')).toBeInTheDocument()
     expect(screen.getByText('quiet-agent')).toBeInTheDocument()
+  })
+
+  it('folds old responses and reveals them on request without folding waiting tabs', () => {
+    const old = Date.now() - 3 * 86400000
+    renderBoard([
+      card({
+        bucket: 'done',
+        worktreeName: 'yesterday-response',
+        finishedAt: Date.now() - 36 * 60 * 60 * 1000
+      }),
+      card({ bucket: 'done', worktreeName: 'old-response', finishedAt: old }),
+      card({
+        bucket: 'done',
+        worktreeName: 'waiting-source',
+        conversationName: 'Wait/AINF/Source',
+        finishedAt: old
+      })
+    ])
+    expect(screen.getByText('yesterday-response')).toBeInTheDocument()
+    expect(screen.queryByText('old-response')).not.toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: 'Waiting for input' })).getByText('waiting-source')
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show older responses (1)' }))
+    expect(screen.getByText('old-response')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide older responses' }))
+    expect(screen.queryByText('old-response')).not.toBeInTheDocument()
+  })
+
+  it('keeps read responses and manual waiting visible when idle agents are hidden', () => {
+    const response = card({
+      paneKey: 'read',
+      bucket: 'idle',
+      dotState: 'done',
+      finishedAt: Date.now() - 1000,
+      worktreeName: 'read-response'
+    })
+    const waiting = {
+      ...response,
+      paneKey: 'wait',
+      worktreeName: 'manual-wait',
+      finishedAt: Date.now() - 3 * 86400000
+    }
+    localStorage.setItem(
+      `orca:dashboard-task-note:v1:${taskNoteIdentity(waiting)}`,
+      JSON.stringify({
+        status: 'waiting-input',
+        title: '',
+        summary: '',
+        nextStep: 'Supply source',
+        owner: 'Owner',
+        reviewReference: '',
+        observation: taskObservation(waiting),
+        savedAt: Date.now()
+      })
+    )
+    renderBoard([response, waiting], { showIdle: false })
+    expect(
+      within(screen.getByRole('region', { name: 'Responses' })).getByText('read-response')
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: 'Waiting for input' })).getByText('manual-wait')
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Idle' })).not.toBeInTheDocument()
+  })
+
+  it('includes matching older responses in search results', () => {
+    renderBoard([
+      card({
+        bucket: 'done',
+        worktreeName: 'historical-source',
+        finishedAt: Date.now() - 3 * 86400000
+      })
+    ])
+    fireEvent.change(screen.getByLabelText('Search agents'), {
+      target: { value: 'historical-source' }
+    })
+    expect(screen.getByText('historical-source')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show older/ })).not.toBeInTheDocument()
   })
 
   it('searches agent content and reports the visible result count', () => {
@@ -237,7 +322,7 @@ describe('AgentKanbanBoard', () => {
     await i18n.changeLanguage('ja')
     renderBoard([card({ bucket: 'done' })])
 
-    expect(screen.getByText('完了')).toBeInTheDocument()
+    expect(screen.getByText('Responses')).toBeInTheDocument()
     expect(screen.getByLabelText('Agent を検索')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^フィルター/ })).toBeInTheDocument()
   })
