@@ -17,19 +17,26 @@ export function useEmulatorInputCheck(
 ) {
   const [blocked, setBlocked] = useState<{ target: string; message: string } | null>(null)
   const lastCheckAtRef = useRef(0)
+  const latestCheckRef = useRef(0)
 
   const runCheck = useCallback(async () => {
     if (!liveTarget) {
       return
     }
+    const checkId = ++latestCheckRef.current
     lastCheckAtRef.current = Date.now()
+    let next: { target: string; message: string } | null = null
     try {
       await callRuntimeRpc({ kind: 'local' }, 'emulator.checkInput', { worktree: worktreeId })
-      setBlocked(null)
     } catch (error) {
-      if (isInputBlockedError(error)) {
-        setBlocked({ target: liveTarget, message: emulatorErrorText(error, error.message) })
+      if (!isInputBlockedError(error)) {
+        return
       }
+      next = { target: liveTarget, message: emulatorErrorText(error, error.message) }
+    }
+    // A slower check from a previous attach must not overwrite a newer answer.
+    if (checkId === latestCheckRef.current) {
+      setBlocked(next)
     }
   }, [liveTarget, worktreeId])
 

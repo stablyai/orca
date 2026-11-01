@@ -80,6 +80,8 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6"
         onPointerDownCapture={checkOnInteraction}
         onWheelCapture={checkOnInteraction}
+        onKeyDownCapture={checkOnInteraction}
+        onPasteCapture={checkOnInteraction}
       >
         <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (

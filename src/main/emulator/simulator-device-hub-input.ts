@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { EmulatorError } from './emulator-errors'
 import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 
@@ -6,15 +6,17 @@ import { emulatorFailureText } from '../../shared/emulator-failure-copy'
 const DEVICE_HUB_INPUT_KEY = 'com.apple.coredevice.dtuhidd.active'
 
 // Unknown state (older Xcode, shutdown device) counts as clear so the input command reports its own failure.
-function isDeviceHubInputActive(udid: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(
-      'xcrun',
-      ['simctl', 'spawn', udid, 'notifyutil', '-g', DEVICE_HUB_INPUT_KEY],
-      { timeout: 5_000 },
-      (error, stdout) => resolve(!error && stdout.trim() === `${DEVICE_HUB_INPUT_KEY} 1`)
-    )
-  })
+async function isDeviceHubInputActive(udid: string): Promise<boolean> {
+  try {
+    const result = await runProcess({
+      program: 'xcrun',
+      args: ['simctl', 'spawn', udid, 'notifyutil', '-g', DEVICE_HUB_INPUT_KEY],
+      timeoutMs: 5_000
+    })
+    return result.code === 0 && result.stdout.trim() === `${DEVICE_HUB_INPUT_KEY} 1`
+  } catch {
+    return false
+  }
 }
 
 export async function assertSimulatorInputNotShadowedByDeviceHub(udid: string): Promise<void> {

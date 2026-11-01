@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SimulatorDevice } from '../simctl-simulator-devices'
 import type { ServeSimHelperProcess } from '../serve-sim-helper-processes'
 import type * as ServeSimExecution from '../serve-sim-execution'
+import type * as ProcessHost from '@orca/process-host'
 
 const {
   ensureSimulatorBootedMock,
@@ -29,13 +30,9 @@ const {
   netFetchMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: (
-    _file: string,
-    _args: string[],
-    _options: unknown,
-    callback: (error: Error | null, stdout: string) => void
-  ) => callback(null, notifyutilState.stdout)
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHost>()),
+  runProcess: vi.fn(async () => ({ code: 0, stdout: notifyutilState.stdout, stderr: '' }))
 }))
 
 vi.mock('../../network/http-client', () => ({
