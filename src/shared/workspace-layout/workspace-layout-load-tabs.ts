@@ -13,7 +13,8 @@ const TERMINAL_CREATION_FIELDS = [
   'shellOverride',
   'forceHostRuntime',
   'startupCwd',
-  'launchAgent'
+  'launchAgent',
+  'hostTerminalAlias'
 ] as const satisfies readonly (keyof LayoutTerminalCreation)[]
 
 function contentFields(entry: Tab) {

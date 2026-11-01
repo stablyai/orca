@@ -1,3 +1,4 @@
+import { terminalHostAliasSchema, terminalHostAliasMatchesTab } from './terminal-host-alias'
 // Validate persisted sessions at read boundaries so malformed legacy data never reaches React. Ignore unknown fields, validate fields we read, and salvage independent entries via zod-salvage; only non-session payloads reset to defaults.
 import { z } from 'zod'
 import {
@@ -37,7 +38,8 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
 
-export const terminalTabSchema = z.object({
+export const terminalTabRowSchema = z.object({
+  hostTerminalAlias: terminalHostAliasSchema.optional(),
   id: terminalTabIdSchema,
   ptyId: z.string().nullable(),
   worktreeId: z.string(),
@@ -70,46 +72,61 @@ export const terminalTabSchema = z.object({
     .catch(undefined)
 })
 
+export const terminalTabSchema = terminalTabRowSchema.refine(
+  (row) => !row.hostTerminalAlias || terminalHostAliasMatchesTab(row.hostTerminalAlias, row.id),
+  'Terminal alias must reference its host tab'
+)
+
 const executionHostIdSchema = z.custom<ExecutionHostId>(
   (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
 )
 
-const tabSchema = z.object({
-  id: z.string(),
-  entityId: z.string(),
-  groupId: z.string(),
-  worktreeId: z.string(),
-  executionHostId: executionHostIdSchema.optional(),
-  contentType: tabContentTypeSchema,
-  // Accept registered agent slugs across mixed versions; invalid slugs become absent rather than rejecting the session.
-  agentSessionAgent: z
-    .string()
-    .refine((value) => isStructuredAgentId(value))
-    .optional()
-    .catch(undefined),
-  label: z.string(),
-  generatedLabel: z.string().nullable().optional(),
-  aiVaultTitle: z
-    .object({
-      agent: z.enum(['claude', 'codex']),
-      sessionId: z.string(),
-      title: z.string()
-    })
-    .nullable()
-    .optional()
-    .catch(undefined),
-  quickCommandLabel: z.string().nullable().optional(),
-  customLabel: z.string().nullable(),
-  color: z.string().nullable(),
-  sortOrder: z.number(),
-  createdAt: z.number(),
-  // Why: corrupt optional recency must not discard the whole persisted tab.
-  lastFocusedAt: z.number().finite().nonnegative().optional().catch(undefined),
-  isPreview: z.boolean().optional(),
-  isPinned: z.boolean().optional(),
-  // Preserve chat mode on restore; unknown future values degrade to terminal and missing legacy values remain absent.
-  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
-})
+const tabSchema = z
+  .object({
+    hostTerminalAlias: terminalHostAliasSchema.optional(),
+    id: z.string(),
+    entityId: z.string(),
+    groupId: z.string(),
+    worktreeId: z.string(),
+    executionHostId: executionHostIdSchema.optional(),
+    contentType: tabContentTypeSchema,
+    // Accept registered agent slugs across mixed versions; invalid slugs become absent rather than rejecting the session.
+    agentSessionAgent: z
+      .string()
+      .refine((value) => isStructuredAgentId(value))
+      .optional()
+      .catch(undefined),
+    label: z.string(),
+    generatedLabel: z.string().nullable().optional(),
+    aiVaultTitle: z
+      .object({
+        agent: z.enum(['claude', 'codex']),
+        sessionId: z.string(),
+        title: z.string()
+      })
+      .nullable()
+      .optional()
+      .catch(undefined),
+    quickCommandLabel: z.string().nullable().optional(),
+    customLabel: z.string().nullable(),
+    color: z.string().nullable(),
+    sortOrder: z.number(),
+    createdAt: z.number(),
+    // Why: corrupt optional recency must not discard the whole persisted tab.
+    lastFocusedAt: z.number().finite().nonnegative().optional().catch(undefined),
+    isPreview: z.boolean().optional(),
+    isPinned: z.boolean().optional(),
+    // Preserve chat mode on restore; unknown future values degrade to terminal and missing legacy values remain absent.
+    viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional()
+  })
+  .refine(
+    (entry) =>
+      !entry.hostTerminalAlias ||
+      (entry.contentType === 'terminal' &&
+        entry.executionHostId === entry.hostTerminalAlias.executionHostId &&
+        terminalHostAliasMatchesTab(entry.hostTerminalAlias, entry.entityId)),
+    'Terminal alias must reference its host tab'
+  )
 
 const tabGroupSchema = z.object({
   id: z.string(),

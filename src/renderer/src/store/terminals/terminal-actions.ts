@@ -84,6 +84,7 @@ export type TerminalActions = {
       id?: string
       /** `id` is a mirrored host tab's `web-terminal-` id, minted here and never taken from IPC. */
       mirroredHostTab?: boolean
+      hostTerminalAlias?: TerminalTab['hostTerminalAlias']
       launchAgent?: TuiAgent
       /** The pane a host `agent.launch` laid out before its agent existed, while its fate is open. */
       agentLaunchPane?: TerminalTab['agentLaunchPane']
@@ -94,13 +95,15 @@ export type TerminalActions = {
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
-  /** Synchronous retirement: provider teardown starts before state removal but is never awaited. */
+  /** Alias retirement waits for HOST close; ordinary provider teardown starts synchronously. */
   closeTab: (
     tabId: string,
     opts?: {
       recordInteraction?: boolean
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
+      force?: boolean
+      hostAliasCloseConfirmed?: true
       remoteCloseOwnedByHost?: boolean
       /** See closeUnifiedTab. */
       preserveWorktreeSelection?: boolean

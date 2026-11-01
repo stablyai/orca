@@ -1,3 +1,4 @@
+import { terminalHostAliasMatchesTab, type TerminalHostAlias } from '../terminal-host-alias'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
@@ -12,9 +13,13 @@ type FileOwner = Pick<
   'filePath' | 'externalSshTargetId' | 'runtimeEnvironmentId'
 >
 
-/** Editor tabs follow file ownership; all other tabs follow their partition. */
+/** Editor files and terminal aliases keep content ownership; ordinary tabs follow their partition. */
 export function tabExecutionHostId(
-  tab: { kind: TabContentType; entityId: string },
+  tab: {
+    kind: TabContentType
+    entityId: string
+    terminal?: { hostTerminalAlias?: TerminalHostAlias }
+  },
   workspace: {
     worktreeId: string
     tabs: readonly { entityId: string }[]
@@ -22,6 +27,10 @@ export function tabExecutionHostId(
   },
   hostId: ExecutionHostId
 ): ExecutionHostId {
+  const alias = tab.kind === 'terminal' ? tab.terminal?.hostTerminalAlias : undefined
+  if (alias && terminalHostAliasMatchesTab(alias, tab.entityId)) {
+    return alias.executionHostId
+  }
   const file = tab.kind === 'editor' ? editorTabFile(workspace, tab.entityId) : undefined
   if (file?.externalSshTargetId) {
     return toSshExecutionHostId(file.externalSshTargetId)

@@ -59,7 +59,10 @@ function legacyLayout(
   row: TerminalTab,
   args: WorkspaceLoadArgs
 ): TerminalLayoutSnapshot {
-  const leafId = recordedLeafId(session, row.id) ?? args.context.mintLeafId(`leaf:${row.id}`)
+  const leafId =
+    row.hostTerminalAlias?.leafId ??
+    recordedLeafId(session, row.id) ??
+    args.context.mintLeafId(`leaf:${row.id}`)
   return {
     root: { type: 'leaf', leafId },
     activeLeafId: leafId,

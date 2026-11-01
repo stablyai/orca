@@ -1,3 +1,4 @@
+import { terminalHostAliasSchema } from '../terminal-host-alias'
 // Exercise each legacy Loader normalization; fields outside its rule must survive unchanged.
 
 import { describe, expect, it } from 'vitest'
@@ -266,6 +267,46 @@ describe('Loader precedence for stored data that disagrees with itself, and its 
     expect(saved.unifiedTabs![GIT_KEY]![0]!.color).toBeNull()
     expect(saved.tabGroups![GIT_KEY]![0]!.worktreeId).toBe(GIT_KEY)
     expect(saved.unifiedTabs![GIT_KEY]![1]!.executionHostId).toBe(LOCAL_EXECUTION_HOST_ID)
+  })
+
+  it('keeps the runtime owner and host identities of an explicit terminal alias', () => {
+    const stored = twoTabs()
+    const id = 'web-terminal-host-tab'
+    const alias = terminalHostAliasSchema.parse({
+      executionHostId: 'runtime:host',
+      worktreeId: 'host::/project',
+      tabId: 'host-tab',
+      leafId: leaf(1)
+    })
+    const row = stored.tabsByWorktree[GIT_KEY]![0]!
+    row.id = id
+    row.hostTerminalAlias = alias
+    row.ptyId = null
+    const entry = stored.unifiedTabs![GIT_KEY]![0]!
+    entry.id = id
+    entry.entityId = id
+    entry.hostTerminalAlias = alias
+    entry.executionHostId = alias.executionHostId
+    stored.tabGroups![GIT_KEY]![0]!.tabOrder[0] = id
+    stored.tabGroups![GIT_KEY]![0]!.activeTabId = id
+    stored.terminalLayoutsByTabId[id] = {
+      root: { type: 'leaf', leafId: alias.leafId },
+      activeLeafId: alias.leafId,
+      expandedLeafId: null
+    }
+    delete stored.terminalLayoutsByTabId['tab-a']
+    const saved = saveWorkspaceLayout(load(stored))
+    expect(saved.tabsByWorktree[GIT_KEY]![0]!.hostTerminalAlias).toEqual(alias)
+    expect(saved.unifiedTabs![GIT_KEY]![0]).toMatchObject({
+      executionHostId: 'runtime:host',
+      hostTerminalAlias: alias
+    })
+    delete stored.terminalLayoutsByTabId[id]
+    const restored = saveWorkspaceLayout(load(stored))
+    expect(restored.terminalLayoutsByTabId[id]!.root).toEqual({
+      type: 'leaf',
+      leafId: alias.leafId
+    })
   })
 
   it('saves a moved editor tab an older build left naming its old workspace under its own', () => {

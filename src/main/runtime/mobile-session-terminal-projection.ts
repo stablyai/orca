@@ -47,6 +47,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
 ): RuntimeMobileSessionTerminalTab[] {
   const { rows, selection } = withoutAbsorbedLegacyRows(worktreeId, persistedTabs, session)
   return rows
+    .filter((tab) => !tab.hostTerminalAlias)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     .flatMap((tab, index) => {
       const layout = session.terminalLayoutsByTabId?.[tab.id]

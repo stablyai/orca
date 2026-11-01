@@ -1,3 +1,4 @@
+import { terminalHostAliasMatchesTab } from '../../../shared/terminal-host-alias'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { OpenFile } from '@/store/slices/editor'
@@ -63,12 +64,26 @@ export function getActiveExecutionHostIdForWorktree(
 }
 
 export function isUnifiedTabOwnedByWorktree(
-  tab: Pick<Tab, 'executionHostId' | 'worktreeId'> | undefined,
+  tab:
+    | (Pick<Tab, 'executionHostId' | 'worktreeId'> &
+        Partial<Pick<Tab, 'hostTerminalAlias' | 'contentType' | 'entityId'>>)
+    | undefined,
   worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>,
   ambiguousWorktreeIds: ReadonlySet<string>
 ): boolean {
   if (!tab || tab.worktreeId !== worktree.id) {
     return false
+  }
+  const alias = tab.contentType === 'terminal' ? tab.hostTerminalAlias : undefined
+  if (
+    alias &&
+    tab.executionHostId === alias.executionHostId &&
+    terminalHostAliasMatchesTab(alias, tab.entityId ?? '') &&
+    (worktree.hostId ?? 'local') === 'local' &&
+    !worktree.runtimeOwnerEnvironmentId?.trim() &&
+    !ambiguousWorktreeIds.has(worktree.id)
+  ) {
+    return true
   }
   if (tab.executionHostId) {
     return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)

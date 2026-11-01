@@ -1,3 +1,5 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
@@ -114,4 +116,52 @@ async function retireRuntimeTerminal(
       expectedEnvironmentPairingRevision: revision
     }
   )
+}
+
+export function startTerminalHostAliasRetirement(
+  aliasRow: TerminalTab,
+  get: () => AppState,
+  opts: Parameters<AppState['closeTab']>[1]
+): void {
+  const alias = aliasRow.hostTerminalAlias
+  if (!alias) {
+    return
+  }
+  const host = parseExecutionHostId(alias.executionHostId)
+  const close =
+    host?.kind !== 'runtime'
+      ? Promise.resolve('failed' as const)
+      : aliasRow.hostTerminalAliasGone
+        ? Promise.resolve('unknown-tab' as const)
+        : import('@/runtime/web-runtime-session-tab-lifecycle').then(
+            ({ closeWebRuntimeSessionTab }) =>
+              closeWebRuntimeSessionTab({
+                worktreeId: alias.worktreeId,
+                tabId: alias.tabId,
+                environmentId: host.environmentId,
+                reason: 'user',
+                ...(opts?.force ? { force: true } : {})
+              })
+          )
+  void close
+    .then((outcome) => {
+      const current = get().tabsByWorktree[aliasRow.worktreeId]?.find(
+        (row) => row.id === aliasRow.id
+      )?.hostTerminalAlias
+      if (
+        outcome !== 'failed' &&
+        current?.executionHostId === alias.executionHostId &&
+        current.worktreeId === alias.worktreeId &&
+        current.tabId === alias.tabId
+      ) {
+        get().closeTab(aliasRow.id, {
+          ...opts,
+          captureRecentlyClosed: false,
+          remoteCloseOwnedByHost: true,
+          localPtyTeardownOwnedExternally: true,
+          hostAliasCloseConfirmed: true
+        })
+      }
+    })
+    .catch((error) => console.warn('HOST alias close failed', error))
 }
