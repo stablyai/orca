@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Editor } from '@tiptap/react'
 import type * as EditorInstance from './useRichMarkdownEditorInstance'
@@ -73,15 +73,18 @@ it.each(['outside', 'null', 'inside'] as const)(
         headerSlot={<input aria-label="inside" />}
       />
     )
-    await waitFor(() => {
-      const current = live.editor
-      if (!current) {
-        throw new Error('Editor did not mount')
-      }
-      expect(current.isInitialized).toBe(true)
-      expect(current.view.dom.isConnected).toBe(true)
-      expect(view.container.contains(current.view.dom)).toBe(true)
-    })
+    // Why: Tiptap emits create on a zero-delay timer, and typing before it lands is dropped as initialization.
+    await act(() =>
+      vi.waitFor(() => {
+        const current = live.editor
+        if (!current) {
+          throw new Error('Editor did not mount')
+        }
+        expect(current.isInitialized).toBe(true)
+        expect(current.view.dom.isConnected).toBe(true)
+        expect(view.container.contains(current.view.dom)).toBe(true)
+      })
+    )
     const editor = live.editor
     const root = view.container.querySelector('.rich-markdown-editor-shell')
     if (!editor || !root) {

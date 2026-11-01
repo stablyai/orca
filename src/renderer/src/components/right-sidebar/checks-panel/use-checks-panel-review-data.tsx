@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useCallback, useEffect } from 'react'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
@@ -77,6 +78,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         const result = await fetchPRComments(repo.path, targetPRNumber, {
           force,
           repoId: repo.id,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
           prRepo: targetPRRepo,
           ...(userRefresh ? { userRefresh: true } : {})
         })
@@ -94,9 +96,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
         }
         console.warn('Failed to fetch PR comments:', err)
         setComments([])
-        setCommentsError(
-          checksPanelLoadErrorMessage(err, forgeOwnerHostIdForWorkspace(repo, activeWorktree))
-        )
+        setCommentsError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
       } finally {
         if (
           isCurrentAsyncResult(
@@ -118,8 +118,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       isCurrentAsyncResult,
       setCommentsLoading,
       setComments,
-      setCommentsError,
-      activeWorktree
+      setCommentsError
     ]
   )
 
@@ -146,7 +145,7 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
           url: check.url,
           prRepo: pr?.prRepo ?? null
         },
-        { repoId: repo.id }
+        { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
       )
     },
     [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef]
@@ -172,7 +171,11 @@ export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
       pr?.headSha
     )
     setCommentsLoading(true)
-    void fetchPRComments(repo.path, prNumber, { repoId: repo.id, prRepo: pr?.prRepo }).then(
+    void fetchPRComments(repo.path, prNumber, {
+      repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      prRepo: pr?.prRepo
+    }).then(
       (result) => {
         if (!cancelled && isCurrentAsyncResult(requestKey)) {
           setComments(result)
