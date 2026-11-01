@@ -10474,7 +10474,7 @@
             "agent": "에이전트",
             "process": "프로세스",
             "prompt": "프롬프트",
-            "stop": "멈추다",
+            "stop": "중지",
             "minimumContrast": {
               "title": "색상 대비",
               "description": "텍스트 가독성을 높이거나 터미널 프로그램에서 선택한 색상을 유지합니다.",
@@ -17374,7 +17374,7 @@
           "unreadCount_other": "읽지 않음 {{count}}개"
         },
         "clearCompleted": {
-          "undo": "끄르다",
+          "undo": "실행 취소",
           "cleared_other": "완료된 에이전트 {{count}}개를 지웠습니다"
         },
         "standaloneWorktree": {
@@ -18933,7 +18933,7 @@
       },
       "backgroundTasks": {
         "monitoring": "백그라운드 작업 모니터링",
-        "stop": "멈추다",
+        "stop": "중지",
         "stopTask": "{{value0}} 중지",
         "stopAll": "백그라운드 작업 중지",
         "agent": "백그라운드 에이전트",
@@ -20710,7 +20710,7 @@
   "rendererRecovery": {
     "reload": "새로고침",
     "copyCommands": "복사 명령",
-    "quit": "그만두다",
+    "quit": "종료",
     "stalledDetail": "Orca는 충돌 후 창을 다시 로드했지만 로드가 완료되지 않았습니다.",
     "crashLoopDetail": "Orca는 {{recoveryCount}}회 연속 복구를 시도했지만 성공하지 못했습니다.",
     "driverFallback": "그래도 도움이 되지 않으면 일반적으로 원인은 그래픽 드라이버입니다.",

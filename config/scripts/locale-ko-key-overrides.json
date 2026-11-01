@@ -5656,5 +5656,17 @@
   },
   "auto.components.onboarding.IntegrationsStep.linearWorkspacesLinkedPlural": {
     "ko": "워크스페이스 {{count}}개가 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 접근 권한이 제한된 API 키를 교체할 수 있습니다."
+  },
+  "auto.components.activity.clearCompleted.undo": {
+    "ko": "실행 취소"
+  },
+  "auto.components.settings.terminal.search.stop": {
+    "ko": "중지"
+  },
+  "components.native-chat.backgroundTasks.stop": {
+    "ko": "중지"
+  },
+  "rendererRecovery.quit": {
+    "ko": "종료"
   }
 }
