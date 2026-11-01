@@ -34,6 +34,7 @@ export type TuiAgent =
   | 'rovo' // Rovo Dev
   | 'hermes' // Hermes Agent
   | 'openclaw'
+  | 'zeroclaw' // ZeroClaw (zeroclaw-labs)
   | 'copilot'
   | 'grok'
   | 'devin'
