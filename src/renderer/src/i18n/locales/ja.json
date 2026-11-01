@@ -22692,6 +22692,7 @@
       "androidDeviceNotRunning": "Android デバイス「{{device}}」は起動していません。先に起動してください。",
       "unknownDeviceOrAvd": "「{{device}}」は起動中のデバイスでも既知の AVD でもありません。",
       "avdBootTimeout": "AVD「{{avdName}}」の起動が時間内に完了しませんでした。",
+      "avdExitedBeforeBoot": "AVD「{{avdName}}」は起動が完了する前に停止しました: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy サーバーをダウンロードできませんでした: {{detail}}",
       "scrcpyServerInvalid": "ダウンロードした scrcpy サーバーは無効または不完全でした。"
     },

@@ -23382,6 +23382,7 @@
       "androidDeviceNotRunning": "El dispositivo Android \"{{device}}\" no está en ejecución. Inícialo primero.",
       "unknownDeviceOrAvd": "\"{{device}}\" no es un dispositivo en ejecución ni un AVD conocido.",
       "avdBootTimeout": "El AVD \"{{avdName}}\" no terminó de iniciarse a tiempo.",
+      "avdExitedBeforeBoot": "El AVD \"{{avdName}}\" se detuvo antes de terminar de iniciarse: {{detail}}",
       "scrcpyDownloadFailed": "No se pudo descargar el servidor de scrcpy: {{detail}}",
       "scrcpyServerInvalid": "El servidor de scrcpy descargado no era válido o estaba incompleto."
     },

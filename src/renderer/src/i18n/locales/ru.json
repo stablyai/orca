@@ -23723,6 +23723,7 @@
       "androidDeviceNotRunning": "Устройство Android «{{device}}» не запущено. Сначала запустите его.",
       "unknownDeviceOrAvd": "«{{device}}» не является ни запущенным устройством, ни известным AVD.",
       "avdBootTimeout": "AVD «{{avdName}}» не завершил загрузку вовремя.",
+      "avdExitedBeforeBoot": "AVD «{{avdName}}» остановился до завершения загрузки: {{detail}}",
       "scrcpyDownloadFailed": "Не удалось скачать сервер scrcpy: {{detail}}",
       "scrcpyServerInvalid": "Скачанный сервер scrcpy оказался некорректным или неполным."
     },

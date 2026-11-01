@@ -22953,6 +22953,7 @@
       "androidDeviceNotRunning": "\"{{device}}\" adlı Android cihazı çalışmıyor. Önce başlatın.",
       "unknownDeviceOrAvd": "\"{{device}}\", çalışan bir cihaz veya bilinen bir AVD değil.",
       "avdBootTimeout": "\"{{avdName}}\" adlı AVD'nin açılışı zamanında tamamlanmadı.",
+      "avdExitedBeforeBoot": "\"{{avdName}}\" adlı AVD açılışı tamamlanmadan durdu: {{detail}}",
       "scrcpyDownloadFailed": "scrcpy sunucusu indirilemedi: {{detail}}",
       "scrcpyServerInvalid": "İndirilen scrcpy sunucusu geçersizdi veya eksikti."
     },

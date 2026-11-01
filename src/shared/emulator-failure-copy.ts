@@ -22,6 +22,7 @@ export const EMULATOR_FAILURE_COPY = {
   androidDeviceNotRunning: 'Android device "{{device}}" is not running. Boot it first.',
   unknownDeviceOrAvd: '"{{device}}" is not a running device or a known AVD.',
   avdBootTimeout: 'AVD "{{avdName}}" did not finish booting in time.',
+  avdExitedBeforeBoot: 'AVD "{{avdName}}" stopped before it finished booting: {{detail}}',
   scrcpyDownloadFailed: 'Could not download scrcpy server: {{detail}}',
   scrcpyServerInvalid: 'Downloaded scrcpy server was invalid or truncated.'
 } as const
@@ -53,6 +54,7 @@ const COPY_CODES_BY_ERROR_CODE: Readonly<Record<string, readonly EmulatorFailure
     'serveSimNoEndpoints',
     'serveSimEndpointUnreachable',
     'avdBootTimeout',
+    'avdExitedBeforeBoot',
     'scrcpyDownloadFailed',
     'scrcpyServerInvalid'
   ],

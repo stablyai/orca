@@ -22693,6 +22693,7 @@
       "androidDeviceNotRunning": "Android 设备“{{device}}”未运行。请先启动它。",
       "unknownDeviceOrAvd": "“{{device}}”不是正在运行的设备，也不是已知的 AVD。",
       "avdBootTimeout": "AVD “{{avdName}}”未能及时完成启动。",
+      "avdExitedBeforeBoot": "AVD “{{avdName}}”在完成启动前已停止：{{detail}}",
       "scrcpyDownloadFailed": "无法下载 scrcpy 服务器：{{detail}}",
       "scrcpyServerInvalid": "下载的 scrcpy 服务器无效或不完整。"
     },
