@@ -93,7 +93,12 @@ const Traffic = z.object({
 })
 export type CrewTraffic = z.infer<typeof Traffic>
 
-/** Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
+/**
+ * Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers.
+ * Escalations are skipped: Orca's failure notices are written as the worker's escalation and
+ * carry IDs and CLI syntax meant for the coordinator agent, not a preview line for the user.
+ * The heartbeat term stays separate so the partial message indexes still match.
+ */
 export function readCrewTraffic(
   db: OrchestrationDb,
   aliases: string[],
@@ -105,11 +110,11 @@ export function readCrewTraffic(
     WITH traffic AS (
       SELECT to_handle AS peer, 'to' AS direction, sequence
       FROM messages WHERE from_handle IN (SELECT value FROM json_each(?))
-        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat'
+        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat' AND type <> 'escalation'
       UNION ALL
       SELECT from_handle AS peer, 'from' AS direction, sequence
       FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
-        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat'
+        AND julianday(created_at) >= julianday(?) AND type <> 'heartbeat' AND type <> 'escalation'
     ), peers AS (SELECT peer, MAX(sequence) AS sequence FROM traffic GROUP BY peer)
     SELECT traffic.peer, traffic.direction, traffic.sequence, winner.body, winner.created_at
     FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.sequence = peers.sequence
