@@ -6,7 +6,7 @@ import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../session/
 // Keep grant segments lowercase: media.readChunk would fail manifest grammar and reject the whole bundle.
 
 // Clipboard images use the same pick/stage/read path; keep clipboard.read text-only rather than returning oversized inline images.
-export const BRIDGE_MEDIA_SOURCES = ['library', 'files', 'clipboard'] as const
+export const BRIDGE_MEDIA_SOURCES = ['library', 'files', 'clipboard', 'camera'] as const
 
 export type BridgeMediaSource = (typeof BRIDGE_MEDIA_SOURCES)[number]
 

@@ -24,7 +24,7 @@ export function mobileNativeChatAttachActions(args: {
   }
   if (args.onTakePhoto) {
     actions.push({
-      id: 'camera',
+      id: 'takePhoto',
       label: translate('session.nativeChatAttachActions.takePhoto', 'Take photo'),
       icon: Camera,
       closeBeforePress: true,

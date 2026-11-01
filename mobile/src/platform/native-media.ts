@@ -45,6 +45,7 @@ export type NativeMediaDeps = {
   // Bound selection by remaining registry room when the picker supports a limit.
   readonly launchLibrary: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
   readonly launchFiles: (options: { multiple: boolean; limit: number }) => Promise<PickerResult>
+  readonly launchCamera?: () => Promise<PickerResult>
   readonly readClipboardImage: () => Promise<{
     readonly data: string
     readonly size?: { readonly width: number; readonly height: number }
@@ -182,9 +183,16 @@ export function createNativeMediaVerbServer(
 
     // Expo’s OS library picker needs no permission preflight; an extra denial could block a pick the OS would allow.
     const assets = readAssets(
-      await (source === 'library'
-        ? deps.launchLibrary({ multiple, limit: room })
-        : deps.launchFiles({ multiple, limit: room }))
+      await (source === 'camera'
+        ? (() => {
+            if (!deps.launchCamera) {
+              throw new Error('camera capture is unavailable in this shell')
+            }
+            return deps.launchCamera()
+          })()
+        : source === 'library'
+          ? deps.launchLibrary({ multiple, limit: room })
+          : deps.launchFiles({ multiple, limit: room }))
     )
     if (!isCurrent()) {
       for (const asset of assets) {

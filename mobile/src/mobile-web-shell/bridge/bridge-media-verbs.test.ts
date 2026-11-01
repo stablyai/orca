@@ -18,7 +18,7 @@ const HANDLE = 'media-1'
 
 describe('what a pick may ask for', () => {
   it('takes each source the shell serves, single or multiple', () => {
-    for (const source of ['library', 'files', 'clipboard']) {
+    for (const source of ['library', 'files', 'clipboard', 'camera']) {
       for (const multiple of [true, false]) {
         expect(mediaPickParamsSchema.safeParse({ source, multiple }).success, source).toBe(true)
       }
@@ -27,7 +27,7 @@ describe('what a pick may ask for', () => {
 
   it('refuses a source this build has no picker for, and a missing or extra key', () => {
     for (const params of [
-      { source: 'camera', multiple: false },
+      { source: 'scanner', multiple: false },
       { source: 'library' },
       { multiple: true },
       { source: 'library', multiple: 'yes' },
