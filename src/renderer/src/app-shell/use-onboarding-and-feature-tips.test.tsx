@@ -7,6 +7,7 @@ import type { FeatureTipId } from '../../../shared/feature-tips'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import type { TelemetrySettings } from '../../../shared/telemetry-settings-types'
+import type * as telemetry from '@/lib/telemetry'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { useOnboardingAndFeatureTips } from './use-onboarding-and-feature-tips'
@@ -94,4 +95,26 @@ describe('Chat UI launch tip holdout', () => {
     expect(useAppStore.getState().activeModal).toBe('feature-tips')
     expect(useAppStore.getState().modalData).toMatchObject({ tipId: 'cmd-j-palette' })
   })
+
+  // Exposure is best-effort: a rejected capture (consent flip, session budget, IPC failure) is not
+  // retried, and the tip stays consumed so a failed send never shows it twice.
+  it.each(['treatment', 'control'] as const)(
+    'keeps the %s tip consumed when main rejects the exposure event',
+    async (cohort) => {
+      const actual = await vi.importActual<typeof telemetry>('@/lib/telemetry')
+      vi.mocked(track).mockImplementation(actual.track)
+      const telemetryTrack = vi.fn().mockResolvedValue(false)
+      Object.assign(window.api, { telemetryTrack })
+      await launch(cohort)
+      expect(telemetryTrack).toHaveBeenCalledWith('chat_ui_feature_tip_exposure', {
+        variant: 'chat_ui_off',
+        launch_tip_cohort: cohort,
+        shown: cohort === 'treatment'
+      })
+      expect(useAppStore.getState().featureTipsSeenIds).toContain('chat-ui-here')
+      expect(useAppStore.getState().modalData).toMatchObject({
+        tipId: cohort === 'treatment' ? 'chat-ui-here' : 'cmd-j-palette'
+      })
+    }
+  )
 })
