@@ -13,6 +13,7 @@ type ProjectTargetActionsInput = Pick<
   | 'linkedWorkItem'
   | 'projectGroups'
   | 'projectHostSetups'
+  | 'projectOptions'
   | 'projects'
   | 'repos'
   | 'setBaseBranch'
@@ -31,6 +32,8 @@ type ProjectTargetActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setSelectedProjectGroupId'
+  | 'setSelectedProjectHostSetupOverrideHostId'
+  | 'setSelectedProjectHostSetupOverrideId'
   | 'setSparseDirectories'
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
@@ -44,6 +47,7 @@ import { useCallback } from 'react'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
   getProjectGroupIdFromNewWorkspaceOptionId,
+  getProjectRowHostSetups,
   findActionableFolderProjectGroup
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
@@ -60,6 +64,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     linkedWorkItem,
     projectGroups,
     projectHostSetups,
+    projectOptions,
     projects,
     repos,
     setBaseBranch,
@@ -78,6 +83,8 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setSelectedProjectGroupId,
+    setSelectedProjectHostSetupOverrideHostId,
+    setSelectedProjectHostSetupOverrideId,
     setSparseDirectories,
     setSparseEnabled,
     setSparseSelectedPresetId,
@@ -188,14 +195,23 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       }
 
       setSelectedProjectGroupId(null)
+      const option = projectOptions.find((candidate) => candidate.id === projectId)
+      const checkout = option?.kind === 'project' ? option.checkout : undefined
+      if (checkout) {
+        handleRepoChange(checkout.repoId, { forceResetStartFrom: isProjectGroupTarget })
+        // After handleRepoChange, which clears the override; a same-host sibling checkout needs the exact setup.
+        setSelectedProjectHostSetupOverrideId(checkout.projectHostSetupId)
+        setSelectedProjectHostSetupOverrideHostId(checkout.hostId)
+        return
+      }
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Prefer focusedHostScope rather than hard-pin hostId, so projects available only on another host remain selectable.
       const nextRepoId = resolveWorkspaceCreationRepoId({
         eligibleRepos,
         projects,
-        projectHostSetups,
-        projectId,
+        projectHostSetups: getProjectRowHostSetups(projectOptions, projectHostSetups),
+        projectId: option?.kind === 'project' ? option.projectId : projectId,
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
@@ -212,12 +228,15 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       isProjectGroupTarget,
       projectGroups,
       projectHostSetups,
+      projectOptions,
       projects,
       repos,
       selectedWorkspaceTarget,
       workspaceHostScope,
       initialProjectGroupAppliedRef,
       setSelectedProjectGroupId,
+      setSelectedProjectHostSetupOverrideHostId,
+      setSelectedProjectHostSetupOverrideId,
       setProjectError
     ]
   )
