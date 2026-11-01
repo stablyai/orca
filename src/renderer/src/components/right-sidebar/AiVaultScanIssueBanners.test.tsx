@@ -75,6 +75,7 @@ it('keeps reordered notices dismissed but reveals changed diagnostic details', a
   rerender(view(result([second, { ...first, messageParams: { limit: 10, count: 2 } }])))
   expect(screen.queryByRole('button', { name: 'History notices · 2' })).toBeNull()
   rerender(view(result([second, { ...first, messageDetail: 'at byte 84' }])))
-  await userEvent.click(screen.getByRole('button', { name: 'History notices · 2' }))
+  await userEvent.click(screen.getByRole('button', { name: 'History notices · 1' }))
   expect(screen.getByText('at byte 84')).toBeTruthy()
+  expect(screen.queryByText(second.path)).toBeNull()
 })
