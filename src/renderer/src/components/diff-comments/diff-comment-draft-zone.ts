@@ -8,6 +8,12 @@ import {
   DRAFT_ZONE_DEFAULT_HEIGHT,
   type DraftZoneEntry
 } from './diff-comment-view-zone-entry'
+import {
+  clearRetainedDiffCommentDraft,
+  retainTypedDiffCommentDraft,
+  useDiffCommentDraftModelReanchor,
+  useRetainedDiffCommentDraft
+} from './diff-comment-draft-retention'
 
 export type DiffCommentDraft = {
   lineNumber: number
@@ -19,6 +25,7 @@ type CarriedDraft = { draft: DiffCommentDraft; body: string }
 export type UseDiffCommentDraftZoneArgs = {
   editor: monacoEditor.ICodeEditor | null
   monacoModelIdentity?: string
+  draftRetentionKey?: string
   canOpenDraft?: boolean
   onCreateComment?: (args: {
     lineNumber: number
@@ -41,6 +48,7 @@ export type DiffCommentDraftZoneHandle = {
 export function useDiffCommentDraftZone({
   editor,
   monacoModelIdentity,
+  draftRetentionKey,
   canOpenDraft = true,
   onCreateComment,
   draftPlaceholder,
@@ -178,12 +186,17 @@ export function useDiffCommentDraftZone({
               resizeDiffCommentZone(editor, entry)
             }
           },
-          onCancel: () => disposeDraftZone(true),
+          onCancel: () => {
+            pendingDraftRef.current = null
+            clearRetainedDiffCommentDraft(draftRetentionKey)
+            disposeDraftZone(true)
+          },
           onSubmit: async (body) => {
             const createComment = onCreateCommentRef.current
             if (!createComment) {
               return false
             }
+            clearRetainedDiffCommentDraft(draftRetentionKey)
             entry.submitting = true
             let succeeded = false
             try {
@@ -216,6 +229,7 @@ export function useDiffCommentDraftZone({
       disposeDraftZone,
       draftPlaceholder,
       draftSubmitLabel,
+      draftRetentionKey,
       editor,
       restoreFailedSubmit
     ]
@@ -235,9 +249,19 @@ export function useDiffCommentDraftZone({
       const pending = pendingDraftRef.current
       if (pending && openDraftRef.current(pending.draft, pending.body)) {
         pendingDraftRef.current = null
+        clearRetainedDiffCommentDraft(draftRetentionKey)
       }
     })
-  }, [])
+  }, [draftRetentionKey])
+
+  useRetainedDiffCommentDraft({
+    key: draftRetentionKey,
+    editorReady: editor !== null,
+    canOpenDraft,
+    pendingDraftRef,
+    scheduleReanchor,
+    cancelReanchorFrame
+  })
 
   const openDraftFromArgs = useCallback(
     (args: { lineNumber: number; startLine?: number; top: number }): void => {
@@ -258,33 +282,27 @@ export function useDiffCommentDraftZone({
       pendingDraftRef.current = null
       if (!openDraft({ lineNumber: args.lineNumber, startLine: args.startLine }, carriedBody)) {
         pendingDraftRef.current = pending
+      } else {
+        clearRetainedDiffCommentDraft(draftRetentionKey)
       }
     },
-    [canOpenDraft, cancelReanchorFrame, openDraft]
+    [canOpenDraft, cancelReanchorFrame, draftRetentionKey, openDraft]
   )
 
   useEffect(() => {
     onAddCommentClickRef.current = openDraftFromArgs
   }, [openDraftFromArgs])
 
-  useEffect(() => {
-    if (previousModelIdentityRef.current === monacoModelIdentity) {
-      return
-    }
-    previousModelIdentityRef.current = monacoModelIdentity
-    cancelReanchorFrame()
-    const current = draftZoneRef.current
-    if (current) {
-      // In-flight saves restore their own failures; carrying their text would allow duplicate submission.
-      if (!current.submitting) {
-        pendingDraftRef.current = { draft: current.draft, body: current.body }
-      }
-      disposeDraftZone()
-    }
-    if (pendingDraftRef.current) {
-      scheduleReanchor()
-    }
-  }, [cancelReanchorFrame, disposeDraftZone, monacoModelIdentity, scheduleReanchor])
+  useDiffCommentDraftModelReanchor({
+    monacoModelIdentity,
+    previousModelIdentityRef,
+    key: draftRetentionKey,
+    draftZoneRef,
+    pendingDraftRef,
+    cancelReanchorFrame,
+    disposeDraftZone,
+    scheduleReanchor
+  })
 
   // Combined-diff refreshes briefly clear the editor ref; retry carried drafts when its replacement arrives.
   useEffect(() => {
@@ -303,16 +321,14 @@ export function useDiffCommentDraftZone({
       cancelReanchorFrame()
       // Runs before the identity effect on a same-render swap, so stash here or the draft is lost.
       const current = draftZoneRef.current
-      if (!unmountedRef.current && current && !current.submitting) {
-        pendingDraftRef.current = { draft: current.draft, body: current.body }
+      if (current && !current.submitting) {
+        const pending = { draft: current.draft, body: current.body }
+        pendingDraftRef.current = pending
+        retainTypedDiffCommentDraft(draftRetentionKey, pending)
       }
       disposeDraftZone(false)
     }
-  }, [cancelReanchorFrame, disposeDraftZone, editor])
+  }, [cancelReanchorFrame, disposeDraftZone, draftRetentionKey, editor])
 
-  return {
-    disposeDraftZone,
-    isDraftOpen,
-    onAddCommentClickRef
-  }
+  return { disposeDraftZone, isDraftOpen, onAddCommentClickRef }
 }
