@@ -43,6 +43,8 @@ export type PluginFrameHello = {
   api: { major: number; minor: number }
   methods: string[]
   theme: PluginFrameTheme
+  /** Orca's UI locale (BCP-47); Chromium's `navigator.language` does not follow it. */
+  locale?: string
 }
 
 /** Per-plugin bridge budgets, enforced host-side. */
@@ -70,10 +72,15 @@ export const panelActionCallSchema = z
 
 export type PluginPanelActionCall = z.infer<typeof panelActionCallSchema>
 
+/** Where a desktop frame loads as an isolated `<webview>` guest (plugin-frame-guest.ts). */
+export type PluginFrameGuest = { partition: string; url: string }
+
 export type PluginFrameEntry = {
   html: string
   /** Authorizes this frame's host calls; main binds it to the plugin and contribution. */
   sessionToken: string
+  /** Desktop IPC only: browser clients never get one and keep the srcdoc iframe. */
+  guest?: PluginFrameGuest
 }
 
 /** Pong fast path without parse-issue allocations (~90x accepted cost), bounding near-miss spam cost. */

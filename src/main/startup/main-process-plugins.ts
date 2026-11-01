@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { PluginImageCache } from '../plugins/plugin-image-cache'
 import { installPluginImageProtocolHandler } from '../plugins/plugin-image-protocol'
+import { getPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../shared/plugins/installation/plugin-host-version'
 import { app, BrowserWindow, net } from 'electron'
 import { performance } from 'node:perf_hooks'
@@ -18,6 +19,8 @@ import { getPluginsDataDir } from '../plugins/plugin-discovery'
 import { resolveBundledPluginRoot } from '../plugins/plugin-bundled-bootstrap'
 import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
 import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
+import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
+import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
 import {
   normalizePluginConsents,
@@ -103,7 +106,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     getDevPluginPaths: () => normalizePluginIdList(state.store?.getSettings().devPluginPaths),
     getKeybindings: () => state.keybindings?.getOverrides() ?? {},
     getPluginKillListEntry: (pluginKey) => state.pluginKillListService?.find(pluginKey) ?? null,
-    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
+    hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged),
+    getDesktopFrameServices: getPluginDesktopFrameServices
   })
   const pluginService = state.pluginService
   const pluginAutoUpdater = new PluginAutoUpdater({
@@ -173,6 +177,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     hostVersion: pluginHostVersion(app.getVersion()),
     isEnabled: () => state.store?.getSettings().pluginSystemEnabled === true,
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
+    // Why: a retired bundled plugin must not leave consent, theme choices or frame storage behind.
+    beforeRetire: (pluginKey) => clearRemovedPluginSettings(store, pluginKey),
+    afterRetire: (pluginKey) => clearPluginFrameStorage(pluginKey),
     refreshPlugins: () => state.pluginService?.refresh() ?? Promise.resolve()
   })
   const requestBundledPluginBootstrap = (): void => {

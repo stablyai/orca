@@ -16,6 +16,8 @@ export type PluginSystemSettings = {
   pluginConsents: Record<string, string>
   /** Local directories loaded as dev-mode plugins (manifest hot-reload). */
   devPluginPaths: string[]
+  /** Qualified plugin key → hosts the person always allows its frames to open. Main-only. */
+  pluginExternalHostGrants?: Record<string, string[]>
 }
 
 type PluginSystemDefaultOnSettings = Pick<

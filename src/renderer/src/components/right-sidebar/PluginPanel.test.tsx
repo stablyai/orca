@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivePluginPanel } from '@/store/plugin-panels'
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string) => fallback
 }))
 
@@ -119,10 +120,9 @@ describe('PluginPanel', () => {
 
     const initialIframe = container.querySelector('iframe')
     expect(initialIframe).not.toBeNull()
-    expect(readPanelEntryMock).toHaveBeenCalledWith({
-      pluginKey: 'samples.my-plugin',
-      panelId: 'dashboard'
-    })
+    expect(readPanelEntryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginKey: 'samples.my-plugin', panelId: 'dashboard' })
+    )
     expect(initialIframe?.getAttribute('srcdoc')).toContain('<h1>Hello plugin</h1>')
     expect(initialIframe?.getAttribute('title')).toBe('Dashboard')
     expect(initialIframe?.getAttribute('name')).toBe(
@@ -130,6 +130,53 @@ describe('PluginPanel', () => {
     )
     // allow-same-origin would expose app DOM/storage; keep the sandbox scripts-only.
     expect(initialIframe?.getAttribute('sandbox')).toBe('allow-scripts')
+  })
+
+  it('mounts an isolated guest when main offers one, and starts the watchdog on dom-ready', async () => {
+    const guest = {
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: 'orca-plugin-frame://0123456789abcdef/panel.html'
+    }
+    readPanelEntryMock.mockResolvedValue({ html: '<h1>x</h1>', sessionToken: SESSION_TOKEN, guest })
+
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+
+    expect(container.querySelector('iframe')).toBeNull()
+    const webview = container.querySelector('webview')
+    expect(webview?.getAttribute('partition')).toBe(guest.partition)
+    expect(webview?.getAttribute('src')).toBe(guest.url)
+    expect(webview?.getAttribute('title')).toBe('Dashboard')
+    expect(watchdogStartMock).not.toHaveBeenCalled()
+    await act(async () => {
+      webview?.dispatchEvent(new Event('dom-ready'))
+    })
+    expect(watchdogStartMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('remounts a guest that main closed at an unchanged URL, then gives up after a few tries', async () => {
+    const guest = {
+      partition: 'persist:orca-plugin-0123456789abcdef',
+      url: 'orca-plugin-frame://0123456789abcdef/panel.html'
+    }
+    readPanelEntryMock.mockResolvedValue({ html: '', sessionToken: SESSION_TOKEN, guest })
+    await renderPanel('plugin:samples.my-plugin/dashboard')
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const before = container.querySelector('webview')
+      await act(async () => {
+        before?.dispatchEvent(new Event('destroyed'))
+        await waitForHappyDomTasks()
+      })
+      const after = container.querySelector('webview')
+      expect(after).not.toBeNull()
+      expect(after).not.toBe(before)
+    }
+    expect(readPanelEntryMock).toHaveBeenCalledTimes(4)
+    await act(async () => {
+      container.querySelector('webview')?.dispatchEvent(new Event('render-process-gone'))
+      await waitForHappyDomTasks()
+    })
+    expect(container.querySelector('webview')).toBeNull()
+    expect(container.textContent).toContain('could not be loaded')
   })
 
   it('restarts the watchdog after a dev reload replaces the panel document', async () => {

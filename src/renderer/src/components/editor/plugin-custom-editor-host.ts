@@ -23,7 +23,11 @@ import {
   type PluginEnvelope,
   type PluginError
 } from '../../../../shared/plugins/frames/plugin-protocol'
-import type { PluginFrameEditorChannel } from '../right-sidebar/plugin-frame-host'
+import type {
+  PluginFrameEditorChannel,
+  PluginFrameMessageContext,
+  PluginFrameWindow
+} from '../right-sidebar/plugin-frame-host'
 import {
   createPanelMessageBudget,
   structuredCloneMessageBytes,
@@ -39,7 +43,7 @@ export type CustomEditorUnappliedEdit = 'held' | 'lost' | null
 export type CustomEditorBinaryDocument = { bytes: Uint8Array<ArrayBuffer>; fileType: string }
 
 export type CustomEditorHostOptions = {
-  getFrameWindow: () => Window | null
+  getFrameWindow: () => PluginFrameWindow | null
   /** The buffer as Orca holds it now. */
   getDocument: () => { text: string; readOnly: boolean }
   /** Binary editors only: the document's bytes, or null while they load. */
@@ -50,7 +54,8 @@ export type CustomEditorHostOptions = {
   onEditRefused?: (reason: CustomEditorEditRefusal) => void
   /** The frame holds edits the buffer lacks, or caught up again. */
   onUnappliedEdit?: (state: CustomEditorUnappliedEdit) => void
-  onKeyChord?: (chord: CustomEditorKeyChord) => void
+  /** `context.userActivation`: the chord rode real input in the frame. */
+  onKeyChord?: (chord: CustomEditorKeyChord, context: PluginFrameMessageContext) => void
   /** The edit lane; every other message spends the frame's shared budget. */
   budget?: PanelMessageBudget
   now?: () => number
@@ -265,13 +270,13 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
         ready = true
         pushDocument(true)
       },
-      onEvent(event) {
+      onEvent(event, context) {
         const chord =
           event.event === FRAME_EVENTS.editorKeydown
             ? readCustomEditorKeyChord(event.payload)
             : null
         if (chord) {
-          options.onKeyChord?.(chord)
+          options.onKeyChord?.(chord, context)
         }
       },
       onResponse(response) {

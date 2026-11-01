@@ -65,10 +65,10 @@ app.whenReady().then(async () => {
 })
 `
 
-// Why a tripwire, not a guard: it pins the residual documented in plugin-panel-shell.ts. The
-// shell fences the panel's own window, but a child srcdoc frame is a new realm that commits
-// without will-frame-navigate, and Electron 43 has no per-frame WebRTC switch. When a fix
-// lands, flip the nested-frame assertion to expect no connection.
+// Why a tripwire, not a guard: it pins the residual documented in plugin-panel-shell.ts for the
+// srcdoc iframe browser clients still use. The shell fences the panel's own window, but a child
+// srcdoc frame is a new realm that commits without will-frame-navigate, and Electron 43 has no
+// per-frame WebRTC switch. Desktop guests close it (plugin-frame-guest-egress.electron.test.ts).
 describe('plugin panel WebRTC under Electron', () => {
   // Why the 60s timeout: a real Electron window negotiates WebRTC against two local TURN relays.
   it('blocks the panel window but not a nested srcdoc frame', async () => {

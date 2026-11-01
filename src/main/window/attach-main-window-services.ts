@@ -42,6 +42,7 @@ import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/struct
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
+import { installPluginDesktopFrameServices } from '../plugins/panels/plugin-frame-desktop-services'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -136,6 +137,7 @@ export function attachMainWindowServices(
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)
 
+  installPluginDesktopFrameServices(mainWindow, store)
   const allowedPermissions = new Set(['media', 'fullscreen', 'pointerLock'])
   mainWindow.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback, details) => {

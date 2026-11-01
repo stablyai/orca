@@ -23327,5 +23327,17 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "plugins": {
+    "frameSaveAs": {
+      "title": "Save File",
+      "allFiles": "All Files"
+    },
+    "frameOpenExternal": {
+      "open": "Open",
+      "cancel": "Cancel",
+      "message": "{{plugin}} wants to open {{host}}",
+      "alwaysAllow": "Always allow {{host}} for this plugin"
+    }
   }
 }

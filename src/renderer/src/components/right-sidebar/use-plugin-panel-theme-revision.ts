@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { PluginFrameWindow } from './plugin-frame-host'
 import {
   buildPanelDesignTokenCss,
   currentPanelColorScheme,
@@ -33,11 +34,11 @@ export function usePluginPanelThemeRevision(): number {
 }
 
 /** Pushes theme changes into a plugin frame without remounting it. */
-export function usePluginFrameThemeSync(iframeRef: RefObject<HTMLIFrameElement | null>): void {
+export function usePluginFrameThemeSync(getFrameWindow: () => PluginFrameWindow | null): void {
   const revision = usePluginPanelThemeRevision()
   useEffect(() => {
     if (revision > 0) {
-      postPluginFrameTheme(iframeRef.current?.contentWindow)
+      postPluginFrameTheme(getFrameWindow())
     }
-  }, [revision, iframeRef])
+  }, [revision, getFrameWindow])
 }

@@ -6,6 +6,7 @@ import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-p
 import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { resolveWatcherRootPaths } from '../ipc/watcher-event-root-path-rewrite'
 import { watcherDirectoryIdentity } from '../ipc/watcher-directory-identity'
+import { bumpPluginDevRevision } from './plugin-dev-revision'
 
 // Deleted roots can reject unsubscribe after the native stream has stopped.
 function releaseSubscription(subscription: WatcherProcessSubscription): void {
@@ -195,6 +196,8 @@ export class PluginDevWatcher {
           // Root replacement stops recursive watching without reporting an error.
           requestRetry()
         } else {
+          // Open guests of this dev plugin remount on their next entry read.
+          bumpPluginDevRevision(path)
           this.scheduleRefresh(refresh)
         }
       },
@@ -210,6 +213,7 @@ export class PluginDevWatcher {
         this.subscriptions.push(created)
         // Catch edits between discovery and the native subscription becoming live.
         if (!parent) {
+          bumpPluginDevRevision(path)
           this.scheduleRefresh(refresh)
         }
       })
