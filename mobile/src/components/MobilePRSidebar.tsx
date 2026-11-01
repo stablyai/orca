@@ -48,6 +48,9 @@ type Props = {
   workspaceLabel: string | null
   /** False where a next-step bar already offers Merge and auto-merge. */
   showMergeActions?: boolean
+  /** The hub's launcher and PR actions, so its bar and this body share one in-flight state. */
+  triage?: MobilePrAiTriage
+  actions?: MobilePrActions
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -64,6 +67,8 @@ export function MobilePRSidebar({
   bottomInset = 0,
   showOpenOnWeb = true,
   showMergeActions = true,
+  triage: sharedTriage,
+  actions: sharedActions,
   workspaceLabel
 }: Props) {
   useMobileColorScheme()
@@ -72,7 +77,7 @@ export function MobilePRSidebar({
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
-  const actions = useMobilePrActions({
+  const ownActions = useMobilePrActions({
     client,
     connState,
     worktreeId,
@@ -81,6 +86,7 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+  const actions = sharedActions ?? ownActions
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -98,7 +104,7 @@ export function MobilePRSidebar({
     refetch
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
-  const triage = useMobilePrAiTriage({
+  const ownTriage = useMobilePrAiTriage({
     client,
     connState,
     worktreeId,
@@ -107,6 +113,7 @@ export function MobilePRSidebar({
     hostStatusPending: statusPending,
     hostStatusReadable: statusReadable
   })
+  const triage = sharedTriage ?? ownTriage
   // Key overrides on PR payload so every refetch refreshes them instead of keeping session-long snapshot.
   const botAuthorOverrides = usePRBotAuthorOverrides(
     client,

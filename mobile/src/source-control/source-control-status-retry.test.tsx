@@ -26,19 +26,22 @@ vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () =>
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
-vi.mock('./MobileCommitsScreen', () => ({ MobileCommitsScreen: () => null }))
+vi.mock('./MobileSourceControlHubCommitsPage', () => ({
+  MobileSourceControlHubCommitsPage: () => null
+}))
 vi.mock('./MobileSourceControlNextStepBar', () => ({ MobileSourceControlNextStepBar: () => null }))
 vi.mock('./use-mobile-source-control-next-step', () => ({
   useMobileSourceControlNextStep: () => ({
+    offersMerge: false,
     view: { kind: 'hidden' },
     notice: null,
+    agentNotice: null,
     mergeConfirm: null
   })
 }))
-vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../components/BottomDrawer', () => ({
-  useOptionPager: () => ({ page: null, open: () => {}, close: () => {} }),
+  useOptionPager: () => ({ page: null, open: () => {}, close: () => {}, forget: () => {} }),
   OptionPager: ({ main }: { main: unknown }) => main
 }))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))

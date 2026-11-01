@@ -14,9 +14,11 @@ import { buildResolveConflictsPrompt } from '../../../src/shared/source-control-
 import { resolveGitHubPRMergeMethods } from '../../../src/shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
+import { getBrokenChecks } from '../../../src/shared/pr-checks-fix-prompt'
 import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
 import {
   resolveSourceControlNextStep,
+  type SourceControlNextStep,
   type SourceControlNextStepReview
 } from '../../../src/shared/source-control-next-step-decision'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
@@ -40,7 +42,19 @@ type Params = {
   reviewsSupported: boolean
   refetchPr: (options?: PrSidebarLoadOptions) => void
   headSha: string | null
+  /** The Changes body shows git workflow failures; elsewhere the bar has to. */
+  showWorkflowErrors: boolean
 }
+
+// Steps where the bar itself offers the PR's merge actions.
+// Agent steps leave Merge and auto-merge to the PR body.
+const REVIEW_STEPS: ReadonlySet<SourceControlNextStep['kind']> = new Set([
+  'merge_when_ready',
+  'auto_merge_on',
+  'merge',
+  'merge_blocked',
+  'merged'
+])
 
 export type MobileMergeConfirm = {
   title: string
@@ -58,7 +72,8 @@ export function useMobileSourceControlNextStep({
   prState,
   reviewsSupported,
   refetchPr,
-  headSha
+  headSha,
+  showWorkflowErrors
 }: Params) {
   const t = useMobileTranslation()
   const { client, connState, status, createPrAction, primaryActionArgs, busyAction } = state
@@ -99,20 +114,27 @@ export function useMobileSourceControlNextStep({
     [actions, readyPr]
   )
 
-  const step = useMemo(() => {
-    const checks = readyPr ? summarizeProviderChecks(readyPr.checks) : null
+  const { step, reviewAbsent } = useMemo(() => {
     const reviewInput: SourceControlNextStepReview =
-      pr && checks
-        ? { kind: 'github', pr, failedChecks: checks.failed, pendingChecks: checks.pending }
+      pr && readyPr
+        ? {
+            kind: 'github',
+            pr,
+            // The checks the fix prompt includes, so Fix never launches with nothing to fix.
+            failedChecks: getBrokenChecks(readyPr.checks).length,
+            pendingChecks: summarizeProviderChecks(readyPr.checks).pending
+          }
         : reviewsSupported && (prState.kind === 'loading' || prState.kind === 'hidden')
           ? { kind: 'loading' }
           : { kind: 'none' }
-    return resolveSourceControlNextStep({
+    const next = resolveSourceControlNextStep({
       local: resolveSourceControlCommitAreaPrimaryActionDecision(
         buildMobileSourceControlDecisionInputs({ ...primaryActionArgs, review })
       ),
       conflictOperation: status?.conflictOperation,
       hasUnresolvedConflicts: primaryActionArgs.hasUnresolvedConflicts,
+      hasChangesToCommit:
+        primaryActionArgs.stagedCount > 0 || primaryActionArgs.stageablePaths.length > 0,
       reviewCreation: createPrAction.eligible
         ? createPrAction.pushFirst
           ? 'push_and_create'
@@ -120,6 +142,7 @@ export function useMobileSourceControlNextStep({
         : 'unavailable',
       review: reviewInput
     })
+    return { step: next, reviewAbsent: reviewInput.kind === 'none' }
   }, [
     createPrAction.eligible,
     createPrAction.pushFirst,
@@ -175,13 +198,16 @@ export function useMobileSourceControlNextStep({
         createPrAction,
         pr,
         prDetails: readyPr?.details ?? null,
+        createBlocked: reviewAbsent && createPrAction.visible && Boolean(createPrAction.hint),
         agentName,
         busy: {
           completingMerge: busyAction === MOBILE_COMPLETE_MERGE_ACTION_ID,
           agentLaunch: triage.isBusy('fix-checks') || triage.isBusy('resolve-conflicts'),
+          agentUnavailable: triage.availability !== 'available',
           merge: actions.isBusy({ kind: 'merge' }),
           autoMerge: actions.isBusy({ kind: 'autoMerge' }),
-          ioBusy: busyAction !== null
+          ioBusy: busyAction !== null,
+          prMutationsBlocked: actions.blocked !== null
         },
         handlers: {
           completeMerge: () => void state.completeMerge(),
@@ -219,6 +245,7 @@ export function useMobileSourceControlNextStep({
       primaryAction,
       readyPr,
       resolveConflicts,
+      reviewAbsent,
       state,
       step,
       t,
@@ -233,14 +260,15 @@ export function useMobileSourceControlNextStep({
       : step.kind === 'resolve_conflicts'
         ? 'resolve-conflicts'
         : null
-  const triageNotice = triageKey ? triage.noticeFor(triageKey) : null
-  const notice = actions.error
-    ? { text: actions.error, error: true }
-    : triageNotice?.error
-      ? { text: triageNotice.error, error: true }
-      : triageNotice?.success
-        ? { text: triageNotice.success, error: false }
-        : null
+  // On the PR tab the body's own AI button already shows this launcher's notice.
+  const agentNotice =
+    triageKey && !showWorkflowErrors
+      ? { ...triage.noticeFor(triageKey), availability: triage.availability }
+      : null
+  const workflowError = showWorkflowErrors
+    ? (state.actionError ?? state.commitFailureRecovery?.error ?? null)
+    : null
+  const notice = actions.blocked ?? actions.error ?? workflowError
 
   const mergeConfirm: MobileMergeConfirm | null =
     mergeMethod && pr
@@ -256,5 +284,14 @@ export function useMobileSourceControlNextStep({
         }
       : null
 
-  return { view, notice, mergeConfirm }
+  // While the bar is on a local step, the PR body keeps its own Merge so it stays reachable.
+  return {
+    offersMerge: REVIEW_STEPS.has(step.kind),
+    view,
+    notice,
+    agentNotice,
+    mergeConfirm,
+    triage,
+    actions
+  }
 }

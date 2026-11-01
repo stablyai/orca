@@ -36,7 +36,7 @@ export type MobileNextStepBarView =
       accessibilityHint?: string
       onPress: () => void
     }
-  | { kind: 'auto_merge_on'; loading: boolean; onCancel: () => void }
+  | { kind: 'auto_merge_on'; loading: boolean; disabled: boolean; onCancel: () => void }
   | { kind: 'merged'; baseRef: string | null }
 
 export type MobileNextStepHandlers = {
@@ -53,14 +53,20 @@ export type BuildMobileNextStepBarArgs = {
   createPrAction: MobileCreatePrAction
   pr: PRInfo | null
   prDetails: GitHubWorkItemDetails | null
+  /** No review exists and Create is blocked; say why instead of hiding the bar (e.g. GitLab sign-in). */
+  createBlocked: boolean
   /** The agent the AI buttons launch; null names it "AI". */
   agentName: string | null
   busy: {
     completingMerge: boolean
     agentLaunch: boolean
+    /** The host can't launch agents from a phone yet; the notice says why. */
+    agentUnavailable: boolean
     merge: boolean
     autoMerge: boolean
     ioBusy: boolean
+    /** GitHub refused a PR mutation for good (e.g. no permission); retrying won't help. */
+    prMutationsBlocked: boolean
   }
   handlers: MobileNextStepHandlers
 }
@@ -70,7 +76,9 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
   const agent = args.agentName ?? translate('sourceControl.nextStep.genericAgent', 'AI')
   switch (step.kind) {
     case 'none':
-      return { kind: 'hidden' }
+      return args.createBlocked
+        ? createReviewButton(args.createPrAction, false)
+        : { kind: 'hidden' }
     case 'commit':
       return { kind: 'composer' }
     case 'remote':
@@ -91,7 +99,7 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
           agent
         }),
         icon: 'agent',
-        disabled: busy.agentLaunch,
+        disabled: busy.agentLaunch || busy.agentUnavailable,
         loading: busy.agentLaunch,
         onPress: () => handlers.resolveConflicts(step.scope)
       })
@@ -101,7 +109,7 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
       return button({
         label: translate('sourceControl.nextStep.fixWithAgent', 'Fix with {{agent}}', { agent }),
         icon: 'agent',
-        disabled: busy.agentLaunch,
+        disabled: busy.agentLaunch || busy.agentUnavailable,
         loading: busy.agentLaunch,
         reason: {
           lead: translate('sourceControl.nextStep.cantMergeYet', 'Can’t merge yet:'),
@@ -125,7 +133,7 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
         label: translate('sourceControl.nextStep.mergeWhenReady', 'Merge when ready'),
         icon: 'merge',
         tone: 'secondary',
-        disabled: busy.autoMerge,
+        disabled: busy.autoMerge || busy.prMutationsBlocked,
         loading: busy.autoMerge,
         reason: { text: waitingReason(step, args) },
         onPress: () => handlers.setAutoMerge(true)
@@ -134,6 +142,7 @@ export function buildMobileNextStepBar(args: BuildMobileNextStepBarArgs): Mobile
       return {
         kind: 'auto_merge_on',
         loading: busy.autoMerge,
+        disabled: busy.prMutationsBlocked,
         onCancel: () => handlers.setAutoMerge(false)
       }
     case 'merge':
@@ -210,7 +219,7 @@ function mergeButton(args: BuildMobileNextStepBarArgs, ready: boolean): MobileNe
     label: ready ? merge.label : translate('sourceControl.nextStep.merge', 'Merge'),
     icon: 'merge',
     tone: 'merge',
-    disabled: !ready || args.busy.merge,
+    disabled: !ready || args.busy.merge || args.busy.prMutationsBlocked,
     loading: args.busy.merge,
     reason: !ready && merge.hint ? { text: merge.hint } : null,
     onPress: () => args.handlers.merge(method)

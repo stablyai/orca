@@ -12,7 +12,7 @@ export const SOURCE_CONTROL_HUB_TAB_LABELS: Record<SourceControlHubTab, string> 
     return translate('sourceControl.hubTab.changes', 'Changes')
   },
   get pr() {
-    return translate('sourceControl.hubTab.pullRequestSentence', 'Pull request')
+    return translate('sourceControl.hubTab.pullRequest', 'Pull request')
   }
 }
 

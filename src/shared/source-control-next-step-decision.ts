@@ -20,6 +20,8 @@ export type SourceControlNextStepInputs = {
   local: SourceControlCommitAreaPrimaryActionDecision
   conflictOperation: GitConflictOperation | null | undefined
   hasUnresolvedConflicts: boolean
+  /** Staged or stageable work exists, so the commit box has something to commit. */
+  hasChangesToCommit: boolean
   reviewCreation: SourceControlNextStepReviewCreation
   review: SourceControlNextStepReview
 }
@@ -38,16 +40,6 @@ export type SourceControlNextStep =
   | { kind: 'merged' }
   | { kind: 'none' }
 
-// Commit-area intents that mean the working tree still holds something to commit.
-const COMMITTABLE_INTENTS: ReadonlySet<
-  SourceControlCommitAreaPrimaryActionDecision['titleIntent']
-> = new Set([
-  'commit_staged_changes',
-  'enter_commit_message',
-  'commit_in_progress',
-  'remote_operation_blocks_commit'
-])
-
 /**
  * The one next action for a branch, in order: local conflicts, the commit box, push/pull,
  * create a review, then the review's own steps toward merge. Desktop's commit area is unchanged;
@@ -63,7 +55,7 @@ export function resolveSourceControlNextStep(
   if (inputs.conflictOperation === 'merge') {
     return { kind: 'complete_merge' }
   }
-  if (local.kind === 'stage' || COMMITTABLE_INTENTS.has(local.titleIntent)) {
+  if (inputs.hasChangesToCommit && (local.kind === 'stage' || local.kind === 'commit')) {
     return { kind: 'commit' }
   }
   if (local.kind !== 'commit') {
@@ -98,13 +90,15 @@ function resolveReviewStep(
 ): SourceControlNextStep {
   const { pr } = review
   const mergeState = resolveGitHubPRMergeState(pr)
-  switch (mergeState.kind) {
-    case 'merged':
-      return { kind: 'merged' }
-    case 'closed':
-      return resolveCreateReviewStep(reviewCreation)
-    case 'conflicts':
-      return { kind: 'resolve_conflicts', scope: 'review' }
+  if (mergeState.kind === 'merged') {
+    return { kind: 'merged' }
+  }
+  if (mergeState.kind === 'closed') {
+    return resolveCreateReviewStep(reviewCreation)
+  }
+  // Desktop's label ranks review requirements above conflicts; the next step must not.
+  if (pr.mergeable === 'CONFLICTING' || pr.mergeStateStatus === 'DIRTY') {
+    return { kind: 'resolve_conflicts', scope: 'review' }
   }
   if (review.failedChecks > 0) {
     return { kind: 'fix_checks', failedChecks: review.failedChecks }

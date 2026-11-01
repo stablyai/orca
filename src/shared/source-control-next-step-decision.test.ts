@@ -39,6 +39,7 @@ function step(overrides: Partial<SourceControlNextStepInputs> = {}, pr: Partial<
     local: local(),
     conflictOperation: null,
     hasUnresolvedConflicts: false,
+    hasChangesToCommit: false,
     reviewCreation: 'unavailable',
     review: { kind: 'github', pr: { ...OPEN_PR, ...pr }, failedChecks: 0, pendingChecks: 0 },
     ...overrides
@@ -53,16 +54,25 @@ describe('resolveSourceControlNextStep', () => {
     })
     expect(step({ conflictOperation: 'merge' }).kind).toBe('complete_merge')
     expect(
-      step({ local: local({ hasStageableChanges: true, hasUnstagedChanges: true }) }).kind
+      step({
+        hasChangesToCommit: true,
+        local: local({ hasStageableChanges: true, hasUnstagedChanges: true })
+      }).kind
     ).toBe('commit')
-    expect(step({ local: local({ stagedCount: 2 }) }).kind).toBe('commit')
+    expect(step({ hasChangesToCommit: true, local: local({ stagedCount: 2 }) }).kind).toBe('commit')
+    // A fetch on a clean branch blocks commits but leaves nothing to commit.
+    expect(
+      step({ local: local({ isRemoteOperationActive: true, inFlightRemoteOpKind: 'fetch' }) }).kind
+    ).toBe('merge')
     expect(
       step({ local: local({ upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 } }) }).kind
     ).toBe('remote')
-    expect(step({}, { mergeable: 'CONFLICTING' })).toEqual({
-      kind: 'resolve_conflicts',
-      scope: 'review'
-    })
+    expect(
+      step(
+        {},
+        { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY', reviewDecision: 'REVIEW_REQUIRED' }
+      )
+    ).toEqual({ kind: 'resolve_conflicts', scope: 'review' })
     expect(
       step({ review: { kind: 'github', pr: OPEN_PR, failedChecks: 1, pendingChecks: 0 } })
     ).toEqual({ kind: 'fix_checks', failedChecks: 1 })
@@ -86,6 +96,7 @@ describe('resolveSourceControlNextStep', () => {
     expect(
       step({
         local: local({ stagedCount: 1, hasMessage: true }),
+        hasChangesToCommit: true,
         review: { kind: 'none' },
         reviewCreation: 'create'
       }).kind

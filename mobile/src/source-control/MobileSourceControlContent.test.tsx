@@ -53,6 +53,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: async () => {} }))
+vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
 vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ArrowDownUp: 'ArrowDownUp',
@@ -230,6 +231,8 @@ function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
     createElement(MobileSourceControlNextStepBar, {
       view: { kind: 'composer' },
       notice: null,
+      agentNotice: null,
+      mergeConfirm: null,
       composer: liveState,
       primaryAction: state.primaryAction,
       keyboardLift: state.keyboardLift,
@@ -396,5 +399,28 @@ describe('AI commit message button', () => {
     expect(generateButton()?.props.accessibilityHint).toBe('Clear the message to regenerate.')
     patch({ generatingMessage: true })
     expect(generateButton()?.props.disabled).toBe(false)
+  })
+})
+
+describe('next-step bar and the keyboard', () => {
+  function input() {
+    return renderer?.root.findAll((node) => String(node.type) === 'TextInput')[0] ?? null
+  }
+
+  it('rides the keyboard for its own commit box and steps aside for any other field', () => {
+    render()
+    // Another field (a PR comment) raised the keyboard: the bar must not cover it.
+    patch({ keyboardLift: 300 })
+    expect(input()).toBeNull()
+    patch({ keyboardLift: 0 })
+    act(() => {
+      const onFocus = input()?.props.onFocus
+      if (typeof onFocus !== 'function') {
+        throw new Error('missing focus handler')
+      }
+      onFocus()
+    })
+    patch({ keyboardLift: 300 })
+    expect(input()).not.toBeNull()
   })
 })

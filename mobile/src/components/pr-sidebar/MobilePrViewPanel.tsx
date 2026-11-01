@@ -8,6 +8,8 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
+import type { MobilePrAiTriage } from '../../session/use-mobile-pr-ai-triage'
+import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
@@ -23,6 +25,11 @@ type Props = {
   workspaceLabel: string | null
   /** Clears whatever the hub floats over the body's foot; defaults to the safe area. */
   bottomInset?: number
+  /** False while the hub's next-step bar is offering Merge or auto-merge itself. */
+  showMergeActions?: boolean
+  /** The hub bar's agent launcher and PR actions, shared so both surfaces agree. */
+  triage?: MobilePrAiTriage
+  actions?: MobilePrActions
 }
 
 // Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
@@ -37,7 +44,10 @@ export function MobilePrViewPanelBody({
   branchContextLoaded = true,
   controller,
   workspaceLabel,
-  bottomInset
+  bottomInset,
+  showMergeActions = true,
+  triage,
+  actions
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -75,8 +85,9 @@ export function MobilePrViewPanelBody({
         bottomInset={bottomInset ?? insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
-        // The hub's next-step bar owns Merge and auto-merge.
-        showMergeActions={false}
+        showMergeActions={showMergeActions}
+        triage={triage}
+        actions={actions}
         workspaceLabel={workspaceLabel}
       />
     </View>

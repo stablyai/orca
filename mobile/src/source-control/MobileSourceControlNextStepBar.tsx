@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   ArrowDown,
@@ -18,6 +19,11 @@ import { composerInputStyles } from '../components/composer-input/composer-input
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
+import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
+import { ConfirmModal } from '../components/ConfirmModal'
+import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
+import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
+import type { PrAiTriageLaunchNotice } from '../session/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,
@@ -52,8 +58,12 @@ type Props = {
   primaryAction: MobileSourceControlPrimaryAction
   keyboardLift: number
   bottomInset: number
-  /** Feedback from the last bar action, e.g. an agent that failed to start. */
-  notice: { text: string; error: boolean } | null
+  /** A failed bar action, e.g. a push the remote rejected. */
+  notice: string | null
+  /** How the last "Fix/Resolve with" launch went, with its prompt when it wasn't delivered. */
+  agentNotice: (PrAiTriageLaunchNotice & { availability: MobileAgentLaunchAvailability }) | null
+  /** Set while Merge waits for the user to confirm. */
+  mergeConfirm: MobileMergeConfirm | null
   onHeightChange: (height: number) => void
 }
 
@@ -65,11 +75,16 @@ export function MobileSourceControlNextStepBar({
   keyboardLift,
   bottomInset,
   notice,
+  agentNotice,
+  mergeConfirm,
   onHeightChange
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  if (view.kind === 'hidden' && !notice) {
+  const [composerFocused, setComposerFocused] = useState(false)
+  // The bar rides the keyboard only for its own commit box; for any other field it steps aside.
+  const lift = composerFocused && view.kind === 'composer' ? keyboardLift : 0
+  if ((view.kind === 'hidden' && !notice) || (keyboardLift > 0 && lift === 0)) {
     return null
   }
   const reason = view.kind === 'button' ? view.reason : null
@@ -79,23 +94,29 @@ export function MobileSourceControlNextStepBar({
       style={[
         styles.bar,
         {
-          bottom: keyboardLift > 0 ? keyboardLift + KEYBOARD_COMMIT_BAR_CLEARANCE : 0,
-          paddingBottom: keyboardLift > 0 ? spacing.md : spacing.md + bottomInset
+          bottom: lift > 0 ? lift + KEYBOARD_COMMIT_BAR_CLEARANCE : 0,
+          paddingBottom: lift > 0 ? spacing.md : spacing.md + bottomInset
         }
       ]}
     >
+      {agentNotice ? <AgentLaunchNotice {...agentNotice} errorStyle={styles.reasonError} /> : null}
       {notice ? (
-        <Text style={[styles.reason, notice.error && styles.reasonError]} numberOfLines={2}>
-          {notice.text}
+        <Text style={[styles.reason, styles.reasonError]} numberOfLines={3}>
+          {notice}
         </Text>
-      ) : reason ? (
+      ) : null}
+      {reason ? (
         <Text style={styles.reason} numberOfLines={2}>
           {reason.lead ? <Text style={styles.reasonLead}>{reason.lead} </Text> : null}
           {reason.text}
         </Text>
       ) : null}
       {view.kind === 'composer' ? (
-        <CommitComposer composer={composer} primaryAction={primaryAction} />
+        <CommitComposer
+          composer={composer}
+          primaryAction={primaryAction}
+          onFocusChange={setComposerFocused}
+        />
       ) : view.kind === 'button' ? (
         <BarButton
           label={view.label}
@@ -117,7 +138,7 @@ export function MobileSourceControlNextStepBar({
           <BarButton
             label={t('sourceControl.nextStep.cancelAutoMerge', 'Cancel')}
             tone="secondary"
-            disabled={view.loading}
+            disabled={view.loading || view.disabled}
             loading={view.loading}
             accessibilityLabel={t(
               'sourceControl.nextStep.cancelAutoMergeLabel',
@@ -138,6 +159,14 @@ export function MobileSourceControlNextStepBar({
           </Text>
         </View>
       ) : null}
+      <ConfirmModal
+        visible={mergeConfirm !== null}
+        title={mergeConfirm?.title ?? ''}
+        message={mergeConfirm?.message}
+        confirmLabel={mergeConfirm?.confirmLabel ?? ''}
+        onConfirm={() => mergeConfirm?.onConfirm()}
+        onCancel={() => mergeConfirm?.onCancel()}
+      />
     </View>
   )
 }
@@ -202,10 +231,12 @@ function BarButton({
 
 function CommitComposer({
   composer,
-  primaryAction
+  primaryAction,
+  onFocusChange
 }: {
   composer: ComposerState
   primaryAction: MobileSourceControlPrimaryAction
+  onFocusChange: (focused: boolean) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -219,6 +250,8 @@ function CommitComposer({
     cancelGenerateCommitMessage
   } = composer
   const ioBusy = busyAction !== null
+  // Unmounting a focused field sends no blur, so let go of focus on the way out.
+  useEffect(() => () => onFocusChange(false), [onFocusChange])
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   // Typed text blocks regeneration; the same button cancels active generation.
   const generateBlockedByMessage = !generatingMessage && commitMessage.trim().length > 0
@@ -227,6 +260,8 @@ function CommitComposer({
     <MessageBox
       value={stagedCount === 0 ? '' : commitMessage}
       onChangeText={setCommitMessage}
+      onFocus={() => onFocusChange(true)}
+      onBlur={() => onFocusChange(false)}
       placeholder={t('sourceControl.content.commitMessagePlaceholder', 'Commit message')}
       editable={stagedCount > 0 && !ioBusy}
       accessibilityLabel={
@@ -318,7 +353,7 @@ const styles = themedStyleSheet(() => ({
     textAlign: 'center'
   },
   reasonLead: { color: colors.textPrimary, fontWeight: '600' },
-  reasonError: { color: colors.statusRed },
+  reasonError: { color: colors.statusRed, fontSize: typography.metaSize, textAlign: 'center' },
   row: { flexDirection: 'row', gap: spacing.sm },
   grow: { flex: 1 },
   button: {
