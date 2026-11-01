@@ -524,6 +524,22 @@ it('settles a kept source once when the switch fails after stopping it', async (
   expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
 })
 
+it('closes only a split source pane whose switch fails after the stop', async () => {
+  const readable = await savedTranscript(rig)
+  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+  prepare.mockReset()
+  prepare.mockResolvedValueOnce(readable).mockResolvedValue({ useRealCodexHome: false })
+  const { result, settled, session } = await switchFromKeptTerminal({ split: true })
+  expect(result).toMatchObject({
+    status: 'refused',
+    refusal: { details: { reason: 'transcriptUnreadable' } }
+  })
+  // No stopped state for a split pane: the window closes that pane alone (Brennan 11-01).
+  expect(settled).not.toHaveBeenCalled()
+  expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(true)
+  expect(session().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId?.[LEAF_B]).toBe(PTY_B)
+})
+
 it('settles a kept source once when its tab became a split after the stop', async () => {
   await savedTranscript(rig)
   const { result, settled, stoppedSource } = await switchFromKeptTerminal({

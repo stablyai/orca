@@ -92,9 +92,10 @@ export type KeptSourceTerminal = {
   incarnationId: string
   settled: Mock<(source: StoppedSwitchSource) => void>
   stoppedSource: StoppedSwitchSource
+  session: ReturnType<typeof setupMainOwnedWorkspace>['session']
 }
 
-type StartedKeptSwitch = Pick<KeptSourceTerminal, 'settled' | 'stoppedSource'> & {
+type StartedKeptSwitch = Pick<KeptSourceTerminal, 'settled' | 'stoppedSource' | 'session'> & {
   result: Promise<AgentSessionSwitchResult>
 }
 
@@ -111,11 +112,13 @@ export type KeptTerminalSwitchOptions = {
   /** The host was lost before any exit proof: liveness stays unknown. */
   unproven?: boolean
   afterStop?: (runtime: KeptRuntime) => Promise<void>
+  /** The source pane shares its tab with a running sibling. */
+  split?: boolean
 }
 
 /** A whole-tab terminal whose stop keeps the pane; records main's settlements for it. */
 export function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}): KeptSourceTerminal {
-  const { runtime } = setupMainOwnedWorkspace()
+  const { runtime, session } = setupMainOwnedWorkspace({ split: options.split })
   const incarnationId = '11111111-1111-4111-8111-111111111111'
   runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
   const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
@@ -164,14 +167,16 @@ export function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}): Kep
     source: { ...source, presentation: source.presentation },
     incarnationId,
     settled,
-    stoppedSource
+    stoppedSource,
+    session
   }
 }
 
 export function startSwitchFromKeptTerminal(
   options: KeptTerminalSwitchOptions = {}
 ): StartedKeptSwitch {
-  const { runtime, source, incarnationId, settled, stoppedSource } = keptSourceTerminal(options)
+  const { runtime, source, incarnationId, settled, stoppedSource, session } =
+    keptSourceTerminal(options)
   const result = executeStructuredSessionSwitch(
     {
       sessionId: id,
@@ -187,5 +192,5 @@ export function startSwitchFromKeptTerminal(
     { runtime },
     'chat'
   )
-  return { result, settled, stoppedSource }
+  return { result, settled, stoppedSource, session }
 }

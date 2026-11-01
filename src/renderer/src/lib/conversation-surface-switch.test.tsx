@@ -363,6 +363,43 @@ it.each([
   }
 )
 
+it.each([
+  [
+    'split',
+    'Codex could not switch to chat. Open this conversation from Session History to continue.'
+  ],
+  ['whole', 'Codex could not switch to chat. Use Switch to Chat UI to try again.']
+] as const)('points a failed switch from a %s tab to a retry it still has', async (shape, text) => {
+  // A split pane whose switch fails after the stop closes, and its switch control with it.
+  const leaf = { type: 'leaf' as const, leafId: 'leaf' }
+  useAppStore.setState({
+    terminalLayoutsByTabId: {
+      [fromPane.tabId]: {
+        root:
+          shape === 'split'
+            ? {
+                type: 'split',
+                direction: 'vertical',
+                first: leaf,
+                second: { ...leaf, leafId: 'b' }
+              }
+            : leaf,
+        activeLeafId: 'leaf',
+        expandedLeafId: null
+      }
+    }
+  })
+  mocks.call.mockResolvedValue({
+    status: 'refused',
+    sessionId: 'chat',
+    refusal: { code: 'agent_session_operation_invalid', details: { reason: 'commitFailed' } }
+  })
+  await expect(
+    runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane })
+  ).resolves.toBe(false)
+  expect(mocks.error).toHaveBeenCalledExactlyOnceWith(text)
+})
+
 it.each([true, false])(
   'opens the conversation beside a paired pane it can no longer capture (from History=%s)',
   async (fromHistory) => {

@@ -32,8 +32,8 @@ import {
   closeCapturedStructuredSession,
   type StructuredSessionSurface
 } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { OrcaRuntimeWithChatTabLayoutQueue } from './chat-tab-layout-queue-owner'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithChatTabLayoutQueue {
   protected abstract isHeadlessOwnedMobileBrowserTab(
@@ -69,12 +69,19 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     return closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this)
   }
 
-  abstract publishStructuredAgentSessionTab(input: {
-    workspaceId: string
-    sessionId: string
-    agent: StructuredAgentId
-    activate: boolean
-  }): Promise<void>
+  /** A host with no window saves its own layout; a window saves its layout whole. */
+  protected commitWindowlessChatSession(
+    worktreeId: string,
+    update: (session: WorkspaceSessionState) => WorkspaceSessionState | null
+  ): void {
+    const session = this.getAvailableAuthoritativeWindow()
+      ? null
+      : this.getWorkspaceSessionForWorktree(worktreeId)
+    const next = session && update(session)
+    if (next) {
+      this.setWorkspaceSessionForWorktree(worktreeId, next)
+    }
+  }
 
   // Refused echo closes need a newer snapshot so clients restore the still-live mirror they already pruned.
   protected republishMobileSessionTabsSnapshot(worktreeId: string): void {
