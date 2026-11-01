@@ -9,13 +9,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function readClaudeControlResponses(stdout: string): Map<string, unknown> {
   const responses = new Map<string, unknown>()
   for (const line of stdout.split(/\r?\n/)) {
-    if (!line.trimStart().startsWith('{') || !line.includes('control_response')) {
+    if (!line.trimStart().startsWith('{') || !line.includes('request_id')) {
       continue
     }
     try {
       assertJsonTextStructureWithinLimits(line, CONTROL_JSON_LIMITS)
       const frame: unknown = JSON.parse(line)
-      if (!isRecord(frame) || frame.type !== 'control_response' || !isRecord(frame.response)) {
+      if (!isRecord(frame) || !isRecord(frame.response)) {
         continue
       }
       const response = frame.response

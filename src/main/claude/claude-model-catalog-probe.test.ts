@@ -427,22 +427,23 @@ it('requires definitive first-party account facts, preserving inventory when aut
   }
 })
 
-it('reads slash commands from the real initialize frame past error, diagnostic and oversized lines', async () => {
+it('reads slash commands as main did: past error, diagnostic and oversized lines, with or without type', async () => {
   const { error, initialize } = signinCapture.commandFrames
-  const nested = (depth: number): unknown =>
-    depth === 0 ? 'orca-command-discovery' : { response: nested(depth - 1) }
-  const oversized = JSON.stringify({ type: 'control_response', response: nested(20) })
+  const nested = (depth: number): unknown => (depth === 0 ? {} : { response: nested(depth - 1) })
+  const oversized = JSON.stringify({
+    ...initialize,
+    response: { ...initialize.response, response: nested(20) }
+  })
   const list = (lines: string[]) =>
     createClaudeCommandCatalogProbe({
       ...probeDeps(),
       runListing: async () => `${lines.join('\n')}\n`
     })({ cwd: '/project', accountHomePath: '/homes/account-a' })
-  const rejected = [
-    JSON.stringify(error),
-    'orca-command-discovery control_response not ready',
-    oversized
-  ]
+  const rejected = [JSON.stringify(error), 'orca-command-discovery request_id not ready', oversized]
   await expect(list(rejected)).rejects.toThrow('claude listed no commands')
-  const commands = await list([...rejected, JSON.stringify(initialize)])
-  expect(commands.map((command) => command.name)).toEqual(['deep-research', 'design'])
+  const { type: _type, ...untyped } = initialize
+  for (const frame of [initialize, untyped]) {
+    const commands = await list([...rejected, JSON.stringify(frame)])
+    expect(commands.map((command) => command.name)).toEqual(['deep-research', 'design'])
+  }
 })
