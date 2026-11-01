@@ -1,3 +1,5 @@
+import { terminalSessionExitCode } from './terminal-host-returned-process'
+import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../shared/pty-fenced-termination'
 import type { Session } from './session'
@@ -5,7 +7,8 @@ import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspe
 import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
-import { disposeTerminalHostSessions } from './terminal-host-disposal'
+import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
+import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from './session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
@@ -21,9 +24,7 @@ import {
 } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
-import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import { inspectTerminalHostSession } from './terminal-host-process-inspection'
 import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
@@ -41,12 +42,11 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 export type { TerminalHostOptions } from './terminal-host-options'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
   // Serializes creates for one id across async spawn validation.
-  private pendingCreations = new Map<string, Promise<void>>()
+  private pendingCreations = new Map<string, PendingTerminalCreation>()
   private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones: TerminalHostTombstones
   private readonly spawnOptions: Pick<TerminalHostOptions, 'spawnSubprocess' | 'spawnGate'>
@@ -72,76 +72,59 @@ export class TerminalHost {
     this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
-  async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
-    this.assertCreateOrAttachAllowed(opts)
-    for (
-      let inFlight = this.pendingCreations.get(opts.sessionId);
-      inFlight !== undefined;
-      inFlight = this.pendingCreations.get(opts.sessionId)
-    ) {
-      // Let canceled callers leave rather than wait behind a cwd probe stuck on an unreachable share.
-      await waitForTerminalAttachOperation(inFlight, opts.cancelSignal, opts.sessionId)
-      this.assertCreateOrAttachAllowed(opts)
-    }
-    this.assertCreateOrAttachAllowed(opts)
-
-    let settleCreation: () => void = () => {}
-    this.pendingCreations.set(
-      opts.sessionId,
-      new Promise<void>((resolve) => {
-        settleCreation = resolve
-      })
-    )
-    try {
-      return await createOrAttachClaimedAgentSession({
-        options: opts,
-        owners: this.agentSessionOwners,
-        isLive: (owner) =>
-          this.agentSessionGenerations.isCurrent(
-            owner,
-            Boolean(
-              this.sessions.get(owner.ptyId)?.isAlive &&
-              !this.sessions.get(owner.ptyId)?.isTerminating
+  createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
+    return runTerminalCreation(
+      opts,
+      this.sessions,
+      this.pendingCreations,
+      (options) => this.assertCreateOrAttachAllowed(options),
+      (opts, creation) =>
+        createOrAttachClaimedAgentSession({
+          options: opts,
+          owners: this.agentSessionOwners,
+          isLive: (owner) => {
+            const session = this.sessions.get(owner.ptyId)
+            const live = this.agentSessionGenerations.isCurrent(
+              owner,
+              Boolean(session?.isAlive && !session.isTerminating)
             )
-          ),
-        createOrAttach: async (options) => {
-          this.assertCreateOrAttachAllowed(options)
-          if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
-            throw new Error('agent_session_claim_unavailable')
+            if (live && session) {
+              creation.owner(session.physicalCompletion, terminalSessionExitCode(session))
+            }
+            return live
+          },
+          createOrAttach: async (options) => {
+            this.assertCreateOrAttachAllowed(options)
+            if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
+              throw new Error('agent_session_claim_unavailable')
+            }
+            return await createOrAttachTerminalSession(options, {
+              sessions: this.sessions,
+              assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
+              sessionTeardown: this.sessionTeardown,
+              killedTombstones: this.killedTombstones,
+              spawnSubprocess: this.spawnOptions.spawnSubprocess,
+              spawnGate: this.spawnOptions.spawnGate,
+              onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
+              onSessionCreated: (sessionId, generation, isAlive) =>
+                this.agentSessionGenerations.remember(sessionId, generation, isAlive),
+              ...(this.reportReadinessEvent
+                ? { reportReadinessEvent: this.reportReadinessEvent }
+                : {}),
+              onSessionExit: this.handleSessionExit.bind(this)
+            })
           }
-          return await createOrAttachTerminalSession(options, {
-            sessions: this.sessions,
-            assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
-            sessionTeardown: this.sessionTeardown,
-            killedTombstones: this.killedTombstones,
-            spawnSubprocess: this.spawnOptions.spawnSubprocess,
-            spawnGate: this.spawnOptions.spawnGate,
-            onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
-            onSessionCreated: (sessionId, generation, isAlive) =>
-              this.agentSessionGenerations.remember(sessionId, generation, isAlive),
-            ...(this.reportReadinessEvent
-              ? { reportReadinessEvent: this.reportReadinessEvent }
-              : {}),
-            onSessionExit: this.handleSessionExit.bind(this)
-          })
-        }
-      })
-    } finally {
-      this.pendingCreations.delete(opts.sessionId)
-      settleCreation()
-    }
+        })
+    )
   }
 
   private handleSessionExit(sessionId: string, generation: string | undefined): void {
-    const session = this.sessions.get(sessionId)
-    if (session) {
-      pruneRetiredPtyIncarnations(this.retiredIncarnations)
-      this.retiredIncarnations.set(sessionId, {
-        incarnationId: session.incarnationId,
-        code: session.exitCode ?? 0,
-        expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-      })
-    }
+    recordTerminalHostSessionExit(
+      sessionId,
+      this.sessions.get(sessionId),
+      this.retiredIncarnations,
+      this.reportReadinessEvent
+    )
     this.agentSessionOwners.release(sessionId, generation)
     this.agentSessionGenerations.forget(sessionId, generation)
     this.reapSession(sessionId)
@@ -317,12 +300,23 @@ export class TerminalHost {
     return hasLiveTerminalHostSessions(this.sessions)
   }
 
+  /** Last resort when shutdown overruns its deadline: an async group sweep may not have signalled yet. */
+  killLiveSessionGroupsSync(): void {
+    killLiveSessionGroupsSync(this.sessions.values())
+  }
+
   dispose(): Promise<void> {
     this.creationFenced = true
     if (this.disposePromise) {
       return this.disposePromise
     }
-    const disposePromise = this.disposeSessions()
+    const disposePromise = disposeTerminalHostSessions({
+      pendingCreations: this.pendingCreations,
+      sessionTeardown: this.sessionTeardown,
+      sessions: this.sessions,
+      onFinalCheckpoint: this.onFinalCheckpoint,
+      killedTombstones: this.killedTombstones
+    })
     this.disposePromise = disposePromise
     void disposePromise.catch(() => {
       // Keep failed native owners retryable on the next shutdown request.
@@ -331,15 +325,5 @@ export class TerminalHost {
       }
     })
     return disposePromise
-  }
-
-  private disposeSessions(): Promise<void> {
-    return disposeTerminalHostSessions({
-      pendingCreations: this.pendingCreations,
-      sessionTeardown: this.sessionTeardown,
-      sessions: this.sessions,
-      onFinalCheckpoint: this.onFinalCheckpoint,
-      killedTombstones: this.killedTombstones
-    })
   }
 }

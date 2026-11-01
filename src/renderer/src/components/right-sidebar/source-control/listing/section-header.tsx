@@ -49,17 +49,11 @@ export function SectionHeader({
             </span>
             {conflictCount > 0 && (
               <span className="block truncate text-[11px] font-medium text-destructive/80">
-                {conflictCount === 1
-                  ? translate(
-                      'auto.components.right.sidebar.SourceControl.conflictCount_one',
-                      '{{count}} conflict',
-                      { count: conflictCount }
-                    )
-                  : translate(
-                      'auto.components.right.sidebar.SourceControl.conflictCount_other',
-                      '{{count}} conflicts',
-                      { count: conflictCount }
-                    )}
+                {translate(
+                  'auto.components.right.sidebar.SourceControl.conflictCount',
+                  '{{count}} conflicts',
+                  { count: conflictCount, defaultValue_one: '{{count}} conflict' }
+                )}
               </span>
             )}
           </span>

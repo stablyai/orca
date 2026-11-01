@@ -178,7 +178,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           force: true,
           repoId: repo.id,
           worktreeId: activeWorktreeId ?? undefined,
-          linkedPRNumber
+          linkedPRNumber,
+          userRefresh: true
         })
         if (!isCurrentRequestContext()) {
           return
@@ -188,11 +189,12 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           repoId: repo.id,
           branch,
           linkedGitHubPR: linkedPRNumber,
+          userRefresh: true,
           linkedGitLabMR,
           linkedBitbucketPR,
           linkedAzureDevOpsPR,
           linkedGiteaPR
-        })
+        }).catch(() => null)
         if (!isCurrentRequestContext()) {
           return
         }
@@ -220,7 +222,9 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
             refreshedPR.prRepo,
             {
               force: true,
-              repoId: repo.id
+              repoId: repo.id,
+              wakeWslDistro: true,
+              userRefresh: true
             }
           )
             .then(
@@ -245,7 +249,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           fetchPRComments(repo.path, refreshedPR.number, {
             force: true,
             repoId: repo.id,
-            prRepo: refreshedPR.prRepo
+            prRepo: refreshedPR.prRepo,
+            userRefresh: true
           })
             .then(
               (result) => {

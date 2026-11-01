@@ -1,4 +1,4 @@
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 
 export const AGENT_HOOK_INFER_INTERRUPT_METHOD = 'agent_hook.inferInterrupt' as const
 

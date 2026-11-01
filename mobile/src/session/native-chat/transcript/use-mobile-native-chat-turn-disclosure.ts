@@ -2,26 +2,26 @@ import { useCallback, useMemo, useState } from 'react'
 import {
   isSubagentGroupBlock,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat-types'
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat-reasoning-row'
+} from '../../../../../src/shared/native-chat/native-chat-types'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
-} from '../../../../../src/shared/native-chat-live-line'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-live-line'
 import type {
   NativeChatSettledTurns,
   NativeChatTurnStatus
-} from '../../../../../src/shared/native-chat-turn-status'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../src/shared/native-chat-live-turn-membership'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal
-} from '../../../../../src/shared/native-chat-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shared/native-chat-messages-waiting-behind-live-turn'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../../mobile-native-chat-run-descriptors'
+import type { MobileNativeChatRunPresentation } from '../mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows

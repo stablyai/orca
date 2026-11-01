@@ -64,7 +64,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     return resolveRuntimeWorktreeRemovalTarget({
       selector: worktreeSelector,
       store: this.store,
-      resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
+      resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
       resolveExplicitWorktreeIdScoped: (worktreeId, hostId) =>
         this.resolveExplicitWorktreeIdScoped(worktreeId, hostId),
       ...(requiredHostId ? { requiredHostId } : {})
@@ -83,9 +83,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
-    options: RemoveManagedWorktreeOptions
+    { hostId, deleteBranch }: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined {
-    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
+    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(hostId)?.id, deleteBranch)
   }
 
   /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */
@@ -119,7 +119,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
                   allowUnverifiedStop: allowUnverifiedPtyStop
                 })
             }),
-          options.force === true
+          options.force === true,
+          options.deleteBranch
         )
     )
   }
@@ -315,8 +316,13 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
     })
     const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
     // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
-    return workspace.connectionId
-      ? launch
-      : withHostAccountLaunchEnv(opts, launch, this.accounts.hostLaunchEnvFor(launch.launchAgent))
+    if (workspace.connectionId) {
+      return launch
+    }
+    if (launch.launchAgent) {
+      await this.accounts.prepareHostAgentLaunch(launch.launchAgent)
+    }
+    const hostLaunchEnv = this.accounts.hostLaunchEnvFor(launch.launchAgent)
+    return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
   }
 }

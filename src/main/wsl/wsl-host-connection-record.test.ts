@@ -33,4 +33,35 @@ describe('toWslHostStatus', () => {
     ).toBeNull()
     expect(toWslHostStatus(record, { state: 'connecting' }).deferredUpdate).toBeNull()
   })
+
+  it('codes an unverifiable reason as a sentence, and keeps verbatim connect errors uncoded', () => {
+    expect(
+      toWslHostStatus(record, {
+        state: 'unverifiable',
+        reason: 'guest-unanswered',
+        terminals: 'unverifiable'
+      })
+    ).toMatchObject({
+      detail: 'The distro is running but didn’t answer Orca’s check.',
+      detailCode: 'guestUnanswered'
+    })
+    const failed = toWslHostStatus(record, {
+      state: 'failed',
+      reason: 'bridge refused',
+      terminals: 'unverifiable'
+    })
+    expect(failed.detail).toBe('bridge refused')
+    expect(failed).not.toHaveProperty('detailCode')
+    const pendingStop = {
+      since: 1,
+      reason: 'The WSL service did not confirm whether the distro runs.',
+      reasonCode: 'serviceUnconfirmed',
+      verdict: 'unverifiable' as const
+    }
+    expect(toWslHostStatus({ ...record, pendingStop }, { state: 'closed' })).toMatchObject({
+      detail: pendingStop.reason,
+      detailCode: 'serviceUnconfirmed',
+      removalPending: true
+    })
+  })
 })

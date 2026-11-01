@@ -1,8 +1,9 @@
 import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { grokTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
 import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
@@ -49,7 +50,7 @@ export async function parseGrokSessionFile(
   updateTimeline(accumulator, extractString(record.created_at))
   updateTimeline(accumulator, extractString(record.updated_at))
   updateTimeline(accumulator, extractString(record.last_active_at))
-  await consumeGrokChatHistory(accumulator, dirname(file.path))
+  await consumeGrokChatHistory(accumulator, grokTranscriptPathForMetadata(file.path))
   return finalizeSession(accumulator, platform)
 }
 
@@ -60,13 +61,9 @@ export function grokSessionCwd(summary: Record<string, unknown>): string | null 
 
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
-  sessionDir: string
+  transcriptPath: string
 ): Promise<void> {
-  const input = openTranscriptReadStream(
-    join(sessionDir, 'chat_history.jsonl'),
-    { encoding: 'utf-8' },
-    'scan'
-  )
+  const input = openTranscriptReadStream(transcriptPath, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
     for await (const line of lines) {

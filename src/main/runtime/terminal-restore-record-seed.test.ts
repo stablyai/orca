@@ -607,19 +607,30 @@ describe('terminal view promise characterization', () => {
     await expect(runtime.writeTerminalPreviewInput('view-pty', '')).resolves.toBe(false)
     expect(initialDriver).not.toHaveBeenCalled()
     const receivers: OrcaRuntimeService[] = []
-    runtime['writeTerminalInputChunks'] = async function (this: OrcaRuntimeService, ...args) {
+    const writeChunks = runtime['writeTerminalInputChunks']
+    const currentDriver = vi.fn(function (this: OrcaRuntimeService, _ptyId: string) {
       receivers.push(this)
-      expect(args.length).toBe(3)
-      expect(args[2].inputKind).toBe('driving')
-      runtime.getDriver = function (this: OrcaRuntimeService) {
-        receivers.push(this)
-        return { kind: 'mobile', clientId: 'phone' }
-      }
-      await args[2].beforeWrite?.(args[0])
-      return undefined
-    }
+      return { kind: 'mobile' as const, clientId: 'phone' }
+    })
+    runtime['writeTerminalInputChunks'] = vi.fn(function (
+      this: OrcaRuntimeService,
+      ...args: Parameters<typeof writeChunks>
+    ) {
+      receivers.push(this)
+      runtime.getDriver = currentDriver
+      return writeChunks.apply(this, args)
+    })
     await expect(runtime.writeTerminalPreviewInput('view-pty', 'paste')).resolves.toBe(false)
-    expect(initialDriver).toHaveBeenCalledOnce()
+    expect(runtime['writeTerminalInputChunks']).toHaveBeenCalledExactlyOnceWith(
+      'view-pty',
+      'paste',
+      {
+        inputKind: 'driving',
+        inputSource: 'desktop'
+      }
+    )
+    expect(initialDriver).not.toHaveBeenCalled()
+    expect(currentDriver).toHaveBeenCalledExactlyOnceWith('view-pty')
     expect(receivers).toEqual([runtime, runtime])
   })
 })

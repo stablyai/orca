@@ -8,7 +8,7 @@ import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   MobileTerminalResumeCommand,
   OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup
@@ -107,6 +107,7 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     if (!resumeClaim) {
       return vetoed
     }
+    // Unresumable here (including a WSL host's Windows-only CLI) restores a plain shell.
     const resume = await this.preparePaneOwnedResume(worktreeId, record, !stored).catch(() => null)
     if (!resume) {
       resumeClaim.settleFailure(false)

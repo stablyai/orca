@@ -134,7 +134,11 @@ export function createNativeMediaVerbServer(
     }
   }
 
-  async function pickFrom(source: BridgeMediaSource, multiple: boolean): Promise<StagedMedia[]> {
+  async function pickFrom(
+    source: BridgeMediaSource,
+    multiple: boolean,
+    isCurrent: () => boolean
+  ): Promise<StagedMedia[]> {
     // Check room before the OS copies a selection that mint would refuse.
     const room = deps.registry.remainingCapacity()
     if (room <= 0) {
@@ -145,7 +149,7 @@ export function createNativeMediaVerbServer(
     }
     if (source === 'clipboard') {
       const image = await deps.readClipboardImage()
-      if (image === null) {
+      if (image === null || !isCurrent()) {
         return []
       }
       const base64 = image.data.replace(DATA_URL_PREFIX_RE, '')
@@ -163,6 +167,11 @@ export function createNativeMediaVerbServer(
     // DocumentPicker ignores room; enforce count before staging any bytes.
     function withinRoom(assets: readonly PickedAsset[]): readonly PickedAsset[] {
       if (assets.length > room) {
+        for (const asset of assets) {
+          if (deps.ownsStagedUri(asset.uri)) {
+            discardQuietly(asset.uri)
+          }
+        }
         throw new BridgeNativeVerbRefusedError(
           'native_media_handle_cap',
           `that pick answered ${assets.length} items and this page has room for ${room}`
@@ -171,11 +180,21 @@ export function createNativeMediaVerbServer(
       return assets
     }
 
-    if (source === 'library') {
-      // Expo’s OS library picker needs no permission preflight; an extra denial could block a pick the OS would allow.
-      return stage(withinRoom(readAssets(await deps.launchLibrary({ multiple, limit: room }))))
+    // Expo’s OS library picker needs no permission preflight; an extra denial could block a pick the OS would allow.
+    const assets = readAssets(
+      await (source === 'library'
+        ? deps.launchLibrary({ multiple, limit: room })
+        : deps.launchFiles({ multiple, limit: room }))
+    )
+    if (!isCurrent()) {
+      for (const asset of assets) {
+        if (deps.ownsStagedUri(asset.uri)) {
+          discardQuietly(asset.uri)
+        }
+      }
+      return []
     }
-    return stage(withinRoom(readAssets(await deps.launchFiles({ multiple, limit: room }))))
+    return stage(withinRoom(assets))
   }
 
   // Decode chunks before joining; concatenating independently padded base64 corrupts the file.
@@ -202,7 +221,16 @@ export function createNativeMediaVerbServer(
   return async (verb, params) => {
     if (verb === 'native.media.pick') {
       const { source, multiple } = mediaPickParamsSchema.parse(params)
-      return { items: deps.registry.mint(await pickFrom(source, multiple)) }
+      const generation = deps.registry.generation
+      const isCurrent = (): boolean => deps.registry.generation === generation
+      const staged = await pickFrom(source, multiple, isCurrent)
+      if (!isCurrent()) {
+        for (const item of staged) {
+          discardQuietly(item.uri)
+        }
+        return { items: [] }
+      }
+      return { items: deps.registry.mint(staged) }
     }
     if (verb === 'native.media.read') {
       const { handle, offset, length } = mediaReadParamsSchema.parse(params)

@@ -7,6 +7,15 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
+import type { LocalFileAccess } from '../../../shared/local-file-access'
+
+// Why local only: an SSH read is the remote host's to check, and its relay never sees this field.
+export function localAccess(
+  connectionId: string | undefined,
+  access: LocalFileAccess | undefined
+): { access?: LocalFileAccess } {
+  return access && !connectionId ? { access } : {}
+}
 
 export function assertExternalSshReadOwnership(
   target: RuntimeClientTarget,

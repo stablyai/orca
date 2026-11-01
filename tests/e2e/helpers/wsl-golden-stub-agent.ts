@@ -1,4 +1,3 @@
-import { selectCanonicalProjects } from '../../../src/renderer/src/store/project-host-setup-selector'
 import { execFileSync } from 'node:child_process'
 import type { Page } from '@stablyai/playwright-test'
 import { buildWslExecArgs } from '../../../src/shared/wsl-login-shell-command'
@@ -134,46 +133,31 @@ export function removeWslGoldenStubAgent(distro: string, stage: WslGoldenStubAge
 
 /** Retargets project agent detection and terminal spawning to WSL. */
 export async function useWslRuntimeForActiveProject(page: Page, distro: string): Promise<void> {
-  const catalog = await page.evaluate(() => {
-    const state = window.__store?.getState()
-    if (!state) {
+  await page.evaluate(async (wslDistro) => {
+    const store = window.__store
+    if (!store) {
       throw new Error('Orca store is unavailable')
     }
-    return {
-      repos: state.repos,
-      endpointProjects: state.endpointProjects,
-      endpointProjectHostSetups: state.endpointProjectHostSetups
+    const state = store.getState()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      throw new Error('No active worktree')
     }
-  })
-  const projects = selectCanonicalProjects(catalog)
-  await page.evaluate(
-    async ({ wslDistro, projects }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Orca store is unavailable')
-      }
-      const state = store.getState()
-      const worktreeId = state.activeWorktreeId
-      if (!worktreeId) {
-        throw new Error('No active worktree')
-      }
-      const activeWorktree = Object.values(state.worktreesByRepo)
-        .flat()
-        .find((worktree) => worktree.id === worktreeId)
-      const activeProject = projects.find((project) =>
-        activeWorktree ? project.sourceRepoIds.includes(activeWorktree.repoId) : false
-      )
-      if (!activeProject) {
-        throw new Error('No active project')
-      }
-      await state.updateProject(
-        activeProject.id,
-        {
-          localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
-        },
-        'local'
-      )
-    },
-    { wslDistro: distro, projects }
-  )
+    const activeWorktree = Object.values(state.worktreesByRepo)
+      .flat()
+      .find((worktree) => worktree.id === worktreeId)
+    const activeProject = state.projects.find((project) =>
+      activeWorktree ? project.sourceRepoIds.includes(activeWorktree.repoId) : false
+    )
+    if (!activeProject) {
+      throw new Error('No active project')
+    }
+    await state.updateProject(
+      activeProject.id,
+      {
+        localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+      },
+      'local'
+    )
+  }, distro)
 }

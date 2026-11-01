@@ -340,6 +340,6 @@ describe('shared agent-hook-listener', () => {
           'production'
         )?.providerSession?.id ?? null
     )
-    expect(sessions).toEqual(Array(10).fill('local-parent'))
+    expect(sessions).toEqual(['local-parent', 'local-parent', ...Array(8).fill(null)])
   })
 })

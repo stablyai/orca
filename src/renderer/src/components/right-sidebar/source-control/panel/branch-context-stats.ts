@@ -3,31 +3,19 @@ import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktr
 import { translate } from '@/i18n/i18n'
 
 function formatAheadOfTitle(count: number, ref: string): string {
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.SourceControl.compareBaseCommitsAheadOne',
-        '1 commit ahead of {{ref}}',
-        { ref }
-      )
-    : translate(
-        'auto.components.right.sidebar.SourceControl.compareBaseCommitsAheadOther',
-        '{{count}} commits ahead of {{ref}}',
-        { count, ref }
-      )
+  return translate(
+    'auto.components.right.sidebar.SourceControl.compareBaseCommitsAhead',
+    '{{count}} commits ahead of {{ref}}',
+    { count, ref, defaultValue_one: '{{count}} commit ahead of {{ref}}' }
+  )
 }
 
 function formatBehindOfTitle(count: number, ref: string): string {
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.SourceControl.compareBaseCommitsBehindOne',
-        '1 commit behind {{ref}}',
-        { ref }
-      )
-    : translate(
-        'auto.components.right.sidebar.SourceControl.compareBaseCommitsBehindOther',
-        '{{count}} commits behind {{ref}}',
-        { count, ref }
-      )
+  return translate(
+    'auto.components.right.sidebar.SourceControl.compareBaseCommitsBehind',
+    '{{count}} commits behind {{ref}}',
+    { count, ref, defaultValue_one: '{{count}} commit behind {{ref}}' }
+  )
 }
 
 // Reserve green/red for line totals; coloring commit arrows too would make adjacent unlike quantities look combined.

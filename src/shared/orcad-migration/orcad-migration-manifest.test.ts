@@ -350,6 +350,50 @@ describe('orcad migration manifest', () => {
       manifestSha256: 'a'.repeat(64)
     }
 
+    const chatCandidate = {
+      ...candidate,
+      payload: {
+        ...candidate.payload,
+        dormantState: {
+          ...candidate.payload.dormantState,
+          automations: [{ ...automation, surface: 'chat' }],
+          automationRuns: [
+            {
+              ...run,
+              sessionKind: 'chat',
+              chatSessionId: 'claude_chat',
+              terminalSessionId: null,
+              terminalPaneKey: null,
+              terminalPtyId: null
+            }
+          ]
+        }
+      }
+    }
+    const importedChat = parseOrcadMigrationManifest(chatCandidate).payload.dormantState
+    expect(importedChat?.automations?.[0].surface).toBe('chat')
+    expect(importedChat?.automationRuns?.[0]).toMatchObject({
+      sessionKind: 'chat',
+      chatSessionId: 'claude_chat',
+      outputSnapshot: { content: 'all green' }
+    })
+    expect(() =>
+      parseOrcadMigrationManifest({
+        ...chatCandidate,
+        payload: {
+          ...chatCandidate.payload,
+          dormantState: {
+            ...chatCandidate.payload.dormantState,
+            automationRuns: [
+              {
+                ...chatCandidate.payload.dormantState.automationRuns[0],
+                terminalPaneKey: 'fake:terminal'
+              }
+            ]
+          }
+        }
+      })
+    ).toThrow('orcad_migration_dormant_automation_run_session_invalid')
     expect(
       parseOrcadMigrationManifest(candidate).payload.dormantState?.automationRuns?.[0]
         ?.outputSnapshot?.content

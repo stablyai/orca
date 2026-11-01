@@ -29,17 +29,12 @@ export function buildConnectConfig(
   resolved: SshResolvedConfig | null,
   options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
-  const effectiveHost = resolveEffectiveHost(target, resolved)
-  const effectivePort = resolveEffectivePort(target, resolved)
-  const effectiveUser =
-    isOpenSshConfigBackedTarget(target) && resolved
-      ? (resolved.user ?? target.username)
-      : target.username || resolved?.user || ''
+  const endpoint = resolveEffectiveSshEndpoint(target, resolved)
 
   const config: Record<string, unknown> = {
-    host: effectiveHost,
-    port: effectivePort,
-    username: effectiveUser,
+    host: endpoint.host,
+    port: endpoint.port,
+    username: endpoint.username,
     readyTimeout: CONNECT_TIMEOUT_MS,
     keepaliveInterval: 15_000,
     // Allow RFC4256 keyboard-interactive challenges, including MFA after partial password success.
@@ -85,6 +80,21 @@ export function buildConnectConfig(
   )
 
   return config as ConnectConfig
+}
+
+/** Where a target connects once its stored fields are merged with `ssh -G`. */
+export function resolveEffectiveSshEndpoint(
+  target: SshTarget,
+  resolved: SshResolvedConfig | null
+): { host: string; port: number; username: string } {
+  return {
+    host: resolveEffectiveHost(target, resolved),
+    port: resolveEffectivePort(target, resolved),
+    username:
+      isOpenSshConfigBackedTarget(target) && resolved
+        ? (resolved.user ?? target.username)
+        : target.username || resolved?.user || ''
+  }
 }
 
 function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {

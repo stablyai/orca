@@ -73,7 +73,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       'terminal.send',
       {
         terminal: 'pty-1',
-        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'`,
+        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'`,
         enter: true
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
@@ -105,7 +105,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
     )
     expect(prepared).toEqual({ ...legacy, codexHome: null })
     expect(launch.command).toBe(
-      "cd '/Users/ada/repo' && codex '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'"
+      "cd '/Users/ada/repo' && codex '-c' 'disable_paste_burst=true' '-c' 'tui.resume_cwd=current' 'resume' 'legacy-1'"
     )
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })

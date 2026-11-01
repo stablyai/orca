@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { NODE_RUNTIME_PIN } from '../../src/shared/node-runtime-pin.ts'
 import { assertNodePtyPatchApplied } from './build-orcad-prebuilds.mjs'
+import { nativeDependencyLockDigest } from './native-dependency-lock-digest.mjs'
 import {
   findPostBaselineNodeApiNames,
   findSlotProblems,
@@ -17,11 +18,11 @@ import {
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const ownership = require('./node-pty-job-ownership.cjs')
+// The locked node-pty and node-gyp closures stand in for pnpm-lock.yaml and package.json.
+export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp']
+const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packages']
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
-  'package.json',
   '.github/actions/prepare-orcad-prebuilds/action.yml',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime-pin.ts',
   'config/scripts/build-orcad-prebuilds.mjs',
@@ -30,6 +31,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'config/scripts/capture-windows-native-environment.cmd',
   'config/scripts/orcad-prebuild-slot-contents.mjs',
   'config/scripts/orcad-windows-prebuild-cache.mjs',
+  'config/scripts/native-dependency-lock-digest.mjs',
+  'config/scripts/build-workspace-packages.mjs',
   'config/scripts/node-pty-job-ownership.cjs',
   'config/scripts/windows-pe-machine.cjs',
   'config/scripts/pinned-node-downloads.mjs',
@@ -65,28 +68,32 @@ export function windowsPrebuildCacheIdentity({
   repository = root,
   platform = process.platform,
   arch = process.arch,
-  imageOS = process.env.ImageOS,
-  imageVersion = process.env.ImageVersion
+  imageOS = process.env.ImageOS
 } = {}) {
   const slot = windowsSlot(platform, arch)
-  if (!imageOS || !imageVersion) {
-    throw new Error('Windows prebuild cache needs the hosted ImageOS and ImageVersion')
+  if (!imageOS) {
+    throw new Error('Windows prebuild cache needs the hosted ImageOS')
   }
-  const digest = createHash('sha256').update(JSON.stringify({ slot, imageOS, imageVersion }))
+  // ImageOS, not the weekly ImageVersion: --validate re-checks N-API imports, arch and patches on restore.
+  const { scripts } = JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8'))
+  const locked = nativeDependencyLockDigest({
+    repository,
+    packages: WINDOWS_PREBUILD_LOCKED_PACKAGES
+  }).digest
+  const digest = createHash('sha256').update(
+    JSON.stringify({
+      slot,
+      imageOS,
+      locked,
+      scripts: WINDOWS_PREBUILD_PACKAGE_SCRIPTS.map((name) => [name, scripts?.[name] ?? null])
+    })
+  )
   for (const file of WINDOWS_PREBUILD_CACHE_INPUTS) {
-    const bytes = readFileSync(join(repository, file))
-    if (file === 'package.json') {
-      const manifest = JSON.parse(bytes.toString('utf8'))
-      // App versions do not affect the separately versioned node-pty binary.
-      delete manifest.version
-      digest.update(`\0${file}\0`).update(JSON.stringify(manifest))
-    } else {
-      digest.update(`\0${file}\0`).update(bytes)
-    }
+    digest.update(`\0${file}\0`).update(readFileSync(join(repository, file)))
   }
   return {
     slot,
-    key: `orcad-windows-prebuild-v1-${slot}-${digest.digest('hex')}`,
+    key: `orcad-windows-prebuild-v2-${slot}-${digest.digest('hex')}`,
     path: join(repository, 'out', 'orcad-prebuilds')
   }
 }

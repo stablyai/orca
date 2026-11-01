@@ -215,9 +215,17 @@ export function findCommandSpec(
 export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs): void {
   const spec = findCommandSpec(specs, parsed.commandPath)
   if (!spec) {
+    const path = parsed.commandPath.join(' ')
+    // A real group is not a typo; point at its help instead of unrelated suggestions.
+    if (isCommandGroup(specs, parsed.commandPath)) {
+      throw new RuntimeClientError('invalid_argument', `Missing subcommand for: orca ${path}`, {
+        suggestions: [],
+        nextSteps: [`Run \`orca ${path} --help\` to list its commands.`]
+      })
+    }
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown command: ${parsed.commandPath.join(' ')}`,
+      `Unknown command: ${path}`,
       unknownCommandData(specs, parsed.commandPath)
     )
   }

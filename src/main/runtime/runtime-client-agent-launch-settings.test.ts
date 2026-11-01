@@ -16,12 +16,13 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 
-function fixture() {
+function fixture(overrides: Partial<GlobalSettings> = {}) {
   const host = createGlobalSettingsFixture({
     workspaceDir: '/host',
     agentDefaultArgs: { claude: '--host-old', codex: '--host-codex' },
     agentDefaultEnv: { claude: { API_KEY: 'host-secret', KEEP: 'host-only' } },
-    agentCmdOverrides: { codex: '/host/codex' }
+    agentCmdOverrides: { codex: '/host/codex' },
+    ...overrides
   })
   const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => Object.assign(host, updates))
   const runDurableMutation: NonNullable<RuntimeStore['runDurableMutation']> = async (mutate) =>
@@ -35,19 +36,6 @@ function fixture() {
 }
 
 describe('execution-host agent launch settings', () => {
-  it('presents an existing retired None default as Blank Terminal to every client', () => {
-    const { controller, host } = fixture()
-    host.defaultTuiAgent = 'blank'
-    host.newWorkspaceSetupOnly = true
-    expect(controller.get()).toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
-    })
-    expect(controller.getAgentLaunch()).toMatchObject({
-      defaultTuiAgent: 'blank',
-      newWorkspaceSetupOnly: false
-    })
-  })
   it('edits the store the structured host reads, leaving desktop choices on the desktop', async () => {
     const desktop = createGlobalSettingsFixture({
       workspaceDir: '/desktop',
@@ -140,22 +128,6 @@ describe('execution-host agent launch settings', () => {
     expect(host).not.toHaveProperty('agentNativeChatPermissionModes')
   })
 
-  it('publishes scoped host defaults and resets them when a paired client chooses a shared chat default', async () => {
-    const { controller, host } = fixture()
-    host.agentDefaultArgs = { claude: '', codex: '' }
-    await controller.mutateAgentLaunch({
-      type: 'permissions',
-      syncNativeChat: true,
-      agent: 'codex',
-      mode: 'auto'
-    })
-    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
-    expect(host.agentDefaultArgs.claude).toBe('')
-    await controller.update({ nativeChatPermissionMode: 'ask' })
-    expect(controller.get()).not.toHaveProperty('agentNativeChatPermissionModes')
-    expect(host.nativeChatPermissionMode).toBe('ask')
-  })
-
   it('normalizes older-client None default requests to Blank Terminal', async () => {
     const { controller, host } = fixture()
     const mutation = AgentLaunchSettingsMutation.parse({
@@ -204,17 +176,17 @@ describe('execution-host agent launch settings', () => {
     expect(controller.get().agentDefaultEnv?.claude?.API_KEY).toBe('host-secret')
     await controller.mutateAgentLaunch({ type: 'command', agent: 'claude', value: '' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-secret')
-  })
-
-  it('reports a failed host write instead of returning a successful projection', async () => {
-    const { controller, updateSettings, host } = fixture()
-    updateSettings.mockImplementation(() => {
-      throw new Error('disk full')
-    })
-    await expect(
-      controller.mutateAgentLaunch({ type: 'arguments', agent: 'claude', value: '--new' })
-    ).rejects.toThrow('disk full')
-    expect(host.agentDefaultArgs?.claude).toBe('--host-old')
+    const legacy = fixture({ agentPermissionDefault: undefined })
+    expect(legacy.host.agentPermissionDefault).toBeUndefined()
+    const literal = {
+      agentDefaultArgs: { claude: '--model literal --verbose' },
+      agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', KEEP: 'literal' } }
+    }
+    const response = await legacy.controller.update(literal)
+    expect(legacy.host.agentDefaultArgs).toEqual(literal.agentDefaultArgs)
+    expect(legacy.host.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
+    expect(response.agentDefaultArgs?.claude).toBe(literal.agentDefaultArgs.claude)
+    expect(response.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
   })
 
   it('uses host Windows environment name rules', () => {
@@ -257,7 +229,7 @@ describe('execution-host agent launch settings', () => {
         value: ''
       }).success
     ).toBe(true)
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(false)
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })

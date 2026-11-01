@@ -79,6 +79,7 @@ function harness(phone: Terminal) {
     reflow: vi.fn(),
     clear: vi.fn(),
     fitDimensions: vi.fn(() => ({ cols: COLS, rows: ROWS })),
+    scrollToBottom: vi.fn(),
     resetZoom: vi.fn(),
     cancelSelect: vi.fn(),
     doSelectAll: vi.fn(),

@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import type { TextGenerationFailureFields } from '../../../src/shared/text-generation-failure-copy'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 
 export type MobileGenerateCommitMessageResult =
   | { success: true; message: string }
-  | { success: false; error: string; canceled?: boolean }
+  | ({ success: false; canceled?: boolean } & TextGenerationFailureFields)
 
 // Preserve delivery-unknown on lost mutation replies; rejection does not prove the host did nothing.
 
@@ -78,21 +79,22 @@ const generatedCommitMessageSchema: z.ZodType<MobileGenerateCommitMessageResult,
     z
       .object({
         success: z.literal(false),
-        error: z.string().min(1),
+        error: z.string().min(1).catch(NO_MESSAGE_GENERATED),
+        errorCode: z.string().optional().catch(undefined),
+        errorParams: z
+          .record(z.string(), z.union([z.string(), z.number()]))
+          .optional()
+          .catch(undefined),
+        errorDetail: z.string().optional().catch(undefined),
         canceled: z.unknown().optional()
       })
 
       .transform((value): MobileGenerateCommitMessageResult => ({
         success: false,
         error: value.error,
-        ...(value.canceled ? { canceled: true } : {})
-      })),
-    z
-      .object({ success: z.literal(false), canceled: z.unknown().optional() })
-
-      .transform((value): MobileGenerateCommitMessageResult => ({
-        success: false,
-        error: NO_MESSAGE_GENERATED,
+        ...(value.errorCode !== undefined ? { errorCode: value.errorCode } : {}),
+        ...(value.errorParams !== undefined ? { errorParams: value.errorParams } : {}),
+        ...(value.errorDetail !== undefined ? { errorDetail: value.errorDetail } : {}),
         ...(value.canceled ? { canceled: true } : {})
       })),
     // Null/non-object means generation failed; unreadable objects use the no-message fallback.

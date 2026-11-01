@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { textGenerationFailure } from './text-generation-failure-copy'
+import type { GenerationOutputParse } from './opencode-generation-output'
 
 export function buildAntigravityGenerationInput(prompt: string): string {
   return `${JSON.stringify({
@@ -15,9 +17,7 @@ const resultSchema = z.object({
 })
 const resultEventSchema = eventSchema.extend({ result: resultSchema })
 
-export function parseAntigravityGenerationOutput(
-  stdout: string
-): { ok: true; text: string } | { ok: false; error: string } {
+export function parseAntigravityGenerationOutput(stdout: string): GenerationOutputParse {
   let result: z.infer<typeof resultSchema> | undefined
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.trim()) {
@@ -27,16 +27,16 @@ export function parseAntigravityGenerationOutput(
     try {
       value = JSON.parse(line)
     } catch {
-      return { ok: false, error: 'Antigravity returned invalid JSON events.' }
+      return { ok: false, ...textGenerationFailure('antigravityInvalidEvents') }
     }
     const event = eventSchema.safeParse(value)
     if (!event.success) {
-      return { ok: false, error: 'Antigravity returned invalid JSON events.' }
+      return { ok: false, ...textGenerationFailure('antigravityInvalidEvents') }
     }
     if (event.data.event === 'result') {
       const parsed = resultEventSchema.safeParse(value)
       if (!parsed.success) {
-        return { ok: false, error: 'Antigravity returned an invalid result.' }
+        return { ok: false, ...textGenerationFailure('antigravityInvalidResult') }
       }
       result = parsed.data.result
       if (result.status !== 'SUCCESS') {
@@ -46,5 +46,5 @@ export function parseAntigravityGenerationOutput(
   }
   return result
     ? { ok: true, text: result.response }
-    : { ok: false, error: 'Antigravity returned no final result.' }
+    : { ok: false, ...textGenerationFailure('antigravityNoFinalResult') }
 }

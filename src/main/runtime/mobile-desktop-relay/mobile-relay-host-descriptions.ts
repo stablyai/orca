@@ -38,7 +38,9 @@ export function describeRelayHosts(
         identity: { pairingRevision: identity.pairingRevision, runtimeId: identity.runtimeId },
         label: host.label,
         health: host.health,
-        relay: relayVerdict(host.health, answer)
+        relay: relayVerdict(host.health, answer),
+        ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
+        ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
       }
     ]
   })

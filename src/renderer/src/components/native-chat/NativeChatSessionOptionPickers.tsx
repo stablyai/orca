@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat/input/native-chat-session-option-snapshot'
 import {
   sessionOptionDispatchUnconfirmed,
@@ -98,6 +99,7 @@ function PickerTrigger(props: {
             variant="ghost"
             size="xs"
             aria-label={props.accessibleName}
+            disabled={props.disabled}
             className="max-w-64"
             onKeyDown={props.onKeyDown}
           >
@@ -137,6 +139,12 @@ function SessionOptionPopover(props: {
   focusComposer?: () => void
 }): React.JSX.Element {
   const { model, options, pendingIds, demandModelCatalog } = props
+  const canOpen = [model, ...options].some(
+    (descriptor) =>
+      descriptor.settable &&
+      !pendingIds.has(descriptor.id) &&
+      (!props.isWorking || descriptor.transport === 'agent-session')
+  )
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
@@ -144,7 +152,7 @@ function SessionOptionPopover(props: {
   const [requestedOptionId, setRequestedOptionId] = useState<string | null>(null)
   if (props.request !== seenRequest) {
     setSeenRequest(props.request)
-    if (props.request) {
+    if (props.request && canOpen) {
       setOpen(true)
       setRequestedOptionId(props.request.id === model.id ? null : props.request.id)
     }
@@ -178,7 +186,11 @@ function SessionOptionPopover(props: {
     if (descriptor.id === 'effort') {
       setOpen(false)
     }
-    if (descriptor.kind.currentValue !== value) {
+    if (
+      descriptor.valueSource === 'unknown' ||
+      descriptor.valueSource === 'default' ||
+      descriptor.kind.currentValue !== value
+    ) {
       props.onSet(descriptor, value)
     }
   }
@@ -195,7 +207,7 @@ function SessionOptionPopover(props: {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => setOpen(next && canOpen)}>
       <PickerTrigger
         modelLabel={modelLabel}
         optionsLabel={optionsLabel}
@@ -204,7 +216,7 @@ function SessionOptionPopover(props: {
             ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel)}`
             : modelName
         }
-        disabled={props.isWorking}
+        disabled={!canOpen}
         disabledReason={modelReason ?? optionsReason}
         dispatched={
           sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
@@ -212,7 +224,7 @@ function SessionOptionPopover(props: {
         triggerRef={focusReturn.triggerRef}
         // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
         onKeyDown={(event) => {
-          if (event.key === 'ArrowDown') {
+          if (event.key === 'ArrowDown' && canOpen) {
             event.preventDefault()
             setOpen(true)
           }
@@ -297,6 +309,7 @@ function NativeChatSessionOptionPickersInner({
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
+  useUiLanguageRevision()
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
   // Consume requests even without a usable picker so composer remounts cannot reopen them.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])

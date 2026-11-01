@@ -32,7 +32,7 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
     case 'Alt':
       return isMac ? '⌥' : 'Alt'
     case 'Shift':
-      return isMac ? '⇧' : 'Shift'
+      return '⇧'
   }
 }
 
@@ -60,7 +60,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
     parts.push(isMac ? '⌥' : 'Alt')
   }
   if (parsed.shift) {
-    parts.push(isMac ? '⇧' : 'Shift')
+    parts.push('⇧')
   }
   parts.push(formatKeyToken(parsed.key, isMac))
   return parts

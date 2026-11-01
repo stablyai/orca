@@ -23,6 +23,7 @@ import {
   type WorkspaceCleanupWorktreeFacts
 } from './workspace-cleanup-host-identity'
 import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -229,6 +230,7 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
+    getWorkspaceCleanupGitChipLabel(facets.gitState),
     ...facets.ticketSources,
     ...facets.blockers
   ]

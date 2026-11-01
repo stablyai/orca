@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
@@ -28,7 +29,7 @@ vi.mock('@/store', () => ({
       issueCache: {},
       fetchHostedReviewForBranch: mocks.review,
       settings: { activeRuntimeEnvironmentId: 'focused-elsewhere' },
-      fetchLinearIssue: mocks.linear,
+      fetchLinearIssue: (...args: unknown[]) => linearIssueReadFixture(() => mocks.linear(...args)),
       lookupJiraIssueSummary: mocks.jira,
       fetchIssue: mocks.issue
     })

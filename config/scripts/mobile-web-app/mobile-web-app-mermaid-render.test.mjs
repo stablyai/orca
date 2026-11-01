@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import * as esbuild from 'esbuild'
 import { chromium, webkit } from 'playwright-core'
+import { lucideBarrelPlugin } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
   createBundleServer,
@@ -48,7 +49,14 @@ const ENGINES = [
 const PAGE_ENTRY = `
 import { createElement, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { MermaidDiagram } from './MermaidDiagram'
+
+// The app root provides insets; the expanded viewer reads them.
+const METRICS = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 0, left: 0, right: 0, bottom: 0 }
+}
 
 function Harness() {
   const [state, setState] = useState({ mounted: false, source: '' })
@@ -56,7 +64,11 @@ function Harness() {
     globalThis.__orcaMermaidSet = setState
     document.body.setAttribute('data-ready', 'yes')
   }, [])
-  return state.mounted ? createElement(MermaidDiagram, { source: state.source, base: 15 }) : null
+  return createElement(
+    SafeAreaProvider,
+    { initialMetrics: METRICS },
+    state.mounted ? createElement(MermaidDiagram, { source: state.source, base: 15 }) : null
+  )
 }
 
 createRoot(document.getElementById('root')).render(createElement(Harness))
@@ -100,6 +112,7 @@ beforeAll(async () => {
     logLevel: 'silent',
     nodePaths: [join(mobileDir, 'node_modules')],
     alias: { 'react-native': 'react-native-web' },
+    plugins: [lucideBarrelPlugin],
     // Resolve web sibling; native WebView becomes text in a browser.
     resolveExtensions: ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.js'],
     define: { __DEV__: 'false', 'process.env.NODE_ENV': '"production"' }
@@ -154,14 +167,16 @@ async function pageJitCalls(page) {
   return all.filter((one) => /mermaid-check\.js|\/chunk-/.test(one.stack))
 }
 
+// Mermaid marks its drawings; the frame's expand icon is an SVG too.
 function readDiagram() {
+  const DRAWING = 'svg[aria-roledescription]'
   const frame = document.querySelector('[data-testid="mermaid-diagram"]')
-  const svg = frame?.querySelector('svg') ?? null
+  const svg = frame?.querySelector(DRAWING) ?? null
   return {
     framed: frame !== null,
-    inFrame: frame ? frame.querySelectorAll('svg').length : -1,
+    inFrame: frame ? frame.querySelectorAll(DRAWING).length : -1,
     // Count SVGs across document too: Mermaid’s temporary body element can orphan diagrams outside component host.
-    inDocument: document.querySelectorAll('svg').length,
+    inDocument: document.querySelectorAll(DRAWING).length,
     sourceBox: document.querySelector('[data-testid="mermaid-diagram-source"]') !== null,
     id: svg?.id ?? null,
     html: svg?.outerHTML ?? null,
@@ -197,7 +212,7 @@ async function show(page, source, contains = null) {
     if (frame === null) {
       return false
     }
-    const svg = frame.querySelector('svg')
+    const svg = frame.querySelector('svg[aria-roledescription]')
     if (needle !== null) {
       return (svg?.textContent ?? '').includes(needle)
     }
@@ -258,6 +273,33 @@ describeMermaid(
           }
         }, 600_000)
 
+        it('expands the drawn diagram into the pan and zoom viewer as an image', async () => {
+          const { page, consoleErrors } = await openPage(browser)
+          try {
+            // HTML serialization writes a nonbreaking space as &nbsp;, which an XML image document rejects.
+            await show(page, 'flowchart LR\n  A["first#nbsp;second"] --> B[done]', 'second')
+            await page.getByRole('button', { name: 'Expand diagram' }).click()
+            const image = page.getByRole('img', { name: 'Mermaid diagram' })
+            await image.waitFor()
+            await page.waitForFunction(
+              () => document.querySelector('img[alt="Mermaid diagram"]')?.complete === true
+            )
+            const drawn = await image.evaluate((img) => ({
+              src: img.src.slice(0, 'data:image/svg+xml'.length),
+              natural: img.naturalWidth,
+              shown: img.getBoundingClientRect().width
+            }))
+            // An <img> never runs the markup; the diagram must still paint at a real size.
+            expect(drawn.src).toBe('data:image/svg+xml')
+            expect(drawn.natural).toBeGreaterThan(0)
+            expect(drawn.shown).toBeGreaterThan(0)
+            expect(await page.evaluate(() => globalThis.__orcaCspViolations)).toEqual([])
+            expect(consoleErrors).toEqual([])
+          } finally {
+            await page.close()
+          }
+        }, 600_000)
+
         it('leaves one SVG across a source change, an unmount and a remount', async () => {
           const { page, consoleErrors } = await openPage(browser)
           const listeners = () => page.evaluate(() => globalThis.__orcaListeners.snapshot())
@@ -307,7 +349,7 @@ describeMermaid(
             const inert = await page.evaluate(() => {
               const frame = document.querySelector('[data-testid="mermaid-diagram"]')
               return {
-                rendered: frame?.querySelector('svg') !== null,
+                rendered: frame?.querySelector('svg[aria-roledescription]') !== null,
                 scripts: frame.querySelectorAll('script').length,
                 inlineHandlers: [...frame.querySelectorAll('*')].filter((element) =>
                   [...element.attributes].some((attribute) => attribute.name.startsWith('on'))

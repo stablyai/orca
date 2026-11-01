@@ -19,13 +19,16 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   box: {
     paddingBottom: COMPOSER_TUCK,
     backgroundColor: colors.bgPanel,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: radii.surface,
+    borderTopRightRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: colors.composerBorder,
     overflow: 'hidden'
   },
+  // Full editors and menus scroll above the ordinary composer instead of tucking under it.
+  inlineList: { flexShrink: 1, minHeight: 0, marginBottom: 0 },
+  inlineBox: { flexShrink: 1, minHeight: 0, paddingBottom: 0 },
   header: {
     minHeight: HEADER_HEIGHT,
     flexDirection: 'row',
@@ -92,7 +95,7 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   chevron: {
     width: 36,
@@ -148,14 +151,14 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   iconAction: {
     minHeight: MIN_TOUCH_TARGET,
     width: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   lastIconAction: {
     width: MIN_TOUCH_TARGET

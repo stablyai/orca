@@ -1,15 +1,14 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { savedAgentSessionCatalogModels } from './structured-agent-session-pick-reply'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session-record-options'
+import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -168,14 +167,13 @@ export async function recordStructuredAgentSessionRanOptions(
   if (!ran.model) {
     return
   }
-  const models = await savedAgentSessionCatalogModels(context.deps, record.provider, sessionId)
   await store
     .reviseSessionOptions(recordAgentSessionRanOptions, {
       sessionId,
       fence: child.fence,
       model,
       options: ran,
-      models,
+      models: undefined,
       now: context.now()
     })
     .catch((error: unknown) =>

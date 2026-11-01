@@ -13,9 +13,11 @@ function regenerateLabel(naming: NativeChatNamingFailureControls): string {
 }
 
 export function NativeChatNamingErrorBlock({
-  naming
+  naming,
+  onDismiss
 }: {
   naming: NativeChatNamingFailureControls
+  onDismiss?: () => void
 }): React.JSX.Element {
   return (
     <div className="space-y-1 border-t border-border pt-2" data-tab-hover-card-naming-error>
@@ -57,6 +59,7 @@ export function NativeChatNamingErrorBlock({
             variant="ghost"
             size="chip"
             onClick={() => {
+              onDismiss?.()
               const store = useAppStore.getState()
               store.openSettingsPage()
               store.openSettingsTarget({ pane: 'chat', repoId: null, sectionId: 'chat-names' })

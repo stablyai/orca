@@ -1,7 +1,8 @@
 // Keep executable resolution and command-discovery guidance consistent across stubs.
 const SHARED_STUB_SOURCE = 'skill-stubs/_shared/cli-resolution.md'
 const BLOCK_DEFINITION_PATTERN = /^<!-- block: (?<id>[a-z][a-z0-9-]*) -->$/u
-const INSERTION_MARKER_PATTERN = /^<!-- shared: (?<id>\S+) -->$/u
+// `shared-omit` takes a block's place for a stub whose own text replaces it.
+const INSERTION_MARKER_PATTERN = /^<!-- shared(?<omit>-omit)?: (?<id>\S+) -->$/u
 
 // Skip fragment header before first block marker; require LF-normalized input.
 function parseSharedStubBlocks(markdown, sourcePath) {
@@ -57,15 +58,18 @@ function renderSharedStubBody(stubBody, { blocks, sourcePath }) {
         )
       }
       insertions.set(id, (insertions.get(id) ?? 0) + 1)
-      return block.text
+      return marker.groups.omit ? null : block.text
     })
+    .filter((line) => line !== null)
     .join('\n')
+    // An omitted marker leaves its paragraph gap behind; keep one blank line, as the formatter would.
+    .replace(/\n{3,}/gu, '\n\n')
 
   for (const [id, block] of blocks) {
     const count = insertions.get(id) ?? 0
     if (count !== 1) {
       throw new Error(
-        `${sourcePath} must insert <!-- shared: ${id} --> exactly once; found ${count}.`
+        `${sourcePath} must insert or omit <!-- shared: ${id} --> exactly once; found ${count}.`
       )
     }
     // Why: re-inlining a copy beside the marker is exactly the drift this fragment ends.

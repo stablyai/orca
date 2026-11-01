@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearIssueCreationModel } from '../linear/use-task-page-linear-issue-creation'
 import { useCallback } from 'react'
 import {
@@ -9,6 +10,7 @@ import { jiraGetIssue } from '@/runtime/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { defaultScopeSource } from '@/lib/default-creation-host'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationModel) {
   const {
     settings,
@@ -68,7 +70,7 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
       }
       if (!result.ok) {
         toast.error(
-          result.error ||
+          taskProviderErrorMessage(result) ||
             translate('auto.components.TaskPage.aec5feeb69', 'Failed to create Jira issue.')
         )
         return
@@ -81,7 +83,7 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
           action: result.url
             ? {
                 label: translate('auto.components.TaskPage.9c57663908', 'View'),
-                onClick: () => window.open(result.url, '_blank')
+                onClick: () => openAppHttpLink(result.url)
               }
             : undefined
         }
@@ -113,7 +115,7 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
       if (submitProviderRuntimeContextKey === providerRuntimeContextKeyRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? taskProviderErrorText(error.message)
             : translate('auto.components.TaskPage.aec5feeb69', 'Failed to create Jira issue.')
         )
       }

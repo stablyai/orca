@@ -1,9 +1,19 @@
 # Useful Commands
 
-- **Before handoff**: `pnpm check:changed --maxWorkers=2` (format, lint, typecheck, affected tests, ratchets; cached when nothing changed)
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
-- **Test**: `pnpm test [path/to/file.test.ts]`; affected only: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests))
-- **Lint**: `oxlint`; format: `pnpm format`
+- **Test**: `pnpm test [path/to/file.test.ts] --maxWorkers=2`; incremental: `pnpm test:changed [path] --maxWorkers=2` ([details](.github/CONTRIBUTING.md#targeting-local-tests)). Separate rendered UI E2E checks need explicit, reproducible viewport/state.
+- **Lint/format**: Basic: `pnpm exec oxlint <files>`; full lint gate: `pnpm lint`; formatting: `pnpm exec oxfmt --check <files>` (fix: `--write`). Applicable gates include `pnpm check:code-quality:changed <base>` and `pnpm check:flaky-test-pattern-ratchet`.
+
+> [!IMPORTANT]
+> Always lint changed files before making/pushing-to PRs (so CI never fails on it)
+
+Optional: `pnpm check:changed --maxWorkers=2`; if selection fans out excessively, use scoped checks and report limits. Use the PR base (default `origin/main`; `ORCA_CODE_QUALITY_BASE=<ref>` for stacks). `--base=HEAD` and dirty-only checks provide incremental evidence only.
+
+After final edits/rebases, rerun affected check types; after CI fixes, rerun the failed check too (TS/TSX lint repairs also need typecheck). Failed/stopped checks are incomplete; scoped passes do not prove full CI green. Inspect the exact current-SHA CI step before calling findings unenforced, pre-existing, or resolved.
+
+# Ensure main is always releasable
+
+Never break main. Use stacks or collapse PRs before merge
 
 # Design System
 

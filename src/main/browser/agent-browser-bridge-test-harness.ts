@@ -30,21 +30,27 @@ export function mockBrowserManager(
       return null
     },
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
+    getPopupPages: () => [],
     getGuestWebContentsId: vi.fn(() => null),
     getSessionProfileIdForTab: vi.fn(() => null),
     getBrowserPageLoadError: vi.fn(() => null),
     getBrowserPageCertificateFailure: vi.fn(() => null),
     unregisterGuest: vi.fn(),
+    holdPaintForCapture: () => () => {},
+    holdGuestActive: () => () => {},
     beginAgentCommand: () => ({
+      agent: false,
       run: (execute: () => Promise<unknown>) => execute(),
       end: () => {}
     }),
     showAgentPointer: async () => {},
+    isAgentUsingPage: () => false,
+    handOverAgentActivity: () => {},
     ...overrides
   } as unknown as BrowserManager
 }
 
-type MockEmitterListener = (...args: never[]) => void
+type MockEmitterListener = (...args: any[]) => void
 
 export type MockWebContentsDebugger = {
   isAttached: Mock<() => boolean>
@@ -165,8 +171,13 @@ export function answerAgentBrowserCommands(
         kill: vi.fn(),
         stdin: {
           on: vi.fn(),
-          end: (text: string) => {
-            stdinWrites.push(text)
+          end: (text?: string) => {
+            if (text !== undefined) {
+              stdinWrites.push(text)
+            } else if (!args.includes('batch')) {
+              // Commands outside a batch were answered from argv at spawn.
+              return
+            }
             answer(agentBrowserCommandOf(args, text), cb, args, child)
           }
         }

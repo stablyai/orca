@@ -24,7 +24,7 @@ import {
 import {
   ensureStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
-} from '../../structured-agent-session-host-refusal'
+} from '../../agent-session/structured-agent-session-host-refusal'
 import {
   clientOpensStructuredChatFromHistory,
   supportsStructuredAgentSessions
@@ -45,14 +45,17 @@ export {
 export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.searchSessions',
+    requires: ['sessionSearch'],
     permission: 'workspace',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
-      const response = searchSessionService(params, context.clientKind ? 'relay' : 'runtime')
+      const transport = context.clientKind ? 'relay' : 'runtime'
+      const response = searchSessionService(params, transport)
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
         ? searchWithStructuredOwners(response, {
             ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            transport,
             opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
           })
         : response
@@ -60,6 +63,7 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.searchStatus',
+    requires: ['sessionSearch'],
     permission: 'workspace',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
@@ -67,6 +71,7 @@ export const AI_VAULT_METHODS = [
   }),
   defineMethod({
     name: 'aiVault.setSearchEnabled',
+    requires: ['sessionSearch'],
     permission: 'settings-write',
     params: AiVaultSetSearchEnabledParamsSchema,
     handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
@@ -106,7 +111,6 @@ export const AI_VAULT_METHODS = [
             limit: params.unlimited ? undefined : params.limit,
             unlimited: params.unlimited,
             force: params.force,
-            historyOwnership: params.historyOwnership,
             scopePaths: params.scopePaths,
             includeAntigravityIdeSessions: params.includeAntigravityIdeSessions
           },

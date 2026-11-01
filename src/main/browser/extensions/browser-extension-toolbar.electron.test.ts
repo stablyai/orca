@@ -119,6 +119,11 @@ beforeAll(async () => {
     join(extensionDir, 'quirks.html'),
     '<html><body><div style="width:154px;height:30px">Vue.js not detected</div></body></html>'
   )
+  writeFileSync(join(extensionDir, 'veto.html'), '<!doctype html><script src="veto.js"></script>')
+  writeFileSync(
+    join(extensionDir, 'veto.js'),
+    "onbeforeunload = (event) => { event.preventDefault(); event.returnValue = '' }; console.log('ORCA_EXT_VETO true')"
+  )
   writeFileSync(
     join(extensionDir, 'late.js'),
     "setTimeout(() => { const box = document.createElement('div'); box.style.cssText = 'width:300px;height:180px'; document.body.append(box) }, 300)"
@@ -236,6 +241,7 @@ describe('extension toolbar, action popup and tab activation in a real Electron 
     expect(status.openAfterSecondClick).toBeNull()
     expect(status.latePopupBounds).toEqual({ width: 300, height: 180 })
     expect(status.quirksPopupBounds).toEqual({ width: 170, height: 46 })
+    expect(status.vetoPopupClosed).toBe(true)
 
     expect(status.windowsHidden).toBe(true)
     expect(status.presentationCalls).toEqual([])

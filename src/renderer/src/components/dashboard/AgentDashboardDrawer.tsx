@@ -18,6 +18,7 @@ import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
 import { translate } from '@/i18n/i18n'
+import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -213,6 +214,7 @@ export function AgentDashboardDrawer({
       <SheetContent
         side="left"
         showCloseButton={false}
+        ref={trackSidebarLiveWidth}
         aria-describedby={undefined}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{

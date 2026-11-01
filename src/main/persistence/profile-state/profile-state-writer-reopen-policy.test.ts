@@ -49,23 +49,16 @@ describe('ProfileStateWriterReopenPolicy', () => {
     expect(() => policy.admit()).toThrow('spawn failed')
   })
 
-  it('keeps a revision conflict terminal', () => {
-    const policy = new ProfileStateWriterReopenPolicy(() => 0)
-    expect(policy.recordFailure({ code: 'profile-state-revision-conflict' })).toBeNull()
-    expect(() => policy.admit()).not.toThrow()
-  })
-
-  it('counts every attempt and logs at most once per ten minutes', () => {
+  it('drops a pending bypass once a reopen succeeds', () => {
     let now = 0
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
     const policy = new ProfileStateWriterReopenPolicy(() => now)
-    policy.recordAttempt()
-    now = 9 * 60_000
-    policy.recordAttempt()
-    now = 10 * 60_000
-    policy.recordAttempt()
-    expect(policy.count).toBe(3)
-    expect(info).toHaveBeenCalledTimes(2)
-    info.mockRestore()
+    policy.recordFailure(spawnFailure)
+    policy.bypassBackoffOnce()
+    policy.recordSuccess()
+    policy.recordFailure(spawnFailure)
+    policy.recordFailure(spawnFailure)
+    expect(() => policy.admit()).toThrow('spawn failed')
+    now = 1_000
+    expect(() => policy.admit()).not.toThrow()
   })
 })

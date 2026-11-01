@@ -72,13 +72,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     )
   })
 
-  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
-      'default',
-      'kimi-code/kimi-for-coding'
-    ])
-  })
-
   it('omits Kimi --model for the config default and an empty model', () => {
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi!
 

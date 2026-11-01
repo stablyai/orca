@@ -147,13 +147,16 @@ export function overwriteDiskWithTabEdits(file: OpenFile): Promise<boolean> {
 export function ExternalFileChangeBanner({
   file,
   currentContent,
-  reloadContent
+  reloadContent,
+  binary = false
 }: {
   file: OpenFile
   /** The tab's live buffer (draft if dirty) — what "Keep My Edits" keeps. */
   currentContent: string
   /** Refetch file content for edit tabs or diff content for unstaged tabs. */
   reloadContent: (file: OpenFile) => void
+  /** A binary custom editor's tab: its edits can't be compared or kept as text. */
+  binary?: boolean
 }): React.JSX.Element {
   const [compareOpen, setCompareOpen] = useState(false)
   // A sibling of this code model may own its unsaved text.
@@ -176,7 +179,9 @@ export function ExternalFileChangeBanner({
     keepTabEditsOverExternalChange(file)
   }
   const handleOverwrite = (): void => {
-    void overwriteDiskWithTabEdits(file)
+    void (binary
+      ? attemptEditorFileSave({ fileId: file.id, overwrite: true })
+      : overwriteDiskWithTabEdits(file))
   }
   const handleCompare = (): void => {
     trackExternalChangeConflictAction(file, 'compare')
@@ -198,9 +203,11 @@ export function ExternalFileChangeBanner({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
-            {translate('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
-          </Button>
+          {binary ? null : (
+            <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
+              {translate('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
+            </Button>
+          )}
           <Button type="button" size="xs" variant="outline" onClick={handleReload}>
             {translate(
               'auto.components.editor.ExternalFileChangeBanner.3fa2b8d417',
@@ -208,26 +215,28 @@ export function ExternalFileChangeBanner({
             )}
           </Button>
           {/* Only unsaved model edits can overwrite newer disk content. */}
-          {isModelDirty && (
+          {(binary ? file.isDirty : isModelDirty) && (
             <Button type="button" size="xs" variant="outline" onClick={handleOverwrite}>
               {translate('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}
             </Button>
           )}
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            onClick={handleKeepEdits}
-            title={translate(
-              'auto.components.editor.ExternalFileChangeBanner.keepHint',
-              'Keeps your version. Your next save replaces the version on disk.'
-            )}
-          >
-            {translate(
-              'auto.components.editor.ExternalFileChangeBanner.a95d02c644',
-              'Keep My Edits'
-            )}
-          </Button>
+          {binary ? null : (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              onClick={handleKeepEdits}
+              title={translate(
+                'auto.components.editor.ExternalFileChangeBanner.keepHint',
+                'Keeps your version. Your next save replaces the version on disk.'
+              )}
+            >
+              {translate(
+                'auto.components.editor.ExternalFileChangeBanner.a95d02c644',
+                'Keep My Edits'
+              )}
+            </Button>
+          )}
         </div>
       </div>
       {compareOpen && (

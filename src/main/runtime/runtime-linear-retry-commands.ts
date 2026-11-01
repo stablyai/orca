@@ -84,18 +84,23 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
     return /^[A-Za-z0-9._:@%+=,/-]+$/.test(value) ? value : placeholder
   }
 
-  public async notifyLinearLinkedIssueUpdated(
+  public notifyLinearLinkedIssueUpdated(
+    workspaceId: string,
+    identifier: string | readonly string[]
+  ): void {
+    void this.refreshLinearLinkedIssues(workspaceId, identifier).catch((error: unknown) => {
+      console.warn('[linear] Linked issue refresh failed:', error)
+    })
+  }
+
+  private async refreshLinearLinkedIssues(
     workspaceId: string,
     identifier: string | readonly string[]
   ): Promise<void> {
     const identifiers = typeof identifier === 'string' ? [identifier] : identifier
-    const normalized = new Map(
-      identifiers.map((value) => [value.toLocaleUpperCase(), value] as const)
-    )
+    const normalized = new Map(identifiers.map((value) => [value.toUpperCase(), value] as const))
     for (const worktree of await this.listResolvedWorktrees()) {
-      const linkedIdentifier = normalized.get(
-        (worktree.linkedLinearIssue ?? '').toLocaleUpperCase()
-      )
+      const linkedIdentifier = normalized.get((worktree.linkedLinearIssue ?? '').toUpperCase())
       if (!linkedIdentifier) {
         continue
       }

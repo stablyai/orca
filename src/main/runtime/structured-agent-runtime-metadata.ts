@@ -1,16 +1,17 @@
-import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { resolveAcpLaunchCommand } from '../acp/acp-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../codex/codex-cli-conversations'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
-import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
+import { supportsClaudeStructuredLocation } from '../claude/structured/launch/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../acp/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../pi/rpc-runtime-metadata'
+import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import {
   resolveStructuredClaudeAccountHomePath,
   resolveStructuredCodexAccountHomePath
@@ -40,7 +41,7 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
-      return { command: resolveAcpLaunchCommand(spec, env, options), env }
+      return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {})
   }
@@ -52,7 +53,7 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const homePath = env.HOME ?? env.USERPROFILE
       const pathEnv = env.PATH ?? env.Path ?? null
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
-      return { command: resolveStructuredAgentCommand(agent, commandSettings, options), env }
+      return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
     }
   }
 }
@@ -68,11 +69,11 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              const command = resolveAcpLaunchCommand(spec, env, {
+              const invocation = resolveAcpLaunchCommand(spec, env, {
                 commandSettings,
                 dataDirectory: null
               })
-              return { command, env }
+              return { ...invocation, env }
             },
             minimumVersions
           }
@@ -133,12 +134,15 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: claudeModelCatalogDiscovery,
       ...CLAUDE_CLI_CONVERSATIONS,
       supportsLocation: supportsClaudeStructuredLocation,
-      resolveAccountHome: async ({ launchEnv, location }, services) =>
+      // Without a router a launch keeps the record's home (resolveClaudeStructuredLaunchHome).
+      launchFollowsSelection: () => getClaudeProfileRouter() !== undefined,
+      resolveAccountHome: async ({ launchEnv, location, purpose }, services) =>
         agentSessionAccountHome(
           CLAUDE_STRUCTURED_AGENT,
           resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
+            ...(purpose === 'identity' ? { purpose } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })
         )

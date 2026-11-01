@@ -12,14 +12,13 @@ import {
 import { parseOsc7 } from './parse-osc7'
 import { mergePaneCwdFromOsc7, settlePaneCwdDeferredSpawn } from './resolve-split-cwd'
 import {
-  appendDeferredSplitPaneInput,
+  deferredSplitPaneConnectionInput,
   beginDeferredSplitPaneHandoff,
   claimDeferredSplitPaneHandoff,
   clearDeferredSplitPaneHandoff,
   discardDeferredSplitPaneHandoffForKey,
   type DeferredSplitPaneHandoffHandle
 } from './deferred-split-pane-handoff'
-import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { isPaneReplaying } from './replay-guard'
 import { connectPanePty } from './pty-connection'
@@ -198,13 +197,10 @@ export function createTerminalPaneCreatedHandler(
           }
         : {}),
       ...(handoffForInput
-        ? {
-            onPreconnectInput: (input: PtyPreconnectInputEntry) =>
-              appendDeferredSplitPaneInput(handoffForInput, input)
-          }
-        : {}),
-      ...(claimedDeferredSplitHandoff?.preconnectInput.length
-        ? { preconnectInput: claimedDeferredSplitHandoff.preconnectInput }
+        ? deferredSplitPaneConnectionInput(
+            handoffForInput,
+            claimedDeferredSplitHandoff?.preconnectInput
+          )
         : {}),
       ...(effectiveSpawnHints?.cwd ? { cwd: effectiveSpawnHints.cwd } : {}),
       ...(effectiveSpawnHints?.cwdPromise ? { cwdPromise: effectiveSpawnHints.cwdPromise } : {}),

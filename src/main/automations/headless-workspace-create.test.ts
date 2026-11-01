@@ -65,7 +65,7 @@ describe('headless automation workspace create args', () => {
     })
 
     expect(args).toMatchObject({
-      repoSelector: 'repo-1',
+      repoSelector: { selector: 'id:repo-1', hostId: 'ssh:ssh-target-1' },
       name: 'auto-nightly-review-run-20260102T0304',
       baseBranch: 'origin/main',
       setupDecision: 'skip',

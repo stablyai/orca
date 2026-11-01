@@ -66,6 +66,7 @@ function fixture(currentProfile = 'isolated') {
   })
   const runtime = new RuntimeBrowserProfiles(
     {
+      getRuntimeId: () => 'owner',
       getRuntimeBrowserPageRegistry: () => pages,
       getAuthoritativeWindow: window,
       getBrowserHostLeaseRegistry: () => leases,

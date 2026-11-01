@@ -274,15 +274,16 @@ runs:
         printf 'ELECTRON_CACHE=%s\n' "$cache_root" >> "$GITHUB_ENV"
         printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
 
+    # Main and the warmers own every OS's archive; PR copies duplicated it per PR.
     - name: Cache Electron package archive
-      if: (github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name != 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
     - name: Restore Electron package archive without saving
-      if: github.event_name == 'pull_request' && runner.os == 'Linux' && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name == 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache/restore@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}

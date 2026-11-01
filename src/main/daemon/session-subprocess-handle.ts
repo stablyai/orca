@@ -37,7 +37,8 @@ export type SubprocessHandle = {
   /** Resync ConPTY after frontend clears to prevent stale-row prompt repaint. */
   clear?(): void
   kill(): void
-  forceKill(): void
+  /** Settles once signals are sent; a rejection means the kernel refused them. */
+  forceKill(): void | Promise<void>
   /** Cover detached descendants via the PTY job; unavailable requires fallback and never proves death. */
   terminateOwnedTree(): JobTerminationOutcome
   signal(sig: string): void

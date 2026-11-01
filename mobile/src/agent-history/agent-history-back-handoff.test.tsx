@@ -17,8 +17,17 @@ const router = vi.hoisted(() => ({
 vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
 // Mock RN hosts as strings: Vitest cannot parse React Native Flow, but panel structure stays real.
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
@@ -34,7 +43,26 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  WifiOff: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 // Mock Metro PNG requires; no client means session list never renders here.
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
@@ -73,9 +101,9 @@ function render(pair: Pair): ReactElement {
 
 /** The panel's own chevron, found by the label a user reads rather than by tree position. */
 function pressBack(tree: ReactTestRenderer): void {
-  const back = tree.root
-    .findAll((node) => node.props.accessibilityLabel === 'Back')
-    .filter((node) => typeof node.props.onPress === 'function')
+  const back = tree.root.findAll(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Back'
+  )
   if (back.length !== 1) {
     throw new Error(`expected one Back control, found ${back.length}`)
   }

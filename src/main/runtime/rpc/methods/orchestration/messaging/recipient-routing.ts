@@ -82,7 +82,11 @@ export function resolveRunBoundDispatchRecipient(
     return undefined
   }
   const recipient = `dispatch:${dispatchId}`
-  const mismatch = runMismatch(recipient, boundRun.id, explicitRunId)
+  // Naming the Dispatch's own Run is equivalent to omitting --run.
+  const mismatch =
+    explicitRunId === dispatch.run_id
+      ? undefined
+      : runMismatch(recipient, boundRun.id, explicitRunId)
   if (mismatch && !mismatch.ok) {
     throw new OrchestrationError(mismatch.code, mismatch.message)
   }
@@ -178,12 +182,15 @@ export function resolveBareOrchestrationRecipient(params: {
       ? undefined
       : (runtime.getLiveTerminalPaneKey(party.terminalHandle) ?? undefined)
   // A session party's durable Run binding outranks pane liveness.
-  const boundRun =
+  const boundRuns =
     party.orcaSessionId !== null
-      ? db.getCurrentRunForCoordinator(party)
+      ? db.runsBoundToCoordinator(party)
       : paneKey
-        ? db.getCurrentRunForPane(paneKey)
-        : undefined
+        ? db.runsBoundToPane(paneKey)
+        : []
+  // A coordinator of several Runs takes mail in the Run it is addressed from, else its current one.
+  const addressedRunId = params.explicitRunId ?? params.senderRunId
+  const boundRun = boundRuns.find((run) => run.id === addressedRunId) ?? boundRuns[0]
   if (boundRun) {
     const mismatch = runMismatch(handle, boundRun.id, params.explicitRunId)
     return mismatch ?? { ok: true, to: `run:${boundRun.id}`, runId: boundRun.id }

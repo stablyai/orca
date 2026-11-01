@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import { translate } from '../i18n/mobile-i18n'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { launchAgentWithPrompt, promptedLaunchNotice } from '../session/pr-ai-triage-launch'
 import { resolveMobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
@@ -79,7 +80,12 @@ export function useMobileCommitFailureRecovery({
       return false
     }
     if (!client || connState !== 'connected') {
-      setLaunchError('Waiting for desktop...')
+      setLaunchError(
+        translate(
+          'sourceControl.useMobileCommitFailureRecovery.waitingForDesktop',
+          'Waiting for desktop...'
+        )
+      )
       triggerError()
       return false
     }
@@ -113,7 +119,14 @@ export function useMobileCommitFailureRecovery({
       return notice.succeeded
     } catch (err) {
       triggerError()
-      setLaunchError(err instanceof Error ? err.message : 'Failed to launch agent')
+      setLaunchError(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'sourceControl.useMobileCommitFailureRecovery.launchFailed',
+              'Failed to launch agent'
+            )
+      )
       return false
     } finally {
       inFlightRef.current = false

@@ -30,7 +30,8 @@ import {
   PICKER_LIST_MAX_HEIGHT,
   PICKER_VIEWPORT_PADDING
 } from './worktree-parent-picker-placement'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 
 type WorktreeParentPickerPopoverProps = {
   open: boolean
@@ -325,13 +326,17 @@ export function WorktreeParentPickerPopover({
         }}
       >
         <div className="flex min-w-0 shrink-0 items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-2 text-[11px] leading-none text-muted-foreground">
-          <span className="shrink-0">
-            {translate(
-              'auto.components.sidebar.WorktreeParentPickerPopover.setParentFor',
-              'Set parent for'
-            )}
+          <span className="min-w-0 truncate">
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'auto.components.sidebar.WorktreeParentPickerPopover.setParentForName',
+                'Set parent for <name>{{name}}</name>'
+              )}
+              values={{ name: child.displayName }}
+              components={{ name: <span className="font-medium text-foreground" /> }}
+            />
           </span>
-          <span className="truncate font-medium text-foreground">{child.displayName}</span>
         </div>
         <Command shouldFilter={false} className="min-h-0">
           <CommandInput

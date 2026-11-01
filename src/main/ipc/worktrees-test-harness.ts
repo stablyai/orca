@@ -253,7 +253,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       GHOSTX_ROOT_PATH: repoArg.path
     })
   )
-  createSetupRunnerScriptMock.mockReturnValue({
+  createSetupRunnerScriptMock.mockResolvedValue({
     runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
     envVars: {
       ORCA_ROOT_PATH: '/workspace/repo',

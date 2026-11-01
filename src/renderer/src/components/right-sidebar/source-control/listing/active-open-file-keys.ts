@@ -1,4 +1,7 @@
 import type { DiffSource } from '@/store/slices/editor'
+import type { BranchCompareSnapshot } from '../../../../../../shared/editor-tab-view-types'
+import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
+import { getCompareVersion } from '@/store/slices/editor/git/git-status-reconciliation'
 
 const EMPTY_OPEN_ROW_KEYS: ReadonlySet<string> = new Set()
 
@@ -7,8 +10,19 @@ const SIGNATURE_SEPARATOR = '::'
 /** Use a primitive diffSource::relativePath signature so selectors stay stable across unrelated store updates. */
 export function buildActiveOpenFileSignature(
   diffSource: DiffSource | undefined,
-  relativePath: string
-): string {
+  relativePath: string,
+  branchCompare?: BranchCompareSnapshot,
+  branchSummary?: GitBranchCompareSummary | null
+): string | null {
+  if (
+    diffSource === 'branch' &&
+    (!branchCompare ||
+      !branchSummary ||
+      branchCompare.baseRef !== branchSummary.baseRef ||
+      branchCompare.compareVersion !== getCompareVersion(branchSummary))
+  ) {
+    return null
+  }
   return `${diffSource ?? 'edit'}${SIGNATURE_SEPARATOR}${relativePath}`
 }
 
@@ -32,8 +46,8 @@ export function buildActiveOpenRowKeys(
     return EMPTY_OPEN_ROW_KEYS
   }
 
-  if (diffSource === 'staged') {
-    return filterAvailableRowKeys([`staged::${path}`], availableRowKeys)
+  if (diffSource === 'staged' || diffSource === 'branch') {
+    return filterAvailableRowKeys([`${diffSource}::${path}`], availableRowKeys)
   }
 
   const workingTreeKeys = [`unstaged::${path}`, `untracked::${path}`]

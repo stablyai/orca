@@ -22,7 +22,6 @@ export function aiVaultSessionListArgs(
   options: { force?: boolean; requestToken: string }
 ): AiVaultListArgs {
   return {
-    historyOwnership: {},
     includeAntigravityIdeSessions: true,
     limit: request.sessionLimit === 'unlimited' ? undefined : request.sessionLimit,
     unlimited: request.sessionLimit === 'unlimited',

@@ -10,6 +10,10 @@ import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbenc
 import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import {
+  getLocalizedFeatureWallStepCopy,
+  getLocalizedFeatureWallWorkflowCopy
+} from './feature-wall-tour-localized-copy'
 
 const SUB_STEP_LABELS = ['a', 'b', 'c', 'd', 'e', 'f'] as const
 
@@ -125,7 +129,9 @@ export function FeatureWallRail(props: {
                 >
                   {isDone ? <Check className="size-3.5" aria-hidden /> : index + 1}
                 </span>
-                <span className="min-w-0 truncate font-medium leading-tight">{workflow.title}</span>
+                <span className="min-w-0 truncate font-medium leading-tight">
+                  {getLocalizedFeatureWallWorkflowCopy(workflow.id).title}
+                </span>
               </button>
               {subSteps ? (
                 <div
@@ -179,7 +185,7 @@ export function FeatureWallRail(props: {
                                 isStepActive ? 'font-medium' : 'text-muted-foreground'
                               )}
                             >
-                              {step.name}
+                              {getLocalizedFeatureWallStepCopy(step.id).name}
                             </span>
                           </button>
                         )

@@ -19,6 +19,7 @@ import type { WorktreeCardIssueDisplay } from './worktree-card-meta-types'
 
 type WorktreeCardIssueDetailSectionProps = {
   issue: WorktreeCardIssueDisplay | null
+  workspaceId?: string
   issueMenuOpen: boolean
   onIssueMenuOpenChange: (open: boolean) => void
   onCopyIssueLink?: () => void
@@ -30,6 +31,7 @@ type WorktreeCardIssueDetailSectionProps = {
 
 export function WorktreeCardIssueDetailSection({
   issue,
+  workspaceId,
   issueMenuOpen,
   onIssueMenuOpenChange,
   onCopyIssueLink,
@@ -140,6 +142,7 @@ export function WorktreeCardIssueDetailSection({
                   'View on GitHub'
                 )}
                 href={issue.url}
+                workspaceId={workspaceId}
               >
                 <ExternalLink className="size-3" />
               </MetadataActionIcon>

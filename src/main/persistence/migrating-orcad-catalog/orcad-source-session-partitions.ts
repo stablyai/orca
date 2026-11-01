@@ -13,6 +13,7 @@ import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 import {
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope,
+  orcadMigrationScopeOwnsWholeHost,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
 
@@ -22,6 +23,10 @@ export function orcadMigrationSessionPartitions(
   scope: OrcadMigrationSourceScope
 ): [string, WorkspaceSessionState][] {
   const partitions = sessionPartitions(state, LOCAL_EXECUTION_HOST_ID)
+  // A WSL move's host is `local` itself: no second copy to reconcile with.
+  if (!orcadMigrationScopeOwnsWholeHost(scope)) {
+    return partitions
+  }
   const host = partitions.find(([hostId]) => hostId === scope.hostId)?.[1]
   if (!host) {
     return partitions

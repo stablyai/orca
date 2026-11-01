@@ -50,7 +50,7 @@ function launchReply(promptOutcome: 'handed-to-terminal' | 'not-delivered'): Rpc
   }
 }
 
-/** Launch replies answered by hand; the notes reader never answers, so the seeded notes stand. */
+/** Launch replies answered by hand; the notes read answers with the seeded note. */
 function launchClient() {
   const replies: ((reply: RpcResponse) => void)[] = []
   const sendRequest = vi.fn(
@@ -58,6 +58,13 @@ function launchClient() {
       new Promise<RpcResponse>((resolve) => {
         if (method === 'agent.launchReplay') {
           replies.push(resolve)
+        } else if (method === 'worktree.show') {
+          resolve({
+            id: 'notes',
+            ok: true,
+            result: { worktree: { diffComments: [NOTE] } },
+            _meta: { runtimeId: 'r' }
+          })
         } else if (method === 'worktree.set') {
           resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
         }
@@ -213,7 +220,11 @@ describe('sending review notes to a new agent session', () => {
     await act(async () => replies[0]?.(launchReply('handed-to-terminal')))
     expect(screen().sendingIds.size).toBe(0)
     expect(sendRequest.mock.calls.filter(([method]) => method === 'worktree.set')).toEqual([
-      ['worktree.set', { worktree: 'id:workspace-1', diffComments: [] }]
+      [
+        'worktree.set',
+        { worktree: 'id:workspace-1', diffComments: [], diffCommentsBase: [NOTE] },
+        {}
+      ]
     ])
     await act(async () => screen().send())
     expect(screen().pendingDelivery).toBeNull()

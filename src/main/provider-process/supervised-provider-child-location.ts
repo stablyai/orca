@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
 
 /** Local non-WSL only; Windows additionally needs process start-time proof. */

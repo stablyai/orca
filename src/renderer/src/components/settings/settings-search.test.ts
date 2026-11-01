@@ -40,6 +40,11 @@ describe('settings-search', () => {
     expect(matchesSettingsSearch('accounts', section.searchEntries)).toBe(false)
   })
 
+  it('matches Turkish dotted capital I labels from lowercase queries', () => {
+    expect(matchesSettingsSearch('imleç opaklığı', [{ title: 'İmleç Opaklığı' }])).toBe(true)
+    expect(matchesSettingsSearch('İMLEÇ', [{ title: 'imleç' }])).toBe(true)
+  })
+
   it('keeps empty search ranking in source order without reading entries', () => {
     const sections = [
       {

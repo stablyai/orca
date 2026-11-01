@@ -1,16 +1,14 @@
 import type { BrowserWindow } from 'electron'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './session-construction/agent-session/get-agent-session-execution-namespace'
-import type {
-  RuntimeAgentSessionRpcCaller,
-  RuntimeCreateAgentSessionRequest,
-  RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
 import {
+  type RuntimeAgentSessionRpcCaller,
+  type RuntimeCreateAgentSessionRequest,
+  type RuntimeCreateAgentSessionResult,
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
@@ -109,7 +107,14 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
       // Reserve before async preflight so racing retries cannot independently dispatch.
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+      // Only the agent-session RPC reaches here: the caller's own act, as its spawn below.
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+        request.worktree,
+        undefined,
+        {
+          wslUserAct: true
+        }
+      )
       if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
           workspace,
@@ -168,10 +173,13 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
+          // Only the agent-session RPC reaches here: the caller's own act.
+          wslUserAct: true,
           // No requested surface: the host-planned launch uses unknown.
           startupAgent: request.agent,
           ...(request.prompt ? { startupPrompt: request.prompt } : {}),
           startupPromptDelivery: request.promptDelivery,
+          suppressStartupUpdatePrompt: request.promptDelivery === 'auto-submit',
           // TEMPORARY: see `startupPromptCarry`.
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),

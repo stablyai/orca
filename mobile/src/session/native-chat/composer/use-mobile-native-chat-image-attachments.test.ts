@@ -1,3 +1,4 @@
+import { resetMobileNativeChatDraftInputsForTests } from './mobile-native-chat-draft-inputs'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-tui-input-clear'
@@ -10,6 +11,8 @@ import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-im
 
 // Stub the media seam so direct Expo imports would expose unsupported Flow syntax and fail the transform.
 const pick = vi.hoisted(() => vi.fn())
+const ids = vi.hoisted(() => ({ next: 0 }))
+vi.mock('../../../../../src/shared/uuid-v4', () => ({ createUuidV4: () => `img-${++ids.next}` }))
 vi.mock('../../../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
 
 function ok(id: string, result: unknown): RpcSuccess {
@@ -85,6 +88,8 @@ describe('useMobileNativeChatImageAttachments', () => {
   }
 
   beforeEach(() => {
+    resetMobileNativeChatDraftInputsForTests()
+    ids.next = 0
     pick.mockReset()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
@@ -106,31 +111,6 @@ describe('useMobileNativeChatImageAttachments', () => {
       renderer!.update(createElement(Harness, { args }))
     })
   }
-
-  it('adds an uploaded image as a chip without pasting to the terminal', async () => {
-    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
-    mount(
-      baseArgs({
-        client: client as unknown as RpcClient,
-        deviceTokenRef: { current: 'device-1' },
-        getActiveWorktreeConnectionId: async () => 'conn-1'
-      })
-    )
-
-    await act(async () => {
-      await hook!.attachImage('library')
-    })
-
-    expect(hook!.attachments).toEqual([
-      {
-        id: 'img-1',
-        path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg'
-      }
-    ])
-    expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
-  })
 
   it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])

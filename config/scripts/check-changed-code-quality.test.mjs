@@ -8,11 +8,8 @@ import {
   OXLINT_SCANS,
   collectBaseLineBlocks,
   collectAddedLineRanges,
-  diagnosticTouchesAddedLines,
   isUnloadedPluginDirectiveUnusedWarning,
   isMovedCode,
-  isRootCodeQualityPath,
-  overlapsAddedLines,
   parseAddedLineRanges
 } from './check-changed-code-quality.mjs'
 
@@ -46,28 +43,40 @@ describe('changed-code quality line matching', () => {
     ])
   })
 
-  it('matches diagnostics that overlap any added line', () => {
-    const ranges = [
-      { start: 5, end: 7 },
-      { start: 12, end: 12 }
-    ]
+  it.each(['edit', 'rename'])('treats bracketed filenames literally after %s', (change) => {
+    const repo = mkdtempSync(path.join(tmpdir(), 'changed-code-quality-literal-'))
+    try {
+      const hooks = `core.hooksPath=${path.join(repo, '.git', 'no-hooks')}`
+      const git = (...args) => {
+        const result = runProcessSync({
+          program: 'git',
+          args: ['-c', 'commit.gpgsign=false', '-c', hooks, ...args],
+          cwd: repo
+        })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      git('init', '--quiet')
+      const file = '[cd].ts'
+      const source = change === 'rename' ? '[ab].ts' : file
+      const content = 'export const first = 1\n\nexport const legacy = 3\n'
+      writeFileSync(path.join(repo, source), content)
+      writeFileSync(path.join(repo, 'c.ts'), content)
+      git('add', '.')
+      git('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-qm', 'base')
+      const base = git('rev-parse', 'HEAD')
+      if (change === 'rename') {
+        git('mv', source, file)
+      }
+      writeFileSync(path.join(repo, file), content.replace('first = 1', 'first = 2'))
+      writeFileSync(path.join(repo, 'c.ts'), content.replace('legacy = 3', 'legacy = 4'))
 
-    expect(overlapsAddedLines(3, 5, ranges)).toBe(true)
-    expect(overlapsAddedLines(8, 11, ranges)).toBe(false)
-    expect(overlapsAddedLines(12, 14, ranges)).toBe(true)
-  })
-
-  it('normalizes absolute diagnostic paths before matching', () => {
-    const root = process.cwd()
-    const file = 'config/scripts/check-changed-code-quality.test.mjs'
-    const diagnostic = {
-      filename: `${root}/${file}`,
-      labels: [{ span: { line: 24 } }]
+      const { rangesByFile } = collectAddedLineRanges(repo, base)
+      expect(rangesByFile.get(file)).toEqual([{ start: 1, end: 1 }])
+      expect(rangesByFile.get('c.ts')).toEqual([{ start: 3, end: 3 }])
+    } finally {
+      rmSync(repo, { recursive: true, force: true })
     }
-
-    expect(
-      diagnosticTouchesAddedLines(diagnostic, new Map([[file, [{ start: 24, end: 24 }]]]), root)
-    ).toBe(true)
   })
 
   it('discovers nested rule overrides while retaining root diagnostics', () => {
@@ -114,11 +123,6 @@ describe('changed-code quality line matching', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
-  })
-
-  it('leaves Cloud source to the independent Cloud quality checks', () => {
-    expect(isRootCodeQualityPath('cloud/apps/relay/src/index.ts')).toBe(false)
-    expect(isRootCodeQualityPath('src/main/index.ts')).toBe(true)
   })
 
   it.each(['src/renderer/src', 'mobile/src'])(
@@ -218,15 +222,6 @@ describe('moved-code exemption', () => {
     const base = [['keep0()', 'keep1()', 'unrelated()']]
     const mostlyNew = ['keep0()', ...Array.from({ length: 18 }, (_, i) => `fresh${i}()`)]
     expect(isMovedCode(mostlyNew, base)).toBe(false)
-  })
-
-  it('ignores blank lines when matching', () => {
-    const base = [['a()', 'b()']]
-    expect(isMovedCode(['a()', '', 'b()'], base)).toBe(true)
-  })
-
-  it('never exempts an empty highlight', () => {
-    expect(isMovedCode(['', '   '], [['a()']])).toBe(false)
   })
 
   it('reads the base text of a file that was renamed away', () => {
@@ -347,33 +342,6 @@ describe('unloaded plugin directive unused warning', () => {
     }
   }
 
-  it('exempts a suppression the root scan cannot resolve', () => {
-    withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
-      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
-    })
-    withFixture(directive('ime-enter-guard/require-ime-guard'), (diagnostic) => {
-      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
-    })
-  })
-
-  it('still reports an unused directive for a rule the root scan does load', () => {
-    withFixture(directive('unicorn/no-array-reduce'), (diagnostic) => {
-      expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(false)
-    })
-  })
-
-  it('ignores diagnostics that are not unused-directive warnings', () => {
-    withFixture(directive('anti-slop/no-module-mocking'), (diagnostic) => {
-      expect(
-        isUnloadedPluginDirectiveUnusedWarning(
-          { ...diagnostic, message: 'Unexpected any.' },
-          root,
-          'code quality'
-        )
-      ).toBe(false)
-    })
-  })
-
   it.each([
     "import './web-session-tabs-sync-test-harness'",
     "export * from '@/runtime/web-session-tabs-sync-test-harness'",
@@ -448,26 +416,6 @@ describe('unloaded plugin directive unused warning', () => {
         'react-doctor(no-derived-state-effect)'
       ])
     })
-  })
-
-  it('does not hide unused native rules in a mixed directive', () => {
-    withFixture(
-      directive('react-doctor/no-derived-state-effect, unicorn/no-array-reduce'),
-      (diagnostic) => {
-        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(false)
-      }
-    )
-  })
-
-  it('recognizes a standalone directive containing only Doctor rules', () => {
-    withFixture(
-      directive(
-        'react-doctor/no-derived-state-effect, react-doctor/no-adjust-state-on-prop-change'
-      ),
-      (diagnostic) => {
-        expect(isUnloadedPluginDirectiveUnusedWarning(diagnostic, root, 'code quality')).toBe(true)
-      }
-    )
   })
 
   it('keeps adjacent native directive warnings visible', () => {

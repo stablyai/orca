@@ -10,14 +10,14 @@ import {
 } from './closed-editor-tab-disposal'
 import type { MonacoModelRegistry, DisposableMonacoModel } from './diff-monaco-model-disposal'
 import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { createEditorModelOwnerKeyCache } from './editor-model-owner-key-cache'
 import type { EditorBufferViewIndex } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { EditorBufferKeptRecords } from '@/store/slices/editor/buffers/editor-buffer-kept'
+import type { EditorBufferRouteState } from '@/store/slices/editor/buffers/editor-buffer-identity-cache'
 
 type EditorStore = Pick<
   StoreApi<
-    WorktreeOperationRouteState &
+    EditorBufferRouteState &
       Partial<EditorBufferViewIndex> & {
         openFiles: OpenFile[]
         editorBufferKept?: EditorBufferKeptRecords
@@ -48,6 +48,8 @@ export function attachClosedEditorTabCleanup(
   let active = true
   let scheduled = false
   let generation = 0
+  const { ownerKeyOf, ownerKeyReaderFor, ownerInputsEqual } =
+    createEditorModelOwnerKeyCache(previousState)
 
   const releaseRetainedModel = (model: editor.ITextModel): void => {
     const retained = retainedModels.get(model)
@@ -138,7 +140,7 @@ export function attachClosedEditorTabCleanup(
           openFiles
             .filter((openFile) => openFile.mode === 'edit')
             .map((openFile) =>
-              toEditorModelUri(openFile.filePath, getEditorModelOwnerKey(openFile, currentState))
+              toEditorModelUri(openFile.filePath, ownerKeyOf(openFile, currentState))
             )
         )
       }
@@ -231,40 +233,28 @@ export function attachClosedEditorTabCleanup(
     if (
       openFiles === previous &&
       // Detach/rejoin can change model ownership without replacing openFiles.
-      currentState.editorBufferIdOf === closedState.editorBufferIdOf &&
       currentState.editorBufferKept === closedState.editorBufferKept &&
-      currentState.repos === closedState.repos &&
-      currentState.worktreesByRepo === closedState.worktreesByRepo &&
-      currentState.detectedWorktreesByRepo === closedState.detectedWorktreesByRepo &&
-      currentState.folderWorkspaces === closedState.folderWorkspaces &&
-      currentState.projectGroups === closedState.projectGroups &&
-      currentState.restoredRuntimeHostIdByWorkspaceSessionKey ===
-        closedState.restoredRuntimeHostIdByWorkspaceSessionKey &&
-      currentState.runtimeEnvironmentCatalogHydrated ===
-        closedState.runtimeEnvironmentCatalogHydrated &&
-      currentState.removedRuntimeEnvironmentIds === closedState.removedRuntimeEnvironmentIds &&
-      currentState.runtimeEnvironments === closedState.runtimeEnvironments &&
-      currentState.settings === closedState.settings
+      ownerInputsEqual(currentState, closedState)
     ) {
       return
     }
+    const priorOwnerOf = ownerKeyReaderFor(closedState)
     const liveFiles = new Map(openFiles.map((file) => [file.id, file]))
     let removed = false
     let removedDiff = false
     for (const file of previous) {
-      const priorOwner = getEditorModelOwnerKey(file, closedState)
       const liveFile = liveFiles.get(file.id)
       if (
         !liveFile ||
         liveFile.mode !== file.mode ||
         liveFile.filePath !== file.filePath ||
-        (file.mode === 'edit' && getEditorModelOwnerKey(liveFile, currentState) !== priorOwner)
+        (file.mode === 'edit' && ownerKeyOf(liveFile, currentState) !== priorOwnerOf(file))
       ) {
         const descriptor = {
           id: file.id,
           mode: file.mode,
           filePath: file.filePath,
-          modelOwnerKey: priorOwner
+          modelOwnerKey: priorOwnerOf(file)
         }
         pendingFiles.set(ownerKey(descriptor), descriptor)
         removed = true

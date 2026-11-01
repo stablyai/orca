@@ -97,6 +97,7 @@ export function workspaceSettingsMounts(
         runSetup: false,
         trustedOrcaHooks: {},
         getWorktreeCreateCutoverSupport: async () => false,
+        getBranchIntentSupport: async () => false,
         // Pin an older host so create remains worktree.create rather than agent.launch.
         getAgentLaunchSupport: async () => false,
         transitionDrawer: (view: unknown) => context.effect('drawer', view),

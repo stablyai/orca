@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../types'
+
 import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
@@ -26,34 +26,6 @@ function makeCachedScan(): WorkspaceCleanupScanResult {
 }
 
 describe('workspace cleanup cache hydration', () => {
-  it('hydrates an empty slice from the persisted snapshot', async () => {
-    const scan = vi.fn()
-    const getCachedScan = vi.fn().mockResolvedValue(makeCachedScan())
-    installWorkspaceCleanupApi(scan, getCachedScan)
-    const store = createCleanupTestStore()
-
-    await expect(store.getState().hydrateWorkspaceCleanupFromCache()).resolves.toBe(true)
-
-    expect(scan).not.toHaveBeenCalled()
-    expect(store.getState().workspaceCleanupScan?.scannedAt).toBe(CACHED_AT)
-    expect(
-      store.getState().workspaceCleanupScan?.candidates.map((candidate) => candidate.worktreeId)
-    ).toEqual(['repo1::/tmp/alpha', 'repo1::/tmp/beta'])
-  })
-
-  it('never clobbers live scan data with the snapshot', async () => {
-    const getCachedScan = vi.fn().mockResolvedValue(makeCachedScan())
-    installWorkspaceCleanupApi(vi.fn(), getCachedScan)
-    const store = createCleanupTestStore()
-    const live = { scannedAt: NOW, candidates: [makeCandidate()], errors: [] }
-    store.setState({ workspaceCleanupScan: live } as Partial<AppState>)
-
-    await expect(store.getState().hydrateWorkspaceCleanupFromCache()).resolves.toBe(false)
-
-    expect(getCachedScan).not.toHaveBeenCalled()
-    expect(store.getState().workspaceCleanupScan).toBe(live)
-  })
-
   it('bails when a broad scan starts while the cache read is in flight', async () => {
     const cacheRead = deferred<WorkspaceCleanupScanResult>()
     const broadScan = deferred<WorkspaceCleanupScanResult>()

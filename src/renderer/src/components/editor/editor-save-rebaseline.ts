@@ -1,6 +1,10 @@
+import { editorSaveResourceKey } from '@/store/slices/editor/buffers/editor-buffer-identity'
+import { sameEditorSaveResource } from './editor-save-writer-view'
+import type { AppStoreApi } from './editor-save-queue'
+import { writeEditorBuffer } from '@/store/slices/editor/buffers/editor-buffer-record'
+import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import { editorBufferIdForFile } from '@/store/slices/editor/buffers/editor-buffer-identity-cache'
 import { getWrittenContentDiskSignature } from '../../../../shared/disk-baseline-signature'
 import type { FileWriteDiskConflict } from '../../../../shared/file-write-disk-precondition'
 import { notifyEditorFileCacheStale } from './editor-autosave'
@@ -13,7 +17,6 @@ import {
 import {
   editorModelSiblingTabs,
   noteEditorBaselineWrite,
-  setEditorDiskBaseline,
   waitForEditorBaselineRestamp
 } from './editor-save-disk-precondition'
 
@@ -45,71 +48,103 @@ export function waitForModelBaselineRestamps(state: AppState, file: OpenFile): P
   return Promise.all(tabs.map((sibling) => waitForEditorBaselineRestamp(sibling.id)))
 }
 
-/** Advance the shared baseline and clear conflicts; evict clean sibling caches unless the record holds newer edits. */
-export function rebaselineAfterEditorWrite(state: AppState, fileId: string, content: string): void {
-  // Match the bytes a UTF-8 write produces without an extra stat.
-  const moved = setEditorDiskBaseline(state, fileId, getWrittenContentDiskSignature(content))
-  noteEditorBaselineWrite(fileId)
-  const file = state.openFiles.find((openFile) => openFile.id === fileId)
-  if (file) {
-    // The completed UTF-8 write ends any non-UTF-8 autosave pause.
-    resumeAutosaveForNonUtf8File(file)
-  }
-  // Newer record edits must stay visible in every view instead of being replaced by disk text.
-  const draft = state.editorDrafts[fileId]
-  const recordDirty = draft !== undefined && draft !== content
-  for (const sibling of moved) {
-    noteEditorBaselineWrite(sibling.id)
-    if (sibling.externalMutation === 'changed') {
-      state.setExternalMutation(sibling.id, null)
-    }
-    if (!recordDirty) {
-      notifyEditorFileCacheStale(sibling.id)
-    }
-  }
-}
-
+/** Publish baseline, dirty state and drafts together; a completed write never changes another host's record. */
 export function settleEditorRecordAfterWrite(
-  getState: () => AppState,
-  viewId: string,
-  content: string
-): void {
-  rebaselineAfterEditorWrite(getState(), viewId, content)
-  const state = getState()
-  const currentDraft = state.editorDrafts[viewId]
-  const stillDirty =
-    (currentDraft !== undefined && currentDraft !== content) ||
-    hasPendingEditorBufferChange(state, viewId)
-  state.markFileDirty(viewId, stillDirty, { written: true })
-  if (!stillDirty) {
-    state.clearEditorDraft(viewId)
-  }
-  const savedFile = state.openFiles.find((openFile) => openFile.id === viewId)
-  if (savedFile?.externalMutation === 'changed') {
-    trackExternalChangeConflictAction(savedFile, 'save_overwrite')
-    state.setExternalMutation(viewId, null)
-  }
-}
-
-/** With no original views left, settle retained records and advance detached peers’ baselines without clearing their edits. */
-export function settleEditorWriteWithoutViews(
-  state: AppState,
-  recordViewIds: readonly string[],
-  identityKey: string,
-  content: string
-): void {
+  store: AppStoreApi,
+  viewIds: readonly string[],
+  source: OpenFile,
+  content: string,
+  discarded: boolean
+): string[] {
+  const resourceKey = editorSaveResourceKey(source, store.getState())
   const signature = getWrittenContentDiskSignature(content)
-  state.settleKeptEditorBuffers(recordViewIds, content, signature)
-  for (const peer of state.openFiles) {
-    if (
-      peer.lastKnownDiskSignature === signature ||
-      editorBufferIdForFile(peer, state) !== identityKey
-    ) {
+  const moved: OpenFile[] = []
+  store.setState((state) => {
+    let next = state
+    const writerStillOpen = state.openFiles.some(
+      (file) => viewIds.includes(file.id) && sameEditorSaveResource(state, source, file)
+    )
+    const seen = new Set<string>()
+    for (const file of state.openFiles) {
+      const recordId = editorBufferIdOfView(state, file.id)
+      if (!sameEditorSaveResource(state, source, file) || seen.has(recordId)) {
+        continue
+      }
+      seen.add(recordId)
+      const siblings = editorModelSiblingTabs(state, file)
+      const original = siblings.some((peer) => viewIds.includes(peer.id))
+      const draft = state.editorDrafts[file.id]
+      const isDirty = discarded
+        ? file.isDirty
+        : (draft === undefined ? !original && file.isDirty : draft !== content) ||
+          hasPendingEditorBufferChange(state, file.id)
+      // A live divergent record must not adopt another record's write as its autosave baseline.
+      if (!original && isDirty && writerStillOpen) {
+        continue
+      }
+      const editorDrafts = { ...next.editorDrafts }
+      for (const peer of siblings) {
+        moved.push(peer)
+        if (!isDirty && !discarded) {
+          delete editorDrafts[peer.id]
+        }
+      }
+      next = {
+        ...next,
+        ...writeEditorBuffer(next, file.id, {
+          isDirty,
+          lastKnownDiskSignature: signature,
+          externalMutation:
+            !discarded && file.externalMutation === 'changed' ? undefined : file.externalMutation
+        }),
+        editorDrafts
+      }
+    }
+    const editorBufferKept = { ...next.editorBufferKept }
+    for (const [key, kept] of Object.entries(editorBufferKept)) {
+      const keptKey =
+        kept.resourceKey ??
+        JSON.stringify([source.mode, source.mirroredFromRuntimeSession === true, key])
+      if (
+        !resourceKey ||
+        keptKey !== resourceKey ||
+        !kept.viewIds.some((id) => viewIds.includes(id))
+      ) {
+        continue
+      }
+      if (!discarded && kept.draft === content) {
+        delete editorBufferKept[key]
+      } else {
+        editorBufferKept[key] = {
+          ...kept,
+          record: { ...kept.record, lastKnownDiskSignature: signature }
+        }
+      }
+    }
+    return { ...next, editorBufferKept }
+  })
+  const currentView = (file: OpenFile): OpenFile | undefined =>
+    store
+      .getState()
+      .openFiles.find(
+        (view) => view.id === file.id && sameEditorSaveResource(store.getState(), source, view)
+      )
+  for (const previous of moved) {
+    const file = currentView(previous)
+    if (!file) {
       continue
     }
-    state.setLastKnownDiskSignature(peer.id, signature)
-    if (!peer.isDirty) {
-      notifyEditorFileCacheStale(peer.id)
+    noteEditorBaselineWrite(file.id)
+    resumeAutosaveForNonUtf8File(file)
+    if (file.externalMutation === 'changed' && !discarded) {
+      trackExternalChangeConflictAction(file, 'save_overwrite')
+    }
+    if (
+      file.id !== source.id &&
+      !store.getState().openFiles.find((peer) => peer.id === file.id)?.isDirty
+    ) {
+      notifyEditorFileCacheStale(file.id)
     }
   }
+  return moved.filter(currentView).map((file) => file.id)
 }

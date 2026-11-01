@@ -3,7 +3,7 @@ import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissio
 import { getIntlLocale, i18n, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { AgentPermissionModeMenu } from './AgentPermissionModeMenu'
 import { agentPermissionModeLabel } from './agent-permission-mode-label'
 
 type PresetMode = Exclude<AgentPermissionMode, 'mixed'>
@@ -96,25 +96,20 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
         </p>
         {!autoSupported ? (
           <p className="text-xs text-muted-foreground">
-            {translate('settings.agents.autoUnsupported', 'Auto needs a newer Orca on this host.')}
+            {translate(
+              'settings.agents.autoUnsupported',
+              'Approve for me needs a newer Orca on this host.'
+            )}
           </p>
         ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-end">
-        <SettingsSegmentedControl<AgentPermissionMode>
-          value={mode}
-          onChange={(next) => {
-            if (next !== 'mixed') {
-              onChange(next)
-            }
-          }}
-          ariaLabel={title}
-          size="sm"
-          options={[
-            { value: 'manual', label: agentPermissionModeLabel('manual') },
-            { value: 'auto', label: agentPermissionModeLabel('auto'), disabled: !autoSupported },
-            { value: 'yolo', label: agentPermissionModeLabel('yolo') }
-          ]}
+        <AgentPermissionModeMenu
+          mode={mode}
+          onChange={onChange}
+          label={title}
+          autoAvailable
+          autoDisabled={!autoSupported}
         />
         {/* Keep mounted for animation; inert excludes hidden controls from focus and accessibility. */}
         <div
@@ -138,22 +133,18 @@ export function AgentPermissionsSetting(props: AgentPermissionsSettingProps): Re
               <span className="text-xs text-muted-foreground">
                 {translate('settings.agents.otherAgentsPermissions', 'Other agents')}
               </span>
-              <SettingsSegmentedControl<AgentPermissionMode>
-                value={nonAutoMode ?? 'mixed'}
+              <AgentPermissionModeMenu
+                mode={nonAutoMode ?? 'mixed'}
                 onChange={(next) => {
                   if ((next === 'manual' || next === 'yolo') && onChangeNonAuto) {
                     onChangeNonAuto(next)
                   }
                 }}
-                ariaLabel={translate(
+                label={translate(
                   'settings.agents.otherAgentsPermissionsLabel',
                   'Permissions for other agents'
                 )}
-                size="sm"
-                options={[
-                  { value: 'manual', label: agentPermissionModeLabel('manual') },
-                  { value: 'yolo', label: agentPermissionModeLabel('yolo') }
-                ]}
+                autoAvailable={false}
               />
             </div>
           </div>

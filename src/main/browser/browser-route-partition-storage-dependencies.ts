@@ -34,8 +34,8 @@ export function browserRoutePartitionStorageDependencies(
         const partitionSession = session.fromPartition(partition)
         await partitionSession.clearStorageData()
         await partitionSession.clearCache()
+        browserSessionRegistry.clearRoutePartitionPolicies(partition)
       }
-      browserSessionRegistry.clearRoutePartitionPolicies(partition)
     },
     removePartitionDirectory: async (directory) => {
       if (mode === 'live') {

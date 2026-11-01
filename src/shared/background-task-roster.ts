@@ -3,7 +3,7 @@
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
-} from './agent-session-background-task-wire'
+} from './agent-session/agent-session-background-task-wire'
 import type { BackgroundTaskSay } from './background-task-copy'
 import {
   buildAgentChildRowModels,
@@ -14,7 +14,7 @@ import {
 } from './agent-child-row-model'
 import { agentChildRunStateFor } from './agent-status-child-work-display'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
-import { formatNativeChatDuration } from './native-chat-turn-status'
+import { formatNativeChatDuration } from './native-chat/transcript/native-chat-turn-status'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState
@@ -142,13 +142,14 @@ export function backgroundTaskStateReason(state: RunState, say: BackgroundTaskSa
   }
 }
 
-/** Translate count/state as a whole sentence so languages can agree their forms. */
+/** Translate count/state as a whole sentence so languages can agree their forms; `subject` ("2 agents") stands in for the bare count. */
 export function backgroundTaskCountedState(
-  counted: string | number,
+  count: number,
   state: RunState,
-  say: BackgroundTaskSay
+  say: BackgroundTaskSay,
+  subject?: string
 ): string {
-  const value = { value0: counted }
+  const value = { count, value0: subject ?? count }
   switch (state) {
     case 'working':
       return say('stateWorkingCount', value)

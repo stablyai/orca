@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './mobile-terminal-startup'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -53,7 +53,13 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.pruneOwnedMobileDispatchRecipes()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${worktreeId}`,
+      undefined,
+      {
+        wslUserAct: opts.wslUserAct === true
+      }
+    )
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
@@ -103,6 +109,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           ? { resumeProviderSession: opts.resumeProviderSession }
           : {}),
         ...(opts.spawnIntent ? { spawnIntent: opts.spawnIntent } : {}),
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
         ...(opts.resumeOrigin ? { resumeOrigin: opts.resumeOrigin } : {}),
         ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
@@ -124,7 +131,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         deferMobileSessionPublish: true,
         signal: opts.signal,
         ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {}),
-        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {})
+        ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {}),
+        ...(opts.reopensPane ? { reopensPane: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(
@@ -132,7 +140,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
           `id:${worktreeId}`,
           opts.createMutation.id,
           true,
-          (_selector, handle) => create(handle)
+          (_selector, handle) => create(handle),
+          { wslUserAct: opts.wslUserAct === true }
         )
       : await create()
     if (terminal.ptyId) {

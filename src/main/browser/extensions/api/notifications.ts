@@ -38,14 +38,22 @@ type Shown = {
   notification: Electron.Notification | null
 }
 
-/** Profile → extension → notification id. Held so click handlers survive GC. */
-const shownByProfile = new Map<string, Map<string, Map<string, Shown>>>()
+/** Session → extension → notification id. Held so click handlers survive GC. */
+const shownBySession = new WeakMap<Electron.Session, Map<string, Map<string, Shown>>>()
 
 function shownFor(caller: BrowserExtensionCaller): Map<string, Shown> {
-  let byExtension = shownByProfile.get(caller.browserProfileId)
+  let byExtension = shownBySession.get(caller.session)
   if (!byExtension) {
     byExtension = new Map()
-    shownByProfile.set(caller.browserProfileId, byExtension)
+    shownBySession.set(caller.session, byExtension)
+    const owned = byExtension
+    caller.session.extensions.on('extension-unloaded', (_event, extension) => {
+      const shown = owned.get(extension.id)
+      owned.delete(extension.id)
+      for (const entry of shown?.values() ?? []) {
+        detach(entry)
+      }
+    })
   }
   let shown = byExtension.get(caller.extension.id)
   if (!shown) {
@@ -85,12 +93,14 @@ function emit(caller: BrowserExtensionCaller, event: string, args: unknown[]): v
   )
 }
 
-function detach(entry: Shown): void {
+function detach(entry: Shown, closeNative = true): void {
   const { notification } = entry
   entry.notification = null
   if (notification) {
     notification.removeAllListeners()
-    notification.close()
+    if (closeNative) {
+      notification.close()
+    }
   }
 }
 
@@ -119,6 +129,8 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
       : {})
   })
   notification.on('click', () => {
+    shownFor(caller).delete(id)
+    detach(entry, false)
     noteBrowserExtensionUserGesture(caller.session, caller.extension.id)
     emit(caller, 'onClicked', [id])
   })
@@ -129,6 +141,11 @@ function show(caller: BrowserExtensionCaller, id: string, entry: Shown): void {
   notification.on('close', (details) => {
     shownFor(caller).delete(id)
     emit(caller, 'onClosed', [id, details.reason !== 'timedOut'])
+  })
+  notification.once('failed', () => {
+    shownFor(caller).delete(id)
+    // Electron destroys the native notification after dispatching this failure.
+    detach(entry, false)
   })
   entry.notification = notification
   notification.show()

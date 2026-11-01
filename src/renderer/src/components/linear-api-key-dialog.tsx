@@ -1,3 +1,4 @@
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
@@ -61,7 +62,11 @@ export function LinearApiKeyDialog({
   const runtimeTarget = useMemo(() => defaultScopeHost(settings), [settings])
   const personalKeyUrl = buildLinearPersonalApiKeySettingsUrl(workspace?.organizationUrlKey)
   const workspaceApiUrl = buildLinearWorkspaceApiSettingsUrl(workspace?.organizationUrlKey)
-  const submitLabel = connectLabel ?? (workspace ? 'Update access' : 'Connect')
+  const submitLabel =
+    connectLabel ??
+    (workspace
+      ? translate('taskProviders.linear.updateAccess', 'Update access')
+      : translate('taskProviders.linear.connect', 'Connect'))
   const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
   if (resolvedDialogState !== dialogState) {
     // Reset hidden drafts/errors before paint because parent closure can race a connect request.
@@ -99,14 +104,17 @@ export function LinearApiKeyDialog({
       setDialogState((current) => ({
         ...current,
         connectState: 'error',
-        connectError: result.error
+        connectError: taskProviderErrorMessage(result)
       }))
     } catch (error) {
       if (mountedRef.current) {
         setDialogState((current) => ({
           ...current,
           connectState: 'error',
-          connectError: error instanceof Error ? error.message : 'Connection failed'
+          connectError:
+            error instanceof Error
+              ? taskProviderErrorText(error.message)
+              : translate('taskProviders.linear.connectionFailed', 'Connection failed')
         }))
       }
     }
@@ -114,16 +122,35 @@ export function LinearApiKeyDialog({
 
   const resolvedTitle =
     title ??
-    (workspace ? `Update Linear access for ${workspace.organizationName}` : 'Add Linear access')
+    (workspace
+      ? translate(
+          'taskProviders.linear.updateWorkspaceAccess',
+          'Update Linear access for {{workspace}}',
+          { workspace: workspace.organizationName }
+        )
+      : translate('taskProviders.linear.addAccess', 'Add Linear access'))
   const resolvedDescription =
     description ??
     (workspace
-      ? `Paste a Personal API key for ${workspace.organizationName}. If this workspace is already connected, Orca replaces its stored key.`
-      : 'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.')
+      ? translate(
+          'taskProviders.linear.workspaceApiKeyHint',
+          'Paste a Personal API key for {{workspace}}. If this workspace is already connected, Orca replaces its stored key.',
+          { workspace: workspace.organizationName }
+        )
+      : translate(
+          'taskProviders.linear.apiKeyHint',
+          'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.'
+        ))
   const storageCopy =
     runtimeTarget.kind === 'environment'
-      ? 'This key is stored by the active remote runtime.'
-      : 'Local runtime keys are stored on this device using Electron encrypted storage when available.'
+      ? translate(
+          'taskProviders.linear.remoteKeyStorage',
+          'This key is stored by the active remote runtime.'
+        )
+      : translate(
+          'taskProviders.linear.localKeyStorage',
+          'Local runtime keys are stored on this device using Electron encrypted storage when available.'
+        )
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

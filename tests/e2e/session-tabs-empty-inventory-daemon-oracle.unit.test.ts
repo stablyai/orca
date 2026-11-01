@@ -5,7 +5,7 @@ import { TerminalHost } from '../../src/main/daemon/terminal-host'
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: {
     setState: vi.fn(),
-    getState: vi.fn(() => ({})),
+    getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),
     subscribe: vi.fn(() => () => {})
   }
 }))

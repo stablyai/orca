@@ -8,28 +8,23 @@ import {
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
 import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
+import { takesNewWork } from './db/worker-terminal/worker-terminal-transfer'
 
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
-// Warn only: automatically failing a slow but healthy worker is worse than retaining a hung slot.
-export function warnStaleDispatches(
-  db: OrchestrationDb,
-  onLog: (msg: string) => void,
-  heartbeatIntervalMinutes: number | null
-): void {
-  // Workers told not to send heartbeats cannot miss one.
-  if (heartbeatIntervalMinutes === null) {
-    return
-  }
-  // Warn after two missed heartbeat periods.
-  const minutes = heartbeatIntervalMinutes * 2
-  const thresholdIso = new Date(Date.now() - minutes * 60 * 1000).toISOString()
-  const stale = db.getStaleDispatches(thresholdIso)
-  for (const ctx of stale) {
-    onLog(
-      `Warning: worker ${ctx.assignee_handle ?? '<unknown>'} on task ${ctx.task_id} has not sent a heartbeat in ~${minutes} min (dispatch ${ctx.id})`
-    )
+/** The pane, process and host a Dispatch to `handle` records; the census reads the same. */
+function assigneeAuthority(runtime: CoordinatorRuntime, handle: string) {
+  const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(handle)
+  return {
+    assigneePaneKey:
+      dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(handle) ?? undefined,
+    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+    processIncarnation:
+      dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
+        ? dispatchAuthority.processIncarnation
+        : undefined,
+    hostScope: dispatchAuthority?.hostScope ? JSON.stringify(dispatchAuthority.hostScope) : null
   }
 }
 
@@ -43,21 +38,14 @@ export async function listAvailableWorkerTerminals(
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
     })
-    const dispatched = db.listTasks({ status: 'dispatched' })
-    const busyHandles = new Set<string>()
-
-    for (const task of dispatched) {
-      const ctx = db.getDispatchContext(task.id)
-      if (ctx?.assignee_handle) {
-        busyHandles.add(ctx.assignee_handle)
-      }
-    }
-
-    // The dispatch lock enforces correctness; filtering merely skips busy or disconnected terminals.
+    // The dispatch lock enforces correctness; filtering skips busy, disconnected or still-held terminals.
     return result.terminals
       .filter(
         (t) =>
-          t.handle !== coordinatorHandle && !busyHandles.has(t.handle) && t.connected && t.writable
+          t.handle !== coordinatorHandle &&
+          t.connected &&
+          t.writable &&
+          takesNewWork(db, { assigneeHandle: t.handle, ...assigneeAuthority(runtime, t.handle) })
       )
       .map((t) => t.handle)
   } catch {
@@ -78,7 +66,6 @@ export async function dispatchTaskToWorker(params: {
   // Return circuit breaks to the coordinator that owns the failed-task list.
   onCircuitBroken: (taskId: string) => void
   nestedWorkerMaxDepth: number
-  heartbeatIntervalMinutes: number | null
 }): Promise<TaskDispatchResult> {
   const { db, runtime, task, targetHandle, baseDrift, onLog } = params
   // Refuse stale bases before creating dispatch context so recoverable drift cannot consume circuit-breaker budget.
@@ -98,19 +85,10 @@ export async function dispatchTaskToWorker(params: {
     return 'stale-base-refused'
   }
 
-  const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)
-  const assigneePaneKey =
-    dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
-  const processIncarnation =
-    dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
-      ? dispatchAuthority.processIncarnation
-      : undefined
   const dispatch = db.createDispatchContext({
     taskId: task.id,
     assigneeHandle: targetHandle,
-    assigneePaneKey,
-    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
-    processIncarnation,
+    ...assigneeAuthority(runtime, targetHandle),
     // This authenticated host-local loop is a system root, independent of CLI callers.
     creator: { kind: 'system' },
     maxDepth: params.nestedWorkerMaxDepth
@@ -121,7 +99,6 @@ export async function dispatchTaskToWorker(params: {
     taskId: task.id,
     dispatchId: dispatch.id,
     canDispatchSubWorkers: dispatch.depth < params.nestedWorkerMaxDepth,
-    heartbeatIntervalMinutes: params.heartbeatIntervalMinutes,
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,

@@ -14,13 +14,23 @@ import { runProcessSync } from '@orca/process-host'
 
 const directory = mkdtempSync(join(tmpdir(), 'orca-structured-provider-build-'))
 const bundle = join(directory, 'orcad-server.js')
+let serverMetafile
 
 beforeAll(async () => {
-  await buildOrcadEntry(bundle)
+  serverMetafile = (await buildOrcadEntry(bundle)).metafile
 }, 60_000)
 
 afterAll(() => {
   rmSync(directory, { recursive: true, force: true })
+})
+
+it('ships no runtime Electron imports in the actual server graph', () => {
+  const electronImporters = Object.entries(serverMetafile.inputs)
+    .filter(([, input]) =>
+      input.imports.some(({ path }) => path === 'electron' || path.startsWith('electron/'))
+    )
+    .map(([path]) => path)
+  expect(electronImporters).toEqual([])
 })
 
 it('loads the structured Claude SDK through the packaged server under plain Node', () => {

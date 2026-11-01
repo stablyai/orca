@@ -130,16 +130,27 @@ describe('RateLimitService', () => {
     }
   )
 
-  it('keeps polling on cadence for an account with a Fable window the live feed cannot carry', async () => {
+  it('keeps OAuth-only Fable and credit fields through live posts and polls them on cadence', async () => {
     vi.useFakeTimers()
     try {
-      const withFable = (usedPercent: number): ProviderRateLimits => ({
+      const withOAuthUsage = (usedPercent: number): ProviderRateLimits => ({
         ...okProvider('claude', 40),
-        fableWeekly: { usedPercent, windowMinutes: 10080, resetsAt: null, resetDescription: null }
+        fableWeekly: { usedPercent, windowMinutes: 10080, resetsAt: null, resetDescription: null },
+        extraUsage: {
+          balance: usedPercent,
+          unit: 'currency',
+          currencyCode: 'USD',
+          enabled: true,
+          disabledReason: null,
+          resetsAt: null,
+          spent: null,
+          spendLimit: null,
+          spentPercent: null
+        }
       })
       vi.mocked(fetchClaudeRateLimits)
-        .mockImplementationOnce(async () => withFable(18))
-        .mockImplementation(async () => withFable(39))
+        .mockImplementationOnce(async () => withOAuthUsage(18))
+        .mockImplementation(async () => withOAuthUsage(39))
       mockFreshBackgroundProviderFetches()
 
       const service = new RateLimitService()
@@ -155,11 +166,14 @@ describe('RateLimitService', () => {
           fiveHour: { used_percentage: 50 + minute },
           sevenDay: { used_percentage: 30 }
         })
+        expect(service.getState().claude?.fableWeekly?.usedPercent).toBe(18)
+        expect(service.getState().claude?.extraUsage?.balance).toBe(18)
         await vi.advanceTimersByTimeAsync(60 * 1000)
       }
 
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(service.getState().claude?.fableWeekly?.usedPercent).toBe(39)
+      expect(service.getState().claude?.extraUsage?.balance).toBe(39)
 
       service.stop()
     } finally {

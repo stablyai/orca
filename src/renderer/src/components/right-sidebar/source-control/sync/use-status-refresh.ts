@@ -15,6 +15,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
 import { refreshGitStatusForWorktree } from '../../git-status-refresh'
 
@@ -153,7 +154,11 @@ export function useSourceControlStatusRefresh({
           }
         )
       })
-      .catch((error) => console.warn('[SourceControl] findHugeFoldersToIgnore failed', error))
+      .catch((error) => {
+        if (!isWslDistroNotRunningRefusal(error)) {
+          console.warn('[SourceControl] findHugeFoldersToIgnore failed', error)
+        }
+      })
     return () => {
       cancelled = true
     }

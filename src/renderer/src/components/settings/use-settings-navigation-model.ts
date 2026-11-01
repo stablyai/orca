@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
@@ -7,6 +8,7 @@ import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
 } from '@/lib/agent-skill-nav-install-status'
+import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { deriveNeededSectionIds } from './settings-load-performance'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
@@ -32,9 +34,12 @@ export function useSettingsNavigationModel(
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    // Why the painted theme: Match Terminal may paint the other mode than the one picked.
+    (theme: 'system' | 'dark' | 'light') =>
+      applyDocumentTheme(resolvePaintedTheme(model.settings, theme)),
+    [model.settings]
+  )
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
@@ -156,7 +161,11 @@ export function useSettingsNavigationModel(
     [visibleNavSections]
   )
   const projectByRepoId = useMemo(() => {
-    const projection = { projects: model.projects, setups: model.projectHostSetups }
+    const projection = getProjectHostSetupProjectionFromState({
+      repos: model.repos,
+      projects: model.projects,
+      projectHostSetups: model.projectHostSetups
+    })
     const projectById = new Map(projection.projects.map((project) => [project.id, project]))
     const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
     for (const setup of projection.setups) {

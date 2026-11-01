@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
@@ -18,10 +20,21 @@ type Props = {
   onEditNote: (comment: DiffComment) => void
 }
 
-function accessibilityLabelForLine(line: MobileDiffLine): string {
+function accessibilityLabelForLine(line: MobileDiffLine, t: Translate): string {
   const number = mobileDiffLineNumber(line)
-  const label = line.kind === 'add' ? 'Added' : line.kind === 'delete' ? 'Deleted' : 'Context'
-  return number ? `${label} line ${number}` : `${label} line`
+  if (line.kind === 'add') {
+    return number
+      ? t('components.diffReviewLine.addedLineNumber', 'Added line {{number}}', { number })
+      : t('components.diffReviewLine.addedLine', 'Added line')
+  }
+  if (line.kind === 'delete') {
+    return number
+      ? t('components.diffReviewLine.deletedLineNumber', 'Deleted line {{number}}', { number })
+      : t('components.diffReviewLine.deletedLine', 'Deleted line')
+  }
+  return number
+    ? t('components.diffReviewLine.contextLineNumber', 'Context line {{number}}', { number })
+    : t('components.diffReviewLine.contextLine', 'Context line')
 }
 
 function canCommentOnLine(line: MobileDiffLine): boolean {
@@ -36,6 +49,7 @@ export function MobileDiffReviewLine({
   onAddNote,
   onEditNote
 }: Props) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
@@ -49,7 +63,7 @@ export function MobileDiffReviewLine({
         active && styles.activeRow
       ]}
       accessible
-      accessibilityLabel={accessibilityLabelForLine(line)}
+      accessibilityLabel={accessibilityLabelForLine(line, t)}
     >
       <Text style={styles.prefix}>{mobileDiffLinePrefix(line.kind)}</Text>
       <Text style={styles.lineNumber}>{lineNumber ? String(lineNumber) : ''}</Text>
@@ -64,8 +78,10 @@ export function MobileDiffReviewLine({
         accessibilityRole={canComment ? 'button' : 'text'}
         accessibilityLabel={
           canComment && line.newLineNumber !== undefined
-            ? `Add note on line ${line.newLineNumber}`
-            : accessibilityLabelForLine(line)
+            ? t('components.diffReviewLine.addNoteOnLine', 'Add note on line {{number}}', {
+                number: line.newLineNumber
+              })
+            : accessibilityLabelForLine(line, t)
         }
       >
         <Text style={styles.codeText}>
@@ -80,7 +96,13 @@ export function MobileDiffReviewLine({
               style={({ pressed }) => [styles.noteButton, pressed && styles.noteButtonPressed]}
               onPress={() => onEditNote(comment)}
               accessibilityRole="button"
-              accessibilityLabel={`Edit note on line ${comment.lineNumber}`}
+              accessibilityLabel={t(
+                'components.diffReviewLine.editNoteOnLine',
+                'Edit note on line {{number}}',
+                {
+                  number: comment.lineNumber
+                }
+              )}
             >
               <MessageSquare
                 size={13}

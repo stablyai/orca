@@ -2,7 +2,7 @@ import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { createReadStream } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
+import type { AgentSessionRewindFork } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import { durableWriteTempPath, renameDurable, writeTempFileDurable } from '../durable-file-write'
 import { splitTranscriptStreamLines } from '../native-chat/transcript-stream-lines'
 import { loadClaudeAgentSdk } from './claude-stream-json-connection'
@@ -55,7 +55,8 @@ export async function materializeClaudeRewindTranscript(
           (entry) => entry.type === 'assistant' || entry.type === 'user'
         )?.uuid
         if (!resumeCursor) {
-          throw new Error('claude rewind fork is missing its resume point')
+          // Metadata alone uses the same fresh launch as a rewind with no parent.
+          return
         }
         const destination = join(dirname(sourcePath), `${key.sessionId}.jsonl`)
         const temporary = durableWriteTempPath(destination)
@@ -72,5 +73,12 @@ export async function materializeClaudeRewindTranscript(
       }
     }
   })
-  return { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+  return resumeCursor
+    ? { ...fork, sessionId: result.sessionId, resumeCursor, materialized: true }
+    : {
+        sessionId: fork.sessionId,
+        sourceSessionId: fork.sourceSessionId,
+        replacesSessionId: fork.replacesSessionId,
+        materialized: true
+      }
 }

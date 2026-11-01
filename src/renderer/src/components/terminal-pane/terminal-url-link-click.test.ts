@@ -169,9 +169,6 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()

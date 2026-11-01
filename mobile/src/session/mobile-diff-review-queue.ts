@@ -1,4 +1,5 @@
 import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { translate } from '../i18n/mobile-i18n'
 import type {
   DiffComment,
   DiffReviewScope,
@@ -191,7 +192,11 @@ function statusEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: scope === 'staged' ? 'Staged' : 'Unstaged',
+    get subtitle() {
+      return scope === 'staged'
+        ? translate('session.diffReviewQueue.staged', 'Staged')
+        : translate('session.diffReviewQueue.unstaged', 'Unstaged')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: isMobileGitStageableEntry(entry),
@@ -227,7 +232,9 @@ function branchEntryToQueueItem(
     oldPath: entry.oldPath,
     status: entry.status,
     title: entry.path,
-    subtitle: 'Committed on branch',
+    get subtitle() {
+      return translate('session.diffReviewQueue.committedOnBranch', 'Committed on branch')
+    },
     added: entry.added,
     removed: entry.removed,
     canStage: false,

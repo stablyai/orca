@@ -1,11 +1,13 @@
 import { app } from 'electron'
-import { existsSync, accessSync, chmodSync, constants } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { platform, arch } from 'node:os'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
+import { ensureDependencyBinaryExecutable } from './agent-browser-dependency-binary'
+import { isAgentBrowserStaleRefError } from './agent-browser-batch-command'
 
 export function agentBrowserNativeName(): string {
   const ext = process.platform === 'win32' ? '.exe' : ''
@@ -33,13 +35,7 @@ export function resolveAgentBrowserBinary(): string {
     agentBrowserNativeName()
   )
   if (existsSync(nmBin)) {
-    if (process.platform !== 'win32') {
-      try {
-        accessSync(nmBin, constants.X_OK)
-      } catch {
-        chmodSync(nmBin, 0o755)
-      }
-    }
+    ensureDependencyBinaryExecutable(nmBin)
     return nmBin
   }
 
@@ -91,7 +87,7 @@ export function stripAgentBrowserTargetArgs(args: string[]): string[] {
 
 // Stale refs need a distinct code so agents can retry with a fresh snapshot.
 export function classifyErrorCode(message: string): string {
-  if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
+  if (isAgentBrowserStaleRefError(message)) {
     return 'browser_stale_ref'
   }
   return 'browser_error'
@@ -110,6 +106,14 @@ export function isWebContentsLoading(wc: WebContents): boolean {
     return wc.isLoading()
   } catch {
     // The caller rechecks authoritative page registration after waiting.
+    return false
+  }
+}
+
+export function isLoadingMainFrame(wc: WebContents): boolean {
+  try {
+    return wc.isLoadingMainFrame()
+  } catch {
     return false
   }
 }

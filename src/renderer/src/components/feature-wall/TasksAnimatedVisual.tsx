@@ -316,10 +316,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                 <ClaudeIcon size={14} />
                 <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
                   {translate(
-                    'auto.components.feature.wall.TasksAnimatedVisual.efba6f77eb',
-                    'Reading issue #'
+                    'auto.components.feature.wall.TasksAnimatedVisual.readingIssue',
+                    'Reading issue #{{number}}…',
+                    { number: workspaceIssue.number }
                   )}
-                  {workspaceIssue.number}…
                 </span>
               </div>
             </div>

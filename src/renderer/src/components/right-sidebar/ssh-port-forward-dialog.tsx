@@ -170,11 +170,21 @@ function PortForwardForm({
       const lPort = Number.parseInt(localPort || remotePort, 10)
 
       if (Number.isNaN(rPort) || rPort < 1 || rPort > 65535) {
-        setError('Remote port must be 1\u201365535')
+        setError(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.remotePortOutOfRange',
+            'Remote port must be 1\u201365535'
+          )
+        )
         return
       }
       if (Number.isNaN(lPort) || lPort < 1 || lPort > 65535) {
-        setError('Local port must be 1\u201365535')
+        setError(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.localPortOutOfRange',
+            'Local port must be 1\u201365535'
+          )
+        )
         return
       }
 
@@ -200,9 +210,21 @@ function PortForwardForm({
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('EADDRINUSE') || msg.includes('already in use')) {
-          setError(`Port ${lPort} is already in use. Choose a different local port.`)
+          setError(
+            translate(
+              'auto.components.right.sidebar.PortsPanel.localPortInUse',
+              'Port {{port}} is already in use. Choose a different local port.',
+              { port: lPort }
+            )
+          )
         } else if (msg.includes('EACCES') || msg.includes('permission denied')) {
-          setError(`Port ${lPort} requires elevated privileges. Use a local port \u2265 1024.`)
+          setError(
+            translate(
+              'auto.components.right.sidebar.PortsPanel.localPortRequiresPrivileges',
+              'Port {{port}} requires elevated privileges. Use a local port \u2265 1024.',
+              { port: lPort }
+            )
+          )
         } else {
           setError(msg)
         }

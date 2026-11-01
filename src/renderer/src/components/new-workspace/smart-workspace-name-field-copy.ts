@@ -57,15 +57,18 @@ export function getSmartWorkspaceNameFieldCopy({
         'auto.components.new.workspace.SmartWorkspaceNameField.4bd98f1091',
         'Switch project?'
       )
-  const crossRepoSwitchDescriptionSuffix = crossRepoSwitchIsTaskSource
-    ? translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.differentTaskSource',
-        ', which is different from the selected task source.'
-      )
-    : translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
-        ', which is different from the selected project.'
-      )
+  const formatCrossRepoSwitchDescription = (repoSlug: string): string =>
+    crossRepoSwitchIsTaskSource
+      ? translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.crossRepoDifferentTaskSource',
+          'The GitHub URL points to {{repo}}, which is different from the selected task source.',
+          { repo: repoSlug }
+        )
+      : translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.crossRepoDifferentProject',
+          'The GitHub URL points to {{repo}}, which is different from the selected project.',
+          { repo: repoSlug }
+        )
   const crossRepoSwitchFallbackLabel = crossRepoSwitchIsTaskSource
     ? translate(
         'auto.components.new.workspace.SmartWorkspaceNameField.currentTaskSource',
@@ -112,7 +115,7 @@ export function getSmartWorkspaceNameFieldCopy({
 
   return {
     crossRepoSwitchTitle,
-    crossRepoSwitchDescriptionSuffix,
+    formatCrossRepoSwitchDescription,
     crossRepoSwitchFallbackLabel,
     placeholder
   }

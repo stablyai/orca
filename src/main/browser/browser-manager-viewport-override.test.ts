@@ -45,7 +45,11 @@ vi.mock('./popup-origin-bar-window', () => ({
 vi.mock('./browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: browserMocks.processUserAgentMode,
-    userAgent: browserMocks.processUserAgent
+    userAgent: browserMocks.processUserAgent,
+    electronUserAgent:
+      browserMocks.processUserAgentMode === 'native'
+        ? browserMocks.processUserAgent
+        : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
   })
 }))
 
@@ -162,7 +166,7 @@ describe('browserManager', () => {
 
     // CDP overrides outrank the WebContents UA and must match the auth-host request identity.
     it.each([false, true])(
-      'presents the Firefox UA for a preset applied on a Google auth host (mobile=%s)',
+      'presents the auth UA for a preset applied on a Google auth host (mobile=%s)',
       async (mobile) => {
         const { guest, debuggerSendCommand } = makeGuest(
           mobile ? 4246 : 4245,
@@ -223,7 +227,7 @@ describe('browserManager', () => {
       await flushViewportOps()
       expect(presentedUserAgent()).toBe(googleAuthUserAgent())
 
-      // Retarget the redirect over CDP without rewriting the stale Firefox WebContents UA.
+      // Retarget the redirect over CDP without rewriting the stale auth WebContents UA.
       willRedirect({ preventDefault: vi.fn() }, 'https://example.com/', false, true)
       await flushViewportOps()
       expect(guest.setUserAgent).toHaveBeenCalledTimes(1)
@@ -282,7 +286,7 @@ describe('browserManager', () => {
       )
     })
 
-    it('does not leave the Firefox UA standing when a preset lands mid-navigation off an auth host', async () => {
+    it('does not leave the auth UA standing when a preset lands mid-navigation off an auth host', async () => {
       const { guest, debuggerSendCommand, presentedUserAgent } = makeGuest(
         4252,
         'https://accounts.google.com/'
@@ -765,32 +769,6 @@ describe('browserManager', () => {
         'Emulation.setUserAgentOverride',
         expect.anything()
       )
-    })
-
-    it('keeps a native-mode mobile preset off the Google exception on navigation', async () => {
-      browserMocks.processUserAgentMode = 'native'
-      browserMocks.processUserAgent = GUEST_ELECTRON_UA
-      const { guest, debuggerSendCommand } = makeGuest(4250)
-      webContentsFromIdMock.mockReturnValue(guest)
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'tab-native-nav',
-        sessionProfileId: 'native-profile',
-        webContentsId: guest.id as number,
-        rendererWebContentsId
-      })
-      const didStartNavigation = guestOnMock.mock.calls.find(
-        ([event]) => event === 'did-start-navigation'
-      )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
-
-      await browserManager.setViewportOverride('tab-native-nav', MOBILE_VIEWPORT_OVERRIDE)
-      debuggerSendCommand.mockClear()
-      didStartNavigation(null, 'https://accounts.google.com/', false, true)
-      await flushViewportOps()
-      expect(guest.setUserAgent).not.toHaveBeenCalled()
-      expect(lastUserAgentOverride(debuggerSendCommand)).toMatchObject({
-        userAgent: expect.stringContaining('iPhone')
-      })
     })
 
     it('clears device metrics and disables touch for override=null', async () => {

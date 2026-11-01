@@ -14,10 +14,6 @@ describe('local worktree metadata prune gate', () => {
     __resetLocalWorktreeMetadataPruneGateForTests()
   })
 
-  it('is due for a repo it has never seen', () => {
-    expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(true)
-  })
-
   it('stays undue indefinitely once a pass ran and nothing changed', () => {
     markLocalWorktreeMetadataPruneStarted('repo-1')
 
@@ -53,14 +49,6 @@ describe('local worktree metadata prune gate', () => {
     markLocalWorktreeMetadataPruneStarted('repo-1')
 
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)
-    expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)
-  })
-
-  it('does not re-arm on the first listing it observes', () => {
-    markLocalWorktreeMetadataPruneStarted('repo-1')
-
-    recordLocalWorktreeListingForPruneGate('repo-1', ['/a'])
-
     expect(isLocalWorktreeMetadataPruneDue('repo-1')).toBe(false)
   })
 

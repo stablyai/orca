@@ -402,7 +402,7 @@ describe('the shell capture', () => {
   it('does not open a capture for a start that lands after the session ended', async () => {
     const entered = gate()
     const blocked = gate()
-    const { engine, liveListeners, log } = createTestEngine({
+    const { engine, liveListeners, log, calls } = createTestEngine({
       permission: async () => {
         entered.release()
         await blocked.promise
@@ -416,8 +416,8 @@ describe('the shell capture', () => {
     blocked.release()
     await expect(pending).resolves.toMatchObject({ started: false })
     expect(liveListeners()).toEqual({ microphone: 0, interruptions: 0 })
-    // A successful engine open needs teardown even if its capture was superseded; local end sees no capture and cannot release the native session later.
-    expect(log).toContain('end')
+    expect(calls).toEqual([])
+    expect(log).not.toContain('end')
   })
 
   it('tears the device down for a start that lost the race after opening', async () => {

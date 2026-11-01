@@ -296,7 +296,7 @@ export function createProjectGroupMutationActions(
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
-              previous: s,
+              previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
               nextRepos,
               hostId: movedHostId
             }),

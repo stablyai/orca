@@ -6,9 +6,12 @@ export function redactForTransport(
   hit: AiVaultSearchHit,
   transport: SessionSearchTransport
 ): AiVaultSearchHit {
-  const { resumeCommand, source, ...fields } = hit
+  const { resumeCommand, source, accountHome, accountWslDistro, ...fields } = hit
   return {
     ...fields,
+    ...(transport !== 'relay' && accountHome !== undefined
+      ? { accountHome, accountWslDistro }
+      : {}),
     source: transport === 'relay' ? { presence: source.presence } : { ...source },
     ...(transport !== 'relay' && source.presence === 'present' && resumeCommand !== undefined
       ? { resumeCommand }

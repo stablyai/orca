@@ -67,7 +67,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.xs,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   summaryCollapsed: {
     borderWidth: 1,
@@ -97,7 +97,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 2,
     paddingHorizontal: 3,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel
   },
   hiddenCount: {

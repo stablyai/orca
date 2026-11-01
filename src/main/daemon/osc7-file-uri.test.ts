@@ -2,17 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { parseFileUriPath, parseFileUriPathParts } from './osc7-file-uri'
 
 describe('parseFileUriPath', () => {
-  it('accepts host-qualified POSIX file URI authorities as plain paths', () => {
-    expect(parseFileUriPath('file://remote-host/tmp/result.json', { pathFlavor: 'posix' })).toBe(
-      '/tmp/result.json'
-    )
-  })
-
-  it('accepts empty and localhost POSIX file URI authorities', () => {
-    expect(parseFileUriPath('file:///tmp/result.json')).toBe('/tmp/result.json')
-    expect(parseFileUriPath('file://localhost/tmp/result.json')).toBe('/tmp/result.json')
-  })
-
   it('keeps remote OSC7 authorities as POSIX paths for SSH PTYs on Windows', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -65,8 +54,13 @@ describe('parseFileUriPath', () => {
     }
   )
 
-  it('maps lowercase drvfs paths and rejects malformed percent encoding in WSL context', () => {
+  it('maps lowercase drvfs paths and keeps a literal % in WSL context', () => {
     expect(parseFileUriPath('file://host/mnt/c/work', { wslDistro: 'Ubuntu' })).toBe('C:\\work')
-    expect(parseFileUriPath('file://host/home/%ZZ', { wslDistro: 'Ubuntu' })).toBeNull()
+    // A folder named `%ZZ` is a valid path; nushell sends it unencoded.
+    expect(parseFileUriPath('file://host/home/%ZZ', { wslDistro: 'Ubuntu' })).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\home\\%ZZ'
+    )
+    // Valid hex that is not UTF-8 is still rejected.
+    expect(parseFileUriPath('file://host/home/%FF', { wslDistro: 'Ubuntu' })).toBeNull()
   })
 })

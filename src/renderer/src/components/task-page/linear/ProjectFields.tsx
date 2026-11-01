@@ -1,6 +1,7 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { translate } from '@/i18n/i18n'
+import { linearLabelCountLabel, linearMemberCountLabel } from './linear-attribute-count-labels'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
@@ -50,7 +51,7 @@ export function TaskPageLinearProjectFields({
         }}
         placeholder={translate('auto.components.TaskPage.ecbcc83140', 'Project name')}
         disabled={newLinearProjectSubmitting}
-        className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+        className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
       />
 
       <input
@@ -58,7 +59,7 @@ export function TaskPageLinearProjectFields({
         onChange={(event) => setNewLinearProjectDescription(event.target.value)}
         placeholder={translate('auto.components.TaskPage.579f98afcd', 'Add a short summary...')}
         disabled={newLinearProjectSubmitting}
-        className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+        className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0"
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -188,14 +189,7 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectMemberIds.length === 0
                   ? translate('auto.components.TaskPage.d6cda23ef1', 'Members')
-                  : translate(
-                      'auto.components.TaskPage.7719d8daa9',
-                      '{{value0}} member{{value1}}',
-                      {
-                        value0: newLinearProjectMemberIds.length,
-                        value1: newLinearProjectMemberIds.length > 1 ? 's' : ''
-                      }
-                    )}
+                  : linearMemberCountLabel(newLinearProjectMemberIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
@@ -260,10 +254,7 @@ export function TaskPageLinearProjectFields({
               <span>
                 {newLinearProjectLabelIds.length === 0
                   ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                  : translate('auto.components.TaskPage.eff9800d4b', '{{value0}} label{{value1}}', {
-                      value0: newLinearProjectLabelIds.length,
-                      value1: newLinearProjectLabelIds.length > 1 ? 's' : ''
-                    })}
+                  : linearLabelCountLabel(newLinearProjectLabelIds.length)}
               </span>
               <ChevronDown className="size-3 text-muted-foreground/70" />
             </button>
@@ -365,11 +356,13 @@ export function TaskPageLinearProjectFields({
           )}
           rows={8}
           disabled={newLinearProjectSubmitting}
-          className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
+          className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
         />
       </div>
       <p className="text-[10px] text-muted-foreground">
-        {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+        {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+          shortcut: submitShortcutLabel
+        })}
       </p>
     </div>
   )

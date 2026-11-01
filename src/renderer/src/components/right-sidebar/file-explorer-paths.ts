@@ -2,9 +2,9 @@ import { joinPath } from '@/lib/path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot
+  relativePathInsideRoot,
+  splitPathSegments
 } from '../../../../shared/cross-platform-path'
-import { splitPathSegments } from './path-tree'
 
 export function normalizeAbsolutePathForComparison(path: string): string {
   return normalizeRuntimePathForComparison(path)

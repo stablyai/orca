@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type {
@@ -37,6 +38,7 @@ export function useWorkspaceSections(args: {
   uniqueRepos: WorkspaceSectionRepo[]
   repoById: ReadonlyMap<string, SectionRepo>
 } {
+  const t = useMobileTranslation()
   const {
     displayWorktrees,
     sortMode,
@@ -54,12 +56,12 @@ export function useWorkspaceSections(args: {
 
   const uniqueRepos = useMemo(
     () => buildFilterRepos(filterCatalogRepos, displayWorktrees),
-    [filterCatalogRepos, displayWorktrees]
+    [filterCatalogRepos, displayWorktrees, t]
   )
 
   const repoById = useMemo(
     () => buildSectionRepoMap(projectCatalog.repos, displayWorktrees),
-    [projectCatalog.repos, displayWorktrees]
+    [projectCatalog.repos, displayWorktrees, t]
   )
 
   const plan = useMemo(
@@ -87,7 +89,8 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       projectCatalog,
       workspaceStatuses,
-      showPinnedInGroups
+      showPinnedInGroups,
+      t
     ]
   )
 

@@ -9,11 +9,13 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
 import {
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../shared/remote-viewer-clipboard-env'
 import {
   RUNTIME_SOURCE_ID_ENV,
   RUNTIME_SOURCE_INCARNATION_ENV,
@@ -98,6 +100,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_OPENCODE_AGENT/u',
     `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
     `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
+    `${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}/u`,
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',
@@ -125,6 +128,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // Forward only Orca's clipboard marker; a host SSH session must not leak into bare guest shells.
     ...(env.SSH_CONNECTION === CODEX_REMOTE_VIEWER_SSH_CONNECTION ? ['SSH_CONNECTION/u'] : []),
     `${PI_CLIPBOARD_OSC52_ENV}/u`,
+    `${REMOTE_VIEWER_CLIPBOARD_ENV}/u`,
     'ORCA_OMP_FRESH_CONFIG/p',
     ...worktreeSetupWslenvEntries(env)
   ]

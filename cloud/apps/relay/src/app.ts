@@ -17,6 +17,7 @@ import {
   type RelayRegion
 } from '@orca-cloud/relay-contract'
 import { Hono, type Context } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { SignJWT } from 'jose'
 import { z } from 'zod'
 import {
@@ -43,7 +44,7 @@ import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-
 import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
 import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
 import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
-import { registerCellReserveRoutes } from './cell-reserve-routes.js'
+import { CELL_RESERVE_ROUTE_PATHS, registerCellReserveRoutes } from './cell-reserve-routes.js'
 import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
 import type { CellSeatFeedPage } from './cell-seat-log.js'
 import { type CellFlags, supportedCellFlags } from './cell-flags.js'
@@ -339,6 +340,14 @@ export function createRelayApp(
     if (!rejectionLogWindow.admit(`${entry.route}:${entry.lane}:${entry.reason}`, entry)) return
     logAssignmentRejection(entry)
   }
+  // Content-Length checks alone miss chunked bodies, which req.json would buffer whole.
+  const limitBody = bodyLimit({
+    maxSize: RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes,
+    onError: (context) => context.json({ error: 'request_too_large' }, 413)
+  })
+  app.use('*', (context, next) =>
+    CELL_RESERVE_ROUTE_PATHS.has(context.req.path) ? next() : limitBody(context, next)
+  )
   app.use('/v1/admin/*', async (context, next) => {
     if (
       context.req.path === '/v1/admin/cell-heartbeat' ||

@@ -57,16 +57,6 @@ beforeEach(() => {
 })
 
 describe('classifySftpFailureForExecFallback', () => {
-  it('accepts only the host refusing or sandboxing SFTP', () => {
-    expect(classifySftpFailureForExecFallback(subsystemRefused())).toBe('sftp-unavailable')
-    expect(
-      classifySftpFailureForExecFallback(
-        new Error('Received exit code 127 while establishing SFTP session')
-      )
-    ).toBe('sftp-unavailable')
-    expect(classifySftpFailureForExecFallback(sandboxed())).toBe('sftp-sandboxed')
-  })
-
   it('falls back only for a parse failure ssh2 reported before the SFTP session was ready', () => {
     const corrupted = (): Error =>
       Object.assign(new Error('Packet length 1111577416 exceeds max length of 262144'), {

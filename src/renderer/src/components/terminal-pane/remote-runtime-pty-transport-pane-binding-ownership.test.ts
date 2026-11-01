@@ -84,6 +84,8 @@ describe('remote runtime pane binding ownership', () => {
         await import('@/store/slices/store-test-helpers')
       const { installPanePtyVisibilityBind } =
         await import('./pty-connection/pane-pty-visibility-bind')
+      const { bindReplacedProcessInputModes } =
+        await import('./pty-connection/replaced-process-input-modes')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const store = createTestStore()
       const old = 'remote:env-1@@saved-predecessor'
@@ -161,9 +163,11 @@ describe('remote runtime pane binding ownership', () => {
         registerSideEffectFactConsumerForPty: vi.fn(),
         syncHiddenRendererPtyDelivery: vi.fn(),
         syncPanePtyLayoutBinding: vi.fn(),
+        writeInputModeGround: vi.fn(),
         agentCompletionCoordinator: { startProcessTracking: vi.fn() }
       } as unknown as ConnectPanePtySession
       installPanePtyVisibilityBind(session)
+      bindReplacedProcessInputModes(session)
       const onError = vi.fn()
       try {
         transport.attach({ existingPtyId: old, callbacks: { onError } })

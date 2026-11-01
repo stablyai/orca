@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const browserMocks = vi.hoisted(() => ({
   appGetPathMock: vi.fn(() => '/downloads'),
-  appPrependOnceListenerMock: vi.fn(),
+  appPrependListenerMock: vi.fn(),
   shellOpenExternalMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
   menuBuildFromTemplateMock: vi.fn(),
@@ -18,7 +18,7 @@ const browserMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    prependOnceListener: browserMocks.appPrependOnceListenerMock,
+    prependListener: browserMocks.appPrependListenerMock,
     off: vi.fn(),
     getPath: browserMocks.appGetPathMock
   },
@@ -42,7 +42,7 @@ import {
 } from './browser-manager-test-harness'
 
 const {
-  appPrependOnceListenerMock,
+  appPrependListenerMock,
   guestOnMock,
   guestSetWindowOpenHandlerMock,
   webContentsFromIdMock,
@@ -76,12 +76,14 @@ function popupContents(opener: Pick<Electron.WebFrameMain, 'frameTreeNodeId'> | 
 
 const guestSession = { marker: 'synthetic-opener-session' }
 const rendererSendMock = vi.fn()
+const guestDownloadURLMock = vi.fn()
 
 function attachClickedGuest(pageUrl = 'https://app.example.com/'): WindowOpenHandler {
   const guest = {
     id: 2200,
     session: guestSession,
     getURL: vi.fn(() => pageUrl),
+    downloadURL: guestDownloadURLMock,
     isDestroyed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
@@ -123,7 +125,7 @@ describe('tab-shaped OAuth opens without an opener', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
-    appPrependOnceListenerMock.mockReset()
+    appPrependListenerMock.mockReset()
     rendererSendMock.mockReset()
     openPopupWithOriginBarMock.mockReturnValue({
       contentWebContents: popupContents(null),
@@ -198,7 +200,7 @@ describe('tab-shaped OAuth opens without an opener', () => {
     })
     expect(response).toMatchObject({ action: 'allow' })
     const onWindowCreated: (event: unknown, window: unknown) => void =
-      appPrependOnceListenerMock.mock.calls.at(-1)?.[1]
+      appPrependListenerMock.mock.calls.at(-1)?.[1]
     const nativeWindow = {
       webContents: popupContents(null),
       isDestroyed: vi.fn(() => false),
@@ -236,16 +238,17 @@ describe('tab-shaped OAuth opens without an opener', () => {
   })
 })
 
-describe('target=_blank links to local files', () => {
+describe('target=_blank links', () => {
   const link = { frameName: '', features: '', disposition: 'foreground-tab' }
 
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
     rendererSendMock.mockReset()
+    guestDownloadURLMock.mockReset()
   })
 
-  it('opens them in an Orca tab from a local page', () => {
+  it('opens local files in an Orca tab from a local page', () => {
     const handler = attachClickedGuest('file:///tmp/site/index.html')
 
     expect(handler({ url: 'file:///tmp/site/detail.html#pain', ...link })).toEqual({
@@ -267,5 +270,23 @@ describe('target=_blank links to local files', () => {
       origin: 'null',
       action: 'blocked'
     })
+  })
+
+  it('downloads the link on the page during an agent download instead of opening a tab', () => {
+    const handler = attachClickedGuest()
+    const claim = browserManager.claimNextDownload(2200, '/work/out/report.csv')
+
+    expect(handler({ url: 'https://app.example.com/report.csv', ...link })).toEqual({
+      action: 'deny'
+    })
+    expect(guestDownloadURLMock).toHaveBeenCalledWith('https://app.example.com/report.csv')
+    expect(routedTabs()).toEqual([])
+
+    claim.release()
+    handler({ url: 'https://app.example.com/next', ...link })
+    expect(routedTabs()).toEqual([
+      { browserPageId: 'browser-1', url: 'https://app.example.com/next' }
+    ])
+    expect(guestDownloadURLMock).toHaveBeenCalledOnce()
   })
 })

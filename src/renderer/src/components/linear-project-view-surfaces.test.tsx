@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { credentialDecryptionMessage } from '../../../shared/integration-credential-errors'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -51,7 +52,13 @@ const project: LinearProjectSummary = {
 }
 
 describe('Linear project view surfaces', () => {
-  it('renders collection errors and controlled pagination without changing ownership', () => {
+  it.each([
+    ['Reconnect Linear', 'Unable to load Linear issues. Try again.'],
+    [
+      credentialDecryptionMessage('Linear'),
+      'Unable to read saved Linear login. Reconnect it in Settings.'
+    ]
+  ])('renders safe collection failure %s and controlled pagination', (message, expected) => {
     const onLoadMore = vi.fn()
     const container = render(
       <LinearCollectionNotice
@@ -60,16 +67,16 @@ describe('Linear project view surfaces', () => {
             workspaceId: 'workspace-1',
             workspaceName: 'Acme',
             type: 'auth',
-            message: 'Reconnect Linear'
+            message
           }
         ]}
         hasMore
         count={50}
-        label="projects"
+        kind="projects"
         onLoadMore={onLoadMore}
       />
     )
-    expect(container.textContent).toContain('Acme: Reconnect Linear')
+    expect(container.textContent).toContain(expected)
     const button = container.querySelector('button')
     act(() => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(onLoadMore).toHaveBeenCalledOnce()
@@ -105,7 +112,7 @@ describe('Linear project view surfaces', () => {
     expect(onUseProjectIssues).toHaveBeenCalledWith(project)
     expect(onSelectProject).toHaveBeenCalledTimes(1)
 
-    const openButton = container.querySelectorAll('button[aria-label="Open Compiler issues"]')[1]
+    const openButton = container.querySelector('button[aria-label="Open Compiler in Linear"]')
     act(() => openButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(onOpenProject).toHaveBeenCalledWith(project)
     expect(onSelectProject).toHaveBeenCalledTimes(1)

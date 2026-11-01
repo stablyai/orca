@@ -183,8 +183,11 @@ export function NewWorkspaceComposerProjectSection({
         >
           <div className="min-w-0">
             <div className="truncate text-xs font-medium text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-              {selectedProjectName}
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.connectProject',
+                'Connect {{name}}',
+                { name: selectedProjectName }
+              )}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
           </div>

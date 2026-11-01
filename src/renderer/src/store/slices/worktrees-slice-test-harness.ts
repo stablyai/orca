@@ -1,3 +1,4 @@
+import { createAgentStatusSlice } from './agent-status/agent-status'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -135,6 +136,7 @@ export function createTestStore() {
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
+        ...createAgentStatusSlice(...a),
         trustedOrcaHooks: {},
         sshConnectionStates: new Map([
           [
@@ -150,8 +152,7 @@ export function createTestStore() {
           ]
         ]),
         repos: [],
-        endpointProjects: [],
-        endpointProjectHostSetups: [],
+        projectHostSetups: [],
         deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
         updateFolderWorkspace: vi.fn().mockResolvedValue(true),
         updateSettings: vi.fn().mockResolvedValue(undefined),

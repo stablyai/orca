@@ -4,7 +4,7 @@ import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../worktree/card-properties'
-import { isPluginPanelTabKey } from '../plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../plugins/manifest/plugin-manifest'
 import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
 import { ACTIVITY_GROUP_BY_VALUES, THREAD_READ_FILTER_VALUES } from '../agents-view-thread-filters'
@@ -172,6 +172,7 @@ export const UiUpdateFields = z
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
+    showAgentModels: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
@@ -245,6 +246,7 @@ export const UiUpdateFields = z
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     statusBarCompactChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
+    pluginsAlphaNoticeDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),

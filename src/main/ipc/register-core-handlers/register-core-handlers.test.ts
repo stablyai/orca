@@ -70,7 +70,8 @@ const {
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
-  registerEmulatorVideoStreamHandlersMock
+  registerEmulatorVideoStreamHandlersMock,
+  registerEmulatorScrcpyTouchHandlerMock
 } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
@@ -141,14 +142,16 @@ const {
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
-  registerEmulatorVideoStreamHandlersMock: vi.fn()
+  registerEmulatorVideoStreamHandlersMock: vi.fn(),
+  registerEmulatorScrcpyTouchHandlerMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock,
     once: vi.fn()
-  }
+  },
+  webContents: { fromId: () => undefined }
 }))
 
 vi.mock('../../shared/runtime-environment-store', () => ({
@@ -255,6 +258,8 @@ vi.mock('../workspace-ports', () => ({
   registerWorkspacePortHandlers: registerWorkspacePortHandlersMock
 }))
 
+vi.mock('../link-preview', () => ({ registerLinkPreviewHandlers: vi.fn() }))
+
 vi.mock('../localhost-worktree-labels', () => ({
   registerLocalhostWorktreeLabelHandlers: registerLocalhostWorktreeLabelHandlersMock
 }))
@@ -296,6 +301,10 @@ vi.mock('../emulator-video-stream', () => ({
   registerEmulatorVideoStreamHandlers: registerEmulatorVideoStreamHandlersMock
 }))
 
+vi.mock('../emulator-scrcpy-touch', () => ({
+  registerEmulatorScrcpyTouchHandler: registerEmulatorScrcpyTouchHandlerMock
+}))
+
 vi.mock('../filesystem/filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))
@@ -323,6 +332,14 @@ vi.mock('../wsl-host-handlers', () => ({
 
 vi.mock('../wsl-move-handlers', () => ({
   registerWslMoveHandlers: vi.fn()
+}))
+
+vi.mock('../wsl-move-orchestrator-wiring', () => ({
+  registerWslMoveOrchestrator: vi.fn()
+}))
+
+vi.mock('../wsl-drive-project-handlers', () => ({
+  registerWslDriveProjectHandlers: vi.fn()
 }))
 
 vi.mock('../ephemeral-vm', () => ({
@@ -427,8 +444,8 @@ vi.mock('../native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/structured-agent-session-host-refusal'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { registerCoreHandlers } from './register-core-handlers'
 
 let registeredAiVaultOptions: {
@@ -510,6 +527,7 @@ describe('registerCoreHandlers', () => {
     registerNativeChatHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
+    registerEmulatorScrcpyTouchHandlerMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', async () => {
@@ -627,7 +645,8 @@ describe('registerCoreHandlers', () => {
     })
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
-    expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEmulatorScrcpyTouchHandlerMock).toHaveBeenCalled()
+    expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)

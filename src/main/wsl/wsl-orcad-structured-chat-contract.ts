@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { assistantText } from './wsl-orcad-chat-assistant-text'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -17,14 +17,18 @@ import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-struc
 import { packagedClaudeChatScenario } from '../orcad/orcad-structured-chat-scenario'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
+import { envelope } from './wsl-orcad-chat-envelope'
+import { exerciseScriptedProviderChats } from './wsl-orcad-scripted-provider-chat'
 import {
   expectWindowsDecoyReachable,
   expectWindowsDecoyUnrun,
+  expectWindowsOnlyChatRefused,
   probeWindowsDecoy
 } from './wsl-orcad-chat-windows-decoy'
 import {
   installWslChatFixture,
   WslChatProviderReport,
+  waitForProviderReport,
   writeChatFixtureFile,
   type WslChatHost
 } from './wsl-orcad-chat-provider-fixture'
@@ -32,26 +36,6 @@ import {
 export type ChatLane = WslChatHost & {
   pairing(): PairedRuntimeConnection
   reconnect(whileDisconnected: () => Promise<void>): Promise<void>
-}
-
-function envelope(
-  sessionId: string,
-  method: string,
-  fields: Record<string, unknown>,
-  fence: number | null
-) {
-  return {
-    sessionId,
-    expectedRuntimeFence: fence,
-    clientOperationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-    payloadFingerprint: computeAgentSessionPayloadFingerprint({ sessionId, method, fields })
-  }
-}
-
-function assistantText(row: AgentJournalRenderItem): string {
-  return row.body?.kind === 'message' && row.body.role === 'assistant'
-    ? row.body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    : ''
 }
 
 export type ChatInstall = { home: string; root: string; script: string; cli: string }
@@ -197,19 +181,22 @@ async function exerciseChat(
         envelope: envelope(sessionId, 'agentSession.cancel', {}, fence)
       })
     ).toMatchObject({ ok: true, value: { cancelled: true } })
-    const report = WslChatProviderReport.parse(
-      JSON.parse(await lane.guest(`cat ${quotePosixShell(reportPath)}`))
+    const report = await waitForProviderReport(
+      lane,
+      reportPath,
+      WslChatProviderReport,
+      (written) => written.controlRequests.some((entry) => entry.request.subtype === 'interrupt'),
+      'the Stop interrupt'
     )
     expect(report.cwd).toBe(cwd)
     expect(report.execPath).toMatch(/^\//u)
     // Found on the guest's login PATH, not through a Command setting.
     expect(report.argv[0]).toBe(script)
-    expect(report.env.ORCA_LANE_CLAUDE_WRAPPER).toBe(cli)
+    expect(report.env.ORCA_LANE_CLI_WRAPPER).toBe(cli)
     expect(report.env).toMatchObject({
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1'
     })
-    expect(report.controlRequests.some((entry) => entry.request.subtype === 'interrupt')).toBe(true)
     expect(report.controlResponses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -274,11 +261,16 @@ async function exerciseChat(
       },
       { timeout: 30_000 }
     )
-    const resumed = WslChatProviderReport.parse(
-      JSON.parse(await lane.guest(`cat ${quotePosixShell(reportPath)}`))
+    const resumedArgv = new RegExp(`--resume(?:=| )${providerId}`)
+    const resumed = await waitForProviderReport(
+      lane,
+      reportPath,
+      WslChatProviderReport,
+      (written) => resumedArgv.test(written.argv.join(' ')) && written.userMessages.length > 0,
+      'the resumed turn'
     )
     expect(resumed.cwd).toBe(cwd)
-    expect(resumed.argv.join(' ')).toMatch(new RegExp(`--resume(?:=| )${providerId}`))
+    expect(resumed.argv.join(' ')).toMatch(resumedArgv)
     expect(resumed.userMessages).toHaveLength(1)
     return {
       sessionId,
@@ -299,9 +291,17 @@ export async function proveWslStructuredChat(lane: ChatLane) {
   const gitWorktree = `path:${home}/wsl-orcad-lane-repo`
   const git = await exerciseChat(lane, install, gitWorktree, `${home}/wsl-orcad-lane-repo`)
   const folder = await exerciseChat(lane, install, folderWorktree, folderPath)
+  const { codex, grok, opencode } = await exerciseScriptedProviderChats(
+    lane,
+    install,
+    { worktree: gitWorktree, cwd: `${home}/wsl-orcad-lane-repo` },
+    { worktree: folderWorktree, cwd: folderPath }
+  )
   const decoy = await expectWindowsDecoyReachable(lane)
   await expectWindowsDecoyUnrun(lane, home)
-  // Recorded, not asserted: whether a Windows-only install is picked up is the open question.
   const windowsOnly = await probeWindowsDecoy(lane, install, gitWorktree)
-  return { git, folder, decoy, windowsOnly }
+  expect(windowsOnly.errors, JSON.stringify(windowsOnly)).toEqual([])
+  const windowsOnlyChat = await expectWindowsOnlyChatRefused(lane, gitWorktree)
+  await expectWindowsDecoyUnrun(lane, home)
+  return { git, folder, codex, grok, opencode, decoy, windowsOnly, windowsOnlyChat }
 }

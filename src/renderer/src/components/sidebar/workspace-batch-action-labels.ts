@@ -1,31 +1,19 @@
 import { translate } from '@/i18n/i18n'
 
 export function deleteWorkspacesCountLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.sidebar.workspaceBatchActionLabels.deleteCount_one',
-        'Delete 1 Workspace',
-        { count }
-      )
-    : translate(
-        'auto.components.sidebar.workspaceBatchActionLabels.deleteCount_other',
-        'Delete {{count}} Workspaces',
-        { count }
-      )
+  return translate(
+    'auto.components.sidebar.workspaceBatchActionLabels.deleteCount',
+    'Delete {{count}} Workspaces',
+    { count, defaultValue_one: 'Delete {{count}} Workspace' }
+  )
 }
 
 function sleepWorkspacesCountLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.sidebar.workspaceBatchActionLabels.sleepCount_one',
-        'Sleep 1 Workspace',
-        { count }
-      )
-    : translate(
-        'auto.components.sidebar.workspaceBatchActionLabels.sleepCount_other',
-        'Sleep {{count}} Workspaces',
-        { count }
-      )
+  return translate(
+    'auto.components.sidebar.workspaceBatchActionLabels.sleepCount',
+    'Sleep {{count}} Workspaces',
+    { count, defaultValue_one: 'Sleep {{count}} Workspace' }
+  )
 }
 
 export function getWorktreeContextMenuBatchLabels(args: {

@@ -1,6 +1,8 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from './mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
-import { OrcaRuntimeWithCloseMobileSessionTab } from '../session-lifecycle/close/close-mobile-session-tab'
+import { OrcaRuntimeWithStructuredSessionTabProjection } from './restored-chat-tab-changes'
 import type {
   BrowserTabInfo,
   RuntimeMobileSessionAgentTab,
@@ -10,29 +12,40 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../shared/runtime-types'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
 import type { BrowserSessionTabSelectionOptions } from '../browser-tab-create-publication'
 import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from '../browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
-import { retireStructuredAgentSessionTabFrom } from '../agent-session/structured-agent-session-tab-retirement'
 import {
   chatTabId,
   withChatTabChanges,
-  type ChatTabChange,
-  type ChatTabPlacement
+  type ChatTabChange
 } from '../agent-session/agent-session-tab-layout'
 import { createChatTabLayoutQueue } from '../agent-session-tab-layout-queue'
-import type { WindowLayoutCommand } from '../runtime-layout-apply'
+import type { WindowLayoutCommand, LayoutCommandRunOptions } from '../runtime-layout-apply'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { savedSessionId } from '../saved-structured-agent-session-restoration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { structuredSessionTabRetired } from '../structured-worker-custody'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import {
+  captureStructuredSessionPresentation,
+  capturedStructuredSessionSavedTabChanges,
+  windowlessStructuredSessionTabSaveEligible
+} from './structured-session-tab-presentation'
+import type { StructuredSessionTabPublicationInput as ChatPublication } from './structured-session-tab-publication'
+import {
+  closeCapturedStructuredSession,
+  type StructuredSessionSurface
+} from '../agent-session/structured-agent-session-close'
 
-export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithCloseMobileSessionTab {
+export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
+  protected abstract isHeadlessOwnedMobileBrowserTab(
+    ...args: Parameters<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
+  ): ReturnType<BrowserOwnership['isHeadlessOwnedMobileBrowserTab']>
+  protected abstract getMobileSessionPublicationEpochAfterHeadlessBrowserClose(
+    ...args: Parameters<
+      BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserClose']
+    >
+  ): ReturnType<BrowserOwnership['getMobileSessionPublicationEpochAfterHeadlessBrowserClose']>
   protected abstract getListedBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo>
   protected abstract getMobileTerminalLeafPtyIds(
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalLeafPtyIds']>
@@ -42,7 +55,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['getMobileTerminalPaneKey']>
 
-  abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
+  abstract applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply>
 
   protected abstract persistHeadlessTabGroups(
     ...args: Parameters<HeadlessTabGroupsMethods['persistHeadlessTabGroups']>
@@ -50,40 +66,14 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
 
   protected async closeStructuredAgentSessionTab(
     tab: RuntimeMobileSessionAgentTab,
-    cause: StructuredAgentSessionCloseCause
-  ): Promise<void> {
+    cause: StructuredAgentSessionCloseCause,
+    surface: StructuredSessionSurface | null
+  ): Promise<boolean> {
     const host = getStructuredAgentSessionHost()
-    if (host) {
-      if (typeof host.setSessionTabVisibility === 'function') {
-        // Restore-index failures (newer records/disk errors) are reported without preventing tab close.
-        await host.setSessionTabVisibility(tab.sessionId, false).catch((error: unknown) => {
-          host.deps.logger.warn('recording a closed chat tab failed', {
-            scope: 'tab-visibility-close',
-            sessionId: tab.sessionId,
-            error
-          })
-        })
-      }
+    if (!host) {
+      return false
     }
-    // Retire durable visibility and the runtime snapshot before stopping the provider.
-    this.retireStructuredAgentSessionTabFromSnapshot(tab.sessionId)
-    if (typeof host?.close === 'function') {
-      await host.close(tab.sessionId, cause)
-    }
-  }
-
-  /** Prune runtime snapshots after proven close/release; durable visibility alone leaves dead chat rows. Renderer-free for startup reconciliation and orchestration cleanup. */
-  retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean {
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      const nextSnapshot = retireStructuredAgentSessionTabFrom(snapshot, sessionId)
-      if (!nextSnapshot) {
-        continue
-      }
-      this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-      this.emitMobileSessionTabsSnapshot(nextSnapshot)
-      return true
-    }
-    return false
+    return closeCapturedStructuredSession(host, tab.sessionId, cause, surface, this)
   }
 
   // Refused echo closes need a newer snapshot so clients restore the still-live mirror they already pruned.
@@ -155,18 +145,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     if (!this.offscreenBrowserBackend || !tab.browserPageId) {
       return false
     }
-    if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
-      return true
-    }
-    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
-    return (
-      snapshot.publicationEpoch.includes(':headless-merge:') &&
-      accepted !== undefined &&
-      !getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
-        accepted.rendererTabIdentityKeys.has(id)
-      ) &&
-      this.getListedBrowserTabsByPageId(snapshot.worktree).has(tab.browserPageId)
-    )
+    return this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)
   }
 
   // Public so runtime-side page release (lease fencing) can prune a tab whose page is gone.
@@ -191,7 +170,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      publicationEpoch: this.getMobileSessionPublicationEpochAfterHeadlessBrowserClose(snapshot),
       snapshotVersion: snapshot.snapshotVersion + 1,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
@@ -263,47 +242,66 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   /** Saves a chat's tab in a windowless host's layout, where it is listed from once read there. */
   protected saveWindowlessAgentSessionTab(
     worktreeId: string,
-    chat: { sessionId: string; agent: StructuredAgentId; placement?: ChatTabPlacement }
-  ): void {
-    this.changeWindowlessChatTabs(worktreeId, [
-      { open: { ...chat, tabId: chatTabId(chat.sessionId) } }
-    ])
-  }
-
-  /** Remove saved chat tabs only after the restore index hides them; reverted closes retain their tabs. */
-  protected removeWindowlessAgentSessionTab(sessionId: string): void {
-    const host = getStructuredAgentSessionHost()
-    if (!host || !structuredSessionTabRetired(host, sessionId)) {
-      return
+    chat: Pick<ChatPublication, 'sessionId' | 'agent' | 'placement' | 'tabId'> & {
+      eligible?: () => boolean
     }
-    // Resolve chat workspaces when the close queue runs, including opens queued before it.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      this.queueChatTabChanges(() =>
-        this.worktreesShowingSavedChat(sessionId).map((worktreeId) => ({
-          worktreeId,
-          change: { close: sessionId }
-        }))
-      )
-      return
-    }
-    for (const worktreeId of this.worktreesShowingSavedChat(sessionId)) {
-      this.changeWindowlessChatTabs(worktreeId, [{ close: sessionId }])
-    }
-  }
-
-  private worktreesShowingSavedChat(sessionId: string): string[] {
-    const saved = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {}
-    return Object.entries(saved).flatMap(([worktreeId, tabs]) =>
-      tabs.some((tab) => savedSessionId(tab) === sessionId) ? [worktreeId] : []
+  ): Promise<void> {
+    const tabId = chat.tabId ?? chatTabId(chat.sessionId)
+    return this.changeWindowlessChatTabs(
+      worktreeId,
+      [{ open: { ...chat, tabId } }],
+      () =>
+        chat.eligible?.() !== false &&
+        windowlessStructuredSessionTabSaveEligible(
+          chat.sessionId,
+          tabId,
+          this.getWorkspaceSessionForWorktree(worktreeId),
+          worktreeId
+        )
     )
   }
 
+  captureStructuredAgentSessionPresentation(sessionId: string) {
+    return captureStructuredSessionPresentation(sessionId, {
+      raw: this.currentLocalStructuredSessionPresentation(sessionId),
+      saved: this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs ?? {},
+      pending: this.queueChatTabChanges.pendingOpens()
+    })
+  }
+
+  removeCapturedStructuredSessionSavedTabs(
+    sessionId: string,
+    targets: readonly { worktreeId: string; tabId: string }[]
+  ): void {
+    const changesNow = capturedStructuredSessionSavedTabChanges(sessionId, targets, {
+      sessionOf: (id) => this.getWorkspaceSessionForWorktree(id),
+      currentRaw: () => this.currentLocalStructuredSessionPresentation(sessionId),
+      eligible: () => this.passiveStructuredSessionTabChangeEligible({ close: sessionId })
+    })
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      this.queueChatTabChanges(changesNow)
+    } else {
+      for (const queued of changesNow()) {
+        this.changeWindowlessChatTabs(queued.worktreeId, [queued.change], queued.eligible)
+      }
+    }
+  }
+
   // A window saves its own layout whole, chat tabs included; only a host with none saves them here.
-  protected changeWindowlessChatTabs(worktreeId: string, changes: readonly ChatTabChange[]): void {
+  protected changeWindowlessChatTabs(
+    worktreeId: string,
+    changes: readonly ChatTabChange[],
+    eligible?: (change: ChatTabChange) => boolean
+  ): Promise<void> {
     // Main-owned layouts place chat tabs with or without a window.
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      this.queueChatTabChanges(() => changes.map((change) => ({ worktreeId, change })))
-      return
+      return this.queueChatTabChanges(
+        changes.map((change) => ({
+          worktreeId,
+          change,
+          ...(eligible ? { eligible: () => eligible(change) } : {})
+        }))
+      )
     }
     const session = this.getAvailableAuthoritativeWindow()
       ? null
@@ -314,16 +312,17 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         this.getWorkspaceSessionHostIdForWorktree(worktreeId),
         session,
         worktreeId,
-        changes
+        eligible ? changes.filter(eligible) : changes
       )
     if (next) {
       this.setWorkspaceSessionForWorktree(worktreeId, next)
     }
+    return Promise.resolve()
   }
 
   private readonly queueChatTabChanges = createChatTabLayoutQueue({
     sessionOf: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
     hostIdOf: (worktreeId) => this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-    apply: (command) => this.applyLayoutCommand(command)
+    apply: (command, run) => this.applyLayoutCommand(command, run)
   })
 }

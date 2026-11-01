@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
@@ -15,6 +16,7 @@ type Props = {
 
 export function MobileCommitFailurePanel({ failure, action }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const [expanded, setExpanded] = useState(false)
   const Chevron = expanded ? ChevronDown : ChevronRight
   const detailsText = failure.error.trim()
@@ -23,9 +25,11 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
     <View style={styles.commitFailurePanel}>
       <View style={styles.commitFailureHeader}>
         <View style={styles.commitFailureTextBlock}>
-          <Text style={styles.commitFailureTitle}>Commit failed</Text>
+          <Text style={styles.commitFailureTitle}>
+            {t('sourceControl.commitFailurePanel.title', 'Commit failed')}
+          </Text>
           <Text style={styles.commitFailureSummary} numberOfLines={2}>
-            {action.summary ?? 'Commit failed.'}
+            {action.summary ?? t('sourceControl.commitFailurePanel.summary', 'Commit failed.')}
           </Text>
         </View>
         <Pressable
@@ -38,14 +42,19 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
           onPress={() => void action.launch()}
           disabled={action.launching || action.availability !== 'available'}
           accessibilityRole="button"
-          accessibilityLabel="Fix commit failure with AI"
+          accessibilityLabel={t(
+            'sourceControl.commitFailurePanel.fixWithAi',
+            'Fix commit failure with AI'
+          )}
         >
           {action.launching ? (
             <ActivityIndicator color={colors.bgBase} />
           ) : (
             <Sparkles size={14} color={colors.bgBase} strokeWidth={2.2} />
           )}
-          <Text style={styles.commitFailureFixButtonText}>Fix</Text>
+          <Text style={styles.commitFailureFixButtonText}>
+            {t('sourceControl.commitFailurePanel.fix', 'Fix')}
+          </Text>
         </Pressable>
       </View>
       {action.hasDetails && detailsText ? (
@@ -58,12 +67,22 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
             onPress={() => setExpanded((current) => !current)}
             accessibilityRole="button"
             accessibilityLabel={
-              expanded ? 'Hide commit failure details' : 'Show commit failure details'
+              expanded
+                ? t(
+                    'sourceControl.commitFailurePanel.hideFailureDetails',
+                    'Hide commit failure details'
+                  )
+                : t(
+                    'sourceControl.commitFailurePanel.showFailureDetails',
+                    'Show commit failure details'
+                  )
             }
           >
             <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
             <Text style={styles.commitFailureDetailsButtonText}>
-              {expanded ? 'Hide details' : 'Show details'}
+              {expanded
+                ? t('sourceControl.commitFailurePanel.hideDetails', 'Hide details')
+                : t('sourceControl.commitFailurePanel.showDetails', 'Show details')}
             </Text>
           </Pressable>
           {expanded ? <Text style={styles.commitFailureDetailsText}>{detailsText}</Text> : null}

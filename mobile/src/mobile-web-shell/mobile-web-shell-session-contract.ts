@@ -18,6 +18,8 @@ export type MobileWebShellGates = {
   // Unreadable includes absent/undecodable replies; their empty capabilities must not masquerade as bundle-unavailable.
   readonly statusReadable: boolean
   readonly reachability: MobileWebShellReachability
+  // Unreachable, but still redialing within the attempts the UI calls connecting; absent reads as false.
+  readonly retrying?: boolean
   readonly hostCapabilities: readonly string[]
   readonly hostStatus: MobileWebBundleHostStatus
 }
@@ -43,8 +45,10 @@ export type MobileWebShellBlockedVerdict =
   | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
   | PageRouteRefusalVerdict
 
+export type MobileWebShellReportedFailure = MobileWebShellFailureReason | 'host-profile-unreadable'
+
 export type MobileWebShellFailureCause =
-  | MobileWebShellFailureReason
+  | MobileWebShellReportedFailure
   | 'download-failed'
   | 'status-unreadable'
 
@@ -138,7 +142,7 @@ export type MobileWebShellSessionEvent =
       readonly flow: number
       readonly cause: MobileWebShellUpdateFailureCause
     }
-  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
+  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellReportedFailure }
   | { readonly type: 'retry-pressed' }
   | { readonly type: 'document-started' }
   | { readonly type: 'document-loaded' }

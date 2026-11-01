@@ -108,7 +108,7 @@ function commands() {
     showTerminal: async () => {
       throw new Error('No terminal in HTTP proof')
     },
-    resolveWorktreeSelector: async () => {
+    resolveWorkspaceSelector: async () => {
       throw new Error('No workspace resolution in HTTP proof')
     },
     listResolvedWorktrees: async () => [],

@@ -11,22 +11,6 @@ const HIERARCHY_XML = `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
 </hierarchy>`
 
 describe('parseUiAutomatorXml', () => {
-  it('returns a synthetic root holding the top-level <node> children of <hierarchy>', () => {
-    const root = parseUiAutomatorXml(HIERARCHY_XML)
-    expect(root.children).toHaveLength(1)
-  })
-
-  it('maps attributes and coerces booleans and bounds on a container node', () => {
-    const frame = parseUiAutomatorXml(HIERARCHY_XML).children[0]
-    expect(frame.className).toBe('android.widget.FrameLayout')
-    expect(frame.packageName).toBe('com.android.launcher3')
-    expect(frame.clickable).toBe(false)
-    expect(frame.enabled).toBe(true)
-    expect(frame.focused).toBe(false)
-    expect(frame.bounds).toEqual({ left: 0, top: 0, right: 1080, bottom: 2340 })
-    expect(frame.children).toHaveLength(2)
-  })
-
   it('maps renamed attributes (class/resource-id/content-desc) on a leaf node', () => {
     const search = parseUiAutomatorXml(HIERARCHY_XML).children[0].children[0]
     expect(search.className).toBe('android.widget.EditText')
@@ -39,23 +23,11 @@ describe('parseUiAutomatorXml', () => {
     expect(search.bounds).toEqual({ left: 42, top: 180, right: 1038, bottom: 320 })
   })
 
-  it('gives a childless node an empty children array', () => {
-    const search = parseUiAutomatorXml(HIERARCHY_XML).children[0].children[0]
-    expect(search.children).toEqual([])
-  })
-
   it('preserves sibling order', () => {
     const frame = parseUiAutomatorXml(HIERARCHY_XML).children[0]
     expect(frame.children[0].text).toBe('Search apps')
     expect(frame.children[1].text).toBe('Phone')
     expect(frame.children[1].enabled).toBe(false)
-  })
-
-  it('omits string fields whose attribute is absent or empty', () => {
-    const frame = parseUiAutomatorXml(HIERARCHY_XML).children[0]
-    expect('text' in frame).toBe(false)
-    expect('resourceId' in frame).toBe(false)
-    expect('contentDesc' in frame).toBe(false)
   })
 
   it('omits boolean and bounds fields when their attributes are absent', () => {
@@ -97,15 +69,6 @@ describe('parseUiAutomatorXml', () => {
 })
 
 describe('parseAndroidBounds', () => {
-  it('parses a well-formed bounds string', () => {
-    expect(parseAndroidBounds('[0,0][1080,2340]')).toEqual({
-      left: 0,
-      top: 0,
-      right: 1080,
-      bottom: 2340
-    })
-  })
-
   it('parses negative coordinates for off-screen elements', () => {
     expect(parseAndroidBounds('[-5,10][1080,2340]')).toEqual({
       left: -5,

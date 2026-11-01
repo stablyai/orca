@@ -1,3 +1,4 @@
+import type { BridgeTerminalToolbar } from './bridge/bridge-terminal-key'
 import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
@@ -7,11 +8,13 @@ import {
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
 import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge/bridge-liveness-probe-notify'
 import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from './bridge/bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from './bridge/bridge-terminal-key'
 import type { BridgeHostOptions } from './bridge-host-contract'
 import { pageMayWriteStorageKey } from './page-storage-keys'
 
@@ -24,6 +27,11 @@ export function createBridgeNotifyForwarder(args: {
   initSent: () => boolean
   route: () => BridgeInitRoute | null
   onBackClaim: (claimed: boolean) => void
+  onTerminalKeyRailClaim: (
+    claimed: boolean,
+    inputOwner?: string,
+    toolbar?: BridgeTerminalToolbar
+  ) => void
 }): (message: NotifyMessage) => void {
   const { options, granted } = args
   const { client, host } = options
@@ -45,6 +53,10 @@ export function createBridgeNotifyForwarder(args: {
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
       // Forward Back claims to the screen that owns the native key; this host serves only its document.
       args.onBackClaim(message.claimed)
+      return
+    }
+    if (message.name === BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY) {
+      args.onTerminalKeyRailClaim(message.claimed, message.inputOwner, message.toolbar)
       return
     }
     if (message.name === 'foreground') {
@@ -92,6 +104,10 @@ export function createBridgeNotifyForwarder(args: {
         return
       }
       options.onStorageWrite(message.key, message.value)
+      return
+    }
+    if (message.name === BRIDGE_LIVENESS_PROBE_NOTIFY) {
+      client.probeLivenessNow?.()
       return
     }
     if (message.name === BRIDGE_HAPTICS_NOTIFY) {

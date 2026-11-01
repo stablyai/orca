@@ -13,6 +13,7 @@ import {
   upsertEphemeralVmRuntime
 } from './ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
+import { ephemeralVmFailure } from './ephemeral-vm-failure-copy'
 
 function pairingCode(endpoint = 'wss://sandbox.example.com'): string {
   return encodePairingOffer({
@@ -123,6 +124,27 @@ describe('ephemeral VM runtime store', () => {
       updatedAt: 4_000
     })
     expect(recovered.cleanupLastError).toBeUndefined()
+  })
+
+  it('persists a cleanup failure code next to its English and clears it with plain text', () => {
+    const userDataPath = makeUserDataPath()
+    upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+
+    updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
+      cleanupLastError: ephemeralVmFailure('destroyExited', { exitCode: 2 })
+    })
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
+      cleanupLastError: 'Destroy exited with code 2.',
+      cleanupLastErrorCode: 'destroyExited',
+      cleanupLastErrorParams: { exitCode: 2 }
+    })
+
+    const uncoded = updateEphemeralVmRuntimeStatus(userDataPath, 'orca-instance-1', {
+      cleanupLastError: 'provider delete failed'
+    })
+    expect(uncoded.cleanupLastError).toBe('provider delete failed')
+    expect(uncoded.cleanupLastErrorCode).toBeUndefined()
+    expect(uncoded.cleanupLastErrorParams).toBeUndefined()
   })
 
   it('persists runtime connection metadata', () => {

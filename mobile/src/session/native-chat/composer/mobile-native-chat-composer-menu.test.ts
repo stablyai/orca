@@ -1,3 +1,4 @@
+import { prepareQueuedMessageEditText } from '../../../../../src/shared/queued-message-edit-command'
 import { describe, expect, it } from 'vitest'
 import { deriveComposerAutocomplete } from '../../../../../src/shared/native-chat-composer-autocomplete'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
@@ -13,6 +14,7 @@ import {
 
 function mobileComposerSlashItems(input: {
   agent: string
+  editing?: boolean
   structured: MobileComposerStructuredCatalog | undefined
   query: string
   discovery?: NativeChatSkillDiscoverySnapshot
@@ -27,7 +29,10 @@ function mobileComposerSlashItems(input: {
     catalog.profile,
     catalog.discovery,
     null,
-    catalog.sessionSkills
+    catalog.sessionSkills,
+    input.editing
+      ? (name) => prepareQueuedMessageEditText(input.agent, input.structured?.reported)(`/${name}`)
+      : undefined
   )
   return result.mode === 'slash' ? boundedMenuItems(result.items) : []
 }
@@ -175,4 +180,28 @@ describe('narrowedMenuItems', () => {
     const commandsOnly = items.filter((item) => item.kind === 'command')
     expect(narrowedMenuItems(commandsOnly, 'skill')).toEqual(commandsOnly)
   })
+})
+
+it('keeps edit-valid provider commands and namesake skills without changing the ordinary catalog', () => {
+  const input = {
+    agent: 'claude',
+    structured: {
+      reported: [
+        { name: 'model', kind: 'skill' as const, path: '/model/SKILL.md' },
+        { name: 'review', kind: 'command' as const },
+        { name: 'goal', kind: 'command' as const }
+      ],
+      conversationCommands: ['clear' as const, 'compact' as const]
+    },
+    query: ''
+  }
+  const ordinary = mobileComposerSlashItems(input)
+  const editing = mobileComposerSlashItems({ ...input, editing: true })
+  expect(editing.map(({ kind, name }) => `${kind}:${name}`)).toEqual([
+    'command:review',
+    'command:goal',
+    'skill:model'
+  ])
+  expect(ordinary.map(({ name }) => name)).toContain('compact')
+  expect(ordinary.map(({ kind, name }) => `${kind}:${name}`)).toContain('command:model')
 })

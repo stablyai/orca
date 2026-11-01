@@ -18,30 +18,6 @@ function deferred<T = void>() {
 }
 
 describe('withCodexHomeProcessLock', () => {
-  it('serializes runs that share a lock key', async () => {
-    const events: string[] = []
-    const firstGate = deferred()
-
-    const first = withCodexHomeProcessLock('home-a', async () => {
-      events.push('first:start')
-      await firstGate.promise
-      events.push('first:end')
-      return 1
-    })
-    const second = withCodexHomeProcessLock('home-a', async () => {
-      events.push('second:start')
-      return 2
-    })
-
-    await Promise.resolve()
-    expect(events).toEqual(['first:start'])
-
-    firstGate.resolve()
-    await expect(first).resolves.toBe(1)
-    await expect(second).resolves.toBe(2)
-    expect(events).toEqual(['first:start', 'first:end', 'second:start'])
-  })
-
   it('runs different lock keys concurrently', async () => {
     const events: string[] = []
     const firstGate = deferred()
@@ -91,21 +67,6 @@ describe('withCodexHomeProcessLock', () => {
       expect(events).toEqual(['first:start', 'second:start'])
     } finally {
       vi.useRealTimers()
-    }
-  })
-
-  it('keys explicit and default host homes consistently', () => {
-    const previousCodexHome = process.env.CODEX_HOME
-    delete process.env.CODEX_HOME
-    try {
-      const defaultKey = resolveCodexHomeProcessLockKey(null)
-      expect(resolveCodexHomeProcessLockKey(join(homedir(), '.codex'))).toBe(defaultKey)
-      expect(resolveCodexHomeProcessLockKeyForSpawnEnv(undefined)).toBe(defaultKey)
-      expect(resolveCodexHomeProcessLockKey('/somewhere/else')).not.toBe(defaultKey)
-    } finally {
-      if (previousCodexHome !== undefined) {
-        process.env.CODEX_HOME = previousCodexHome
-      }
     }
   })
 

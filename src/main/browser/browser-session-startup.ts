@@ -42,3 +42,8 @@ export function initializeBrowserSessionsForApp(
   browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   initialized = true
 }
+
+/** Whether a partition may be opened: before this, opening one would skip a pending cookie import. */
+export function browserSessionsInitialized(): boolean {
+  return initialized
+}

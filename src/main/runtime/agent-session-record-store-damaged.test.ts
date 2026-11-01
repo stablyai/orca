@@ -6,7 +6,7 @@ import { readStructuredAgentSessionHistoryResult } from '../native-chat/agent-se
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
-import type { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
+import type { nextAgentSessionFence } from '../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { listStructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import { findConflictingStructuredAdoption } from '../native-chat/structured-agent-session-history-adoption'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -17,16 +17,19 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecordStore } from './agent-session-record-store'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import type { AgentSessionReserveRequest } from './agent-session/ownership/agent-session-reservation-admission'
 import {
   editPersistedTestAgentSessionStore,
   openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+} from './agent-session/records/agent-session-record-store-test-harness'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000
 const NATIVE: AgentSessionExecutionLocation = {
@@ -124,6 +127,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

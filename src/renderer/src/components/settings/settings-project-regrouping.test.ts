@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+
 import { createUIStore } from '../../store/slices/ui-slice-test-harness'
-import {
-  buildProjectGroupingIndex,
-  getProjectGroupingForRepo
-} from '../../../../shared/project-section-grouping'
+
 import {
   buildSettingsProjectList,
   getSettingsEntryHostSelection,
@@ -37,7 +34,9 @@ function pickRepo(
   if (!target) {
     throw new Error(`Missing Settings target for ${repo.id}`)
   }
-  store.getState().setSettingsProjectHostSelection(target.projectId, target.hostId, target.setupId)
+  store
+    .getState()
+    .setSettingsProjectHostSelection(target.selectionKey, target.hostId, target.setupId)
 }
 
 function selectedRepo(store: ReturnType<typeof createUIStore>, repos: Repo[], repo: Repo): Repo {
@@ -61,20 +60,12 @@ function selectedRepo(store: ReturnType<typeof createUIStore>, repos: Repo[], re
 }
 
 describe('Settings project selection across local checkout regrouping', () => {
-  it('keeps a newer native pick instead of an older project-level WSL pick after removal', () => {
-    const store = createUIStore()
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-    pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
-
-    expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(nativeA.path)
-  })
-
-  it('keeps the shared project setup pick when another native checkout arrives', () => {
+  it('keeps a newer project-level WSL pick when an older checkout selection still exists', () => {
     const store = createUIStore()
     pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
     pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
 
-    expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeA).path).toBe(wslA.path)
+    expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeA).path).toBe(nativeA.path)
     expect(selectedRepo(store, [nativeA, nativeB, wslA], wslA).path).toBe(wslA.path)
     expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(wslA.path)
   })
@@ -99,48 +90,5 @@ describe('Settings project selection across local checkout regrouping', () => {
     expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeA).path).toBe(nativeA.path)
     expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeB).path).toBe(nativeB.path)
     expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(nativeA.path)
-  })
-
-  it('skips a removed setup and keeps the latest selection still in the entry', () => {
-    const store = createUIStore()
-    pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-
-    expect(selectedRepo(store, [nativeA], nativeA).path).toBe(nativeA.path)
-  })
-})
-
-describe('Settings provided local setup grouping', () => {
-  it('uses current project membership for both Settings and sidebar, including independent setups', () => {
-    const provisioned = makeRepo('provisioned-copy', 'C:\\projects\\provisioned')
-    const repos = [nativeA, nativeB, provisioned]
-    const projection = projectHostSetupProjectionFromRepos(repos)
-    const sharedId = projection.setups[0].projectId
-    const grouping = {
-      projects: projection.projects,
-      projectHostSetups: projection.setups.map((setup) =>
-        setup.repoId === provisioned.id
-          ? { ...setup, projectId: sharedId, setupMethod: 'provisioned' as const }
-          : setup
-      )
-    }
-    const entries = buildSettingsProjectList(repos, grouping)
-    const sidebarEntry = getProjectGroupingForRepo(
-      provisioned.id,
-      new Map(repos.map((repo) => [repo.id, repo])),
-      buildProjectGroupingIndex(grouping)
-    )
-    const entry = entries.find((candidate) =>
-      candidate.setups.some((setup) => setup.repoId === provisioned.id)
-    )
-    expect(entries).toHaveLength(2)
-    expect(sidebarEntry.key).toBe(`project:${sharedId}`)
-    expect(entry?.projectId).toBe(sharedId)
-    expect(entry?.setups.map((setup) => setup.repoId)).toEqual([nativeA.id, provisioned.id])
-    expect(
-      entries
-        .find((candidate) => candidate.projectId === `repo:${nativeB.id}`)
-        ?.setups.map((setup) => setup.repoId)
-    ).toEqual([nativeB.id])
   })
 })

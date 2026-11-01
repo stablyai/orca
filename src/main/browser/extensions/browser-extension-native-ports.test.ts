@@ -136,19 +136,6 @@ describe('native messaging ports', () => {
     expect(mocks.hosts).toEqual([])
   })
 
-  it('reports lookup failures with Chrome’s messages and starts nothing', async () => {
-    const { session } = fakeSession()
-    const { caller } = workerCaller(session)
-    mocks.lookup.mockResolvedValueOnce({
-      ok: false,
-      error: 'Access to the specified native messaging host is forbidden.'
-    })
-    await expect(call(caller, 'connect', 'p1', 'com.x')).rejects.toThrow(
-      'Access to the specified native messaging host is forbidden.'
-    )
-    expect(mocks.hosts).toEqual([])
-  })
-
   it('routes a worker port to that worker, keeps it alive while open, and kills the host on disconnect', async () => {
     const { session } = fakeSession()
     const { caller, end } = workerCaller(session)

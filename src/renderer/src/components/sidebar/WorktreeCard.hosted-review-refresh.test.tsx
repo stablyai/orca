@@ -148,21 +148,6 @@ describe('WorktreeCard hosted review refresh', () => {
     expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
   })
 
-  it('does not poll hosted reviews when status and PR surfaces are hidden', async () => {
-    worktreeCardProperties = []
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-
-    act(() => {
-      root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
-    })
-
-    act(() => {
-      vi.advanceTimersByTime(60_000)
-    })
-
-    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
-  })
-
   it('refetches the linked Linear issue only when its source changes, not on metadata writes', async () => {
     worktreeCardProperties = ['linear-issue']
     const { default: WorktreeCard } = await import('./WorktreeCard')

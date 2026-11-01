@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupGitLabel } from './workspace-cleanup-presentation'
+import { getWorkspaceCleanupGitState } from './workspace-cleanup-presentation'
 import {
   formatUnpushedCommitCount,
   formatWorkspaceCleanupContextDetail,
@@ -71,7 +71,7 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
 }
 
 export function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
-  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitLabel(candidate))
+  return formatWorkspaceCleanupGitStatusLabel(getWorkspaceCleanupGitState(candidate))
 }
 
 export function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {

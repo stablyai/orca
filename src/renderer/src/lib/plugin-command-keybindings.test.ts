@@ -11,7 +11,7 @@ import {
 } from './plugin-command-keybindings'
 
 const command: ActivePluginCommand = {
-  pluginKey: 'orca-samples.tasks',
+  pluginKey: 'samples.tasks',
   pluginName: 'Tasks',
   id: 'open',
   title: 'Open Tasks',
@@ -65,7 +65,7 @@ describe('plugin command keybindings', () => {
   })
 
   it('does not match worktree commands without an active worktree', () => {
-    const worktreeCommand = { ...command, context: 'worktree' as const }
+    const worktreeCommand = { ...command, context: 'workspace' as const }
     const input = {
       key: 't',
       code: 'KeyT',

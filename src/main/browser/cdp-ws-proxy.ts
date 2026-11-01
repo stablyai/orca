@@ -7,11 +7,13 @@ import { CdpTargetDiscovery } from './cdp-target-discovery'
 import { CdpDebuggerChannel } from './cdp-debugger-channel'
 import { CdpPageNavigationCommands } from './cdp-page-navigation-commands'
 import { CdpDomFocusReplay } from './cdp-dom-focus-replay'
+import { CdpElementCapture } from './cdp-element-capture'
 import { CdpPageCaptureCommands } from './cdp-page-capture-commands'
 import type { CapturePaintHold } from './cdp-screenshot'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
 import { CdpPageInputCommands, type ShowAgentPointer } from './cdp-page-input-commands'
 import { isTrustedCdpLoopbackRequest } from './cdp-loopback-request-guard'
+import { parseCdpClientCommand } from './cdp-client-command'
 import {
   assertRemoteCliPageAccess,
   runUnderRemoteCliPageAdmission
@@ -23,6 +25,7 @@ export class CdpWsProxy {
   private client: WebSocket | null = null
   private detachClientListeners: (() => void) | null = null
   private port = 0
+  private stopped = false
   private readonly responder = new CdpClientResponseWriter(() => this.client)
   private readonly sessions = new CdpSyntheticSessionRegistry()
   private readonly discovery: CdpTargetDiscovery
@@ -32,6 +35,7 @@ export class CdpWsProxy {
   private readonly pageCapture: CdpPageCaptureCommands
   private readonly input: CdpPageInputCommands
   private pointAtNextResolvedNode = false
+  readonly elementCapture = new CdpElementCapture()
 
   constructor(
     private readonly webContents: WebContents,
@@ -77,7 +81,14 @@ export class CdpWsProxy {
   }
 
   async start(): Promise<string> {
+    if (this.stopped) {
+      throw new Error('CDP proxy has been stopped')
+    }
     await this.debuggerChannel.attachDebugger()
+    if (this.stopped || this.webContents.isDestroyed()) {
+      await this.stop()
+      throw new Error('CDP proxy has been stopped')
+    }
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => {
         if (!isTrustedCdpLoopbackRequest(req, this.port)) {
@@ -107,6 +118,8 @@ export class CdpWsProxy {
       this.wss.on('connection', (ws) => {
         this.closeClient()
         this.client = ws
+        // Keep errors contained even after a replaced client's message listeners are detached.
+        ws.on('error', () => ws.terminate())
         const onMessage = (data: WebSocket.RawData): void => {
           runUnderRemoteCliPageAdmission(this.webContents.id, () =>
             this.handleClientMessage(ws, data.toString())
@@ -145,15 +158,19 @@ export class CdpWsProxy {
   }
 
   async stop(): Promise<void> {
-    this.debuggerChannel.detachDebugger()
-    this.closeClient()
-    if (this.wss) {
-      this.wss.close()
-      this.wss = null
-    }
-    if (this.httpServer) {
-      this.httpServer.close()
-      this.httpServer = null
+    this.stopped = true
+    try {
+      this.debuggerChannel.detachDebugger()
+    } finally {
+      this.closeClient()
+      if (this.wss) {
+        this.wss.close()
+        this.wss = null
+      }
+      if (this.httpServer) {
+        this.httpServer.close()
+        this.httpServer = null
+      }
     }
   }
 
@@ -181,15 +198,20 @@ export class CdpWsProxy {
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
-    let msg: { id?: number; method?: string; params?: Record<string, unknown>; sessionId?: string }
+    let parsed: unknown
     try {
-      msg = JSON.parse(raw)
+      parsed = JSON.parse(raw)
     } catch {
       return
     }
-    if (msg.id == null || !msg.method) {
+    const envelope = parseCdpClientCommand(parsed)
+    if (!envelope.command) {
+      if (envelope.invalidId !== null) {
+        this.responder.sendError(envelope.invalidId, 'Invalid CDP request', client)
+      }
       return
     }
+    const msg = envelope.command
     const clientId = msg.id
     this.responder.recordRequestSessionId(client, clientId, msg)
     // Refuse every step of a revoked helper, including reads.
@@ -228,6 +250,7 @@ export class CdpWsProxy {
         )
       return
     }
+    this.elementCapture.observe(msg.method, msg.params, effectiveSessionId)
     if (msg.method === 'DOM.focus') {
       this.domFocusReplay.forwardDomFocus(client, clientId, msg.params ?? {}, effectiveSessionId)
       return
@@ -275,6 +298,12 @@ export class CdpWsProxy {
     // Reload natively because CDP reload can destroy guest targets during process swaps.
     if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
+      return
+    }
+    // The guest debugger outlives this client, so nothing would resume workers or frames left waiting.
+    if (msg.method === 'Target.setAutoAttach') {
+      const params = { ...msg.params, waitForDebuggerOnStart: false }
+      this.debuggerChannel.forwardCommand(client, clientId, msg.method, params, msg.sessionId)
       return
     }
     this.debuggerChannel.forwardCommand(

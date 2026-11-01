@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { OrchestrationFleetWorker } from '../../../shared/orchestration-fleet-projection'
-import { subagentGroupFallbackText } from '../../../shared/native-chat-subagent-summary'
+import { subagentGroupFallbackText } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
 import { formatWorkerRead, formatWorkerRelease, formatWorkerStart } from './worker-output'
 
@@ -98,6 +98,21 @@ describe('worker-start plain formatting', () => {
         residualResources: []
       })
     ).toBe('Worker ctx_ready [ready] for task_1')
+  })
+
+  it('names the workspace a start created', () => {
+    expect(
+      formatWorkerStart({
+        taskId: 'task_1',
+        dispatchId: 'ctx_ready',
+        state: 'ready',
+        effects: [
+          { kind: 'worktree', action: 'created_child', id: 'repo::/w/otter', name: 'otter' },
+          { kind: 'terminal', id: 'term_worker' }
+        ],
+        residualResources: []
+      })
+    ).toBe('Worker ctx_ready [ready] for task_1\nCreated workspace: otter')
   })
 })
 

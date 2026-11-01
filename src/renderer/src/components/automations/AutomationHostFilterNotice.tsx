@@ -21,9 +21,13 @@ export function automationHostLoadSummaryMessage(
     return null
   }
   return translate(
-    'auto.components.automations.hostSummary.partialFailure',
-    '{{failed}} of {{total}} hosts could not be loaded',
-    { failed: failedHostCount, total: totalHostCount }
+    'auto.components.automations.hostSummary.partialFailureOfHosts',
+    '{{failed}} of {{count}} hosts could not be loaded',
+    {
+      failed: failedHostCount,
+      count: totalHostCount,
+      defaultValue_one: '{{failed}} of {{count}} host could not be loaded'
+    }
   )
 }
 

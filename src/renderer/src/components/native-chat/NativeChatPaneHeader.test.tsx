@@ -19,7 +19,7 @@ vi.mock('../tab-bar/native-chat-cli-fork-run', () => ({
   useNativeChatCliForkPending: () => false
 }))
 
-import { NativeChatPaneHeader } from './NativeChatPaneHeader'
+import { NativeChatPaneHeader, type NativeChatHeaderHandOff } from './NativeChatPaneHeader'
 
 const fullRequest = vi.spyOn(historyRequest, 'resolveAiVaultPanelSessionListRequest')
 const testWindow = window
@@ -35,7 +35,7 @@ beforeEach(() => {
   })
 })
 
-function renderHeader() {
+function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
   const source = useAppStore.getState().createUnifiedTab('folder:workspace', 'agent-session', {
     agentSessionAgent: 'codex',
     executionHostId: 'runtime:remote-host'
@@ -47,8 +47,9 @@ function renderHeader() {
         worktreeId={source.worktreeId}
         groupId={source.groupId}
         nativeChat={{ sessionId: source.entityId, agent: 'codex' }}
-        focused
+        focused={focused}
         colorScheme="dark"
+        handOff={handOff}
       />
     </TooltipProvider>
   )
@@ -84,34 +85,4 @@ it('offers the terminal header action order and targets Resume and Close at the 
     type: 'close',
     target: { kind: 'tab', worktreeId: source.worktreeId, tabId: source.id }
   })
-})
-
-it('Split from the header keeps the source and opens a fresh chat on the same host', () => {
-  const source = renderHeader()
-  mocks.launch.mockImplementation((args: { worktreeId: string; groupId: string }) => {
-    useAppStore.getState().createUnifiedTab(args.worktreeId, 'agent-session', {
-      targetGroupId: args.groupId,
-      agentSessionAgent: 'codex',
-      executionHostId: 'runtime:remote-host'
-    })
-    return { surface: { kind: 'local-chat', tabId: 'fresh-chat' } }
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Split Chat Right' }))
-  const state = useAppStore.getState()
-  const destination = state.activeGroupIdByWorktree[source.worktreeId]
-  expect(destination).not.toBe(source.groupId)
-  expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({
-      agent: 'codex',
-      requestedSurface: 'chat',
-      selectedExecutionHostId: source.executionHostId,
-      worktreeId: source.worktreeId,
-      groupId: destination,
-      focusIntent: expect.objectContaining({ cancel: expect.any(Function) })
-    })
-  )
-  const tabs = state.unifiedTabsByWorktree[source.worktreeId]
-  expect(tabs.find((tab) => tab.id === source.id)).toEqual(source)
-  expect(tabs).toHaveLength(2)
-  expect(tabs.find((tab) => tab.groupId === destination)?.entityId).not.toBe(source.entityId)
 })

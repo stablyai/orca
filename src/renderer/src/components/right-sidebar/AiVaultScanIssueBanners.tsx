@@ -7,8 +7,9 @@ import {
   skippedAiVaultTranscriptReasons
 } from './ai-vault-scan-issue-state'
 import { translate } from '@/i18n/i18n'
+import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
-// Scanner-authored messages contain host/path/cap details and have no catalog key.
+// Coded scanner copy is translated; other scanner-authored messages carry host/path details verbatim.
 export function AiVaultScanIssueBanners({
   scanResult
 }: {
@@ -25,7 +26,7 @@ export function AiVaultScanIssueBanners({
     <>
       {blocking ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
-          {blocking.message}
+          {aiVaultScanIssueDisplayText(blocking)}
         </div>
       ) : null}
       {hasNoticeRows ? (
@@ -42,15 +43,15 @@ export function AiVaultScanIssueBanners({
                 issue.kind === 'host' ? 'text-destructive' : 'text-muted-foreground'
               }`}
             >
-              {issue.message}
+              {aiVaultScanIssueDisplayText(issue)}
             </div>
           ))}
           {skippedTranscriptCount > 0 ? (
             <div className="border-b border-sidebar-border px-3 py-1.5 text-[11px] text-muted-foreground">
               {translate(
-                'auto.components.right.sidebar.AiVaultPanel.transcriptsSkipped',
-                '{{count}} transcript skipped',
-                { count: skippedTranscriptCount }
+                'auto.components.right.sidebar.AiVaultPanel.transcriptsSkippedCount',
+                '{{count}} transcripts skipped',
+                { count: skippedTranscriptCount, defaultValue_one: '{{count}} transcript skipped' }
               )}
             </div>
           ) : null}

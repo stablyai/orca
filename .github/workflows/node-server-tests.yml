@@ -187,6 +187,7 @@ jobs:
         if: runner.os == 'Linux'
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
       - name: Build the last Bun orcad for the cross-runtime tests
         id: bun-orcad
         background: true
@@ -408,7 +409,10 @@ jobs:
           persist-credentials: false
       - name: Trust the checked-out workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # A direct install (6-9s) beats restoring the 417 MB store plus a linking install.
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-pnpm-store: 'false'
       - name: Build and smoke this runner's node-pty prebuild slot under the pinned Node
         run: |
           pnpm build:orcad-prebuilds

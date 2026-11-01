@@ -151,7 +151,9 @@ describe('registerWorktreeHandlers', () => {
     const resolveOptions = vi
       .spyOn(projectGitOptions, 'getLocalProjectWorktreeGitOptions')
       .mockReturnValue({ wslDistro: 'Ubuntu' })
-    const write = vi.spyOn(issueCommandFile, 'writeIssueCommand').mockResolvedValue(undefined)
+    const write = vi
+      .spyOn(issueCommandFile, 'writeIssueCommandUnlessWslStopped')
+      .mockResolvedValue(undefined)
     try {
       await handlers['hooks:writeIssueCommand'](null, { repoId: 'repo-1', content: 'command' })
       const options = write.mock.calls[0]?.[2]
@@ -161,7 +163,8 @@ describe('registerWorktreeHandlers', () => {
       expect(write).toHaveBeenCalledExactlyOnceWith(
         '/workspace/repo',
         'command',
-        expect.any(Function)
+        expect.any(Function),
+        { wakeWslDistro: undefined }
       )
     } finally {
       resolveOptions.mockRestore()

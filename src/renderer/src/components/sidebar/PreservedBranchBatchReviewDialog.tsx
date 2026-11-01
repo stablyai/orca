@@ -178,7 +178,7 @@ export function PreservedBranchBatchReviewDialog({
             {translate(
               'auto.components.sidebar.PreservedBranchBatchReviewDialog.a0f9863597',
               'Force Delete {{count}} Branches',
-              { count: selectedBranches.length }
+              { count: selectedBranches.length, defaultValue_one: 'Force Delete {{count}} Branch' }
             )}
           </Button>
         </DialogFooter>

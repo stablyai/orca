@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -40,6 +41,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
 }
 
 export function useMobilePrActions(input: PrActionsInput) {
+  useMobileTranslation()
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 

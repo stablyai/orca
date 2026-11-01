@@ -1,4 +1,3 @@
-import { selectCanonicalProjectHostSetups } from '../../src/renderer/src/store/project-host-setup-selector'
 import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -123,7 +122,7 @@ for (const delayCreateResponse of [false, true]) {
     if (!createdGroup) {
       throw new Error('Group creation failed')
     }
-    const catalog = await orcaPage.evaluate(
+    await orcaPage.evaluate(
       async ({ repoIds, groupId }) => {
         const store = window.__store!
         for (const repoId of repoIds.slice(0, 2)) {
@@ -133,22 +132,14 @@ for (const delayCreateResponse of [false, true]) {
           }
           await store.getState().moveProjectToGroup(repo, groupId)
         }
-        const state = store.getState()
-        return {
-          repos: state.repos,
-          endpointProjects: state.endpointProjects,
-          endpointProjectHostSetups: state.endpointProjectHostSetups
-        }
+        const collapsedGroups = store
+          .getState()
+          .projectHostSetups.map((setup) => `project:${setup.projectId}`)
+        await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
+        store.setState({ collapsedGroups: new Set(collapsedGroups) })
       },
       { repoIds, groupId: createdGroup.id }
     )
-    const collapsedGroups = selectCanonicalProjectHostSetups(catalog).map(
-      (setup) => `project:${setup.projectId}`
-    )
-    await orcaPage.evaluate(async (collapsedGroups) => {
-      await window.api.ui.set({ groupBy: 'repo', collapsedGroups })
-      window.__store!.setState({ collapsedGroups: new Set(collapsedGroups) })
-    }, collapsedGroups)
 
     const scroller = orcaPage.locator('[data-worktree-sidebar]')
     const group = scroller.locator(`[data-project-group-header-id="${createdGroup.id}"]`)

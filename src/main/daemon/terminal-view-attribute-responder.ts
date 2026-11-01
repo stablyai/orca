@@ -3,6 +3,7 @@ import type { Terminal } from '@xterm/headless'
 import {
   formatXColorRgbSpec,
   parseXColorSpec,
+  terminalColorSchemeReport,
   TERMINAL_VIEW_ANSI_COLOR_COUNT,
   type TerminalViewAttributes,
   type TerminalViewRgb
@@ -36,15 +37,6 @@ const SPECIAL_COLOR_IDENTS: Record<SpecialColorSlot, string> = {
 
 function isValidColorIndex(value: number): boolean {
   return value >= 0 && value < TERMINAL_VIEW_ANSI_COLOR_COUNT
-}
-
-// Match xterm’s relativeLuminance2 calculation for private DSR ?996n replies.
-function relativeLuminance([r, g, b]: TerminalViewRgb): number {
-  const linear = (channel: number): number => {
-    const c = channel / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
-  return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
 }
 
 export function installTerminalViewAttributeResponder(
@@ -146,10 +138,12 @@ export function installTerminalViewAttributeResponder(
     const base = deps.getBaseAttributes()
     if (base) {
       // xterm derives ?996n from current OSC-mutated color luminance, not the app’s colorSchemeMode.
-      const background = specialOverrides.get('background') ?? base.background
-      const foreground = specialOverrides.get('foreground') ?? base.foreground
-      const dark = relativeLuminance(background) < relativeLuminance(foreground)
-      deps.emitReply(`\x1b[?997;${dark ? 1 : 2}n`)
+      deps.emitReply(
+        terminalColorSchemeReport(
+          specialOverrides.get('foreground') ?? base.foreground,
+          specialOverrides.get('background') ?? base.background
+        )
+      )
     }
     return true
   })

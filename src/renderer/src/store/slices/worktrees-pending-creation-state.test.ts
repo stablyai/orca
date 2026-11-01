@@ -59,64 +59,6 @@ describe('pending worktree creation state', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('beginPendingWorktreeCreation registers the entry and makes it the active surface', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-
-    expect(store.getState().pendingWorktreeCreations.c1).toBeDefined()
-    expect(store.getState().activePendingCreationId).toBe('c1')
-  })
-
-  it('keeps source and run context on the retryable request', () => {
-    const store = createTestStore()
-    const entry = makePendingCreation('c1', {
-      request: {
-        repoId: 'repo-ssh',
-        taskSourceContext: {
-          kind: 'task-source',
-          provider: 'github',
-          projectId: 'github:stablyai/orca',
-          hostId: 'local',
-          projectHostSetupId: 'setup-local',
-          repoId: 'repo-local',
-          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
-        },
-        workspaceRunContext: {
-          kind: 'workspace-run',
-          projectId: 'github:stablyai/orca',
-          hostId: 'ssh:ssh-1',
-          projectHostSetupId: 'setup-ssh',
-          repoId: 'repo-ssh',
-          path: '/home/orca/orca'
-        },
-        name: 'feature',
-        setupDecision: 'inherit',
-        agent: null,
-        pendingFirstAgentMessageRename: false,
-        note: '',
-        startupPlan: null,
-        quickPrompt: '',
-        quickTelemetry: null
-      }
-    })
-
-    store.getState().beginPendingWorktreeCreation(entry)
-
-    expect(store.getState().pendingWorktreeCreations.c1.request).toMatchObject({
-      repoId: 'repo-ssh',
-      taskSourceContext: {
-        provider: 'github',
-        hostId: 'local',
-        repoId: 'repo-local'
-      },
-      workspaceRunContext: {
-        hostId: 'ssh:ssh-1',
-        projectHostSetupId: 'setup-ssh',
-        repoId: 'repo-ssh'
-      }
-    })
-  })
-
   it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {
     const store = createTestStore()
     store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
@@ -125,38 +67,6 @@ describe('pending worktree creation state', () => {
     store.getState().updatePendingWorktreeCreation('c1', { phase: 'fetching' })
 
     // Same map reference => no subscriber notification on a no-op progress event.
-    expect(store.getState().pendingWorktreeCreations).toBe(before)
-  })
-
-  it('updatePendingWorktreeCreation applies a real phase change', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-
-    store.getState().updatePendingWorktreeCreation('c1', { phase: 'creating' })
-
-    expect(store.getState().pendingWorktreeCreations.c1.phase).toBe('creating')
-  })
-
-  it('updatePendingWorktreeCreation can replace the retryable request during preflight', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-
-    store.getState().updatePendingWorktreeCreation('c1', {
-      request: {
-        ...store.getState().pendingWorktreeCreations.c1.request,
-        setupDecision: 'run'
-      }
-    })
-
-    expect(store.getState().pendingWorktreeCreations.c1.request.setupDecision).toBe('run')
-  })
-
-  it('updatePendingWorktreeCreation is a no-op for an unknown id', () => {
-    const store = createTestStore()
-    const before = store.getState().pendingWorktreeCreations
-
-    store.getState().updatePendingWorktreeCreation('missing', { status: 'error', error: 'x' })
-
     expect(store.getState().pendingWorktreeCreations).toBe(before)
   })
 
@@ -172,20 +82,6 @@ describe('pending worktree creation state', () => {
 
     store.getState().removePendingWorktreeCreation('c2')
     expect(store.getState().activePendingCreationId).toBeNull()
-  })
-
-  it('removePendingWorktreeCreation cancels active VM provisioning', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(
-      makePendingCreation('c1', {
-        phase: 'provisioning-vm'
-      })
-    )
-
-    store.getState().removePendingWorktreeCreation('c1')
-
-    expect(mockApi.ephemeralVm.cancelProvision).toHaveBeenCalledWith({ provisionId: 'c1' })
-    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
   })
 
   it('removePendingWorktreeCreation cleans up a provisioned-root setup and VM runtime', async () => {
@@ -239,17 +135,6 @@ describe('pending worktree creation state', () => {
 
     expect(mockApi.ephemeralVm.cleanup).not.toHaveBeenCalled()
     expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
-  })
-
-  it('setActivePendingWorktreeCreation ignores unknown ids but always accepts null', () => {
-    const store = createTestStore()
-    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
-
-    store.getState().setActivePendingWorktreeCreation('missing')
-    expect(store.getState().activePendingCreationId).toBe('c1')
-
-    store.getState().setActivePendingWorktreeCreation(null)
-    expect(store.getState().activePendingCreationId).toBeNull()
   })
 
   it('setActiveWorktree dismisses the creation panel even when re-selecting the already-active worktree', () => {

@@ -13,6 +13,7 @@ import { remarkChatMath } from './chat-markdown-math'
 import CommentMarkdown from './CommentMarkdown'
 import { splitMarkdownTopLevelBlocks, type MarkdownBlockSplit } from './markdown-top-level-blocks'
 import { NativeChatMarkdown } from '../native-chat/NativeChatMarkdown'
+import type * as KatexModule from 'katex'
 
 const parsing = vi.hoisted(() => ({ characters: 0, calls: 0, operations: 0 }))
 vi.mock('remark-parse', async (original) => {
@@ -61,6 +62,19 @@ vi.mock('remark-parse', async (original) => {
   }
 })
 
+const typesets = vi.hoisted(() => ({ count: 0 }))
+vi.mock('katex', async (original) => {
+  const { default: katex } = await original<typeof KatexModule>()
+  return {
+    default: {
+      ...katex,
+      renderToString: (...args: Parameters<typeof katex.renderToString>) => {
+        typesets.count++
+        return katex.renderToString(...args)
+      }
+    }
+  }
+})
 vi.mock('./CommentMermaidBlock', () => ({ default: () => null }))
 afterEach(cleanup)
 
@@ -306,6 +320,81 @@ b\]`,
     expect(invalid.querySelector('.katex-error')).toBeNull()
     expect(documentOf('```math\nx^2\n```').querySelector('.katex')).not.toBeNull()
   })
+
+  it('typesets an unchanged formula once while its block streams and when it remounts', () => {
+    const formulas = String.raw`Cache $q_{c}^{2}$, $\notACachedCommand{x}$ and $\frac{c_1}{c_2}$ `
+    const before = typesets.count
+    const finished = documentOf(`${formulas}tail`, { fadeWords: true }).innerHTML
+    const streamed = render(<CommentMarkdown content={formulas} math growing variant="document" />)
+    for (let words = 1; words <= 20; words++) {
+      streamed.rerender(
+        <CommentMarkdown
+          content={`${formulas}${'more '.repeat(words)}`}
+          math
+          growing
+          variant="document"
+        />
+      )
+    }
+    streamed.unmount()
+    expect(typesets.count - before).toBe(4)
+    const remounted = documentOf(`${formulas}tail`, { fadeWords: true })
+    expect(remounted.innerHTML).toBe(finished)
+    expect(annotations(remounted)).toEqual(['q_{c}^{2}', String.raw`\frac{c_1}{c_2}`])
+    expect(remounted.textContent).toContain(String.raw`$\notACachedCommand{x}$`)
+    expect(typesets.count - before).toBe(4)
+  })
+
+  it('uses current full-pre input across sibling edits and same-text structural edits', () => {
+    const pre = (body: string) => `<pre>${body}</pre>`
+    const code = '<code class="language-math">identityX</code>'
+    const view = render(<CommentMarkdown content={pre(`${code} + y`)} math unknownHtmlAsText />)
+    expect(annotations(view.container)).toEqual(['identityX + y'])
+    view.rerender(<CommentMarkdown content={pre(`${code} + z`)} math unknownHtmlAsText />)
+    expect(annotations(view.container)).toEqual(['identityX + z'])
+    expect(annotations(documentOf(pre(`${code} + q`)))).toEqual(['identityX + q'])
+    view.rerender(
+      <CommentMarkdown
+        content={pre('<span class="math-inline">x</span><code class="language-math">y</code>')}
+        math
+      />
+    )
+    expect(annotations(view.container)).toEqual(['xxxy'])
+    view.rerender(<CommentMarkdown content={pre('x<code class="language-math">y</code>')} math />)
+    expect(annotations(view.container)).toEqual(['xy'])
+    const invalid = pre(
+      '<span class="math-inline">\\invalidNested{x}</span><code class="language-math">nestedY</code>'
+    )
+    view.rerender(<CommentMarkdown content={invalid} math />)
+    for (const node of [view.container, documentOf(invalid)]) {
+      expect(annotations(node)).toEqual([])
+      expect(node.textContent).toBe('nestedY')
+    }
+  })
+
+  it.each([10, 100])(
+    'reuses actual kernel work on canonical and nested production triggers at N=%i',
+    (count) => {
+      for (const nested of [false, true]) {
+        const value = `repeated_{${count}${nested ? 'n' : 'c'}}`
+        const formula = nested ? `<span class="math-inline"><b>${value}</b></span>` : `$${value}$`
+        const before = typesets.count
+        const view = render(<CommentMarkdown content={formula} math growing />)
+        for (let index = 1; index <= count; index++) {
+          view.rerender(
+            <CommentMarkdown content={`${'prefix '.repeat(index)}${formula} tail`} math growing />
+          )
+          expect(annotations(view.container)).toEqual([value])
+        }
+        view.unmount()
+        expect(annotations(documentOf(formula, { fadeWords: true }))).toEqual([value])
+        expect(typesets.count - before).toBe(1)
+        process.stdout.write(
+          `Kernel calls N=${count}, nested=${nested}: ${typesets.count - before}\n`
+        )
+      }
+    }
+  )
 
   it.each(['> ', '- ', '> - '])('ends unfinished math before leaving %s containers', (prefix) => {
     for (const opener of ['$$', String.raw`\[`]) {

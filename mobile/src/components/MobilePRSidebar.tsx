@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { RotateCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ScrollView, Text, View } from 'react-native'
+import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
@@ -179,30 +179,19 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  const t = useMobileTranslation()
   useMobileColorScheme()
   if (branch === 'loading') {
     return (
-      <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
-      </View>
+      <MobileStateView loading title={t('components.prSidebar.loading', 'Loading pull request…')} />
     )
   }
   if (branch === 'error') {
-    const message = state.kind === 'error' ? state.message : 'Something went wrong.'
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>{message}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
-        >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
+      <MobileLoadErrorState
+        error={state.kind === 'error' ? state.message : null}
+        onRetry={onRetry}
+      />
     )
   }
   if (branch === 'blocked' || actions.blocked) {
@@ -211,7 +200,10 @@ function PrSidebarContent({
       actions.blocked ??
       (state.kind === 'blocked'
         ? state.message
-        : 'Not permitted — your GitHub account is not connected.')
+        : t(
+            'components.prSidebar.notPermitted',
+            'Not permitted — your GitHub account is not connected.'
+          ))
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>

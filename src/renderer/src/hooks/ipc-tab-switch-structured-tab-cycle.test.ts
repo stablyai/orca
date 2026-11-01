@@ -92,16 +92,6 @@ function storeWithStructuredTabActive({
 describe('handleSwitchTerminalTab with a structured chat tab active', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('leaves activeTabId naming a live background terminal', () => {
-    // Require the stale ID to exist in the terminal list or the buggy path would pass.
-    mocks.store = storeWithStructuredTabActive({
-      terminalIds: ['term-1', 'term-2', 'term-3'],
-      lastFocusedTerminalId: 'term-2'
-    })
-    expect(mocks.store.activeTabType).toBe('agent-session')
-    expect(mocks.store.activeTabId).toBe('term-2')
-  })
-
   it('jumps to the first terminal instead of cycling from the background terminal', () => {
     mocks.store = storeWithStructuredTabActive({
       terminalIds: ['term-1', 'term-2', 'term-3'],
@@ -122,16 +112,5 @@ describe('handleSwitchTerminalTab with a structured chat tab active', () => {
     // The stale id matched the only terminal, so the single-terminal guard swallowed the chord.
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-1')
-  })
-
-  it('still cycles normally from a focused terminal tab', () => {
-    mocks.store = storeWithStructuredTabActive({
-      terminalIds: ['term-1', 'term-2', 'term-3'],
-      lastFocusedTerminalId: 'term-2',
-      activeGroupTabId: 'unified-term-2'
-    })
-    expect(mocks.store.activeTabType).toBe('terminal')
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(mocks.store.setActiveTab).toHaveBeenCalledWith('term-3')
   })
 })

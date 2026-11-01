@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from './native-chat-types'
+import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { pendingSendsAsMessages, prunePendingSends } from './native-chat-pending-sends'
 
 const prompt = 'Summarize the failing tests.\n\nThen propose a fix for each one.'

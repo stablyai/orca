@@ -1,10 +1,4 @@
-import { isFolderRepo } from '../repo-kind'
-import {
-  getRuntimePathBasename,
-  resolveRuntimePath,
-  normalizeRuntimePathForComparison,
-  relativePathInsideRoot
-} from '../cross-platform-path'
+import { normalizeRuntimePathForComparison, relativePathInsideRoot } from '../cross-platform-path'
 import { parseWslUncPath } from '../wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
@@ -270,26 +264,4 @@ function canClassifyAsExternal(
     return layout.nestWorkspaces
   }
   return true
-}
-
-export function managedWorktreeDirectories(
-  repo: Pick<Repo, 'path' | 'kind' | 'worktreeBasePath' | 'connectionId'>,
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
-): string[] {
-  if (isFolderRepo(repo)) {
-    return []
-  }
-  const configured = new Set(
-    resolveConfiguredWorktreeBasePaths(repo).map(normalizeRuntimePathForComparison)
-  )
-  const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
-  const directories: string[] = []
-  for (const layout of buildKnownOrcaWorkspaceLayouts(settings, repo)) {
-    if (configured.has(normalizeRuntimePathForComparison(layout.path))) {
-      directories.push(layout.path)
-    } else if (layout.nestWorkspaces && repoName) {
-      directories.push(resolveRuntimePath(layout.path, repoName))
-    }
-  }
-  return directories
 }

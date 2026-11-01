@@ -157,6 +157,20 @@ describe('worker authority idle stop', () => {
     expect(() => authority.assertWritable()).toThrow()
   })
 
+  it('still refuses with the revision conflict when the failure listener throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { authority, close, peer } = await idleFixture(() => {
+      throw new Error('listener broke')
+    })
+    await idleStopped(close)
+    const other = peer()
+    other.writeSerializedDomains([{ domain: 'ui', payload: '{"external":true}' }])
+    other.close()
+    await expect(
+      authority.writeSerializedDomains([{ domain: 'ui', payload: '{"mine":true}' }])
+    ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
+  })
+
   it('closes cleanly while stopped and refuses later writes', async () => {
     const { authority, close } = await idleFixture()
     await idleStopped(close)

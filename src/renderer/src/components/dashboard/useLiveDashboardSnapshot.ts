@@ -79,6 +79,8 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       buildDashboardSnapshot(
         {
           chatNames,
+          activeWorktreeId: launchRouteStore.activeWorktreeId,
+          activeWorkspaceExecutionHostId: launchRouteStore.activeWorkspaceExecutionHostId,
           repos,
           worktreesByRepo,
           tabsByWorktree,

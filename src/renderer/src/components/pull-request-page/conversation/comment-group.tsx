@@ -93,11 +93,21 @@ export function ConversationCommentGroup({
       >
         <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
           <span className="min-w-0 truncate">
-            {translate('auto.components.PullRequestPage.f4fe47c2bb', 'Resolved')}{' '}
             {group.kind === 'thread'
-              ? translate('auto.components.PullRequestPage.345b68254c', 'thread')
-              : translate('auto.components.PullRequestPage.e01e34f5fa', 'comment')}{' '}
-            {translate('auto.components.PullRequestPage.3c891789f6', 'by')} {root.author}
+              ? translate(
+                  'auto.components.PullRequestPage.resolvedThreadBy',
+                  'Resolved thread by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )
+              : translate(
+                  'auto.components.PullRequestPage.resolvedCommentBy',
+                  'Resolved comment by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )}
             {count > 1 ? ` (${count})` : ''}
           </span>
         </AccordionTrigger>

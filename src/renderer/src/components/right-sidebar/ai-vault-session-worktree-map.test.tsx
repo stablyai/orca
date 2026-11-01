@@ -303,8 +303,6 @@ describe('folder workspace resume targets', () => {
   }
   const folderKey = folderWorkspaceKey(folder.id)
   const targetState = {
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
     folderWorkspaces: [folder],
     projectGroups: [],
     repos,
@@ -315,11 +313,17 @@ describe('folder workspace resume targets', () => {
   it.each([folderKey, worktreeA.id, null])(
     'resumes a folder conversation and its subagent in the folder with active %s',
     (activeWorktreeId) => {
-      const parent = makeSession({ agent: 'claude', id: 'claude:parent', cwd: '/work/notes' })
+      const parent = makeSession({
+        agent: 'claude',
+        id: 'claude:parent',
+        cwd: '/physical/notes',
+        cwdAliases: ['/work/notes']
+      })
       const child = makeSession({
         agent: 'claude',
         id: 'claude:child',
-        cwd: '/work/notes',
+        cwd: '/physical/notes',
+        cwdAliases: ['/work/notes'],
         subagent: { parentSessionId: parent.sessionId, agentType: null, status: null }
       })
       const { result } = renderHook(() =>

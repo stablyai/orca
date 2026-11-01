@@ -1,3 +1,4 @@
+import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import {
@@ -32,9 +33,12 @@ export function agentLaunchFailureCode(error: unknown): string {
 
 /** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
 export function agentLaunchFailureMessage(error: unknown): string | undefined {
-  return error instanceof OrchestrationError
-    ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
-    : undefined
+  return (
+    formatTerminalStartFailure(error) ??
+    (error instanceof OrchestrationError
+      ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
+      : undefined)
+  )
 }
 
 /** Keep a refused folder's full path or only its code; truncating the path would name a different folder. */

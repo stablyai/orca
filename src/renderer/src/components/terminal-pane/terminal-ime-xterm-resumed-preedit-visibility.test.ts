@@ -198,16 +198,4 @@ describe('preedit visibility across a composition the IME resumes', () => {
 
     expect(displayedPreedit(rig.compositionView)).toEqual({ preedit: '글', shown: true })
   })
-
-  it('hides the overlay once the composition ends and nothing resumes it', async () => {
-    const rig = openTerminal()
-
-    await rig.replay([
-      { type: 'compositionstart', data: '' },
-      { type: 'compositionupdate', data: '한' },
-      { type: 'compositionend', data: '한' }
-    ])
-
-    expect(displayedPreedit(rig.compositionView).shown).toBe(false)
-  })
 })

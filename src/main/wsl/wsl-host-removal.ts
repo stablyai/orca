@@ -4,6 +4,7 @@
  * Dropping it would strand a still-running server that blocks the next add's activation.
  */
 import { errorMessage } from '../../shared/error-message'
+import { wslHostServerStopReason } from '../../shared/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,
   setWslHostPendingStop
@@ -13,6 +14,8 @@ import type { WslHostAddResult, WslHostServerStop } from '../../shared/wsl-host-
 import { admitWslHostDistro, wslHostRemovalPendingMessage } from './wsl-host-add-admission'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslHostConnector } from './wsl-host-service'
+import { noteWslHostUserAction } from './wsl-host-user-actions'
+import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -39,19 +42,52 @@ export async function removeWslHostServer(
         }))
     }
     await connector.disconnect(record.distro)
-    // Without its holder the distro idles out, pending or not.
+    // Without its holder the distro stops once nothing started in it (a peer's orcad, user jobs) runs.
     await connector.releaseHolder(record.distro)
   }
+  serverStop = noteServerKeptForPeers(userDataPath, record.environmentId, serverStop)
   if (serverStop.stopped) {
     removeWslHostEnvironment(userDataPath, record.environmentId)
+    // Every Remove (sidebar or Settings) is the user's: the move orchestrator never removes a
+    // host. Only on the proven stop, and before the service's cleanup await can fail.
+    noteWslHostUserAction({ kind: 'removed', distro: record.distro })
     return { serverStop, removed: true }
   }
+  const { reason, reasonCode, reasonParams } = serverStop
   setWslHostPendingStop(userDataPath, record.environmentId, {
     since: Date.now(),
-    reason: serverStop.reason,
+    reason,
+    ...(reasonCode ? { reasonCode } : {}),
+    ...(reasonCode && reasonParams ? { reasonParams } : {}),
     verdict: serverStop.verdict ?? 'unverifiable'
   })
   return { serverStop: { ...serverStop, kept: true }, removed: false }
+}
+
+/** R39: undo of a move onto this host must not read a server kept for another Orca as stopped. */
+function noteServerKeptForPeers(
+  userDataPath: string,
+  environmentId: string,
+  serverStop: WslHostServerStop
+): WslHostServerStop {
+  if (!serverStop.stopped) {
+    return serverStop
+  }
+  try {
+    if (serverStop.keptForOtherDesktops) {
+      recordWslHostKeptForPeers(userDataPath, environmentId)
+    } else {
+      forgetWslHostKeptForPeers(userDataPath, environmentId)
+    }
+    return serverStop
+  } catch (error) {
+    // Unrecorded, a later undo would take the kept server for stopped; keep the host listed instead.
+    return {
+      stopped: false,
+      verdict: serverStop.keptForOtherDesktops ? 'live' : 'unverifiable',
+      ...wslHostServerStopReason('removalUnrecorded', { detail: errorMessage(error) })
+    }
+  }
 }
 
 /** Adding a pending host again keeps it, under the same stopped-distro rule as any add. */

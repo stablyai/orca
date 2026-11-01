@@ -40,6 +40,7 @@ import {
 import { getWslAccountTarget } from './account-wsl-location'
 import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -72,6 +73,12 @@ async function runAgentLoginInTerminal(
   json: boolean,
   session: InteractiveLoginSession
 ): Promise<void> {
+  if (command === 'opencode') {
+    command = await resolveOpenCodeLoginCommand(
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv }),
+      session
+    )
+  }
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
     let spawnCmd: string

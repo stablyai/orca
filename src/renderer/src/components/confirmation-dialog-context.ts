@@ -8,6 +8,7 @@ export type ConfirmationDialogField = {
   label: string
   type?: 'text' | 'password'
   autoComplete?: string
+  defaultValue?: string
 }
 
 export type ConfirmationDialogOptions = {
@@ -20,6 +21,8 @@ export type ConfirmationDialogOptions = {
   surface?: 'security'
   icon?: LucideIcon
   cancelVariant?: 'outline' | 'ghost'
+  /** A notice, not a question: only the confirm button shows, and it settles true. */
+  acknowledgeOnly?: boolean
   initialFocus?: 'confirm'
   /** The short close-prompt look: small title, text and buttons. */
   compact?: boolean

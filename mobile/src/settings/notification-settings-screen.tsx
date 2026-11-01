@@ -1,13 +1,13 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AppState, View, Text, Pressable, Switch, ScrollView } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { ListRow } from '../components/list/ListGroup'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSwitch } from '../components/MobileSwitch'
+import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -28,7 +28,7 @@ export default function NotificationsScreen({
   children?: (enabled: boolean) => ReactNode
 }) {
   useMobileColorScheme()
-  const insets = useSafeAreaInsets()
+  const t = useMobileTranslation()
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const requestRevision = useRef(0)
@@ -53,10 +53,15 @@ export default function NotificationsScreen({
       }
     } catch {
       if (revision === requestRevision.current) {
-        setError('Could not load notification settings. Try again.')
+        setError(
+          t(
+            'settings.notificationSettingsScreen.loadFailed',
+            'Could not load notification settings. Try again.'
+          )
+        )
       }
     }
-  }, [operations])
+  }, [operations, t])
 
   useFocusEffect(
     useCallback(() => {
@@ -90,7 +95,12 @@ export default function NotificationsScreen({
       const saved = await operations.preference(value && permission.granted)
       setPushEnabled(saved.enabled)
     } catch {
-      setError('Could not save notification settings. Try again.')
+      setError(
+        t(
+          'settings.notificationSettingsScreen.saveFailed',
+          'Could not save notification settings. Try again.'
+        )
+      )
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -100,135 +110,64 @@ export default function NotificationsScreen({
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
-    ? 'Notifications are disabled in system settings.'
+    ? t(
+        'settings.notificationSettingsScreen.notificationsBlocked',
+        'Notifications are disabled in system settings.'
+      )
     : (description ??
-      'Get notified on this device when an agent needs your input or finishes a task.')
+      t(
+        'settings.notificationSettingsScreen.description',
+        'Get notified on this device when an agent needs your input or finishes a task.'
+      ))
+
+  const openSystemSettings = () =>
+    void operations
+      .openSettings()
+      .catch(() =>
+        setError(
+          t(
+            'settings.notificationSettingsScreen.openSettingsFailed',
+            'Could not open system settings. Try again.'
+          )
+        )
+      )
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
-        paddingBottom: insets.bottom + spacing.xl
-      }}
+    <SettingsScreen
+      title={t('settings.notificationSettingsScreen.title', 'Notifications')}
+      onBack={onBack}
     >
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
-      </View>
-
-      {error && (
-        <Text accessibilityRole="alert" style={styles.hint}>
-          {error}
-        </Text>
-      )}
-      <View style={styles.section}>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Enable notifications</Text>
-          <Switch
-            value={switchEnabled}
-            testID="notification-enabled"
-            accessibilityLabel="Enable notifications"
-            disabled={notificationsBlocked || saving}
-            onValueChange={(v) => void togglePush(v)}
-            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-            thumbColor={colors.textPrimary}
-          />
-        </View>
-        <Text style={styles.hint}>{hint}</Text>
-        {notificationsBlocked && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsButton,
-              pressed && styles.settingsButtonPressed
-            ]}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
+      <SettingsSection first footer={hint}>
+        <ListRow
+          key="enabled"
+          title={t(
+            'settings.notificationSettingsScreen.enableNotifications',
+            'Enable notifications'
+          )}
+          accessory={
+            <MobileSwitch
+              value={switchEnabled}
+              testID="notification-enabled"
+              accessibilityLabel={t(
+                'settings.notificationSettingsScreen.enableNotifications',
+                'Enable notifications'
+              )}
+              disabled={notificationsBlocked || saving}
+              onValueChange={(v) => void togglePush(v)}
+            />
+          }
+        />
+        {notificationsBlocked ? (
+          <ListRow
+            key="systemSettings"
+            title={t('settings.notificationSettingsScreen.openSettings', 'Open Settings')}
             testID="notification-system-settings"
-            onPress={() =>
-              void operations
-                .openSettings()
-                .catch(() => setError('Could not open system settings. Try again.'))
-            }
-          >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
-          </Pressable>
-        )}
-      </View>
+            onPress={openSystemSettings}
+          />
+        ) : null}
+      </SettingsSection>
       {children?.(switchEnabled && !saving)}
-    </ScrollView>
+    </SettingsScreen>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  hint: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18,
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md
-  },
-  settingsButton: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md + 2,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  settingsButtonPressed: {
-    opacity: 0.6
-  },
-  settingsButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
-}))

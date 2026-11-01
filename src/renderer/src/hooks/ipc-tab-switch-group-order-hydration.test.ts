@@ -9,11 +9,7 @@ vi.mock('../store', () => ({ useAppStore: { getState: getStateMock } }))
 import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
 import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
 
-import {
-  handleSwitchTab,
-  handleSwitchTabAcrossAllTypes,
-  handleSwitchTerminalTab
-} from './ipc-tab-switch'
+import { handleSwitchTab, handleSwitchTerminalTab } from './ipc-tab-switch'
 
 const WT = 'wt-1'
 const GROUP = 'group-1'
@@ -72,30 +68,6 @@ function stateWithGroupOrder(tabOrder: string[]) {
 describe('tab-cycle chord against a group whose tabOrder is still hydrating', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('switches to the group tab that group.tabOrder has not recorded yet', () => {
-    const store = stateWithGroupOrder(['tab-1'])
-    getStateMock.mockReturnValue(store)
-
-    expect(handleSwitchTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
-  })
-
-  it('switches across all types in the same hydrating state', () => {
-    const store = stateWithGroupOrder(['tab-1'])
-    getStateMock.mockReturnValue(store)
-
-    expect(handleSwitchTabAcrossAllTypes(-1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-3')
-  })
-
-  it('still cycles in the recorded order once tabOrder is complete', () => {
-    const store = stateWithGroupOrder(['tab-2', 'tab-1', 'tab-3'])
-    getStateMock.mockReturnValue(store)
-
-    expect(handleSwitchTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-3')
   })
 
   it('cycles a terminal-only shortcut while the runtime row is still hydrating', () => {

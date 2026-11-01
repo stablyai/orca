@@ -11,6 +11,9 @@ import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
+import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import { toast } from 'sonner'
 import type { PendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import { clearPendingPRCommentAiAck, takePendingPRCommentAiAck } from '../pr-comments-ai-launch-ack'
 import type { ChecksAgentComposerState } from './panel-state-types'
@@ -119,7 +122,10 @@ function fixture(saved = true, paired = false) {
   const context = { current: checksPanelAsyncResultKey(repo.id, 'main', 42, null, 'head') }
   const loading = { current: false }
   const fetchPRComments = vi.fn().mockResolvedValue([])
-  const setComments = vi.fn()
+  let comments: PRComment[] = []
+  const setComments = vi.fn((value: SetStateAction<PRComment[]>) => {
+    comments = typeof value === 'function' ? value(comments) : value
+  })
   const isCurrentAsyncResult = (key: string) => key === context.current
   const resolveThread = vi.fn().mockResolvedValue(true)
   let composerState: ChecksAgentComposerState | null = null
@@ -143,6 +149,16 @@ function fixture(saved = true, paired = false) {
   const view = renderHook(
     ({ head }) => {
       context.current = checksPanelAsyncResultKey(repo.id, 'main', 42, null, head)
+      const pr: PRInfo = {
+        number: 42,
+        title: 'Review',
+        state: 'open',
+        url: '',
+        checksStatus: 'pending',
+        updatedAt: '',
+        mergeable: 'MERGEABLE',
+        headSha: head
+      }
       const data = useChecksPanelReviewData({
         activeGitLabReview: null,
         branch: 'main',
@@ -151,16 +167,7 @@ function fixture(saved = true, paired = false) {
         gitLabProjectRefRef: { current: null },
         isCurrentAsyncResult,
         isPanelVisible: true,
-        pr: {
-          number: 42,
-          title: 'Review',
-          state: 'open',
-          url: '',
-          checksStatus: 'pending',
-          updatedAt: '',
-          mergeable: 'MERGEABLE',
-          headSha: head
-        },
+        pr,
         prCacheKey: repo.id,
         prNumber: 42,
         repo,
@@ -194,14 +201,14 @@ function fixture(saved = true, paired = false) {
         activeReview: review,
         activeWorktree: worktree,
         activeWorktreeId: worktree.id,
+        asyncResultKeyRef: context,
         branch: 'main',
         claimedCommentResolutionRef: claimed,
         commentResolutionAckBusy: false,
         commentsLoading: false,
         detectedAgentIds: paired ? ['codex'] : null,
-        isCurrentAsyncResult,
         pendingCommentResolutionRef: pending,
-        pr: null,
+        pr,
         prCacheKey: repo.id,
         prNumber: 42,
         repo,
@@ -235,7 +242,11 @@ function fixture(saved = true, paired = false) {
         sourceControlAiActionsVisible: true,
         stateRequestKey: context.current
       })
-      return { ...queue, noEnabledAgentKnown: resolution.noEnabledAgentKnown }
+      return {
+        ...queue,
+        handleResolve: resolution.handleResolve,
+        noEnabledAgentKnown: resolution.noEnabledAgentKnown
+      }
     },
     { initialProps: { head: 'head' } }
   )
@@ -267,7 +278,8 @@ function fixture(saved = true, paired = false) {
     composer,
     resolveThread,
     loading,
-    fetchPRComments
+    fetchPRComments,
+    comments: () => comments
   }
 }
 
@@ -358,7 +370,7 @@ it.each([false, true])(
     await act(async () => f.inventory.resolve(['claude']))
     await waitFor(() => expect(f.composer).toHaveBeenCalledOnce())
     expect(launch).not.toHaveBeenCalled()
-    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialRecipe?.agentId).toBe(
+    expect(f.composer.mock.calls[0]?.[0]?.launchContext?.initialSelection?.current.agentId).toBe(
       saved ? 'codex' : undefined
     )
   }
@@ -401,3 +413,27 @@ it.each(['before-delivery', 'during-ack'])(
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(2))
   }
 )
+
+it('rolls back and reports a failed resolve after the PR head moves mid-request', async () => {
+  const provider = deferred<boolean>()
+  const f = fixture()
+  const thread = { ...f.groups[0].root, isResolved: false }
+  f.fetchPRComments.mockResolvedValue([thread])
+  await act(async () => f.rerender({ head: 'head' }))
+  await waitFor(() => expect(f.comments()).toEqual([thread]))
+  f.resolveThread.mockReturnValueOnce(provider.promise)
+  let pending: Promise<boolean> = Promise.resolve(true)
+  act(() => {
+    pending = f.result.current.handleResolve('thread-42', true)
+  })
+  // The store cache already holds the optimistic resolve when the new head re-reads it.
+  f.fetchPRComments.mockResolvedValue([{ ...thread, isResolved: true }])
+  await act(async () => f.rerender({ head: 'head-B' }))
+  await waitFor(() => expect(f.comments()[0]?.isResolved).toBe(true))
+  await act(async () => {
+    provider.resolve(false)
+    await pending
+  })
+  expect(f.comments()[0]?.isResolved).toBe(false)
+  expect(toast.error).toHaveBeenCalledOnce()
+})

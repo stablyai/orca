@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatLiveReasoning } from '../../../../../src/shared/native-chat-reasoning-row'
+import type { NativeChatLiveReasoning } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 
 const pressableMounts = vi.hoisted(() => ({ count: 0 }))
 

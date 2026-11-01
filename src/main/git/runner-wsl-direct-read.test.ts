@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 
 const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
@@ -57,20 +57,8 @@ function fencedProbeStdout(command: unknown, payload: string): string {
 
 const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
 
-type MockChild = EventEmitter & {
-  stdout: EventEmitter
-  stderr: EventEmitter
-  pid: number
-  kill: ReturnType<typeof vi.fn>
-}
-
-function createMockChild(): MockChild {
-  const child = new EventEmitter() as MockChild
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  child.pid = 1234
-  child.kill = vi.fn()
-  return child
+function createMockChild() {
+  return createFakeSpawnedChild(1234)
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
@@ -295,7 +283,6 @@ describe('WSL direct Git reads', () => {
           cwd: String.raw`C:\repo`,
           env: { GIT_CONFIG_GLOBAL: '/home/user/custom.gitconfig' },
           wslDistro: DISTRO,
-          captureWslLoginShellOutput: true,
           terminationBarrier: true
         })
       ).resolves.toEqual({ stdout: 'fork-point\n', stderr: '' })
@@ -320,7 +307,13 @@ describe('WSL direct Git reads', () => {
           return command
         }
         const terminator = createMockChild()
-        queueMicrotask(() => terminator.emit('close', 0, null))
+        queueMicrotask(() => {
+          // The kill first confirms the distro still runs, so it cannot boot a stopped one (E9).
+          if (args?.includes('--running')) {
+            terminator.stdout.emit('data', Buffer.from(`${DISTRO}\n`))
+          }
+          terminator.emit('close', 0, null)
+        })
         return terminator
       })
       const controller = new AbortController()
@@ -338,8 +331,10 @@ describe('WSL direct Git reads', () => {
 
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
       expect(command.kill).not.toHaveBeenCalled()
-      expect(spawnMock.mock.calls[1]?.[1]?.join(' ')).toContain('kill -TERM')
-      expect(spawnMock.mock.calls[1]?.[1]).toContain('4321')
+      const kill = spawnMock.mock.calls.find(([, args]) =>
+        String(args?.join(' ')).includes('kill -TERM')
+      )
+      expect(kill?.[1]).toContain('4321')
     })
   })
 

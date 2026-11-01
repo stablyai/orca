@@ -7,6 +7,7 @@ import type { GitHubProjectViewError } from '../../../../shared/github/project-r
 import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 import { translate } from '@/i18n/i18n'
 import { projectViewErrorMessage } from './project-view-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
@@ -75,11 +76,6 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
     ),
     command: `unset ${varName}`
   }
-}
-
-function openExternal(url: string): void {
-  // Route through Electron’s shell IPC because window.open may not reach the default browser.
-  void window.api.shell.openUrl(url)
 }
 
 async function copyToClipboard(text: string): Promise<void> {
@@ -348,7 +344,7 @@ export function GhAuthErrorHelp({
           {docsUrl ? (
             <button
               type="button"
-              onClick={() => openExternal(docsUrl)}
+              onClick={(event) => openAppHttpLink(docsUrl, { event })}
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
             >
               <ExternalLink className="size-3" />{' '}
@@ -386,7 +382,11 @@ export function GhAuthErrorHelp({
           </Button>
         ))}
         {docsUrl ? (
-          <Button size="sm" variant="outline" onClick={() => openExternal(docsUrl)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(event) => openAppHttpLink(docsUrl, { event })}
+          >
             <ExternalLink className="mr-1 size-3.5" />{' '}
             {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
           </Button>

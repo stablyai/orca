@@ -1,4 +1,3 @@
-import { selectCanonicalProjects } from '@/store/project-host-setup-selector'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -97,7 +96,7 @@ export default function NewWorkspaceComposerCard(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
   const updateSettings = useAppStore((state) => state.updateSettings)
-  const projects = useAppStore((state) => selectCanonicalProjects(state))
+  const projects = useAppStore((state) => state.projects)
   const repos = useAppStore((state) => state.repos)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
@@ -140,28 +139,55 @@ export default function NewWorkspaceComposerCard(
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? 'Connect'
-      : 'Reconnect'
+      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const setupConfigLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.setupConfigDefaultTabs',
+          'Default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.setupConfigSetupAndDefaultTabs',
+            'Setup and default tab commands'
+          )
+        : translate(
+            'auto.components.NewWorkspaceComposerCard.setupConfigSetupScript',
+            'Setup script'
+          )
   const setupRunLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.runDefaultTabCommands',
+          'Run default tab commands'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.runSetupAndDefaultTabCommands',
+            'Run setup and default tab commands'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.runSetupCommand', 'Run setup command')
   const setupAskLabel =
     setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
+      ? translate(
+          'auto.components.NewWorkspaceComposerCard.askRunDefaultTabCommands',
+          'Run default tab commands now?'
+        )
       : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
-  const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+        ? translate(
+            'auto.components.NewWorkspaceComposerCard.askRunSetupAndDefaultTabCommands',
+            'Run setup and default tab commands now?'
+          )
+        : translate('auto.components.NewWorkspaceComposerCard.askRunSetup', 'Run setup now?')
+  const setupRunButtonLabel =
+    setupConfig?.kind === 'setup'
+      ? translate('auto.components.NewWorkspaceComposerCard.runSetupNow', 'Run setup now')
+      : translate('auto.components.NewWorkspaceComposerCard.runCommandsNow', 'Run commands now')
+  const setupSkipButtonLabel =
+    setupConfig?.kind === 'setup'
+      ? translate('auto.components.NewWorkspaceComposerCard.skipForNow', 'Skip for now')
+      : translate('auto.components.NewWorkspaceComposerCard.skipCommands', 'Skip commands')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()

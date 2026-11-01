@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { isMacUserAgent } from '../terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
@@ -21,12 +22,6 @@ import {
 
 export type BrowserShortcutPlatform = {
   isMac: boolean
-}
-
-function getDefaultBrowserShortcutPlatform(): BrowserShortcutPlatform {
-  return {
-    isMac: typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-  }
 }
 
 export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
@@ -71,7 +66,7 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
 }
 
 export function getBrowserPaneSearchEntries(
-  platform: BrowserShortcutPlatform = getDefaultBrowserShortcutPlatform()
+  platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() }
 ): SettingsSearchEntry[] {
   return [
     {
@@ -230,6 +225,8 @@ export function getBrowserPaneSearchEntries(
         'Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.'
       ),
       keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.8a489aab8d', 'google'),
+        ...translateSearchKeyword('browser.googleCookieClear.signInKeyword', 'sign-in'),
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword('auto.components.settings.browser.search.29193a51d5', 'cookies'),
         ...translateSearchKeyword('auto.components.settings.browser.search.66dd641a47', 'session'),

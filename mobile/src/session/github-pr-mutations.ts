@@ -25,6 +25,7 @@ import {
   type GitHubPrRepoSlug
 } from './github-pr-repo-slug'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { translate } from '../i18n/mobile-i18n'
 
 export type { GitHubPrMutationOutcome } from './github-pr-mutation-outcome'
 
@@ -62,7 +63,7 @@ export function fetchUpdatePRTitle(
           prRepo: args.prRepo
         })
       ),
-    'Failed to update title.'
+    translate('session.githubPrMutations.titleUpdateFailed', 'Failed to update title.')
   )
 }
 
@@ -264,7 +265,10 @@ export function fetchResolveReviewThread(
           { prRepo: args.prRepo }
         )
       ),
-    'Failed to update review thread.'
+    translate(
+      'session.githubPrMutations.reviewThreadUpdateFailed',
+      'Failed to update review thread.'
+    )
   )
 }
 

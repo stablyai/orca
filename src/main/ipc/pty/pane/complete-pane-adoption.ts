@@ -1,3 +1,4 @@
+import { readTerminalStartFailure } from '../../../../shared/terminal-start-failure'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
@@ -17,6 +18,7 @@ import {
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
 import { provenSpawnResponse } from '../spawn-outcome'
 import { ptySizes } from '../delivery/visibility-state'
 import {
@@ -77,6 +79,9 @@ export async function completePaneAdoption(
         )
       : undefined
     ensureWslHookRelayForReattach(result, args.connectionId)
+    if (result.wslDistro && !args.connectionId) {
+      wslBridgePtyPresence.noteLive(result.id, result.wslDistro)
+    }
     runtime?.preparePtyExecutionContext?.(result.id, result.wslDistro ?? null, {
       preserveExisting: result.wslDistro === undefined
     })
@@ -119,6 +124,7 @@ export async function completePaneAdoption(
       runtime,
       args.store,
       claim,
+      { ...result, isReattach: true },
       result.id,
       args.worktreeId,
       args.connectionId ?? null,
@@ -143,7 +149,11 @@ export async function completePaneAdoption(
         }
         return {
           result: response,
-          outcome: { kind: 'registration-exited' as const, result: response },
+          outcome: {
+            kind: 'registration-exited' as const,
+            result: response,
+            terminalStartFailure: readTerminalStartFailure(error)
+          },
           owner,
           materialized: true as const
         }

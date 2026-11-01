@@ -93,6 +93,10 @@ describe('active worktree removal successor', () => {
       revealInSidebar: false,
       executionHostId: 'local'
     })
+    // Orca picked the successor, not the user: no switch that could start a stopped distro.
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
+      'navigationIntent'
+    )
   })
 
   it('hands off after forgetting a paired row selected through its physical SSH alias', async () => {

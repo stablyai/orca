@@ -1,3 +1,4 @@
+import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
 import type { Store } from '../persistence'
@@ -13,6 +14,7 @@ import {
   type KeybindingInput,
   type KeybindingOverrides
 } from '../../shared/keybindings'
+import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -125,6 +127,9 @@ export function createOrFocusDashboardPopout(
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
+    if (dashboardPopoutWindow.webContents.isCrashed()) {
+      dashboardPopoutWindow.webContents.reload()
+    }
     if (dashboardPopoutWindow.isMinimized()) {
       dashboardPopoutWindow.restore()
     }
@@ -136,13 +141,15 @@ export function createOrFocusDashboardPopout(
 
   const savedBounds = resolveRestoredBounds(store)
 
+  // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
+  const wslArguments = wslHostsWindowArguments()
   const window = new BrowserWindow({
     width: savedBounds?.width ?? DEFAULT_WIDTH,
     height: savedBounds?.height ?? DEFAULT_HEIGHT,
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
-    title: 'Orca Agent Dashboard',
+    title: translateMain('native.dialog.dashboardTitle', 'Orca Agent Dashboard'),
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
@@ -153,7 +160,8 @@ export function createOrFocusDashboardPopout(
       // Chromium shares zoom by origin; isolate the session to keep popout zoom local.
       partition: DASHBOARD_POPOUT_PARTITION,
       // No webviews run here; disable embedding and omit host identity so client-placed pages stay mirrors.
-      webviewTag: false
+      webviewTag: false,
+      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)
@@ -248,7 +256,18 @@ export function createOrFocusDashboardPopout(
   window.on('close', freezeBounds)
   app.on('before-quit', freezeBounds)
 
+  window.on('page-title-updated', (event) => {
+    event.preventDefault()
+  })
+  const updateTitle = (): void => {
+    if (!window.isDestroyed()) {
+      window.setTitle(translateMain('native.dialog.dashboardTitle', 'Orca Agent Dashboard'))
+    }
+  }
+  mainI18n.on('languageChanged', updateTitle)
+
   window.on('closed', () => {
+    mainI18n.off('languageChanged', updateTitle)
     app.removeListener('before-quit', freezeBounds)
     unsubscribeUIChanged?.()
     if (dashboardPopoutWindow === window) {

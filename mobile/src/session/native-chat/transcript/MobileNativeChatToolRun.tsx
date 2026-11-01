@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Pressable,
@@ -19,25 +11,29 @@ import {
   type NativeSyntheticEvent
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
+import { useWorkingPulse } from '../../../components/use-working-motion'
+import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
+import {
+  nativeChatToolActivityCopy,
+  nativeChatToolCallCount
+} from './native-chat-tool-activity-copy'
+import { nativeChatToolRunWords } from './native-chat-tool-run-words'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { nativeChatToolLineIdentity } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-identity'
 import { pairNativeChatToolResults } from '../../../../../src/shared/native-chat/tools/native-chat-tool-pairing'
 import { nativeChatToolRunHeader } from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-header'
-import {
-  NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH,
-  nativeChatToolRunSentence
-} from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-sentence'
+import { nativeChatToolRunSentence } from '../../../../../src/shared/native-chat/tools/native-chat-tool-run-sentence'
 import { buildEditCards } from '../../../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
-import { MobileNativeChatDiffCard } from '../../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
 import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
@@ -47,7 +43,7 @@ import {
 } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
-import { MobileNativeChatOwnedScrollView } from '../../MobileNativeChatOwnedScrollView'
+import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import type {
   MobileNativeChatToolRunAsides,
   MobileNativeChatToolRunProps
@@ -56,10 +52,6 @@ import type {
 /** Desktop's 18rem: an opened run lists this much before it scrolls in place. */
 const MEMBERS_MIN_HEIGHT = 288
 const FOLLOW_REARM_PX = 24
-
-function fill(template: string, value: number): string {
-  return template.replaceAll('{{value0}}', String(value))
-}
 
 // Keep one header element so live-to-settled changes cannot remount it.
 function PulsingText({
@@ -71,23 +63,11 @@ function PulsingText({
   style?: React.ComponentProps<typeof Animated.Text>['style']
   children: React.ReactNode
 }): React.JSX.Element {
-  const opacity = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    if (!pulsing) {
-      opacity.setValue(1)
-      return
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.5, duration: 1000, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 1000, useNativeDriver: true })
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [opacity, pulsing])
+  // The transcript's one Reduce Motion read; without it (unknown) the header holds still.
+  const reducedMotion = useContext(MobileNativeChatReplyRevealsContext)?.reducedMotion ?? true
+  const pulse = useWorkingPulse(pulsing && !reducedMotion)
   return (
-    <Animated.Text style={[style, { opacity }]} numberOfLines={2}>
+    <Animated.Text ref={pulse.ref} style={[style, pulse.style]} numberOfLines={2}>
       {children}
     </Animated.Text>
   )
@@ -195,9 +175,11 @@ export function ToolRun({
   previousTodoWrite,
   previousUpdatePlan,
   fontScale = 1,
-  onOpenFile
+  onOpenFile,
+  viewedImages
 }: MobileNativeChatToolRunProps): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
   const [open, setOpen] = useMobileNativeChatDisclosure(runKey, false)
   const asideCount = asides
@@ -214,18 +196,17 @@ export function ToolRun({
     [activeTurnIsWorking, awaitingAnswer, blocks, trailing]
   )
   const { live, latestCallLabel, iconName: headerIcon } = header
-  const sentence = nativeChatToolRunSentence(
-    header.work,
-    { live },
-    NATIVE_CHAT_TOOL_RUN_SENTENCE_ENGLISH
-  )
-  const fallbackLabel = fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY[header.fallbackLabel], header.callCount)
+  const sentence = nativeChatToolRunSentence(header.work, { live }, nativeChatToolRunWords(t))
+  const fallbackLabel =
+    header.fallbackLabel === 'result'
+      ? nativeChatToolActivityCopy(t).result
+      : nativeChatToolCallCount(t, header.callCount)
   const marks = [
     header.failedCallCount > 0
-      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount, header.failedCallCount)
+      ? nativeChatToolActivityCopy(t, { value0: header.failedCallCount }).failedCount
       : null,
     header.interruptedCallCount > 0
-      ? fill(NATIVE_CHAT_TOOL_ACTIVITY_COPY.interruptedCount, header.interruptedCallCount)
+      ? nativeChatToolActivityCopy(t, { value0: header.interruptedCallCount }).interruptedCount
       : null
   ].filter((mark) => mark !== null)
   const type = toolType(fontScale)
@@ -235,7 +216,7 @@ export function ToolRun({
     <View style={styles.run} testID={mobileNativeChatMemberId('run')}>
       {/* Keep one button through live/settled states so accessibility focus survives. */}
       <Pressable
-        style={styles.header}
+        style={({ pressed }) => [styles.header, pressed && pressedStyle]}
         onPress={() => setOpen(!open)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -265,6 +246,8 @@ export function ToolRun({
           </Text>
         ) : null}
       </Pressable>
+      {/* A read's result is the image the agent saw, so it shows without opening the run. */}
+      {viewedImages ? <View style={styles.viewedImages}>{viewedImages}</View> : null}
       {open ? (
         <ToolRunMembers
           followKey={blocks.length + asideCount}

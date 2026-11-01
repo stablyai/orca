@@ -25,7 +25,11 @@ import {
   takeRemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { RemoteRuntimeRequestResponseRouter } from './remote-runtime-request-response-router'
-import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type {
+  RuntimeRequestSelection,
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../runtime-types'
 import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
 
@@ -37,7 +41,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   envelope?: RuntimeOrchestrationEnvelope,
   validateStatus?: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
   signal?: AbortSignal,
-  clientCapabilities: readonly RuntimeCapability[] = []
+  clientCapabilities: readonly RuntimeCapability[] = [],
+  requestSelection?: RuntimeRequestSelection
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -55,18 +60,23 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
         method: 'status.get'
       })
     : null
-  const pendingRequest = {
-    preparedRequest: prepareRemoteRuntimeRequest(new Map(), () =>
+  const prepare = (selectedParams: unknown) =>
+    prepareRemoteRuntimeRequest(new Map(), () =>
       serializeRemoteRuntimeRpcRequest({
         requestId,
         deviceToken: connection.credential.deviceToken,
         method,
-        params,
+        params: selectedParams,
         envelope
       })
     )
+  const pendingRequest: { preparedRequest: ReturnType<typeof prepare> | null } = {
+    // Reserve this connection before authentication; select mutation params only after status.
+    preparedRequest:
+      requestSelection && serializedStatusRequest
+        ? prepareRemoteRuntimeRequest(new Map(), () => serializedStatusRequest)
+        : prepare(params)
   }
-  let serializedRequest = takeRemoteRuntimePreparedRequest(pendingRequest)
   return await new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const handshake = createRemoteRuntimeClientHandshake(connection.hostPublicKeyB64)
     let settled = false
@@ -139,19 +149,26 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
     const finishResponse = (response: RuntimeRpcResponse<TResult>): void =>
       finish({ ok: true, response })
 
-    function sendRequestedRpc(): void {
-      const request = serializedRequest
-      serializedRequest = null
-      if (request === null) {
-        finishError(
-          new RemoteRuntimeClientError(
+    function sendRequestedRpc(status?: unknown): void {
+      try {
+        if (requestSelection) {
+          const selectedParams = requestSelection.paramsForStatus(status)
+          releaseRemoteRuntimePreparedRequest(pendingRequest)
+          pendingRequest.preparedRequest = prepare(selectedParams)
+        }
+        const request = takeRemoteRuntimePreparedRequest(pendingRequest)
+        if (request === null) {
+          throw new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
             'Remote Orca runtime request was released before it could be sent.'
           )
-        )
-        return
+        }
+        const frame = handshake.channel.sealText(request)
+        requestSelection?.onDispatch?.()
+        ws?.send(frame)
+      } catch (error) {
+        finishError(error instanceof Error ? error : new Error(String(error)))
       }
-      ws?.send(handshake.channel.sealText(request))
     }
 
     router = new RemoteRuntimeRequestResponseRouter({

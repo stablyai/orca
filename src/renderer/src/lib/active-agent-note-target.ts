@@ -158,7 +158,12 @@ export async function findActiveRuntimeTerminal(
   runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
-  timeoutMs: number
+  timeoutMs: number,
+  options: {
+    signal?: AbortSignal
+    expectedEnvironmentPairingRevision?: number
+    beforeSend?: () => void
+  } = {}
 ): Promise<RuntimeTerminalListResult['terminals'][number] | null> {
   const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
     runtimeTarget,
@@ -169,7 +174,7 @@ export async function findActiveRuntimeTerminal(
       limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
       includeVisualLayouts: false
     },
-    { timeoutMs }
+    { timeoutMs, ...options }
   )
   // Why: paired renderer tabs wrap the host id with `web-terminal-*`.
   const runtimeTabId = toHostSessionTabId(noteTarget.tabId)

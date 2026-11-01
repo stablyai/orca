@@ -6,6 +6,7 @@ import type { StoreState } from './pty-connection-test-store-state'
 export function createInitialStoreState(getState: () => StoreState): StoreState {
   return {
     activeWorktreeId: 'wt-1',
+    unifiedTabsByWorktree: {},
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }]
     },
@@ -29,8 +30,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     },
     runtimeStatusByEnvironmentId: new Map(),
     repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
-    endpointProjects: [],
-    endpointProjectHostSetups: [],
+    projects: [],
     sshConnectionStates: new Map(),
     transientClearedAgentStatusConnectionIds: {},
     cacheTimerByKey: {},

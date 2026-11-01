@@ -7,7 +7,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import {
   AI_VAULT_SESSION_LIMITS,
   DEFAULT_AI_VAULT_SESSION_LIMIT,
@@ -24,7 +24,7 @@ export function AiVaultSessionLimitMenu({
   const sessionLimitLabel =
     sessionLimit === 'unlimited'
       ? translate('auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited', 'Unlimited')
-      : sessionLimit.toLocaleString()
+      : sessionLimit.toLocaleString(getIntlLocale())
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
@@ -56,7 +56,7 @@ export function AiVaultSessionLimitMenu({
                       'auto.components.right.sidebar.AiVaultSessionLimitMenu.unlimited',
                       'Unlimited'
                     )
-                  : limit.toLocaleString()}
+                  : limit.toLocaleString(getIntlLocale())}
               </span>
               <span className="ml-auto text-[11px] font-normal text-muted-foreground">
                 {limit === DEFAULT_AI_VAULT_SESSION_LIMIT

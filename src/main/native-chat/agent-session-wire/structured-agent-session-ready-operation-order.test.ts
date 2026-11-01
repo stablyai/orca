@@ -1,5 +1,5 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
@@ -7,7 +7,7 @@ import {
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { abandonStructuredAgentSessionHost } from './structured-agent-session-host-test-abandon'
 import { expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStopNoteIdentity } from './structured-agent-session-command-turn'
 import {
   CALLER,
@@ -92,7 +92,7 @@ it('persists unknown Set objective and receipt across reopen, without replay ove
   await abandonStructuredAgentSessionHost(host)
   await hostTestRecoveryCapsuleSettled()
   const database = host.deps.journalDatabase
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   expect(database.isClosed).toBe(true)
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -225,10 +225,11 @@ it.each(['append', 'wait'] as const)(
     }
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const append = vi.spyOn(journal, 'appendItem')
-    const withdraw = vi.spyOn(journal, 'appendTombstone')
+    const withdraw = vi.spyOn(journal, 'withdrawGoalObjective')
+    const original = journal.appendClaimingAttachments.bind(journal)
+    const appendGoal = vi.spyOn(journal, 'appendClaimingAttachments')
     if (phase === 'append') {
-      const original = journal.appendItem.bind(journal)
-      append.mockImplementationOnce(async (...args) => {
+      appendGoal.mockImplementationOnce(async (...args) => {
         await held.promise
         return original(...args)
       })
@@ -241,7 +242,7 @@ it.each(['append', 'wait'] as const)(
     })
     const result = goal.catch((error: unknown) => error)
     await (phase === 'append'
-      ? vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
+      ? vi.waitFor(() => expect(appendGoal).toHaveBeenCalledOnce())
       : host.collaboratorsForTests().serialize(SESSION, async () => {}))
     const stopEnvelope = envelope('agentSession.cancel', {})
     const stopped = host.cancel(CALLER, { envelope: stopEnvelope })

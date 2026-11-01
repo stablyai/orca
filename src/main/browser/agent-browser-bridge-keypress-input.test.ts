@@ -291,6 +291,38 @@ describe('AgentBrowserBridge keypress input', () => {
     })
     expect(keyEventCalls(wc)).toHaveLength(0)
   })
+
+  it('types text as a keydown and keyup per character, which key-driven editors need', async () => {
+    await expect(bridge.type('Hi\n', undefined, 'tab-1')).resolves.toEqual({ typed: true })
+
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(keyEventCalls(wc).map(({ type, key, text }) => [type, key, text])).toEqual([
+      ['keyDown', 'H', 'H'],
+      ['keyUp', 'H', undefined],
+      ['keyDown', 'i', 'i'],
+      ['keyUp', 'i', undefined],
+      ['keyDown', 'Enter', '\r'],
+      ['keyUp', 'Enter', undefined]
+    ])
+  })
+
+  it('inserts characters no key types, in order with the typed ones', async () => {
+    const order: string[] = []
+    wc.debugger.sendCommand.mockImplementation(async (method: string, params: unknown) => {
+      if (isRecord(params) && params.type === 'keyDown') {
+        order.push(`key ${String(params.key)}`)
+      } else if (method === 'Input.insertText' && isRecord(params)) {
+        order.push(`text ${String(params.text)}`)
+      }
+      return {}
+    })
+
+    await bridge.type('a😀b', undefined, 'tab-1')
+
+    expect(order).toEqual(['key a', 'text 😀', 'key b'])
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
   describe.each(['a', 'MediaPlayPause'])('target admission for %s', (key) => {
     function registerTwoWorkspaces(): MockWebContents {
       const otherPage = mockWebContents(200)

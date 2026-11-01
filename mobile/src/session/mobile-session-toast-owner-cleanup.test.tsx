@@ -1,4 +1,4 @@
-import { createElement, StrictMode } from 'react'
+import { createContext, createElement, StrictMode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -16,10 +16,17 @@ const boundary = vi.hoisted(() => {
     synchronous: false
   }
 })
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: (effect: () => () => void) => useEffect(effect, [effect]) }
+})
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   View: 'View',
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios' },
   Keyboard: { dismiss: vi.fn() },
+  Easing: { bezier: () => 'toast-easing' },
   Animated: {
     timing: (
       _value: unknown,
@@ -48,12 +55,22 @@ vi.mock('../terminal/terminal-copy-gutter-preference', () => ({
   useTerminalCopyTrimsGutter: () => ({ current: false })
 }))
 vi.mock('./mobile-session-styles', () => ({ styles: { container: {}, kavInner: {} } }))
+vi.mock('../transport/use-workspace-client', () => ({
+  WorkspaceServerContext: createContext(undefined)
+}))
+vi.mock('../components/AnchoredDetailCard', () => ({ AnchoredDetailCard: () => null }))
+vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
+vi.mock('../layout/responsive-layout', () => ({
+  useResponsiveLayout: () => ({ isLandscapePhone: false })
+}))
+vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
+vi.mock('./use-session-title-card', () => ({
+  useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
+}))
 vi.mock('./MobileSessionHeader', () => ({ MobileSessionHeader: () => null }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
-vi.mock('./session-side-rail', () => ({
-  useSessionSideRail: () => ({ backInRail: false, keysInRail: false })
-}))
+vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 import { useMobileSessionFeedbackCapabilities } from './use-mobile-session-feedback-capabilities'
 import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
 import { MobileSessionSurface } from './MobileSessionSurface'
@@ -87,6 +104,7 @@ function mounted(strict = false) {
     createWarningState: { source: '', visible: '' },
     setCreateWarningState: vi.fn(),
     setToastMessage,
+    onLiveInputSendFailureRef: { current: vi.fn() },
     toastOpacityRef: { current: {} },
     toastHideTimerRef: { current: null },
     toastSeqRef: { current: 0 },
@@ -132,8 +150,12 @@ function mounted(strict = false) {
     const accessory = useMobileSessionAccessorySelection(accessoryScope)
     const result = { ...feedback, ...accessory }
     read.value = result
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads only setMobileSessionRootRef; its child components are isolated presentation stubs.
-    const controller = result as unknown as SurfaceController
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Actual surface reads the root ref, tabs and sheet visibility; its presentation children are stubbed.
+    const controller = {
+      ...result,
+      visibleTabs: [],
+      bulkCloseConfirm: { visible: false }
+    } as unknown as SurfaceController
     return visible ? createElement(MobileSessionSurface, { key: surfaceKey, controller }) : null
   }
   let root: ReturnType<typeof create> | undefined
@@ -164,6 +186,19 @@ function mounted(strict = false) {
       act(() => renderer.update(element(surfaceKey, visible)))
   }
 }
+it('routes a Live input failure through the session toast and retires the callback on unmount', () => {
+  const { root, scope, setToastMessage } = mounted()
+
+  act(() => scope.onLiveInputSendFailureRef.current('delivery-unconfirmed'))
+
+  expect(setToastMessage).toHaveBeenCalledExactlyOnceWith(
+    'Live input interrupted. Field cleared; check the terminal before continuing.'
+  )
+  act(() => root.unmount())
+  scope.onLiveInputSendFailureRef.current('delivery-unconfirmed')
+  expect(setToastMessage).toHaveBeenCalledTimes(1)
+})
+
 it.each([
   ['success', false],
   ['failure', false],
@@ -308,7 +343,8 @@ it.each([1200, 1500])('keeps exact live fade-in/hide/fade-out timing at %s ms', 
   expect(view.setToastMessage.mock.calls).toEqual([['message']])
   expect(boundary.animationStarts[0].options).toEqual({
     toValue: 1,
-    duration: 150,
+    duration: 200,
+    easing: 'toast-easing',
     useNativeDriver: true
   })
   act(() => boundary.animationStarts[0].complete({ finished: true }))
@@ -323,7 +359,8 @@ it.each([1200, 1500])('keeps exact live fade-in/hide/fade-out timing at %s ms', 
   expect(vi.getTimerCount()).toBe(0)
   expect(boundary.animationStarts[1].options).toEqual({
     toValue: 0,
-    duration: 200,
+    duration: 150,
+    easing: 'toast-easing',
     useNativeDriver: true
   })
   act(() => boundary.animationStarts[1].complete({ finished: true }))
@@ -412,8 +449,8 @@ it('preserves synchronous native completion and natural hide cleanup', () => {
   expect(vi.getTimerCount()).toBe(0)
   expect(view.setToastMessage.mock.calls).toEqual([['sync'], [null]])
   expect(boundary.animationStarts.map((start) => start.options)).toEqual([
-    { toValue: 1, duration: 150, useNativeDriver: true },
-    { toValue: 0, duration: 200, useNativeDriver: true }
+    { toValue: 1, duration: 200, easing: 'toast-easing', useNativeDriver: true },
+    { toValue: 0, duration: 150, easing: 'toast-easing', useNativeDriver: true }
   ])
   act(() => view.root.unmount())
 })

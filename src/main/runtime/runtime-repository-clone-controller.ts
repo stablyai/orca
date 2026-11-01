@@ -113,6 +113,8 @@ export class RuntimeRepositoryCloneController {
         ['clone', '--progress', '--', trimmedUrl, clonePath],
         {
           cwd: trimmedDestination,
+          // Host Git on purpose: the clone makes a new repo no project owns, even inside one.
+          hostGit: true,
           admissionTier: 'interactive',
           env: promptGuardGitEnv(),
           stdio: ['ignore', 'ignore', 'pipe']

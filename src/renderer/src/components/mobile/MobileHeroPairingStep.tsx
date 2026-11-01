@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
@@ -11,7 +12,7 @@ import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
-import { translate } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 
 /** Why: one full sentence per device kind so translators own word order and punctuation. */
 function pairDeviceHeading(): string {
@@ -190,11 +191,14 @@ export function MobileHeroPairingStep({
         </div>
         <h2 className="mp-h2">{pairDeviceHeading()}</h2>
         <p className="mp-lead-sm">
-          {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-          <strong>
-            {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-          </strong>
-          {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
+          <Trans
+            i18n={i18n}
+            defaults={translate(
+              'auto.components.mobile.MobileHero.openAppAndScan',
+              'Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.'
+            )}
+            components={{ strong: <strong /> }}
+          />
         </p>
         <MachineNameField id="mobile-hero-machine-name" className="mp-pairing-machine" />
       </div>

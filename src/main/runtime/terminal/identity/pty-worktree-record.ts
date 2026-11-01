@@ -184,6 +184,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
     if (state.incarnationId !== undefined) {
       if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
         this.invalidatePtyIncarnationHandle(ptyId)
+        this.terminalWaiters.rejectPty(ptyId, 'terminal_handle_stale')
         this.retirePredecessorPtyExitEvidence(pty)
       }
       pty.incarnationId = state.incarnationId

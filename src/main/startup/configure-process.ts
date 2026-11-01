@@ -1,6 +1,7 @@
 import { app } from 'electron'
+import { guardExternalOpensInE2E } from './e2e-external-open-guard'
 import { quitProcess } from './process-quit-request'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
@@ -156,6 +157,11 @@ export function patchPackagedProcessPath(): void {
         join(home, '.grok/bin')
       )
     }
+
+    if (process.platform === 'darwin' && existsSync('/opt/local/bin/port')) {
+      // MacPorts is rare, so gate on default-prefix `port`; last so it only fills gaps, never re-ranks seeded dirs.
+      appendPaths.push('/opt/local/bin', '/opt/local/sbin')
+    }
   }
 
   // env-node shebangs require runtime shims; exclude generic user bins so arbitrary wrappers cannot shadow system tools.
@@ -193,6 +199,7 @@ export function configureDevUserDataPath(isDev: boolean): void {
     mkdirSync(e2eHomeDir, { recursive: true, mode: 0o700 })
     app.setPath('home', e2eHomeDir)
     app.setPath('userData', e2eConfig.userDataDir)
+    guardExternalOpensInE2E()
     return
   }
 

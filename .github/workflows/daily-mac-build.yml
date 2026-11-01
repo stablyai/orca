@@ -68,7 +68,8 @@ jobs:
       version: ${{ steps.daily.outputs.version }}
       head_sha: ${{ steps.freshness.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
-    runs-on: macos-15
+    # Hosted macos-15 cannot boot the packaged x64 terminal host that afterPack verifies.
+    runs-on: blacksmith-6vcpu-macos-15
     # Allow 150min for install 3×10 + publish 2×45 + ~25 setup/build/verify, so outer timeout cannot strand cleanup mid-retry.
     timeout-minutes: 150
     env:

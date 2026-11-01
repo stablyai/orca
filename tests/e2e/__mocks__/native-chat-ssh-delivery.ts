@@ -78,7 +78,7 @@ function createSettlingProvider(
       if (mode === 'lost') {
         return settleAfter(10, writeUnverifiable('transport_settlement_lost', true))
       }
-      if (mode === 'slow' && data.startsWith('X')) {
+      if (mode === 'slow' && (data.startsWith('X') || data.startsWith('\x1b[200~X'))) {
         return settleAfter(1300, WRITE_ACCEPTED)
       }
       return Promise.resolve(WRITE_ACCEPTED)

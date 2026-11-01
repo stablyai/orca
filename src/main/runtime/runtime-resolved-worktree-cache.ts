@@ -16,6 +16,10 @@ export class RuntimeResolvedWorktreeCache {
   private resolvedInFlight: ResolvedInFlight | null = null
   private resolvedGeneration = 0
 
+  get generation(): number {
+    return this.resolvedGeneration
+  }
+
   peek(): ResolvedCache | null {
     return this.resolved
   }

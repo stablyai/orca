@@ -78,7 +78,12 @@ export function createProjectMovePauseFollower(
         if ([...pause.started].some((id) => !pause.ended.has(id))) {
           throw new Error('project_move_pause_incomplete_sleep')
         }
-        const errors = await Promise.all(pause.ended.values())
+        const errors = await Promise.all(
+          [...pause.ended].map(async ([id, ended]) =>
+            // Why: a workspace main failed to sleep stays awake, and main already reports it.
+            request.successfulWorktreeIds.includes(id) ? await ended : null
+          )
+        )
         const error = errors.find((failure) => failure !== null)
         if (error) {
           throw error

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import {
-  MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
+  MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS,
   MobileWebBundleGrantNameSchema
 } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
 import { BRIDGE_MAX_PAGE_ROUTES, BRIDGE_MAX_ROUTE_PATHNAME_CHARS } from './bridge-caps'
@@ -11,7 +11,9 @@ export const BridgePageRouteGrantsSchema = z
     z
       .object({
         pathname: z.string().min(1).max(BRIDGE_MAX_ROUTE_PATHNAME_CHARS),
-        grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+        grants: z
+          .array(MobileWebBundleGrantNameSchema)
+          .max(MOBILE_WEB_BUNDLE_MAX_GRANTED_ROUTE_GRANTS)
       })
       .strict()
   )

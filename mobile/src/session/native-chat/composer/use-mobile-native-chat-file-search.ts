@@ -107,8 +107,8 @@ export function useMobileNativeChatFileSearch(args: {
           }
           queryCacheRef.current.set(normalizedQuery, paths)
           while (queryCacheRef.current.size > FILE_SEARCH_QUERY_CACHE_LIMIT) {
-            const oldest = queryCacheRef.current.keys().next().value as string | undefined
-            if (!oldest) {
+            const oldest = queryCacheRef.current.keys().next().value
+            if (oldest === undefined) {
               break
             }
             queryCacheRef.current.delete(oldest)
@@ -134,7 +134,11 @@ export function useMobileNativeChatFileSearch(args: {
             const accepted = nativeChatFileInventoryRead.interpret(response)
             return accepted.accepted ? accepted.value : null
           })
-          if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
+          if (
+            !loaded ||
+            inventory.commit(loaded.lease, loaded.value) !== 'committed' ||
+            !isCurrentRequest()
+          ) {
             return
           }
           applyPaths(rankInventory(loaded.value, normalizedQuery))

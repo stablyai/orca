@@ -17,6 +17,22 @@ function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEn
 }
 
 describe('getDiscardAllPaths', () => {
+  it('skips non-recursing present submodules and children but keeps restorable ones', () => {
+    const submodule = { commitChanged: false, trackedChanges: true, untrackedChanges: false }
+    const entries: GitStatusEntry[] = [
+      entry({ path: 'dirty-sub', submodule }),
+      entry({ path: 'dirty-sub/file.ts', submoduleRoot: 'dirty-sub' }),
+      entry({ path: 'deleted-sub', status: 'deleted', submodule }),
+      entry({ path: 'recursing-sub', submodule: { ...submodule, restoreRecurses: true } }),
+      entry({ path: 'parent.ts' })
+    ]
+    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual([
+      'deleted-sub',
+      'recursing-sub',
+      'parent.ts'
+    ])
+  })
+
   it('skips entries with an unresolved conflict', () => {
     const entries: GitStatusEntry[] = [
       entry({ path: 'clean.ts', area: 'unstaged' }),

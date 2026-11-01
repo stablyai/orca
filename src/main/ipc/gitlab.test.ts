@@ -67,6 +67,11 @@ const {
   getMergeRequestForBranchMock: vi.fn(),
   getProjectSlugMock: vi.fn()
 }))
+const readWslDistroRunningStateMock = vi.hoisted(() => vi.fn())
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: readWslDistroRunningStateMock
+}))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -175,6 +180,40 @@ describe('GitLab IPC handlers', () => {
     ]) {
       mock.mockReset()
     }
+    readWslDistroRunningStateMock.mockReset().mockResolvedValue('running')
+  })
+
+  it('refuses a checks-panel MR poll for a stopped WSL distro, but not an explicit open', async () => {
+    setPlatform('win32')
+    readWslDistroRunningStateMock.mockResolvedValue('stopped')
+    getWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
+    registerGitLabHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handlers read only the four accessors storeWithRepos implements.
+      storeWithRepos(
+        [repo()],
+        [
+          {
+            id: 'project-1',
+            displayName: 'Orca',
+            badgeColor: 'blue',
+            sourceRepoIds: ['repo-local'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ]
+      ) as Store
+    )
+    const details = ipcHandlers.get('gitlab:workItemDetails')!
+    const args = { repoPath: '/local/orca', iid: 8, type: 'mr' }
+
+    await expect(details(null, { ...args, background: true })).rejects.toThrow(
+      "WSL distro 'Ubuntu' is not running"
+    )
+    expect(getWorkItemDetailsMock).not.toHaveBeenCalled()
+
+    await details(null, args)
+    expect(getWorkItemDetailsMock).toHaveBeenCalledTimes(1)
   })
 
   it('resolves repoId and source host context before listing work items', async () => {

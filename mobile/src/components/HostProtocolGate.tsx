@@ -5,6 +5,7 @@ import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
@@ -25,6 +26,7 @@ export function HostProtocolGate({
   blocked: blockedView
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -59,7 +61,10 @@ export function HostProtocolGate({
       <View style={styles.pending}>
         <ActivityIndicator
           color={colors.textSecondary}
-          accessibilityLabel="Checking host compatibility"
+          accessibilityLabel={t(
+            'components.hostProtocolGate.checkingCompatibility',
+            'Checking host compatibility'
+          )}
         />
       </View>
     )
@@ -89,7 +94,10 @@ export function HostProtocolGate({
           >
             <ActivityIndicator
               color={colors.textSecondary}
-              accessibilityLabel="Checking host compatibility"
+              accessibilityLabel={t(
+                'components.hostProtocolGate.checkingCompatibility',
+                'Checking host compatibility'
+              )}
             />
           </View>
         ) : null}
