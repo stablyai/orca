@@ -17,9 +17,14 @@ import { isBrowserAutomationVisible } from '@/components/browser-pane/host-guest
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 
 type CapturePaintHoldEvent = { browserPageId: string; held: boolean }
+type AgentActivityEvent = { browserPageId: string; worktreeId: string | null; active: boolean }
 
-function captureHoldHandler(unsubs: (() => void)[] = []): (event: CapturePaintHoldEvent) => void {
-  let handler: ((event: CapturePaintHoldEvent) => void) | null = null
+function registerBridge(unsubs: (() => void)[] = []): {
+  onHold: (event: CapturePaintHoldEvent) => void
+  onAgentActivity: (event: AgentActivityEvent) => void
+} {
+  let onHold: ((event: CapturePaintHoldEvent) => void) | null = null
+  let onAgentActivity: ((event: AgentActivityEvent) => void) | null = null
   const subscribe = vi.fn(() => () => {})
   vi.stubGlobal('window', {
     api: {
@@ -32,7 +37,11 @@ function captureHoldHandler(unsubs: (() => void)[] = []): (event: CapturePaintHo
         onOpenLinkInOrcaTab: subscribe,
         onSessionProfilesChanged: subscribe,
         onCapturePaintHold: (callback: (event: CapturePaintHoldEvent) => void) => {
-          handler = callback
+          onHold = callback
+          return () => {}
+        },
+        onAgentActivity: (callback: (event: AgentActivityEvent) => void) => {
+          onAgentActivity = callback
           return () => {}
         }
       }
@@ -40,19 +49,19 @@ function captureHoldHandler(unsubs: (() => void)[] = []): (event: CapturePaintHo
   })
 
   registerBrowserStateIpcBridge(unsubs, () => false)
-  if (!handler) {
-    throw new Error('Expected the bridge to subscribe to browser:capturePaintHold')
+  if (!onHold || !onAgentActivity) {
+    throw new Error('Expected the bridge to subscribe to capture holds and agent activity')
   }
-  return handler
+  return { onHold, onAgentActivity }
 }
 
-describe('capture paint holds from main', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
+describe('capture paint holds from main', () => {
   it('keeps the page drawn from the hold until its release, ignoring repeats', () => {
-    const onHold = captureHoldHandler()
+    const { onHold } = registerBridge()
 
     onHold({ browserPageId: 'page-1', held: true })
     onHold({ browserPageId: 'page-1', held: true })
@@ -67,7 +76,7 @@ describe('capture paint holds from main', () => {
 
   it('releases a live hold when the bridge is disposed', () => {
     const unsubs: (() => void)[] = []
-    const onHold = captureHoldHandler(unsubs)
+    const { onHold } = registerBridge(unsubs)
 
     onHold({ browserPageId: 'page-2', held: true })
     expect(isBrowserAutomationVisible('page-2')).toBe(true)
@@ -76,5 +85,19 @@ describe('capture paint holds from main', () => {
       unsubscribe()
     }
     expect(isBrowserAutomationVisible('page-2')).toBe(false)
+  })
+})
+
+describe('agent activity from main', () => {
+  // #36161: a fixed bootstrap lease let a driven page in a hidden worktree stop drawing.
+  it('keeps the page drawn while an agent drives it, until main reports it idle', () => {
+    const { onAgentActivity } = registerBridge()
+
+    onAgentActivity({ browserPageId: 'page-3', worktreeId: 'wt-agent', active: true })
+    onAgentActivity({ browserPageId: 'page-3', worktreeId: 'wt-agent', active: true })
+    expect(isBrowserAutomationVisible('page-3')).toBe(true)
+
+    onAgentActivity({ browserPageId: 'page-3', worktreeId: 'wt-agent', active: false })
+    expect(isBrowserAutomationVisible('page-3')).toBe(false)
   })
 })
