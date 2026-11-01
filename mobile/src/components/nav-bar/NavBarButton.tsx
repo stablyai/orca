@@ -16,6 +16,8 @@ type NavBarButtonProps = {
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
+  /** Drawn size. The header stays at 36; a Duo rail control passes the 44pt target. */
+  size?: number
 }
 
 // A round top-bar button; the bar floats over content like the composer, so its buttons are round too.
@@ -25,7 +27,8 @@ export function NavBarButton({
   accessibilityLabel,
   onPress,
   active = false,
-  disabled = false
+  disabled = false,
+  size = NAV_BAR_BUTTON_SIZE
 }: NavBarButtonProps) {
   useMobileColorScheme()
   return (
@@ -33,18 +36,19 @@ export function NavBarButton({
       ref={ref}
       style={({ pressed }) => [
         styles.button,
+        { width: size, height: size },
         active && styles.active,
         pressed && styles.pressed,
         disabled && styles.disabled
       ]}
       onPress={onPress}
       disabled={disabled}
-      hitSlop={4}
+      hitSlop={size >= 44 ? 0 : 4}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled, selected: active }}
     >
-      <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      <Icon size={size / 2} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
     </Pressable>
   )
 }

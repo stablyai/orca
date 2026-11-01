@@ -7,8 +7,8 @@ import {
   useMobileNativeChatDisclosures
 } from './transcript/mobile-native-chat-disclosure-store'
 import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { useChatBottomFit } from './composer/use-chat-bottom-fit'
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -214,8 +214,7 @@ export function MobileNativeChatView({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const insets = useSafeAreaInsets()
-  const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
+  const { bottomPad, composerFit, transcriptInset } = useChatBottomFit(keyboardInset)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
@@ -339,7 +338,7 @@ export function MobileNativeChatView({
           title={t('session.nativeChatView.loading', 'Loading conversation…')}
         />
       ) : (
-        <GestureHandlerRootView style={styles.listWrap}>
+        <GestureHandlerRootView style={[styles.listWrap, transcriptInset]}>
           <MobileNativeChatDisclosureContext.Provider value={disclosures}>
             <MobileNativeChatScrollRootsBoundary
               {...{ rowKeys, layoutKey }}
@@ -392,6 +391,7 @@ export function MobileNativeChatView({
       {trayContent}
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
+          {...composerFit}
           draftScopeKey={composerScopeKey}
           structured={structuredActivityUi ? structuredComposer : null}
           draftKey={draftKey}

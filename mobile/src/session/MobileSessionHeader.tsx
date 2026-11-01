@@ -17,6 +17,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
 import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useReleasedSideInset } from '../layout/released-side-inset'
 
 export function MobileSessionHeader({
   controller,
@@ -49,6 +50,7 @@ export function MobileSessionHeader({
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
+  const releasedStrip = useReleasedSideInset()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
@@ -120,6 +122,12 @@ export function MobileSessionHeader({
       />
     </>
   )
+  // Why: keep the larger of the strip and the top-chrome clearance so controls stay off the clock/camera.
+  const releasedStripPadding = releasedStrip
+    ? releasedStrip.side === 'right'
+      ? { paddingRight: Math.max(releasedStrip.width, topChrome.space?.right ?? 0) }
+      : { paddingLeft: Math.max(releasedStrip.width, topChrome.space?.left ?? 0) }
+    : null
   return (
     <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
       <SafeAreaView
@@ -129,7 +137,9 @@ export function MobileSessionHeader({
             paddingLeft: topChrome.space.left,
             paddingRight: topChrome.space.right,
             minHeight: topChrome.space.minHeight
-          }
+          },
+          // The background reaches the Duo's status column; tabs and buttons stay clear of it.
+          releasedStripPadding
         ]}
         edges={topChrome.space ? [] : ['top']}
       >

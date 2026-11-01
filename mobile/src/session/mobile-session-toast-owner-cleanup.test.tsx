@@ -23,8 +23,10 @@ vi.mock('expo-router', async () => {
 vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: vi.fn() }) },
   View: 'View',
+  Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Platform: { OS: 'ios' },
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
   Keyboard: { dismiss: vi.fn() },
   Easing: { bezier: () => 'toast-easing' },
   Animated: {
@@ -64,6 +66,12 @@ vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
+}))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+}))
 vi.mock('./use-session-title-card', () => ({
   useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
 }))

@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   View: 'View',
+  Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, absoluteFillObject: {} },
   Keyboard: { dismiss: () => {} },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
-  Platform: { OS: 'ios' }
+  Platform: { OS: 'ios' },
+  useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 vi.mock('../platform/clipboard', () => ({
   useClipboardWriter: () => ({ writeText: async () => {} }),
@@ -33,6 +35,12 @@ vi.mock('../layout/responsive-layout', () => ({
   useResponsiveLayout: () => ({ isLandscapePhone: false })
 }))
 vi.mock('../layout/use-shell-side-rail', () => ({ useShellSideRail: () => false }))
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 })
+}))
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+}))
 vi.mock('../session/use-session-title-card', () => ({
   useSessionTitleCard: () => ({ active: false, visual: null, tabId: null, missingTab: false })
 }))
