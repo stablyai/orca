@@ -2582,8 +2582,8 @@
       "inputPane": "{{title}} · Entrada"
     },
     "structuredOpen": {
-      "worktreeDeleted": "A árvore de trabalho foi excluída.",
-      "folderWorkspaceRemoved": "O espaço de trabalho da pasta foi removido."
+      "worktreeDeleted": "A worktree foi excluída.",
+      "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
     }
   },
   "settings": {

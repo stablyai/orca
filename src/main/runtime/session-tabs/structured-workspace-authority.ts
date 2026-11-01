@@ -71,10 +71,9 @@ export async function prepareStructuredWorkspaceAuthority(
       )
     const selected = folderNow()
     if (selected.kind !== 'selected') {
-      throw new StructuredWorkspaceUnavailable(
-        selected.kind === 'missing' ? 'removed' : 'unknown',
-        'folder'
-      )
+      throw selected.kind === 'missing'
+        ? new StructuredWorkspaceUnavailable('removed', 'folder')
+        : new StructuredWorkspaceUnavailable('unknown')
     }
     const row = selected.value.workspace
     path = row.folderPath

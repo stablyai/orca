@@ -95,9 +95,9 @@ it('explains a removed History workspace with one short toast sentence', () => {
 it('uses the translated deleted-workspace sentences from the phone catalog', async () => {
   await activateMobileUiLocale('fr')
   expect(mobileStructuredSessionOpenMessage('workspace-missing', 'codex')).toBe(
-    'L’arbre de travail a été supprimé.'
+    'Le worktree a été supprimé.'
   )
   expect(
     mobileStructuredSessionOpenMessage('workspace-missing', 'claude', undefined, 'folder')
-  ).toBe('L’espace de travail du dossier a été retiré.')
+  ).toBe('L’espace de travail de type dossier a été retiré.')
 })

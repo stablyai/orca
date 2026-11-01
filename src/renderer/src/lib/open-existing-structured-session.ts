@@ -31,7 +31,6 @@ export type StructuredSessionRevealOutcome =
   | StructuredSessionOpenTarget
   | StructuredSessionOpenFailure
   | 'gone'
-  | 'workspace-missing'
   | 'host-cannot-open'
   | 'unreachable'
 

@@ -44,11 +44,8 @@ export async function openMobileAgentHistoryChat(args: {
   ) {
     return false
   } else if (result.kind !== 'superseded') {
-    if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
-      args.failed(result.failure.reason, result.failure.workspaceKind)
-    } else {
-      args.failed(result.kind === 'failed' ? result.failure.reason : 'unknown')
-    }
+    const failure = result.kind === 'failed' ? result.failure : undefined
+    args.failed(failure?.reason ?? 'unknown', failure?.workspaceKind)
   }
   return true
 }

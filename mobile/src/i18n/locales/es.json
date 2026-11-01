@@ -2582,7 +2582,7 @@
       "inputPane": "{{title}} · Entrada"
     },
     "structuredOpen": {
-      "worktreeDeleted": "El árbol de trabajo se eliminó.",
+      "worktreeDeleted": "El worktree se eliminó.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
     }
   },

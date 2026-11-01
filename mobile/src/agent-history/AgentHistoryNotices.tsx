@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { AccessibilityInfo, Pressable, ScrollView, Text, View } from 'react-native'
 import { mobileSessionReviewCommentStyles } from '../session/mobile-session-review-comment-styles'
 import { TriangleAlert, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
@@ -130,6 +130,8 @@ export function useAgentHistoryResumeToast() {
   const showToast = useCallback((text: string) => {
     clearTimeout(timer.current)
     setMessage(text)
+    // The toast has no focus or live region, so announce it on both platforms.
+    AccessibilityInfo.announceForAccessibility(text)
     timer.current = setTimeout(() => setMessage(null), 3_000)
   }, [])
   return { message, showToast }

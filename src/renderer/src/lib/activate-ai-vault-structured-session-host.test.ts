@@ -537,7 +537,7 @@ it.each([
     host: TARGET,
     workspaceKind: 'folder',
     locale: 'fr',
-    message: 'L’espace de travail du dossier a été retiré.'
+    message: 'L’espace de travail de type dossier a été retiré.'
   }
 ] as const)(
   'shows one $locale removed-$workspaceKind toast for $agent History Resume without presenting a tab',
