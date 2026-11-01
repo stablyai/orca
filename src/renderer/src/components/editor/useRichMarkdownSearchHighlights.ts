@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { richMarkdownSearchPluginKey, type RichMarkdownSearchMatch } from './rich-markdown-search'
+import { settleMermaidNavigation } from './use-mermaid-viewport'
 
 type SearchNavigation = {
   editor: Editor
@@ -88,7 +89,18 @@ export function useRichMarkdownSearchHighlights({
       const relativeTop = coords.top - containerRect.top
       const targetScroll = container.scrollTop + relativeTop - containerRect.height / 2
       container.scrollTo({ top: targetScroll, behavior: 'instant' })
+      return settleMermaidNavigation(container, () => {
+        if (!editor.isDestroyed && editor.state.doc === tr.doc) {
+          const settledCoords = editor.view.coordsAtPos(activeMatch.from)
+          const settledRect = container.getBoundingClientRect()
+          container.scrollTo({
+            top: container.scrollTop + settledCoords.top - settledRect.top - settledRect.height / 2,
+            behavior: 'instant'
+          })
+        }
+      })
     }
+    return undefined
   }, [
     activeMatchIndex,
     editor,

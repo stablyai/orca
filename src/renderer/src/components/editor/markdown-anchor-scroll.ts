@@ -1,6 +1,7 @@
 import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { settleMermaidNavigation } from './use-mermaid-viewport'
 
 // Match preview suffixes for duplicate headings so anchors resolve to the same heading.
 export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string): void {
@@ -18,7 +19,22 @@ export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string)
   for (const heading of headings) {
     if (slugger.slug(heading.textContent ?? '') === decoded) {
       revealMarkdownNavigationDetails(heading)
-      heading.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+      const container = heading.closest<HTMLElement>('.overflow-auto')
+      const pending = container
+        ? settleMermaidNavigation(
+            container,
+            () => {
+              if (root.contains(heading)) {
+                heading.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+              }
+            },
+            heading
+          )
+        : undefined
+      heading.scrollIntoView({
+        behavior: pending ? 'instant' : motionSafeScrollBehavior(),
+        block: 'start'
+      })
       return
     }
   }

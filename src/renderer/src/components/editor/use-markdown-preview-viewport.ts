@@ -14,6 +14,7 @@ import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { useMarkdownPreviewDomSearch } from './use-markdown-preview-dom-search'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
+import { cancelMermaidNavigation } from './use-mermaid-viewport'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 export function useMarkdownPreviewViewport({
@@ -163,6 +164,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
+      cancelMermaidNavigation(container)
       revealMarkdownNavigationDetails(target)
       container.scrollTo({ top: getMarkdownPreviewAnchorScrollTop(container, target) })
       target.focus({ preventScroll: true })

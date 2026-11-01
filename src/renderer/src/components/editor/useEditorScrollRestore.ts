@@ -1,6 +1,10 @@
 import { useLayoutEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  recordMarkdownMermaidScrollAnchor,
+  restoreMarkdownMermaidScrollAnchor
+} from './markdown-mermaid-scroll-anchor'
 
 export function useEditorScrollRestore(
   scrollContainerRef: RefObject<HTMLDivElement | null>,
@@ -21,6 +25,11 @@ export function useEditorScrollRestore(
       }
       throttleTimer = setTimeout(() => {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        recordMarkdownMermaidScrollAnchor(
+          container,
+          container.querySelector('.ProseMirror'),
+          scrollCacheKey
+        )
         throttleTimer = null
       }, 150)
     }
@@ -30,6 +39,11 @@ export function useEditorScrollRestore(
       // Zero-height StrictMode/early cleanup must not overwrite a valid cached scroll position before content renders.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        recordMarkdownMermaidScrollAnchor(
+          container,
+          container.querySelector('.ProseMirror'),
+          scrollCacheKey
+        )
       }
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
@@ -47,9 +61,15 @@ export function useEditorScrollRestore(
 
     let frameId = 0
     let attempts = 0
+    let cancelRestore: (() => void) | undefined
 
     // Retry while asynchronous Tiptap hydration grows scrollHeight; the initial frame may not reach the cached offset.
     const tryRestore = (): void => {
+      const restoredAnchor = restoreMarkdownMermaidScrollAnchor(container, scrollCacheKey)
+      if (restoredAnchor !== null) {
+        cancelRestore = restoredAnchor
+        return
+      }
       const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
       const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
       container.scrollTop = nextScrollTop
@@ -65,7 +85,10 @@ export function useEditorScrollRestore(
     }
 
     tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      cancelRestore?.()
+    }
     // Restart when the editor becomes available or the retry budget could expire before hydration mounts content.
   }, [scrollContainerRef, scrollCacheKey, editor])
 }

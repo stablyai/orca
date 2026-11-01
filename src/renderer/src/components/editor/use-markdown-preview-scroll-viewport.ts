@@ -1,6 +1,11 @@
 import { useLayoutEffect } from 'react'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
+import {
+  clearMarkdownMermaidScrollAnchor,
+  recordMarkdownMermaidScrollAnchor,
+  restoreMarkdownMermaidScrollAnchor
+} from './markdown-mermaid-scroll-anchor'
 
 export function useMarkdownPreviewScrollViewport({
   foundation,
@@ -11,13 +16,17 @@ export function useMarkdownPreviewScrollViewport({
   restorePixels?: boolean
   scrollCacheKey: string
 }): void {
-  const { rootRef, renderedContent } = foundation
+  const { rootRef, bodyRef, renderedContent } = foundation
 
   useLayoutEffect(() => {
+    if (!restorePixels) {
+      clearMarkdownMermaidScrollAnchor(scrollCacheKey)
+    }
     const container = rootRef.current
     if (!container) {
       return
     }
+    const body = bodyRef.current
 
     let throttleTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -27,6 +36,9 @@ export function useMarkdownPreviewScrollViewport({
       }
       throttleTimer = setTimeout(() => {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        if (restorePixels) {
+          recordMarkdownMermaidScrollAnchor(container, body, scrollCacheKey)
+        }
         throttleTimer = null
       }, 150)
     }
@@ -36,13 +48,16 @@ export function useMarkdownPreviewScrollViewport({
       // Why: StrictMode's zero-height mount must not clobber a valid cached position.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
+        if (restorePixels) {
+          recordMarkdownMermaidScrollAnchor(container, body, scrollCacheKey)
+        }
       }
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
       container.removeEventListener('scroll', onScroll)
     }
-  }, [rootRef, scrollCacheKey])
+  }, [rootRef, bodyRef, scrollCacheKey, restorePixels])
 
   useLayoutEffect(() => {
     const container = rootRef.current
@@ -56,8 +71,14 @@ export function useMarkdownPreviewScrollViewport({
 
     let frameId = 0
     let attempts = 0
+    let cancelRestore: (() => void) | undefined
 
     const tryRestore = (): void => {
+      const restoredAnchor = restoreMarkdownMermaidScrollAnchor(container, scrollCacheKey)
+      if (restoredAnchor !== null) {
+        cancelRestore = restoredAnchor
+        return
+      }
       const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
       const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
       container.scrollTop = nextScrollTop
@@ -73,6 +94,9 @@ export function useMarkdownPreviewScrollViewport({
     }
 
     tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [rootRef, scrollCacheKey, renderedContent, restorePixels])
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      cancelRestore?.()
+    }
+  }, [rootRef, bodyRef, scrollCacheKey, renderedContent, restorePixels])
 }

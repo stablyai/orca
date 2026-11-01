@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
@@ -32,6 +32,7 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
+import { registerMarkdownExportRevision } from './markdown-export-revision'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -216,6 +217,15 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+
+  useLayoutEffect(() => {
+    if (!editor || editor.isDestroyed) {
+      return
+    }
+    return registerMarkdownExportRevision(editor.view.dom, () =>
+      editor.isDestroyed ? null : editor.state.doc
+    )
+  }, [editor, fileId])
 
   useRichMarkdownPendingFocus({
     editor,

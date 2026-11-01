@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { MarkdownPreviewSurface } from './MarkdownPreviewSurface'
@@ -12,6 +12,7 @@ import { useMarkdownPreviewDocument } from './use-markdown-preview-document'
 import { useMarkdownPreviewDocumentSearch } from './use-markdown-preview-document-search'
 import type { VirtualMarkdownPreviewNavigation } from './VirtualMarkdownPreviewBody'
 import { useMarkdownPreviewViewport } from './use-markdown-preview-viewport'
+import { registerMarkdownExportRevision } from './markdown-export-revision'
 
 export {
   decodeMarkdownPreviewAnchor,
@@ -54,6 +55,13 @@ export default function MarkdownPreview({
     markdownAnnotationsEnabled,
     largePreview: incomingLargePreview
   })
+  useLayoutEffect(() => {
+    const body = foundation.bodyRef.current
+    if (body) {
+      return registerMarkdownExportRevision(body, () => content)
+    }
+    return undefined
+  }, [foundation.bodyRef, content, foundation.renderedContent])
   const largePreview = exceedsMarkdownRichModeSizeLimit(foundation.renderedContent)
   const recordBeforeSwap = useCallback(() => {
     foundation.rootRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))

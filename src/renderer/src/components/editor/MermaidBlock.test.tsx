@@ -13,6 +13,7 @@ vi.mock('dompurify', () => ({ default: { sanitize: mermaid.sanitize } }))
 
 import MermaidBlock from './MermaidBlock'
 import { mermaidSvgSanitizeConfig } from './mermaid-sanitize'
+import { settleMermaidNavigation } from './use-mermaid-viewport'
 
 const partial = 'flowchart TD\n A["Sync with main '
 const complete = `${partial}once"]`
@@ -23,9 +24,125 @@ beforeEach(() => {
   mermaid.render.mockResolvedValue({ svg: diagram })
   mermaid.sanitize.mockReset().mockImplementation((svg) => svg)
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('MermaidBlock rendering', () => {
+  it('defers an offscreen document diagram, then keeps its SVG after leaving and re-entering', async () => {
+    let notify: ((isIntersecting: boolean) => void) | undefined
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          callback: (entries: Pick<IntersectionObserverEntry, 'isIntersecting'>[]) => void
+        ) {
+          notify = (isIntersecting) => callback([{ isIntersecting }])
+        }
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const { container, rerender } = render(<MermaidBlock content={complete} isDark={false} lazy />)
+    await act(async () => {})
+    expect(mermaid.render).not.toHaveBeenCalled()
+    expect(container.querySelector('svg')).toBeNull()
+
+    act(() => notify?.(true))
+    await waitFor(() =>
+      expect(container.querySelector('svg')).toHaveTextContent('Sync with main once')
+    )
+    rerender(<MermaidBlock content={complete} isDark={false} lazy />)
+    act(() => notify?.(false))
+    act(() => notify?.(true))
+    await act(async () => {})
+    expect(container.querySelector('svg')).toHaveTextContent('Sync with main once')
+    expect(mermaid.render).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['pointer', 'keyboard', 'editing'] as const)(
+    'does not recenter the rich editor after the user resumes %s interaction',
+    async (interaction) => {
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          observe() {}
+          disconnect() {}
+        }
+      )
+      const pending = Promise.withResolvers<{ svg: string }>()
+      mermaid.render.mockReturnValueOnce(pending.promise)
+      const { container } = render(
+        <div className="rich-markdown-editor-shell">
+          <div className="overflow-auto">
+            <div className="ProseMirror" contentEditable suppressContentEditableWarning>
+              <MermaidBlock content={complete} isDark={false} lazy />
+            </div>
+          </div>
+        </div>
+      )
+      const viewport = container.querySelector<HTMLElement>('.overflow-auto')!
+      const editor = container.querySelector<HTMLElement>('.ProseMirror')!
+      act(() => {
+        settleMermaidNavigation(viewport, () => {
+          viewport.scrollTop = 100
+        })
+      })
+      await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+      if (interaction === 'pointer') {
+        fireEvent.pointerDown(editor)
+      } else if (interaction === 'keyboard') {
+        fireEvent.keyDown(editor, { key: 'PageDown' })
+      } else {
+        fireEvent(editor, new Event('beforeinput', { bubbles: true }))
+      }
+      viewport.scrollTop = 800
+      await act(async () => pending.resolve({ svg: diagram }))
+      expect(viewport.scrollTop).toBe(800)
+      expect(container.querySelector('svg')).toHaveTextContent('Sync with main once')
+    }
+  )
+
+  it('keeps a document diagram visible while edited source renders', async () => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(
+          private readonly notify: (
+            entries: Pick<IntersectionObserverEntry, 'isIntersecting'>[]
+          ) => void
+        ) {}
+        observe() {
+          this.notify([{ isIntersecting: true }])
+        }
+        disconnect() {}
+      }
+    )
+    const { container, rerender } = render(
+      <MermaidBlock content={complete} isDark={false} lazy pendingContent={<div />} />
+    )
+    await waitFor(() =>
+      expect(container.querySelector('svg')).toHaveTextContent('Sync with main once')
+    )
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    rerender(
+      <MermaidBlock
+        content={`${complete}\n B --> C`}
+        isDark={false}
+        lazy
+        pendingContent={<div />}
+      />
+    )
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(2))
+    expect(container.querySelector('svg')).toHaveTextContent('Sync with main once')
+    await act(async () => {
+      pending.resolve({ svg: '<svg><text>Edited diagram</text></svg>' })
+    })
+    expect(container.querySelector('svg')).toHaveTextContent('Edited diagram')
+  })
+
   it('offers to expand a rendered diagram, but not its source or an error', async () => {
     const pending = Promise.withResolvers<{ svg: string }>()
     mermaid.render.mockReturnValueOnce(pending.promise)

@@ -16,7 +16,11 @@ On paired runtimes, the HTML file must be inside the worktree. Very old paired s
 
 ## Mermaid
 
-Mermaid diagrams render inline inside markdown preview. Standalone `.mmd` files open in a dedicated viewer with pan/zoom.
+Mermaid diagrams render inline in markdown preview and the rich editor as they approach the viewport, rather than all at once when a document opens. Export as PDF waits for deferred diagrams and abandons the snapshot if the document changes while they render.
+
+Switching tabs restores your reading position without rendering earlier offscreen diagrams. Newer heading navigation takes precedence over an unfinished Find jump.
+
+Standalone `.mmd` files open in a dedicated viewer with pan/zoom.
 
 ## PDF
 

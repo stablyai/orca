@@ -6,6 +6,7 @@ import { getMermaidConfig } from './mermaid-config'
 import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
+import { useMermaidViewport } from './use-mermaid-viewport'
 
 type MermaidApi = typeof mermaidNamespace
 
@@ -27,6 +28,7 @@ type MermaidBlockProps = {
   className?: string
   pendingContent?: React.ReactNode
   renderEnabled?: boolean
+  lazy?: boolean
   onRenderComplete?: () => void
   onExpand?: (diagram: RenderedMermaidDiagram) => void
 }
@@ -51,6 +53,7 @@ export default function MermaidBlock({
   className,
   pendingContent,
   renderEnabled = true,
+  lazy = false,
   onRenderComplete,
   onExpand
 }: MermaidBlockProps): React.JSX.Element {
@@ -59,14 +62,16 @@ export default function MermaidBlock({
     content: string
     result: RenderedMermaidDiagram | { error: string }
   } | null>(null)
-  // Why: new source waits as source, but a theme change keeps the old diagram until it re-renders.
+  const viewport = useMermaidViewport(lazy, rendered?.content === content)
+  const shouldRender = renderEnabled && viewport.renderEnabled
+  const fallback = pendingContent ?? (lazy ? <div className="mermaid-block min-h-48" /> : undefined)
   const result =
-    pendingContent !== undefined && rendered?.content !== content
+    !lazy && pendingContent !== undefined && rendered?.content !== content
       ? null
       : (rendered?.result ?? null)
 
   useEffect(() => {
-    if (!renderEnabled) {
+    if (!shouldRender) {
       return
     }
     let cancelled = false
@@ -119,20 +124,24 @@ export default function MermaidBlock({
     return () => {
       cancelled = true
     }
-  }, [content, isDark, id, renderEnabled])
+  }, [content, isDark, id, shouldRender])
 
   useLayoutEffect(() => {
-    if (renderEnabled && rendered?.content === content) {
+    if (shouldRender && rendered?.content === content) {
       onRenderComplete?.()
     }
-  }, [content, rendered, renderEnabled, onRenderComplete])
+  }, [content, rendered, shouldRender, onRenderComplete])
 
-  if ((!renderEnabled || result === null) && pendingContent !== undefined) {
-    return <>{pendingContent}</>
+  const pending = (!shouldRender || result === null) && fallback !== undefined
+  if (pending && !lazy) {
+    return <>{fallback}</>
   }
 
-  const diagram =
-    result && 'error' in result ? (
+  let diagram: React.ReactNode
+  if (pending) {
+    diagram = fallback
+  } else if (result && 'error' in result) {
+    diagram = (
       <div className="mermaid-block">
         <div className="mermaid-error">
           {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}{' '}
@@ -142,15 +151,26 @@ export default function MermaidBlock({
           <code>{content}</code>
         </pre>
       </div>
-    ) : result && onExpand ? (
-      <ExpandableDiagram diagram={result} onExpand={onExpand} />
-    ) : (
+    )
+  } else if (result && onExpand) {
+    diagram = <ExpandableDiagram diagram={result} onExpand={onExpand} />
+  } else {
+    diagram = (
       <div
         className="mermaid-block"
         dangerouslySetInnerHTML={result ? { __html: result.svg } : undefined}
       />
     )
-  return className ? <div className={className}>{diagram}</div> : diagram
+  }
+  return lazy ? (
+    <div ref={viewport.ref} data-mermaid-lazy className={className}>
+      {diagram}
+    </div>
+  ) : className ? (
+    <div className={className}>{diagram}</div>
+  ) : (
+    <>{diagram}</>
+  )
 }
 
 function ExpandableDiagram({

@@ -1,7 +1,22 @@
 // @vitest-environment happy-dom
 
+import { createElement } from 'react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getActiveMarkdownExportPayload } from './markdown-export-extract'
+import { useAppStore } from '@/store'
+import {
+  getActiveMarkdownExportPayload,
+  type MarkdownExportPayload
+} from './markdown-export-extract'
+import MermaidBlock from './MermaidBlock'
+import { registerMarkdownExportRevision } from './markdown-export-revision'
+
+const mermaid = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  render: vi.fn<(id: string, content: string) => Promise<{ svg: string }>>()
+}))
+vi.mock('mermaid', () => ({ default: mermaid }))
+vi.mock('dompurify', () => ({ default: { sanitize: (svg: string) => svg } }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -10,7 +25,7 @@ vi.mock('@/store', () => ({
 }))
 
 describe('getActiveMarkdownExportPayload', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal(
       'fetch',
@@ -19,7 +34,6 @@ describe('getActiveMarkdownExportPayload', () => {
         blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
       })
     )
-    const { useAppStore } = await import('@/store')
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [
         {
@@ -33,8 +47,160 @@ describe('getActiveMarkdownExportPayload', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
   })
+
+  it('waits for offscreen diagrams before taking the PDF snapshot', async () => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const { container } = render(
+      createElement(
+        'div',
+        { className: 'markdown-body' },
+        createElement(MermaidBlock, {
+          content: 'flowchart TD\n A[Hidden] --> B[Diagram]',
+          isDark: false,
+          lazy: true
+        })
+      )
+    )
+    expect(container.querySelector('svg')).toBeNull()
+    let exporting = Promise.resolve<MarkdownExportPayload | null>(null)
+    act(() => {
+      exporting = getActiveMarkdownExportPayload({
+        fileId: '/repo/docs/readme.md',
+        root: container
+      })
+    })
+    let settled = false
+    void exporting.then(() => {
+      settled = true
+    })
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    expect(settled).toBe(false)
+    await act(async () => {
+      pending.resolve({
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Hidden diagram</text></svg>'
+      })
+    })
+    const payload = await exporting
+    const exported = parseExportedHtml(payload?.html)
+    expect(exported.querySelector('.mermaid-block svg text')?.textContent).toBe('Hidden diagram')
+    expect(exported.querySelector('pre')).toBeNull()
+  })
+
+  it('abandons an export when its document unmounts while a diagram is rendering', async () => {
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    )
+    const pending = Promise.withResolvers<{ svg: string }>()
+    mermaid.render.mockReturnValueOnce(pending.promise)
+    const mounted = render(
+      createElement(
+        'div',
+        { className: 'markdown-body' },
+        createElement(MermaidBlock, {
+          content: 'flowchart TD\n A --> B',
+          isDark: false,
+          lazy: true
+        })
+      )
+    )
+    let exporting = Promise.resolve<MarkdownExportPayload | null>(null)
+    act(() => {
+      exporting = getActiveMarkdownExportPayload({
+        fileId: '/repo/docs/readme.md',
+        root: mounted.container
+      })
+    })
+    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    try {
+      mounted.unmount()
+      await expect(exporting).resolves.toBeNull()
+    } finally {
+      await act(async () => {
+        pending.resolve({ svg: '<svg />' })
+      })
+    }
+  })
+
+  it.each(['edit', 'size limit', 'file close'] as const)(
+    'abandons a pending export after a document %s without replacing its root',
+    async (change) => {
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          observe() {}
+          disconnect() {}
+        }
+      )
+      const pending = Promise.withResolvers<{ svg: string }>()
+      mermaid.render.mockReturnValueOnce(pending.promise)
+      const document = (edited: boolean) =>
+        createElement(
+          'div',
+          { className: 'markdown-body' },
+          createElement('p', null, edited ? 'Changed document' : 'Original document'),
+          createElement(MermaidBlock, {
+            content: 'flowchart TD\n A --> B',
+            isDark: false,
+            lazy: true
+          }),
+          edited
+            ? createElement(MermaidBlock, {
+                content: 'flowchart TD\n C --> D',
+                isDark: false,
+                lazy: true
+              })
+            : null
+        )
+      const mounted = render(document(false))
+      const subtree = mounted.container.firstElementChild
+      if (!subtree) {
+        throw new Error('Missing rendered document')
+      }
+      let revision = 'original'
+      const unregister = registerMarkdownExportRevision(subtree, () => revision)
+      try {
+        let exporting = Promise.resolve<MarkdownExportPayload | null>(null)
+        act(() => {
+          exporting = getActiveMarkdownExportPayload({
+            fileId: '/repo/docs/readme.md',
+            root: mounted.container
+          })
+        })
+        await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+        if (change === 'edit') {
+          revision = 'changed'
+          mounted.rerender(document(true))
+        } else if (change === 'size limit') {
+          subtree.setAttribute('data-markdown-preview-incomplete', 'true')
+        } else {
+          vi.mocked(useAppStore.getState).mockReturnValue({
+            ...useAppStore.getState(),
+            openFiles: []
+          })
+        }
+        expect(mounted.container.firstElementChild).toBe(subtree)
+        await act(async () => pending.resolve({ svg: '<svg><text>Original diagram</text></svg>' }))
+        await expect(exporting).resolves.toBeNull()
+      } finally {
+        unregister()
+      }
+    }
+  )
 
   it('rejects virtual, loading, and failed previews even if export eligibility is stale', async () => {
     const root = document.createElement('div')

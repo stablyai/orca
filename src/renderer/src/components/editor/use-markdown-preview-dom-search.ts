@@ -5,6 +5,7 @@ import {
   clearMarkdownPreviewSearchHighlights,
   setActiveMarkdownPreviewSearchMatch
 } from './markdown-preview-search'
+import { settleMermaidNavigation } from './use-mermaid-viewport'
 
 export function useMarkdownPreviewDomSearch(
   foundation: MarkdownPreviewFoundation,
@@ -12,6 +13,7 @@ export function useMarkdownPreviewDomSearch(
 ): void {
   const {
     bodyRef,
+    rootRef,
     searchInstanceRef,
     isSearchOpen,
     matchesRef,
@@ -70,5 +72,24 @@ export function useMarkdownPreviewDomSearch(
       matchesRef.current,
       activeMatchIndex
     )
-  }, [activeMatchIndex, disabled, matchCount, matchesRef, searchInstanceRef, searchRevision])
+    const container = rootRef.current
+    if (container && matchesRef.current[activeMatchIndex]) {
+      return settleMermaidNavigation(container, () => {
+        setActiveMarkdownPreviewSearchMatch(
+          searchInstanceRef.current,
+          matchesRef.current,
+          activeMatchIndex
+        )
+      })
+    }
+    return undefined
+  }, [
+    activeMatchIndex,
+    disabled,
+    matchCount,
+    matchesRef,
+    rootRef,
+    searchInstanceRef,
+    searchRevision
+  ])
 }
