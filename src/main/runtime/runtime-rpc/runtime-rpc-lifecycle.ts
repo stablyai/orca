@@ -261,6 +261,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           )
         }
       },
+      // A pruned browser session must also lose the device servers minted for it.
+      onDevicesPruned: (deviceIds) => {
+        if (this.relayedRuntimeClients.forget(deviceIds)) {
+          this.mobileDesktopRelay?.phonesChanged()
+        }
+      },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {
           return

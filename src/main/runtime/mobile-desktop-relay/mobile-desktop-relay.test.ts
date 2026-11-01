@@ -223,6 +223,25 @@ describe('MobileDesktopRelay', () => {
     await vi.waitFor(() => expect(sockets[1]!.closed).toBe(true))
   })
 
+  it("hands the caller its own token wherever the server echoes the caller's delegated token", async () => {
+    sockets.length = 0
+    const { relay, phone, replies } = relayWithPhone()
+    relay.forward(phone, 'env-1', { id: 's', method: 'terminal.subscribe' }, '{"id":"s"}')
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+    const driver = { kind: 'mobile', clientId: 'host-token' }
+    sockets[0]!.callbacks.onText(
+      JSON.stringify({
+        id: 's',
+        ok: true,
+        streaming: true,
+        result: { type: 'driver-changed', driver }
+      })
+    )
+    expect(replies).toHaveLength(1)
+    expect(replies[0]).not.toContain('host-token')
+    expect(JSON.parse(replies[0]!).result.driver.clientId).toBe('desktop-token')
+  })
+
   it('treats a server whose sync failed as unavailable, and syncs again on the next request', async () => {
     sockets.length = 0
     let failing = true
