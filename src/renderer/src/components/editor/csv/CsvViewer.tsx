@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { detectCsvDelimiter } from './csv-parse'
-import { CsvDelimiterPicker, type CsvDelimiterChoice } from './csv-delimiter-picker'
+import {
+  CSV_DELIMITER_CHOICES,
+  CsvDelimiterPicker,
+  type CsvDelimiterChoice
+} from './csv-delimiter-picker'
 import { CsvGrid } from './CsvGrid'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { openCsvHttpLink } from './csv-link-routing'
@@ -83,7 +87,7 @@ export default function CsvViewer({
     onSave,
     onStructureChange: (mutation) => {
       if (delimiterChoice === 'auto') {
-        setDelimiterChoice(delimiter === ',' ? 'comma' : delimiter === ';' ? 'semicolon' : 'tab')
+        setDelimiterChoice(csvDelimiterChoice(delimiter))
       }
       const widths = remapCsvColumnWidths(columnWidths, document?.columnCount ?? 0, mutation)
       if (widths !== columnWidths) {
@@ -186,13 +190,11 @@ export default function CsvViewer({
 }
 
 export function csvChosenDelimiter(choice: CsvDelimiterChoice, detected: string): string {
-  return choice === 'auto'
-    ? detected
-    : choice === 'comma'
-      ? ','
-      : choice === 'semicolon'
-        ? ';'
-        : '\t'
+  return CSV_DELIMITER_CHOICES.find((entry) => entry.choice === choice)?.delimiter ?? detected
+}
+
+function csvDelimiterChoice(delimiter: string): CsvDelimiterChoice {
+  return CSV_DELIMITER_CHOICES.find((entry) => entry.delimiter === delimiter)?.choice ?? 'auto'
 }
 
 export function CsvFooter({

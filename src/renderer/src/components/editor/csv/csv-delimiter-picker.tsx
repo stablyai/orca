@@ -9,7 +9,14 @@ import {
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 
-export type CsvDelimiterChoice = 'auto' | 'comma' | 'semicolon' | 'tab'
+export const CSV_DELIMITER_CHOICES = [
+  { choice: 'comma', delimiter: ',' },
+  { choice: 'semicolon', delimiter: ';' },
+  { choice: 'tab', delimiter: '\t' },
+  { choice: 'pipe', delimiter: '|' }
+] as const
+
+export type CsvDelimiterChoice = 'auto' | (typeof CSV_DELIMITER_CHOICES)[number]['choice']
 
 export function CsvDelimiterPicker({
   value,
@@ -21,22 +28,25 @@ export function CsvDelimiterPicker({
   onChange: (choice: CsvDelimiterChoice) => void
 }): React.JSX.Element {
   const id = useId()
-  const comma = translate('auto.components.editor.CsvViewer.delimiterComma', 'Comma')
-  const semicolon = translate('auto.components.editor.CsvViewer.delimiterSemicolon', 'Semicolon')
-  const tab = translate('auto.components.editor.CsvViewer.delimiterTab', 'Tab')
-  const detectedName =
-    detectedDelimiter === ',' ? comma : detectedDelimiter === ';' ? semicolon : tab
-  const choices = [
+  const names: Record<Exclude<CsvDelimiterChoice, 'auto'>, string> = {
+    comma: translate('auto.components.editor.CsvViewer.delimiterComma', 'Comma'),
+    semicolon: translate('auto.components.editor.CsvViewer.delimiterSemicolon', 'Semicolon'),
+    tab: translate('auto.components.editor.CsvViewer.delimiterTab', 'Tab'),
+    pipe: translate('auto.components.editor.CsvViewer.delimiterPipe', 'Pipe')
+  }
+  const detected = CSV_DELIMITER_CHOICES.find((entry) => entry.delimiter === detectedDelimiter)
+  const choices: { value: CsvDelimiterChoice; label: string }[] = [
     {
       value: 'auto',
       label: translate('auto.components.editor.CsvViewer.delimiterAuto', 'Auto ({{delimiter}})', {
-        delimiter: detectedName
+        delimiter: detected ? names[detected.choice] : detectedDelimiter
       })
     },
-    { value: 'comma', label: `${comma} (,)` },
-    { value: 'semicolon', label: `${semicolon} (;)` },
-    { value: 'tab', label: tab }
-  ] as const
+    ...CSV_DELIMITER_CHOICES.map(({ choice, delimiter }) => ({
+      value: choice,
+      label: choice === 'tab' ? names.tab : `${names[choice]} (${delimiter})`
+    }))
+  ]
 
   return (
     <div className="ms-auto flex items-center gap-2">

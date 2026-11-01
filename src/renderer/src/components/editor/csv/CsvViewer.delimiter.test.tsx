@@ -55,6 +55,24 @@ describe('CSV delimiter selection', () => {
     expect(screen.getByRole('cell', { name: 'tea' })).toBeTruthy()
   })
 
+  it('names an automatically detected pipe separator', () => {
+    render(<CsvViewer content={'id|amount\n1|1,50'} filePath="export.csv" />)
+    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe('Auto (Pipe)')
+    expect(screen.getByRole('columnheader', { name: 'amount' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: '1,50' })).toBeTruthy()
+  })
+
+  it('applies an explicit pipe separator to a file detected as comma-separated', async () => {
+    render(<CsvViewer content={'name,notes|extra\nAda,a|b'} filePath="people.csv" />)
+    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe('Auto (Comma)')
+
+    await chooseDelimiter('Pipe (|)')
+
+    expect(screen.getByRole('columnheader', { name: 'name,notes' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'Ada,a' })).toBeTruthy()
+    expect(screen.getByRole('cell', { name: 'b' })).toBeTruthy()
+  })
+
   it('applies the selected separator to quoted multiline records', async () => {
     render(
       <CsvViewer content={'"multi\nline";value\n"first\nsecond";"a;b"'} filePath="multiline.csv" />

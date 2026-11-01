@@ -17,15 +17,18 @@ describe('CSV text mutations', () => {
     ).toThrow('Table edits must stay below 1 MiB')
     expect(document.source).toBe('header\nfirst\nsecond')
   })
-  it('quotes a remaining ambiguous column so reopening Auto does not split its values', () => {
-    const document = parseCsvTextDocument('name;label,other\na;b,x', ',')
-    const result = mutateCsvTextDocument(document, { kind: 'delete-columns', columns: [1] })
-    expect(result).toBe('"name;label"\n"a;b"')
-    expect(parseCsv(result, detectCsvDelimiter('data.csv', result)).rows).toEqual([
-      ['name;label'],
-      ['a;b']
-    ])
-  })
+  it.each([';', '|'])(
+    'quotes a remaining %j column so reopening Auto does not split its values',
+    (separator) => {
+      const document = parseCsvTextDocument(`name${separator}label,other\na${separator}b,x`, ',')
+      const result = mutateCsvTextDocument(document, { kind: 'delete-columns', columns: [1] })
+      expect(result).toBe(`"name${separator}label"\n"a${separator}b"`)
+      expect(parseCsv(result, detectCsvDelimiter('data.csv', result)).rows).toEqual([
+        [`name${separator}label`],
+        [`a${separator}b`]
+      ])
+    }
+  )
   it('retains other tokens, BOM, mixed record endings and absent final newline', () => {
     const source = '\ufeff"name",note\r\n"Ada","a""b"\nBob,"two\r\nlines"\rEnd,last'
     const document = parseCsvTextDocument(source, ',')
