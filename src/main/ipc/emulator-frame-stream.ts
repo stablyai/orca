@@ -46,11 +46,12 @@ export function registerEmulatorFrameStreamHandlers(): void {
               owner.send('emulator:frameStreamError', { streamId, message })
             }
           },
-          onFrame: (frame) => {
+          onFrame: (frame, config) => {
             if (sessions.has(streamId) && !owner.isDestroyed()) {
               owner.send('emulator:frameStreamFrame', {
                 streamId,
-                bytes: frameToArrayBuffer(frame)
+                bytes: frameToArrayBuffer(frame),
+                config
               })
             }
           }

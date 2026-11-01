@@ -83,10 +83,11 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
-  const visualStreamGeometry = useMemo(
+  const geometry = useMemo(
     () => resolveVisualStreamGeometry(streamSize, visualOrientation),
     [streamSize, visualOrientation]
   )
+  const inputRotation = previewUrl?.startsWith('scrcpy://') ? 0 : geometry.streamRotation
   const canInteract = isLive && !loading && !streamError
   const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
     wsUrl,
@@ -110,9 +111,10 @@ export function EmulatorDeviceFrame({
       mapClientPointToSimulatorScreen(
         { clientX: event.clientX, clientY: event.clientY },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        geometry.size,
+        inputRotation
       ),
-    [visualStreamGeometry.size]
+    [inputRotation, geometry.size]
   )
 
   const sendGesturePoints = useCallback(
@@ -181,7 +183,7 @@ export function EmulatorDeviceFrame({
       activePointerIdRef.current = event.pointerId
       pointerSamplesRef.current = [{ clientX: event.clientX, clientY: event.clientY }]
       lastTouchPointRef.current = point
-      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point)
+      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point, inputRotation)
       // Send touch phases live; iOS gesture recognizers can ignore whole drags replayed only on pointer-up.
       liveTouchRef.current = sendTouch(
         buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
@@ -190,7 +192,7 @@ export function EmulatorDeviceFrame({
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
     },
-    [canInteract, enableKeyboardCapture, mapEventToScreenPoint, sendTouch]
+    [canInteract, enableKeyboardCapture, inputRotation, mapEventToScreenPoint, sendTouch]
   )
 
   const handlePointerMove = useCallback(
@@ -268,7 +270,9 @@ export function EmulatorDeviceFrame({
       const action = resolveEmulatorPointerAction(
         samples,
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        geometry.size,
+        undefined,
+        inputRotation
       )
       if (!action) {
         return
@@ -279,7 +283,15 @@ export function EmulatorDeviceFrame({
         sendGesturePoints(action.points)
       }
     },
-    [canInteract, mapEventToScreenPoint, onTap, sendGesturePoints, sendTouch, visualStreamGeometry]
+    [
+      canInteract,
+      inputRotation,
+      mapEventToScreenPoint,
+      onTap,
+      sendGesturePoints,
+      sendTouch,
+      geometry
+    ]
   )
 
   const handleWheel = useCallback(
@@ -296,7 +308,9 @@ export function EmulatorDeviceFrame({
           deltaY: event.deltaY
         },
         event.currentTarget.getBoundingClientRect(),
-        visualStreamGeometry.size
+        geometry.size,
+        undefined,
+        inputRotation
       )
       if (!delta) {
         return
@@ -323,13 +337,17 @@ export function EmulatorDeviceFrame({
         timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
       }
     },
-    [canInteract, flushWheelGesture, sendTouch, visualStreamGeometry]
+    [canInteract, flushWheelGesture, inputRotation, sendTouch, geometry]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
     setStreamError(false)
     setStreamSize((current) =>
-      current?.width === size.width && current.height === size.height ? current : size
+      current?.width === size.width &&
+      current.height === size.height &&
+      current.orientation === size.orientation
+        ? current
+        : size
     )
   }, [])
 
@@ -342,7 +360,7 @@ export function EmulatorDeviceFrame({
   const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   // Physical orientation follows successful rotate requests even if portrait-locked apps keep portrait pixels.
-  const screenAspectRatio = visualStreamGeometry.aspectRatio
+  const screenAspectRatio = geometry.aspectRatio
   const frameKind = useMemo(
     () => resolveDeviceFrameKind(deviceName, streamAspectRatio),
     [deviceName, streamAspectRatio]
@@ -397,7 +415,7 @@ export function EmulatorDeviceFrame({
             showStream={Boolean(showStream)}
             streamError={streamError}
             streamKey={streamKey}
-            streamRotation={visualStreamGeometry.streamRotation}
+            streamRotation={geometry.streamRotation}
           />
         </div>
       </div>

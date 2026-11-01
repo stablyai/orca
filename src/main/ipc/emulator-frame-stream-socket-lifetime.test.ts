@@ -36,7 +36,7 @@ afterEach(async () => {
 })
 
 it.each(['did-navigate', 'render-process-gone', 'destroyed'])(
-  'closes the live MJPEG HTTP socket after %s',
+  'closes the live MJPEG and pending config HTTP sockets after %s',
   async (goneEvent) => {
     registerEmulatorFrameStreamHandlers()
     const sockets = new Set<Socket>()
@@ -62,7 +62,7 @@ it.each(['did-navigate', 'render-process-gone', 'destroyed'])(
       { streamUrl: `http://127.0.0.1:${address.port}/stream.mjpeg` }
     )
     await frameReceived
-    expect(sockets.size).toBe(1)
+    expect(sockets.size).toBe(2)
     const closed = Promise.all(Array.from(sockets, (socket) => once(socket, 'close')))
     sender.emit(goneEvent)
     await closed

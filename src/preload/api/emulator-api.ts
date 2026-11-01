@@ -1,3 +1,4 @@
+import type { EmulatorStreamConfig } from '../../shared/emulator-stream-config'
 export type EmulatorApi = {
   onPaneFocus: (callback: (data: { worktreeId: string }) => void) => () => void
   onAutoAttach: (
@@ -11,7 +12,11 @@ export type EmulatorApi = {
   }>
   stopFrameStream: (args: { streamId: string }) => Promise<void>
   onFrameStreamFrame: (
-    callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
+    callback: (data: {
+      streamId: string
+      bytes: ArrayBuffer
+      config?: EmulatorStreamConfig
+    }) => void
   ) => () => void
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void

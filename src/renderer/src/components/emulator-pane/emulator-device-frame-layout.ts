@@ -1,8 +1,11 @@
+import type { EmulatorStreamOrientation } from '../../../../shared/emulator-stream-config'
+
 export type DeviceFrameKind = 'phone' | 'tablet'
 
 export type StreamSize = {
   width: number
   height: number
+  orientation?: EmulatorStreamOrientation
 }
 
 export type EmulatorDeviceVisualOrientation = 'portrait' | 'landscape'
@@ -28,7 +31,7 @@ export type DeviceFrameLayout = {
 export type VisualStreamGeometry = {
   aspectRatio: number
   size: StreamSize | null
-  streamRotation: -90 | 0 | 90
+  streamRotation: -90 | 0 | 90 | 180
 }
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -59,6 +62,21 @@ export function resolveVisualStreamGeometry(
   streamSize: StreamSize | null,
   visualOrientation: EmulatorDeviceVisualOrientation
 ): VisualStreamGeometry {
+  if (streamSize?.orientation) {
+    const { width, height, orientation } = streamSize
+    // Landscape-sized frames already carry upright pixels, matching serve-sim's own preview.
+    const streamRotation =
+      orientation === 'portrait_upside_down'
+        ? 180
+        : width <= height && orientation === 'landscape_left'
+          ? 90
+          : width <= height && orientation === 'landscape_right'
+            ? -90
+            : 0
+    const quarterTurn = Math.abs(streamRotation) === 90
+    const size = quarterTurn ? { width: height, height: width } : { width, height }
+    return { aspectRatio: size.width / size.height, size, streamRotation }
+  }
   // The physical frame/input rect must follow successful rotation even when serve-sim retains the old canvas dimensions.
   const width = streamSize?.width ?? 9
   const height = streamSize?.height ?? 19

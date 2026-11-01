@@ -4,12 +4,7 @@ import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { translate } from '@/i18n/i18n'
-import type { VisualStreamGeometry } from './emulator-device-frame-layout'
-
-type StreamSize = {
-  height: number
-  width: number
-}
+import type { StreamSize, VisualStreamGeometry } from './emulator-device-frame-layout'
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
@@ -92,7 +87,11 @@ export function EmulatorScreenStreamContent({
           if (naturalWidth <= 0 || naturalHeight <= 0) {
             return
           }
-          onStreamSize({ width: naturalWidth, height: naturalHeight })
+          onStreamSize({
+            width: naturalWidth,
+            height: naturalHeight,
+            orientation: frameStream.config?.orientation
+          })
         }}
       />
     )
@@ -140,9 +139,9 @@ function resolveStreamMediaStyle(
     return undefined
   }
   return {
-    height: `${100 * screenAspectRatio}%`,
+    height: `${Math.abs(streamRotation) === 90 ? 100 * screenAspectRatio : 100}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,
     transformOrigin: 'center',
-    width: `${100 / screenAspectRatio}%`
+    width: `${Math.abs(streamRotation) === 90 ? 100 / screenAspectRatio : 100}%`
   }
 }

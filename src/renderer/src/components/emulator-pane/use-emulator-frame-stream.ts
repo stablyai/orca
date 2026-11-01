@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import type { EmulatorStreamConfig } from '../../../../shared/emulator-stream-config'
 
 const FIRST_FRAME_TIMEOUT_MS = 6_000
 
@@ -7,6 +8,7 @@ type EmulatorFrameStreamState = {
   error: string | null
   frameUrl: string | null
   streamIdentity: string | null
+  config?: EmulatorStreamConfig
 }
 
 function createFrameUrl(bytes: ArrayBuffer): string {
@@ -71,7 +73,7 @@ export function useEmulatorFrameStream(
       }
     }
 
-    const unsubscribeFrame = emulatorApi.onFrameStreamFrame?.(({ streamId, bytes }) => {
+    const unsubscribeFrame = emulatorApi.onFrameStreamFrame?.(({ streamId, bytes, config }) => {
       if (disposed || streamId !== activeStreamId) {
         return
       }
@@ -79,7 +81,7 @@ export function useEmulatorFrameStream(
       const nextFrameUrl = createFrameUrl(bytes)
       const previousFrameUrl = currentFrameUrlRef.current
       currentFrameUrlRef.current = nextFrameUrl
-      setState({ error: null, frameUrl: nextFrameUrl, streamIdentity })
+      setState({ error: null, frameUrl: nextFrameUrl, streamIdentity, config })
       if (previousFrameUrl) {
         URL.revokeObjectURL(previousFrameUrl)
       }
@@ -133,5 +135,5 @@ export function useEmulatorFrameStream(
   if (state.streamIdentity !== streamIdentity) {
     return { error: null, frameUrl: null }
   }
-  return { error: state.error, frameUrl: state.frameUrl }
+  return { error: state.error, frameUrl: state.frameUrl, config: state.config }
 }
