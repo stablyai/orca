@@ -2,6 +2,8 @@ import type { BrowserCookieImportFailure } from './browser-cookie-import-failure
 import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
 import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
 export type BrowserHistoryEntry = {
+  partitions?: string[]
+  hasUnscopedVisits?: boolean
   url: string
   normalizedUrl: string
   title: string

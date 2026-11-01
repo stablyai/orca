@@ -154,6 +154,12 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
+  clearBrowsingData: (args: {
+    browserPageId: string
+    partition: string
+    cookies: boolean
+    cache: boolean
+  }): Promise<string> => ipcRenderer.invoke('browser:clearBrowsingData', args),
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {
     const listener = (): void => callback()

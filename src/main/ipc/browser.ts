@@ -1,4 +1,5 @@
 import { ipcMain, webContents } from 'electron'
+import { registerBrowserBrowsingDataHandlers } from './browser-browsing-data-ipc'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../browser/doc-preview-guest-policy'
@@ -45,6 +46,7 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
 }
 
 export function registerBrowserHandlers(): void {
+  registerBrowserBrowsingDataHandlers()
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')

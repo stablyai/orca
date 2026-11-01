@@ -109,6 +109,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
       }),
     sessionGoogleCookieClearTarget: () => Promise.resolve(null),
     sessionClearGoogleCookies: () => Promise.resolve('unverified' as const),
+    clearBrowsingData: () =>
+      Promise.reject(new Error('Clear browsing data requires the desktop browser host.')),
     sessionClearDefaultCookies: () => Promise.resolve(false),
     sitePermissionsList: () => Promise.resolve([]),
     sitePermissionsSet: () => Promise.resolve([]),

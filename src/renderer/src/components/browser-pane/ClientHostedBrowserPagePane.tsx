@@ -231,7 +231,12 @@ export function ClientHostedBrowserPagePane({
       })
       publisher.publish(metadata)
       // Address-bar suggestions use the client's URL history, including client-hosted pages.
-      recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
+      recordHistoryFromGuest(
+        metadata.url,
+        getBrowserDisplayTitle(metadata.title, metadata.url),
+        undefined,
+        webviewRef.current?.getAttribute('partition') ?? undefined
+      )
       setAddressBarValueFromPage(toDisplayUrl(metadata.url))
     }
     const onStart = (event: Electron.DidStartNavigationEvent): void => {
