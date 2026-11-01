@@ -1,5 +1,5 @@
 import { isAgentHookSource, type AgentHookSource } from './agent-hook-relay'
-import type { AgentProviderSessionKey } from './agent-session-resume'
+import type { AgentProviderSessionKey } from './agent-session/lifecycle/agent-session-resume'
 
 export const AGENT_STATUS_PROVIDER_SESSION_CHAIN_MAX = 256
 

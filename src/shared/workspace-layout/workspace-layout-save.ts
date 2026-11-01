@@ -1,6 +1,6 @@
 // Serialize the model and beside records into session documents older builds understand; derive redundant fields from one source.
 
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { ClosedTerminalTabTombstonesByTabId } from '../closed-terminal-tab-tombstones'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../tab-types'

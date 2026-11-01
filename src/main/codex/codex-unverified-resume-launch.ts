@@ -1,5 +1,5 @@
 import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-drop'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
 export const UNVERIFIED_CODEX_RESUME_ERROR =
   'Orca could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'

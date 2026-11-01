@@ -13,7 +13,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChatPermissionChoice } from '../../shared/agent-chat-permission-mode'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { claudeQuerySettingsReader } from './claude-agent-sdk-control-requests'

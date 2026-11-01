@@ -1,4 +1,4 @@
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from './orchestration-fleet-projection'

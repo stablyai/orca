@@ -4,7 +4,7 @@ import {
 } from './structured-agent-session-catalog-reads'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import * as providerSupport from './structured-agent-session-provider-support'
 import type { OpenedStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import type {

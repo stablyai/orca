@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, symlink, rm, realpath } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../opencode/opencode-transcript-import'
 import { CLAUDE_CLI_CONVERSATIONS } from '../claude/claude-cli-conversations'
 import { PI_TRANSCRIPT_IMPORT } from '../pi/pi-transcript-import'

@@ -4,7 +4,7 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'

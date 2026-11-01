@@ -1,5 +1,5 @@
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'

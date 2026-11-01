@@ -1,5 +1,5 @@
 import type { ClaudeNamingGeneration } from './claude-naming-generation'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   launchPreparationFailure,

@@ -1,8 +1,8 @@
-import {
-  getAgentResumeArgv,
-  type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
-} from './agent-session-resume'
+import { getAgentResumeArgv } from './agent-resume-argv'
+import type {
+  AgentProviderSessionMetadata,
+  ResumableTuiAgent
+} from './agent-session/lifecycle/agent-session-resume'
 import { quoteStartupArg, type AgentStartupShell } from './tui-agent-startup-shell'
 
 /** Unrecognized locators require refusal: the caller cannot safely launch a resume it could not cancel. Dropped returns the plain launch command. */

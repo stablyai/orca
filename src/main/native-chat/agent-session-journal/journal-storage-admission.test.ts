@@ -11,7 +11,7 @@ import type {
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
 } from '../../../shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,

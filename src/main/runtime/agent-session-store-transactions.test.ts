@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -12,7 +12,7 @@ import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 

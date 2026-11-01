@@ -19,7 +19,7 @@ import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
 } from '../opencode/opencode-model-catalog-listing'
-import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
+import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,

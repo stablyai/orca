@@ -1,5 +1,5 @@
-import type { AgentChildWorkKind } from './agent-status-child-work'
-import type { AgentStatusState } from './agent-status-types'
+import type { AgentChildWorkKind } from '../../agent-status-child-work'
+import type { AgentStatusState } from '../../agent-status-types'
 
 /** A prompt the session was waiting on the user for when the stop cut it off. */
 export type AgentSessionRestartPrompt = { kind: 'approval' | 'question'; label: string }

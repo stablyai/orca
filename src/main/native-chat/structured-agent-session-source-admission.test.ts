@@ -12,7 +12,7 @@ import {
 } from './structured-agent-cli-source'
 import { prepareAdoptedTranscript } from './agent-session-wire/structured-agent-session-adopted-import'
 import type { AgentSessionAttachParams } from './agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
 import { prepareCodexAdoption } from './codex-adoption-preparation'
 import { codexAiVaultSessionResumePreparation } from '../codex/codex-ai-vault-session-resume'

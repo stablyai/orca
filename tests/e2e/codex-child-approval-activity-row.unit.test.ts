@@ -67,7 +67,7 @@ import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/compo
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'

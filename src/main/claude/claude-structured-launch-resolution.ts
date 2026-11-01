@@ -3,7 +3,7 @@ import { prepareClaudeReceivingAccount } from './claude-receiving-account'
 import { assertStructuredAgentResolutionCurrent } from '../native-chat/structured-agent-command-resolution'
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
@@ -14,9 +14,9 @@ import type {
 } from '../../shared/agent-chat-permission-mode'
 import {
   agentSessionProviderHandleKey,
-  agentSessionProviderHandleRoot
-} from '../../shared/agent-session-provider-handle'
-import { claudeProviderHandleLeafUuid } from '../../shared/agent-session-provider-handle-encoding'
+  agentSessionProviderHandleRoot,
+  claudeProviderHandleLeafUuid
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import {
   claudeChildEnv,
@@ -35,7 +35,7 @@ import { claudeSessionIdForOrcaSession } from './structured/claude-structured-se
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork
-} from '../../shared/agent-session-rewind'
+} from '../../shared/agent-session/lifecycle/agent-session-rewind'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'

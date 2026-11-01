@@ -1,6 +1,6 @@
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState

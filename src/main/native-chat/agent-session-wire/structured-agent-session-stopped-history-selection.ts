@@ -12,7 +12,7 @@ import {
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,
   type StoppedHistoryDelivery
-} from '../../../shared/agent-session-stopped-history'
+} from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 type StoppedHistoryContext = {

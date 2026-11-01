@@ -6,7 +6,7 @@ import type {
   AgentSessionFailureSurface
 } from './agent-session/failures/agent-session-failure-words'
 import { joinSentences } from './sentence-joining'
-import { agentSessionSignInFor } from './agent-session-sign-in'
+import { agentSessionSignInFor } from './agent-session/lifecycle/agent-session-sign-in'
 
 const SENTENCE_END = /[.!?\u3002\uFF01\uFF1F][\p{Pe}\p{Pf}"']*\s*$/u
 

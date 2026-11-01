@@ -2,7 +2,7 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError

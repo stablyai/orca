@@ -8,7 +8,7 @@ import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'

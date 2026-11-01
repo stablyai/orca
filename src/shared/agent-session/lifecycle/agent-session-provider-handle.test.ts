@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
-  agentSessionProviderHandleRoot,
   agentSessionProviderHandlesEqual,
   appendAgentSessionProviderHandleLink,
   findAgentSessionProviderHandleLink,
-  isAgentSessionProviderHandle,
   isAgentSessionHandleProvider,
   isAgentSessionProviderHandleChain,
   MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
-import { claudeProviderHandle, codexProviderHandle } from './agent-session-provider-handle-encoding'
+import {
+  agentSessionProviderHandleKey,
+  agentSessionProviderHandleRoot,
+  isAgentSessionProviderHandle,
+  claudeProviderHandle,
+  codexProviderHandle
+} from './agent-session-provider-handle-encoding'
 
 const CLAUDE: AgentSessionProviderHandle = claudeProviderHandle('sess-1', 'leaf-1')
 

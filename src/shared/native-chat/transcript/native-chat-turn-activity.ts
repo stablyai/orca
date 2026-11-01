@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../agent-session-wire'
 import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'

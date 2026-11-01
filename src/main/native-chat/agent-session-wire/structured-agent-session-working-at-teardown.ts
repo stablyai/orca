@@ -2,18 +2,16 @@ import { agentSessionCurrentContextRows } from '../../../shared/agent-session-co
 // Capture live host work immediately before stopping its child; stale persisted turns must never create resume offers.
 // Include pending prompts and running child work while that evidence still reflects the pre-stop state.
 
-import {
-  agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleRoot
-} from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleRoot } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { latestStructuredAgentSessionUserItem } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionResumeMarker,
   AgentSessionResumeTrigger,
   AgentSessionResumeWork
-} from '../../../shared/agent-session-resume-marker'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -25,11 +23,11 @@ import {
   type AgentSessionRestartActivity,
   type AgentSessionRestartPrompt,
   type AgentSessionRestartTask
-} from '../../../shared/agent-session-restart-activity'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandTurn

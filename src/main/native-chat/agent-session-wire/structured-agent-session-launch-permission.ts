@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentChatPermissionModes,
   savedChatPermissionMode,

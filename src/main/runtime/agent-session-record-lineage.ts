@@ -1,5 +1,5 @@
 import type Database from '../sqlite/sync-database'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 /** Indexed reverse links cover historical clear successors without scanning every conversation. */
 export function agentSessionRecordLineage(

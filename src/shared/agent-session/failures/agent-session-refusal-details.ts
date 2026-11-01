@@ -18,7 +18,7 @@ import { isAgentJournalResolution } from '../journal/agent-session-journal-schem
 import {
   AGENT_SESSION_REWIND_REASONS,
   type AgentSessionRewindReason
-} from '../../agent-session-rewind'
+} from '../lifecycle/agent-session-rewind'
 import type { TuiAgent } from '../../tui-agent'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 import type {

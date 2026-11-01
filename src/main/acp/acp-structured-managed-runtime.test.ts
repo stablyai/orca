@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, truncate, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { RUNTIME_RELEASE_RECEIPT } from '../node-runtime/managed-runtime-release'
 import { createAcpStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'

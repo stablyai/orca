@@ -6,8 +6,8 @@ import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acqui
 import {
   agentSessionAccountHome,
   type LegacyAgentSessionAccountHome
-} from '../../../shared/agent-session-account-home'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import {
   ClaudeProfileRouter,

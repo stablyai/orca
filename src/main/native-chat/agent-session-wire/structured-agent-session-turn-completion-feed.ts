@@ -1,7 +1,7 @@
 // Derive attention edges on the host so background chats work without a renderer reader.
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent

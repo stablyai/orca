@@ -8,7 +8,7 @@ import {
   type AgentSessionContextWindow
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
 import {
   isAgentSessionContextClear,
   latestAgentSessionContextClearSequence

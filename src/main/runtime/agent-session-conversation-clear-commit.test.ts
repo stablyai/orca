@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabases,
@@ -13,7 +13,7 @@ import {
   type AgentSessionConversationClear
 } from './agent-session-conversation-command-record'
 import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 

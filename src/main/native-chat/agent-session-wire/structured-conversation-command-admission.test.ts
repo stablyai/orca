@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import {

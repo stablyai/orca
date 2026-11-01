@@ -1,4 +1,4 @@
-import type { PersistedAgentSessionLease } from '../../../../shared/agent-session-legacy-handoff-lease'
+import type { PersistedAgentSessionLease } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import {
   editPersistedTestAgentSessionStore,
   readPersistedTestAgentSessionStore

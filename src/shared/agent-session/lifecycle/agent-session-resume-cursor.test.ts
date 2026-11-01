@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  extractAgentProviderSession,
-  getAgentResumeArgv,
-  isResumableTuiAgent
-} from './agent-session-resume'
-import { buildAgentResumeStartupPlan } from './tui-agent-startup'
-import { resolveStartupShell, tokenizeStartupCommand } from './tui-agent-startup-shell'
+import { extractAgentProviderSession, isResumableTuiAgent } from './agent-session-resume'
+import { getAgentResumeArgv } from '../../agent-resume-argv'
+import { buildAgentResumeStartupPlan } from '../../tui-agent-resume-startup'
+import { resolveStartupShell, tokenizeStartupCommand } from '../../tui-agent-startup-shell'
 
 describe('Cursor conversation continuity', () => {
   it('captures only the hook conversation identity', () => {

@@ -1,4 +1,4 @@
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
 import { recordAgentSessionRuntimeEnd } from '../agent-session-runtime-end-record'

@@ -2,7 +2,7 @@
 // Downgrade turn items to legacy status only at RPC; canonical journal/status/in-process readers keep the body.
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session-turn-record'
+import { legacyAgentJournalTurnStatusBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,

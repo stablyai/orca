@@ -12,7 +12,7 @@ import { structuredAgentSessionTabId } from '../../shared/structured-agent-sessi
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { createStore, closeTestStores, testState } from '../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'

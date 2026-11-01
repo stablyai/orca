@@ -10,7 +10,7 @@ import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 import {

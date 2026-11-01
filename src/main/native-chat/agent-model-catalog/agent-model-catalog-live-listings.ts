@@ -1,5 +1,5 @@
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentModelCatalogLiveListing } from './agent-model-catalog-store'
 import type {
   AgentModelCatalogServiceDeps,

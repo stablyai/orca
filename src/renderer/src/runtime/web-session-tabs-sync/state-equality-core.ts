@@ -3,7 +3,7 @@ import {
   agentStatusEvidenceObservedAt,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
 import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {

@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   journalRowSchemaVersion,
   type AgentJournalTurnLifecycle
-} from './agent-session/journal/agent-session-journal-types'
+} from '../journal/agent-session-journal-types'
 import {
   agentJournalTurnBody,
   isRunningAgentJournalTurn,

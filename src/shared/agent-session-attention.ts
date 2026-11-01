@@ -4,7 +4,7 @@ import {
   agentSessionScopeKey,
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
-} from './agent-session-record'
+} from './agent-session/lifecycle/agent-session-record'
 import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type { AgentSessionTurnCompletionEvent } from './agent-session-wire'
 import { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './agent-turn-outcome'

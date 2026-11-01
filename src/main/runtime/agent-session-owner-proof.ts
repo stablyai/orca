@@ -1,5 +1,5 @@
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   withAcquiredAgentSessionAccount,
   type ClaudeAccountRecipe

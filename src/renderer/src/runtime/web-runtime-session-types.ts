@@ -1,7 +1,7 @@
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery

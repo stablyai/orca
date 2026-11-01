@@ -22,7 +22,7 @@ import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'

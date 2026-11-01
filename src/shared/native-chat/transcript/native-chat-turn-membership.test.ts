@@ -12,8 +12,8 @@ import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-sco
 import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
 import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import { isNativeChatRowInLiveWorkingTurn } from '../../native-chat-live-turn-membership'
-import { isAgentSessionRewindTarget } from '../../agent-session-rewind'
-import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import { isAgentSessionRewindTarget } from '../../agent-session/lifecycle/agent-session-rewind'
+import { readAgentJournalTurn } from '../../agent-session/lifecycle/agent-session-turn-record'
 import type { NativeChatRole } from '../native-chat-types'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }

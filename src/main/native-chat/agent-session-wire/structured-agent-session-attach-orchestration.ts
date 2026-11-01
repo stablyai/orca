@@ -6,7 +6,7 @@ import {
   type AttachAttempt
 } from './structured-agent-session-attach-publish'
 
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
 import type {

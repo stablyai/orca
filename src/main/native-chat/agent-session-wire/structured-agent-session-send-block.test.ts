@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionConversationCommandRecord } from '../../../shared/agent-session/agent-session-conversation-command'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   openConversationForWrite,
   structuredAgentSessionSendBlock

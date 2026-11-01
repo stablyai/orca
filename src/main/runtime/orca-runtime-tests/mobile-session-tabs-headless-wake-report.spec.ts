@@ -4,7 +4,7 @@ import {
   electronMocks,
   getDefaultWorkspaceSession
 } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   TEST_REPO_ID,
   TEST_WINDOW_ID,

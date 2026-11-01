@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalProducerLinkage
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalProducerLinkage,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryRequest
@@ -19,7 +19,7 @@ import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { foldSubagentItems } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   subagentJournalBody,

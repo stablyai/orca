@@ -11,7 +11,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../../shared/agent-session-wire'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'

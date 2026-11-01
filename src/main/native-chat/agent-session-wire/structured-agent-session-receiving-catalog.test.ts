@@ -9,8 +9,8 @@ import {
 import type { AgentModelCatalogProbe } from '../agent-model-catalog/agent-model-catalog-discovery'
 import { rm } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionAccountHomePath } from '../../../shared/agent-session-account-home'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
 import { hostTestOperationId } from './structured-agent-session-host-test-data'
 import {

@@ -1,4 +1,4 @@
-import { isStructuredAgentId } from './agent-session-provider-handle'
+import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 /** Read only necessary fields so clients with different tab shapes share the registered-agent tab predicate. */
 export function isStructuredTab<T extends { contentType?: string; agentSessionAgent?: unknown }>(

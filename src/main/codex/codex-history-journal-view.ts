@@ -8,7 +8,7 @@ import {
   agentJournalItemPosition,
   compareAgentJournalPositions
 } from '../../shared/agent-session/journal/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 

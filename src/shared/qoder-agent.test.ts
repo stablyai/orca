@@ -12,7 +12,7 @@ import {
   detectAgentStatusFromTitle
 } from './agent-detection'
 import { buildAgentStartupPlan, buildAgentResumeStartupPlan } from './tui-agent-startup'
-import { getAgentResumeArgv } from './agent-session-resume'
+import { getAgentResumeArgv } from './agent-resume-argv'
 import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { normalizeAndAccept } from './agent-hook-listener-test-harness'
 

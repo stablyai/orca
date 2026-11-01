@@ -3,9 +3,9 @@ import {
   activeProviderContext,
   isAgentSessionProviderContextBoundary
 } from './agent-session-provider-context'
-import { agentSessionRecordFixture } from './agent-session-record.test-fixture'
-import { isPersistedAgentSessionRecord } from './agent-session-record'
-import { encodeAgentSessionRecord } from './agent-session-record-stored-form'
+import { agentSessionRecordFixture } from './agent-session/lifecycle/agent-session-record.test-fixture'
+import { isPersistedAgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
+import { encodeAgentSessionRecord } from './agent-session/lifecycle/agent-session-record-stored-form'
 
 const boundary = { operationId: 'clear-operation', afterFence: 3, clearedAt: 5000 }
 

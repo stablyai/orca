@@ -8,7 +8,7 @@ import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   MobileTerminalResumeCommand,
   OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup

@@ -78,14 +78,14 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   }
 }))
 
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { ConversationCommandParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache

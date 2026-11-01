@@ -15,7 +15,7 @@ import { createTrackedJournalOpener } from './journal-host-database-test-support
 import {
   agentSessionJournalProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalSubmissionQueuedLinkTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

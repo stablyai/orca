@@ -8,7 +8,7 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount

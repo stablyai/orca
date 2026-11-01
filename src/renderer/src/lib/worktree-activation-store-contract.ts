@@ -4,7 +4,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../shared/agent-session-resume'
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'

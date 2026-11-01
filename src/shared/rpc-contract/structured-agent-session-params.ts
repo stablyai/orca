@@ -13,7 +13,7 @@ import {
 } from './structured-agent-session-identifiers'
 import { z } from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
-import { isStructuredAgentId } from '../agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'
 import { AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH } from '../agent-session-question-answer'
 import {

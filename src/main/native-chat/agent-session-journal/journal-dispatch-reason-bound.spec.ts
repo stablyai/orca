@@ -11,7 +11,7 @@ import {
 import { JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalDispatchReasonBoundTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

@@ -1,5 +1,5 @@
 import { prepareStructuredWorkspaceAuthority } from './structured-workspace-authority'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import {
   isNativeLocalLocation,

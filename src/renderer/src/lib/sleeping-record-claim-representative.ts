@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isHostMirroredSleepingRecord } from './host-mirrored-pane-liveness'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
 

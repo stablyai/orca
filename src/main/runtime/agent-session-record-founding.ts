@@ -6,7 +6,7 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-chat-pe
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
-} from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,

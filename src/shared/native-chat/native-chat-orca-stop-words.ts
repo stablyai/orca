@@ -1,4 +1,4 @@
-import type { AgentSessionOrcaStopCause } from '../agent-session-orca-stop'
+import type { AgentSessionOrcaStopCause } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { joinSentences } from '../sentence-joining'
 
 /** English pieces; desktop translates each with the same fallback, the phone keeps English. */

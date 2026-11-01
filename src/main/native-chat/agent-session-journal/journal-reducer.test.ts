@@ -1,5 +1,8 @@
 import { journalInputOrder } from './journal-input-order'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
@@ -8,8 +11,7 @@ import {
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   applyJournalRow,

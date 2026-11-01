@@ -5,7 +5,7 @@ import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
-import type { AgentSessionRewindReason } from '../../agent-session-rewind'
+import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
 import type { AgentSessionArgumentProblem } from '../agent-session-argument-problem'
 import type { TuiAgent } from '../../tui-agent'
 import type { CodexInstallationProblem } from '../../codex-cli-installation'

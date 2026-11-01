@@ -2,7 +2,7 @@ import type { StructuredSessionSurface } from '../../agent-session/structured-ag
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import type { z } from 'zod'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
+import { agentSessionFingerprintConflict } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import type { RpcContext } from '../core'
 import {

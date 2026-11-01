@@ -20,7 +20,7 @@ import {
   CreateIntentParams,
   SendParams
 } from '../../../shared/rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { registerActionEffortCreateTests } from './structured-agent-session-launch-action-effort.test-fixture'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 

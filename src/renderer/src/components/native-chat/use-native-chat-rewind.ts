@@ -8,8 +8,8 @@ import {
   type AgentSessionRewindReason,
   type AgentSessionRewindResult,
   type AgentSessionRewindSupport
-} from '../../../../shared/agent-session-rewind'
-import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
+} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionWriteFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
 import {

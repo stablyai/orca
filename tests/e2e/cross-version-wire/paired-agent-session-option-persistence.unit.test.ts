@@ -22,7 +22,7 @@ import {
   hostTestOperationId
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'
 import type {

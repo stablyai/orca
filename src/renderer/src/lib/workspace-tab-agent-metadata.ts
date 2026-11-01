@@ -1,6 +1,6 @@
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../shared/agent-status-freshness'
 import type { Worktree } from '../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'

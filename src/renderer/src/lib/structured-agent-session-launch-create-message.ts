@@ -2,11 +2,13 @@ import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
 } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
-import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
-import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
+import {
+  type StructuredLaunchState,
+  notifyStructuredLaunchListeners
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts

@@ -11,7 +11,7 @@ import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-sess
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import type { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/claude-structured-journal-translation'

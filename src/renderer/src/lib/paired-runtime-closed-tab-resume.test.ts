@@ -10,7 +10,7 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 import { useAppStore, type AppState } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Worktree } from '../../../shared/worktree/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'

@@ -1,5 +1,5 @@
 import type { AgentType } from './agent-status-types'
-import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from './agent-session/lifecycle/agent-session-provider-handle'
 
 /** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */
 export type AgentJournalCursor = {

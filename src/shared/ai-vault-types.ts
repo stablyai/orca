@@ -1,6 +1,6 @@
 import type { AiVaultScanIssueText } from './ai-vault-scan-issue-copy'
 import type { TuiAgent } from './tui-agent'
-import type { AgentSessionAccountHome } from './agent-session-account-home'
+import type { AgentSessionAccountHome } from './agent-session/lifecycle/agent-session-account-home'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [

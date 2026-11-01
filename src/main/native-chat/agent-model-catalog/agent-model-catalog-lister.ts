@@ -1,5 +1,5 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import { startSpan } from '../../observability/tracer'
 import {

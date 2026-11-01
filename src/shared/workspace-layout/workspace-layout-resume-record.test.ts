@@ -1,7 +1,7 @@
 // Both live/quit resume records and sleep records round-trip through sleepingAgentSessionsByPaneKey, loading into separate mutually exclusive leaf fields.
 
 import { describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import { applyLayoutCommand } from './workspace-layout-commands'
 import { build, testContext } from './workspace-layout-command.test-fixture'

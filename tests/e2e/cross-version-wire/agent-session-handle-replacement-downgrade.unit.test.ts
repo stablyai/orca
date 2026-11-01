@@ -4,18 +4,18 @@ import {
   agentSessionProviderHandleKey,
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
-} from '../../../src/shared/agent-session-provider-handle'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../src/shared/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../../src/shared/agent-session-record-stored-form'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // A release before neutral handles: handles stored and held in their typed form.

@@ -10,7 +10,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import {
   legacyAgentJournalTurnStatusBody,
   readAgentJournalTurn
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import {

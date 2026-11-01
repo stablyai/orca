@@ -6,7 +6,7 @@ import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/ag
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry

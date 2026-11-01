@@ -1,6 +1,9 @@
 import { z } from 'zod'
-import type { AgentSessionLease, AgentSessionRecord } from './agent-session-record'
-import { agentSessionScopeKey } from './agent-session-record'
+import {
+  type AgentSessionLease,
+  type AgentSessionRecord,
+  agentSessionScopeKey
+} from './agent-session/lifecycle/agent-session-record'
 
 const path = z
   .string()

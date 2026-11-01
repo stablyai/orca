@@ -1,4 +1,4 @@
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _internals } from '../agent-hooks/server'
 import { isBackgroundTaskBlock, isSubagentBlock } from '../../shared/native-chat/native-chat-types'

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { createStructuredChatNamingHandler } from '../structured-chat-naming'

@@ -1,7 +1,7 @@
 import { hostSupportsLaunchChoices } from '@/components/settings/agent-launch-settings-transport'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'

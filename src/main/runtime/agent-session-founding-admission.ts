@@ -3,7 +3,7 @@ import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
 } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
 import {
   assertAdoptedConversationUnowned,

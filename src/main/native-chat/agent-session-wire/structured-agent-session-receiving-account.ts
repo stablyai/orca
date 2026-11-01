@@ -5,8 +5,8 @@ import {
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

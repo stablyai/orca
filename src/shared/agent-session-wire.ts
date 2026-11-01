@@ -5,7 +5,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session/agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './agent-session-rewind'
+import type { AgentSessionRewindReason } from './agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionWireRefusal } from './agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type {
@@ -25,8 +25,8 @@ import type {
   AgentJournalTurnLifecycle
 } from './agent-session/journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from './agent-turn-outcome'
-import type { AgentSessionRecord } from './agent-session-record'
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentSessionRecord } from './agent-session/lifecycle/agent-session-record'
+import type { AgentProviderSessionMetadata } from './agent-session/lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from './native-chat/native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 

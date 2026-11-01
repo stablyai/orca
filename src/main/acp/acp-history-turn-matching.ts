@@ -8,7 +8,7 @@ import type {
   AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
 import type { AcpHistoryItem } from './acp-history-journal-overlay'

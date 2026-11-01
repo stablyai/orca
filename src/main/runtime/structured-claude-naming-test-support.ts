@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { appendTranscriptEntries } from '../claude/claude-provider-session-rename'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { fakeClaude, type FakeConnection } from '../claude/claude-structured-session-test-support'
 import type { ClaudeStreamJsonLaunch } from '../claude/claude-stream-json-connection'
 import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
@@ -21,9 +21,9 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
+  stopStructuredAgentSessionRuntime,
+  type StructuredAgentSessionRuntimeDeps
 } from './structured-agent-session-runtime'
-import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
 
 export async function writeNativeNamingConversation(
   path: string,

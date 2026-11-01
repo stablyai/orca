@@ -1,6 +1,9 @@
 // Stored pane data uses leaf IDs within tabs and full pane keys in records; remint repeated IDs before loading into the partition-wide leaf map.
 
-import { isPaneSleepRecord, type SleepingAgentSessionRecord } from '../agent-session-resume'
+import {
+  isPaneSleepRecord,
+  type SleepingAgentSessionRecord
+} from '../agent-session/lifecycle/agent-session-resume'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
 import { omitStoredFields } from './stored-record-fields'

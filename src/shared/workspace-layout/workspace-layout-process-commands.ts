@@ -1,6 +1,6 @@
 // Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
-import { isPaneSleepRecord } from '../agent-session-resume'
+import { isPaneSleepRecord } from '../agent-session/lifecycle/agent-session-resume'
 import { omitStoredFields } from './stored-record-fields'
 import {
   applied,

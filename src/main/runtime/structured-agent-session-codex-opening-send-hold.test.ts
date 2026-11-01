@@ -19,10 +19,10 @@ import type { openCodexAppServerConnection } from '../codex/codex-app-server-con
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,

@@ -9,7 +9,7 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchResult
 } from '../../../src/shared/agent-launch-intent'
-import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
+import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-tab-closed'
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'

@@ -10,19 +10,19 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import {
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../shared/agent-session-lease-adjudication'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
   AgentSessionProcessIdentity
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   PersistedAgentSessionHandoffStage,
   PersistedAgentSessionRecord,
   PersistedAgentSessionRuntimeKind
-} from '../../../shared/agent-session-legacy-handoff-lease'
+} from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
@@ -51,7 +51,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }

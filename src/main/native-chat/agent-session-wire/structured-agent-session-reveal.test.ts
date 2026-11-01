@@ -1,12 +1,12 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { revealStructuredAgentSession } from './structured-agent-session-reveal'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 function recordFor(provider: 'claude' | 'codex', sessionId: string): AgentSessionRecord {
   const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))

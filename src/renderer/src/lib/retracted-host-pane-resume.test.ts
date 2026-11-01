@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 

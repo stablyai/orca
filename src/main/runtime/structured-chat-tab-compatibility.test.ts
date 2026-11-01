@@ -322,7 +322,7 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
   const { seedTestAgentSessionRecordStore } =
     await import('./agent-session-record-store-test-harness')
   const { agentSessionRecordFixture, agentSessionLeaseFixture } =
-    await import('../../shared/agent-session-record.test-fixture')
+    await import('../../shared/agent-session/lifecycle/agent-session-record.test-fixture')
   const entry = agentSessionRecordFixture(
     agentSessionLeaseFixture({
       sessionId: B,

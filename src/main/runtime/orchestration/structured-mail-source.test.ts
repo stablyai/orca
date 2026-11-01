@@ -9,7 +9,7 @@ import {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { orchestrationSenderName } from './orchestration-sender-name'
 import * as relations from './agent-message-relation'

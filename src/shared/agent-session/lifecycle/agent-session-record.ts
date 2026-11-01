@@ -1,7 +1,7 @@
-import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
+import { isAgentSessionConversationName } from '../agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
@@ -11,12 +11,12 @@ import {
 } from './agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
-import type { AgentSessionLastTurn } from './agent-session-last-turn'
-import type { ExecutionHostId } from './execution-host'
+import type { AgentSessionLastTurn } from '../../agent-session-last-turn'
+import type { ExecutionHostId } from '../../execution-host'
 import {
   isAgentSessionConversationCommandRecord,
   type AgentSessionConversationCommandRecord
-} from './agent-session/agent-session-conversation-command'
+} from '../agent-session-conversation-command'
 import {
   decodePersistedAgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
@@ -24,18 +24,14 @@ import {
 import {
   isAgentSessionProviderContextBoundary,
   type AgentSessionProviderContextBoundary
-} from './agent-session-provider-context'
+} from '../../agent-session-provider-context'
 import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from './ssh-retained-payload-limits'
+import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
   MAX_PATH_LENGTH,
   type AgentSessionAccountHome
 } from './agent-session-account-home'
-
-export type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
-export type { AgentSessionAccountHome } from './agent-session-account-home'
-export type { AgentSessionOptionsReplacement } from './agent-session-options-replacement'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 

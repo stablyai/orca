@@ -1,7 +1,7 @@
 import type { AppState } from '../../types'
-import '../../../../../shared/agent-session-resume'
+import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   normalizePaneKeySet,

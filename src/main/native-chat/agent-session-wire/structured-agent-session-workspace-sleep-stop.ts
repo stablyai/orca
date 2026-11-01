@@ -2,7 +2,7 @@ import { recordAgentSessionAcquisitionExit } from '../../runtime/agent-session-a
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict
-} from '../../../shared/agent-session-lease-adjudication'
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { structuredSessionNeverStarted } from '../../runtime/agent-session-record-founding'
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-lifetime'

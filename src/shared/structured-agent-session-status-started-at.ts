@@ -6,7 +6,7 @@ import type {
   AgentJournalSubmission
 } from './agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 import type { StructuredAgentSessionLatestRequest } from './agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionStatusSummary } from './agent-session-wire'

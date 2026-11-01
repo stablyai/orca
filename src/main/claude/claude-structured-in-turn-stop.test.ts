@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { personStopDecidesTurn } from '../native-chat/agent-session-journal/journal-stop-turn-end'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'

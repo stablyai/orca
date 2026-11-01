@@ -2,7 +2,7 @@ import {
   agentProviderSessionsEqual,
   isPaneSleepRecord,
   type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 /** An older window capture of a still-running agent, which no pane has claimed yet. */

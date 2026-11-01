@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult

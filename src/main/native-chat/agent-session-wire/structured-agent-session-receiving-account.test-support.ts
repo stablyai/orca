@@ -3,7 +3,7 @@ import { hostTestAttachParams } from './structured-agent-session-host-test-data'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { withAcquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

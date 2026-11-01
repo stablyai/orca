@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { ClaudeAtRestCommandCatalog } from './claude-at-rest-commands'
 import {
   bindAtRestCommandContexts,

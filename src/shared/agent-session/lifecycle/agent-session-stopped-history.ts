@@ -3,17 +3,17 @@
 import {
   readAgentSessionFailureFact,
   type SubmissionRejectionKind
-} from './agent-session/failures/agent-session-failure'
+} from '../failures/agent-session-failure'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from './agent-session/journal/agent-session-journal-types'
+} from '../journal/agent-session-journal-types'
 import {
   classifyDispatchRejection,
   dispatchWasWithdrawn
-} from './agent-session/requests/structured-agent-session-dispatch-rejection'
-import { MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-message-params'
+} from '../requests/structured-agent-session-dispatch-rejection'
+import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session-message-params'
 
 /** The record Claude writes for its own Stop, carried after each stopped message. */
 export const STOPPED_MESSAGE_INTERRUPTED_MARKER = '[Request interrupted by user]'

@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 

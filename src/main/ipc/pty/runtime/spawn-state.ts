@@ -24,7 +24,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,

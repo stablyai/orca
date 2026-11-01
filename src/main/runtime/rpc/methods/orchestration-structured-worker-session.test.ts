@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
-import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'

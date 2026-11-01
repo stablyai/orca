@@ -3,7 +3,7 @@
 
 import { AGENT_LAUNCH_SURFACES } from '../agent-launch-surface'
 import { z } from 'zod'
-import { isAgentSessionOptions } from '../agent-session-record'
+import { isAgentSessionOptions } from '../agent-session/lifecycle/agent-session-record'
 import { parseAgentSessionOperationTimestamp } from '../agent-session-host-authority'
 import { parsePaneKey } from '../stable-pane-id'
 import { isValidHostTerminalTabId } from '../terminal-tab-id'

@@ -4,15 +4,14 @@ import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status
 import type { AppState } from '../../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status-live-entry-state-history'
-import { pickHostTurnEnd } from '../../../../../shared/agent-status-types'
+import { pickHostTurnEnd, type AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status-ipc-payload'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus

@@ -9,7 +9,7 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import {
   codexProviderHandle,
   claudeProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'

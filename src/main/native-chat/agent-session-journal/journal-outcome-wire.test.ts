@@ -6,7 +6,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionHistory } from '../agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'

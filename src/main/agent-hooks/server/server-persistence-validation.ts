@@ -1,7 +1,7 @@
 import { readAgentProcessPresence } from '../../../shared/agent-process-presence'
 import { createHash } from 'node:crypto'
 
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isTurnEndDisposition,
   normalizeAgentStatusPayload,

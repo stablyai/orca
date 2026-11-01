@@ -1,4 +1,4 @@
-import { canonicalAgentSessionDigest } from '../../shared/agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AutomationRun } from '../../shared/automations-types'
 
 export const AUTOMATION_AGENT_CALLER = { kind: 'local-cli' } as const

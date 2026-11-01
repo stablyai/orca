@@ -20,7 +20,7 @@ import type {
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../shared/structured-agent-session-mutation'
+} from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'

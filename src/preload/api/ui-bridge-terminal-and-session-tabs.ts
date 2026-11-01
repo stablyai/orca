@@ -19,7 +19,7 @@ import type {
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type {

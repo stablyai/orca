@@ -3,7 +3,7 @@ import { normalizeColorQueryReplyColors } from '../../shared/pty-owner-color-que
 import { recognizeAgentLaunchCommand } from '../../shared/agent-command-line-intent'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { agentKindSchema } from '../../shared/telemetry-events'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
 function isAgentLaunch(args: {
   launchAgent?: unknown

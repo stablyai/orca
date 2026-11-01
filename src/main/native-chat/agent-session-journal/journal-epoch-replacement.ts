@@ -24,7 +24,7 @@ import type {
   AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import {

@@ -1,4 +1,4 @@
-import type { AgentSessionOwnerObservation } from './agent-session-conversation-view'
+import type { AgentSessionOwnerObservation } from '../../agent-session-conversation-view'
 /**
  * Single-writer lease adjudication.
  *
@@ -11,13 +11,10 @@ import type { AgentSessionOwnerObservation } from './agent-session-conversation-
  */
 
 import { nextAgentSessionFence } from './agent-session-next-fence'
-import type {
-  AgentSessionDeathEvidence,
-  AgentSessionHandoffStage,
-  AgentSessionLease
-} from './agent-session-record'
-import type { AgentSessionOwnerVerdict } from './agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionRefusalDetailsByCode } from './agent-session/failures/agent-session-refusal-details'
+import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import type { AgentSessionHandoffStage, AgentSessionLease } from './agent-session-record'
+import type { AgentSessionOwnerVerdict } from '../failures/agent-session-wire-refusals'
+import type { AgentSessionRefusalDetailsByCode } from '../failures/agent-session-refusal-details'
 
 /** What a PID probe can compare against the recorded owner. */
 export type AgentSessionProcessIdentityField = 'process-start-time' | 'spawn-token'

@@ -1,6 +1,6 @@
 /** Provider session IDs locate machine-local transcripts; resuming elsewhere fails or opens an unrelated same-ID transcript. Worktree IDs/merged sleeping records/current-catalog routing lack sufficient host scope. Refuse positively foreign records while preserving unstamped legacy resumes; absence of evidence alone cannot strand them. */
 import { afterEach, describe, expect, it } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'

@@ -1,6 +1,6 @@
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import type {
@@ -17,7 +17,7 @@ import type {
   CodexStructuredLaunch,
   CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 

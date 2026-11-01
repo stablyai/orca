@@ -12,7 +12,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
 
 export type RetainedAgentEntry = {

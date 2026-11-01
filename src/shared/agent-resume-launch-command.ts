@@ -1,4 +1,4 @@
-import type { ResumableTuiAgent } from './agent-session-resume'
+import type { ResumableTuiAgent } from './agent-session/lifecycle/agent-session-resume'
 import {
   isPosixStartupShell,
   quoteStartupArg,

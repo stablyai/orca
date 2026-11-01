@@ -15,13 +15,16 @@ import {
 } from '../../agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../../agent-session/lifecycle/agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-turn-outcome'
 import {
   PROVIDER_EXIT_ROW_PREFIX,
   RESTART_CONTINUATION_ROW_PREFIX,
   STALE_SESSION_ROW_PREFIX
-} from '../../agent-session-stop-row-identity'
+} from '../../agent-session/lifecycle/agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../agent-session/failures/structured-agent-session-start-failure-row-key'
 import { hostStatesTurnScopes } from './native-chat-turn-membership'
 

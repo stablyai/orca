@@ -3,7 +3,7 @@ import type { AgentSessionConversationView } from '../../shared/agent-session-co
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
 
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   structuredAgentSessionPaneKey,

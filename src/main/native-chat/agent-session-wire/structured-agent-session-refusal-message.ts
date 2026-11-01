@@ -1,5 +1,5 @@
-import { terminalOwnerRefusalMessage } from '../../../shared/agent-session-legacy-handoff-lease'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { terminalOwnerRefusalMessage } from '../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAnyRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 

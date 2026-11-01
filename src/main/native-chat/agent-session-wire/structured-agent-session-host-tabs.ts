@@ -3,7 +3,7 @@ import {
   type SavedStructuredStatusGroup
 } from './structured-agent-session-saved-status'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 

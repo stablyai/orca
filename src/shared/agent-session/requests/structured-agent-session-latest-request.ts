@@ -9,7 +9,10 @@ import type {
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../lifecycle/agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'

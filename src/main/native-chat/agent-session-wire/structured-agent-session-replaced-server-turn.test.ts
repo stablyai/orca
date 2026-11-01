@@ -6,9 +6,9 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings

@@ -4,7 +4,7 @@ import {
   extractAgentProviderSession,
   readPathFromKeys,
   type AgentProviderSessionMetadata
-} from '../agent-session-resume'
+} from '../agent-session/lifecycle/agent-session-resume'
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'

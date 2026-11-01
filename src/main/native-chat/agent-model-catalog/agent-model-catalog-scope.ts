@@ -1,6 +1,6 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
 import { homedir } from 'node:os'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,

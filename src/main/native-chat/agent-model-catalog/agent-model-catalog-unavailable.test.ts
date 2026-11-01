@@ -15,8 +15,8 @@ import {
 } from './agent-model-catalog-store'
 import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavailable'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 const HOME = '/homes/selected'
 const ACCOUNT_HOME = { variable: 'GROK_HOME', path: HOME } as const

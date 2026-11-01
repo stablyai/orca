@@ -1,7 +1,10 @@
-import { assertStructuredAgentResolutionCurrent } from '../native-chat/structured-agent-command-resolution'
+import {
+  assertStructuredAgentResolutionCurrent,
+  type StructuredAgentCommandSettings
+} from '../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { z } from 'zod'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import { JsonlRpcAgentConnection } from '../jsonl-rpc/agent-connection'
@@ -10,7 +13,6 @@ import type {
   AgentModelCatalogSuccess
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
-import type { StructuredAgentCommandSettings } from '../native-chat/structured-agent-command-resolution'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from './rpc-launch'
 import { checkPiRpcVersion, resolvePiRpcInvocation } from './rpc-launch-resolution'

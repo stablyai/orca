@@ -1,4 +1,4 @@
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'

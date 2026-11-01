@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
@@ -12,8 +12,7 @@ import {
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
-import { parseJournalRow } from './journal-row-schema'
-import type { JournalRow } from './journal-row-schema'
+import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import {
   projectionBase as base,

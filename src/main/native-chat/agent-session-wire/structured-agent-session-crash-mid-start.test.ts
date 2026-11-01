@@ -9,8 +9,8 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../shared/agent-session-host-authority'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { openCodexAppServerConnection } from '../../codex/codex-app-server-connection'
 import { adapterFor, fakeCodex } from '../../codex/codex-structured-session-adapter-fixture'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'

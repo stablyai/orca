@@ -1,4 +1,4 @@
-import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
 import { refreshClaudeStructuredSessionOptions } from '../claude-structured-session-options'

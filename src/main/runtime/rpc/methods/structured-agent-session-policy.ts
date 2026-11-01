@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/protocol-version'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { readAgentLaunchModeSettings } from '../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../core'
 

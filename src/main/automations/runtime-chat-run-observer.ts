@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/ag
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { readAutomationRunReceipt } from './automation-run-receipt'

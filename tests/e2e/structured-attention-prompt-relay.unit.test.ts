@@ -42,7 +42,7 @@ import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
-import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 
 describe('Delayed remote prompt delivery', () => {
   async function mountPausedRelay({ viewed = true, away = false } = {}) {

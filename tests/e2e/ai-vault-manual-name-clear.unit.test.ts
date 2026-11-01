@@ -9,9 +9,9 @@ import { createElement, Fragment } from 'react'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../src/shared/agent-session-record.test-fixture'
+} from '../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AiVaultListResult, AiVaultSession } from '../../src/shared/ai-vault-types'
 import {
   projectStructuredAiVaultSessions,

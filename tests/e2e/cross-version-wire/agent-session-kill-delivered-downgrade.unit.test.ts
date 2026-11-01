@@ -6,8 +6,8 @@ import { agentSessionConversationView } from '../../../src/shared/agent-session-
 import {
   agentSessionLeaseOwnerVerdict,
   agentSessionLeasePossiblyWriting
-} from '../../../src/shared/agent-session-lease-adjudication'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session-record.test-fixture'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-snapshot'
 import {
   closeTestJournalHostDatabase,

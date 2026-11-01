@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'

@@ -8,7 +8,7 @@ import {
   type WorkspaceSleepDeps,
   type WorkspaceSleepQueue
 } from './workspace-sleep-execution'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 const SELF = { kind: 'self' } as const
 const local = (worktreeId: string): WorkspaceSleepTarget => ({

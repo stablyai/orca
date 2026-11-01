@@ -1,7 +1,7 @@
 // The activation gate's fake store and inventory, shared by its window-owned and layout-owner tests.
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
 import { vi } from 'vitest'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtyListedSession } from '../../../shared/pty-listed-session'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'

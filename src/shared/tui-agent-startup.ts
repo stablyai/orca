@@ -1,7 +1,7 @@
 import { withFreshOmpLaunch, isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { withOmpDraftCleanup } from './omp-draft-launch'
 import { isShellProcess } from './agent-detection'
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 import {
   clearEnvCommand,
   commandSeparator,

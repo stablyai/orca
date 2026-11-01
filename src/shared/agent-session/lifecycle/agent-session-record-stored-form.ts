@@ -10,8 +10,9 @@ import {
   decodePersistedAgentSessionProviderHandleChain,
   encodePersistedAgentSessionProviderHandleChain
 } from './agent-session-provider-handle'
-import { isAgentSessionLastTurn } from './agent-session-last-turn'
-import type { AgentSessionDeathEvidence, AgentSessionRecord } from './agent-session-record'
+import { isAgentSessionLastTurn } from '../../agent-session-last-turn'
+import type { AgentSessionDeathEvidence } from '../../agent-session-death-evidence'
+import type { AgentSessionRecord } from './agent-session-record'
 
 // Older builds accept only exit-observed, pid-absent and identity-mismatch and set aside any other
 // row, so a delivered kill is stored as the absent pid their restart probe would itself record.

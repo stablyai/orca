@@ -1,9 +1,8 @@
-import {
-  getAgentForkArgv,
-  getAgentResumeArgv,
-  type AgentProviderSessionMetadata,
-  type ResumableTuiAgent
-} from './agent-session-resume'
+import { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+import type {
+  AgentProviderSessionMetadata,
+  ResumableTuiAgent
+} from './agent-session/lifecycle/agent-session-resume'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'

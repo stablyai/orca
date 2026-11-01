@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionOperationKey } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentSessionOperationKey } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import { scaleStore, scaleJournal, scaleRecord } from './agent-session-scale.test-fixture'
 import {

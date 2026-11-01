@@ -1,13 +1,13 @@
 import type { AgentJournalCursor } from '../../shared/agent-session-journal-identity'
-import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { settleAgentSessionOperationInto } from './agent-session/ownership/agent-session-operation-admission'
 import {
   agentSessionProviderHandleChainHead,
-  agentSessionProviderHandleKey,
   appendAgentSessionProviderHandleLink
-} from '../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 function rewindProviderChain(
   record: AgentSessionRecord,

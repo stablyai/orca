@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,

@@ -1,4 +1,4 @@
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 
 export const AGENT_SESSION_SIGN_IN = [
   { agent: 'claude', loginCommand: ['claude', 'auth', 'login'] },

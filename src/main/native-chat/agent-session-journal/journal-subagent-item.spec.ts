@@ -10,7 +10,7 @@ import {
   isSubagentBlock,
   type NativeChatSubagentBlock
 } from '../../../shared/native-chat/native-chat-types'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import {

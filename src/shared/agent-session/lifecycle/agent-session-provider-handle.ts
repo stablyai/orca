@@ -1,6 +1,6 @@
 /** Handles expose transport, agent and conversation ID; adapters alone read resumeCursor (encoding lives separately). Resumes extend a chain; forks change its root. Supersede unsaved creations in place; replace lost saved conversations with a following creation so forgotten history remains attributable. */
 
-import type { AgentType } from './agent-status-types'
+import type { AgentType } from '../../agent-status-types'
 import {
   agentSessionProviderHandleReplacementsEqual,
   isAgentSessionProviderHandleReplacement,
@@ -15,14 +15,6 @@ import {
   isAgentSessionProviderHandleInNamespace,
   isAgentSessionProviderHandleKeyFor,
   type PersistedAgentSessionProviderHandle
-} from './agent-session-provider-handle-encoding'
-
-export type { AgentSessionProviderHandleReplacement } from './agent-session-provider-handle-replacement'
-export {
-  agentSessionProviderHandleKey,
-  agentSessionProviderHandleRoot,
-  isAgentSessionProviderHandle,
-  isStructuredAgentId
 } from './agent-session-provider-handle-encoding'
 
 /** Built-ins are only the fallback list; hosts advertise registered-agents and publish additional agents/capabilities through agentSession.agents. */

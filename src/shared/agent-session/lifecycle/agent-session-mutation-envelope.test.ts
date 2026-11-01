@@ -6,7 +6,7 @@ import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from './agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
 
 const LEASE = agentSessionLeaseFixture({
   sessionId: 'session-1',

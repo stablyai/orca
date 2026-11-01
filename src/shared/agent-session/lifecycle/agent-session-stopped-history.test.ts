@@ -4,14 +4,14 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionFailureFact,
   type SubmissionRejectionKind
-} from './agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from './agent-session/failures/agent-session-failure-words'
+} from '../failures/agent-session-failure'
+import { agentSessionFailureWords } from '../failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from './agent-session/journal/agent-session-journal-types'
-import { MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-message-params'
+} from '../journal/agent-session-journal-types'
+import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session-message-params'
 import {
   agentSessionStoppedHistoryOwed,
   selectStoppedHistory,

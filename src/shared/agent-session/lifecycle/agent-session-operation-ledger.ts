@@ -1,7 +1,7 @@
 import type {
   AgentSessionAnyRefusalDetails,
   AgentSessionRefusalDetailsByCode
-} from './agent-session/failures/agent-session-refusal-details'
+} from '../failures/agent-session-refusal-details'
 import {
   isAgentSessionRewindResult,
   type AgentSessionRewindReason,
@@ -13,11 +13,11 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from './agent-session-host-authority'
+} from '../../agent-session-host-authority'
 import {
   isAgentSessionConversationCommandResult,
   type AgentSessionConversationCommandResult
-} from './agent-session/agent-session-conversation-command'
+} from '../agent-session-conversation-command'
 
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }

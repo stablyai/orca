@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord

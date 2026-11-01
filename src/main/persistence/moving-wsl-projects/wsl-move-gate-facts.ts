@@ -6,7 +6,7 @@
  */
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
 import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
-import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
+import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../../shared/automations-types'
 import { probePtyRunningWorkWithInspection } from '../../../shared/pty-running-work-probe'
 import { parsePaneKey } from '../../../shared/stable-pane-id'

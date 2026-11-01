@@ -5,7 +5,7 @@ import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
@@ -23,7 +23,7 @@ import {
   openTestJournalHostDatabase
 } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { prepareStructuredAgentSessionCreateForWorktree } from './structured-agent-session-create'
 

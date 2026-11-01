@@ -17,7 +17,7 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 let rig: RestTestRig
 

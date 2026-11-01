@@ -1,5 +1,5 @@
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../shared/runtime-types'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspaceSleepNotice,

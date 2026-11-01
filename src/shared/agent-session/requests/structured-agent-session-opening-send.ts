@@ -8,7 +8,7 @@ import type {
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../agent-session-turn-record'
+import { readAgentJournalTurn } from '../lifecycle/agent-session-turn-record'
 
 /** Minimal fold shape lets the host read without rendering a snapshot. */
 export type StructuredAgentSessionOpeningSendItem = {

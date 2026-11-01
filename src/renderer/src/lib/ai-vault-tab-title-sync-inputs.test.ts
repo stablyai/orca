@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'

@@ -5,7 +5,7 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
 describe('cross-version wire routing for the send path', () => {
   it.each([
     'src/shared/agent-session/failures/agent-session-wire-refusals.ts',
-    'src/shared/structured-agent-session-mutation.ts',
+    'src/shared/agent-session/lifecycle/structured-agent-session-mutation.ts',
     'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts',
     'src/main/runtime/rpc/core.ts',
     'src/main/runtime/rpc/errors.ts',

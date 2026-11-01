@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { assertLegacyAiVaultResumeCommandAllowed } from './structured-session-ownership'
 import { installOwnership, PROVIDER_SESSION } from './structured-session-ownership.test-support'

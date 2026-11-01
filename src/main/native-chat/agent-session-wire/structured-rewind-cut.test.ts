@@ -11,7 +11,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { isStructuredRewindTarget, structuredRewindCut } from './structured-rewind-cut'
 

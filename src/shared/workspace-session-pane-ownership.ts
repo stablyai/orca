@@ -1,5 +1,5 @@
 /** Share persisted-pane/editor ownership across source export, destination validation and profile transfer. */
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type { SleepingAgentSessionRecord } from './agent-session/lifecycle/agent-session-resume'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 

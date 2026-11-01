@@ -50,7 +50,7 @@ import type {
   CodexStructuredSessionAdapterDeps,
   CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD_ID = 'thread-abc'
 const USER_MESSAGE: AgentJournalMessageItem = {

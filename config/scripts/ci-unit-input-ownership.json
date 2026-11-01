@@ -2,7 +2,7 @@
   "version": 1,
   "records": [
     {
-      "file": "src/shared/agent-session-rewind.ts",
+      "file": "src/shared/agent-session/lifecycle/agent-session-rewind.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80",

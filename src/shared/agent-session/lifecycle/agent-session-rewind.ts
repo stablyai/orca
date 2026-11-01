@@ -3,17 +3,17 @@ import {
   AgentJournalItemBodySchema,
   AgentJournalProducerLinkageFields,
   AgentJournalTurnScopeSchema
-} from './agent-session/journal/agent-session-journal-schemas'
+} from '../journal/agent-session-journal-schemas'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from './agent-session/journal/agent-session-journal-item-key'
-import { isQueuedAgentJournalSubmission } from './agent-session/requests/agent-session-queued-submission'
+} from '../journal/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session/journal/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+} from '../journal/agent-session-journal-types'
+import type { AgentSessionMutationEnvelope } from '../../agent-session-wire'
 
 export const AGENT_SESSION_REWIND_REASONS = [
   'unsupported',

@@ -2,15 +2,15 @@
 // No expiry: remove on a non-continuation start, successful resume, dismissal or chat close.
 
 import { z } from 'zod'
-import { AGENT_STATUS_STATES } from './agent-status-types'
-import { AGENT_CHILD_WORK_KINDS } from './agent-status-child-work'
+import { AGENT_STATUS_STATES } from '../../agent-status-types'
+import { AGENT_CHILD_WORK_KINDS } from '../../agent-status-child-work'
 import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
   AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
-  AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS
+  AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS,
+  type AgentSessionRestartActivity
 } from './agent-session-restart-activity'
-import type { AgentSessionRestartActivity } from './agent-session-restart-activity'
-import type { AgentJournalCursor } from './agent-session-journal-identity'
+import type { AgentJournalCursor } from '../../agent-session-journal-identity'
 
 /** Why the app went away. Recorded because an update install is a restart the user did not choose,
  *  and the surface that offers the resume says so. */

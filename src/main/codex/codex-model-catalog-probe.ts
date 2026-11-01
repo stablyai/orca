@@ -14,7 +14,7 @@ import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
 } from './codex-structured-launch-resolution'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import type {
   AgentModelCatalogProbe,

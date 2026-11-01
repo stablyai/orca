@@ -11,7 +11,7 @@ import type {
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {

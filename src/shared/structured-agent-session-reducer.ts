@@ -38,7 +38,7 @@ import {
   ownItemCount,
   trimRetainedItems
 } from './structured-agent-session-item-retention'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
 import { queuePublicationField } from './agent-session/requests/structured-agent-session-queue-publication-field'
 import {

@@ -1,29 +1,29 @@
 // Stopped-before-start sends keep their original place plus one notice; the journal already holds the send and refusal.
 
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import type {
   AgentJournalAnsweredTurn,
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+} from '../journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import {
   NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
   NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
-} from './native-chat/native-chat-stopped-before-start'
+} from '../../native-chat/native-chat-stopped-before-start'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
-} from './agent-session/requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+} from '../requests/structured-agent-session-dispatch-rejection'
+import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
 import {
   projectNativeChatTranscript,
   projectNativeChatTranscriptMessages
-} from './native-chat/transcript/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from './native-chat/transcript/native-chat-turn-membership'
+} from '../../native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatRowsInDrawOrder } from '../../native-chat/transcript/native-chat-turn-grouping'
+import { nativeChatTurnMembership } from '../../native-chat/transcript/native-chat-turn-membership'
 
 let sequence = 0
 

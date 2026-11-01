@@ -4,18 +4,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionDeathEvidence } from '../../shared/agent-session-record'
+import type { AgentSessionDeathEvidence } from '../../shared/agent-session-death-evidence'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionFailedAcquisitionSettlement } from './agent-session-acquisition-failure-settlement'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-alpha-1'
 const LAST_RENEWED_AT = 30_000

@@ -18,7 +18,7 @@ import { createStructuredAgentSessionId } from '../../../src/shared/structured-a
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
-} from '../../../src/shared/structured-agent-session-mutation'
+} from '../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
 
 // Skip Windows until the POSIX stub wrapper has a verified .cmd equivalent.
 export const SUPPORTED = process.platform !== 'win32'

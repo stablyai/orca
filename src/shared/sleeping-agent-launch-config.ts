@@ -1,4 +1,4 @@
-import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import type { SleepingAgentLaunchConfig } from './agent-session/lifecycle/agent-session-resume'
 
 export function buildSleepingAgentLaunchConfig(args: {
   agentCommand?: string | null

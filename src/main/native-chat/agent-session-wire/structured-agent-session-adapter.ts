@@ -6,7 +6,7 @@ import type {
   AgentSessionRewindFork,
   AgentSessionRewindReason,
   AgentSessionRewindSupport
-} from '../../../shared/agent-session-rewind'
+} from '../../../shared/agent-session/lifecycle/agent-session-rewind'
 // The host owns journal/lease authority; adapters report delivery uncertainty without guessing.
 
 import type {
@@ -18,13 +18,13 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-identity'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type {
-  AgentSessionAccountHome,
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
 import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'

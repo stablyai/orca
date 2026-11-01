@@ -1,4 +1,4 @@
-import { RESUMABLE_TUI_AGENTS } from '../../../../shared/agent-session-resume'
+import { RESUMABLE_TUI_AGENTS } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import type { AppState } from '@/store/types'

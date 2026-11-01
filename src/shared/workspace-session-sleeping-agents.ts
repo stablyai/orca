@@ -1,9 +1,9 @@
 import { z } from 'zod'
+import { getAgentResumeArgv } from './agent-resume-argv'
 import {
-  getAgentResumeArgv,
   normalizeAgentProviderSession,
   RESUMABLE_TUI_AGENTS
-} from './agent-session-resume'
+} from './agent-session/lifecycle/agent-session-resume'
 import { AGENT_EFFORT_LEVEL } from './agent-effort-level'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { normalizeMainAgentStatusField } from './agent-status-types'

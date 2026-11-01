@@ -1,7 +1,7 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session-record.test-fixture'
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 /** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'

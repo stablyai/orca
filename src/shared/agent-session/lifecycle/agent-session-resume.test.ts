@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   agentProviderSessionsEqual,
   extractAgentProviderSession,
-  getAgentResumeArgv,
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from './agent-session-resume'
+import { getAgentResumeArgv } from '../../agent-resume-argv'
 
 describe('agent session resume metadata', () => {
   it('treats devin as a resumable TUI agent', () => {

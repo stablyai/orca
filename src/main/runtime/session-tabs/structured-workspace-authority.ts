@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,

@@ -2,7 +2,7 @@
 // Reads/replays and the offer’s own continuation/start never withdraw it.
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import { isRestartContinuationOf } from './structured-agent-session-restart-continuation-envelope'

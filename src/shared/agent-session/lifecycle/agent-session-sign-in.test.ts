@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureSentence } from './agent-session/failures/agent-session-failure-words'
+import { agentSessionFailureSentence } from '../failures/agent-session-failure-words'
 
 describe('agent-specific sign-in guidance', () => {
   it.each([

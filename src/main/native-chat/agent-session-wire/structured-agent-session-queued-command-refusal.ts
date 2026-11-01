@@ -9,7 +9,7 @@ import {
   type AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
-import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { structuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-turn-identity'
 import type { StructuredAgentSessionCommandHandoverContext } from './structured-agent-session-command-turn'
 

@@ -7,7 +7,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   buildAgentResumeStartupPlan,

@@ -2,7 +2,7 @@
  * An empty result there could release a live reservation and admit a second writer. */
 
 import { readFile, readdir } from 'node:fs/promises'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session-caller-env'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { spawnTokenFromEnvironBlock } from './agent-session-spawn-token-readback'
 
 export type AgentSessionSpawnTokenScan = ReadonlyMap<string, readonly number[]>

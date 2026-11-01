@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from './agent-session-host-authority'
+} from '../../agent-session-host-authority'
 import {
   agentSessionOperationExpiry,
   agentSessionOperationKey,
