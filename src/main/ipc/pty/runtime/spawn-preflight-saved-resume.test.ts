@@ -97,10 +97,7 @@ function chatHost() {
 function deps(runtime: ReturnType<typeof chatHost>): PtyRuntimeControllerDeps {
   const noCodexResumeLaunch: PtyRuntimeControllerDeps['noCodexResumeLaunch'] = (command) => ({
     codexResumeHome: null,
-    command,
-    notifyResumeUnavailable: false,
-    droppedResumeArgv: false,
-    providerSession: null
+    command
   })
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight reads only the admission members `chatHost` provides.
@@ -117,7 +114,6 @@ function deps(runtime: ReturnType<typeof chatHost>): PtyRuntimeControllerDeps {
     resolveCodexResumeLaunch: async (command) => noCodexResumeLaunch(command),
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome: async (resumeHome) => resumeHome.codexHomePath,
-    stripSequencedStartupResumeArgv: (env) => env,
     assertWorkspaceAcceptsNewPty: () => undefined,
     resolvePtySpawnStartupCwd: (_worktreeId, cwd) => cwd,
     requestSerializedBuffer: async () => null,

@@ -43,7 +43,7 @@ describe('prepareCodexSessionResume', () => {
     })
   })
 
-  it('falls back to a fresh session when the rollout home is not trusted', async () => {
+  it('does not prepare an untrusted rollout home', async () => {
     const resolveVerifiedResumeHome = vi.fn(async (source: { homePath: string }) => source.homePath)
 
     await expect(
@@ -52,23 +52,23 @@ describe('prepareCodexSessionResume', () => {
         trustedCodexHomes: ['/managed/other/home'],
         resolveVerifiedResumeHome
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
+    ).resolves.toEqual({ outcome: 'unresolved' })
     expect(resolveVerifiedResumeHome).not.toHaveBeenCalled()
   })
 
-  it('marks cross-agent metadata as never having claimed Codex provenance', async () => {
+  it('does not prepare a home from cross-agent metadata', async () => {
     await expect(
       prepare({
         transcriptPath: '/Users/example/.claude/projects/repo/x.jsonl',
         trustedCodexHomes: [ORIGIN_HOME]
       })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
+    ).resolves.toEqual({ outcome: 'unresolved' })
   })
 
-  it('marks a resume with no transcript path as unclaimed but still fresh', async () => {
+  it('leaves a missing transcript unresolved', async () => {
     await expect(
       prepare({ transcriptPath: undefined, trustedCodexHomes: [ORIGIN_HOME] })
-    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: false })
+    ).resolves.toEqual({ outcome: 'unresolved' })
   })
 })
 

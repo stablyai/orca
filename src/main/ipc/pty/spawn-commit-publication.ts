@@ -104,7 +104,6 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     connectionId: args.connectionId,
     worktreeId: args.worktreeId,
     launchedAt: state.codexHomeLaunchStartedAt,
-    resumeArgvDropped: input.resumeArgvDropped,
     result
   })
   // Inventory cannot infer background/reattached PTYs from mounted views.

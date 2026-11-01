@@ -9,10 +9,7 @@ export function makeRuntimePtySpawnTestDeps(
 ): PtyRuntimeControllerDeps {
   const noCodexResumeLaunch: PtyRuntimeControllerDeps['noCodexResumeLaunch'] = (command) => ({
     codexResumeHome: null,
-    command,
-    notifyResumeUnavailable: false,
-    droppedResumeArgv: false,
-    providerSession: null
+    command
   })
   return {
     store: undefined,
@@ -27,7 +24,6 @@ export function makeRuntimePtySpawnTestDeps(
     resolveCodexResumeLaunch: async (command) => noCodexResumeLaunch(command),
     noCodexResumeLaunch,
     reconcileSharedRuntimeResumeHome: async (resumeHome) => resumeHome.codexHomePath,
-    stripSequencedStartupResumeArgv: (env) => env,
     assertWorkspaceAcceptsNewPty: () => undefined,
     resolvePtySpawnStartupCwd: (_worktreeId, cwd) => cwd,
     requestSerializedBuffer: async () => null,

@@ -40,13 +40,10 @@ export async function spawnPtyFromRuntimeController(
     commit: () => {
       if (!ctx.result.isReattach) {
         Object.assign(ctx.result, {
-          ...(ctx.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {}),
           launchConfig: ctx.args.launchConfig,
           launchAgent: ctx.args.launchAgent,
           launchToken: ctx.args.launchToken,
-          resumeProviderSession: ctx.codexResumeArgvDropped
-            ? undefined
-            : ctx.args.resumeProviderSession
+          resumeProviderSession: ctx.args.resumeProviderSession
         })
       }
       return commitRuntimePtySpawn(ctx)

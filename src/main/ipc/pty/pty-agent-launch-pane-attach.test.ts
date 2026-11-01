@@ -162,8 +162,7 @@ describe('a pane whose process belongs to an agent launch', () => {
           prepareCodexResumeHome: unexpected,
           resolveCodexResumeLaunch: unexpected,
           noCodexResumeLaunch: unexpected,
-          reconcileSharedRuntimeResumeHome: unexpected,
-          stripSequencedStartupResumeArgv: unexpected
+          reconcileSharedRuntimeResumeHome: unexpected
         },
         { cols: 80, rows: 24 }
       )
