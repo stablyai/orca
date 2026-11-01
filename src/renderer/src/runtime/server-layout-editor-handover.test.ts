@@ -146,7 +146,8 @@ function openDesktopFile(
       language: 'typescript',
       mode: 'edit'
     },
-    { suppressActiveRuntimeFallback: true }
+    // Why: joins the mirrored terminal's pane; the lone-pane auto-split would mint a desktop-only group.
+    { suppressActiveRuntimeFallback: true, placementFixed: true }
   )
   const tab = (store.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
     (entry) => entry.entityId === fileId

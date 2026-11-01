@@ -67,6 +67,9 @@ describe('hydrateBrowserSession', () => {
     expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
     expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
     expect(s.activeBrowserTabId).toBe('browser-1')
+    // Why: restore reproduces a layout; it must not split beside the first restored tab.
+    expect(s.groupsByWorktree[validWt]).toHaveLength(1)
+    expect(s.layoutByWorktree[validWt]?.type).toBe('leaf')
   })
 
   // Main load repairs tabless local/SSH browsers; window must not mint IDs main cannot resolve (L280).

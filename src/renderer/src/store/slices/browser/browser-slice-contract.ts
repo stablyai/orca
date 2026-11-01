@@ -54,6 +54,8 @@ export type CreateBrowserTabOptions = {
   browserRuntimeEnvironmentId?: string | null
   /** Creates a page that shows a workspace document instead of a URL. */
   docLocation?: BrowserPageDocLocation
+  /** This call's placement is already decided (restore replay); never redirect it beside a lone pane. */
+  placementFixed?: boolean
 }
 
 export type CreateBrowserPageOptions = {
@@ -145,7 +147,8 @@ export type BrowserSlice = {
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (
     groupId: string,
-    splitDirection?: TabSplitDirection
+    splitDirection?: TabSplitDirection,
+    options?: { placementFixed?: boolean }
   ) => Promise<void>
   /** `profileId: null` uses the workspace default profile. */
   openBrowserProfileTabInActiveWorkspace: (

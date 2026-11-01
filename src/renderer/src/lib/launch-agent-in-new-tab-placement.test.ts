@@ -118,6 +118,21 @@ describe('launchAgentInNewTab terminal tab activation', () => {
     expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
+  it('keeps a pinned panel launch in that panel', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      requestId: 'request-pinned',
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      groupId: 'left',
+      placementFixed: true
+    })
+
+    expect(mockCreateTab.mock.calls[0]?.[1]).toBe('left')
+    expect(mockCreateTab.mock.calls[0]?.[3]).toMatchObject({ placementFixed: true })
+  })
+
   it('applies a saved action choice as terminal flags by scope', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const base = getDefaultSettings('/tmp')
