@@ -1,6 +1,7 @@
 import * as fileOperations from 'node:fs/promises'
 import { readFile, rm } from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
+import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
 import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session/agent-session-question-answer'
 import '../unused-default-rpc-methods.test-fixture'
@@ -371,6 +372,7 @@ it('hands off bounded tool evidence with the latest conversation while keeping t
   await rig.host.journalSnapshot(SESSION)
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const output = `AssertionError: CURRENT PART\nReceived: ${'a'.repeat(200_000)}\nTests: 2 failed`
+  const toolOutput = `Error: SAVED_TOOL_FAILURE\n${'b'.repeat(200_000)}\nSAVED_TOOL_OUTPUT_END`
   const bodies: AgentJournalItemBody[] = [
     hostTestMessage('Review the viewer'),
     {
@@ -385,6 +387,14 @@ it('hands off bounded tool evidence with the latest conversation while keeping t
         },
         { type: 'tool-result', output, callId: 'test', isError: true }
       ]
+    },
+    {
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'pnpm test saved-viewer.test.ts' },
+      callId: 'saved-test',
+      state: 'failed',
+      output: journalPayload(toolOutput)
     },
     {
       kind: 'message',
@@ -420,7 +430,16 @@ it('hands off bounded tool evidence with the latest conversation while keeping t
   expect(context.capturedText).toContain('[assistant] The append resets reader position.')
   expect(context.capturedText).toContain('[user] Should we redo the viewer?')
   expect(context.capturedText).not.toContain('a'.repeat(2_000))
+  expect(context.capturedText).toContain(
+    '[tool shell failed input preview] call=saved-test {"command":"pnpm test saved-viewer.test.ts"}'
+  )
+  expect(context.capturedText).toContain(
+    '[tool result error] call=saved-test Error: SAVED_TOOL_FAILURE'
+  )
+  expect(context.capturedText).toContain('SAVED_TOOL_OUTPUT_END')
+  expect(context.capturedText).not.toContain('b'.repeat(2_000))
   expect(await readFile(context.transcriptPath, 'utf8')).toContain(output)
+  expect(await readFile(context.transcriptPath, 'utf8')).toContain(toolOutput)
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
 
