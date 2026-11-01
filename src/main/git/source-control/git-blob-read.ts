@@ -7,11 +7,8 @@ import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../runner'
 import { isMaxBufferOverflowError } from '../max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
-import {
-  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
-  filePreviewExtension
-} from '../../../shared/file-preview-kind'
 import { literalPathspec } from './git-pathspec'
+import { isImageOrPdfPreviewPath, readTextconvDriver } from './textconv-driver'
 
 export type GitBlobReadResult = {
   content: string
@@ -21,6 +18,8 @@ export type GitBlobReadResult = {
   failed?: boolean
   /** Past MAX_GIT_SHOW_BYTES: left unread and reported binary, so older diff readers stay safe. */
   tooLarge?: boolean
+  /** The diff driver failed and the stored bytes stand in; don't cache, it may recover. */
+  textconvFailed?: boolean
 }
 
 const TOO_LARGE_BLOB: GitBlobReadResult = {
@@ -30,11 +29,12 @@ const TOO_LARGE_BLOB: GitBlobReadResult = {
   tooLarge: true
 }
 
+/** `textconv` decides whether to apply the path's diff driver; omitted, the driver is looked up. */
 export async function readUnstagedLeftBlob(
   worktreePath: string,
   filePath: string,
   options: GitRuntimeOptions = {},
-  textconv = true
+  textconv?: Promise<boolean>
 ): Promise<GitBlobReadResult> {
   const indexBlob = await readGitBlobAtIndexPath(worktreePath, filePath, options, textconv)
   if (indexBlob.exists || indexBlob.failed) {
@@ -44,12 +44,11 @@ export async function readUnstagedLeftBlob(
   return readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
 }
 
-/** `textconv` applies the path's diff driver, as `git diff` does; false reads the stored bytes. */
 export function readGitBlobAtIndexPath(
   worktreePath: string,
   filePath: string,
   options: GitRuntimeOptions = {},
-  textconv = true
+  textconv?: Promise<boolean>
 ): Promise<GitBlobReadResult> {
   return readGitBlob(worktreePath, undefined, filePath, options, textconv)
 }
@@ -59,7 +58,7 @@ export function readGitBlobAtOidPath(
   oid: string,
   filePath: string,
   options: GitRuntimeOptions = {},
-  textconv = true
+  textconv?: Promise<boolean>
 ): Promise<GitBlobReadResult> {
   return readGitBlob(worktreePath, oid, filePath, options, textconv)
 }
@@ -69,7 +68,7 @@ async function readGitBlob(
   oid: string | undefined,
   filePath: string,
   options: GitRuntimeOptions,
-  textconv: boolean
+  textconv: Promise<boolean> | undefined
 ): Promise<GitBlobReadResult> {
   // Git blob syntax requires forward slashes, including on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
@@ -78,12 +77,14 @@ async function readGitBlob(
     ...gitReadOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
+  const applyTextconv = isImageOrPdfPreviewPath(filePath)
+    ? Promise.resolve(false)
+    : (textconv ??
+      readTextconvDriver(worktreePath, gitPath, options).then((driver) => driver !== undefined))
+  let raw: Buffer
   try {
-    const stdout =
-      textconv && !isImageOrPdfPreviewPath(filePath)
-        ? await readTextconvBlob(spec, gitPath, oid, readOptions)
-        : (await gitExecFileAsyncBuffer(['cat-file', 'blob', '--', spec], readOptions)).stdout
-    return { ...bufferToBlob(stdout, filePath), exists: true }
+    // The raw read proves a blob is there: `cat-file --textconv` would print a tree listing.
+    raw = (await gitExecFileAsyncBuffer(['cat-file', 'blob', '--', spec], readOptions)).stdout
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return TOO_LARGE_BLOB
@@ -95,23 +96,21 @@ async function readGitBlob(
       failed: !(await verifyMissingBlobPath(error, worktreePath, gitPath, options, oid))
     }
   }
-}
-
-async function readTextconvBlob(
-  spec: string,
-  gitPath: string,
-  oid: string | undefined,
-  readOptions: Parameters<typeof gitExecFileAsyncBuffer>[1]
-): Promise<Buffer> {
+  if (!(await applyTextconv)) {
+    return { ...bufferToBlob(raw, filePath), exists: true }
+  }
   try {
-    return (await gitExecFileAsyncBuffer(['cat-file', '--textconv', '--', spec], readOptions))
-      .stdout
+    const { stdout } = await gitExecFileAsyncBuffer(
+      ['cat-file', '--textconv', '--', spec],
+      readOptions
+    )
+    return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
-    if (isMaxBufferOverflowError(error) || isMissingGitBlobPath(error, gitPath, oid)) {
-      throw error
+    if (isMaxBufferOverflowError(error)) {
+      return TOO_LARGE_BLOB
     }
     // A driver missing from this host's PATH, or failing, must not hide the stored blob.
-    return (await gitExecFileAsyncBuffer(['cat-file', 'blob', '--', spec], readOptions)).stdout
+    return { ...bufferToBlob(raw, filePath), exists: true, textconvFailed: true }
   }
 }
 
@@ -173,11 +172,6 @@ export async function readWorkingTreeFile(filePath: string): Promise<GitBlobRead
   } catch {
     return { content: '', isBinary: false, exists: true, failed: true }
   }
-}
-
-/** Image/PDF diffs preview the stored bytes, so a diff driver must not replace them. */
-export function isImageOrPdfPreviewPath(filePath: string): boolean {
-  return !!IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
 }
 
 function bufferToBlob(buffer: Buffer, filePath?: string): GitBlobReadResult {

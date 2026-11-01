@@ -162,22 +162,20 @@ async function loadDiff(
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists && !rightBlob.failed
-      readFailed = leftBlob.failed === true || rightBlob.failed === true
+      readFailed = [leftBlob, rightBlob].some((blob) => blob.failed || blob.textconvFailed)
       tooLarge = leftBlob.tooLarge === true || rightBlob.tooLarge === true
     } else {
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
       const hostFilePath = hostWorktreePath ? path.join(hostWorktreePath, filePath) : undefined
+      const textconv = hostFilePath
+        ? workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, options)
+        : Promise.resolve(false)
       const [leftBlob, workingTreeBlob] = await Promise.all([
-        (hostFilePath
-          ? workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, options)
-          : Promise.resolve(false)
-        ).then((textconv) =>
-          compareAgainstHead
-            ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
-            : readUnstagedLeftBlob(worktreePath, filePath, options, textconv)
-        ),
+        compareAgainstHead
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
+          : readUnstagedLeftBlob(worktreePath, filePath, options, textconv),
         hostFilePath
           ? readWorkingTreeFile(hostFilePath)
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
@@ -187,7 +185,7 @@ async function loadDiff(
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
-      readFailed = leftBlob.failed === true || workingTreeBlob.failed === true
+      readFailed = [leftBlob, workingTreeBlob].some((blob) => blob.failed || blob.textconvFailed)
       tooLarge = leftBlob.tooLarge === true || workingTreeBlob.tooLarge === true
     }
   } catch {

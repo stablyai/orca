@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
-import { rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -86,5 +86,19 @@ describe('diff drivers with textconv', () => {
       originalContent: 'one\n',
       modifiedContent: 'two\n'
     })
+  })
+
+  it('does not read a replaced directory through the driver as file content', async () => {
+    await writeFile(path.join(repo, '.gitattributes'), 'foo diff=upper\n')
+    git('config', 'diff.upper.textconv', 'tr a-z A-Z <')
+    await mkdir(path.join(repo, 'foo'))
+    await writeFile(path.join(repo, 'foo', 'bar'), 'x\n')
+    git('add', '.')
+    git('commit', '-m', 'init')
+    git('rm', '-rq', 'foo')
+    await writeFile(path.join(repo, 'foo'), 'file\n')
+    git('add', 'foo')
+
+    expect(await getDiff(repo, 'foo', true)).toMatchObject({ originalContent: '' })
   })
 })
