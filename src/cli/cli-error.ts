@@ -5,7 +5,7 @@ import {
 } from '../shared/automation-owner-conflict'
 import { automationOwnerConflictRecovery } from './automation-owner-conflict-recovery'
 import { worktreeSelectorRecovery } from './worktree-selector-recovery'
-import { selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
+import { ambiguousWorkspaceChoices, selectorAmbiguityRecovery } from './selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
@@ -68,31 +68,16 @@ export function cliErrorCode(error: unknown): string | undefined {
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   const selector = contextRecovery(cliErrorCode(error), context)
-  if (
+  const workspaceChoices =
     error instanceof RuntimeClientError &&
     !(error instanceof RuntimeRpcFailureError) &&
-    error.code === 'selector_ambiguous' &&
-    error.data &&
-    typeof error.data === 'object' &&
-    'workspaces' in error.data &&
-    Array.isArray(error.data.workspaces) &&
-    error.data.workspaces.every(
-      (row: unknown) =>
-        row &&
-        typeof row === 'object' &&
-        'id' in row &&
-        typeof row.id === 'string' &&
-        'path' in row &&
-        typeof row.path === 'string' &&
-        'hostId' in row &&
-        typeof row.hostId === 'string' &&
-        'selector' in row &&
-        typeof row.selector === 'string'
-    )
-  ) {
+    error.code === 'selector_ambiguous'
+      ? ambiguousWorkspaceChoices(error.data)
+      : undefined
+  if (workspaceChoices) {
     return formatMessageWithNextSteps(
-      `${message}\nWorkspace choices (JSON data):\n${JSON.stringify(error.data.workspaces, null, 2)}`,
-      nextStepsFromData(error.data)
+      `${message}\nWorkspace choices (JSON data):\n${JSON.stringify(workspaceChoices, null, 2)}`,
+      nextStepsFromData(errorData(error))
     )
   }
   if (selector) {
