@@ -1,5 +1,5 @@
 import {
-  TERMINAL_SHORTCUT_STORAGE_KEYS,
+  LIVE_PAGE_STORAGE_KEYS,
   isHostWorkspaceStorageKey,
   isPageStorageKeyForRoute,
   PAGE_STORAGE_MAX_VALUE_CHARS
@@ -65,7 +65,7 @@ export function refreshPageTerminalShortcuts(
   oversize: readonly string[]
 ): void {
   const nextOversize = new Set(oversizeKeys)
-  for (const key of TERMINAL_SHORTCUT_STORAGE_KEYS) {
+  for (const key of LIVE_PAGE_STORAGE_KEYS) {
     const value = entries[key]
     if (value === undefined) {
       values.delete(key)

@@ -11,8 +11,7 @@ import {
 } from './mobile-native-chat-draft-inputs'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, type TextInput, View } from 'react-native'
-import { Plus } from 'lucide-react-native'
+import { Keyboard, type TextInput, View } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -28,16 +27,14 @@ import {
   type MobileNativeChatSessionOptionPickersProps
 } from '../input/MobileNativeChatSessionOptionPickers'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
+import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-composer-menu'
+export type { MobileNativeChatStructuredComposer } from './mobile-native-chat-composer-menu'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
 import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
 import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
-import {
-  COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
-} from '../../../components/composer-input/composer-input-styles'
+import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
@@ -45,20 +42,12 @@ import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
 } from './MobileNativeChatComposerMic'
+import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
+import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
-
-export type MobileNativeChatStructuredComposer = {
-  catalog: MobileComposerStructuredCatalog
-  onSlashMenuOpen: () => void
-  onSlashMenuDemand?: (open: boolean) => void
-  onAttachFiles?: () => void
-  // An uploading attachment must hold Send.
-  files: readonly PendingNativeChatFile[]
-  onRemoveFile: (id: string) => void
-}
 
 type Props = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
@@ -96,6 +85,10 @@ type Props = MobileNativeChatMicProps & {
   onNeedSkills?: () => void
   /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
   stop?: { onStop?: () => void; held: boolean } | null
+  /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
+  fitScreenCorners?: boolean
+  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
+  widthToggle?: { expanded: boolean; onToggle: () => void } | null
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
@@ -135,7 +128,9 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendFollowUp = null
+  sendFollowUp = null,
+  fitScreenCorners = false,
+  widthToggle = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -277,8 +272,14 @@ export function MobileNativeChatComposer({
           nestedScrollEnabled={editSession ? true : undefined}
         />
       ) : null}
-      <View style={styles.composerInset} testID="native-chat-composer-inset">
-        <View style={styles.bar} testID="native-chat-composer">
+      <View
+        style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
+        testID="native-chat-composer-inset"
+      >
+        <View
+          style={fitScreenCorners ? styles.barCornerFit : styles.bar}
+          testID="native-chat-composer"
+        >
           <MobileNativeChatComposerAttachments
             images={attachments}
             files={files}
@@ -319,19 +320,12 @@ export function MobileNativeChatComposer({
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             {attachPress ? (
-              <Pressable
-                accessibilityLabel={attachLabel}
-                style={({ pressed }) => [inputStyles.controlButton, pressed && inputStyles.pressed]}
+              <MobileNativeChatAttachButton
+                label={attachLabel}
                 onPress={attachPress}
-                disabled={isAttaching || disabled}
-                hitSlop={COMPOSER_CONTROL_HIT_SLOP}
-              >
-                {isAttaching ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : (
-                  <Plus size={19} color={colors.textPrimary} strokeWidth={2} />
-                )}
-              </Pressable>
+                isAttaching={isAttaching}
+                disabled={disabled}
+              />
             ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
@@ -349,6 +343,7 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={inputStyles.actionSpacer} />
+            {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}
