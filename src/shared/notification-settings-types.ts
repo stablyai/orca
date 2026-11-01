@@ -8,6 +8,7 @@ export type NotificationSettings = {
   agentTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  suppressWhileMicActive: boolean
   customSoundId:
     | 'system'
     | 'two-tone'
@@ -82,6 +83,9 @@ export type NotificationDispatchResult = {
     | 'not-displayed'
     | 'blocked-by-system'
     | 'invalid-request'
+  /** True when delivered but the sound was withheld (e.g. suppressWhileMicActive) — the
+   *  banner/click action still show; only the native and renderer custom sound are skipped. */
+  soundSuppressed?: boolean
 }
 
 export type NotificationDismissResult = {

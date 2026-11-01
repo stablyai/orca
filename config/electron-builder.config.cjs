@@ -505,6 +505,11 @@ module.exports = {
         'orca-process-footprint',
         context.packager
       )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-mic-active-status'),
+        'orca-mic-active-status',
+        context.packager
+      )
       await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
     }
   },
@@ -625,6 +630,10 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      {
+        from: 'native/mic-active-status-macos/.build/release/orca-mic-active-status',
+        to: 'MacOS/orca-mic-active-status'
       }
     ],
     target: [
