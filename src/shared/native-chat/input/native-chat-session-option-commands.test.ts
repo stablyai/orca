@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from '../../agent-session-option-catalog-claude-codex'
-import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session-option-catalog-grok'
+} from '../../agent-session/options/agent-session-option-catalog-claude-codex'
+import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-grok'
 import {
   buildNativeChatSessionOptionCommand,
   parseBuiltSessionOptionCommand,

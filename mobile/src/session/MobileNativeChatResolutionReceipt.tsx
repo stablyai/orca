@@ -4,7 +4,7 @@ import {
   nativeChatReceiptAnswers,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../src/shared/native-chat-resolution-receipt'
+} from '../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { nativeChatReceiptCopy } from './native-chat-receipt-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'

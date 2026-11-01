@@ -14,7 +14,14 @@ import {
 
 export type SkillUpdateRun =
   | { state: 'idle' }
-  | { state: 'running'; targetKey: string; names: string[]; startedAt: number }
+  | {
+      state: 'running'
+      targetKey: string
+      names: string[]
+      startedAt: number
+      /** A silent update: it holds the target but never reports in the status bar. */
+      background?: boolean
+    }
   | {
       state: 'done'
       targetKey: string
@@ -110,8 +117,14 @@ export function useSkillUpdateRun(targetKey: string | null): SkillUpdateRun {
   return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
 }
 
+/** The status bar's run: the user's latest foreground run; silent updates never show. */
+export function getLatestSkillUpdateRun(): SkillUpdateRun {
+  const run = getSkillUpdateRun(latestTargetKey)
+  return run.state === 'running' && run.background ? IDLE : run
+}
+
 export function useLatestSkillUpdateRun(): SkillUpdateRun {
-  const read = (): SkillUpdateRun => getSkillUpdateRun(latestTargetKey)
+  const read = getLatestSkillUpdateRun
   return useSyncExternalStore(subscribeSkillUpdateRun, read, read)
 }
 
@@ -162,6 +175,41 @@ export async function startSkillUpdateRun(request: {
   setRun(targetKey, settled)
   // A run of any outcome may have changed the disk, so every skills surface re-reads it.
   notifyInstalledAgentSkillsChanged()
+}
+
+/**
+ * Runs a silent update under the target's single-run ownership, so a manual update cannot
+ * interleave with it and the dialog shows busy. Returns null without running while the target is busy or holds an unacknowledged result.
+ */
+export async function runAutomaticSkillUpdate<T>(
+  target: BundledSkillTarget,
+  names: string[],
+  run: () => Promise<T>
+): Promise<{ value: T } | null> {
+  const targetKey = bundledSkillTargetKey(target)
+  const slot = slotFor(targetKey)
+  // Never replace a running update or a result the user has not acknowledged yet.
+  if (slot.run.state !== 'idle') {
+    return null
+  }
+  const token = ++nextToken
+  slot.token = token
+  // Why no latestTargetKey: a silent update never claims the status bar.
+  setRun(targetKey, {
+    state: 'running',
+    targetKey,
+    names,
+    startedAt: Date.now(),
+    background: true
+  })
+  try {
+    return { value: await run() }
+  } finally {
+    if (slots.get(targetKey)?.token === token) {
+      slot.token = ++nextToken
+      setRun(targetKey, IDLE)
+    }
+  }
 }
 
 export function acknowledgeSkillUpdateRun(targetKey: string): void {

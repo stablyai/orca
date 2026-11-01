@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { contextTokensFromUsage } from '../../shared/agent-session-context-usage'
+import { contextTokensFromUsage } from '../../shared/agent-session/agent-session-context-usage'
 import {
   closeProviderTimelineRigs,
   messageText

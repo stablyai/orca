@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { chatAssigneeSessionId } from '../../orchestration/chat-assignee'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrchestrationDb } from '../../orchestration/db'

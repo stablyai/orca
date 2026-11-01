@@ -2,11 +2,13 @@ import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
 } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/structured-agent-session-mutation'
-import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
+import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import type { StructuredAgentSessionCreateParams } from '../../../shared/agent-session/structured-agent-session-create'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
-import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
-import { notifyStructuredLaunchListeners } from './agent-session/launch/structured-agent-session-launch-registry'
+import {
+  type StructuredLaunchState,
+  notifyStructuredLaunchListeners
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
@@ -16,7 +18,7 @@ import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { firstFrameOptionState } from '@/components/native-chat/use-structured-agent-session-option-state'
 import {
   applyStructuredLaunchHeldOptions,
@@ -25,8 +27,8 @@ import {
   structuredLaunchOptionOverlay,
   settleStructuredLaunchCreateOptions
 } from './structured-agent-session-launch-options'
-import { structuredAgentSessionDrawnValues } from '../../../shared/structured-agent-session-option-snapshot'
-import { encodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
+import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { encodeStructuredAgentSessionOptionValue } from '../../../shared/agent-session/options/structured-agent-session-option-codec'
 
 /** Freeze what create carries once; an ambiguous reply always replays the same payload.
  *  `hostTakesExplicitOptions`: the host advertises the create options-mode capability. */

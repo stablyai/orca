@@ -49,15 +49,15 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
         }
       ]
     }
-    mirror = new CodexConfigMirror({ getSettings: () => settings }, (path) => path)
+    mirror = new CodexConfigMirror({ getSettings: () => settings }, async (path) => path)
   })
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('still guards every managed home against the daemon socket limit', () => {
-    mirror.safeSyncToManagedHomes()
+  it('still guards every managed home against the daemon socket limit', async () => {
+    await mirror.safeSyncToManagedHomes()
 
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
       `[features]\n${OVERRIDE_LINE}\n`
@@ -65,14 +65,14 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     expect(existsSync(join(testState.fakeHomeDir, '.codex'))).toBe(false)
   })
 
-  it('leaves a WSL home to launch prep instead of running its blocking ownership check', () => {
-    const assertManagedHomePath = vi.fn((path: string) => path)
+  it('leaves a WSL home to launch prep instead of running its blocking ownership check', async () => {
+    const assertManagedHomePath = vi.fn(async (path: string) => path)
     const wslMirror = new CodexConfigMirror(
       { getSettings: () => getDefaultSettings(testState.fakeHomeDir) },
       assertManagedHomePath
     )
 
-    wslMirror.safeSyncIntoManagedHome(
+    await wslMirror.safeSyncIntoManagedHome(
       '\\\\wsl.localhost\\Ubuntu\\home\\u\\.local\\share\\orca\\codex-accounts\\acct\\home',
       undefined,
       'acct'
@@ -81,10 +81,10 @@ describe('CodexConfigMirror without ~/.codex/config.toml', () => {
     expect(assertManagedHomePath).not.toHaveBeenCalled()
   })
 
-  it('adds the guard without touching settings already in the managed home', () => {
+  it('adds the guard without touching settings already in the managed home', async () => {
     writeFileSync(join(managedHomePath, 'config.toml'), 'model = "gpt-5"\n')
 
-    mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
+    await mirror.safeSyncIntoManagedHome(managedHomePath, undefined, 'acct')
 
     expect(readFileSync(join(managedHomePath, 'config.toml'), 'utf-8')).toBe(
       `model = "gpt-5"\n\n[features]\n${OVERRIDE_LINE}\n`

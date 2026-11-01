@@ -3,8 +3,8 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import {
   realClaudeAuthenticated,

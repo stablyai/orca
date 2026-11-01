@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-turn-outcome'
 import { orcaShutdownRowClientMessageId } from '../../shared/native-chat/native-chat-orca-stop-cut'
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'

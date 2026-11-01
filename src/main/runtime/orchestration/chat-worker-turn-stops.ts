@@ -1,7 +1,6 @@
-import type {
-  AgentSessionStatusSummary,
-  AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import { AGENT_DONE_QUIET_MS } from '../../../shared/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import {
   reportWorkerTurnStop,
@@ -32,8 +31,16 @@ function chatStop(event: AgentSessionTurnCompletionEvent): ChatStop | null {
   }
 }
 
-/** Reports a chat worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-export function chatWorkerTurnStopReporter(deps: WorkerTurnStopReportDeps) {
+/** Reports a chat worker whose turn ended (or stopped at a prompt) while its Dispatch is open.
+ *  A finished turn waits out the quiet period, as a terminal's does, and while its Dispatch is still
+ *  starting: the turn that reported ends just before the follow-up it claimed hands over its task. */
+export function chatWorkerTurnStopReporter(
+  deps: WorkerTurnStopReportDeps,
+  setTimer: (run: () => void, delayMs: number) => void = (run, delayMs) => {
+    setTimeout(run, delayMs).unref?.()
+  }
+) {
+  const generations = new Map<string, number>()
   return (
     event: AgentSessionTurnCompletionEvent,
     readStatus: (
@@ -41,25 +48,72 @@ export function chatWorkerTurnStopReporter(deps: WorkerTurnStopReportDeps) {
     ) => Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined
   ): void => {
     try {
-      const stop = chatStop(event)
-      const db = stop ? deps.getDb() : null
-      const status = stop ? readStatus(stop.sessionId) : undefined
-      // A queued follow-up already started the next turn.
-      if (!stop || !db || status?.status === 'working') {
+      const sessionId =
+        event.type === 'completion'
+          ? event.completion.sessionId
+          : event.type === 'prompt'
+            ? event.prompt.sessionId
+            : undefined
+      if (!sessionId) {
         return
       }
-      for (const { dispatch, from } of chatWorkerDispatches(stop.sessionId, db)) {
-        reportWorkerTurnStop(
-          db,
-          { kind: 'local', dispatch },
-          {
-            from,
-            stopKey: stop.stopKey,
-            reason: stop.reason,
-            lastOutput: status?.lastAssistantMessage
-          },
-          deps
-        )
+      // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
+      const generation = (generations.get(sessionId) ?? 0) + 1
+      generations.set(sessionId, generation)
+      const stop = chatStop(event)
+      const db = stop ? deps.getDb() : null
+      if (!stop || !db) {
+        return
+      }
+      // The Dispatch a stop belongs to is one open when it was seen.
+      const seen = new Set(
+        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => dispatch.id)
+      )
+      const deliver = (): void => {
+        try {
+          const current = deps.getDb()
+          const status = readStatus(stop.sessionId)
+          // A newer edge supersedes this one, and a queued follow-up already started the next turn.
+          if (
+            generations.get(stop.sessionId) !== generation ||
+            !current ||
+            status?.status === 'working'
+          ) {
+            return
+          }
+          const open = chatWorkerDispatches(stop.sessionId, current).filter(({ dispatch }) =>
+            seen.has(dispatch.id)
+          )
+          if (
+            stop.reason === 'finished' &&
+            open.some(
+              ({ dispatch }) => current.getWorkerDispatch(dispatch.id)?.state === 'starting'
+            )
+          ) {
+            setTimer(deliver, AGENT_DONE_QUIET_MS)
+            return
+          }
+          for (const { dispatch, from } of open) {
+            reportWorkerTurnStop(
+              current,
+              { kind: 'local', dispatch },
+              {
+                from,
+                stopKey: stop.stopKey,
+                reason: stop.reason,
+                lastOutput: status?.lastAssistantMessage
+              },
+              deps
+            )
+          }
+        } catch (error) {
+          console.warn('[orchestration] chat worker stop report failed', error)
+        }
+      }
+      if (stop.reason === 'finished') {
+        setTimer(deliver, AGENT_DONE_QUIET_MS)
+      } else {
+        deliver()
       }
     } catch (error) {
       console.warn('[orchestration] chat worker stop report failed', error)

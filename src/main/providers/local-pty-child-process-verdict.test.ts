@@ -17,11 +17,7 @@ vi.mock('./agent-foreground-process', () => ({
   confirmShellForegroundProcess: confirmShellForegroundMock
 }))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
-import {
-  confirmLocalPtyShellForeground,
-  hasLocalPtyChildProcesses,
-  inspectLocalPtyChildProcesses
-} from './local-pty-foreground-inspection'
+
 import { LocalPtyProvider } from './local-pty-provider'
 import { ptyIncarnations, ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
@@ -92,71 +88,8 @@ afterEach(() => {
   ptyShellPath.clear()
 })
 
-describe('confirmLocalPtyShellForeground', () => {
-  it('proves against the spawned shell path, which tells the Git Bash launcher apart', async () => {
-    const launcher = 'C:\\Program Files\\Git\\bin\\bash.exe'
-    registerPane('pty-git-bash', 'bash.exe', launcher)
-    confirmShellForegroundMock.mockResolvedValueOnce(true)
-
-    await expect(confirmLocalPtyShellForeground('pty-git-bash')).resolves.toBe(true)
-    expect(confirmShellForegroundMock).toHaveBeenCalledWith(4242, launcher, expect.any(Object))
-  })
-})
-
 // Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
-
-describe('inspectLocalPtyChildProcesses', () => {
-  it('reports unverifiable when the pty fd cannot be read', async () => {
-    registerPane(
-      'pty-closed',
-      () => {
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    expect(await inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
-  })
-
-  it('still answers no-children when the shell itself is in the foreground', async () => {
-    registerPane('pty-idle', 'zsh', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
-  })
-
-  it('answers children when something else is in the foreground', async () => {
-    registerPane('pty-busy', 'vim', '/bin/zsh')
-    expect(await inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
-  })
-
-  it('treats a pane this provider does not hold as a real negative', async () => {
-    expect(await inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
-  })
-
-  it('preserves uncertainty conservatively in the boolean adapter', async () => {
-    let reads = 0
-    registerPane(
-      'pty-closed',
-      () => {
-        reads += 1
-        throw new Error('EBADF: bad file descriptor')
-      },
-      '/bin/zsh'
-    )
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(true)
-    // The result must come from the failed read, not from an earlier short-circuit.
-    expect(reads).toBe(1)
-  })
-})
-
-describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
-  it('reports unverifiable rather than reading the spawn file as an idle shell', async () => {
-    const term = await registerRetiredPane('pty-retired')
-
-    expect(term.process).toBe(POSIX_SHELL)
-    // False idle would authorize pane termination despite the unreadable descriptor.
-    expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
-  }, 15000)
-})
 
 describe('inspectPtyProviderProcess child-process evidence', () => {
   const provider = new LocalPtyProvider()

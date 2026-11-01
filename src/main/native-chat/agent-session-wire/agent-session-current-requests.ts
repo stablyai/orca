@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionCurrentRequestsMarker,
   AgentSessionCurrentRequestsPiece,
   AgentSessionCurrentRequestsRead
-} from '../../../shared/agent-session-current-requests-wire'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session-current-requests-capability'
+} from '../../../shared/agent-session/requests/agent-session-current-requests-wire'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import type { StructuredAgentSessionCurrentWorkJournal } from './structured-agent-session-current-work'
 
 export type CurrentRequestsSubscriber = {

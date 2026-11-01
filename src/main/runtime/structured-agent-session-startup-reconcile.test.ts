@@ -4,7 +4,7 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../native-chat/agent-session-journal/journal-host-database'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type * as AgentSessionRecordRows from './agent-session-record-rows'
@@ -118,4 +118,46 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
     })
   ])
   expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
+})
+
+it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
+  const { sessionId } = await seedChat({ newer: true })
+  const log = recordingStructuredAgentSessionLogger()
+  const runtime = startupRuntime(log)
+  await runtime.prepareStructuredAgentSessionStartupRestoration()
+  const host = getStructuredAgentSessionHost()
+  const close = vi.spyOn(host!, 'close')
+  vi.spyOn(runtime, 'captureStructuredAgentSessionPresentation').mockReturnValue({
+    raw: null,
+    saved: []
+  })
+  vi.spyOn(runtime, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
+  const { captureStructuredSessionSurface, closeCapturedStructuredSession } =
+    await import('./agent-session/structured-agent-session-close')
+  expect(host).not.toBeNull()
+  if (!host) {
+    throw new Error('Expected installed host')
+  }
+  await expect(
+    closeCapturedStructuredSession(
+      host,
+      sessionId,
+      'user-close',
+      captureStructuredSessionSurface(host, sessionId, runtime),
+      runtime
+    )
+  ).resolves.toBe(false)
+
+  expect(log.entries).toContainEqual({
+    level: 'warn',
+    message: 'recording a closed chat tab failed',
+    fields: {
+      scope: 'tab-close-hide',
+      sessionId,
+      error: expect.objectContaining({
+        refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
+      })
+    }
+  })
+  expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
 })

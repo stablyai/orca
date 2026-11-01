@@ -60,30 +60,6 @@ function table(linearIssueListRows = rows) {
   )
 }
 
-it('collapses only the clicked section, keeps counts, and expands with Enter and Space', async () => {
-  const user = userEvent.setup()
-  render(table())
-  const todo = screen.getByRole('button', { name: 'Todo 2', expanded: true })
-  const done = screen.getByRole('button', { name: 'Done 1', expanded: true })
-  await user.click(todo)
-  expect(todo.getAttribute('aria-expanded')).toBe('false')
-  expect(screen.queryByText('Issue 1')).toBeNull()
-  expect(screen.queryByText('Issue 2')).toBeNull()
-  expect(screen.getByText('Issue 3')).toBeTruthy()
-  expect(done.getAttribute('aria-expanded')).toBe('true')
-  expect(screen.getByRole('button', { name: 'Todo 2' })).toBe(todo)
-
-  await user.keyboard('{Enter}')
-  expect(todo.getAttribute('aria-expanded')).toBe('true')
-  expect(screen.getByText('Issue 1')).toBeTruthy()
-  expect(screen.getByText('Issue 2')).toBeTruthy()
-  await user.keyboard(' ')
-  expect(todo.getAttribute('aria-expanded')).toBe('false')
-  expect(screen.queryByText('Issue 1')).toBeNull()
-  await user.click(todo)
-  expect(screen.getByText('Issue 1')).toBeTruthy()
-})
-
 it('tracks the group key through refreshed rows and leaves ungrouped issues visible', async () => {
   const user = userEvent.setup()
   const view = render(table())

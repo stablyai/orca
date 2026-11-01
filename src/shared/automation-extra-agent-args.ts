@@ -1,5 +1,5 @@
-import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-launch'
+import { agentArgTerminatorIndex } from './agent-session/options/agent-session-option-agent-args'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { findOptionOccurrence } from './command-option-occurrence'
 import {
   quoteStartupArg,

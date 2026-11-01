@@ -10,6 +10,8 @@ export const PluginSetEnabledParams = z.object({
   approvalFingerprint: approvalFingerprintParam
 })
 
+export const PluginSetSystemEnabledParams = z.object({ enabled: z.boolean() })
+
 /** Over RPC, approval needs the explicit CLI fingerprint; the desktop review dialog uses IPC. */
 export const PluginRpcConsentParams = z
   .object({
@@ -54,5 +56,15 @@ export const PluginDevUnloadParams = z
   })
 
 export const PluginGetLogsParams = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
+  /** `cursor` from an earlier reply; only later lines come back. Older hosts ignore it. */
+  after: z.string().max(64).optional()
+})
+
+export const PluginDevInspectParams = z.object({
+  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
+})
+
+export const PluginRestartParams = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
 })

@@ -25,7 +25,7 @@ import { createStructuredAgentSessionLifecycleDelivery } from './structured-agen
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { modelCatalogHostDeps } from './structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,

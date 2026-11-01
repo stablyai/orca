@@ -7,7 +7,7 @@ import {
   type ParsedAgentStatusPayload,
   type TurnEndDisposition
 } from '../../shared/agent-status-types'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from './runtime-worktree-status-projection'

@@ -15,7 +15,8 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
   }
   const dismissLabel = translate('aiVault.scanIssues.dismissNotices', 'Dismiss history notices')
   return (
-    <Collapsible className="shrink-0 border-b border-sidebar-border text-xs text-muted-foreground">
+    <div className="shrink-0 border-b border-sidebar-border text-xs text-muted-foreground">
+      <Collapsible>
       <div className="flex items-center gap-1 px-3 py-1">
         <CollapsibleTrigger asChild>
           <Button variant="ghost" size="xs" className="group min-w-0 flex-1 justify-start">
@@ -60,6 +61,7 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
           ))}
         </div>
       </CollapsibleContent>
-    </Collapsible>
+      </Collapsible>
+    </div>
   )
 }

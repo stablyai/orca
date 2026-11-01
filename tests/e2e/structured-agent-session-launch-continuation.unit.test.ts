@@ -6,7 +6,7 @@ import {
   created,
   createParams
 } from '../../src/renderer/src/lib/structured-agent-session-launch-create-message.test-fixture'
-import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../src/shared/agent-session/agent-session-wire'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
@@ -29,11 +29,11 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environmen
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
-import { structuredAgentSessionMessageSelection } from '../../src/shared/structured-agent-session-option-view'
-import { structuredAgentSessionModelId } from '../../src/shared/structured-agent-session-option-state'
+import { structuredAgentSessionMessageSelection } from '../../src/shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionModelId } from '../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import { CreateIntentParams } from '../../src/shared/rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionCreateFingerprint } from '../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   retryStructuredAgentSessionLaunchIntent,
   restoreStructuredAgentSessionLaunchIntent

@@ -40,7 +40,7 @@ import {
 import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
 import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   handBackStructuredAgentSessionMessage,
   returnMessageToComposer

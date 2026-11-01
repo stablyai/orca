@@ -10,10 +10,10 @@ import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-
 import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
-} from '../../../src/shared/native-chat-turn-status'
-import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
+} from '../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatAwaitingInput } from '../../../src/shared/native-chat/native-chat-terminal-turn'
-import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat/native-chat-resolution-receipt'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome

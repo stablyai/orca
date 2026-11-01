@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredRunningChildWork } from '../../shared/agent-child-work-listing'
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'

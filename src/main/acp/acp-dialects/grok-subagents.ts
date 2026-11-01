@@ -1,8 +1,8 @@
 // Grok's subagent IDs also name their child sessions (1.0.46 recordings).
 
 import { z } from 'zod'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { NativeChatSubagentState } from '../../../shared/native-chat-types'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpSubagentUpdate } from './acp-dialect'
 import { grokTaskResults, isGrokSubagentTask } from './grok-background-tasks'
