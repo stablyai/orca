@@ -7,6 +7,7 @@ import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { getRepoSshConnectionId } from '../../shared/execution-host'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selection'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../shared/agent-launch-disabled'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type { resolveStartupAgentLaunchRuntime } from './agent-launch-scope-runtime'
@@ -159,7 +160,10 @@ export function buildWorktreeStartupForAgent(
 } {
   const { agent, repo, settings } = environment
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
-    throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    throw Object.assign(
+      new Error('Selected agent is disabled. Choose an enabled agent before creating.'),
+      { code: AGENT_LAUNCH_DISABLED_CODE }
+    )
   }
   const { platform, shell, launchRuntime } = environment.getLaunchRuntime(agent)
   const planInputs = resolveAgentStartupPlanInputs({

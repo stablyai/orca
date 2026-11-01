@@ -36,6 +36,7 @@ import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution
 import { resolveStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../shared/agent-launch-disabled'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
 
 /** No launch command could be built for a requested `startupAgent`. */
@@ -108,7 +109,12 @@ export async function resolveAgentTerminalCreateOptions(
       throw new Error('runtime_unavailable')
     }
     if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
+      // The terminal surface shares this guard; carry the same code so both launch paths
+      // report a definite refusal rather than an unknown outcome (#37045).
+      throw Object.assign(
+        new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`),
+        { code: AGENT_LAUNCH_DISABLED_CODE }
+      )
     }
   }
   if (!launchAgent || !store) {
