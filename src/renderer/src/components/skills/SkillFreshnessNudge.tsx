@@ -11,6 +11,7 @@ import {
   summarizeBundledSkillPlan
 } from '../../../../shared/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
+import { modalSafeToastActionLabel } from '@/lib/toast-modal-lock'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
@@ -138,7 +139,8 @@ export function SkillFreshnessNudge(): null {
           }
         },
         action: {
-          label: (
+          // Modal-safe: the review dialog it opens stacks above the modal instead of replacing it.
+          label: modalSafeToastActionLabel(
             <span className="inline-flex items-center gap-1.5">
               <RefreshCw className="size-3.5" />
               {names.size === 1

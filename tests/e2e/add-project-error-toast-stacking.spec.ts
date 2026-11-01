@@ -134,7 +134,25 @@ for (const theme of ['dark', 'light'] as const) {
             await cdp.detach()
           }
         }
+        // Default-deny: a custom toast's unmarked action is visibly inert above the modal.
+        await expect(customToast.getByRole('button', { name: 'Open GitHub' })).toHaveAttribute(
+          'aria-disabled',
+          'true'
+        )
+        // Modal-safe: Later only defers the toast, so it runs without touching the modal.
         await pathField.click()
+        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
+        await expect(customToast).toBeHidden()
+        await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
+        await expect(pathField).toHaveValue(missingPath)
+        expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
+        await client.app.evaluate(({ BrowserWindow }) => {
+          BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+            mode: 'web',
+            surface: 'toast'
+          })
+        })
+        await expect(customToast).toBeVisible()
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -157,9 +175,17 @@ for (const theme of ['dark', 'light'] as const) {
         .filter({ hasText: 'A device tried to connect but is not paired' })
       const action = actionToast.getByRole('button', { name: 'Open Mobile Settings' })
       await expect(action).toBeVisible()
+      // Navigating actions stay blocked above a modal, and must look it rather than look live.
+      await expect(action).toHaveAttribute('aria-disabled', 'true')
+      await expect(action).toHaveAttribute('title', 'Close the dialog to use this')
+      await expect(action).toHaveCSS('opacity', '0.5')
+      await expect(action).toHaveCSS('cursor', 'not-allowed')
+      await action.click({ force: true })
       await actionToast.locator('[data-title]').click()
       await expect(actionToast).toBeVisible()
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
+      await expect(page.getByPlaceholder('Search settings')).toBeHidden()
+      await expect(pathField).toHaveValue(missingPath)
       expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
 
       // Credential prompts deliberately use a higher tier; this visibility fix does not cross it.
@@ -191,24 +217,6 @@ for (const theme of ['dark', 'light'] as const) {
         window.__store?.getState().removeSshCredentialRequest('toast-layer-fixture')
       )
       await expect(pathField).toHaveValue(missingPath)
-      // Toast actions run above a modal without closing it or taking its focus.
-      await pathField.click()
-      await action.click()
-      await expect(page.getByPlaceholder('Search settings')).toBeVisible()
-      await expect(actionToast).toBeHidden()
-      await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
-      await expect(pathField).toHaveValue(missingPath)
-      expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
-      // Keep a toast mounted so the toaster's resting layer can be measured below.
-      await client.app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
-          mode: 'web',
-          surface: 'toast'
-        })
-      })
-      await expect(
-        page.locator('[data-sonner-toast]').filter({ hasText: 'Onboarding completed!' })
-      ).toBeVisible()
       await page
         .getByRole('dialog', { name: /Open host project/i })
         .getByRole('button', { name: 'Close', exact: true })
@@ -217,7 +225,6 @@ for (const theme of ['dark', 'light'] as const) {
       const toaster = page.locator('[data-sonner-toaster]')
       await expect(toaster).toHaveCSS('z-index', '47')
 
-      await page.evaluate(() => window.__store?.getState().closeSettingsPage())
       await page.evaluate(async () => {
         await window.__store?.getState().updateSettings({ experimentalAgentDashboardPopout: true })
       })
@@ -234,6 +241,10 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => document.body.setAttribute('data-scroll-locked', '1'))
       await expect(toaster).toHaveCSS('z-index', '47')
       await page.evaluate(() => document.body.removeAttribute('data-scroll-locked'))
+      await expect(action).not.toHaveAttribute('aria-disabled')
+      await expect(action).toHaveCSS('opacity', '1')
+      await action.click()
+      await expect(page.getByPlaceholder('Search settings')).toBeVisible()
       await assertHiddenIsolation(client.app, testInfo, 'client-final-isolation')
       await assertHiddenIsolation(electronApp, testInfo, 'host-final-isolation')
       expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
@@ -241,5 +252,50 @@ for (const theme of ['dark', 'light'] as const) {
     } finally {
       await client.dispose()
     }
+  })
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`a navigating toast action cannot unmount a settings dialog draft (${theme})`, async ({
+    electronApp,
+    orcaPage: page
+  }) => {
+    await page.evaluate(async (theme) => {
+      const store = window.__store!.getState()
+      await store.updateSettings({ theme })
+      store.openSettingsPage()
+      store.openSettingsTarget({ pane: 'browser', repoId: null })
+    }, theme)
+    await page.getByRole('button', { name: 'Add Profile', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'New Browser Profile' })
+    await expect(dialog).toBeVisible()
+    const nameField = dialog.getByRole('textbox')
+    await nameField.fill('Draft profile name')
+
+    await electronApp.evaluate(({ ipcMain, BrowserWindow }) => {
+      ipcMain.removeHandler('mobile:consumePendingUnpairedDeviceAuthFailure')
+      ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', () => true)
+      BrowserWindow.getAllWindows()[0].webContents.send('mobile:unpairedDeviceAuthFailure')
+    })
+    const action = page
+      .locator('[data-sonner-toast]')
+      .filter({ hasText: 'A device tried to connect but is not paired' })
+      .getByRole('button', { name: 'Open Mobile Settings' })
+    await expect(action).toBeVisible()
+    await expect(action).toHaveAttribute('aria-disabled', 'true')
+    await expect(action).toHaveCSS('opacity', '0.5')
+    // Before default-deny, this switched to Mobile settings and unmounted the dialog with its draft.
+    await action.click({ force: true })
+    const mobilePane = page.getByText('Control terminals and agents from your phone.')
+    await expect(dialog).toBeVisible()
+    await expect(nameField).toHaveValue('Draft profile name')
+    expect(await nameField.evaluate((input) => input === document.activeElement)).toBe(true)
+    await expect(mobilePane).toBeHidden()
+
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await expect(action).not.toHaveAttribute('aria-disabled')
+    await action.click()
+    await expect(mobilePane).toBeVisible()
   })
 }

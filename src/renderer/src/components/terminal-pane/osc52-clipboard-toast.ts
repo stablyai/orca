@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import { translate } from '@/i18n/i18n'
+import { modalSafeToastActionLabel } from '@/lib/toast-modal-lock'
 
 let hasShownOsc52ClipboardBlockedToast = false
 let hasShownOsc52ClipboardFailedToast = false
@@ -87,9 +88,9 @@ export function showOsc52ClipboardCopyRetryToast(
       ),
       duration: 30_000,
       action: {
-        label: translate(
-          'auto.components.terminal.pane.osc52.clipboard.failed.toast.a73165c6c5',
-          'Copy'
+        // Modal-safe: a clipboard write leaves the UI behind a modal untouched.
+        label: modalSafeToastActionLabel(
+          translate('auto.components.terminal.pane.osc52.clipboard.failed.toast.a73165c6c5', 'Copy')
         ),
         onClick: () => {
           void writeClipboardText(text).catch(showOsc52ClipboardFailedToast)

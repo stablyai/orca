@@ -5,10 +5,14 @@ import {
   OctagonXIcon,
   TriangleAlertIcon
 } from 'lucide-react'
-import { useRef, type PointerEvent } from 'react'
+import { useEffect, useRef, type RefObject, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
-import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
+import {
+  isModalLockedToastTarget,
+  isModalOverlayOpen,
+  syncToastModalLockAttributes
+} from '@/lib/toast-modal-lock'
 import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
 import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
 import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
@@ -19,14 +23,8 @@ export const INLINE_ACTION_CLASS_NAMES = {
   actionButton: '!m-0 !self-center'
 }
 
-// Why: scope to real modals; Radix menus/selects also set body pointer-events:none.
-function isModalOverlayOpen(element: Element): boolean {
-  return element.ownerDocument.body.querySelector(MODAL_OVERLAY_CHILD_SELECTOR) !== null
-}
-
-// Why: Radix dismisses or refocuses on pointerdown outside the modal; swallowing only that keeps
-// the modal open with focus intact while the toast's click still runs its action.
-function shieldModalFromToastPointerDown(event: PointerEvent<HTMLDivElement>): void {
+// Pointerdown outside a Radix modal dismisses it or moves focus, so every toast press is shielded.
+function shieldModalFromToastPointerDown(event: SyntheticEvent): void {
   const target = event.target
   if (
     target instanceof Element &&
@@ -36,6 +34,33 @@ function shieldModalFromToastPointerDown(event: PointerEvent<HTMLDivElement>): v
     event.preventDefault()
     event.stopPropagation()
   }
+}
+
+// Default-deny: only close and modal-safe controls run while a modal owns the interaction lock.
+function blockModalToastInteraction(event: SyntheticEvent): void {
+  if (event.target instanceof Element && isModalLockedToastTarget(event.target)) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+}
+
+function useToastModalLockAttributes(wrapperRef: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) {
+      return
+    }
+    const sync = (): void => syncToastModalLockAttributes(wrapper)
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(wrapper, { childList: true, subtree: true })
+    // installBodyOverlayAttributes mirrors modal open/close onto this attribute.
+    observer.observe(wrapper.ownerDocument.body, {
+      attributes: true,
+      attributeFilter: ['data-modal-overlay-open']
+    })
+    return () => observer.disconnect()
+  }, [wrapperRef])
 }
 
 const TOASTER_OFFSET = {
@@ -48,9 +73,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
   const theme = useAppStore((s) => s.settings?.theme) || 'system'
   const wrapperRef = useRef<HTMLDivElement>(null)
   useNotificationCardLayoutVarReader(wrapperRef)
+  useToastModalLockAttributes(wrapperRef)
 
   return (
-    <div ref={wrapperRef} onPointerDownCapture={shieldModalFromToastPointerDown}>
+    <div
+      ref={wrapperRef}
+      onPointerDownCapture={shieldModalFromToastPointerDown}
+      onClickCapture={blockModalToastInteraction}
+      onAuxClickCapture={blockModalToastInteraction}
+      onContextMenuCapture={blockModalToastInteraction}
+    >
       <Sonner
         theme={theme as ToasterProps['theme']}
         position="bottom-right"

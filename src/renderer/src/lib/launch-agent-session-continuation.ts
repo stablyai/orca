@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import type { ReactNode } from 'react'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -23,6 +24,7 @@ import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { workspaceNavigationToastAction } from '@/lib/workspace-navigation-toast-action'
+import { modalSafeToastActionLabel } from '@/lib/toast-modal-lock'
 
 type LaunchAgentSessionContinuationArgs = {
   agent: TuiAgent
@@ -214,11 +216,14 @@ function notifyDeliveryUnconfirmed(agentLabel: string, prompt: string): void {
 }
 
 function copyPromptToastAction(prompt: string): {
-  action: { label: string; onClick: () => void }
+  action: { label: ReactNode; onClick: () => void }
 } {
   return {
     action: {
-      label: translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt'),
+      // Modal-safe: a clipboard write leaves the UI behind a modal untouched.
+      label: modalSafeToastActionLabel(
+        translate('components.agentSessionContinuation.copyPrompt', 'Copy prompt')
+      ),
       onClick: () => {
         void window.api.ui.writeClipboardText(prompt)
       }

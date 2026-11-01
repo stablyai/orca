@@ -586,7 +586,7 @@ body[data-modal-overlay-open] {
   line-height: 1.45;
 }
 
-/* Visible toasts absorb backdrop clicks; Toaster gates actions while a modal owns the pointer lock. */
+/* Visible toasts absorb backdrop clicks; Toaster runs only close and modal-safe controls while a modal owns the pointer lock. */
 body[data-modal-overlay-open]
   [data-sonner-toaster]
   [data-sonner-toast][data-visible='true'][data-removed='false']:is(
@@ -594,6 +594,13 @@ body[data-modal-overlay-open]
     [data-expanded='true']
   ) {
   pointer-events: auto;
+}
+
+/* Controls the modal lock blocks must look inert, not clickable-but-dead (toast-modal-lock.ts sets the attribute). */
+/* Extra attribute outranks Sonner's runtime-injected [data-button] cursor. */
+[data-sonner-toaster] [data-sonner-toast] [data-toast-modal-locked][aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
