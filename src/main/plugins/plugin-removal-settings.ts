@@ -1,6 +1,6 @@
 import { pluginThemeSettingsAfterRemoval } from '../../shared/plugin-theme-settings'
 import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 /** Forgets a removed plugin's consent, disabled flag, allowed external hosts and theme choices. */
 export function clearRemovedPluginSettings(

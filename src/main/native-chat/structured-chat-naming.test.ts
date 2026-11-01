@@ -26,7 +26,7 @@ import {
   type AgentSessionUserNameWrite,
   compareAndSetAgentSessionRecordName,
   setAgentSessionRecordUserName
-} from '../runtime/agent-session-record-conversation-name'
+} from '../runtime/agent-session/records/agent-session-record-conversation-name'
 import {
   createStructuredChatNamingHandler,
   type StructuredChatNameGeneration,

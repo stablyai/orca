@@ -33,6 +33,8 @@ export type StructuredAgentSessionLatestRequest = {
   outcome: AgentJournalTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
   settledAt: number | undefined
+  /** The agent opened this turn itself (e.g. woken by a background task) and the user steered nothing into it. */
+  selfStarted?: true
 }
 
 /** Commands and steers have no independent request; their turns own any response. */
@@ -78,7 +80,10 @@ export function latestStructuredAgentSessionRequest(
         id: turn.turnId,
         turnState: turn.state,
         outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
+        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn),
+        ...(turn.userItemId === item.itemId && !steeredInto(submissions, item.itemId)
+          ? { selfStarted: true as const }
+          : {})
       }
     }
     const submission = rejected.get(item.itemId)
@@ -98,6 +103,14 @@ export function latestStructuredAgentSessionRequest(
     }
   }
   return null
+}
+
+/** A user message steered into a turn the agent started makes it the user's turn too. */
+function steeredInto(submissions: readonly AgentJournalSubmission[], turnItemId: string): boolean {
+  return submissions.some(
+    ({ answeredInTurn }) =>
+      answeredInTurn?.via === 'steer' && answeredInTurn.turnItemId === turnItemId
+  )
 }
 
 /** Exclude sends that failed nobody and never became turns; include provider-journaled user rows, even from children/history/old hosts. */

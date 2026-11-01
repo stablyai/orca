@@ -6,7 +6,7 @@ import { getRepoExecutionHostId } from '../shared/execution-host'
 import { isWorkspaceKey, parseWorkspaceKey } from '../shared/workspace-scope'
 import { splitWorktreeId } from '../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
-import type { Store } from './persistence'
+import type { Store } from './persistence/loading-store/store'
 import { isWslMoveRepoBlocked } from './persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { hostWorktreeTarget } from '../shared/worktree/host-qualified-identity'
 

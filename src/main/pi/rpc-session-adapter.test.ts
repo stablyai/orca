@@ -13,7 +13,7 @@ import {
   sessionId,
   setup
 } from './rpc-session-adapter.test-fixture'
-import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session/agent-session-launch-directory'
 
 afterEach(closePiRpcAdapterFixtures)
 

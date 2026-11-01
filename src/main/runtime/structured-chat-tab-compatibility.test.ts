@@ -320,7 +320,7 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
     groupId = group.id,
     folderId = folder.id
   const { seedTestAgentSessionRecordStore } =
-    await import('./agent-session-record-store-test-harness')
+    await import('./agent-session/records/agent-session-record-store-test-harness')
   const { agentSessionRecordFixture, agentSessionLeaseFixture } =
     await import('../../shared/agent-session/lifecycle/agent-session-record.test-fixture')
   const entry = agentSessionRecordFixture(

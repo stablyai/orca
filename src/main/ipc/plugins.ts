@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
 import {
@@ -15,6 +15,9 @@ import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-te
 import { handlePluginPanelStateRequest } from '../plugins/panels/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
+import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
+import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
+import { readPluginPanelImage } from '../plugins/panels/plugin-panel-image'
 import {
   bindPluginFrameGuests,
   clearPluginFrameStorage
@@ -148,6 +151,8 @@ export function registerPluginHandlers(
 
   bindPluginFrameGuests(pluginService)
   registerPluginFrameEntryHandlers(store, pluginService)
+  registerPluginPanelPushHandlers(pluginService)
+  registerPluginSettingsHandlers(pluginService)
 
   ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
     const parsed = readNewFileTemplateArgsSchema.parse(args)
@@ -175,6 +180,19 @@ export function registerPluginHandlers(
       {
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
         resolveComponentsPanel: (token) => pluginService.panels.componentsPanelPlugin(owner, token)
+      },
+      args
+    )
+  })
+
+  // Components panels' Image files: bytes from inside the plugin, never a URL the renderer loads.
+  ipcMain.handle('plugins:panelImage', async (event, args: unknown) => {
+    await pluginService.whenReady()
+    const owner = rendererPanelOwner(event.sender.id)
+    return readPluginPanelImage(
+      {
+        resolveComponentsPanelRoot: (token) =>
+          pluginService.panels.componentsPanelRoot(owner, token)
       },
       args
     )

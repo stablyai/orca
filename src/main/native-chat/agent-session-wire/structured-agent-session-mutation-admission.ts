@@ -24,7 +24,7 @@ import type {
   AgentSessionMutationOperationAdmission,
   AgentSessionMutationOperationDecision
 } from '../../runtime/agent-session/ownership/agent-session-operation-admission'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import {
   classifyJournalOpenFailure,
   journalOpenRefusal

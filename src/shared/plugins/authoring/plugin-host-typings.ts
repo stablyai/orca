@@ -53,7 +53,9 @@ export function renderPluginHostMethodMembers(
       if (options.compact) {
         return `${docComment(indent, spec.summary)}${indent}${JSON.stringify(name)}: { params: ${paramsText}; result: ${result} }\n`
       }
-      const since = `Since host API ${version(spec.since)}.`
+      const frames =
+        spec.framesSince === undefined ? '' : ` (panels and editors: ${version(spec.framesSince)})`
+      const since = `Since host API ${version(spec.since)}${frames}.`
       const deprecated =
         spec.deprecatedSince === undefined
           ? ''
@@ -84,6 +86,22 @@ export function renderPluginHostTypings(): string {
 // Host API ${version(PLUGIN_HOST_API_MINOR)} types shared by frames (\`window.orca\`) and workers (\`activate(orca)\`).
 
 declare module 'orca/host' {
+  // Why from 'orca': authors declare \`PluginRequests\` and \`PluginPanelEvents\` there once, and
+  // workers, frames and components panels all read the same contract.
+  export type {
+    DataChange,
+    PluginBridgeApi,
+    PluginPanelEvents,
+    PluginRequestArgs,
+    PluginRequestInput,
+    PluginRequestOptions,
+    PluginRequestOutput,
+    PluginRequests,
+    SecretsApi,
+    SettingsApi,
+    StorageApi,
+    Undeclared
+  } from 'orca'
   export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
   export type Disposable = { dispose(): void }
   /** \`orca.api\`: check \`minor\` (or \`host.has\`) before calling a method newer than your oldest Orca. */

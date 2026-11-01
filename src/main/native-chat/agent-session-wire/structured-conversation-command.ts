@@ -25,7 +25,7 @@ import {
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
-} from '../../runtime/agent-session-conversation-command-record'
+} from '../../runtime/agent-session/records/agent-session-conversation-command-record'
 
 export function conversationCommandFailure(
   failure: AgentSessionFailureFact | undefined,

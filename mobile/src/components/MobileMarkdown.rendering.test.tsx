@@ -245,3 +245,21 @@ it('renders document images through the image renderer, including reference synt
   expect(renderImage).toHaveBeenCalledWith('assets/diagram.png', 'Architecture')
   expect(renderImage).toHaveBeenCalledWith('assets/other.png', 'Reference')
 })
+
+it('draws every image in a paragraph and keeps the text around them, leaving declined images as links', () => {
+  const renderImage = vi.fn((href: string, alt: string) =>
+    href.startsWith('/') ? createElement('View', { testID: `image:${href}`, alt }) : null
+  )
+  act(() => {
+    renderer = create(
+      createElement(MobileMarkdown, {
+        content:
+          'Before and after:  \n![one](/tmp/a.png)\n![two](/tmp/b.png)\n![three](rel.png) done',
+        renderImage
+      })
+    )
+  })
+  const images = renderer!.root.findAll((node) => String(node.props.testID).startsWith('image:'))
+  expect(images.map((node) => node.props.testID)).toEqual(['image:/tmp/a.png', 'image:/tmp/b.png'])
+  expect(texts(renderer!)).toEqual(['Before and after:', 'three done'])
+})

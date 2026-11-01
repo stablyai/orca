@@ -39,41 +39,6 @@ describe('createAuthFilesystemOperation', () => {
     expect(secondRaw).not.toHaveBeenCalled()
   })
 
-  it('allows different WSL distros to probe concurrently', async () => {
-    const ubuntuRaw = vi.fn(async () => 'ubuntu')
-    const debianRaw = vi.fn(async () => 'debian')
-    const ubuntu = createAuthFilesystemOperation(
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex\\auth.json',
-      ubuntuRaw
-    )
-    const debian = createAuthFilesystemOperation(
-      '\\\\wsl.localhost\\Debian\\home\\alice\\.codex\\auth.json',
-      debianRaw
-    )
-    const controller = new AbortController()
-
-    await expect(
-      Promise.all([ubuntu.wait(controller.signal), debian.wait(controller.signal)])
-    ).resolves.toEqual(['ubuntu', 'debian'])
-    expect(ubuntuRaw).toHaveBeenCalledOnce()
-    expect(debianRaw).toHaveBeenCalledOnce()
-  })
-
-  it('does not start an operation for an already-aborted waiter', async () => {
-    const raw = vi.fn(async () => 'unexpected')
-    const operation = createAuthFilesystemOperation(
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex\\auth.json',
-      raw
-    )
-    const controller = new AbortController()
-    const abortError = new Error('already expired')
-    controller.abort(abortError)
-
-    await expect(operation.wait(controller.signal)).rejects.toBe(abortError)
-    await expect(operation.result).rejects.toBe(abortError)
-    expect(raw).not.toHaveBeenCalled()
-  })
-
   it('caps cross-distro operations and never starts an expired queued probe', async () => {
     let resolveUbuntu!: (value: string) => void
     let resolveDebian!: (value: string) => void

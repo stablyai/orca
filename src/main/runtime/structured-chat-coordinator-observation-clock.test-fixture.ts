@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 
 export function createCoordinatorMailObservationClock(
   getHost: () => StructuredAgentSessionHost,

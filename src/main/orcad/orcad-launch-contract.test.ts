@@ -8,7 +8,7 @@ import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import {
   beginAgentSessionRuntimeRecord,
   readAgentSessionRuntimeEnds
-} from '../runtime/agent-session-runtime-end-record'
+} from '../runtime/agent-session/records/agent-session-runtime-end-record'
 
 describe('parseArgs', () => {
   it('keeps help-looking values as values', () => {
