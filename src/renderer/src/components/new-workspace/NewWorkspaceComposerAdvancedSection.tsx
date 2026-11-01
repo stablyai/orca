@@ -1,6 +1,7 @@
 import React from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import { cn } from '@/lib/utils'
@@ -148,25 +149,16 @@ export function NewWorkspaceComposerAdvancedSection({
   }, [])
 
   return (
-    <div
-      className={cn(
-        'grid transition-[grid-template-rows] duration-200 ease-out',
-        advancedOpen && sparseEditing ? 'overflow-visible' : 'overflow-hidden',
-        !advancedOpen && '!mt-2',
-        advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-      )}
-      aria-hidden={!advancedOpen}
-      inert={!advancedOpen}
-    >
-      <div className="min-h-0">
-        <div
-          className={cn(
-            'space-y-4 px-1 pt-1 pb-3 transition-[opacity,transform] duration-150 ease-out',
-            advancedOpen
-              ? 'translate-y-0 opacity-100 delay-200'
-              : '-translate-y-1 opacity-0 delay-0'
-          )}
-        >
+    // Why: unmount collapsed controls so their clipped boxes can't sit under the footer's Create button.
+    <Collapsible open={advancedOpen}>
+      <CollapsibleContent
+        animation="height"
+        className={cn(advancedOpen && sparseEditing && '!overflow-visible')}
+        // Why: content stays mounted through the close animation; keep it out of Tab order meanwhile.
+        inert={!advancedOpen}
+        aria-hidden={!advancedOpen}
+      >
+        <div className="space-y-4 px-1 pt-1 pb-3">
           {smartNameSelection ? (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
@@ -380,7 +372,7 @@ export function NewWorkspaceComposerAdvancedSection({
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

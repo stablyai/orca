@@ -96,7 +96,8 @@ describe('quick-create modal card without an attachment destination', () => {
       </TooltipProvider>
     )
     const card = container.querySelector('[data-workspace-composer-root]')!
-    expect(container.querySelector('textarea')?.getAttribute('placeholder')).toBe('Write a note')
+    // Collapsed Advanced leaves no note field, so the card has no text destination at all.
+    expect(container.querySelector('textarea')).toBeNull()
     expect(container.querySelector('[data-attachment-path]')).toBeNull()
     const transfer = { types: ['Files'], files: [new File(['x'], 'notes.txt')], dropEffect: 'link' }
     await act(async () => {
