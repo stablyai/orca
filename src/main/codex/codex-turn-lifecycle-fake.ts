@@ -35,9 +35,10 @@ function refusal(method: string, message: string): CodexAppServerRequestError {
 export function codexTurnLifecycleFake(
   threadId: string,
   notify: () => Notify,
-  options: { legacyStartAnswers?: boolean } = {}
+  options: { legacyStartAnswers?: boolean; mintTurnId?: () => string } = {}
 ): CodexTurnLifecycleFake {
   let minted = 0
+  const mintTurnId = options.mintTurnId ?? (() => `turn-${++minted}`)
   let echoes = 0
   let picked: string | null = null
   let active: string | null = null
@@ -83,11 +84,11 @@ export function codexTurnLifecycleFake(
     routes: {
       'turn/start': () => {
         const running = active ?? picked
-        const turnId = running ?? `turn-${++minted}`
+        const turnId = running ?? mintTurnId()
         picked ??= active ? null : turnId
         lastTurn = turnId
         // Pre-0.148 steered starts return a submission ID that never becomes a turn.
-        const answeredId = options.legacyStartAnswers && running ? `turn-${++minted}` : turnId
+        const answeredId = options.legacyStartAnswers && running ? mintTurnId() : turnId
         const answer = { turn: { id: answeredId, status: 'inProgress' } }
         const wait = held
         held = null

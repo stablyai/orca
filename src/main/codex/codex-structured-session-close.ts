@@ -122,10 +122,6 @@ export async function closeCodexPublishedSession(
   }
   if (session.ended && session.connection.closed) {
     sessions.delete(sessionId)
-    const report = codexCloseReport(await session.connection.closeOutcome())
-    if (report) {
-      throw report
-    }
     return true
   }
   // Preserve unexpected-death settlement when sink failure forces a close.

@@ -1,4 +1,13 @@
-import type { CodexAcquisitionAttempt } from './codex-structured-session-state'
+import type {
+  CodexAcquisitionAttempt,
+  CodexAcquisitionRegistry,
+  CodexSession,
+  CodexStructuredSessionAdapterDeps
+} from './codex-structured-session-state'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
+import type { deliverCodexServerRequest } from './codex-structured-provider-events'
 import { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
 import { CodexPromptRegistry } from './codex-structured-prompt-replies'
@@ -53,4 +62,23 @@ export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
     finished,
     finish
   }
+}
+
+export type CodexStructuredAcquisitionInput = {
+  input: StructuredAgentSessionAcquireInput
+  deps: CodexStructuredSessionAdapterDeps
+  sessions: Map<string, CodexSession>
+  acquisitions: CodexAcquisitionRegistry
+  notificationRetries: CodexStructuredNotificationRetry
+  deliver: (
+    acquisition: CodexAcquisitionAttempt['window'],
+    sessionId: string,
+    event: () => unknown
+  ) => void
+  handleServerRequest: (
+    sessionId: string,
+    request: Parameters<typeof deliverCodexServerRequest>[2]
+  ) => void
+  handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
+  forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
 }

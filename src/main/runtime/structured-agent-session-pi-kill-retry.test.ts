@@ -242,7 +242,13 @@ it.each([
       )
     ).toHaveLength(failure === 'startup-source-root' ? 0 : 1)
     expect(await send('A legitimate new user message.')).toMatchObject({ ok: true })
-    await vi.waitFor(() => expect(prompts.at(-1)).toBe('A legitimate new user message.'))
+    await vi.waitFor(() =>
+      expect(prompts).toEqual(
+        failure === 'published-source'
+          ? ['First start fails before open.', 'A legitimate new user message.']
+          : ['A legitimate new user message.']
+      )
+    )
     await vi.waitFor(async () => {
       const snapshot = await host.journalSnapshot(SESSION)
       expect(snapshot.submissions.at(-1)?.dispatchState).toBe('accepted')

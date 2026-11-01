@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -135,6 +135,7 @@ async function rawSubmission(clientMessageId: string): Promise<AgentJournalSubmi
 }
 
 beforeEach(async () => {
+  transportFault.terminate.mockReset().mockResolvedValue({ tree: null, killDelivered: true })
   root = await mkdtemp(join(tmpdir(), 'orca-codex-held-sends-'))
   answers = 0
   events.length = 0
@@ -363,6 +364,77 @@ describe('a Codex receipt whose first save fails', () => {
   })
 })
 
+async function openOwnedCodexHost() {
+  const protocols: ReturnType<typeof codexTurnLifecycleFake>[] = []
+  const connections: CodexAppServerConnection[] = []
+  const ends: { error: Error; index: number }[] = []
+  const openConnection: typeof spawnCodexAppServerConnection = (launch, callbacks = {}) => {
+    const child = createFakePipedChild(9_999_990 - ownedChildren.length)
+    ownedChildren.push(child)
+    if (ownedChildren.length > 1) {
+      child.stdin.once('finish', () => {
+        child.emit('exit', 0, null)
+        child.stdout.end()
+      })
+    }
+    const notify = (method: string, params: unknown) =>
+      child.stdout.write(`${JSON.stringify({ method, params })}\n`)
+    const protocol = codexTurnLifecycleFake(THREAD, () => notify, { mintTurnId: randomUUID })
+    protocols.push(protocol)
+    let pending = ''
+    child.stdin.on('data', (bytes) => {
+      pending += String(bytes)
+      const lines = pending.split('\n')
+      pending = lines.pop() ?? ''
+      for (const line of lines) {
+        const frame = JSON.parse(line)
+        if (frame.id === undefined) {
+          continue
+        }
+        const result =
+          frame.method === 'thread/start' || frame.method === 'thread/resume'
+            ? { thread: { id: THREAD }, model: 'scripted-model' }
+            : frame.method === 'turn/start'
+              ? protocol.routes['turn/start']()
+              : frame.method === 'thread/read'
+                ? { thread: { id: THREAD, turns: [] } }
+                : {}
+        void Promise.resolve(result).then((result) =>
+          child.stdout.write(`${JSON.stringify({ id: frame.id, result })}\n`)
+        )
+      }
+    })
+    return spawnCodexAppServerConnection(
+      launch,
+      {
+        ...callbacks,
+        onExit: (error, exit) => {
+          ends.push({ error, index: ownedChildren.indexOf(child) })
+          return callbacks.onExit?.(error, exit)
+        }
+      },
+      () => child
+    ).then((connection) => {
+      connections.push(connection)
+      return connection
+    })
+  }
+  const logger = { warn: vi.fn(), error: vi.fn() }
+  host = await ensureStructuredAgentSessionHost({
+    logger,
+    stateDirectory: root,
+    hostId: 'local',
+    claimKeyId: 'key-1',
+    resolveWorkspacePath: async () => root,
+    resolveLaunchArgs: () => [],
+    resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
+    resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+    resolveEnvironment: async () => ({ PATH: process.env.PATH }),
+    ...scriptedCodexTransport(openConnection)
+  })
+  return { protocols, connections, logger, ends }
+}
+
 it.each(['published', 'before-generation'] as const)(
   'settles a %s Codex source fault and completes the successor response without old-root exit',
   async (phase) => {
@@ -370,62 +442,7 @@ it.each(['published', 'before-generation'] as const)(
     const readEntered = Promise.withResolvers<void>()
     const readRelease = Promise.withResolvers<void>()
     const sourceError = Object.assign(new Error('read EIO'), { code: 'EIO' })
-    const protocols: ReturnType<typeof codexTurnLifecycleFake>[] = []
-    const connections: CodexAppServerConnection[] = []
-    const openConnection: typeof spawnCodexAppServerConnection = (launch, callbacks = {}) => {
-      const child = createFakePipedChild(9_999_990 - ownedChildren.length)
-      ownedChildren.push(child)
-      if (ownedChildren.length > 1) {
-        child.stdin.once('finish', () => {
-          child.emit('exit', 0, null)
-          child.stdout.end()
-        })
-      }
-      const notify = (method: string, params: unknown) =>
-        child.stdout.write(`${JSON.stringify({ method, params })}\n`)
-      const protocol = codexTurnLifecycleFake(THREAD, () => notify)
-      protocols.push(protocol)
-      let pending = ''
-      child.stdin.on('data', (bytes) => {
-        pending += String(bytes)
-        const lines = pending.split('\n')
-        pending = lines.pop() ?? ''
-        for (const line of lines) {
-          const frame = JSON.parse(line)
-          if (frame.id === undefined) {
-            continue
-          }
-          const result =
-            frame.method === 'thread/start' || frame.method === 'thread/resume'
-              ? { thread: { id: THREAD }, model: 'scripted-model' }
-              : frame.method === 'turn/start'
-                ? protocol.routes['turn/start']()
-                : frame.method === 'thread/read'
-                  ? { thread: { id: THREAD, turns: [] } }
-                  : {}
-          void Promise.resolve(result).then((result) =>
-            child.stdout.write(`${JSON.stringify({ id: frame.id, result })}\n`)
-          )
-        }
-      })
-      return spawnCodexAppServerConnection(launch, callbacks, () => child).then((connection) => {
-        connections.push(connection)
-        return connection
-      })
-    }
-    const logger = { warn: vi.fn(), error: vi.fn() }
-    host = await ensureStructuredAgentSessionHost({
-      logger,
-      stateDirectory: root,
-      hostId: 'local',
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async () => root,
-      resolveLaunchArgs: () => [],
-      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      resolveEnvironment: async () => ({ PATH: process.env.PATH }),
-      ...scriptedCodexTransport(openConnection)
-    })
+    const { protocols, connections } = await openOwnedCodexHost()
     const attach = async () => {
       const params = hostTestAttachParams(
         host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? null,
@@ -515,6 +532,7 @@ it.each(['published', 'before-generation'] as const)(
     vi.useRealTimers()
     const sent = await send('A healthy successor replies')
     await vi.waitFor(() => expect(protocols[1].turnId).not.toBeNull())
+    expect(protocols[1].turnId).not.toBe(protocols[0].turnId)
     protocols[1].start()
     protocols[1].echo(sent)
     const body = 'Complete original response'
@@ -574,6 +592,170 @@ it.each(['published', 'before-generation'] as const)(
         )
       }
       expect(items.some((item) => JSON.stringify(item.body).includes(body))).toBe(true)
+    } finally {
+      reopened.close()
+    }
+  }
+)
+
+it.each(['natural-clean', 'EIO-then-exit', 'refused-close-then-exit'] as const)(
+  'reclaims %s once and saves the first successor reply after reopening SQLite',
+  async (ending) => {
+    await stopStructuredAgentSessionRuntime()
+    transportFault.terminate.mockResolvedValue('unverifiable')
+    const { protocols, connections, ends, logger } = await openOwnedCodexHost()
+    const attach = () => {
+      const params = hostTestAttachParams(
+        host.deps.store.getRecord(SESSION)?.lease.runtimeFence ?? null,
+        { providerHandle: undefined }
+      )
+      params.envelope.clientOperationId = operationId()
+      return host.attach(CALLER, params)
+    }
+    const first = await attach()
+    if (!first.ok) {
+      throw new Error('original attach refused')
+    }
+    fence = first.value.fence
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
+    const originalFence = fence
+    const originalGeneration = host.collaboratorsForTests().sessions.get(SESSION)?.child?.generation
+    const body = 'Complete original response'
+    const original = await send('Original request before the app-server ends')
+    await vi.waitFor(() => expect(protocols[0].turnId).not.toBeNull())
+    protocols[0].start()
+    protocols[0].echo(original)
+    const notify = (index: number, item: unknown) =>
+      ownedChildren[index].stdout.write(
+        `${JSON.stringify({ method: 'item/completed', params: { threadId: THREAD, turnId: protocols[index].turnId, item } })}\n`
+      )
+    notify(0, {
+      id: 'original-tool',
+      type: 'commandExecution',
+      command: 'printf original',
+      status: 'completed',
+      exitCode: 0,
+      aggregatedOutput: body
+    })
+    notify(0, { id: 'original-answer', type: 'agentMessage', text: body })
+    protocols[0].end('completed')
+    await vi.waitFor(async () => {
+      expect((await rawSubmission(original)).dispatchState).toBe('accepted')
+      expect(host.currentWork(SESSION)?.working()).toBe(false)
+    })
+    const old = connections[0]
+    const closeOutcome = vi.spyOn(old, 'closeOutcome')
+    const sourceError = Object.assign(new Error('original read EIO'), { code: 'EIO' })
+    if (ending === 'refused-close-then-exit') {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const closing = host.close(SESSION, 'evict').catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(await closing).toBeInstanceOf(Error)
+      expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'live',
+        runtimeFence: originalFence
+      })
+      expect(ownedChildren).toHaveLength(1)
+      expect(ends).toHaveLength(0)
+      vi.useRealTimers()
+    } else if (ending === 'EIO-then-exit') {
+      ownedChildren[0].stdout.emit('error', sourceError)
+    }
+    // This input supplies an actual connection exit event; post-exit descendant proof stays unknown.
+    ownedChildren[0].emit('exit', ending === 'natural-clean' ? 0 : 1, null)
+    ownedChildren[0].stdout.end()
+    await vi.waitFor(() => {
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child ?? null).toBeNull()
+      expect(host.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+        claimStatus: 'released',
+        runtimeFence: originalFence + 1,
+        deathEvidence: { kind: 'exit-observed', ownerFence: originalFence }
+      })
+    })
+    expect(ends).toHaveLength(1)
+    expect(ends[0].index).toBe(0)
+    if (ending === 'EIO-then-exit') {
+      await expect(old.close()).rejects.toBe(sourceError)
+      expect(ends[0].error.message).toContain(sourceError.message)
+    }
+    const attemptsBeforeSuccessor = closeOutcome.mock.calls.length
+    const laddersBeforeSuccessor = transportFault.terminate.mock.calls.length
+    const warningsBeforeSuccessor = logger.warn.mock.calls.length
+    const next = await attach()
+    expect(next.ok).toBe(true)
+    if (!next.ok) {
+      throw new Error('first successor attach refused')
+    }
+    fence = next.value.fence
+    expect(fence).toBeGreaterThan(originalFence)
+    await vi.waitFor(() =>
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+    )
+    expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.generation).not.toBe(
+      originalGeneration
+    )
+    expect(closeOutcome.mock.calls.length).toBe(attemptsBeforeSuccessor)
+    expect(transportFault.terminate.mock.calls.length).toBe(laddersBeforeSuccessor)
+    expect(
+      logger.warn.mock.calls.slice(warningsBeforeSuccessor).map(([, fields]) => fields.scope)
+    ).not.toContain('codex-prior-session-close')
+    expect(ends).toHaveLength(1)
+    const successor = await send('First request to the successor')
+    await vi.waitFor(() => expect(protocols[1].turnId).not.toBeNull())
+    expect(protocols[1].turnId).not.toBe(protocols[0].turnId)
+    protocols[1].start()
+    protocols[1].echo(successor)
+    notify(1, { id: 'successor-answer', type: 'agentMessage', text: 'Healthy successor reply' })
+    protocols[1].end('completed')
+    await vi.waitFor(async () => {
+      expect((await rawSubmission(successor)).dispatchState).toBe('accepted')
+      expect(host.currentWork(SESSION)?.working()).toBe(false)
+    })
+    expect(ownedChildren).toHaveLength(2)
+    await stopStructuredAgentSessionRuntime()
+    const reopened = JournalHostDatabase.open(root)
+    try {
+      const replay = replayJournal(reopened.db, SESSION)
+      expect(replay?.damage).toBeNull()
+      expect(replay?.newer).toBeNull()
+      const items = [...(replay?.state.items.values() ?? [])]
+      const tool = items.find(
+        (item) => item.body.kind === 'tool-call' && item.body.callId === 'original-tool'
+      )
+      expect(tool?.body).toMatchObject({
+        kind: 'tool-call',
+        callId: 'original-tool',
+        state: 'completed',
+        output: {
+          head: body,
+          byteLength: 26,
+          digest: createHash('sha256').update(body).digest('hex'),
+          truncated: false
+        }
+      })
+      const originalAnswer = items.find(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.role === 'assistant' &&
+          JSON.stringify(item.body).includes(body)
+      )
+      expect(originalAnswer?.body).toMatchObject({ blocks: [{ type: 'text', text: body }] })
+      const successorAnswer = items.find(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.role === 'assistant' &&
+          JSON.stringify(item.body).includes('Healthy successor reply')
+      )
+      expect(successorAnswer?.body).toMatchObject({
+        blocks: [{ type: 'text', text: 'Healthy successor reply' }]
+      })
+      if (!tool || !originalAnswer || !successorAnswer) {
+        throw new Error('missing saved original or successor content')
+      }
+      expect(tool.sequence).toBeLessThan(originalAnswer.sequence)
+      expect(originalAnswer.sequence).toBeLessThan(successorAnswer.sequence)
     } finally {
       reopened.close()
     }

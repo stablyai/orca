@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream'
+import { Duplex, PassThrough } from 'node:stream'
 import { vi } from 'vitest'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
@@ -22,6 +22,10 @@ export function fixture(
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
+  const reportInput = new PassThrough()
+  const reportOutput = new PassThrough()
+  reportOutput.resume()
+  child.stdio[3] = Duplex.from({ readable: reportInput, writable: reportOutput })
   const spawn = vi.fn<PipedProcessSpawner>(() => {
     return child
   })
@@ -54,5 +58,5 @@ export function fixture(
       child.stdout.end()
     }
   })
-  return { agent, child, spawn, connection }
+  return { agent, child, spawn, connection, reportInput }
 }

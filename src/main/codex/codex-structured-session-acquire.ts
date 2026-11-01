@@ -1,3 +1,8 @@
+import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/structured-agent-session-provider-exit-proof'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger
+} from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
@@ -5,8 +10,7 @@ import {
 } from '../../shared/agent-session-provider-handle-encoding'
 import {
   launchPreparationFailure,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput
+  type AgentSessionAcquisition
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   closeFailedCodexAcquisition,
@@ -31,36 +35,15 @@ import { providerSpawnAbsent } from '../provider-process/provider-executable-mis
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
-  mintCodexAcquisitionGeneration,
-  type CodexAcquisitionRegistry,
-  type CodexAcquisitionAttempt,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps
+  mintCodexAcquisitionGeneration
 } from './codex-structured-session-state'
-import type { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
-import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
-import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+import type { CodexStructuredAcquisitionInput } from './codex-structured-acquisition-window'
 import { readCodexThreadId } from './codex-structured-thread-facts'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 
-export async function acquireCodexStructuredSession(input: {
-  input: StructuredAgentSessionAcquireInput
-  deps: CodexStructuredSessionAdapterDeps
-  sessions: Map<string, CodexSession>
-  acquisitions: CodexAcquisitionRegistry
-  notificationRetries: CodexStructuredNotificationRetry
-  deliver: (
-    acquisition: CodexAcquisitionAttempt['window'],
-    sessionId: string,
-    event: () => unknown
-  ) => void
-  handleServerRequest: (
-    sessionId: string,
-    request: Parameters<typeof deliverCodexServerRequest>[2]
-  ) => void
-  handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
-  forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
-}): Promise<AgentSessionAcquisition> {
+export async function acquireCodexStructuredSession(
+  input: CodexStructuredAcquisitionInput
+): Promise<AgentSessionAcquisition> {
   const { input: acquireInput, deps, sessions, acquisitions, notificationRetries } = input
   const sessionId = acquireInput.identity.sessionId
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
@@ -101,12 +84,26 @@ export async function acquireCodexStructuredSession(input: {
       previous: previousAttempt
     })
     acquisitions.assertCurrent(sessionId, attempt)
+    const previousSession = sessions.get(sessionId)
     if (
-      !(await closeCodexPublishedSession(
-        sessions,
-        sessionId,
-        deps.onEvent,
-        deps.logger ? { logger: deps.logger } : {}
+      !(await stopAgentSessionProviderRoot(
+        () =>
+          closeCodexPublishedSession(
+            sessions,
+            sessionId,
+            deps.onEvent,
+            deps.logger ? { logger: deps.logger } : {}
+          ),
+        (error) =>
+          neverThrowingStructuredAgentSessionLogger(
+            deps.logger ?? createStructuredAgentSessionLogger()
+          ).warn('Previous Codex session stopped with a diagnostic', {
+            scope: 'codex-prior-session-close',
+            sessionId,
+            fence: previousSession?.fence,
+            acquisitionGeneration: previousSession?.acquisitionGeneration,
+            error
+          })
       ))
     ) {
       throw new Error(`codex app-server for session ${sessionId} could not be stopped`)

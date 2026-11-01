@@ -11,7 +11,6 @@ import type { terminateProviderProcessTree } from '../provider-process/provider-
 import { createAcpAgentConnection, type AcpAgentConnection } from './acp-agent-connection'
 import { startupReceiveRig } from './acp-startup-receive.test-support'
 import { AcpAuthRequiredError } from './acp-errors'
-import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
 
@@ -29,11 +28,11 @@ const actual = await vi.importActual<{
 const grace =
   process.platform === 'win32' ? ROOT_ONLY_GRACEFUL_EXIT_MS : PROVIDER_SUPERVISOR_MAX_STOP_MS
 const prompt = [{ type: 'text', text: 'hello' }] as const
-/** What the supervisor writes when it cannot spawn the agent's CLI. */
-const SPAWN_ENOENT_REPORT = `${PROVIDER_SPAWN_FAILURE_MARKER}${JSON.stringify({
+/** The original failed launch record on the supervisor's owned report pipe. */
+const SPAWN_ENOENT_REPORT = `${JSON.stringify({
+  kind: 'failed',
   thrown: false,
-  code: 'ENOENT',
-  message: 'spawn fixture-acp-agent ENOENT'
+  error: { name: 'Error', code: 'ENOENT', message: 'spawn fixture-acp-agent ENOENT' }
 })}\n`
 
 afterEach(async () => {
@@ -47,13 +46,13 @@ afterEach(async () => {
 })
 
 describe('ACP process-owning connection', () => {
-  // The supervisor (POSIX only) reports the failed spawn on stderr and exits 127.
+  // The supervisor (POSIX only) reports the failed spawn on fd3 and exits 127.
   it.skipIf(process.platform === 'win32')(
     'marks the exit of a CLI the supervisor could not spawn as a missing executable',
     async () => {
       const onExit = vi.fn()
-      const { connection, child } = fixture({ onExit }, { cwd: process.cwd() })
-      child.stderr.write(SPAWN_ENOENT_REPORT)
+      const { connection, child, reportInput } = fixture({ onExit }, { cwd: process.cwd() })
+      reportInput.write(SPAWN_ENOENT_REPORT)
       await tick()
       child.emit('exit', 127, null)
       child.emit('close', 127, null)
@@ -69,14 +68,21 @@ describe('ACP process-owning connection', () => {
     expect(connection.pid).toBe(child.pid)
     expect(connection.rootVerdict).toBe('live')
     expect(connection.lastCloseResult).toBeNull()
-    expect(spawn).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        cwd: start.cwd,
-        env: expect.objectContaining({ ACP_ACCOUNT_HOME: '/host/account' }),
-        stdio: ['pipe', 'pipe', 'pipe', ...(process.platform === 'win32' ? [] : ['ipc'])]
-      })
-    )
-    expect(spawn.mock.calls[0][0].env).not.toHaveProperty('STRIPPED')
+    expect(spawn.mock.calls.length).toBe(1)
+    const call = spawn.mock.calls[0]
+    if (!call) {
+      throw new Error('expected one ACP spawn call')
+    }
+    const spec = call[0]
+    expect(spec.cwd).toBe(start.cwd)
+    expect(spec.env?.ACP_ACCOUNT_HOME).toBe('/host/account')
+    expect('STRIPPED' in (spec.env ?? {})).toBe(false)
+    expect(spec.stdio).toEqual([
+      'pipe',
+      'pipe',
+      'pipe',
+      ...(process.platform === 'win32' ? [] : ['pipe'])
+    ])
     expect(await connection.start(start)).toMatchObject({
       sessionId: 'session-1'
     })

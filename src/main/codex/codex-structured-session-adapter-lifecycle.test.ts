@@ -1,6 +1,9 @@
+import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { CodexCloseOutcome } from './app-server/codex-app-server-connection-types'
 import { scriptedCodexCloseOutcome } from './codex-scripted-child.test-fixture'
 import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   AgentJournalMessageItem,
@@ -102,7 +105,8 @@ function fakeCodex(routes: Record<string, Route> = {}): {
 function adapterFor(
   codex: ReturnType<typeof fakeCodex>,
   launch: Partial<CodexStructuredLaunch> = {},
-  events: CodexStructuredSessionEvent[] = []
+  events: CodexStructuredSessionEvent[] = [],
+  logger?: StructuredAgentSessionLogger
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
   return new CodexStructuredSessionAdapter({
@@ -115,6 +119,7 @@ function adapterFor(
       ...launch
     }),
     onEvent: (event) => events.push(event),
+    ...(logger ? { logger } : {}),
     openConnection: codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
@@ -137,6 +142,109 @@ async function acquired(
 }
 
 describe('CodexStructuredSessionAdapter lifecycle', () => {
+  it('retains legacy read metadata at rest until exact completed reclamation', async () => {
+    const codex = fakeCodex({
+      'thread/resume': () => ({ thread: { id: THREAD_ID, historyMode: 'legacy' } }),
+      'skills/list': () => ({ data: [{ cwd: '/work/repo', skills: [], errors: [] }] })
+    })
+    const adapter = await acquired(codex, { resumeThreadId: THREAD_ID })
+    await vi.waitFor(() => expect(adapter.readCommands('session-1')).toBeDefined())
+    const commands = adapter.readCommands('session-1')
+    const stops = adapter.backgroundTaskStops('session-1')
+    const connection = codex.connections[0]
+    const outcome = vi.spyOn(connection, 'closeOutcome')
+    connection.closed = true
+    connection.handlers.onExit?.(new Error('codex app-server exited'))
+    expect(adapter.rewindSupport('session-1')).toEqual({
+      supported: false,
+      reason: 'history-not-paginated'
+    })
+    expect(adapter.readCommands('session-1')).toBe(commands)
+    expect(adapter.backgroundTaskStops('session-1')).toEqual(stops)
+    expect(adapter.backgroundTaskState('session-1')).toBeDefined()
+    expect(adapter.heldSends('session-1')?.size).toBe(0)
+    expect(adapter.projectOptions('session-1', {})).toBeUndefined()
+    expect(
+      adapter.readAppliedInputOptions({
+        sessionId: 'session-1',
+        fence: 7,
+        acquisitionGeneration: 'generation-1'
+      })
+    ).toBeNull()
+    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
+    expect(outcome).not.toHaveBeenCalled()
+    expect(connection.closeCount).toBe(0)
+    expect(adapter.readCommands('session-1')).toBeUndefined()
+  })
+
+  it.each(['root', 'kill', 'false', 'unproven', 'rejected'] as const)(
+    'uses prior-live %s acceptance without attributing old diagnostics to the new acquisition',
+    async (disposition) => {
+      const codex = fakeCodex()
+      const events: CodexStructuredSessionEvent[] = []
+      const logger = { warn: vi.fn(), error: vi.fn() }
+      const adapter = adapterFor(codex, {}, events, logger)
+      const input = { identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' }
+      await acquireReadyCodexForTest(adapter, input)
+      const old = codex.connections[0]
+      const originalClose = old.closeOutcome
+      const sourceError = new Error('old receive failed')
+      const accepted = disposition === 'root' || disposition === 'kill'
+      const preResultError =
+        disposition === 'unproven'
+          ? new AgentSessionAcquisitionExitUnprovenError(sourceError)
+          : sourceError
+      old.closeOutcome = vi.fn(async (): Promise<CodexCloseOutcome> => {
+        if (disposition === 'rejected' || disposition === 'unproven') {
+          throw preResultError
+        }
+        old.closed = accepted
+        return {
+          accepted,
+          physical: {
+            root: disposition === 'kill' || !accepted ? 'live' : 'exited',
+            tree: null,
+            ...(disposition === 'kill' ? { killDelivered: true } : {})
+          },
+          processless: false,
+          receive: accepted ? { state: 'failed', error: sourceError } : { state: 'retained' }
+        }
+      })
+      const next = { ...input, fence: 8, spawnToken: 'spawn-10' }
+      if (!accepted) {
+        const error = await adapter.acquire(next).catch((error: unknown) => error)
+        if (disposition === 'rejected' || disposition === 'unproven') {
+          expect(error).toBe(preResultError)
+        } else {
+          expect(error).toBeInstanceOf(Error)
+        }
+        expect(codex.connections).toHaveLength(1)
+        expect(adapter.holdsLiveProviderProcess('session-1', 'generation-1')).toBe(true)
+        expect(events.filter((event) => event.type === 'ended')).toHaveLength(0)
+        expect(logger.warn).not.toHaveBeenCalled()
+        old.closeOutcome = originalClose
+      }
+      await acquireReadyCodexForTest(adapter, next)
+      expect(codex.connections).toHaveLength(2)
+      expect(events.filter((event) => event.type === 'ended')).toHaveLength(1)
+      if (accepted) {
+        expect(logger.warn).toHaveBeenCalledOnce()
+        const fields = logger.warn.mock.calls[0][1]
+        expect(fields).toMatchObject({
+          scope: 'codex-prior-session-close',
+          sessionId: 'session-1',
+          fence: 7,
+          acquisitionGeneration: 'generation-1'
+        })
+        if (!(fields.error instanceof Error) || !(fields.error.cause instanceof AggregateError)) {
+          throw new Error('missing original close causes')
+        }
+        expect(fields.error.cause.errors).toContain(sourceError)
+      }
+      await adapter.closeAll()
+    }
+  )
+
   it('keeps sessions isolated and closes each child once', async () => {
     const codex = fakeCodex()
     const adapter = adapterFor(codex)
