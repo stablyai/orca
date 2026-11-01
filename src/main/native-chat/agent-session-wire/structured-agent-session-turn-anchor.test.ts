@@ -2,19 +2,19 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   liveAgentJournalTurnAnchor,
   revisedAgentJournalTurnAnchor
-} from '../../../shared/agent-session-turn-record'
-import { structuredAgentTurnAnchors } from '../../../shared/native-chat-turn-membership'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { structuredAgentTurnAnchors } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { resolveAgentJournalTurnRowWrite } from '../agent-session-timeline/agent-journal-turn-row-revision'

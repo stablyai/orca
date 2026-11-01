@@ -25,7 +25,7 @@ import {
   ownerOf,
   type ExecutionOwnerRig
 } from './structured-agent-session-switch-terminal-admission.test-fixture'
-import type { AgentSessionExecutionClaim } from '../../../../shared/agent-session-host-authority'
+import type { AgentSessionExecutionClaim } from '../../../../shared/agent-session/agent-session-host-authority'
 
 let rig: RestTestRig
 beforeEach(async () => {

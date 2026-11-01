@@ -1,16 +1,18 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
-import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session-definitive-refusal'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   refuse,
-  type AgentSessionAttachResult,
-  type AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+  isAgentSessionRefusalError
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionAttachResult,
+  AgentSessionMutationResult
+} from '../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'

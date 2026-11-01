@@ -4,12 +4,12 @@
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   isSubagentGroupFallbackText,
   normalizeSubagentState,
@@ -29,7 +29,7 @@ import {
   type NativeChatBackgroundTaskBlock,
   type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 
 export type JournalSubagentLivenessRevision = {
   identity: AgentJournalItemIdentity

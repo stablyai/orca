@@ -1,6 +1,6 @@
 import { AGENT_TYPE_MAX_LENGTH } from './agent-status-field-normalization'
 import type { AgentType } from './agent-status-types'
-import { extractAgentProviderSession } from './agent-session-resume'
+import { extractAgentProviderSession } from './agent-session/lifecycle/agent-session-resume'
 
 export type AgentProcessIdentity = {
   pid: number

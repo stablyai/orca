@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { ClipboardPaste, FileUp, ImagePlus, Monitor, Plus, Smartphone } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { SectionHeader } from '../components/list/ListGroup'
 import { triggerMediumImpact } from '../platform/haptics'
 import type { TerminalAccessoryKey } from '../terminal/terminal-accessory-keys'
 import { TERMINAL_SHORTCUT_SPECIAL_KEYS } from '../terminal/terminal-accessory-keys'
@@ -169,73 +170,73 @@ export function TerminalMoreKeysSheet({
             () => closeThen(onToggleDisplay)
           )}
         </View>
-        <Text style={styles.sheetHeading}>{t('session.terminalMoreKeys.keys', 'Keys')}</Text>
-        <View style={styles.sheetGrid}>
-          {keys.map((k) =>
-            key(k.id, k.label, k.accessibilityLabel ?? k.label, () => onBuiltInKey(k))
-          )}
-          {EXTRA_KEYS.map((k) =>
-            key(k.id, k.label, k.accessibilityLabel, () => onSpecialKey(k.id))
-          )}
+        <View>
+          <SectionHeader title={t('session.terminalMoreKeys.keys', 'Keys')} first />
+          <View style={styles.sheetGrid}>
+            {keys.map((k) =>
+              key(k.id, k.label, k.accessibilityLabel ?? k.label, () => onBuiltInKey(k))
+            )}
+            {EXTRA_KEYS.map((k) =>
+              key(k.id, k.label, k.accessibilityLabel, () => onSpecialKey(k.id))
+            )}
+          </View>
         </View>
         {combos.length > 0 ? (
-          <>
-            <Text style={styles.sheetHeading}>
-              {t('session.terminalMoreKeys.combos', 'Combos')}
-            </Text>
+          <View>
+            <SectionHeader title={t('session.terminalMoreKeys.combos', 'Combos')} first />
             <View style={styles.sheetGrid}>
               {combos.map((k) =>
                 key(k.id, k.label, k.accessibilityLabel ?? k.label, () => onBuiltInKey(k))
               )}
             </View>
-          </>
+          </View>
         ) : null}
-        <Text style={styles.sheetHeading}>
-          {t('session.terminalMoreKeys.yourKeys', 'Your keys')}
-        </Text>
-        <View style={styles.sheetGrid}>
-          {customKeys.map((custom) => (
+        <View>
+          <SectionHeader title={t('session.terminalMoreKeys.yourKeys', 'Your keys')} first />
+          <View style={styles.sheetGrid}>
+            {customKeys.map((custom) => (
+              <Pressable
+                key={custom.id}
+                style={({ pressed }) => [
+                  styles.key,
+                  styles.sheetKey,
+                  pressed && styles.keyPressed,
+                  !canSend && styles.disabled
+                ]}
+                disabled={!canSend}
+                onPress={() => {
+                  onCustomKey(custom)
+                  onClose()
+                }}
+                onLongPress={() => {
+                  triggerMediumImpact()
+                  closeThen(() => onDeleteCustomKey(custom))
+                }}
+                delayLongPress={400}
+                accessibilityRole="button"
+                accessibilityLabel={t('session.terminalMoreKeys.sendKey', 'Send {{label}}', {
+                  label: custom.label
+                })}
+                accessibilityHint={t(
+                  'session.terminalMoreKeys.deleteKeyHint',
+                  'Long press to delete this key'
+                )}
+              >
+                <Text style={styles.keyText}>{custom.label}</Text>
+              </Pressable>
+            ))}
             <Pressable
-              key={custom.id}
-              style={({ pressed }) => [
-                styles.key,
-                styles.sheetKey,
-                pressed && styles.keyPressed,
-                !canSend && styles.disabled
-              ]}
-              disabled={!canSend}
-              onPress={() => {
-                onCustomKey(custom)
-                onClose()
-              }}
-              onLongPress={() => {
-                triggerMediumImpact()
-                closeThen(() => onDeleteCustomKey(custom))
-              }}
-              delayLongPress={400}
+              style={({ pressed }) => [styles.ghostKey, pressed && styles.keyPressed]}
+              onPress={() => closeThen(onAddCustomKey)}
               accessibilityRole="button"
-              accessibilityLabel={t('session.terminalMoreKeys.sendKey', 'Send {{label}}', {
-                label: custom.label
-              })}
-              accessibilityHint={t(
-                'session.terminalMoreKeys.deleteKeyHint',
-                'Long press to delete this key'
-              )}
+              accessibilityLabel={t('session.terminalMoreKeys.addCustomKey', 'Add custom key')}
             >
-              <Text style={styles.keyText}>{custom.label}</Text>
+              <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
+              <Text style={[styles.keyText, styles.ghostKeyText]}>
+                {t('session.terminalMoreKeys.addKey', 'Add key')}
+              </Text>
             </Pressable>
-          ))}
-          <Pressable
-            style={({ pressed }) => [styles.ghostKey, pressed && styles.keyPressed]}
-            onPress={() => closeThen(onAddCustomKey)}
-            accessibilityRole="button"
-            accessibilityLabel={t('session.terminalMoreKeys.addCustomKey', 'Add custom key')}
-          >
-            <Plus size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            <Text style={[styles.keyText, styles.ghostKeyText]}>
-              {t('session.terminalMoreKeys.addKey', 'Add key')}
-            </Text>
-          </Pressable>
+          </View>
         </View>
       </View>
     </BottomDrawer>

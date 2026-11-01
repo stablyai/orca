@@ -4,7 +4,7 @@ import {
   StructuredChatTranscriptError
 } from '../../../ai-vault/structured-chat-cli-fork'
 import type { AiVaultChatForkSource } from '../../../../shared/ai-vault-resume-preparation'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 /**

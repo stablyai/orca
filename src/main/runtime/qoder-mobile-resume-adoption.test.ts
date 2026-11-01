@@ -1,7 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OwnedMobileTerminalCreateOptions } from './terminal/launch/mobile-terminal-create'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 
 await import('./orca-runtime-test-mocks.spec')

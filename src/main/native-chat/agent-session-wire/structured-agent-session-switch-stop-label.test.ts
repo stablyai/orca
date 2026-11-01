@@ -9,20 +9,20 @@ import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transc
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session-goal-control-copy'
-import { refuse } from '../../../shared/agent-session-wire'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import type { NativeChatMessage } from '../../../shared/native-chat-types'
-import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
-import { selectStructuredAgentSettledTurns } from '../../../shared/structured-agent-session-turn-timing'
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentSettledTurns } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'

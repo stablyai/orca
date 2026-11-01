@@ -1,7 +1,7 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import { isStructuredAgentSessionHostTabId } from '../../../../shared/structured-agent-session-host-tab-id'
+import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 /** Where a switch published a row: in the tab it replaced's slot, or beside a split pane's tab. */
 export type SlotAnchor = { hostTabId: string; after: boolean }

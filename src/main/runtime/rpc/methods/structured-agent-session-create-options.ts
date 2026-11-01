@@ -1,9 +1,9 @@
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
-} from '../../../../shared/structured-agent-session-create'
+} from '../../../../shared/agent-session/structured-agent-session-create'
 
 export function structuredAgentSessionCreateIntentFingerprint(params: {
   envelope: AgentSessionMutationEnvelope

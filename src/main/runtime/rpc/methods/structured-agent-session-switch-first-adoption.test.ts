@@ -2,9 +2,9 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { z } from 'zod'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   createRestTestRig,
   type RestTestRig

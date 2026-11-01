@@ -2,12 +2,12 @@ import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import type { ClaudeContextFacts } from './claude-context-facts'
 import { claudeCommandResultEnd } from './claude-command-turn'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
-import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
+import type { ClaudeJournalPrompts } from './structured/journal/claude-structured-journal-prompts'
 import {
   claudeProviderFrameKind,
   claudeResultFailure,
   isSettledClaudeResultKind
-} from './claude-structured-provider-fallback'
+} from './structured/launch/claude-structured-provider-fallback'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { claudeFrameParentRef, isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'

@@ -14,8 +14,11 @@ import {
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
 import type { AgentType } from '../../../shared/agent-status-types'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../../shared/native-chat-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath } from '../session-file-resolver'
 import {
@@ -44,11 +47,7 @@ export {
   type PreparedLegacyImport
 } from './journal-legacy-import-contract'
 
-export {
-  LEGACY_IMPORT_BLOCK_LIMITS,
-  legacyItemBody,
-  boundBlock
-} from './journal-legacy-import-body'
+export { LEGACY_IMPORT_BLOCK_LIMITS, legacyItemBody } from './journal-legacy-import-body'
 // Build a fresh epoch: import-scoped legacy identities cannot safely share structured sequence space.
 
 const MAX_LEGACY_IMPORT_RECORD_BYTES = 16 * 1024 * 1024
@@ -311,5 +310,3 @@ async function decodeReplacementItems(input: {
     pi?.close()
   }
 }
-
-/** Bound every bulk-bearing block, including mixed-message tool calls; the transcript retains full content. */

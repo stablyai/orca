@@ -10,8 +10,8 @@ import type * as SessionClient from '@/runtime/structured-agent-session-client'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../../shared/agent-session-wire'
-import type { StructuredAgentSessionCreateParams } from '../../../../shared/structured-agent-session-create'
+} from '../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionCreateParams } from '../../../../shared/agent-session/structured-agent-session-create'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-agent-session-launch-registry'

@@ -2,7 +2,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { z } from 'zod'
 import type { RpcContext } from '../core'
 import type { SwitchToChatParams, SwitchToTerminalParams } from './structured-agent-session-schemas'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   ensureStructuredHostInstalled,
   requireStructuredSessionHost,
@@ -15,7 +15,7 @@ import {
   switchConversationIdentity
 } from './structured-agent-session-switch-source'
 import { captureStructuredAgentCliSource } from '../../../native-chat/structured-agent-cli-source'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
 import type { AgentSessionSwitchDeadline } from '../../../../shared/agent-session-switch-execution'
 export async function prepareStructuredSessionSwitch(

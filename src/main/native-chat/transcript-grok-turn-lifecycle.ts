@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat/native-chat-types'
 import { asRecord, parseJsonObject, timestampMs } from '../ai-vault/session-scanner-values'
 import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
 import { splitTranscriptStreamLines } from './transcript-stream-lines'

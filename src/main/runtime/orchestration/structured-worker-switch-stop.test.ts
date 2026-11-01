@@ -17,7 +17,7 @@ import {
   type RestTestRig
 } from '../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { STOP_NOTE_CANCELLATION_REQUESTED } from '../../native-chat/agent-session-wire/structured-agent-session-turn-stop-notes'
 
 let rig: RestTestRig

@@ -7,7 +7,10 @@ import {
   readOpenCode2TranscriptPage,
   readOpenCode2TranscriptSignal
 } from './transcript-opencode2-sqlite'
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'

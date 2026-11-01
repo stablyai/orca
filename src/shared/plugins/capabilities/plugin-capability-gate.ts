@@ -50,7 +50,7 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: 'plugin is not enabled with current consent'
     }
   }
-  if (!subject.grantedCapabilities.includes(spec.capability)) {
+  if (spec.capability !== null && !subject.grantedCapabilities.includes(spec.capability)) {
     return {
       granted: false,
       code: 'capability_denied',

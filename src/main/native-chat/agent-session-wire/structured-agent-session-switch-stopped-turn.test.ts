@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   SWITCH_STOPPED_CLI_TURN_ID,
   SWITCH_STOPPED_CLI_TURN_ITEMS,

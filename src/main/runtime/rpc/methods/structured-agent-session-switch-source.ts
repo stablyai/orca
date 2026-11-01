@@ -4,7 +4,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
-} from '../../../../shared/agent-session-wire-refusals'
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import { listStructuredProviderSessionOwnership } from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'
@@ -13,7 +13,7 @@ import {
   keysMayMatch,
   terminalConversationKey
 } from '../../../native-chat/structured-conversation-key'
-import { canonicalAgentSessionDigest } from '../../../../shared/agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 export function recordWorkspace(host: StructuredAgentSessionHost, id: string) {
   const record = host.deps.store.getRecord(id)

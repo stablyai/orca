@@ -14,7 +14,7 @@ import {
   callStructuredAgentSession,
   supportsInPlaceSwitch
 } from '@/runtime/structured-agent-session-client'
-import type { AgentSessionWireRefusal } from '../../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { CliChatResumeSource } from './cli-chat-resume-source'

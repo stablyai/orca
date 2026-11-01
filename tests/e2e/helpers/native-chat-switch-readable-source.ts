@@ -9,7 +9,7 @@ import {
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import { HOST_TEST_SESSION } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { structuredAgentRuntimeMetadata } from '../../../src/main/runtime/structured-agent-runtime-metadata'
-import { agentSessionProviderHandleChainHead } from '../../../src/shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 
 export async function prepareReadableSwitchSource(rig: RestTestRig, workspaceId: string) {
   const params = createTestParams()

@@ -39,8 +39,8 @@ vi.mock('react-native', async () => {
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
-import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session-journal-types'
-import { selectStructuredAgentTurnBars } from '../../../../../src/shared/structured-agent-session-turn-timing'
+import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { selectStructuredAgentTurnBars } from '../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import { activateMobileUiLocale, getMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   findAllByHostType,

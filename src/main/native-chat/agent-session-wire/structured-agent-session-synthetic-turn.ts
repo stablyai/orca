@@ -1,5 +1,5 @@
-import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
-import { revisedAgentJournalTurnAnchor } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { revisedAgentJournalTurnAnchor } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 
 type TurnBody = Extract<AgentJournalItemBody, { kind: 'turn' }>
 

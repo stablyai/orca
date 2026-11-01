@@ -7,7 +7,7 @@ import type { StructuredAgentSessionEndedEvent } from './structured-agent-sessio
 import { sameProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type StructuredAgentSessionStartFlight = {
   readonly abort: () => void

@@ -1,5 +1,7 @@
-import type { AgentSessionWireRefusal } from './agent-session-wire'
-import { agentSessionRefusalError } from './agent-session-wire-refusals'
+import {
+  type AgentSessionWireRefusal,
+  agentSessionRefusalError
+} from './agent-session/failures/agent-session-wire-refusals'
 import { waitForPromiseWithSignal } from './abort-signal-reason'
 
 /**

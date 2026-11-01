@@ -2,7 +2,7 @@ import type {
   NativeChatAppendedMessages,
   NativeChatReadSessionResult
 } from '../../../../preload/api-types'
-import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat/native-chat-types'
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-turn-outcome'
 import { translate } from '@/i18n/i18n'
 

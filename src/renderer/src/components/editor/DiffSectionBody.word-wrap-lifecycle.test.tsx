@@ -4,40 +4,46 @@ import { useEffect, useRef, type ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DiffSectionBody } from './DiffSectionBody'
 
-const { mountedEditors, syncWordWrap, cleanupShiftWheel, createEditor } = vi.hoisted(() => {
-  function createEditor() {
-    const listeners = new Set<() => void>()
-    const modified = {
-      onDidDispose: (listener: () => void) => {
-        listeners.add(listener)
-        return { dispose: () => listeners.delete(listener) }
+const { mountedEditors, renderedOptions, syncWordWrap, cleanupShiftWheel, createEditor } =
+  vi.hoisted(() => {
+    function createEditor() {
+      const listeners = new Set<() => void>()
+      const modified = {
+        onDidDispose: (listener: () => void) => {
+          listeners.add(listener)
+          return { dispose: () => listeners.delete(listener) }
+        }
+      }
+      return {
+        editor: {
+          getModifiedEditor: () => modified,
+          getContainerDomNode: () => document.createElement('div'),
+          getModel: () => null,
+          onDidDispose: vi.fn(() => ({ dispose: vi.fn() }))
+        },
+        disposeModified: () => listeners.forEach((listener) => listener())
       }
     }
+    const mountedEditors: ReturnType<typeof createEditor>[] = []
+    const renderedOptions: Record<string, unknown>[] = []
     return {
-      editor: {
-        getModifiedEditor: () => modified,
-        getContainerDomNode: () => document.createElement('div'),
-        getModel: () => null,
-        onDidDispose: vi.fn(() => ({ dispose: vi.fn() }))
-      },
-      disposeModified: () => listeners.forEach((listener) => listener())
+      mountedEditors,
+      renderedOptions,
+      syncWordWrap: vi.fn(() => ({ dispose: vi.fn() })),
+      cleanupShiftWheel: vi.fn(),
+      createEditor
     }
-  }
-  const mountedEditors: ReturnType<typeof createEditor>[] = []
-  return {
-    mountedEditors,
-    syncWordWrap: vi.fn(() => ({ dispose: vi.fn() })),
-    cleanupShiftWheel: vi.fn(),
-    createEditor
-  }
-})
+  })
 
 vi.mock('@monaco-editor/react', () => ({
   DiffEditor: ({
-    onMount
+    onMount,
+    options
   }: {
     onMount: (editor: (typeof mountedEditors)[number]['editor']) => void
+    options: Record<string, unknown>
   }) => {
+    renderedOptions.push(options)
     const mount = useRef(onMount)
     useEffect(() => {
       const instance = createEditor()
@@ -88,7 +94,14 @@ const props: ComponentProps<typeof DiffSectionBody> = {
   language: 'markdown',
   modelPathBase: 'wrap-lifecycle',
   isEditable: false,
-  diffEditorFontSize: 13,
+  typography: {
+    fontFamily: 'monospace',
+    cssFontFamily: 'monospace',
+    fontSize: 13,
+    fontWeight: 'normal',
+    lineHeight: 0,
+    fontLigatures: false
+  },
   diffWordWrap: true,
   onRetrySection: vi.fn(),
   onLoadDeferredSection: vi.fn(),
@@ -99,6 +112,7 @@ const frames = new Map<number, FrameRequestCallback>()
 
 beforeEach(() => {
   mountedEditors.length = 0
+  renderedOptions.length = 0
   syncWordWrap.mockClear()
   cleanupShiftWheel.mockClear()
   frames.clear()
@@ -180,5 +194,16 @@ describe('combined diff word-wrap lifecycle', () => {
     runMountFrame()
 
     expect(syncWordWrap).toHaveBeenLastCalledWith(mountedEditors[1]?.editor, false)
+  })
+
+  // The Monaco wrapper calls updateOptions on every options identity change, once per mounted section.
+  it('keeps editor options stable across re-renders that change no option', () => {
+    const view = render(<DiffSectionBody {...props} />)
+    view.rerender(<DiffSectionBody {...props} onMount={vi.fn()} onRetrySection={vi.fn()} />)
+    expect(renderedOptions.at(-1)).toBe(renderedOptions[0])
+
+    view.rerender(<DiffSectionBody {...props} sideBySide={false} />)
+    expect(renderedOptions.at(-1)).not.toBe(renderedOptions[0])
+    expect(renderedOptions.at(-1)).toMatchObject({ renderSideBySide: false })
   })
 })

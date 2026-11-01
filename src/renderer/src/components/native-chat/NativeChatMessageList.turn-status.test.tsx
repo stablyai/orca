@@ -26,17 +26,17 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalTurnItem
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   selectStructuredAgentSettledTurns,
   selectStructuredAgentTurnBars
-} from '../../../../shared/structured-agent-session-turn-timing'
+} from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   SWITCH_STOPPED_CLI_TURN_ITEMS,
   SWITCH_STOPPED_CLI_USER_ITEM_KEY

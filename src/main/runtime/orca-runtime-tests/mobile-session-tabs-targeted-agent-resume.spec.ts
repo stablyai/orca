@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { HEADLESS_SECOND_LEAF_ID, TEST_WORKTREE_ID } from '../orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import type { TerminalLaunchResult } from '../../../shared/agent-session-resume'
+import type { TerminalLaunchResult } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../remote-runtime-terminal-create-identity'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../agent-session-record-store'
+import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import {
   chooseSavedResumeFreshLaunch,
   savedResumeResult

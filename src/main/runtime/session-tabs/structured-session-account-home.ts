@@ -1,11 +1,11 @@
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
   /** Resolve account home through this host's agent registration; null means unregistered and create refuses. */

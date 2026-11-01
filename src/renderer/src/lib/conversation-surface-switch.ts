@@ -26,8 +26,8 @@ import {
   AGENT_SESSION_SWITCH_CLIENT_MS,
   type AgentSessionSwitchResult
 } from '../../../shared/agent-session-switch-execution'
-import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { AgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { structuredLaunchFailure } from './agent-session/launch/structured-agent-session-launch-failure'
 import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 import { runLegacyConversationSwitch } from './conversation-switch-legacy'

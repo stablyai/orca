@@ -6,7 +6,7 @@ import { agentLaunchFeatureRequirement } from '../agent-launch-feature-requireme
 import { AgentLaunchTabClosedError } from '../../../../shared/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../shared/agent-launch-intent'
-import { agentSessionOperationKey } from '../../../../shared/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE

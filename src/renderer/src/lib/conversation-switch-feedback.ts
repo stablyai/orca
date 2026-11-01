@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from './agent-session/launch/structured-agent-session-launch-failure'
 import { agentLabel } from '../../../shared/ai-vault-session-filters'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 

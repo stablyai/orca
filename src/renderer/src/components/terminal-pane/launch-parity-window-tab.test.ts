@@ -31,7 +31,7 @@ import {
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import { mainLayoutApplyTransport } from './pty-connection-test-main-pane-start-fixtures'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { createPaneManagerOptionsTestContext } from './terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.

@@ -1,6 +1,6 @@
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import type { reserveRequestFor } from './structured-agent-session-attach'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { SwitchStoppedCliTurn } from './structured-agent-session-switch-import'
 
 export type StructuredAgentSessionCreateOptions = {

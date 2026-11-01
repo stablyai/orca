@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
-import type { SleepingAgentSessionRecord } from '../orca-runtime-test-mocks.spec'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,

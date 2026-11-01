@@ -32,7 +32,7 @@ import {
   closeCapturedStructuredSession,
   type StructuredSessionSurface
 } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { OrcaRuntimeWithChatTabLayoutQueue } from './chat-tab-layout-queue-owner'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithChatTabLayoutQueue {

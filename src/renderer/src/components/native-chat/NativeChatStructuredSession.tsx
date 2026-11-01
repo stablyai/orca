@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
-import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { agentSessionPromptQuestions } from '../../../../shared/agent-session/agent-session-question-answer'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './use-structured-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -48,7 +48,7 @@ import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
 import { chatApprovalFromJournal } from '../../../../shared/native-chat-interactive-prompt'
 import { useAppStore } from '../../store'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from './NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader, nativeChatPaneCaptureHandlers } from './NativeChatPaneHeader'
@@ -56,7 +56,7 @@ import { structuredAgentSessionReadFailureNotice } from './structured-agent-sess
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 import { useNativeChatHostSendGate } from './use-native-chat-host-send-gate'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatClaudeSignInContext } from './native-chat-claude-sign-in'
 import { useStructuredSessionNotices } from './native-chat-structured-session-notices'
 import { useStructuredNativeChatDelivery } from './use-structured-native-chat-delivery'
@@ -367,7 +367,7 @@ export function NativeChatStructuredSession(
               answerInputRef={questionAnswerInputRef}
             />
           ) : null}
-          {nativeChatStructuredAsyncQuestion(props, controller, session, transport.send)}
+          {nativeChatStructuredAsyncQuestion(props, controller, session, transport, submits)}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
           {composerShown ? (
             <NativeChatComposer

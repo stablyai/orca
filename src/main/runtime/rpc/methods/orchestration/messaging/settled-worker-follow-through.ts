@@ -235,7 +235,7 @@ function noticeUnreadMailNotContinued(
       mailbox: () => dispatchReportMailbox(db, dispatch),
       describe: (task) => ({
         subject: 'Mail did not reach the finished worker',
-        body: `Orca could not continue the worker of ${task} with the mail it had not read before reporting: ${reason}. The mail is kept; send to dispatch:${dispatchId} again to retry.`
+        body: `Orca could not continue the worker of ${task} with the mail it had not read before reporting: ${reason}. The mail is kept for your next send to dispatch:${dispatchId}.`
       }),
       payload: { dispatchId, reason }
     },

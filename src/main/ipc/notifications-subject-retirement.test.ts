@@ -11,7 +11,7 @@ import {
   type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   type StructuredAttentionState
-} from '../../shared/agent-session-attention'
+} from '../../shared/agent-session/agent-session-attention'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -65,6 +65,7 @@ function register(
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: true,
           suppressWhenFocused: options.suppressWhenFocused
         }

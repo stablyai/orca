@@ -14,7 +14,12 @@ const fallback = vi.hoisted(() => ({
   completion: { completed: Promise.resolve(true), signal: new AbortController().signal },
   eligible: vi.fn(),
   schedule: vi.fn(),
-  preferences: { onlyWhenDesktopAway: true, sound: true, suppressWhileViewing: true }
+  preferences: {
+    onlyWhenDesktopAway: true,
+    onlyWhenAgentNeedsInput: false,
+    sound: true,
+    suppressWhileViewing: true
+  }
 }))
 vi.mock('./push-token', () => ({ getDevicePushToken: fallback.token }))
 vi.mock('./push-registration', () => ({
@@ -167,7 +172,12 @@ beforeEach(() => {
   fallback.supported.mockReturnValue(true)
   fallback.eligible.mockResolvedValue(true)
   fallback.schedule.mockResolvedValue('local')
-  fallback.preferences = { onlyWhenDesktopAway: true, sound: true, suppressWhileViewing: true }
+  fallback.preferences = {
+    onlyWhenDesktopAway: true,
+    onlyWhenAgentNeedsInput: false,
+    sound: true,
+    suppressWhileViewing: true
+  }
 })
 
 const liveAlert = {
@@ -253,6 +263,18 @@ it.each([
   emitAlert({ ...liveAlert, ...fields })
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(fallback.schedule).not.toHaveBeenCalled()
+})
+
+it('presents only agent questions when the phone wants nothing else, on any host', async () => {
+  fallback.token.mockResolvedValue(null)
+  fallback.preferences = { ...fallback.preferences, onlyWhenAgentNeedsInput: true }
+  emitAlert({ ...liveAlert, agentState: 'done' })
+  emitAlert({ ...liveAlert, agentState: 'blocked', notificationSeq: 5 })
+  await vi.waitFor(() => expect(fallback.schedule).toHaveBeenCalledOnce())
+  // Foreground eligibility re-reads the kind from this data, so it must carry it.
+  expect(fallback.schedule.mock.calls[0][0]).toMatchObject({
+    content: { data: { source: 'agent-task-complete', agentState: 'needs-input' } }
+  })
 })
 
 it('delegates foreground eligibility before scheduling', async () => {

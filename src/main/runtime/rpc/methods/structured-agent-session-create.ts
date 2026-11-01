@@ -1,15 +1,18 @@
 import type { StructuredSessionSurface } from '../../agent-session/structured-agent-session-close'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
+import {
+  refuse,
+  AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { assertAgentPromptRequestActive } from '../../orca-runtime-core'
-import { refuse, AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
@@ -19,7 +22,7 @@ import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-se
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
-} from '../../../../shared/structured-agent-session-create'
+} from '../../../../shared/agent-session/structured-agent-session-create'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
 import type { StructuredAgentSessionCreateOptions } from '../../../native-chat/agent-session-wire/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -27,7 +30,7 @@ import {
   captureStructuredAgentCliSource,
   type StructuredAgentCliSourceEvidence
 } from '../../../native-chat/structured-agent-cli-source'
-import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionAdoption } from '../../../native-chat/structured-agent-session-history-adoption'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

@@ -1,7 +1,7 @@
 import { prepareReadableSwitchSource } from './helpers/native-chat-switch-readable-source'
 import { createRestTestRig } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { HOST_TEST_SESSION } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   setupMainOwnedWorkspace,
@@ -25,7 +25,7 @@ import { resetStructuredAgentSessionReadOwnersForTests } from '../../src/rendere
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../src/shared/agent-session-wire'
+} from '../../src/shared/agent-session/agent-session-wire'
 import type * as StructuredAgentSessionClientModule from '@/runtime/structured-agent-session-client'
 
 // @vitest-environment happy-dom
@@ -36,7 +36,7 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
   ).createStructuredSessionMocks()
 )
 const feed = vi.hoisted(() => ({ cursor: { epoch: 'epoch', sequence: 1 } }))
-vi.mock('@/lib/structured-agent-session-launch', () =>
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () =>
   moduleFactories.structuredAgentSessionLaunch()
 )
 vi.mock('@/runtime/structured-agent-session-client', async (actual) => ({

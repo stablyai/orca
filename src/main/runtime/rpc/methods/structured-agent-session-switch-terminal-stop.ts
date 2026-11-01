@@ -6,7 +6,7 @@ import type {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
 import { armSwitchTurnBoundaryWait } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-turn-boundary'
 import type { AgentSessionSwitchDeadline } from '../../../../shared/agent-session-switch-execution'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { interruptWorkingAgent } from '../../terminal-agent-interrupt'
 import type { AiVaultAgent } from '../../../../shared/ai-vault-types'

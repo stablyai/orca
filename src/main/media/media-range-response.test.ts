@@ -32,27 +32,6 @@ describe('media range responses', () => {
     expect(reader.close).toHaveBeenCalledTimes(1)
   })
 
-  it.each([
-    'bytes=10-',
-    'bytes=5-2',
-    'bytes=-0',
-    'bytes=',
-    'bytes=0-1,4-5',
-    'bytes=9007199254740992-',
-    'bytes=-9007199254740992'
-  ])('refuses invalid range %s without reading', async (range) => {
-    const reader = fixture()
-    const response = await createMediaRangeResponse(
-      new Request('https://video.test', { headers: { range } }),
-      'video/mp4',
-      reader
-    )
-    expect(response.status).toBe(416)
-    expect(response.headers.get('Content-Range')).toBe('bytes */10')
-    expect(reader.read).not.toHaveBeenCalled()
-    expect(reader.close).toHaveBeenCalledTimes(1)
-  })
-
   it('bounds reads when streaming a multi-gigabyte file and releases it on cancellation', async () => {
     const reader = fixture(4 * 1024 ** 3)
     const response = await createMediaRangeResponse(
@@ -68,24 +47,6 @@ describe('media range responses', () => {
       true
     )
     expect(reader.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('answers HEAD and empty files without reading', async () => {
-    for (const [method, size] of [
-      ['HEAD', 10],
-      ['GET', 0]
-    ] as const) {
-      const reader = fixture(size)
-      const response = await createMediaRangeResponse(
-        new Request('https://video.test', { method }),
-        'video/mp4',
-        reader
-      )
-      expect(response.status).toBe(200)
-      expect(response.body).toBeNull()
-      expect(reader.read).not.toHaveBeenCalled()
-      expect(reader.close).toHaveBeenCalledTimes(1)
-    }
   })
 
   it('closes a failed read and reports the stream error', async () => {

@@ -2,7 +2,7 @@ import { asRecord } from '../../ai-vault/session-scanner-values'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 // Codex rollout facts the resting importer reads beside its message rows.

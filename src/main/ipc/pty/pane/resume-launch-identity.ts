@@ -2,7 +2,7 @@ import { agentHookServer } from '../../../agent-hooks/server'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 
 /** Both spawn entry points seed resume identity before the first hook so phone/chat/process readers can address its transcript. */

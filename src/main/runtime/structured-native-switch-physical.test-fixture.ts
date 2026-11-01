@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import { join } from 'node:path'
 import * as cliTranscript from '../ai-vault/structured-chat-cli-fork'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionSwitchDeadline } from '../../shared/agent-session-switch-execution'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { structuredAgentRuntimeMetadata } from './structured-agent-runtime-metadata'

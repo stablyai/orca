@@ -6,10 +6,8 @@ import type { StructuredAgentSessionAttachLock } from './structured-agent-sessio
 // Passing the host itself would let this quietly grow new dependencies; an explicit context makes
 // each one a deliberate addition and keeps the orchestration testable without constructing a host.
 
-import type {
-  AgentSessionTurnActivity,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionHostDeps,

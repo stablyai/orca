@@ -2,7 +2,7 @@
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { OrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { withRenamedOrcadMigrationDrafts } from '../persistence/migrating-orcad-catalog/orcad-source-draft-rename'
 import {
   listOrcadMigrationSourceCutovers,

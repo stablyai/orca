@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionRevisionJournal,

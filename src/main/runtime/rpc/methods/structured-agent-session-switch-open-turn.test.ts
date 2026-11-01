@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as cliTranscript from '../../../ai-vault/structured-chat-cli-fork'
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   createRestTestRig,
   type RestTestRig

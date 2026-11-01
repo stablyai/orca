@@ -1,19 +1,19 @@
 import { vi, type Mock } from 'vitest'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../../src/shared/agent-session-record'
-import { agentSessionRefusalError } from '../../../src/shared/agent-session-wire-refusals'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionRefusalError } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionConversationView } from '../../../src/shared/agent-session-conversation-view'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/codex-structured-agent-definition'
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/protocol-version'
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 
 type StructuredHostCalls = Record<string, ReturnType<typeof vi.fn>> & {
   getRecord: Mock<(sessionId: string) => AgentSessionRecord | null>

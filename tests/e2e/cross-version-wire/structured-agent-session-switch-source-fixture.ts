@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import {
   agentSessionRecordFixture,
   agentSessionLeaseFixture
-} from '../../../src/shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../../src/shared/agent-session-record'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../../src/shared/agent-session/lifecycle/agent-session-record'
 import type { AiVaultChatForkSource } from '../../../src/shared/ai-vault-resume-preparation'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 /** A saved conversation for the real switch handler's account and transcript checks. */
 export async function structuredSwitchSource(

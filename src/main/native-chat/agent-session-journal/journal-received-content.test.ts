@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   adapterFor as claudeAdapter,
   claudeFrame,
   fakeClaude,
   identityFor as claudeIdentity
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import {
   acquireReadyCodexForTest,
   adapterFor as codexAdapter,

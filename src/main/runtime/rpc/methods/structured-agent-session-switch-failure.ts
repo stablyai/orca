@@ -6,7 +6,7 @@ import {
   agentSessionRefusalError,
   isAgentSessionRefusalError,
   refuseUnclassified
-} from '../../../../shared/agent-session-wire-refusals'
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 export function structuredSessionSwitchFailure(
   error: unknown,
   sessionId: string

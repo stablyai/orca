@@ -5,12 +5,12 @@ import {
   readCodexHistoryJournalView,
   sameCodexHistoryJournalView
 } from '../../codex/codex-history-journal-view'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createLegacyIdentityTracker } from '../agent-session-journal/journal-legacy-identity'

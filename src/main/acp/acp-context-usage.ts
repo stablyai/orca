@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../shared/agent-session/agent-session-context-usage'
 import type {
   ProviderTimelineEvent,
   ProviderTimelineJoin

@@ -7,7 +7,10 @@ import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
-import type { NativeChatBlock, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat/native-chat-types'
 import type {
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal,

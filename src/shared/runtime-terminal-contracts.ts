@@ -1,6 +1,6 @@
+import type { TerminalLaunchResult } from './agent-session/lifecycle/agent-session-resume'
+import type * as AgentSessionResume from './agent-session/lifecycle/agent-session-resume'
 import type { TerminalSurfaceCloseCapture } from './terminal-tab-close'
-import type { TerminalLaunchResult } from './agent-session-resume'
-import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'

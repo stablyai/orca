@@ -1,13 +1,13 @@
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session-lease-adjudication'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import {
   AgentSessionRefusalError,
   agentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   captureSwitchStoppedCliTurn,
   catchUpSwitchedCliTranscript,

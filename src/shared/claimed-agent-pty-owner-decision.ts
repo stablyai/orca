@@ -1,4 +1,4 @@
-import type { AgentSessionExecutionClaim } from './agent-session-host-authority'
+import type { AgentSessionExecutionClaim } from './agent-session/agent-session-host-authority'
 import {
   agentSessionClaimKey,
   agentSessionClaimsEqual,

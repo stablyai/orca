@@ -2,9 +2,9 @@ import type {
   AgentSessionOwnerObservation,
   AgentSessionConversationView
 } from '../../../shared/agent-session-conversation-view'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session-lease-adjudication'
-export { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session-lease-adjudication'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+export { agentSessionLeasePossiblyWriting } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { structuredAgentRuntimeMetadata } from '../../runtime/structured-agent-runtime-metadata'
 import {
   keysMayMatch,

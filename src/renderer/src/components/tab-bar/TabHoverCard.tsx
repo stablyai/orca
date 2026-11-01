@@ -1,5 +1,5 @@
+import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { useState, type ReactNode, type SyntheticEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -53,9 +53,34 @@ export function TabHoverCard({
   action?: ReactNode
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLElement>(null)
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const alert = typeof body.alert === 'function' ? body.alert(dismiss) : body.alert
+  const interactive = body.alert !== undefined && body.alert !== null
+  const canOpen = (): boolean => {
+    const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
+    return interactive || !!(label && label.scrollWidth > label.clientWidth)
+  }
+
+  useEffect(() => {
+    if (!open || interactive || body.action) {
+      return
+    }
+    const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
+    if (!label) {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      if (label.scrollWidth <= label.clientWidth) {
+        setOpen(false)
+      }
+    })
+    observer.observe(label)
+    return () => observer.disconnect()
+  }, [open, interactive, body.action, body.title])
+
+  // A card with a control opens on hover whether or not the title is clipped, so the control stays reachable.
   if (body.action) {
     return (
       <HoverCard open={open} onOpenChange={setOpen} openDelay={500} closeDelay={100}>
@@ -77,10 +102,16 @@ export function TabHoverCard({
       </HoverCard>
     )
   }
-  const interactive = body.alert !== undefined && body.alert !== null
   return (
-    <Tooltip open={open} onOpenChange={setOpen} disableHoverableContent={!interactive}>
+    <Tooltip
+      open={open}
+      onOpenChange={(nextOpen) => setOpen(nextOpen && canOpen())}
+      disableHoverableContent={!interactive}
+    >
       <TooltipTrigger
+        ref={(node) => {
+          triggerRef.current = node
+        }}
         asChild
         onFocus={(event) => {
           // Nested controls own their focus hints.

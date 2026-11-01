@@ -3,7 +3,10 @@ import type {
   BundledSkillPlan,
   BundledSkillPlanRequest
 } from '../../../shared/bundled-skill-plan'
-import { BUNDLED_ORCA_SKILL_CAPABILITY } from '../../../shared/skill-install-capability'
+import {
+  BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY,
+  BUNDLED_ORCA_SKILL_CAPABILITY
+} from '../../../shared/skill-install-capability'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 
@@ -67,6 +70,33 @@ export function executeBundledSkillsOnTarget(
     { kind: 'environment', environmentId: target.environmentId },
     'skills.executeBundledOrca',
     { planDigest, request },
+    { timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS }
+  )
+}
+
+/** Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead. */
+export async function autoUpdateBundledSkillsOnTarget(
+  target: BundledSkillTarget,
+  names: string[]
+): Promise<BundledSkillInstallResult | null> {
+  if (target.kind === 'ssh') {
+    return null
+  }
+  if (target.kind !== 'environment') {
+    return window.api.skills.bundledAutoUpdate({ names })
+  }
+  if (
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
+    ))
+  ) {
+    return null
+  }
+  return callRuntimeRpc<BundledSkillInstallResult>(
+    { kind: 'environment', environmentId: target.environmentId },
+    'skills.autoUpdateBundledOrca',
+    { names },
     { timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS }
   )
 }

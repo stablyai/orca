@@ -12,7 +12,7 @@ import {
   type AgentSessionSwitchDeadline,
   type AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
-import { AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 import { structuredCallerFor } from './structured-agent-session-gate'
@@ -28,7 +28,7 @@ import {
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
 import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
-import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
+import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

@@ -1,8 +1,10 @@
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session-switch-execution'
 import { inPlaceSwitchEnabled } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { refuse } from '../../../../shared/agent-session-wire-refusals'
-import type { AgentSessionWireRefusal } from '../../../../shared/agent-session-wire'
+import {
+  refuse,
+  type AgentSessionWireRefusal
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,

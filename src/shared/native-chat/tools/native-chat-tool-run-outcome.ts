@@ -2,7 +2,7 @@
 
 import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
 import { selectActiveToolCall } from './native-chat-tool-activity'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 
 export type NativeChatToolRunOutcome = {
   failedCallCount: number

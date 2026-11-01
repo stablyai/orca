@@ -1,4 +1,4 @@
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 
 /**
  * What rows scoped to a turn record say about it. `steeredInto`: user rows that joined a running

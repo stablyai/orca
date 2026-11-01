@@ -67,20 +67,25 @@ export function onWslDistroGateNote(listener: (note: WslDistroGateNote) => void)
   return () => noteListeners.delete(listener)
 }
 
+// A user act's onSettled notes its wake while the act still holds; listeners are background work.
+function notifyGateNoteListeners(note: WslDistroGateNote): void {
+  outsideWslUserAct(() => {
+    for (const listener of noteListeners) {
+      listener(note)
+    }
+  })
+}
+
 /** A link into the distro died, or a read saw it stop: later running reads must start after it settles. */
 export function noteWslDistroMayHaveStopped(distro: string): void {
   mayHaveStoppedAt.set(distroKey(distro), performance.now())
-  for (const listener of noteListeners) {
-    listener({ kind: 'stopped', distro })
-  }
+  notifyGateNoteListeners({ kind: 'stopped', distro })
 }
 
 /** A user act just touched the distro, which starts it: an older 'stopped' read no longer answers. */
 export function noteWslDistroWoken(distro: string): void {
   wokenAt.set(distroKey(distro), performance.now())
-  for (const listener of noteListeners) {
-    listener({ kind: 'woken', distro })
-  }
+  notifyGateNoteListeners({ kind: 'woken', distro })
 }
 
 /** A wsl.exe launch starts its distro: if the last read said stopped, that read no longer answers. */

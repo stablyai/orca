@@ -1,5 +1,5 @@
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { NativeChatTurnLifecycle } from '../../../shared/native-chat-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatTurnLifecycle } from '../../../shared/native-chat/native-chat-types'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 
 /**

@@ -165,12 +165,11 @@ describeRender(
     }, 120_000)
 
     it('mounts diff review rather than the unmatched route', async () => {
-      const opened = await openRoute(REVIEW_ROUTE, 'reviewed')
+      const opened = await openRoute(REVIEW_ROUTE, 'Changes')
       const text = await opened.page.evaluate(() => document.body.innerText)
-      // Queue filters distinguish review screen from generic header.
-      for (const filter of ['All', 'Unreviewed', 'Notes']) {
-        expect(text).toContain(filter)
-      }
+      // The review body (loading, waiting or failed) distinguishes the diff screen from the hub, which shares the Changes title.
+      expect(text).toMatch(/review/i)
+      expect(text).not.toContain('Pull Request')
       expect(text).not.toContain(UNMATCHED)
       expect(opened.errors).toEqual([])
       expect(opened.requestedHosts.filter((host) => host !== new URL(origin).host)).toEqual([])
@@ -179,7 +178,7 @@ describeRender(
 
     it.each([
       ['source-control', HUB_ROUTE, 'Source Control', HUB_CHUNK_KEY],
-      ['review', REVIEW_ROUTE, 'reviewed', REVIEW_CHUNK_KEY]
+      ['review', REVIEW_ROUTE, 'Changes', REVIEW_CHUNK_KEY]
     ])(
       "fetches %s's own chunk on a client-side navigation",
       async (_name, route, text, key) => {

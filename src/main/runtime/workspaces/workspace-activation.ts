@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithBuildWorktreeStartup } from './startup/workspace-agent-startup'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import {
+  type RuntimeNavigationTarget,
   navigationTargetsClients,
   navigationTargetsHost,
   resolveRuntimeNavigationTarget

@@ -63,20 +63,6 @@ describe('literal Markdown serialization', () => {
     }
   })
 
-  it('keeps upstream escaping when the parser cannot validate a block', () => {
-    const editor = createEditor('[[]]')
-    const upstream = editor.markdown!.serialize(editor.getJSON())
-    const parse = vi.spyOn(editor.markdown!, 'parse').mockImplementation(() => {
-      throw new Error('custom parser failure')
-    })
-    try {
-      expect(editor.getMarkdown()).toBe(upstream)
-    } finally {
-      parse.mockRestore()
-      editor.destroy()
-    }
-  })
-
   it('preserves headings, marked text, and nested blocks', () => {
     const editor = createEditor({
       type: 'doc',

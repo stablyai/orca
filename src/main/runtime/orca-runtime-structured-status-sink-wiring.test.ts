@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-vi.mock('./structured-agent-session-runtime', () => ({
+vi.mock('./agent-session/structured-agent-session-runtime', () => ({
   ensureStructuredAgentSessionHost: vi.fn(
     async (deps: Record<string, unknown> & { logger: StructuredAgentSessionLogger }) => {
       installed.deps = deps

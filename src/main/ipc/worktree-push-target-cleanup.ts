@@ -1,6 +1,6 @@
 // Prune unused fork remotes after removal; reconciliation reuses these ownership and usage predicates.
 
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'

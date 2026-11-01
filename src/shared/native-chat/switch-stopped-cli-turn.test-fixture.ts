@@ -1,4 +1,4 @@
-import type { AgentJournalRenderItem } from '../agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 
 // The journal a recorded Claude CLI turn (main's `__fixtures__/claude-cli-switch-2.1.302.jsonl`,
 // first two rows) leaves after a switch stopped it: imported, then caught up as a person's Stop.

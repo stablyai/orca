@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_GOAL_CONTROL_COPY as COPY } from '../../shared/agent-session-goal-control-copy'
 import { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
@@ -15,16 +15,16 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import type { AgentSessionStopOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
 import { agentVerdictDisplayMark } from '../../shared/agent-main-agent-verdict'
-import { activeProviderContext } from '../../shared/agent-session-provider-context'
+import { activeProviderContext } from '../../shared/agent-session/agent-session-provider-context'
 import { nativeSwitchPhysicalFixture } from './structured-native-switch-physical.test-fixture'
 
 const os = vi.hoisted(() => ({

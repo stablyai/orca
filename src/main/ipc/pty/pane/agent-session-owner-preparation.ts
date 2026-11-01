@@ -1,7 +1,7 @@
 import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import { isRegisteredAgentSessionOwnerLive } from '../provider/liveness'
 import { agentSessionOwners, reconcileAgentSessionOwnerListings } from './agent-session-owners'
 

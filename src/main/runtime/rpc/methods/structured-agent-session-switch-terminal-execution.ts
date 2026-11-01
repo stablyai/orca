@@ -1,5 +1,5 @@
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { z } from 'zod'
 import type { RpcContext } from '../core'
@@ -9,7 +9,7 @@ import type {
   AgentSessionSwitchDeadline,
   AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
 import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 import { TerminalNotPlacedError } from '../../session-tabs/terminal-not-placed-error'

@@ -1,13 +1,9 @@
-const MAX_LEGACY_IMPORT_SUBAGENTS = 64
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
-import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
-  boundInlineText,
+  boundLegacyImportBlock,
   boundToolInput,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
@@ -60,30 +56,8 @@ export function legacyItemBody(
   return {
     kind: 'message',
     role: message.role,
-    blocks: limits ? message.blocks.map((block) => boundBlock(block, limits)) : message.blocks
+    blocks: limits
+      ? message.blocks.map((block) => boundLegacyImportBlock(block, limits))
+      : message.blocks
   }
-}
-
-export function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
-  if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
-  }
-  if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
-  }
-  if (block.type === 'tool-call') {
-    return { ...block, input: boundToolInput(block.input, limits) }
-  }
-  if (block.type === 'subagent-group') {
-    return {
-      ...block,
-      agents: block.agents.slice(0, MAX_LEGACY_IMPORT_SUBAGENTS).map((agent) => ({
-        ...agent,
-        // Digest-based roster IDs keep children with shared prefixes distinct.
-        id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
-      }))
-    }
-  }
-  return block
 }

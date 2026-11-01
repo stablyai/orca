@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionOwnerBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import {

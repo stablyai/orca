@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operations'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import {
   buildWorktreeStartupForAgent,

@@ -21,7 +21,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatQueuedMessageList } from './NativeChatQueuedMessageList'
 import { useStructuredAgentSessionQueuedMessages } from './use-structured-agent-session-queued-messages'
 import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 function waitingDraft(messageId: string, position: number): AgentSessionQueuedMessage {
   return {

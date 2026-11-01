@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { vi, type Mock } from 'vitest'
 import * as cliTranscript from '../../../ai-vault/structured-chat-cli-fork'
 import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { RestTestRig } from '../../../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
 import { HOST_TEST_SESSION as id } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import {

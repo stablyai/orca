@@ -11,7 +11,7 @@ import {
   refreshLocalRuntimeCapabilities,
   setLocalRuntimeCapabilitiesForTests
 } from '@/runtime/local-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY as HISTORY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY as HISTORY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { inPlaceSwitchCapability } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { AiVaultVirtualRow } from './AiVaultVirtualRow'

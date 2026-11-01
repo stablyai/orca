@@ -6,11 +6,12 @@ import type { WslHostConnectionState } from '../../../../shared/wsl-host-types'
 import type { PtyTransport } from './pty-transport-types'
 import { useRetryPanesWhenWslHostReturns } from './use-wsl-host-return-retry'
 
-function pane(environmentId: string | null): PtyTransport {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these two members.
+function pane(environmentId: string | null, retrying = true): PtyTransport {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only these three members.
   return {
     getRuntimeEnvironmentId: () => environmentId,
-    retryRecovery: vi.fn(() => true)
+    retryRecovery: vi.fn(() => retrying),
+    reopenAfterHostReturned: vi.fn(() => true)
   } as unknown as PtyTransport
 }
 
@@ -69,5 +70,33 @@ describe('a stopped WSL host coming back on its own', () => {
     hostStatus('ready')
     rerender()
     expect(hostPane.retryRecovery).toHaveBeenCalledOnce()
+  })
+
+  // Why: after a relaunch the restored pane's connect was refused, so no retry is armed to resume.
+  it('reopens a pane the stop left idle, and clears the stop’s error, after Start', () => {
+    hostStatus('distro-stopped')
+    const idlePane = pane('wsl:ubuntu', false)
+    const retryingPane = pane('wsl:ubuntu', true)
+    const onHostReturned = vi.fn()
+    const { rerender } = renderHook(() =>
+      useRetryPanesWhenWslHostReturns(
+        'wsl:ubuntu',
+        status,
+        {
+          current: new Map([
+            [1, idlePane],
+            [2, retryingPane]
+          ])
+        },
+        onHostReturned
+      )
+    )
+    expect(onHostReturned).not.toHaveBeenCalled()
+    hostStatus('ready')
+    rerender()
+    expect(onHostReturned).toHaveBeenCalledOnce()
+    expect(idlePane.reopenAfterHostReturned).toHaveBeenCalledOnce()
+    // A pane whose own retry took over is not opened a second time.
+    expect(retryingPane.reopenAfterHostReturned).not.toHaveBeenCalled()
   })
 })

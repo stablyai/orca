@@ -1,6 +1,6 @@
 import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../runtime-account-controller'
@@ -8,7 +8,7 @@ import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session
 import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../session-tabs/structured-session-create-support'
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey } from '../orchestration/terminal-pane-mail-routing'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../terminal/wait/terminal-wait-visible-probe'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { Repo } from '../../../shared/repo-types'
 import { escalateChatWorkerError } from '../orchestration/chat-worker-error-escalation'
 import type { StructuredAgentSessionRequestFailure } from '../../native-chat/agent-session-wire/structured-agent-session-request-failures'
@@ -76,6 +76,14 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
   abstract onStructuredSessionTabHidden(
     ...args: Parameters<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
   ): ReturnType<OrcaRuntimeWithGetPtyRecordForPaneKey['onStructuredSessionTabHidden']>
+
+  /** The structured host's hooks for a hidden chat tab and a switch's stop. */
+  protected structuredSessionTabHooks() {
+    return {
+      captureSessionSwitchStop: (sessionId: string) => this.captureSessionSwitchStop(sessionId),
+      onSessionTabHidden: (sessionId: string) => this.onStructuredSessionTabHidden(sessionId)
+    }
+  }
 
   listRepos(): Repo[] {
     return this.store?.getRepos() ?? []

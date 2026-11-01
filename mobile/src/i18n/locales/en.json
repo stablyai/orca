@@ -143,7 +143,8 @@
       "dictationMode": "Dictation Mode",
       "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
       "speechModelHeading": "SPEECH MODEL",
-      "speechModel": "Speech Model"
+      "speechModel": "Speech Model",
+      "loading": "Loading voice settings…"
     }
   },
   "common": {
@@ -164,7 +165,24 @@
     "close": "Close",
     "edit": "Edit",
     "refresh": "Refresh",
-    "open": "Open"
+    "open": "Open",
+    "hideDetails": "Hide details",
+    "details": "Details",
+    "loadError": {
+      "title": "Unable to Load",
+      "generic": "Something went wrong. Try again.",
+      "unreachable": "Couldn't reach the desktop. Try again."
+    },
+    "offline": {
+      "waitingFor": "Waiting for {{host}}",
+      "waiting": "Waiting for desktop",
+      "message": "Check that your computer is awake and Orca is running.",
+      "reconnect": "Reconnect"
+    },
+    "noMatch": {
+      "title": "No matches",
+      "clearSearch": "Clear search"
+    }
   },
   "host": {
     "edit": {
@@ -273,7 +291,8 @@
       "connecting": "Connecting to host…",
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
-      "useReset": "Use reset"
+      "useReset": "Use reset",
+      "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts."
     }
   },
   "agentHistory": {
@@ -299,7 +318,6 @@
       "refreshSessions": "Refresh agent sessions",
       "unavailable": "Agent Session History Unavailable",
       "updateHost": "Update Orca on this host to browse agent session history.",
-      "loadFailed": "Unable to Load",
       "placeholder": "Search sessions, repo:, path:",
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped",
@@ -309,9 +327,7 @@
       "hideDetails": "Hide details",
       "showDetails": "Show details",
       "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…",
-      "noMatches": "No matches",
-      "clearSearch": "Clear search"
+      "loading": "Loading agent sessions…"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -572,7 +588,9 @@
       "pin": "Pin",
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
-      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
+      "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "deleteAnyway": "Delete Anyway"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -663,6 +681,9 @@
       "activeFilters_other": "Workspace options ({{count}} filters active)",
       "searchWorkspaces": "Search workspaces",
       "newWorkspace": "New workspace"
+    },
+    "identity": {
+      "hostNotFound": "Host not found"
     }
   },
   "webShell": {
@@ -701,7 +722,9 @@
       "sound": "Notification sound",
       "suppressWhileFocused": "Suppress while focused",
       "suppressWhileFocusedHint": "Skip alerts for the workspace open on this phone.",
-      "footer": "Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume."
+      "footer": "Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.",
+      "onlyWhenAgentNeedsInput": "Only when an agent needs me",
+      "onlyWhenAgentNeedsInputHint": "Permission requests and questions. Skips finished agents."
     },
     "desktopChannel": {
       "silentName": "Orca silent notifications",
@@ -806,12 +829,13 @@
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
-      "retrying": "worktree.ps failed ({{error}}) — retrying automatically",
       "noMatches": "No matching workspaces",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
-      "reopenDetail": "This host lists workspaces in a way this page does not know yet."
+      "reopenDetail": "This host lists workspaces in a way this page does not know yet.",
+      "loading": "Loading workspaces…",
+      "retryingAutomatically": "Retrying automatically."
     },
     "workspaceListSections": {
       "pinned": "Pinned",
@@ -920,7 +944,6 @@
       "reviewUnavailable": "Review Unavailable",
       "loadFailed": "Unable to Load Review",
       "noReviewableChanges": "No Reviewable Changes",
-      "tryDifferentFilter": "Try a different review filter.",
       "loadingDiff": "Loading diff...",
       "diffTruncated": "Diff truncated for mobile preview.",
       "binaryDiff": "Binary Diff",
@@ -931,14 +954,15 @@
       "tooLargeMessage": "This diff is too large for the mobile preview.",
       "deletedMessage": "This file was deleted. Add a file note or mark it reviewed.",
       "selectFile": "Select a file to review.",
-      "retryLabel": "Retry loading review"
+      "showUnchangedLines": "Show {{count}} unchanged lines",
+      "unchangedLines_one": "{{count}} unchanged line",
+      "unchangedLines_other": "{{count}} unchanged lines",
+      "allStaged": "Everything is staged"
     },
     "diffReviewDrawers": {
       "discardTitle": "Discard File",
       "discardMessage": "Discard changes to \"{{filePath}}\"? This cannot be undone.",
       "discard": "Discard",
-      "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
-      "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
       "sendNotes": "Send Notes",
       "terminalLabel": "{{title}} ({{id}})",
       "terminal": "Terminal",
@@ -948,8 +972,6 @@
       "copyNotes": "Copy Notes",
       "sendUnsentNotes": "Send Unsent Notes",
       "clearSentNotes": "Clear Sent Notes",
-      "stageReviewedFiles": "Stage Reviewed Files",
-      "markUnreviewed": "Mark Unreviewed",
       "openInSession": "Open in Session",
       "loadingSessions": "Loading agent sessions...",
       "unsentNotes_one": "{{count}} unsent notes",
@@ -962,67 +984,37 @@
       "reviewNote": "Review note",
       "saveLineNote": "Save note on line {{lineNumber}}",
       "deleteNote": "Delete note",
-      "completeTitle": "Review Complete",
-      "fileSummary_one": "{{fileCount}} file reviewed, {{count}} note",
-      "fileSummary_other": "{{fileCount}} file reviewed, {{count}} notes",
-      "filesSummary_one": "{{fileCount}} files reviewed, {{count}} note",
-      "filesSummary_other": "{{fileCount}} files reviewed, {{count}} notes",
-      "stageReviewedLabel": "Stage reviewed files",
-      "stageReviewed": "Stage Reviewed",
-      "sendNotesLabel": "Send notes to agent"
-    },
-    "diffReviewFileSummary": {
-      "branchFrom": "Branch from {{oldPath}}",
-      "stagedFrom": "Staged from {{oldPath}}",
-      "unstagedFrom": "Unstaged from {{oldPath}}",
-      "branch": "Branch",
-      "staged": "Staged",
-      "unstaged": "Unstaged",
-      "reviewed": "Reviewed",
-      "changed": "Changed",
+      "sendNotesLabel": "Send notes to agent",
+      "viewedFiles_one": "{{count}} file viewed",
+      "viewedFiles_other": "{{count}} files viewed",
       "notes_one": "{{count}} note",
       "notes_other": "{{count}} notes",
-      "staleCount": "{{count}} stale",
+      "allViewedTitle": "All files viewed",
+      "unstageFile": "Unstage",
+      "addFileNote": "Add File Note",
+      "pullRequest": "Pull Request",
+      "discardChanges": "Discard Changes"
+    },
+    "diffReviewFileSummary": {
+      "changed": "Changed",
       "editFileNote": "Edit file note",
       "stale": "Stale",
-      "previousHunk": "Previous hunk",
-      "hunk": "Hunk",
-      "nextHunk": "Next hunk"
+      "untracked": "Untracked",
+      "notStaged": "Not staged",
+      "viewed": "Viewed",
+      "renamedFrom": "Renamed from {{oldPath}}"
     },
     "diffReviewFooter": {
-      "stageFile": "Stage file",
-      "stage": "Stage",
-      "unstageFile": "Unstage file",
-      "unstage": "Unstage",
-      "discardFile": "Discard file",
-      "discard": "Discard",
       "previousFile": "Previous file",
-      "addFileNote": "Add file note",
-      "note": "Note",
-      "markFileReviewed": "Mark file reviewed",
-      "reviewed": "Reviewed",
-      "markReviewed": "Mark Reviewed",
-      "nextFile": "Next file"
+      "nextFile": "Next file",
+      "stageNext": "Stage · next file",
+      "viewedNext": "Viewed · next file",
+      "nextFileButton": "Next file"
     },
     "diffReviewHeader": {
-      "filterAll": "All",
-      "showAllFiles": "Show all review files",
-      "filterUnreviewed": "Unreviewed",
-      "showUnreviewedFiles": "Show unreviewed review files",
-      "filterNotes": "Notes",
-      "showNotesFiles": "Show notes review files",
-      "filterUnstaged": "Unstaged",
-      "showUnstagedFiles": "Show unstaged review files",
-      "filterStaged": "Staged",
-      "showStagedFiles": "Show staged review files",
-      "filterBranch": "Branch",
-      "showBranchFiles": "Show branch review files",
       "title": "Changes",
-      "openPullRequestSidebar": "Open pull request sidebar",
       "openReviewActions": "Open review actions",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} reviewed",
-      "unsentNotes_one": "{{count}} unsent note",
-      "unsentNotes_other": "{{count}} unsent notes"
+      "jumpToFile": "{{fileName}}, jump to another file"
     },
     "diffReviewLine": {
       "addedLineNumber": "Added line {{number}}",
@@ -1053,8 +1045,6 @@
     },
     "prSidebar": {
       "loading": "Loading pull request…",
-      "loadFailed": "Something went wrong.",
-      "retryLoading": "Retry loading pull request",
       "notPermitted": "Not permitted — your GitHub account is not connected."
     },
     "richMarkdownEditor": {
@@ -1117,7 +1107,8 @@
       "connectTarget": "Connect target",
       "options": "Options",
       "createWorkspace": "Create workspace",
-      "startFrom": "Start from"
+      "startFrom": "Start from",
+      "loadingProjects": "Loading projects…"
     },
     "newWorktreeModal": {
       "remoteRepository": "Remote repository"
@@ -1159,7 +1150,12 @@
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
       "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "dontRun": "Don't run",
+      "runArchiveTitle": "Run archive script from {{repoName}}?",
+      "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
+      "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
+      "archiveScriptLabel": "Archive script",
+      "newArchiveScriptLabel": "New archive script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -1305,6 +1301,22 @@
     "mermaidDiagram": {
       "label": "Mermaid diagram",
       "expand": "Expand diagram"
+    },
+    "worktreeAgentList": {
+      "hideChildAgents_one": "Hide {{count}} child agent",
+      "hideChildAgents_other": "Hide {{count}} child agents",
+      "showChildAgents_one": "Show {{count}} child agent",
+      "showChildAgents_other": "Show {{count}} child agents",
+      "hideIdleChildren": "Hide {{count}} idle child agents",
+      "showIdleChildren": "Show {{count}} idle child agents",
+      "idleChildCount": "{{count}} idle"
+    },
+    "diffReviewFilesSheet": {
+      "title": "Files",
+      "search": "Jump to file",
+      "noMatches": "No files match",
+      "current": "current",
+      "viewedFile": "{{path}} viewed"
     }
   },
   "pullRequest": {
@@ -1607,6 +1619,13 @@
       "sent": "Sent",
       "deliveryUnconfirmed": "Delivery unconfirmed — check page before retrying",
       "dialogAnswerFailed": "That answer did not reach the page."
+    },
+    "stream": {
+      "updateApp": "Update the Orca app to stream browser tabs here.",
+      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "checking": "Checking desktop browser streaming support.",
+      "pageUnavailable": "Browser page is not available yet.",
+      "timedOut": "Browser stream timed out."
     }
   },
   "files": {
@@ -1621,9 +1640,9 @@
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
       "emptyState": "No files found",
       "filterPlaceholder": "Filter files",
-      "noMatches": "No matches",
       "noMatchesHint": "Only folders you have opened are searched.",
-      "clearFilter": "Clear filter"
+      "clearFilter": "Clear filter",
+      "loading": "Loading files…"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -1733,7 +1752,8 @@
       "copySource": "Copy Markdown source",
       "copyLoaded": "Copy loaded",
       "copyPathLabel": "Copy Markdown path",
-      "copyPath": "Copy path"
+      "copyPath": "Copy path",
+      "loading": "Loading document…"
     },
     "nativeChatCardHeaderAction": {
       "collapse": "Collapse"
@@ -1828,7 +1848,8 @@
       "sendReviewNotes": "Send review notes to AI",
       "send": "Send",
       "imageLabel": "{{title}} image",
-      "previewLabel": "{{title}} preview"
+      "previewLabel": "{{title}} preview",
+      "loading": "Loading file…"
     },
     "header": {
       "workspaceDetailsHint": "Shows the full workspace name and where it is",
@@ -2060,17 +2081,28 @@
       "invalidSourceControlResponse": "Source control response was invalid",
       "reviewNotesLoadFailed": "Unable to load review notes",
       "diffLoadFailed": "Unable to load diff",
-      "committedDiffUnavailable": "Committed diff is unavailable"
+      "committedDiffUnavailable": "Committed diff is unavailable",
+      "commitLoadFailed": "Unable to load this commit",
+      "commitDiffUnavailable": "Commit diff is unavailable"
     },
     "diffReviewQueue": {
       "staged": "Staged",
       "unstaged": "Unstaged",
-      "committedOnBranch": "Committed on branch"
+      "committedOnBranch": "Committed on branch",
+      "inCommit": "In this commit"
     },
     "diffReviewScreenModel": {
       "branch": "Branch",
       "staged": "Staged",
-      "unstaged": "Unstaged"
+      "unstaged": "Unstaged",
+      "positionUncommitted": "{{position}} of {{count}} uncommitted",
+      "positionInCommit": "{{position}} of {{count}} in this commit",
+      "positionViewed": "{{position}} of {{count}} · {{viewedCount}} viewed",
+      "commitFiles_one": "{{count}} file",
+      "commitFiles_other": "{{count}} files",
+      "uncommittedFiles_one": "{{count}} uncommitted",
+      "uncommittedFiles_other": "{{count}} uncommitted",
+      "viewedOfCount": "{{viewedCount}} of {{count}} viewed"
     },
     "nativeChatAttachActions": {
       "photos": "Photos",
@@ -2192,7 +2224,8 @@
     "useDiffReviewController": {
       "missingWorktree": "Missing worktree",
       "waitingForDesktop": "Waiting for desktop...",
-      "loadFailed": "Unable to load review"
+      "loadFailed": "Unable to load review",
+      "commitMissing": "Update the Orca app to open commit files here."
     },
     "useDiffReviewDiffLoading": {
       "waitingForDesktop": "Waiting for desktop...",
@@ -2200,10 +2233,7 @@
     },
     "useDiffReviewGitActions": {
       "waitingForDesktop": "Waiting for desktop...",
-      "actionFailed": "Source control action failed",
-      "stageResults": "{{staged}} staged, {{failed}} failed",
-      "reviewedFilesStaged_one": "{{count}} reviewed file staged",
-      "reviewedFilesStaged_other": "{{count}} reviewed files staged"
+      "actionFailed": "Source control action failed"
     },
     "useDiffReviewInteractions": {
       "openFailed": "Unable to open in session"
@@ -2563,7 +2593,28 @@
       "gone": "{{agent}}'s chat is no longer on this host, so it cannot be reopened here.",
       "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
-      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment."
+      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
+      "paneUnavailable": "Agent's pane is no longer available."
+    },
+    "nativeChatView": {
+      "loading": "Loading conversation…"
+    },
+    "contentState": {
+      "connectingTo": "Connecting to {{host}}…",
+      "connecting": "Connecting…",
+      "tabsStalled": "Tabs are taking longer than expected"
+    },
+    "presentation": {
+      "loadingTabs": "Loading tabs",
+      "oneTab": "1 tab",
+      "tabCount": "{{tabCount}} tabs",
+      "tapToRetry": "{{status}} — tap to retry"
+    },
+    "documentReaders": {
+      "markdownFailed": "Couldn't load markdown",
+      "diffFailed": "Couldn't load diff preview",
+      "fileFailed": "Couldn't load file preview",
+      "outsideWorkspace": "This file is outside the workspace. Open it on desktop to view it."
     }
   },
   "chat": {
@@ -2925,6 +2976,14 @@
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
       "tokens": "{{value0}} tokens"
+    },
+    "agentMessage": {
+      "startedWorker": "Started worker",
+      "taskFromCoordinator": "Task from coordinator",
+      "messageFromCoordinator": "Message from coordinator",
+      "updateFromWorker": "Update from worker",
+      "messageFrom": "Message from",
+      "showMore": "Show more"
     }
   },
   "sourceControl": {
@@ -3098,12 +3157,6 @@
       "sync": "Sync",
       "publishBranch": "Publish Branch"
     },
-    "branchDiffPreviewDrawer": {
-      "committedOnBranch": "Committed on branch",
-      "closePreview": "Close committed diff preview",
-      "loadFailed": "Unable to Load Diff",
-      "truncated": "Diff truncated for mobile preview."
-    },
     "commitFailurePanel": {
       "title": "Commit failed",
       "summary": "Commit failed.",
@@ -3120,7 +3173,8 @@
       "retryFiles": "Retry commit files",
       "waitingForDesktop": "Waiting for desktop...",
       "noFileChanges": "No file changes",
-      "noCommits": "No commits."
+      "noCommits": "No commits.",
+      "loading": "Loading commits…"
     },
     "branchCard": {
       "mergeState": "merge",
@@ -3190,7 +3244,7 @@
     },
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
-      "loadFailedTitle": "Unable to Load"
+      "loading": "Loading changes…"
     },
     "prChip": {
       "loading": "Loading pull request…",
@@ -3319,11 +3373,6 @@
       "waitingForDesktop": "Waiting for desktop...",
       "updateDesktop": "Update Orca desktop to use Source Control on mobile.",
       "loadFailed": "Unable to load source control"
-    },
-    "openers": {
-      "waitingForDesktop": "Waiting for desktop...",
-      "openDiffFailed": "Unable to open diff",
-      "tabNotReady": "The file opened, but its tab isn't ready yet. Try again."
     },
     "runners": {
       "actionFailed": "Source control action failed"
@@ -3516,7 +3565,8 @@
       "loadingStates": "Loading states...",
       "noStates": "No states available",
       "jiraFilter": "Jira Filter",
-      "jiraSite": "Jira Site"
+      "jiraSite": "Jira Site",
+      "statesFailed": "Couldn't load states. Reopen to try again."
     },
     "githubProjectList": {
       "chooseProject": "Choose a GitHub project",
@@ -3528,7 +3578,9 @@
       "itemSubtitle": "Project item · {{repository}}{{number}}",
       "emptyField": "Empty",
       "moreFields_one": "+{{count}} field",
-      "moreFields_other": "+{{count}} fields"
+      "moreFields_other": "+{{count}} fields",
+      "loading": "Loading project…",
+      "noMatches": "No project items match."
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",
@@ -3593,7 +3645,8 @@
       "assignee": "Assignee",
       "project": "Project",
       "priority": "Priority",
-      "assignees": "Assignees"
+      "assignees": "Assignees",
+      "loading": "Loading details…"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Refresh details"
@@ -4011,6 +4064,21 @@
     },
     "jiraViewControls": {
       "jqlSearch": "JQL search"
+    },
+    "itemComments": {
+      "noComments": "No comments yet",
+      "oneComment": "1 comment",
+      "commentCount": "{{commentCount}} comments"
+    },
+    "listState": {
+      "loading": "Loading tasks…"
+    },
+    "connectionPresentation": {
+      "connectToHost": "Connect to a host to load tasks",
+      "noMatchingTasks": "No matching tasks"
+    },
+    "runtimeHydration": {
+      "loadFailed": "Failed to load Tasks settings"
     }
   },
   "terminal": {
