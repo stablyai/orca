@@ -1,5 +1,5 @@
 /** Empty-host claims refuse all referencing state; migrations block only state their manifest cannot carry. */
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'

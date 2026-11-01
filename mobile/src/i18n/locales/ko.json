@@ -21,7 +21,6 @@
     "panel": {
       "all": "모두",
       "emptyScope": "이 범위에는 이전 에이전트 세션이 없습니다.",
-      "loadFailed": "로드 실패",
       "missingResumeId": "이 세션에는 재개 ID가 없습니다.",
       "noSearchResults": "검색 조건에 맞는 세션이 없습니다.",
       "noSessions": "에이전트 세션 없음",
@@ -522,6 +521,10 @@
       "disconnected": "첨부 실패(연결 끊김)",
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "에이전트에게 넘김",
+      "startedAgent": "에이전트 시작됨"
     }
   },
   "common": {
@@ -654,17 +657,14 @@
       "loadingDiff": "차이점 로드 중…",
       "loadingReview": "리뷰 로드 중…",
       "noReviewableChanges": "리뷰할 변경 사항 없음",
-      "retryLabel": "리뷰 다시 불러오기",
       "reviewUnavailable": "리뷰 사용 불가",
       "selectFile": "리뷰할 파일을 선택하세요.",
-      "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다.",
-      "tryDifferentFilter": "다른 리뷰 필터를 사용해 보세요."
+      "tooLargeMessage": "이 차이점은 너무 커서 모바일에서 미리 볼 수 없습니다."
     },
     "diffReviewDrawers": {
       "addNote": "메모 추가",
       "cancelNote": "메모 취소",
       "clearSentNotes": "전송한 메모 지우기",
-      "completeTitle": "리뷰 완료",
       "copyNotes": "메모 복사",
       "deleteNote": "메모 삭제",
       "discard": "버리기",
@@ -672,13 +672,8 @@
       "discardTitle": "파일 변경사항 취소",
       "editNote": "메모 편집",
       "fileNote": "파일 메모",
-      "fileSummary_one": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "fileSummary_other": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "filesSummary_one": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
-      "filesSummary_other": "파일 {{fileCount}}개 리뷰 완료, 메모 {{count}}개",
       "lineNumber": "{{lineNumber}}행",
       "loadingSessions": "에이전트 세션 로드 중…",
-      "markUnreviewed": "리뷰 안 됨으로 표시",
       "newAgentSession": "새 에이전트 세션",
       "openInSession": "세션에서 열기",
       "reviewNote": "리뷰 메모",
@@ -686,11 +681,6 @@
       "sendNotes": "메모 보내기",
       "sendNotesLabel": "에이전트에 메모 보내기",
       "sendUnsentNotes": "미전송 메모 보내기",
-      "stageReviewed": "리뷰한 파일 스테이지",
-      "stageReviewedFiles": "리뷰한 파일 스테이지",
-      "stageReviewedLabel": "리뷰한 파일 스테이지",
-      "stageableFiles_one": "리뷰를 마쳤지만 스테이징되지 않은 파일 {{count}}개를 스테이지할 수 있습니다.",
-      "stageableFiles_other": "리뷰를 마쳤지만 스테이징되지 않은 파일 {{count}}개를 스테이지할 수 있습니다.",
       "statusUnreadable": "이 호스트의 상태를 읽지 못했습니다. 다시 시도 중…",
       "terminal": "터미널",
       "terminalLabel": "{{title}} ({{id}})",
@@ -699,57 +689,17 @@
       "updateRequired": "컴퓨터에서 Orca를 업데이트하세요"
     },
     "diffReviewFileSummary": {
-      "branch": "브랜치",
-      "branchFrom": "브랜치 · 이전 경로: {{oldPath}}",
       "changed": "변경됨",
       "editFileNote": "파일 메모 편집",
-      "hunk": "변경 블록",
-      "nextHunk": "다음 변경 블록",
-      "notes_one": "메모 {{count}}개",
-      "notes_other": "메모 {{count}}개",
-      "previousHunk": "이전 변경 블록",
-      "reviewed": "리뷰 완료",
-      "staged": "스테이징됨",
-      "stagedFrom": "스테이징됨 · 이전 경로: {{oldPath}}",
-      "stale": "오래됨",
-      "staleCount": "오래된 메모 {{count}}개",
-      "unstaged": "스테이징 안 됨",
-      "unstagedFrom": "스테이징 안 됨 · 이전 경로: {{oldPath}}"
+      "stale": "오래됨"
     },
     "diffReviewFooter": {
-      "addFileNote": "파일 메모 추가",
-      "discard": "버리기",
-      "discardFile": "파일 변경사항 취소",
-      "markFileReviewed": "파일을 리뷰 완료로 표시",
-      "markReviewed": "리뷰 완료로 표시",
       "nextFile": "다음 파일",
-      "note": "메모",
-      "previousFile": "이전 파일",
-      "reviewed": "리뷰 완료",
-      "stage": "스테이지",
-      "stageFile": "파일 스테이지",
-      "unstage": "언스테이지",
-      "unstageFile": "파일 언스테이지"
+      "previousFile": "이전 파일"
     },
     "diffReviewHeader": {
-      "filterAll": "모두",
-      "filterBranch": "브랜치",
-      "filterNotes": "메모",
-      "filterStaged": "스테이징됨",
-      "filterUnreviewed": "리뷰 안 됨",
-      "filterUnstaged": "스테이징 안 됨",
-      "openPullRequestSidebar": "PR 사이드바 열기",
       "openReviewActions": "리뷰 작업 메뉴 열기",
-      "reviewedProgress": "{{reviewedCount}}/{{queueLength}} 리뷰 완료",
-      "showAllFiles": "모든 리뷰 대상 파일 표시",
-      "showBranchFiles": "브랜치의 리뷰 대상 파일 표시",
-      "showNotesFiles": "메모가 있는 리뷰 대상 파일 표시",
-      "showStagedFiles": "스테이징된 리뷰 대상 파일 표시",
-      "showUnreviewedFiles": "리뷰하지 않은 파일 표시",
-      "showUnstagedFiles": "스테이징되지 않은 리뷰 대상 파일 표시",
-      "title": "변경 사항",
-      "unsentNotes_one": "미전송 메모 {{count}}개",
-      "unsentNotes_other": "미전송 메모 {{count}}개"
+      "title": "변경 사항"
     },
     "diffReviewLine": {
       "addNoteOnLine": "{{number}}번 줄에 메모 추가",
@@ -848,10 +798,8 @@
       "selectRunTarget": "실행 대상 선택"
     },
     "prSidebar": {
-      "loadFailed": "문제가 발생했습니다.",
       "loading": "PR 로드 중…",
-      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다.",
-      "retryLoading": "PR 로드 다시 시도"
+      "notPermitted": "GitHub 계정이 연결되지 않아 접근이 허용되지 않습니다."
     },
     "protocolBlockScreen": {
       "backToHosts": "호스트로 돌아가기",
@@ -2412,9 +2360,6 @@
     },
     "useDiffReviewGitActions": {
       "actionFailed": "소스 제어 작업에 실패했습니다.",
-      "reviewedFilesStaged_one": "리뷰한 파일 {{count}}개 스테이징됨",
-      "reviewedFilesStaged_other": "리뷰한 파일 {{count}}개 스테이징됨",
-      "stageResults": "{{staged}}개 스테이징됨, {{failed}}개 실패",
       "waitingForDesktop": "데스크톱 연결 대기 중…"
     },
     "useDiffReviewInteractions": {
@@ -2848,12 +2793,6 @@
       "baseBranchUnavailable": "비교할 기본 브랜치를 확인할 수 없습니다.",
       "loadFailed": "커밋된 변경 사항을 로드할 수 없습니다."
     },
-    "branchDiffPreviewDrawer": {
-      "closePreview": "커밋된 차이점 미리보기 닫기",
-      "committedOnBranch": "브랜치에 커밋됨",
-      "loadFailed": "차이점을 불러올 수 없음",
-      "truncated": "모바일 미리보기용으로 차이점의 일부가 생략되었습니다."
-    },
     "commitDropdown": {
       "checkOutBranchToPush": "커밋을 푸시하기 전에 브랜치를 체크아웃하세요",
       "checkOutBranchToSync": "커밋을 동기화하기 전에 브랜치를 체크아웃하세요",
@@ -2907,7 +2846,6 @@
       "emptyMessage": "워크트리에 변경 사항이 없습니다.",
       "emptyTitle": "로컬 변경 사항 없음",
       "generateMessage": "AI로 commit 메시지 생성",
-      "noStagedFiles": "스테이징된 파일 없음",
       "openActions": "소스 제어 작업 열기",
       "reconnecting": "데스크톱에 다시 연결 중…",
       "regenerateHint": "다시 생성하려면 메시지를 지웁니다.",
@@ -3048,9 +2986,7 @@
       "pushBeforeCreateFailed": "푸시에 실패했습니다. 푸시 오류를 해결한 후 다시 시도하세요."
     },
     "hubTab": {
-      "changes": "변경 사항",
-      "commits": "커밋",
-      "pullRequest": "PR"
+      "changes": "변경 사항"
     },
     "loaders": {
       "connectingToDesktop": "데스크톱에 연결 중…",
@@ -3069,13 +3005,7 @@
       "prCreatedTitle": "PR 생성 완료",
       "switchBranchTitle": "브랜치 전환"
     },
-    "openers": {
-      "openDiffFailed": "차이점을 열 수 없습니다.",
-      "tabNotReady": "파일은 열렸지만 탭이 아직 준비되지 않았습니다. 다시 시도하세요.",
-      "waitingForDesktop": "데스크톱 연결 대기 중…"
-    },
     "panel": {
-      "loadFailedTitle": "로드 실패",
       "unavailableTitle": "소스 제어 사용 불가"
     },
     "prChip": {
@@ -3116,7 +3046,6 @@
       "publishBranch": "브랜치 게시",
       "pull": "풀",
       "push": "푸시",
-      "stageAll": "모두 스테이지",
       "sync": "동기화"
     },
     "remoteDropdown": {
@@ -3903,8 +3832,7 @@
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
       "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
-      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다.",
-      "retrying": "worktree.ps가 실패했습니다({{error}}). 자동으로 다시 시도합니다."
+      "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
     "workspaceListSections": {
       "all": "모두",

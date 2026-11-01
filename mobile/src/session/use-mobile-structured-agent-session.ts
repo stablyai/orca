@@ -1,18 +1,18 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat/transcript/native-chat-transcript-retention'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { createStructuredQuestionProjection } from '../../../src/shared/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/structured-agent-start-projection'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
+import { agentSessionTranscriptRows } from '../../../src/shared/agent-session/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
-import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionQueueSendsNext
-} from '../../../src/shared/structured-agent-session-live-turn'
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion

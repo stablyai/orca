@@ -6,7 +6,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/structured-agent-session-owner'
-import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -103,5 +103,5 @@ export function useAgentMessageSenderView(
     },
     [address, sessionId, handle, chatWorktreeId, stableTarget]
   )
-  return useAgentMessageSenderSource(locate)
+  return useAgentMessageSenderSource(locate, sender?.agent)
 }

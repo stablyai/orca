@@ -1,7 +1,6 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { RotateCw } from 'lucide-react-native'
+import { ScrollView, Text, View } from 'react-native'
+import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
@@ -19,9 +18,7 @@ import {
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
 import { useHostProtocolGates } from './host-protocol-gates-context'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
-import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
-import { fetchPRCheckDetails } from '../session/github-pr-rpc'
-import { hasGitHubCheckHandle } from '../../../src/shared/pr-checks-fix-prompt'
+import { buildPrFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
@@ -49,6 +46,11 @@ type Props = {
   showOpenOnWeb?: boolean
   /** Named when an AI button's agent starts; the branch stands in when absent. */
   workspaceLabel: string | null
+  /** False where a next-step bar already offers Merge and auto-merge. */
+  showMergeActions?: boolean
+  /** The hub's launcher and PR actions, so its bar and this body share one in-flight state. */
+  triage?: MobilePrAiTriage
+  actions?: MobilePrActions
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -64,6 +66,9 @@ export function MobilePRSidebar({
   headSha,
   bottomInset = 0,
   showOpenOnWeb = true,
+  showMergeActions = true,
+  triage: sharedTriage,
+  actions: sharedActions,
   workspaceLabel
 }: Props) {
   useMobileColorScheme()
@@ -72,7 +77,7 @@ export function MobilePRSidebar({
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
-  const actions = useMobilePrActions({
+  const ownActions = useMobilePrActions({
     client,
     connState,
     worktreeId,
@@ -81,6 +86,7 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+  const actions = sharedActions ?? ownActions
   const commentActions = useMobilePrCommentActions({
     client,
     connState,
@@ -98,7 +104,7 @@ export function MobilePRSidebar({
     refetch
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
-  const triage = useMobilePrAiTriage({
+  const ownTriage = useMobilePrAiTriage({
     client,
     connState,
     worktreeId,
@@ -107,6 +113,7 @@ export function MobilePRSidebar({
     hostStatusPending: statusPending,
     hostStatusReadable: statusReadable
   })
+  const triage = sharedTriage ?? ownTriage
   // Key overrides on PR payload so every refetch refreshes them instead of keeping session-long snapshot.
   const botAuthorOverrides = usePRBotAuthorOverrides(
     client,
@@ -140,6 +147,7 @@ export function MobilePRSidebar({
         workspaceLabel={launchWorkspaceLabel}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
+        showMergeActions={showMergeActions}
       />
     </ScrollView>
   )
@@ -161,6 +169,7 @@ function PrSidebarContent({
   triage,
   workspaceLabel,
   showOpenOnWeb,
+  showMergeActions,
   botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
@@ -178,38 +187,22 @@ function PrSidebarContent({
   triage: MobilePrAiTriage
   workspaceLabel: string | null
   showOpenOnWeb: boolean
+  showMergeActions: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   if (branch === 'loading') {
     return (
-      <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>
-          {t('components.prSidebar.loading', 'Loading pull request…')}
-        </Text>
-      </View>
+      <MobileStateView loading title={t('components.prSidebar.loading', 'Loading pull request…')} />
     )
   }
   if (branch === 'error') {
-    const message =
-      state.kind === 'error'
-        ? state.message
-        : t('components.prSidebar.loadFailed', 'Something went wrong.')
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>{message}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
-        >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-        </Pressable>
-      </View>
+      <MobileLoadErrorState
+        error={state.kind === 'error' ? state.message : null}
+        onRetry={onRetry}
+      />
     )
   }
   if (branch === 'blocked' || actions.blocked) {
@@ -255,6 +248,7 @@ function PrSidebarContent({
         refetch={refetch}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
+        showMergeActions={showMergeActions}
       />
     )
   }
@@ -271,6 +265,7 @@ function PrSidebarSections({
   triage,
   refetch,
   showOpenOnWeb,
+  showMergeActions,
   botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
@@ -282,6 +277,7 @@ function PrSidebarSections({
   triage: MobilePrAiTriage
   refetch: (options?: PrSidebarLoadOptions) => void
   showOpenOnWeb: boolean
+  showMergeActions: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
   useMobileColorScheme()
@@ -290,25 +286,7 @@ function PrSidebarSections({
   const checksTriage = {
     fixChecks: () =>
       void triage.launch('fix-checks', () =>
-        buildFixChecksPrompt({
-          prNumber: pr.number,
-          prTitle: pr.title,
-          prUrl: pr.url,
-          checks: data.checks,
-          loadCheckDetails: async (check) => {
-            if (!client || !hasGitHubCheckHandle(check)) {
-              return null
-            }
-            const outcome = await fetchPRCheckDetails(client, worktreeId, {
-              checkRunId: check.checkRunId,
-              workflowRunId: check.workflowRunId,
-              checkName: check.name,
-              url: check.url,
-              prRepo: pr.prRepo ?? null
-            })
-            return outcome.ok ? outcome.result : null
-          }
-        })
+        buildPrFixChecksPrompt({ client, worktreeId, pr, checks: data.checks })
       ),
     isBusy: triage.isBusy('fix-checks'),
     availability: triage.availability,
@@ -347,6 +325,7 @@ function PrSidebarSections({
             worktreeId={worktreeId}
             onUnlinked={refetch}
             onRecheck={() => refetch({ includeDetails: false })}
+            showMerge={showMergeActions}
           />
         </View>
       </View>

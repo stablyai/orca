@@ -1,8 +1,8 @@
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { MobileNativeChatItemSourceContext } from '../../mobile-native-chat-item-read'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { MobileNativeChatItemSourceContext } from '../mobile-native-chat-item-read'
 import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
@@ -74,6 +74,10 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('../../../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText }) }))
 // Keep the real drawer lifecycle; only native animation completion is driven by the test.
+// BottomDrawer also carries the option pager, which loads Reanimated at import.
+vi.mock('react-native-reanimated', async () =>
+  (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
+)
 vi.mock('../../../components/mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedDrawer'
 }))
@@ -190,7 +194,8 @@ describe('message selection actions', () => {
     ]
   ] as const)('copies the %s source %j through Android message actions', (role, text, expected) => {
     render({ ...message, role, blocks: [{ type: 'text', text }] })
-    expect(nodes('Pressable').map((node) => node.props.disabled)).toEqual([undefined, undefined])
+    expect(nodes('Pressable')).toHaveLength(2)
+    expect(nodes('Pressable').some((node) => node.props.disabled)).toBe(false)
     pressAction(0)
     expect(writeText.mock.calls).toEqual([[expected]])
     expect(onClose).not.toHaveBeenCalled()

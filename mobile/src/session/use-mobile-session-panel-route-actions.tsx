@@ -189,8 +189,6 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         hostId,
         worktreeId,
         name: worktreeName || '',
-        // Source-control/PR origin enables dismissal after diff open; Files must not inherit it.
-        ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
         ...descriptor.params,
         ...workspaceRouteParams(executionHost)
       }

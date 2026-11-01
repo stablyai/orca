@@ -56,7 +56,7 @@ export type PRRefreshStateClearToken = {
   updatedAt: number
 }
 
-const PR_REFRESH_ACTIVE_STALE_MS = 120_000
+export const PR_REFRESH_ACTIVE_STALE_MS = 120_000
 const PR_REFRESH_PAUSED_GRACE_MS = 5_000
 const MAX_PR_REFRESH_STATE_ENTRIES = 2000
 const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])

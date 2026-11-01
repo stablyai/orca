@@ -1,7 +1,7 @@
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock
-} from '../../../../../src/shared/native-chat-types'
+} from '../../../../../src/shared/native-chat/native-chat-types'
 
 export type MobileNativeChatToolRunAsides = {
   before: ReadonlyMap<NativeChatBlock, readonly React.JSX.Element[]>
@@ -24,4 +24,6 @@ export type MobileNativeChatToolRunProps = {
   awaitingAnswer?: boolean
   fontScale?: number
   onOpenFile?: (path: string) => void
+  /** Thumbnails of the images the run's reads returned, drawn under its header. */
+  viewedImages?: React.ReactNode
 }

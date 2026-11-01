@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebShellSessionState,
   MobileWebShellUpdateNotice
@@ -50,7 +50,7 @@ vi.mock('../transport/rpc-operation', () => ({
     return { manifest: doubles.manifest }
   }
 }))
-vi.mock('../transport/mobile-web-bundle-fetch', () => ({
+vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 
@@ -60,9 +60,9 @@ import {
   type MobileWebBundleAsset
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
-import { MobileWebBundleManifestReadSchema } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
+import { MobileWebBundleManifestReadSchema } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import {
   createFakeGenerationFileSystem,
   FAKE_GENERATION_ROOT,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import { createCodexDispatchEchoes, readCodexDispatchEcho } from './codex-structured-dispatch-echo'
 
 const CODEX_IDENTITY: AgentJournalItemIdentity = {

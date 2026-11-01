@@ -1,15 +1,15 @@
 import { createElement, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   encodeAgentSessionQuestionAnswers,
   type AgentSessionQuestionAnswer
-} from '../../../src/shared/agent-session-question-answer'
+} from '../../../src/shared/agent-session/agent-session-question-answer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { formatQuestionFreeTextAnswer } from './native-chat/input/mobile-native-chat-question'
 import {
   projectStructuredQuestion,

@@ -7,7 +7,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { buildMobileTerminalChatFork } from './terminal/launch/mobile-terminal-chat-fork'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from './terminal/launch/mobile-terminal-startup'
-import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 let root: string

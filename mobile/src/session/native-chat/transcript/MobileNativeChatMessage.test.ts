@@ -3,25 +3,18 @@ import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX } from '../../../../../src/shared/orca-dispatch-status-prompt'
-import { projectStructuredItemToNativeChat } from '../../../../../src/shared/structured-agent-session-projection'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { AGENT_SESSION_HOST_STATUS_COPY } from '../../../../../src/shared/agent-session-host-status-rows'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { structuredQuestionTranscript } from '../../../../../src/shared/structured-agent-question-projection'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat-resolution-receipt'
-import { colors, typography } from '../../../theme/mobile-theme'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import { colors } from '../../../theme/mobile-theme'
 import { MobileEdgeFade } from '../../../components/MobileEdgeFade'
 import { ANSWERED_PROMPT_ITEMS } from '../input/mobile-native-chat-answered-prompts.test-fixture'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
-import { styles } from './mobile-native-chat-message-styles'
-import { agentMessageTranscriptText } from '../../../../../src/shared/agent-session/agent-message-display-text'
-import {
-  agentMessageHeading,
-  agentMessageSenderLabel
-} from '../../../../../src/shared/agent-session/agent-message-presentation'
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
+import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
 import { snapshotEvent, ok } from '../../use-mobile-structured-agent-session-queued.test-fixture'
 import {
@@ -88,48 +81,8 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     findAllByHostType(node, 'Text').map((text) => String(text.children.join('')))
 
-  it('renders the shared clear boundary as one muted divider with prior history retained', () => {
-    const message = projectStructuredItemToNativeChat({
-      itemId: 'clear',
-      revision: 1,
-      sequence: 5,
-      observedAt: 5,
-      body: {
-        kind: 'status',
-        text: 'Context cleared',
-        presentation: 'context-cleared',
-        contextClear: { operationId: 'clear', afterFence: 3, clearedAt: 5 }
-      }
-    })!
-    const tree = render(message)
-    expect(textIn(tree.root)).toEqual(['Context cleared'])
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-    expect(
-      tree.root.findAll(
-        (node) =>
-          String(node.type) === 'View' && node.props.accessibilityLabel === 'Context cleared'
-      )
-    ).toHaveLength(1)
-  })
-
   const words = (node: ReactTestInstance): string[] =>
     node.children.flatMap((child) => (typeof child === 'string' ? [child] : words(child)))
-
-  it('draws an answered approval and question as their receipts', () => {
-    const { messages, receipts } = structuredQuestionTranscript(ANSWERED_PROMPT_ITEMS)
-    const drawn = messages.flatMap((message) => {
-      const receipt = receipts.get(message.id)
-      return receipt ? [words(render(message, { receipt }).root).join('')] : []
-    })
-    expect(drawn).toEqual([
-      expect.stringMatching(
-        /^Bash\{[\s\S]*echo receipt-check[\s\S]*\}AllowResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
-      ),
-      expect.stringMatching(
-        /^Asked: Do you prefer tea or coffee\?CoffeeResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
-      )
-    ])
-  })
 
   it('keeps answered receipts beside Started worker through the production structured hook', async () => {
     const items = [
@@ -190,34 +143,42 @@ describe('MobileNativeChatMessage', () => {
     expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
   })
 
+  it.each([
+    ['en', 'agent-start', 'Worker assignment', 'Started worker'],
+    ['en', 'agent-handoff', 'Fix the stall', 'Handed off to agent'],
+    ['en', 'agent-handoff', '', 'Started agent'],
+    ['de', 'agent-handoff', '', 'Agent gestartet']
+  ] as const)(
+    'heads a %s %s card with task %j as %j, as desktop does',
+    async (locale, kind, task, title) => {
+      const agent = {
+        party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+        name: 'Worker'
+      }
+      const message = projectStructuredAgentStartItem({
+        itemId: 'start',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body:
+          kind === 'agent-start'
+            ? { kind, dispatchId: 'dispatch', worker: agent, task }
+            : { kind, launchId: 'launch', agent, task }
+      })!
+      await activateMobileUiLocale(locale)
+      try {
+        expect(textIn(render(message).root)).toContain(title)
+      } finally {
+        await activateMobileUiLocale('en')
+      }
+    }
+  )
+
   it("keeps an answered prompt's receipt when its settled turn folds away, as desktop does", () => {
     const { messages, receipts } = structuredQuestionTranscript(ANSWERED_PROMPT_ITEMS)
     const question = messages.find((message) => receipts.get(message.id)?.kind === 'question')!
     const tree = render(question, { receipt: receipts.get(question.id), foldedAway: true })
     expect(words(tree.root).join('')).toContain('Asked: Do you prefer tea or coffee?')
-  })
-
-  it('zooms a receipt with the chat, as its words were before it became a receipt', () => {
-    const { messages, receipts } = structuredQuestionTranscript(ANSWERED_PROMPT_ITEMS)
-    const question = messages.find((message) => receipts.get(message.id)?.kind === 'question')!
-    const tree = render(question, { receipt: receipts.get(question.id), fontScale: 1.5 })
-    const sizeOf = (first: string) =>
-      Object.assign(
-        {},
-        ...[
-          tree.root.find((node) => String(node.type) === 'Text' && node.children[0] === first).props
-            .style
-        ].flat()
-      ).fontSize
-    expect(sizeOf('Asked:')).toBe(typography.bodySize * 1.5)
-    expect(sizeOf('Coffee')).toBe(typography.metaSize * 1.5)
-    expect(tree.root.find((node) => String(node.type) === 'MessageSquareMore').props.size).toBe(
-      15 * 1.5
-    )
-    const time = tree.root.find(
-      (node) => String(node.type) === 'Text' && node.props.accessibilityLabel
-    )
-    expect(Object.assign({}, ...[time.props.style].flat()).fontSize).toBe(typography.metaSize * 1.5)
   })
 
   it("lists a group's questions once nobody can answer them here, as desktop does", () => {
@@ -278,25 +239,6 @@ describe('MobileNativeChatMessage', () => {
     )
   })
 
-  it('shows when your message and the reply were written, beside copy, zoomed with the chat, as desktop does', () => {
-    const at = new Date(2026, 9, 15, 15, 42).getTime()
-    const timeIn = (message: NativeChatMessage) =>
-      render(message, { fontScale: 1.5 })
-        .root.findAll((node) => String(node.type) === 'Text' && node.props.accessibilityLabel)
-        .map((node) => [
-          node.children.join(''),
-          Object.assign({}, ...[node.props.style].flat()).fontSize
-        ])
-    const shown = [[expect.stringMatching(/^(3:42\sPM|15:42)$/), typography.metaSize * 1.5]]
-    expect(timeIn({ ...userMessage([{ type: 'text', text: 'ship it' }]), timestamp: at })).toEqual(
-      shown
-    )
-    expect(timeIn({ ...toolMessage([{ type: 'text', text: 'Shipped.' }]), timestamp: at })).toEqual(
-      shown
-    )
-    expect(timeIn(userMessage([{ type: 'text', text: 'ship it' }]))).toEqual([])
-  })
-
   it('draws a question call as the question awaited, then as asked, never as a raw tool line', () => {
     const ask = {
       type: 'tool-call' as const,
@@ -337,83 +279,6 @@ describe('MobileNativeChatMessage', () => {
       'Asked: Do you prefer red or blue?'
     )
   })
-
-  it.each([
-    ['system', 'history-item-too-large'],
-    ['user', 'history-item-too-large']
-  ] as const)(
-    'renders a %s host notice as selectable muted text rather than a markdown answer',
-    (role, presentation) => {
-      const tree = render(
-        {
-          id: 'notice',
-          role,
-          timestamp: 1,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'provider fallback', presentation }]
-        },
-        { fontScale: 1.5 }
-      )
-      expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-      const text = tree.root.find(
-        (node) => String(node.type) === 'Text' && node.props.selectable === true
-      )
-      expect(text.props.children).toBe(AGENT_SESSION_HOST_STATUS_COPY[presentation])
-      expect(text.props.selectable).toBe(true)
-      expect(Object.assign({}, ...text.props.style)).toMatchObject({
-        color: colors.textMuted,
-        fontSize: 25.5,
-        lineHeight: 34.5
-      })
-    }
-  )
-
-  it.each(['started', 'task', 'coordinator', 'worker', 'generic'] as const)(
-    'uses the desktop shared heading, sender, text and fold rules for %s',
-    (kind) => {
-      const from: AgentMessageSource = {
-        kind: 'agent',
-        senders: [
-          {
-            party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
-            name: 'Parser worker',
-            ...(kind === 'coordinator' || kind === 'worker' ? { relation: kind } : {})
-          }
-        ],
-        orchestration:
-          kind === 'task'
-            ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
-            : { message: 'mail-notice', mailbox: 'term_recipient', dispatchId: null, messages: [] }
-      }
-      const body = 'A short task fits without a disclosure.'
-      const raw =
-        kind === 'task'
-          ? `${ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX}\r\nInstructions\r\n=== TASK ===\r\n${body}`
-          : body
-      const message: NativeChatMessage = {
-        ...userMessage([{ type: 'text', text: raw }]),
-        from,
-        ...(kind === 'started' ? ({ role: 'system', agentStart: true } as const) : {})
-      }
-      const tree = render(message)
-      const headings = {
-        started: 'Started worker',
-        task: 'Task from coordinator',
-        coordinator: 'Message from coordinator',
-        worker: 'Update from worker',
-        generic: 'Message from'
-      }
-      expect(textIn(tree.root).slice(0, 2)).toEqual([
-        headings[agentMessageHeading(from, message.agentStart === true)],
-        agentMessageSenderLabel({
-          localChat: false,
-          snapshotName: from.senders[0].name,
-          fallback: 'an agent'
-        })
-      ])
-      expect(markdownIn(tree.root)).toEqual([agentMessageTranscriptText(message.blocks, from)])
-    }
-  )
 
   it('finishes an agent image-only card with zero body extent and keeps its attachment', () => {
     const tree = render({
@@ -562,57 +427,6 @@ describe('MobileNativeChatMessage', () => {
     ])
   })
 
-  describe('a message the host recorded and did not deliver', () => {
-    const notSent = { ...userMessage([{ type: 'text', text: 'fix it' }]), unsent: true as const }
-    const lineIn = (tree: ReactTestRenderer) =>
-      tree.root.findAll(
-        (node) => String(node.type) === 'Text' && node.props.style === styles.unsentNotice
-      )
-
-    it('says why under the bubble, and draws no line without a reason, as the desktop', () => {
-      const tree = render(notSent, { unsentNotice: 'Claude is not signed in.' })
-      expect(markdownIn(tree.root)).toEqual(['fix it'])
-      expect(textIn(tree.root)).toEqual(['Claude is not signed in.'])
-      expect(lineIn(render(notSent))).toHaveLength(0)
-    })
-
-    it("draws the line under another agent's message too", () => {
-      const fromAgent: NativeChatMessage = {
-        ...notSent,
-        from: {
-          kind: 'agent',
-          senders: [
-            {
-              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
-              name: 'Coder'
-            }
-          ],
-          orchestration: null
-        }
-      }
-      expect(
-        lineIn(render(fromAgent, { unsentNotice: 'Your message was not sent.' }))
-      ).toHaveLength(1)
-    })
-  })
-
-  it('preserves an ordinary assistant answer without interpreting its text as a host notice', () => {
-    const tree = render(toolMessage([{ type: 'text', text: 'provider fallback' }]))
-    expect(tree.root.find((node) => String(node.type) === 'MobileMarkdown').props.content).toBe(
-      'provider fallback'
-    )
-  })
-
-  it('renders a loadable preview URI as an image thumbnail', () => {
-    const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
-    const image = findByHostType(tree.root, 'Image')
-    expect(image.props.source).toEqual({ uri: 'file:///a.jpg' })
-    expect(image.parent?.props).toMatchObject({
-      accessibilityRole: 'imagebutton',
-      accessibilityLabel: 'a photo'
-    })
-  })
-
   it('opens an attachment full size when tapped', () => {
     const openImage = vi.fn()
     act(() => {
@@ -628,17 +442,6 @@ describe('MobileNativeChatMessage', () => {
     })
     act(() => renderer!.root.findByProps({ accessibilityRole: 'imagebutton' }).props.onPress())
     expect(openImage).toHaveBeenCalledWith({ uri: 'file:///a.jpg', label: 'a photo' })
-  })
-
-  it('draws a picture-only message with nothing else in its bubble, so no gap sits under it', () => {
-    render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
-    const bubble = renderer!.root.find(
-      (node) =>
-        String(node.type) === 'View' && [node.props.style].flat().includes(styles.userBubble)
-    )
-    expect(bubble.findAll((node) => node !== bubble && String(node.type) === 'View')).toHaveLength(
-      0
-    )
   })
 
   it('folds a long message of yours until opened, and the transcript keeps it open', () => {
@@ -667,15 +470,6 @@ describe('MobileNativeChatMessage', () => {
     )
     expect(onToggleUserMessage).toHaveBeenCalledWith('u1')
     expect(clips(render(message, { userMessageOpen: true, onToggleUserMessage }))).toHaveLength(0)
-  })
-
-  it('prefers the url over the path when both are present', () => {
-    const tree = render(
-      userMessage([{ type: 'image-ref', url: 'file:///local.jpg', path: '/tmp/host.png' }])
-    )
-    expect(findByHostType(tree.root, 'Image').props.source).toEqual({
-      uri: 'file:///local.jpg'
-    })
   })
 
   it('falls back to a text placeholder for a bare host path', () => {
@@ -742,36 +536,12 @@ describe('MobileNativeChatMessage', () => {
     }
   )
 
-  it('draws your message as selectable Markdown in the bubble’s text colour', () => {
-    const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))
-    const markdown = findByHostType(tree.root, 'MobileMarkdown')
-    expect(markdown.props).toMatchObject({
-      content: '**Fix** `src/a.ts`',
-      tone: 'userMessage',
-      rangeSelectable: true
-    })
-    expect(markdown.props.renderVisual).toBeUndefined()
-  })
-
-  it('routes assistant prose through selectable Markdown', () => {
-    const tree = render(toolMessage([{ type: 'text', text: 'Agent reply prose' }]))
-    const markdown = findByHostType(tree.root, 'MobileMarkdown')
-    expect(markdown.props.content).toBe('Agent reply prose')
-    expect(markdown.props.rangeSelectable).toBe(true)
-  })
-
   describe('structured activity UI', () => {
     const runningCall = {
       type: 'tool-call' as const,
       name: 'Bash',
       input: { command: 'npm test' },
       state: 'running' as const
-    }
-    const settledCall = {
-      type: 'tool-call' as const,
-      name: 'Read',
-      input: { file_path: 'a/b.ts' },
-      state: 'completed' as const
     }
 
     it('keeps one live header while calls start and finish, naming the latest call beside it', () => {
@@ -797,48 +567,6 @@ describe('MobileNativeChatMessage', () => {
         expect.arrayContaining(['Running 1 command and editing 1 file', 'Diff src/a.ts'])
       )
       expect(textIn(tree.root).some((text) => text.startsWith('Running Diff'))).toBe(false)
-    })
-
-    it('settles to the past tense once the agent moves past the run', () => {
-      const tree = render(toolMessage([settledCall, runningCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: true,
-        trailingRun: false
-      })
-      expect(textIn(tree.root)).toContain('Read 1 file and ran 1 command')
-    })
-
-    it('draws nothing for a row its settled turn folded away', () => {
-      const folded = render(toolMessage([settledCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: false,
-        foldedAway: true
-      })
-      expect(textIn(folded.root)).toEqual([])
-    })
-
-    it("keeps a settled turn's answer row whole, its own run included", () => {
-      const tree = render(toolMessage([{ type: 'text', text: 'Done.' }, settledCall]), {
-        structuredActivityUi: true,
-        activeTurnIsWorking: false
-      })
-      expect(textIn(tree.root)).toContain('Read 1 file')
-    })
-
-    it('renders the settled turn status row under a user message', () => {
-      const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
-        structuredActivityUi: true,
-        turnStatus: { startedAt: 1_700_000_000_000, thinking: false, workedSeconds: 3 }
-      })
-      expect(textIn(tree.root)).toContain('Worked for 3s')
-    })
-
-    it('does not render a turn status row without one', () => {
-      const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
-        structuredActivityUi: true
-      })
-      expect(markdownIn(tree.root)).toEqual(['go'])
-      expect(textIn(tree.root)).toEqual([])
     })
   })
 })

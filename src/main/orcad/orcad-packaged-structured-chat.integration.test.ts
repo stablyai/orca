@@ -15,9 +15,9 @@ import { z } from 'zod'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { spawnProcess } from '@orca/process-host'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { parsePairingCode } from '../../shared/pairing'
 import {
   pairedRuntimeConnectionFromOffer,
@@ -28,7 +28,7 @@ import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../shared/protocol-version'
+} from '../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   sendRemoteRuntimeRequest,
   subscribeRemoteRuntimeRequest,

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { RELAY_CLOSE_CODE, RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type WebSocket from 'ws'
-import type { RelayAssignmentStore } from './assignment-store.js'
+import type { RelayAssignmentStore } from './assignment/assignment-store.js'
 import type { RelayConfig } from './config.js'
 import type { CredentialReservation, RelayCredentialStore } from './credential-store.js'
 import {

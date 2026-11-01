@@ -2,7 +2,7 @@ import type { PendingSessionSelection } from './pending-session-selection'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../../src/shared/structured-agent-session-projection'
+} from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
 import { createElement, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'

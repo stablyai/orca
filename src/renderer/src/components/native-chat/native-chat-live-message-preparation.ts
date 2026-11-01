@@ -2,7 +2,8 @@ import {
   prepareNativeChatMessages,
   surfaceNativeChatHarnessTurns
 } from '../../../../shared/native-chat/transcript/native-chat-message-preparation'
-import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 
 export function prepareNativeChatLiveMessages(

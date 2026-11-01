@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -54,7 +54,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg
   },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.4 },
+  pressed: { opacity: feedback.pressedOpacity },
+  disabled: { opacity: feedback.disabledOpacity },
   label: { color: colors.bgBase, fontSize: 15, fontWeight: '600' }
 }))

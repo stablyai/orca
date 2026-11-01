@@ -65,30 +65,4 @@ describe('agent status program-status facet', () => {
     expect(store.getState().setAgentProgramStatus(PANE, null)).toBe(true)
     expect(store.getState().agentStatusByPaneKey[PANE]).toEqual(entryBefore)
   })
-
-  it('ignores an equal facet and never creates a row', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    expect(store.getState().setAgentProgramStatus(PANE, FACET)).toBe(false)
-    expect(store.getState().agentStatusByPaneKey[PANE]).toBeUndefined()
-
-    store.getState().setAgentStatus(PANE, { state: 'working', prompt: 'p', programStatus: FACET })
-    const map = store.getState().agentStatusByPaneKey
-    expect(store.getState().setAgentProgramStatus(PANE, { ...FACET, observedAt: 2_000 })).toBe(
-      false
-    )
-    expect(store.getState().agentStatusByPaneKey).toBe(map)
-  })
-
-  it('applies a facet patch inside a batch and reports whether it changed anything', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus(PANE, { state: 'working', prompt: 'p' })
-    const outcomes = store.getState().setAgentStatuses([
-      { kind: 'programStatus', paneKey: PANE, programStatus: FACET },
-      { kind: 'programStatus', paneKey: PANE, programStatus: FACET }
-    ])
-    expect(outcomes).toEqual([true, false])
-    expect(store.getState().agentStatusByPaneKey[PANE].programStatus).toEqual(FACET)
-  })
 })

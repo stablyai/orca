@@ -1,4 +1,4 @@
-import type { StructuredLaunchCaller } from '../../structured-agent-session-launch-callers'
+import type { StructuredLaunchCaller } from './structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import { STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS } from '@/components/native-chat/structured-agent-session-send-runtime'
 import {
