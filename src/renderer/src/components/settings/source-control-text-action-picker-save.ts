@@ -53,7 +53,8 @@ export function saveSourceControlTextPickerDraft({
   settings,
   agent,
   entry,
-  draft
+  draft,
+  hostKeys
 }: {
   source: SourceControlAiSettings
   repoAi?: RepoSourceControlAiOverrides
@@ -65,6 +66,8 @@ export function saveSourceControlTextPickerDraft({
   agent: AgentPickerEntry['agent']
   entry: AgentPickerEntry
   draft: AgentPickerDraft
+  /** Hosts the card's commands run on, so their host-specific picks are replaced too. */
+  hostKeys: readonly string[]
 }) {
   const scope = repoId ? 'repo' : 'global'
   let currentSource: SourceControlAiSettings = {
@@ -116,6 +119,7 @@ export function saveSourceControlTextPickerDraft({
       repo: currentRepo,
       actionId: operation,
       agentId: agent,
+      hostKeys,
       change:
         field === 'model'
           ? { field, value: draft.choices.model }

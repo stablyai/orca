@@ -8,7 +8,10 @@ import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId
 } from '../../../../shared/execution-host'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
+import {
+  getRepoCommitMessageModelDiscoveryHostKey,
+  LOCAL_COMMIT_MESSAGE_HOST_KEY
+} from '../../../../shared/commit-message-host-key'
 import {
   getCommitMessageAgentCapability,
   isCustomAgentId,
@@ -16,7 +19,7 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import {
   getDiscoveredModels,
-  readSourceControlAiActionModelChoice,
+  readSourceControlAiModelChoiceForHost,
   resolveThinkingLevel
 } from '../../../../shared/source-control-ai-model-selection'
 import {
@@ -118,13 +121,9 @@ const TextActionPicker = memo(
       [props.source, settings?.sourceControlAi, settings?.commitMessageAi]
     )
     const host = parseRoutableExecutionHostId(repo ? getRepoExecutionHostId(repo) : 'local')
-    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-      host?.kind === 'ssh'
-        ? host.targetId
-        : host?.kind === 'runtime'
-          ? `runtime:${host.environmentId}`
-          : null
-    )
+    const hostKey = repo
+      ? getRepoCommitMessageModelDiscoveryHostKey(repo)
+      : LOCAL_COMMIT_MESSAGE_HOST_KEY
     const scope = props.repoId ? 'repo' : 'global'
     const discovery = useTextActionModelDiscovery(hostKey, props.writeSourceControlAiSettings)
     const choice = props.draft.modelChoice
@@ -271,7 +270,7 @@ const TextActionPicker = memo(
       textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent)
     )
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
-      const saved = readSourceControlAiActionModelChoice(choice, hostKey, entry.agent)
+      const saved = readSourceControlAiModelChoiceForHost(choice, hostKey, entry.agent)
       const models = entry.catalog.origin !== 'unknown' ? entry.catalog.models : []
       const selectedModel =
         saved && !models.some((model) => model.id === saved)
@@ -365,7 +364,13 @@ const TextActionPicker = memo(
               settings,
               agent,
               entry,
-              draft
+              draft,
+              // A global pick covers every registered repository's host, read when it is made.
+              hostKeys: props.repoId
+                ? [hostKey]
+                : useAppStore
+                    .getState()
+                    .repos.map((repo) => getRepoCommitMessageModelDiscoveryHostKey(repo))
             })
             props.onChange?.(saved.choice, saved.agentArgs)
           },

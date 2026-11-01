@@ -1,4 +1,5 @@
 import { getCommitMessageAgentSpec } from './commit-message-agent-spec'
+import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from './commit-message-host-key'
 import { removeSourceControlAiArgumentFlag } from './source-control-ai-argument-flags'
 import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
 import type {
@@ -21,14 +22,16 @@ type ActionModelChoiceInput = {
   change:
     | { field: 'model'; value: string | undefined }
     | { field: 'effort'; modelId: string; value: string | undefined }
+  /** Execution hosts this save covers, beyond hosts the saved settings already name. */
+  hostKeys?: readonly string[]
   backslash?: CommandTemplateBackslash
 }
 
-/** A user pick applies to every known host, including hosts still reading the older host map. */
+/** A user pick applies to every host known at save time, including hosts reading the host map. */
 function writeChoice(
   choice: SourceControlAiModelChoice | undefined,
   input: ActionModelChoiceInput,
-  hostKeys: Iterable<string>,
+  remoteHostKeys: Iterable<string>,
   pinModel: boolean
 ): SourceControlAiModelChoice | undefined {
   const next = structuredClone(choice ?? {})
@@ -38,9 +41,15 @@ function writeChoice(
     next.selectedModelByAgent = { ...next.selectedModelByAgent }
     const byHost = { ...next.selectedModelByAgentByHost }
     next.selectedModelByAgentByHost = byHost
+    // The local host reads the host-agnostic value; a local copy would hide the other editor's later picks.
+    if (byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY]) {
+      const localModels = { ...byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY] }
+      delete localModels[agentId]
+      byHost[LOCAL_COMMIT_MESSAGE_HOST_KEY] = localModels
+    }
     const models = [
       next.selectedModelByAgent,
-      ...[...hostKeys].map((hostKey) => {
+      ...[...remoteHostKeys].map((hostKey) => {
         const hostModels = { ...byHost[hostKey] }
         byHost[hostKey] = hostModels
         return hostModels
@@ -94,12 +103,14 @@ export function saveSourceControlAiActionModelChoice(
       : input.actionId === 'conversationName'
         ? undefined
         : repo?.modelOverridesByOperation?.[input.actionId]
-  const hostKeys = new Set([
+  const remoteHostKeys = new Set([
     ...Object.keys(choice?.selectedModelByAgentByHost ?? {}),
     ...Object.keys(source.selectedModelByAgentByHost ?? {}),
     ...Object.keys(source.discoveredModelsByAgentByHost ?? {}),
-    ...Object.keys(input.settings.commitMessageAi?.discoveredModelsByAgentByHost ?? {})
+    ...Object.keys(input.settings.commitMessageAi?.discoveredModelsByAgentByHost ?? {}),
+    ...(input.hostKeys ?? [])
   ])
+  remoteHostKeys.delete(LOCAL_COMMIT_MESSAGE_HOST_KEY)
   const recipe =
     input.target.type === 'global'
       ? source.actions?.[input.actionId]
@@ -119,7 +130,7 @@ export function saveSourceControlAiActionModelChoice(
     input.change.field === 'effort' &&
     Boolean(spec?.effortFlag.some((flag) => flag.modelVariant)) &&
     stripped.agentArgs !== (recipe?.agentArgs ?? '')
-  const nextChoice = writeChoice(choice, input, hostKeys, pinModel)
+  const nextChoice = writeChoice(choice, input, remoteHostKeys, pinModel)
   const modelOverridesByOperation = { ...scope?.modelOverridesByOperation }
   if (nextChoice) {
     modelOverridesByOperation[input.actionId] = nextChoice

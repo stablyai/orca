@@ -5,7 +5,15 @@ import {
   saveSourceControlActionRecipe,
   toSourceControlAiRepoUpdate
 } from './source-control-ai-recipe-save'
+import {
+  getDefaultSourceControlAiSettings,
+  mergeLegacyCommitMessageAiIntoSourceControlAi,
+  normalizeSourceControlAiSettings,
+  projectSourceControlAiToLegacyCommitMessageAi,
+  resolveSourceControlAiForOperation
+} from './source-control-ai'
 import type { GlobalSettings } from './global-settings-types'
+import type { SourceControlAiSettings } from './source-control-ai-types'
 import type { Repo } from './repo-types'
 
 function settings(): GlobalSettings {
@@ -311,5 +319,86 @@ describe('text action model and effort writes', () => {
       selectedThinkingByModel: { 'provider/model': 'low' }
     })
     expect({ settings, repo }).toEqual(before)
+  })
+})
+
+describe('text action model writes across hosts and editors', () => {
+  function pickCommitModel(source: SourceControlAiSettings, hostKeys?: string[]) {
+    const saved = saveSourceControlAiActionModelChoice({
+      target: { type: 'global' },
+      settings: { sourceControlAi: source },
+      actionId: 'commitMessage',
+      agentId: 'codex',
+      hostKeys,
+      change: { field: 'model', value: 'gpt-5.4-mini' }
+    })
+    if (!('sourceControlAi' in saved)) {
+      throw new Error('Expected global save')
+    }
+    return normalizeSourceControlAiSettings(saved.sourceControlAi)
+  }
+  function resolvedModel(source: SourceControlAiSettings, hostKey: string) {
+    const result = resolveSourceControlAiForOperation({
+      settings: {
+        sourceControlAi: source,
+        commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(source)
+      },
+      operation: 'commitMessage',
+      discoveryHostKey: hostKey
+    })
+    return result.ok && result.value.params.model
+  }
+
+  it('lets a later feature-wall pick take effect locally after a card pick', () => {
+    const source = getDefaultSourceControlAiSettings()
+    source.agentId = 'codex'
+    source.discoveredModelsByAgentByHost = { local: {}, 'ssh:one': {} }
+    source.selectedModelByAgentByHost = { local: { codex: 'gpt-5.6-terra' } }
+    source.modelOverridesByOperation = {
+      commitMessage: { selectedModelByAgentByHost: { local: { claude: 'opus' } } }
+    }
+    const picked = pickCommitModel(source)
+    expect(picked.modelOverridesByOperation?.commitMessage).toEqual({
+      selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+      selectedModelByAgentByHost: {
+        local: { claude: 'opus' },
+        'ssh:one': { codex: 'gpt-5.4-mini' }
+      }
+    })
+    expect(resolvedModel(picked, 'local')).toBe('gpt-5.4-mini')
+    // The feature-wall card edits the legacy host-agnostic model, which reconciliation carries back.
+    const legacy = projectSourceControlAiToLegacyCommitMessageAi(picked)
+    const afterWall = mergeLegacyCommitMessageAiIntoSourceControlAi(picked, {
+      ...legacy,
+      selectedModelByAgent: { ...legacy.selectedModelByAgent, codex: 'gpt-5.5' }
+    })
+    expect(resolvedModel(afterWall, 'local')).toBe('gpt-5.5')
+    expect(resolvedModel(afterWall, 'ssh:one')).toBe('gpt-5.4-mini')
+    expect(
+      afterWall.modelOverridesByOperation?.commitMessage?.selectedModelByAgentByHost?.local
+    ).toEqual({ claude: 'opus' })
+  })
+
+  it('writes registered hosts without discovery so they keep the pick once Arguments lose the flag', () => {
+    const source = getDefaultSourceControlAiSettings()
+    source.agentId = 'codex'
+    source.actions = { commitMessage: { agentId: 'codex', agentArgs: '--model gpt-5.5 --trace' } }
+    const picked = pickCommitModel(source, ['local', 'runtime:env-1', 'ssh:box'])
+    expect(picked.actions?.commitMessage?.agentArgs).toBe('--trace')
+    for (const hostKey of ['local', 'runtime:env-1', 'ssh:box']) {
+      expect(resolvedModel(picked, hostKey)).toBe('gpt-5.4-mini')
+    }
+    const cleared = saveSourceControlAiActionModelChoice({
+      target: { type: 'global' },
+      settings: { sourceControlAi: picked },
+      actionId: 'commitMessage',
+      agentId: 'codex',
+      hostKeys: ['runtime:env-1'],
+      change: { field: 'model', value: undefined }
+    })
+    expect(
+      'sourceControlAi' in cleared &&
+        cleared.sourceControlAi.modelOverridesByOperation?.commitMessage
+    ).toBeUndefined()
   })
 })

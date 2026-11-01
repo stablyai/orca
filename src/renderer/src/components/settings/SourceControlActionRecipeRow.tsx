@@ -141,6 +141,15 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs font-medium text-foreground">{getActionLabel(actionId)}</p>
           <p className="text-[11px] text-muted-foreground">{getActionDescriptions()[actionId]}</p>
+          {actionId === 'commitMessage' ? (
+            // The global Commit message model is also the other text actions' fallback.
+            <p className="text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.settings.source.control.action.recipe.options.commitMessageSharedModel',
+                'Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use.'
+              )}
+            </p>
+          ) : null}
         </div>
         <div className="w-full shrink-0 space-y-1 sm:w-[220px]">
           {isLaunchAction ? (

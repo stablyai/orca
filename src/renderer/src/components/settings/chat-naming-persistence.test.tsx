@@ -429,6 +429,12 @@ it.each(['global', 'repo'] as const)(
         }
       }
     })
+    // The registered repository's SSH host has no discovery yet still gets the pick.
+    expect(
+      saved?.modelOverridesByOperation?.commitMessage?.selectedModelByAgentByHost?.[
+        'ssh:target one'
+      ]?.codex
+    ).toBe('text-catalog-model')
     await waitFor(() =>
       expect(row.getByRole('button', { name: 'Select agent' }).textContent).toContain(
         'Text catalog model · Codex · High'
