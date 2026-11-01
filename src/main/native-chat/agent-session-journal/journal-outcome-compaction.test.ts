@@ -12,10 +12,14 @@ import { projectJournalBatch } from '../agent-session-wire/agent-session-journal
 import {
   closeTestJournalHostDatabases,
   createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  openTestJournalHostDatabase,
+  publishTestJournalEpoch
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalOutcomeCompaction } from './journal-outcome-compaction'
+import { JOURNAL_OUTCOME_FORMAT } from './journal-outcome-format'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
+import { journalInputOrder } from './journal-input-order'
 import {
   expectProjectionMatches,
   projectionBase as base,
@@ -102,41 +106,86 @@ function compact(compaction = new JournalOutcomeCompaction()): void {
   }
 }
 
-it('keeps a mixed prefix byte-identical, including masks and ordering across deletion and re-creation', async () => {
-  const state = seedProjectionRows(database, [projectionEpochRow, item(2, 'x', 1), item(3, 'y', 1)])
-  const rig = projectionWriter(database, state)
-  rigs.push(rig)
-  const raw = () => database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
-  const prefix = raw()
-  for (let revision = 2; revision <= 40; revision++) {
-    await rig.writer.enqueue((seq) => item(seq, 'x', revision))
+it.each([1, 'mixed', 'upgrade', 2] as const)(
+  'keeps format %s prefix bytes, masks and re-creation order',
+  async (format) => {
+    const state = seedProjectionRows(database, [
+      projectionEpochRow,
+      item(2, 'x', 1),
+      item(3, 'y', 1)
+    ])
+    const rig = projectionWriter(database, state)
+    rigs.push(rig)
+    const raw = () => database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
+    const prefix = raw()
+    for (let revision = 2; revision <= 40; revision++) {
+      await rig.writer.enqueue((seq) => item(seq, 'x', revision))
+      if (revision === 10) {
+        await rig.writer.enqueue((seq) => item(seq, 'y', 2))
+      }
+      if (format === 'mixed' && revision === 20) {
+        await rig.writer.enqueue((seq) => ({
+          ...base(seq),
+          kind: 'tombstone',
+          itemId: 'x',
+          revision: 21
+        }))
+        // Synthetic old-format records: ordinary values have the same frozen meaning in formats 1/2.
+        database.db.prepare('UPDATE journal_outcomes SET format = 1').run()
+      }
+    }
+    await rig.writer.enqueue((seq) => ({
+      ...base(seq),
+      kind: 'tombstone',
+      itemId: 'y',
+      revision: 3
+    }))
+    await rig.writer.enqueue((seq) => ({
+      ...base(seq),
+      kind: 'lifecycle-batch',
+      settlementId: 'reinsert',
+      mutations: [
+        { kind: 'tombstone', itemId: 'x', revision: 41 },
+        { kind: 'item', itemId: 'z', revision: 1, body: { kind: 'status', text: 'z' } },
+        { kind: 'item', itemId: 'x', revision: 42, body: { kind: 'status', text: 'x re-created' } }
+      ]
+    }))
+    if (format === 1 || format === 'upgrade') {
+      database.db.prepare('UPDATE journal_outcomes SET format = 1').run()
+      database.db.prepare('UPDATE journal_outcome_epochs SET format = 1').run()
+    }
+    const compaction = new JournalOutcomeCompaction()
+    if (format === 'upgrade') {
+      // The pass has captured a format-1 boundary; a real write raises the epoch during its rest.
+      expect(compaction.page(database)).toBe(true)
+      await rig.writer.enqueue((seq) => item(seq, 'x', 43))
+    }
+    const before = records()
+    const rows = raw()
+    const facts = before.filter((row) => row.deleted === 1 || row.field === 'tombstones')
+    expect(facts.some((row) => row.field === 'items' && row.entry_key === '"y"')).toBe(true)
+    compact(compaction)
+    expect(records().length).toBeLessThan(before.length)
+    const xValues = before.filter(
+      (row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0
+    )
+    expect(
+      records().filter(
+        (row) => row.field === 'items' && row.entry_key === '"x"' && row.deleted === 0
+      )
+    ).toEqual([xValues[0], xValues.at(-1)])
+    expect(records().filter((row) => row.deleted === 1 || row.field === 'tombstones')).toEqual(
+      facts
+    )
+    expect(raw()).toEqual(rows)
+    expect(raw().slice(0, prefix.length)).toEqual(prefix)
+    for (const row of records()) {
+      expect(before).toContainEqual(row)
+    }
+    expect([...rig.state().items.keys()]).toEqual(['z', 'x'])
+    expectProjectionMatches(database, rig.state())
   }
-  await rig.writer.enqueue((seq) => ({ ...base(seq), kind: 'tombstone', itemId: 'y', revision: 2 }))
-  await rig.writer.enqueue((seq) => ({
-    ...base(seq),
-    kind: 'lifecycle-batch',
-    settlementId: 'reinsert',
-    mutations: [
-      { kind: 'tombstone', itemId: 'x', revision: 41 },
-      { kind: 'item', itemId: 'z', revision: 1, body: { kind: 'status', text: 'z' } },
-      { kind: 'item', itemId: 'x', revision: 42, body: { kind: 'status', text: 'x re-created' } }
-    ]
-  }))
-  const before = records()
-  const rows = raw()
-  const facts = before.filter((row) => row.deleted === 1 || row.field === 'tombstones')
-  expect(facts.some((row) => row.field === 'items' && row.entry_key === '"y"')).toBe(true)
-  compact()
-  expect(records().length).toBeLessThan(before.length)
-  expect(records().filter((row) => row.deleted === 1 || row.field === 'tombstones')).toEqual(facts)
-  expect(raw()).toEqual(rows)
-  expect(raw().slice(0, prefix.length)).toEqual(prefix)
-  for (const row of records()) {
-    expect(before).toContainEqual(row)
-  }
-  expect([...rig.state().items.keys()]).toEqual(['z', 'x'])
-  expectProjectionMatches(database, rig.state())
-})
+)
 
 it.each([4, 40])(
   'bounds large copies after %i lifecycle re-creations and same-epoch context rewinds',
@@ -241,7 +290,7 @@ it.each([4, 40])(
   }
 )
 
-it.each(['format', 'collection', 'scalar'] as const)(
+it.each(['format', 'collection', 'scalar', 'old-native', 'epoch'] as const)(
   'stops at an unknown record %s and never deletes anything after it',
   (unknown) => {
     seedOutcomeRows(database, [
@@ -250,11 +299,23 @@ it.each(['format', 'collection', 'scalar'] as const)(
     ])
     // A mismatched summary also exercises the per-record fence rather than only the fast summary.
     if (unknown === 'format') {
-      database.db.prepare('UPDATE journal_outcomes SET format = 2 WHERE seq = 40').run()
+      database.db
+        .prepare('UPDATE journal_outcomes SET format = ? WHERE seq = 40')
+        .run(JOURNAL_OUTCOME_FORMAT + 1)
+    } else if (unknown === 'epoch') {
+      database.db
+        .prepare('UPDATE journal_outcome_epochs SET format = ?')
+        .run(JOURNAL_OUTCOME_FORMAT + 1)
     } else if (unknown === 'collection') {
       database.db
         .prepare(
           "UPDATE journal_outcomes SET field = 'futureCollection' WHERE seq = 40 AND field = 'items'"
+        )
+        .run()
+    } else if (unknown === 'old-native') {
+      database.db
+        .prepare(
+          "UPDATE journal_outcomes SET format = 1, field = 'inputEntries' WHERE seq = 40 AND field = 'items'"
         )
         .run()
     } else {
@@ -264,14 +325,37 @@ it.each(['format', 'collection', 'scalar'] as const)(
         )
         .run()
     }
-    const before = records()
+    database.transaction((db) => {
+      publishTestJournalEpoch(db, 'healthy-successor', epoch)
+      publishJournalOutcomeEpoch(db, 'healthy-successor', epoch, [
+        projectionEpochRow,
+        ...Array.from({ length: 100 }, (_, n) => item(n + 2, 'healthy', n + 1))
+      ])
+    })
+    const affected = () => records().filter((row) => row.generation === 1)
+    const before = affected()
     const atOrAfterUnknown = (row: (typeof before)[number]) =>
       Number(row.seq) > 40 ||
-      (row.seq === 40 && String(row.field) >= (unknown === 'collection' ? 'futureCollection' : '$'))
+      (row.seq === 40 &&
+        String(row.field) >=
+          (unknown === 'collection'
+            ? 'futureCollection'
+            : unknown === 'old-native'
+              ? 'inputEntries'
+              : '$'))
     compact()
-    expect(records().length).toBeLessThan(before.length)
-    expect(records().filter(atOrAfterUnknown)).toEqual(before.filter(atOrAfterUnknown))
-    database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()
+    if (unknown === 'epoch') {
+      expect(affected()).toEqual(before)
+    } else {
+      expect(affected().length).toBeLessThan(before.length)
+    }
+    expect(affected().filter(atOrAfterUnknown)).toEqual(before.filter(atOrAfterUnknown))
+    expect(
+      records().filter((row) => row.field === 'items' && row.entry_key === '"healthy"')
+    ).toHaveLength(2)
+    database.db
+      .prepare('UPDATE journal_outcome_epochs SET format = ?')
+      .run(JOURNAL_OUTCOME_FORMAT + 1)
     const stopped = records()
     compact()
     expect(records()).toEqual(stopped)
@@ -316,6 +400,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     kind: 'submission',
     clientMessageId: 'sent',
     payloadFingerprint: 'sent',
+    handoverRecorded: true,
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
     providerHandle: { kind: 'codex', threadId: 'thread-1' }
   }))
@@ -334,6 +419,44 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     itemId: 'echo',
     revision: 1,
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+  }))
+  await append((seq) => ({
+    ...base(seq),
+    kind: 'submission',
+    clientMessageId: 'kept',
+    payloadFingerprint: 'kept',
+    handoverRecorded: true,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'keep queued' }] },
+    providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  }))
+  await append((seq) => ({
+    ...base(seq),
+    kind: 'queue',
+    messageId: 'card',
+    change: {
+      op: 'queued',
+      position: 0,
+      queuedAt: { epoch, sequence: seq },
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'keep queued' }] }
+    }
+  }))
+  await append((seq) => ({
+    ...base(seq),
+    kind: 'dispatch',
+    clientMessageId: 'kept',
+    state: 'rejected',
+    providerItemId: null,
+    reason: null,
+    keptAsQueuedMessageId: 'card'
+  }))
+  await append((seq) => ({
+    ...base(seq),
+    kind: 'submission',
+    clientMessageId: 'pending',
+    payloadFingerprint: 'pending',
+    handoverRecorded: true,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending' }] },
+    providerHandle: { kind: 'codex', threadId: 'thread-1' }
   }))
   await append((seq) => ({
     ...base(seq),
@@ -362,6 +485,14 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
           blocks: [{ type: 'text', text: `${id} ${revision} ${'content '.repeat(70)}` }]
         }
       }))
+    }
+    if (revision === 6) {
+      // Synthetic old-format ordinary records; native joins exist only in format 2.
+      database.db
+        .prepare(
+          "UPDATE journal_outcomes SET format = 1 WHERE field NOT IN ('inputEntries', 'inputCards')"
+        )
+        .run()
     }
   }
   await append((seq) => ({
@@ -415,6 +546,12 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     }
   }))
+  // Synthetic ordinal control: native b claims no ordinary prefix membership.
+  database.db
+    .prepare(
+      "UPDATE journal_outcomes SET ordinal = 'b' WHERE field = 'inputEntries' AND entry_key = ?"
+    )
+    .run('"pending"')
   const identity = {
     sessionId,
     workspaceId: 'ws',
@@ -560,11 +697,42 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     expect(shrunk).toBe(true)
     return { forward, backward, workerText, prompts: work.actionablePrompts() }
   }
+  const native = (state: ReturnType<typeof rig.state>) => ({
+    entries: [...state.inputEntries],
+    cards: [...state.inputCards],
+    cut: journalInputOrder(state).place('pending')?.context.cut,
+    introduced: journalInputOrder(state).lineage.cards.get('card')?.introduced
+  })
+  const expectedNative = structuredClone(native(rig.state()))
+  expect(expectedNative.entries.map(([id]) => id)).toEqual(['pending'])
+  expect(expectedNative.cards.map(([id]) => id)).toContain('card')
+  expect(expectedNative.cut).toBeTypeOf('number')
+  expect(expectedNative.introduced).toBeTypeOf('number')
   const expected = await consumers()
   const raw = database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()
   const before = records()
+  expect(before).toContainEqual(
+    expect.objectContaining({
+      field: 'inputEntries',
+      entry_key: '"pending"',
+      ordinal: 'b',
+      deleted: 0
+    })
+  )
+  expect(before).toContainEqual(
+    expect.objectContaining({
+      field: 'inputEntries',
+      entry_key: '"sent"',
+      value_json: 'null',
+      deleted: 1
+    })
+  )
   compact()
   expect(records().length).toBeLessThan(before.length / 2)
+  expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)
+  expect(
+    records().filter((row) => row.field === 'inputEntries' || row.field === 'inputCards')
+  ).toEqual(before.filter((row) => row.field === 'inputEntries' || row.field === 'inputCards'))
   expect(database.db.prepare('SELECT * FROM journal_rows ORDER BY seq').all()).toEqual(raw)
   for (const row of records()) {
     expect(before).toContainEqual(row)
@@ -574,5 +742,14 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   database = openTestJournalHostDatabase(root)
   journal = await journals.open({ identity, stateDirectory: root })
   expect(journal.snapshot()).toEqual(snapshot)
+  expect(native(restoreJournal(database.db, sessionId)!.state)).toEqual(expectedNative)
   expect(await consumers()).toEqual(expected)
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'after-cleanup' },
+    { kind: 'status', text: 'continued after mixed-format cleanup' },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  expect(renderJournalState(restoreJournal(database.db, sessionId)!.state)).toEqual(
+    journal.snapshot()
+  )
 })

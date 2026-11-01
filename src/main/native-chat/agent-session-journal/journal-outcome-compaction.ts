@@ -2,21 +2,25 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 import { AgentSessionJournalError } from './journal-write-guards'
+import { journalOutcomeSource, type JournalOutcomeSource } from './journal-outcome-format'
 import {
-  JOURNAL_OUTCOME_FORMAT,
-  journalOutcomeSource,
-  type JournalOutcomeSource
-} from './journal-outcome-format'
-import {
+  JOURNAL_OUTCOME_FORMAT_1,
   OUTCOME_FORMAT_1_COLLECTIONS,
   outcomeFormat1StoredScalars
 } from './journal-outcome-format-1'
+import { JOURNAL_OUTCOME_FORMAT_2, isNativeOutcomeField } from './journal-outcome-format-2'
 
 const PAGE_SIZE = 32
 const fields = new Set<string>(OUTCOME_FORMAT_1_COLLECTIONS)
 const scalars = new Set(
   Object.keys(outcomeFormat1StoredScalars.shape).map((key) => JSON.stringify(key))
 )
+const ordinary = (field: string, key: string): boolean =>
+  field === '$' ? scalars.has(key) : fields.has(field)
+const formats = new Map<number, (field: string, key: string) => boolean>([
+  [JOURNAL_OUTCOME_FORMAT_1, ordinary],
+  [JOURNAL_OUTCOME_FORMAT_2, (field, key) => ordinary(field, key) || isNativeOutcomeField(field)]
+])
 type Position = { seq: number; field: string; key: string }
 type Active = JournalOutcomeSource & { sessionId: string; epoch: string; after: Position }
 type Progress = {
@@ -69,7 +73,8 @@ export class JournalOutcomeCompaction {
       typeof row.session_id !== 'string' ||
       typeof row.epoch !== 'string' ||
       typeof row.through_seq !== 'number' ||
-      row.format !== JOURNAL_OUTCOME_FORMAT
+      typeof row.format !== 'number' ||
+      !formats.has(row.format)
     ) {
       return next
     }
@@ -108,7 +113,11 @@ export class JournalOutcomeCompaction {
       .prepare(`SELECT generation, format FROM journal_outcome_epochs
       WHERE session_id = ? AND epoch = ?`)
       .get(active.sessionId, active.epoch)
-    if (source?.generation !== active.generation || source.format !== JOURNAL_OUTCOME_FORMAT) {
+    if (
+      source?.generation !== active.generation ||
+      typeof source.format !== 'number' ||
+      !formats.has(source.format)
+    ) {
       return next
     }
     const rows = db
@@ -130,12 +139,13 @@ export class JournalOutcomeCompaction {
       WHERE generation = ? AND seq = ? AND field = ? AND entry_key = ? AND format = ?`)
     let after = active.after
     for (const row of rows) {
+      const admits = typeof row.format === 'number' ? formats.get(row.format) : undefined
       if (
-        row.format !== JOURNAL_OUTCOME_FORMAT ||
+        !admits ||
         typeof row.seq !== 'number' ||
         typeof row.field !== 'string' ||
         typeof row.entry_key !== 'string' ||
-        (row.field === '$' ? !scalars.has(row.entry_key) : !fields.has(row.field))
+        !admits(row.field, row.entry_key)
       ) {
         // Never inspect or delete past a record whose contract this build does not know.
         return next
@@ -145,8 +155,8 @@ export class JournalOutcomeCompaction {
         continue
       }
       const key = [active.generation, row.field, row.entry_key]
-      // Format 1's per-key last-write-wins makes superseded middle values redundant; changing that
-      // replacement meaning requires a format bump.
+      // Declared formats store whole values per key; superseded middle values are redundant.
+      // Changing that replacement meaning requires a format bump.
       if (row.seq !== first.get(...key)?.seq && row.seq !== latest.get(...key)?.seq) {
         remove.run(active.generation, row.seq, row.field, row.entry_key, row.format)
       }
