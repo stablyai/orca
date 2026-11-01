@@ -52,7 +52,7 @@ export async function saveClipboardImageBufferAsTempFile(
     ? path.join(folder, `orca-paste-${randomUUID()}`, shellInertFileName(args.fileName))
     : path.join(
         folder,
-        // Phone library picks can be JPEG or HEIC; agents trust the extension over the bytes.
+        // Phone library picks are often JPEG; agents trust the extension over the bytes.
         agentSessionPastedImageName(
           Date.now(),
           randomUUID(),

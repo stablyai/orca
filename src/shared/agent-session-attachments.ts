@@ -123,7 +123,7 @@ export type AgentSessionAttachmentClipboardTarget = Omit<
 >
 
 /** Extensions a pasted image's name can carry; the host picks one from the image's bytes. */
-export const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'gif', 'webp', 'heic'] as const
+export const AGENT_SESSION_PASTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'gif', 'webp'] as const
 export type AgentSessionPastedImageExtension =
   (typeof AGENT_SESSION_PASTED_IMAGE_EXTENSIONS)[number]
 

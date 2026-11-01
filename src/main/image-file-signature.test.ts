@@ -10,8 +10,7 @@ describe('detectImageFileSignature', () => {
     ['jpg', Buffer.from(JPEG), 'image/jpeg'],
     ['gif', Buffer.from('GIF89a\x01\x00\x01\x00\x00\x00', 'latin1'), 'image/gif'],
     ['gif', Buffer.from('GIF87a\x01\x00\x01\x00\x00\x00', 'latin1'), 'image/gif'],
-    ['webp', Buffer.from('RIFF\x24\x00\x00\x00WEBP', 'latin1'), 'image/webp'],
-    ['heic', Buffer.from('\x00\x00\x00\x20ftypheic', 'latin1'), 'image/heic']
+    ['webp', Buffer.from('RIFF\x24\x00\x00\x00WEBP', 'latin1'), 'image/webp']
   ])('recognizes %s from its leading bytes', (extension, header, mimeType) => {
     expect(header.length).toBeLessThanOrEqual(IMAGE_SIGNATURE_BYTES)
     expect(detectImageFileSignature(header)).toEqual({ mimeType, extension })
@@ -22,7 +21,6 @@ describe('detectImageFileSignature', () => {
     ['text', Buffer.from('hello world!')],
     ['a PDF', Buffer.from('%PDF-1.7\n%\xe2\xe3', 'latin1')],
     ['a RIFF file that is not WebP', Buffer.from('RIFF\x24\x00\x00\x00WAVE', 'latin1')],
-    ['an AVIF, which shares the HEIF box', Buffer.from('\x00\x00\x00\x20ftypavif', 'latin1')],
     ['a truncated PNG header', Buffer.from(PNG.slice(0, 4))]
   ])('rejects %s', (_label, header) => {
     expect(detectImageFileSignature(header)).toBeNull()

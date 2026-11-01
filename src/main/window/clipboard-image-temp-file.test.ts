@@ -32,13 +32,11 @@ describe('saveClipboardImageBufferAsTempFile', () => {
     expect(writeFileMock).toHaveBeenCalledWith(savedPath, Buffer.from([1, 2, 3]))
   })
 
-  it.each([
-    ['jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1])],
-    ['heic', Buffer.from('\x00\x00\x00\x20ftypheic\x00\x00\x00\x00', 'latin1')]
-  ])('names a %s phone pick by its bytes, not as a .png', async (extension, bytes) => {
-    const savedPath = await saveClipboardImageBufferAsTempFile(bytes)
+  it('names a JPEG phone pick by its bytes, not as a .png', async () => {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1])
+    const savedPath = await saveClipboardImageBufferAsTempFile(jpeg)
 
-    expect(basename(savedPath)).toMatch(new RegExp(`^orca-paste-\\d+-uuid-1\\.${extension}$`))
+    expect(basename(savedPath)).toMatch(/^orca-paste-\d+-uuid-1\.jpg$/)
   })
 
   it('writes a terminal-backed composer paste into the never-swept paste folder', async () => {
