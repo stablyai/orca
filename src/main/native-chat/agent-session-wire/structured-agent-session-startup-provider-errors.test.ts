@@ -35,7 +35,8 @@ it.each([false, true])(
       }).handle({
         type: 'message',
         sessionId: SESSION,
-        message
+        message,
+        startupPending: true
       })
       throw withObservedProviderExit(
         typed

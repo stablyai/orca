@@ -227,7 +227,7 @@ export function createClaudeJournalTranslator(
         prompts.retryPendingCancellations()
         prompts.cancel(event.promptKey)
       } else if (event.type === 'message' && event.message.type === 'result') {
-        journalClaudeResult(resultContext, event.message, event.observedAt ?? Date.now())
+        journalClaudeResult(resultContext, event)
       } else if (event.type === 'message') {
         backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
         messageContext.usageLimits.observe(event.message)
