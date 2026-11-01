@@ -535,6 +535,7 @@ describe('Claude structured journal translation', () => {
   it('surfaces the reason an error-subtype result stopped the turn', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
+    translator.handle(message('user', 'user-1', [{ type: 'text', text: 'Continue' }]))
 
     translator.handle(
       resultFrame('error_max_turns', { is_error: true, errors: ['turn limit reached'] })
@@ -546,6 +547,7 @@ describe('Claude structured journal translation', () => {
   it('keeps an unmodeled result subtype on the bounded provider fallback', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
+    translator.handle(message('user', 'user-1', [{ type: 'text', text: 'Continue' }]))
 
     translator.handle(
       resultFrame('error_from_the_future', { is_error: true, errors: ['budget exhausted'] })

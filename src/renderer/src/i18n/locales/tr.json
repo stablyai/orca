@@ -19059,6 +19059,7 @@
       "failureWords": {
         "theAgent": "Ajan",
         "providerStartFailed": "{{agent}}, başlatılması tamamlanmadan durdu.",
+        "savedConversationMissing": "{{agent}} bu sohbetin kayıtlı konuşmasını bulamadı.",
         "runCommandAgain": "/{{command}} komutunu yeniden çalıştırın.",
         "sendToTryAgain": "Tekrar denemek için mesajınızı gönderin.",
         "sendAgainToTryOnceMore": "Tekrar denemek için mesajınızı yeniden gönderin.",

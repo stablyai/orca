@@ -1992,6 +1992,7 @@
       "providerRetrying": "{{agent}} tuvo un problema temporal y está reintentando.",
       "providerRetryingQuoted": "{{agent}} está reintentando: {{detail}}.",
       "providerStartFailed": "{{agent}} se detuvo antes de terminar de iniciarse.",
+      "savedConversationMissing": "{{agent}} no pudo encontrar la conversación guardada de este chat.",
       "queueFull": "Había demasiados mensajes esperando al agente, así que este no se envió.",
       "quitTerminalAgent": "Cierre ese agente para continuar el chat aquí.",
       "runCommandAgain": "Vuelva a ejecutar /{{command}}.",

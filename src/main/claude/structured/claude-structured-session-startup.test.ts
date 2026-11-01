@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   adapterAtPublishFor,
   fakeClaude,
   claudeFrame,
   identityFor,
-  USER_MESSAGE
+  USER_MESSAGE,
+  recordingJournalSink,
+  PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
@@ -48,6 +51,25 @@ describe('Claude host-awaited open', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('leaves a missing saved conversation to the final startup failure row', async () => {
+    const frame = JSON.parse(
+      readFileSync(
+        new URL('../__fixtures__/claude-missing-conversation.jsonl', import.meta.url),
+        'utf8'
+      )
+    )
+    const claude = fakeClaude({ holdInit: true })
+    const { adapter } = adapterFor(claude)
+    const appendItem = vi.fn()
+    await adapter.acquire({
+      ...ACQUIRE,
+      events: { ...recordingJournalSink(), appendItem }
+    })
+    // Replay under the fixture's acquisition identity, preserving the captured error payload.
+    claudeFrame(claude.connections[0], { ...frame, session_id: PROVIDER_SESSION_ID })
+    expect(appendItem.mock.calls.filter(([, body]) => body.kind === 'status')).toHaveLength(0)
   })
 
   // SDK-typed shape; ordering constructed

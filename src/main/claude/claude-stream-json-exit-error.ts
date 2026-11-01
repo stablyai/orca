@@ -9,6 +9,8 @@ import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wir
 
 // Claude Code's own startup refusal: as root it exits before initialize rather than skip permissions.
 const CLAUDE_ROOT_FULL_ACCESS_REFUSAL = /--dangerously-skip-permissions cannot be used with root/
+const CLAUDE_MISSING_CONVERSATION =
+  /^No conversation found with session ID: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\s*$/im
 
 export function claudeStreamJsonExitError(
   stderrTail: string,
@@ -21,10 +23,15 @@ export function claudeStreamJsonExitError(
   const message = `claude stream-json exited${how ? ` ${how}` : ''}${detail ? `: ${detail}` : ''}`
   const diagnostic = providerDiagnostic([how, detail].filter(Boolean).join('\n'), 'log')
   // The typed refusal replaces this error in failure facts, so it carries the diagnostic too.
-  const refusal = CLAUDE_ROOT_FULL_ACCESS_REFUSAL.test(detail)
+  const refusalReason = CLAUDE_ROOT_FULL_ACCESS_REFUSAL.test(detail)
+    ? 'fullAccessAsRoot'
+    : CLAUDE_MISSING_CONVERSATION.test(detail)
+      ? 'savedConversationMissing'
+      : null
+  const refusal = refusalReason
     ? withProviderDiagnostic(
         Object.assign(
-          new AgentSessionAcquisitionRefusal(message, 'fullAccessAsRoot'),
+          new AgentSessionAcquisitionRefusal(message, refusalReason),
           cause ? { cause } : {}
         ),
         diagnostic

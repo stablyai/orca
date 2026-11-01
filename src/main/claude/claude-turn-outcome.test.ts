@@ -101,6 +101,29 @@ describe('claudeResultOutcome', () => {
   })
 })
 
+it.each(['started-send', 'child'] as const)(
+  'keeps a failure owned by %s before a root turn exists',
+  (owner) => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+    translator.handle({
+      type: 'message',
+      sessionId: 'orca-session',
+      ...(owner === 'started-send' ? { startedSend: { clientMessageId: 'send-1' } } : {}),
+      message: {
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        errors: ['The requested action failed.'],
+        ...(owner === 'child' ? { parent_tool_use_id: 'child-tool' } : {})
+      }
+    })
+    expect(
+      state.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+    ).toHaveLength(1)
+  }
+)
+
 describe('claudeTurnEndForResult', () => {
   it('records the verdict without moving the lifecycle arm', () => {
     expect(
@@ -323,7 +346,7 @@ describe("a person's Stop inside a live turn", () => {
     expect(settledTurn(state.items, 'user-3')).toMatchObject({ outcome: 'failure' })
   })
 
-  it('ends the Stop with its turn, so a result after the turn settled reads on its own', () => {
+  it('ends the Stop with its turn, so the next turn failure reads on its own', () => {
     const state = sinkWithStop(stopOf('user-1'))
     const translator = createClaudeJournalTranslator({ sink: state.sink })
     translator.handle(userTurn('user-1'))
@@ -332,6 +355,7 @@ describe("a person's Stop inside a live turn", () => {
       sessionId: 'orca-session',
       message: { type: 'system', subtype: 'session_state_changed', state: 'idle' }
     })
+    translator.handle(userTurn('user-2'))
 
     translator.handle({ type: 'message', sessionId: 'orca-session', message: cutShort })
 

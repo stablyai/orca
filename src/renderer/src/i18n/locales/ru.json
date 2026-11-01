@@ -19647,6 +19647,7 @@
       "failureWords": {
         "theAgent": "Агент",
         "providerStartFailed": "{{agent}} остановился до завершения запуска.",
+        "savedConversationMissing": "{{agent}} не удалось найти сохранённую беседу этого чата.",
         "runCommandAgain": "Выполните /{{command}} снова.",
         "sendToTryAgain": "Отправьте сообщение, чтобы повторить попытку.",
         "sendAgainToTryOnceMore": "Отправьте сообщение снова, чтобы повторить попытку.",

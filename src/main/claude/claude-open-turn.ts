@@ -84,6 +84,10 @@ export class ClaudeOpenTurn {
     return this.current !== null
   }
 
+  get hasStartedSend(): boolean {
+    return this.startedSend !== null
+  }
+
   /** An open cycle with prior root work can fold a send; its first send remains the opener. */
   get openedInLiveProviderCycle(): boolean {
     return this.current !== null && this.cycleWorkObserved

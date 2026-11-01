@@ -18413,6 +18413,7 @@
       "failureWords": {
         "theAgent": "Agent",
         "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+        "savedConversationMissing": "{{agent}} はこのチャットの保存された会話を見つけられませんでした。",
         "runCommandAgain": "/{{command}} をもう一度実行してください。",
         "sendToTryAgain": "もう一度試すには、メッセージを送信してください。",
         "sendAgainToTryOnceMore": "メッセージをもう一度送信して、再度お試しください。",

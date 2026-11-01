@@ -13,17 +13,13 @@ import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
 import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 import { PROVIDER_RETRY_PIECES } from './agent-session-provider-retry-words-text'
 import { USAGE_LIMIT_PIECES } from './agent-session-usage-limit-words-text'
+import { START_FAILURE_PIECES } from './agent-session-start-failure-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
   {
     theAgent: () => translate('components.native-chat.failureWords.theAgent', COPY.theAgent),
-    providerStartFailed: (values) =>
-      translate(
-        'components.native-chat.failureWords.providerStartFailed',
-        COPY.providerStartFailed,
-        values
-      ),
+    ...START_FAILURE_PIECES,
     runCommandAgain: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandAgain',
@@ -36,21 +32,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate(
         'components.native-chat.failureWords.sendAgainToTryOnceMore',
         COPY.sendAgainToTryOnceMore
-      ),
-    couldNotStart: (values) =>
-      translate('components.native-chat.failureWords.couldNotStart', COPY.couldNotStart, values),
-    couldNotRestart: (values) =>
-      translate(
-        'components.native-chat.failureWords.couldNotRestart',
-        COPY.couldNotRestart,
-        values
-      ),
-    startTimedOut: (values) =>
-      translate('components.native-chat.failureWords.startTimedOut', COPY.startTimedOut, values),
-    startTimedOutKeepsHappening: () =>
-      translate(
-        'components.native-chat.failureWords.startTimedOutKeepsHappening',
-        COPY.startTimedOutKeepsHappening
       ),
     argumentsUnsupportedOption: (values) =>
       translate(

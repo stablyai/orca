@@ -96,6 +96,10 @@ export function journalClaudeResult(
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
+  // Without a turn or a started send, the host owns the startup failure.
+  if (failure && settlesTurn && endedTurnIdentity === null && !turn.hasStartedSend) {
+    return
+  }
   if ((failure || !isSettledClaudeResultKind(kind)) && !alreadyShown) {
     providerFallback.append(
       kind,

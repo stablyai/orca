@@ -1922,6 +1922,7 @@
       "providerRetrying": "{{agent}} で一時的な問題が発生したため、再試行しています。",
       "providerRetryingQuoted": "{{agent}} は再試行しています: {{detail}}。",
       "providerStartFailed": "{{agent}} は起動が完了する前に停止しました。",
+      "savedConversationMissing": "{{agent}} はこのチャットの保存された会話を見つけられませんでした。",
       "queueFull": "Agent を待っているメッセージが多すぎたため、このメッセージは送信されませんでした。",
       "quitTerminalAgent": "ここでチャットを続けるには、その Agent を終了してください。",
       "runCommandAgain": "/{{command}} をもう一度実行してください。",
