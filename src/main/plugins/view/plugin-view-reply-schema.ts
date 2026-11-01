@@ -21,6 +21,7 @@ const drawnPanelSchema = z.object({
   colorScheme: z.enum(['light', 'dark']),
   themeApplied: z.boolean(),
   settled: z.boolean(),
+  pendingRequests: z.number().int().nonnegative().optional(),
   actions: z.array(pluginShotActResultSchema).max(PLUGIN_SHOT_MAX_ACTS).optional()
 })
 
@@ -29,7 +30,8 @@ export const pluginViewReplySchema: z.ZodType<PluginViewReply> = z.union([
   z.object({
     requestId: z.string().max(128),
     ok: z.literal(true),
-    panel: drawnPanelSchema.optional()
+    panel: drawnPanelSchema.optional(),
+    restored: z.boolean().optional()
   }),
   z.object({
     requestId: z.string().max(128),

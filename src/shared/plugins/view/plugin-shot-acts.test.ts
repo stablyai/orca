@@ -16,10 +16,36 @@ describe('parsePluginShotActs', () => {
     })
   })
 
+  it("takes the kit's Slider, Table and Tree verbs with their arguments", () => {
+    const table = { type: 'Table' }
+    const tree = { label: 'Folders' }
+    const json = JSON.stringify([
+      { slide: { label: 'Volume' }, value: 7 },
+      { sort: table, column: 'name' },
+      { selectRows: table, keys: ['a', 'b'] },
+      { activateRow: table, key: 'a' },
+      { loadMore: table },
+      { expand: tree, key: 'src' },
+      { collapse: tree, key: 'src' },
+      { selectItem: tree, key: 'src/main.ts' },
+      { activateItem: tree, key: 'src/main.ts' }
+    ])
+    expect(parsePluginShotActs(json)).toMatchObject({ ok: true, acts: { length: 9 } })
+    expect(parsePluginShotActs('{"slide":{"label":"Volume"},"value":"7"}')).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/^action 1 \(slide\) \(value\): /)
+    })
+    expect(parsePluginShotActs('{"expand":{"label":"Folders"}}')).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/^action 1 \(expand\) \(key\): /)
+    })
+  })
+
   it('names the act and field that is wrong', () => {
     expect(parsePluginShotActs('[{"press":{"text":"A"}},{"click":{}}]')).toEqual({
       ok: false,
-      error: 'action 2: expected an object with one of press, type, select, toggle'
+      error:
+        'action 2: expected an object with one of press, type, select, toggle, slide, sort, selectRows, activateRow, loadMore, expand, collapse, selectItem, activateItem'
     })
     expect(parsePluginShotActs('[{"type":{"label":"Name"}}]')).toMatchObject({
       ok: false,

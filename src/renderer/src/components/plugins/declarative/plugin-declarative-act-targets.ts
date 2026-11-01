@@ -35,9 +35,10 @@ export function usePluginDeclarativeActTarget<T>(
   fallback: T,
   live: { value: T; change: (next: T) => void; readOnly: boolean }
 ): void {
-  const liveRef = useRef(live)
+  // Why the fallback rides along: a Table's `[]` is a new array every render.
+  const liveRef = useRef({ ...live, fallback })
   useLayoutEffect(() => {
-    liveRef.current = live
+    liveRef.current = { ...live, fallback }
   })
   useLayoutEffect(() => {
     if (!props) {
@@ -47,7 +48,7 @@ export function usePluginDeclarativeActTarget<T>(
       value: () => liveRef.current.value,
       readOnly: () => liveRef.current.readOnly,
       change: (next) => {
-        if (!isSameKind(next, fallback)) {
+        if (!isSameKind(next, liveRef.current.fallback)) {
           return false
         }
         liveRef.current.change(next)
@@ -60,5 +61,42 @@ export function usePluginDeclarativeActTarget<T>(
         targets.delete(props)
       }
     }
-  }, [props, fallback])
+  }, [props])
+}
+
+/** A mounted Tree's expanded items, which Orca holds while the person browses. */
+export type PluginDeclarativeActExpansion = {
+  expanded(): ReadonlySet<string>
+  /** Opens or closes `key` as a click on its chevron would. */
+  set(key: string, open: boolean): void
+}
+
+const expansions = new WeakMap<PluginDeclarativeDrawnProps, PluginDeclarativeActExpansion>()
+
+export function pluginDeclarativeActExpansion(
+  props: PluginDeclarativeDrawnProps
+): PluginDeclarativeActExpansion | null {
+  return expansions.get(props) ?? null
+}
+
+export function usePluginDeclarativeActExpansion(
+  props: PluginDeclarativeDrawnProps,
+  live: PluginDeclarativeActExpansion
+): void {
+  const liveRef = useRef(live)
+  useLayoutEffect(() => {
+    liveRef.current = live
+  })
+  useLayoutEffect(() => {
+    const expansion: PluginDeclarativeActExpansion = {
+      expanded: () => liveRef.current.expanded(),
+      set: (key, open) => liveRef.current.set(key, open)
+    }
+    expansions.set(props, expansion)
+    return () => {
+      if (expansions.get(props) === expansion) {
+        expansions.delete(props)
+      }
+    }
+  }, [props])
 }

@@ -240,10 +240,10 @@ describe('plugins.shot on the desktop', () => {
       answer({ ...DRAWN, panel: { ...DRAWN.panel!, actions: [{ ok: true }] } })
     )
     const shot = await createPluginViewDesktop(deps()).shot({ pluginKey: KEY, acts })
-    expect(shot).toMatchObject({ actions: [{ ok: true }] })
+    expect(shot).toMatchObject({ actions: [{ ok: true }], restored: false })
     const [, body, timeoutMs] = relay.requestPluginViewFromRenderer.mock.calls[0] ?? []
     expect(body).toMatchObject({ capture: { acts } })
-    expect(timeoutMs).toBe(24_000)
+    expect(timeoutMs).toBe(27_500)
 
     relay.requestPluginViewFromRenderer.mockClear()
     await expect(
@@ -254,5 +254,19 @@ describe('plugins.shot on the desktop', () => {
       data: { reason: 'window_shown' }
     })
     expect(relay.requestPluginViewFromRenderer).not.toHaveBeenCalled()
+  })
+
+  it('reports unanswered host calls and whether --act was put back once the capture ended', async () => {
+    relay.requestPluginViewFromRenderer.mockImplementation(async (...args) =>
+      args[1]?.kind === 'open-panel'
+        ? { ...DRAWN, panel: { ...DRAWN.panel!, pendingRequests: 1, actions: [{ ok: true }] } }
+        : { requestId: 'r', ok: true, restored: true }
+    )
+    const view = createPluginViewDesktop(deps())
+    await expect(
+      view.shot({ pluginKey: KEY, acts: [{ toggle: { label: 'Hide done' } }] })
+    ).resolves.toMatchObject({ pendingRequests: 1, restored: true })
+    // Without acts there is nothing to put back, so no `restored`.
+    expect(await view.shot({ pluginKey: KEY })).not.toHaveProperty('restored')
   })
 })

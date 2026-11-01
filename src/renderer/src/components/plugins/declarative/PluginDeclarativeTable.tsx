@@ -100,6 +100,7 @@ export function PluginDeclarativeTable({
     defaultValue: props.defaultSelected,
     fallback: [],
     acked: props.$edit,
+    actTarget: props,
     callback: selectionCallback,
     send: (callback, value, edit) => emit(callback, [{ keys: [...value] }], { edit })
   })
