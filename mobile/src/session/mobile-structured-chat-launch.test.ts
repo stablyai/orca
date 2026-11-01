@@ -49,7 +49,7 @@ describe('mobileStructuredChatLaunchSurface', () => {
     expect(mobileStructuredChatLaunchSurface('gemini', chatHost)).toBeUndefined()
     expect(
       mobileStructuredChatLaunchSurface('hermes', { ...chatHost, defaultView: 'terminal' })
-    ).toBeUndefined()
+    ).toBe('chat')
     expect(
       mobileStructuredChatLaunchSurface('hermes', { ...chatHost, canRequestSurface: false })
     ).toBeUndefined()

@@ -107,11 +107,23 @@ describe('launchNewTabAgentThroughHost chat surface', () => {
     expect(params).not.toHaveProperty('surface')
   })
 
-  it('keeps the host terminal default when Chat UI is off', async () => {
+  it('still asks for Hermes chat when Chat UI is off', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('terminal')
     const { params, methods } = await launch('hermes', LAUNCH_CAPABILITIES)
     expect(methods).toEqual(['agentSession.agents', 'agent.launchReplay'])
+    expect(params).toMatchObject({ agent: 'hermes', surface: 'chat' })
+  })
+
+  it('leaves Claude on the terminal when Chat UI is off', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('terminal')
+    const { params } = await launch('claude', LAUNCH_CAPABILITIES)
     expect(params).not.toHaveProperty('surface')
+  })
+
+  it('asks for Hermes chat when a fresh install has not stored Chat UI', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    const { params } = await launch('hermes', LAUNCH_CAPABILITIES)
+    expect(params).toMatchObject({ agent: 'hermes', surface: 'chat' })
   })
 
   it('does not ask for chat when the host cannot choose a surface', async () => {

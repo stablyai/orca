@@ -35,12 +35,12 @@ function publishMobileStructuredChatLaunch(context: MobileStructuredChatLaunchCo
   }
 }
 
-// Transcript-overlay agents already open as chat on top of a terminal. Other registered agents need an explicit chat launch.
+// These agents cannot switch a terminal to chat, and Chat UI defaults to off.
 export function mobileStructuredChatLaunchSurface(
   agent: string,
   context: MobileStructuredChatLaunchContext | null
 ): 'chat' | undefined {
-  if (!context?.canRequestSurface || context.defaultView !== 'chat') {
+  if (!context?.canRequestSurface) {
     return undefined
   }
   if (isNativeChatSupportedAgent(agent) || !context.registeredAgents.includes(agent)) {
