@@ -103,24 +103,42 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
   entries: ContextEntry[]
   omitted: boolean
 } {
+  const blocks: (NativeChatToolCallBlock | NativeChatToolResultBlock)[] = []
+  const positions = new Map<
+    NativeChatToolCallBlock | NativeChatToolResultBlock,
+    { messageIndex: number; blockIndex: number }
+  >()
+  const pairsByMessage: NativeChatToolPair[][] = messages.map(() => [])
+  messages.forEach((message, messageIndex) => {
+    if (message.agentStart || message.role === 'reasoning') {
+      return
+    }
+    message.blocks.forEach((block, blockIndex) => {
+      if (block.type === 'tool-call' || block.type === 'tool-result') {
+        blocks.push(block)
+        positions.set(block, { messageIndex, blockIndex })
+      }
+    })
+  })
+  for (const pair of pairToolBlocks(blocks)) {
+    const block = pair.result ?? pair.call
+    const position = block && positions.get(block)
+    if (position) {
+      // Prioritize a cross-message pair with its later result, keeping its call context together.
+      pairsByMessage[position.messageIndex].push(pair)
+    }
+  }
   const entries: ContextEntry[] = []
   let remaining = MAX_TOOL_CHARS
   let omitted = false
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
-    const message = messages[messageIndex]
-    if (message.agentStart || message.role === 'reasoning') {
-      continue
-    }
-    if (
-      !message.blocks.some((block) => block.type === 'tool-call' || block.type === 'tool-result')
-    ) {
+    const pairs = pairsByMessage[messageIndex]
+    if (!pairs.length) {
       continue
     }
     if (remaining < MIN_ENTRY_CHARS) {
       return { entries, omitted: true }
     }
-    const pairs = pairToolBlocks(message.blocks)
-    const blockIndices = new Map(message.blocks.map((block, index) => [block, index]))
     for (let index = pairs.length - 1; index >= 0; index--) {
       if (remaining < MIN_ENTRY_CHARS) {
         return { entries, omitted: true }
@@ -129,9 +147,9 @@ function selectToolEvidence(messages: readonly NativeChatMessage[]): {
       const formatted = formatToolPair(pair, remaining)
       omitted ||= formatted.shortened
       for (const { block, text } of formatted.parts) {
-        const blockIndex = blockIndices.get(block)
-        if (blockIndex !== undefined) {
-          entries.push({ messageIndex, blockIndex, text })
+        const position = positions.get(block)
+        if (position) {
+          entries.push({ ...position, text })
         }
       }
       remaining -= contextEntryChars(formatted.parts)

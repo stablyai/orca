@@ -312,3 +312,66 @@ it('keeps interleaved prose and out-of-order results at their original block pos
     expect(context.indexOf(markers[index - 1])).toBeLessThan(context.indexOf(markers[index]))
   }
 })
+
+it('keeps a later anonymous failure with its earlier call under tool budget pressure', () => {
+  const context = buildAgentSessionHandoffContext([
+    message('assistant', [
+      { type: 'text', text: 'Starting the legacy check.' },
+      { type: 'tool-call', name: 'shell', input: 'pnpm test legacy.test.ts', callId: 'legacy' },
+      { type: 'text', text: 'Waiting for the legacy check.' }
+    ]),
+    ...Array.from({ length: 5 }, (_, index) =>
+      message('assistant', [
+        { type: 'tool-call', name: 'Read', input: 'i'.repeat(1_000), callId: `read-${index}` },
+        { type: 'tool-result', output: 'o'.repeat(2_000), callId: `read-${index}` }
+      ])
+    ),
+    message('tool', [
+      { type: 'text', text: 'Legacy check completed.' },
+      { type: 'tool-result', output: 'Legacy assertion failed', isError: true },
+      { type: 'text', text: 'Fix the legacy assertion next.' }
+    ])
+  ])
+  const markers = [
+    'Starting the legacy check.',
+    '[tool shell input preview] call=legacy pnpm test legacy.test.ts',
+    'Waiting for the legacy check.',
+    'Legacy check completed.',
+    '[tool result error] Legacy assertion failed',
+    'Fix the legacy assertion next.'
+  ]
+  for (const marker of markers) {
+    expect(context).toContain(marker)
+  }
+  for (let index = 1; index < markers.length; index++) {
+    expect(context.indexOf(markers[index - 1])).toBeLessThan(context.indexOf(markers[index]))
+  }
+  expect(context.match(/pnpm test legacy.test.ts/g)).toHaveLength(1)
+  expect(context).toContain('messages or tool details omitted')
+  expect(context.length).toBeLessThanOrEqual(36_000)
+})
+
+it('preserves orphan results without consuming pending cross-message calls', () => {
+  const context = buildAgentSessionHandoffContext([
+    message('tool', [{ type: 'tool-result', output: 'anonymous orphan' }]),
+    message('assistant', [
+      { type: 'tool-call', name: 'Read', input: 'a.ts', callId: 'a' },
+      { type: 'tool-call', name: 'Search', input: 'pattern', callId: 'b' }
+    ]),
+    message('tool', [
+      { type: 'tool-result', output: 'named orphan', callId: 'unknown' },
+      { type: 'tool-result', output: 'search result', callId: 'b' },
+      { type: 'tool-result', output: 'file contents' }
+    ])
+  ])
+  expect(context).toBe(
+    [
+      '[tool result] anonymous orphan',
+      '[tool Read input preview] call=a a.ts',
+      '[tool Search input preview] call=b pattern',
+      '[tool result] call=unknown named orphan',
+      '[tool result] call=b search result',
+      '[tool result] file contents'
+    ].join('\n\n')
+  )
+})
