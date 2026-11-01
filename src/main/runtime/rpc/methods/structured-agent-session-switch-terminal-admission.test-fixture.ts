@@ -107,13 +107,27 @@ export function executionOwnerRig(
   }
   const previousProvider = getLocalPtyProvider()
   setLocalPtyProvider(ptyProvider)
-  const list = (owner?: AgentSessionOwnerBinding, ptyId = owner?.ptyId ?? ''): string => {
+  /** Listed with the handle and pane key its create exported, as the execution owner reports. */
+  const list = (
+    owner?: AgentSessionOwnerBinding,
+    ptyId = owner?.ptyId ?? '',
+    surface:
+      | { worktreeId?: string; terminalHandle?: string; tabId: string; leafId: string }
+      | undefined = owner?.surface
+  ): string => {
     const incarnationId = randomUUID()
     sessions.set(ptyId, {
       id: ptyId,
       cwd: chat.root,
       title: '',
       incarnationId,
+      ...(surface
+        ? {
+            worktreeId: surface.worktreeId ?? WORKTREE_ID,
+            terminalHandle: surface.terminalHandle,
+            paneKey: `${surface.tabId}:${surface.leafId}`
+          }
+        : {}),
       ...(owner && listsOwners ? { agentSessionOwners: [owner] } : {})
     })
     return incarnationId
@@ -129,7 +143,12 @@ export function executionOwnerRig(
     const ensure = args.agentSessionEnsure
     if (!ensure) {
       const ptyId = `switch-pty-${++started}`
-      return { id: ptyId, incarnationId: list(undefined, ptyId) }
+      const surface = {
+        terminalHandle: args.preAllocatedHandle,
+        tabId: args.tabId ?? '',
+        leafId: args.leafId ?? ''
+      }
+      return { id: ptyId, incarnationId: list(undefined, ptyId, surface) }
     }
     await reconcileAgentSessionOwnerListings()
     const ensured = await agentSessionOwners.ensure({
@@ -171,6 +190,7 @@ export function executionOwnerRig(
         opts.seed?.(claim)
         return await prepareAgentSessionOwner(claim)
       },
+      listProcesses: () => ptyProvider.listProcesses(),
       write: () => true,
       kill: () => true,
       stopAndWait: async () => true,

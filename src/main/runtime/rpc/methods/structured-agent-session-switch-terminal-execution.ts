@@ -45,7 +45,8 @@ export async function executeStructuredSessionTerminalSwitch(
         agent,
         source: saved,
         commandOverride: execution?.commandOverride,
-        signal: deadline.signal
+        signal: deadline.signal,
+        chatSessionId: sessionId
       })
     : {}
   deadline.check()
@@ -70,26 +71,33 @@ export async function executeStructuredSessionTerminalSwitch(
       reason: 'messagesUnsettled'
     })
   }
+  // A retry after a lost reply: the terminal this switch already started, still running once
+  // the stop is done (one that exited during it is not listed).
+  const own = await ctx.runtime.ownSwitchTerminal(record.location.workspaceId, sessionId)
+  check()
   const prepared =
-    content === 'saved'
+    content === 'saved' && !own
       ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
   check()
-  // Parked: bound to a pane no layout shows yet. A lost reply is answered by re-issuing this same
-  // create, which adopts the running terminal through the conversation's claim.
-  const terminal = await host.trackSwitchPhysical(
-    sessionId,
-    ctx.runtime.spawnSwitchTerminal(record.location.workspaceId, {
-      agent,
-      source: prepared,
-      commandOverride: execution?.commandOverride,
-      options: record.options,
-      signal: deadline.signal,
-      // The answer the admission took, so the spawn decides the claim the same way.
-      resumeSupported: adoption.resumeSupported,
-      ...(adoption.unclaimed ? { unclaimed: true } : {})
-    })
-  )
+  // Parked: bound to a pane no layout shows yet, under the chat's key, so a retry after a lost
+  // reply places the running terminal (`own`) instead of starting another.
+  const terminal =
+    own ??
+    (await host.trackSwitchPhysical(
+      sessionId,
+      ctx.runtime.spawnSwitchTerminal(record.location.workspaceId, {
+        agent,
+        source: prepared,
+        commandOverride: execution?.commandOverride,
+        options: record.options,
+        signal: deadline.signal,
+        // The answer the admission took, so the spawn decides the claim the same way.
+        resumeSupported: adoption.resumeSupported,
+        ...(adoption.unclaimed ? { unclaimed: true } : {}),
+        chatSessionId: sessionId
+      })
+    ))
   let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>
   let dispatched = false
   try {

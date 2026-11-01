@@ -373,6 +373,7 @@ it('reports a dispatched terminal with a lost answer as uncertain, preserving it
   const { runtime } = setupMainOwnedWorkspace()
   await rig.store.setSessionTabVisibility(id, false)
   await rig.store.setSessionTabVisibility(id, true, 'source-chat')
+  vi.spyOn(runtime, 'ownSwitchTerminal').mockResolvedValue(undefined)
   vi.spyOn(runtime, 'spawnSwitchTerminal').mockRejectedValue(
     new DaemonRequestTimeoutError('raw daemon text must not become start-failed copy')
   )

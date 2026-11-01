@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
@@ -120,7 +121,15 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       }
       return null
     }
-    const session = matches[0]
+    return this.adoptListedTerminal(matches[0], worktreeId, terminalHandle)
+  }
+
+  /** The one listed PTY exported with this create's handle, bound here under that handle. */
+  protected adoptListedTerminal(
+    session: PtyProcessInfo,
+    worktreeId: string,
+    terminalHandle: string
+  ): RuntimeTerminalCreate {
     const authoritativeWorktreeId = session.worktreeId ?? inferWorktreeIdFromPtyId(session.id)
     if (authoritativeWorktreeId !== worktreeId) {
       // Why: a reused address or forged provider record must never adopt a PTY from another workspace.

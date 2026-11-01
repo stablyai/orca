@@ -121,8 +121,16 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
     },
     false
   )
-  const lost = await runtime.spawnSwitchTerminal(WORKTREE_ID, { agent: 'codex', source })
-  const retried = await runtime.spawnSwitchTerminal(WORKTREE_ID, { agent: 'codex', source })
+  const lost = await runtime.spawnSwitchTerminal(WORKTREE_ID, {
+    agent: 'codex',
+    source,
+    chatSessionId: id
+  })
+  const retried = await runtime.spawnSwitchTerminal(WORKTREE_ID, {
+    agent: 'codex',
+    source,
+    chatSessionId: id
+  })
   expect(started).toBe(1)
   expect(spawn).toHaveBeenCalledTimes(2)
   expect(retried).toMatchObject({
@@ -183,7 +191,8 @@ it.each([
   const retried = await r.run('to-terminal-retry')
   expect(retried).toMatchObject({ status: 'completed', sessionId: id, terminal: t1.tabId })
   expect(r.started()).toBe(1)
-  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual([t1.ptyId, t1.ptyId])
+  // The retry finds it by the chat's key and creates nothing.
+  expect(r.spawned.map((terminal) => terminal.ptyId)).toEqual([t1.ptyId])
   expect(r.place.mock.calls.map(([, args]) => [args.chatSessionId, args.terminal.ptyId])).toEqual([
     [id, t1.ptyId],
     [id, t1.ptyId]
@@ -282,9 +291,9 @@ it.each([
 })
 
 it.each([
-  { control: 'another live holder beside that terminal', supportsClaims: true, started: 1 },
-  // No claim to adopt by: the retry starts a second CLI, which the user can close.
-  { control: 'an execution owner that cannot attest claims', supportsClaims: false, started: 2 }
+  { control: 'another live holder beside that terminal', supportsClaims: true },
+  // No claim to adopt by: the chat's key still finds the first terminal.
+  { control: 'an execution owner that cannot attest claims', supportsClaims: false }
 ])('a retry checks only the switched tab: $control', async (c) => {
   const r = await switchRig({ supportsClaims: c.supportsClaims })
   await lostFirstAttempt(r)
@@ -293,7 +302,7 @@ it.each([
   }
   expect(await r.run('to-terminal-retry')).toMatchObject({ status: 'completed', sessionId: id })
   expect(r.stop).toHaveBeenCalledTimes(2)
-  expect(r.started()).toBe(c.started)
+  expect(r.started()).toBe(1)
 })
 
 it.each([
@@ -322,11 +331,30 @@ it.each([
   expect(r.place).toHaveBeenCalledTimes(2)
 })
 
-// Scaling contract: a switch's ownership preparation and its create each list owners once, by
-// panel R138's design, however many other conversations' owners the host holds.
-it.each([10, 100])('lists owners twice per switch with %i other owners', async (others) => {
+// Scaling contract: a switch's own-terminal lookup, its ownership preparation and its create each
+// list once (panel R138, R142), however many other conversations' owners the host holds.
+it.each([10, 100])('lists owners three times per switch with %i other owners', async (others) => {
   const r = await switchRig({ seed: (claim) => fill(r, claim, others) })
   const before = r.fullListings()
   expect(await r.run('to-terminal-scaling')).toMatchObject({ status: 'completed' })
-  expect(r.fullListings() - before).toBe(2)
+  expect(r.fullListings() - before).toBe(3)
+})
+
+// R142: a terminal opened unclaimed (another worktree's terminal holds the claim) has no claim to
+// adopt it by; its retry after a lost answer places it by the chat's key instead of starting another.
+it('retries into its first unclaimed terminal after a lost placement answer', async () => {
+  const r = await switchRig({ seed: (claim) => r.list(ownerOf(foreign(claim), 'foreign-pty')) })
+  const first = await lostFirstAttempt(r)
+  expect(r.owners().map((owner) => owner.ptyId)).toEqual(['foreign-pty'])
+  const res = await r.run('to-terminal-unclaimed-retry')
+  expect(res).toMatchObject({
+    status: 'completed',
+    sessionId: id,
+    terminal: first.tabId
+  })
+  expect(r.started()).toBe(1)
+  expect(r.place.mock.calls.map(([, args]) => args.terminal.ptyId)).toEqual([
+    first.ptyId,
+    first.ptyId
+  ])
 })

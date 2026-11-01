@@ -12,6 +12,10 @@ import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-t
 import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
+import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
+import { withTimeoutResult } from '../../runtime-async-boundaries'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export type SwitchTerminalSpawn = {
   agent: TuiAgent
@@ -24,7 +28,14 @@ export type SwitchTerminalSpawn = {
   resumeSupported?: boolean
   /** Another worktree's terminal holds the conversation's claim: open this one without it. */
   unclaimed?: boolean
+  /** The chat being switched, whose terminal's create carries its key. */
+  chatSessionId: string
 }
+
+/** One key per chat's switch terminal: a retry's create names the terminal its lost attempt
+ *  started, while that one runs. */
+const switchTerminalHandle = (workspaceId: string, chatSessionId: string): string =>
+  `term_${deterministicAgentSessionUuid(`switch-terminal\0${workspaceId}\0${chatSessionId}`)}`
 
 /** Another worktree's terminal, or several, own the conversation's claim. The switch checks only
  *  its own tab (Brennan 11-01, temporary): it opens its terminal unclaimed instead of refusing. */
@@ -39,9 +50,9 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
 
   /**
    * A switch's terminal: main's ordinary claim-carrying create, parked with no tab until the
-   * layout replace shows it. Re-issuing the same create after a lost reply adopts the running
-   * terminal through the conversation's claim (the common pattern: an idempotent keyed create),
-   * joins an in-flight one, or creates; no custody is owed anywhere.
+   * layout replace shows it, keyed by the chat it replaces. A retry after a lost reply first
+   * adopts the terminal that key names (`ownSwitchTerminal`), whichever claim either attempt
+   * carried (the common pattern: an idempotent keyed create); no custody is owed anywhere.
    */
   async spawnSwitchTerminal(
     workspaceId: string,
@@ -52,8 +63,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       args
     )
     // No claim when nothing can adopt by one: a chat that never saved a turn (no provider session
-    // to name), a route that cannot attest one (SSH), or an execution owner too old to adopt. A
-    // retry after a lost reply there starts a second CLI, which the user can close.
+    // to name), a route that cannot attest one (SSH), or an execution owner too old to adopt.
     const claim =
       providerSession &&
       !args.unclaimed &&
@@ -80,6 +90,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
         presentation: 'background',
         tabId: randomUUID(),
         leafId: randomUUID(),
+        preAllocatedHandle: switchTerminalHandle(workspace.id, args.chatSessionId),
         ...(agentSessionClaim ? { agentSessionClaim } : {}),
         persistHostSessionBinding: true,
         deferMobileSessionPublish: true,
@@ -131,6 +142,54 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     return { resumeSupported }
   }
 
+  /**
+   * The switch's own terminal for this chat, started by an attempt whose answer was lost and still
+   * running: found by its create's key, so the retry places it instead of starting another CLI.
+   * Gone once it exits, so a later switch creates its own. An owner that lists no processes (too
+   * old to report the key) finds none, and a retry there starts a second CLI the user can close.
+   */
+  async ownSwitchTerminal(
+    workspaceId: string,
+    chatSessionId: string
+  ): Promise<RuntimeTerminalCreate | undefined> {
+    if (!this.ptyController?.listProcesses) {
+      return undefined
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      `id:${workspaceId}`,
+      undefined,
+      {
+        wslUserAct: true
+      }
+    )
+    const listed = await withTimeoutResult(
+      this.ptyController.listProcesses(getConnectionExecutionHostId(workspace.connectionId)),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    )
+    if (!listed.ok) {
+      // An unread inventory cannot prove the earlier terminal is gone.
+      throw new Error('runtime_unavailable')
+    }
+    const terminalHandle = switchTerminalHandle(workspace.id, chatSessionId)
+    const own = listed.value.filter(
+      (session) => session.terminalHandle === terminalHandle && !session.exiting
+    )
+    if (own.length === 0) {
+      return undefined
+    }
+    // The in-process provider lists no pane key; it runs in this process, which then knows the pane.
+    const paneKey = own[0].paneKey ?? this.paneOfPty(this.ptysById.get(own[0].id)).paneKey
+    if (own.length > 1 || !paneKey?.includes(':')) {
+      throw new Error('terminal_create_identity_conflict')
+    }
+    return {
+      ...this.adoptListedTerminal(own[0], workspace.id, terminalHandle),
+      tabId: paneKey.slice(0, paneKey.indexOf(':')),
+      paneKey,
+      agentSessionDisposition: 'adopted'
+    }
+  }
+
   private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${workspaceId}`,
@@ -179,7 +238,7 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
   /**
    * A switch's terminal that no tab will show once the switch failed with its client connected:
    * ended only while it is still that exact process and nothing views it. Refused or unreachable,
-   * it stays for a retry's create to adopt through the claim; one it adopted was never its own.
+   * it stays for a retry to adopt by its key; one it adopted is not ended here.
    */
   async discardSwitchTerminal(terminal: RuntimeTerminalCreate): Promise<void> {
     const pty = terminal.ptyId ? this.ptysById.get(terminal.ptyId) : undefined
