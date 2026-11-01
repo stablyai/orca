@@ -14,12 +14,13 @@ export function isImageOrPdfPreviewPath(filePath: string): boolean {
 /** The path's `diff=<driver>` when that driver sets `textconv`; never rejects. */
 export async function readTextconvDriver(
   worktreePath: string,
-  gitPath: string,
-  options: GitRuntimeOptions
+  filePath: string,
+  options: GitRuntimeOptions = {}
 ): Promise<string | undefined> {
-  if (isImageOrPdfPreviewPath(gitPath)) {
+  if (isImageOrPdfPreviewPath(filePath)) {
     return undefined
   }
+  const gitPath = filePath.replace(/\\/g, '/')
   const readOptions = gitReadOptionsForWorktree(worktreePath, options)
   try {
     const { stdout } = await gitExecFileAsync(

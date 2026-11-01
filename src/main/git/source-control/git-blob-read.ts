@@ -3,7 +3,7 @@ import { isBinaryBuffer } from '../../../shared/binary-buffer'
 import { isMissingGitBlobPath } from '../../../shared/git-blob-absence'
 import { readGitCommandFailureStderr } from '../../../shared/git-command-failure-text'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
+import { gitOptionsForWorktree, gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsyncBuffer } from '../runner'
 import { isMaxBufferOverflowError } from '../max-buffer-overflow'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
@@ -18,8 +18,6 @@ export type GitBlobReadResult = {
   failed?: boolean
   /** Past MAX_GIT_SHOW_BYTES: left unread and reported binary, so older diff readers stay safe. */
   tooLarge?: boolean
-  /** The diff driver failed and the stored bytes stand in; don't cache, it may recover. */
-  textconvFailed?: boolean
 }
 
 const TOO_LARGE_BLOB: GitBlobReadResult = {
@@ -80,7 +78,7 @@ async function readGitBlob(
   const applyTextconv = isImageOrPdfPreviewPath(filePath)
     ? Promise.resolve(false)
     : (textconv ??
-      readTextconvDriver(worktreePath, gitPath, options).then((driver) => driver !== undefined))
+      readTextconvDriver(worktreePath, filePath, options).then((driver) => driver !== undefined))
   let raw: Buffer
   try {
     // The raw read proves a blob is there: `cat-file --textconv` would print a tree listing.
@@ -100,17 +98,18 @@ async function readGitBlob(
     return { ...bufferToBlob(raw, filePath), exists: true }
   }
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(
-      ['cat-file', '--textconv', '--', spec],
-      readOptions
-    )
+    // Drivers can need the WSL login profile (keys, agents), so skip the direct-read route.
+    const { stdout } = await gitExecFileAsyncBuffer(['cat-file', '--textconv', '--', spec], {
+      ...gitOptionsForWorktree(worktreePath, options),
+      maxBuffer: MAX_GIT_SHOW_BYTES
+    })
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return TOO_LARGE_BLOB
     }
     // A driver missing from this host's PATH, or failing, must not hide the stored blob.
-    return { ...bufferToBlob(raw, filePath), exists: true, textconvFailed: true }
+    return { ...bufferToBlob(raw, filePath), exists: true }
   }
 }
 

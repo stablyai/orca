@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -86,6 +86,24 @@ describe('diff drivers with textconv', () => {
       originalContent: 'one\n',
       modifiedContent: 'two\n'
     })
+  })
+
+  it('re-reads driver output once the driver recovers', async () => {
+    await writeFile(path.join(repo, '.gitattributes'), 'notes.txt diff=keyed\n')
+    // Stand-in for a locked key: the driver fails until the marker exists.
+    git('config', 'diff.keyed.textconv', 'test -f key && tr a-z A-Z <')
+    await writeFile(path.join(repo, 'notes.txt'), 'one\n')
+    git('add', '.')
+    git('commit', '-m', 'init')
+    await writeFile(path.join(repo, 'notes.txt'), 'two\n')
+    git('add', 'notes.txt')
+    // Age the stamped inputs so the first result is old enough to settle.
+    const old = new Date(Date.now() - 10_000)
+    await utimes(path.join(repo, '.git', 'index'), old, old)
+
+    expect(await getDiff(repo, 'notes.txt', true)).toMatchObject({ originalContent: 'one\n' })
+    await writeFile(path.join(repo, 'key'), '')
+    expect(await getDiff(repo, 'notes.txt', true)).toMatchObject({ originalContent: 'ONE\n' })
   })
 
   it('does not read a replaced directory through the driver as file content', async () => {

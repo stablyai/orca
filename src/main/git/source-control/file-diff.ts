@@ -14,6 +14,7 @@ import {
   readUnstagedLeftBlob,
   readWorkingTreeFile
 } from './git-blob-read'
+import { readTextconvDriver } from './textconv-driver'
 import { workingTreeMatchesTextconv } from './working-tree-textconv'
 import {
   findContainingSubmodule,
@@ -149,29 +150,36 @@ async function loadDiff(
   let modifiedDeleted = false
   let readFailed = false
   let tooLarge = false
+  const textconvDriver = readTextconvDriver(worktreePath, filePath, options)
 
   try {
     if (staged) {
+      const textconv = textconvDriver.then((driver) => driver !== undefined)
       // HEAD and index blobs are independent; read them concurrently.
       const [leftBlob, rightBlob] = await Promise.all([
-        readGitBlobAtOidPath(worktreePath, 'HEAD', options.oldPath ?? filePath, options),
-        readGitBlobAtIndexPath(worktreePath, filePath, options)
+        options.oldPath === undefined
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
+          : readGitBlobAtOidPath(worktreePath, 'HEAD', options.oldPath, options),
+        readGitBlobAtIndexPath(worktreePath, filePath, options, textconv)
       ])
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
       modifiedContent = rightBlob.content
       modifiedIsBinary = rightBlob.isBinary
       modifiedDeleted = !rightBlob.exists && !rightBlob.failed
-      readFailed = [leftBlob, rightBlob].some((blob) => blob.failed || blob.textconvFailed)
+      readFailed = leftBlob.failed === true || rightBlob.failed === true
       tooLarge = leftBlob.tooLarge === true || rightBlob.tooLarge === true
     } else {
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
       const hostFilePath = hostWorktreePath ? path.join(hostWorktreePath, filePath) : undefined
-      const textconv = hostFilePath
-        ? workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, options)
-        : Promise.resolve(false)
+      const textconv = textconvDriver.then(
+        (driver) =>
+          driver !== undefined &&
+          hostFilePath !== undefined &&
+          workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, driver, options)
+      )
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
           ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
@@ -185,7 +193,7 @@ async function loadDiff(
       modifiedContent = workingTreeBlob.content
       modifiedIsBinary = workingTreeBlob.isBinary
       modifiedDeleted = !workingTreeBlob.exists
-      readFailed = [leftBlob, workingTreeBlob].some((blob) => blob.failed || blob.textconvFailed)
+      readFailed = leftBlob.failed === true || workingTreeBlob.failed === true
       tooLarge = leftBlob.tooLarge === true || workingTreeBlob.tooLarge === true
     }
   } catch {
@@ -200,11 +208,13 @@ async function loadDiff(
     filePath,
     tooLarge
   )
+  // Driver output depends on config, keys and tools the stamp doesn't cover.
+  const reusable = !readFailed && (await textconvDriver) === undefined
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {
-    return { result: { ...result, modifiedDeleted: true }, reusable: !readFailed }
+    return { result: { ...result, modifiedDeleted: true }, reusable }
   }
-  return { result, reusable: !readFailed }
+  return { result, reusable }
 }
 
 /** A worktree path with no host spelling is a read failure, never a proven deletion. */

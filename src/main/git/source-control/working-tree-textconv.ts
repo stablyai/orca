@@ -1,11 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
 import { GIT_READ_TIMEOUT_MS } from '../../../shared/git-command-timeout'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitOptionsForWorktree, gitReadOptionsForWorktree } from '../git-runtime-options'
+import { gitOptionsForWorktree } from '../git-runtime-options'
 import { createLocalGitObjectQuarantine } from '../local-git-object-quarantine'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from '../runner'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
-import { readTextconvDriver } from './textconv-driver'
 
 /**
  * Whether an unstaged diff may show the Git side through the path's textconv driver.
@@ -16,19 +15,16 @@ export async function workingTreeMatchesTextconv(
   worktreePath: string,
   filePath: string,
   hostFilePath: string,
+  driver: string,
   options: GitRuntimeOptions = {}
 ): Promise<boolean> {
   const gitPath = filePath.replace(/\\/g, '/')
-  const driver = await readTextconvDriver(worktreePath, gitPath, options)
-  if (!driver) {
-    return false
-  }
   let fileStat
   try {
+    // A deleted file stays raw too: Monaco's revert arrows would restore converted text.
     fileStat = await stat(hostFilePath)
-  } catch (error) {
-    // A deleted file leaves nothing editable, so the Git side can show converted text.
-    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+  } catch {
+    return false
   }
   if (!fileStat.isFile() || fileStat.size > MAX_GIT_SHOW_BYTES) {
     return false
@@ -55,7 +51,7 @@ export async function workingTreeMatchesTextconv(
           `--path=${gitPath}`,
           oid.trim()
         ],
-        { ...gitReadOptionsForWorktree(worktreePath, options), env, maxBuffer: MAX_GIT_SHOW_BYTES }
+        { ...gitOptionsForWorktree(worktreePath, options), env, maxBuffer: MAX_GIT_SHOW_BYTES }
       )
       return stdout
     })
