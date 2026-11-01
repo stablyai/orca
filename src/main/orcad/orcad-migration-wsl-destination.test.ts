@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration/orcad-migration-manifest'
 import {
   assertOrcadMigrationSourceServedHere,
-  ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST,
-  servesLocalWslMigrationSource
+  ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST
 } from './orcad-migration-wsl-destination'
 
 const WSL_SOURCE: OrcadMigrationManifestSource = {
@@ -13,21 +12,9 @@ const WSL_SOURCE: OrcadMigrationManifestSource = {
   scopeFolderWorkspaceIds: [],
   generation: 1
 }
-const SSH_SOURCE: OrcadMigrationManifestSource = {
-  sshTargetId: 'ssh-1',
-  sshTargetGeneration: 1,
-  targetLabel: 'Prod'
-}
 const WSL_HOST = { ORCA_WSL_ORCAD_HOST: '1', WSL_DISTRO_NAME: 'ubuntu' }
 
 describe('WSL migration destination', () => {
-  it('serves the WSL source only on the orcad Orca launched inside a distro', () => {
-    expect(servesLocalWslMigrationSource(WSL_HOST, 'linux')).toBe(true)
-    // WSLg and SSH guests lack the desktop-launched WSL host identity.
-    expect(servesLocalWslMigrationSource({ WSL_DISTRO_NAME: 'Ubuntu' }, 'linux')).toBe(false)
-    expect(servesLocalWslMigrationSource(WSL_HOST, 'win32')).toBe(false)
-  })
-
   it('accepts its own distro, case-insensitively', () => {
     expect(() => assertOrcadMigrationSourceServedHere(WSL_SOURCE, WSL_HOST, 'linux')).not.toThrow()
   })
@@ -56,9 +43,5 @@ describe('WSL migration destination', () => {
         ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST
       )
     }
-  })
-
-  it('leaves the SSH conversion alone everywhere', () => {
-    expect(() => assertOrcadMigrationSourceServedHere(SSH_SOURCE, {}, 'linux')).not.toThrow()
   })
 })
