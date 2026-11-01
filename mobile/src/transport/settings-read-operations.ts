@@ -3,6 +3,8 @@ import type { RpcCompatibleReader } from './rpc-operation-contract'
 import { normalizeSourceControlGroupOrder } from '../../../src/shared/source-control-group-order'
 import type { SourceControlGroupOrder } from '../../../src/shared/ui-chrome-types'
 import { nativeChatQueueFollowUps } from '../../../src/shared/native-chat-follow-up-behavior'
+import { hostNewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-host-support'
+import type { NewChatPermissionSettings } from '../../../src/shared/agent-chat-permission-mode'
 
 function settingsMember(raw: unknown): unknown {
   const boxed: { readonly settings?: unknown } | null | undefined = raw == null ? raw : Object(raw)
@@ -141,6 +143,27 @@ export const nativeChatQueueFollowUpsRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: followUpBehaviorReader
+  })
+)
+
+const newChatPermissionReader: RpcCompatibleReader<
+  unknown,
+  'new-chat-permission',
+  NewChatPermissionSettings
+> = (raw) => ({
+  compatible: true,
+  variant: 'new-chat-permission',
+  value: hostNewChatPermissionSettings(raw == null ? undefined : settingsMember(raw)),
+  salvage: { droppedPaths: [], droppedCount: 0 }
+})
+
+export const nativeChatNewChatPermissionRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.native-chat-new-chat-permission-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: newChatPermissionReader
   })
 )
 

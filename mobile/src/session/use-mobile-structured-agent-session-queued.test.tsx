@@ -289,6 +289,7 @@ describe('mobile structured queued messages', () => {
         await hook!.sendWithOutcome('queue by default')
       })
       expect(requestOf('agentSession.send').params.delivery).toBe('queue-if-active')
+      const settingsReads = calls('settings.get').length
       await act(async () =>
         preferenceListener?.({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
       )
@@ -300,7 +301,7 @@ describe('mobile structured queued messages', () => {
       expect(
         subscribe.mock.calls.filter(([method]) => method === 'agentSession.subscribe')
       ).toHaveLength(1)
-      expect(calls('settings.get')).toHaveLength(1)
+      expect(calls('settings.get')).toHaveLength(settingsReads)
     })
 
     it('a new send follows the current host capability after acknowledgement loss', async () => {

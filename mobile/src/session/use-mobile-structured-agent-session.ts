@@ -100,6 +100,7 @@ export function useMobileStructuredAgentSession(
     client,
     sessionId,
     enabled,
+    connected,
     fence: state.fence,
     mutate,
     optionStamp,

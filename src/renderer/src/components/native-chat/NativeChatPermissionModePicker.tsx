@@ -11,9 +11,13 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useAppStore } from '@/store'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
+  chatPermissionModeWarns,
   isAgentChatPermissionMode,
+  newChatPermissionModeForSettings,
+  type AgentChatPermissionChoice,
   type AgentChatPermissionMode
 } from '../../../../shared/agent-chat-permission-mode'
 import type {
@@ -31,6 +35,8 @@ import { runSessionOptionSurfaceCall } from './native-chat-session-option-surfac
 export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
   truncate?: boolean
+  /** Drops the Full access warning colour, e.g. when it is the user's own default. */
+  quiet?: boolean
 }): React.JSX.Element {
   const Icon = NATIVE_CHAT_PERMISSION_MODE_ICONS[props.mode]
   const label = nativeChatPermissionModeLabel(props.mode)
@@ -40,7 +46,7 @@ export function NativeChatPermissionModeName(props: {
       {props.truncate ? <span className="truncate">{label}</span> : <span>{label}</span>}
     </>
   )
-  return props.mode === 'full-access' ? (
+  return props.mode === 'full-access' && !props.quiet ? (
     <span className="flex min-w-0 items-center gap-1.5 text-status-warning">{body}</span>
   ) : (
     <span className="flex min-w-0 items-center gap-1.5">{body}</span>
@@ -84,6 +90,8 @@ export type NativeChatPermissionModePickerProps = {
   agent?: string | null
   disabled?: boolean
   currentLabel?: string
+  /** The mode new chats start in; the pill does not warn about a mode the user chose as default. */
+  defaultMode?: AgentChatPermissionChoice | null
   onSelect: (mode: AgentChatPermissionMode) => void
 }
 
@@ -93,7 +101,8 @@ function NativeChatPermissionModePickerInner({
   agent,
   disabled = false,
   onSelect,
-  currentLabel
+  currentLabel,
+  defaultMode
 }: NativeChatPermissionModePickerProps): React.JSX.Element {
   useUiLanguageRevision()
   const title = nativeChatPermissionPickerTitle()
@@ -118,7 +127,11 @@ function NativeChatPermissionModePickerInner({
               className="max-w-40 min-w-0 shrink"
             >
               {isAgentChatPermissionMode(current) ? (
-                <NativeChatPermissionModeName mode={current} truncate />
+                <NativeChatPermissionModeName
+                  mode={current}
+                  truncate
+                  quiet={!chatPermissionModeWarns(current, defaultMode)}
+                />
               ) : (
                 <>
                   <Settings2 className="size-3.5 shrink-0" aria-hidden />
@@ -161,6 +174,7 @@ export function NativeChatComposerPermissionPicker({
   snapshot: readonly SessionOptionDescriptor[]
   agent?: string
 }): React.JSX.Element | null {
+  const settings = useAppStore((state) => state.settings)
   const descriptor = snapshot.find((entry) => entry.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID)
   const current = descriptor?.kind.type === 'select' ? descriptor.kind.currentValue : undefined
   if (!surface || !descriptor || descriptor.kind.type !== 'select') {
@@ -178,6 +192,7 @@ export function NativeChatComposerPermissionPicker({
       modes={modes}
       currentLabel={descriptor.description}
       agent={agent ?? null}
+      defaultMode={agent ? newChatPermissionModeForSettings(agent, settings) : null}
       disabled={!descriptor.settable}
       onSelect={(mode) => {
         // The report can match a new explicit pick while the chat still follows agent settings.

@@ -2,7 +2,8 @@ import {
   AGENT_CHAT_PERMISSION_MODES,
   agentChatPermissionModes,
   isAgentChatPermissionMode,
-  type AgentChatPermissionMode
+  type AgentChatPermissionMode,
+  type NewChatPermissionSettings
 } from './agent-chat-permission-mode'
 import {
   resolveTuiAgentLaunchArgs,
@@ -10,6 +11,10 @@ import {
 } from './tui-agent-launch-defaults'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import { isTuiAgent } from './tui-agent-config'
+import {
+  isAgentPermissionChoice,
+  normalizeAgentPermissionOverrides
+} from './tui-agent-permission-choice'
 
 /** Every shell a host could parse its arguments with: any one granting bypass counts. */
 const HOST_STARTUP_SHELLS: readonly AgentStartupShell[] = ['posix', 'powershell', 'cmd']
@@ -22,6 +27,27 @@ export function hostSettingsApplyChatPermissionModes(settings: unknown): boolean
     'nativeChatPermissionMode' in settings &&
     isAgentChatPermissionMode(settings.nativeChatPermissionMode)
   )
+}
+
+/** The checked fields of a host's `settings.get` that pick the permission its new chats start in. */
+export function hostNewChatPermissionSettings(settings: unknown): NewChatPermissionSettings {
+  if (typeof settings !== 'object' || settings === null) {
+    return {}
+  }
+  const choice = 'agentPermissionDefault' in settings ? settings.agentPermissionDefault : undefined
+  const legacy =
+    'nativeChatPermissionMode' in settings ? settings.nativeChatPermissionMode : undefined
+  return {
+    ...(isAgentPermissionChoice(choice) ? { agentPermissionDefault: choice } : {}),
+    ...('agentPermissionOverrides' in settings
+      ? {
+          agentPermissionOverrides: normalizeAgentPermissionOverrides(
+            settings.agentPermissionOverrides
+          )
+        }
+      : {}),
+    ...(isAgentChatPermissionMode(legacy) ? { nativeChatPermissionMode: legacy } : {})
+  }
 }
 
 /** Older hosts use Full access if any startup shell parses a bypass flag, otherwise Ask; null for agents without chat modes. */

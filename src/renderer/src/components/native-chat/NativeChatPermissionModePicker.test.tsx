@@ -1,8 +1,16 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-chat-permission-mode'
+
+const store = vi.hoisted(() => {
+  const settings: Record<string, unknown> = { nativeChatPermissionMode: 'ask' }
+  return { settings }
+})
+vi.mock('@/store', () => ({
+  useAppStore: <T,>(select: (state: typeof store) => T): T => select(store)
+}))
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -171,6 +179,18 @@ describe('NativeChatPermissionModePicker', () => {
     expect(option('ask').querySelector('.text-status-warning')).toBeNull()
   })
 
+  it("keeps Full access quiet on the pill when it is the user's default, but not in the menu", () => {
+    render(
+      <NativeChatPermissionModePicker
+        {...props({ current: 'full-access', defaultMode: 'full-access' })}
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Permissions Full access' })
+    expect(trigger.querySelector('.text-status-warning')).toBeNull()
+    expect(option('full-access').querySelector('.text-status-warning')).not.toBeNull()
+  })
+
   it('locks the pill and its rows while disabled', () => {
     render(<NativeChatPermissionModePicker {...props({ disabled: true })} />)
     expect(screen.getByTestId('permission-trigger').getAttribute('data-disabled')).toBe('true')
@@ -264,6 +284,50 @@ describe('NativeChatComposerPermissionPicker', () => {
       expect(options.setOption).toHaveBeenCalledExactlyOnceWith('permissionMode', 'full-access')
     }
   )
+
+  it.each([
+    ['legacy Ask', { nativeChatPermissionMode: 'ask' }, true],
+    ['legacy Full access', { nativeChatPermissionMode: 'full-access' }, false],
+    [
+      'Agent Permissions Full access',
+      { nativeChatPermissionMode: 'ask', agentPermissionDefault: 'full-access' },
+      false
+    ],
+    [
+      'Codex Ask override',
+      {
+        agentPermissionDefault: 'full-access',
+        agentPermissionOverrides: { codex: 'ask' }
+      },
+      true
+    ]
+  ])('with a %s default, warns about Full access on the pill: %s', (_name, settings, warns) => {
+    const previous = store.settings
+    store.settings = settings
+    onTestFinished(() => {
+      store.settings = previous
+    })
+    render(
+      <NativeChatComposerPermissionPicker
+        surface={surface()}
+        snapshot={[
+          descriptor({
+            kind: {
+              type: 'select',
+              currentValue: 'full-access',
+              choices: [
+                { value: 'ask', label: 'Ask for approval' },
+                { value: 'full-access', label: 'Full access' }
+              ]
+            }
+          })
+        ]}
+        agent="codex"
+      />
+    )
+    const trigger = screen.getByRole('button', { name: 'Permissions Full access' })
+    expect(trigger.querySelector('.text-status-warning') !== null).toBe(warns)
+  })
 
   it('renders nothing without a permission descriptor', () => {
     const { container } = render(

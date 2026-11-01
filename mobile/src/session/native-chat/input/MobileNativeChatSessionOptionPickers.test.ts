@@ -17,6 +17,7 @@ import { AccessibilityInfo, Platform } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
 import { structuredAgentSessionPermissionDescriptor } from '../../../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { createStructuredAgentSessionOptionState } from '../../../../../src/shared/agent-session/options/structured-agent-session-options'
+import type { AgentChatPermissionChoice } from '../../../../../src/shared/agent-chat-permission-mode'
 import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
@@ -116,7 +117,8 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     snapshot: SessionOptionDescriptor[],
     isWorking = false,
     requestedPage: string | null = null,
-    busy: { pendingId?: string; sendInFlight?: boolean } = {}
+    busy: { pendingId?: string; sendInFlight?: boolean } = {},
+    permissionDefault: AgentChatPermissionChoice | null = null
   ) => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
@@ -133,6 +135,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
         controller,
         isWorking: working,
         sendInFlight: busy.sendInFlight,
+        permissionDefault,
         presentation,
         onDrawerOpen: (page) => setPresentation({ page, refocus: false }),
         onNavigate: (page) => setPresentation((current) => current && { ...current, page })
@@ -561,6 +564,33 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(setOption).toHaveBeenCalledWith('permissionMode', 'ask')
     expect(rowByText('Sonnet 5').props.accessibilityRole).toBe('radio')
   })
+
+  it.each([
+    ['ask', true],
+    ['full-access', false],
+    ['own', true]
+  ] as const)(
+    'with a %s default, warns about Full access on the pill: %s',
+    (defaultMode, warns) => {
+      mount(
+        [
+          MODEL_DESCRIPTOR,
+          {
+            ...PERMISSION_DESCRIPTOR,
+            kind: { type: 'select', currentValue: 'full-access', choices: PERMISSION_CHOICES }
+          }
+        ],
+        false,
+        null,
+        {},
+        defaultMode
+      )
+      expect(findByHostType(renderer!.root, 'ShieldAlert').props.color).toBe(
+        warns ? colors.statusAmber : colors.textSecondary
+      )
+      expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5, full access')
+    }
+  )
 
   it.each([
     ['claude', 'accept-edits', 'Accept edits'],

@@ -23,6 +23,7 @@ import {
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
+import { useMobileNewChatPermission } from './use-mobile-new-chat-permission'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -31,6 +32,8 @@ export function useMobileStructuredAgentOptions(args: {
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
+  /** Reads the host's new-chat permission while true; the picker warns against it. */
+  connected?: boolean
   fence: number | null
   turnId: string | null
   mutate: StructuredAgentSessionMutate
@@ -47,6 +50,11 @@ export function useMobileStructuredAgentOptions(args: {
 }) {
   const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
     args
+  const newChatPermission = useMobileNewChatPermission(
+    client,
+    enabled && args.connected === true,
+    sessionId
+  )
   const optionCatalog = useMemo(
     () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
@@ -216,6 +224,7 @@ export function useMobileStructuredAgentOptions(args: {
     pendingOptionId: writer.pendingOptionId(controller, optionState.record),
     setStructuredOption,
     invokeStructuredOption,
-    sendSelection
+    sendSelection,
+    newChatPermission
   }
 }

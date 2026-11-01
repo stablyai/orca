@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chatPermissionHostVerdict,
+  hostNewChatPermissionSettings,
   hostSettingsApplyChatPermissionModes,
   legacyHostChatPermissionMode
 } from './agent-chat-permission-host-support'
@@ -40,6 +41,20 @@ describe('whether a host applies per-chat modes', () => {
     )
     expect(hostSettingsApplyChatPermissionModes({ agentDefaultArgs: {} })).toBe(false)
     expect(hostSettingsApplyChatPermissionModes(undefined)).toBe(false)
+  })
+})
+
+describe("a host's new-chat permission settings", () => {
+  it('keeps the fields that pick the default and drops values this client cannot read', () => {
+    expect(
+      hostNewChatPermissionSettings({
+        agentPermissionDefault: 'full-access',
+        agentPermissionOverrides: { codex: 'ask', claude: 'future-mode' },
+        nativeChatPermissionMode: 'retired-mode',
+        theme: 'dark'
+      })
+    ).toEqual({ agentPermissionDefault: 'full-access', agentPermissionOverrides: { codex: 'ask' } })
+    expect(hostNewChatPermissionSettings('settings')).toEqual({})
   })
 })
 
