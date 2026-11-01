@@ -36,7 +36,7 @@ async function reportResult(f: Fixture, worker: Worker) {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (handle) => f.runtime.mailTarget(handle),
     getCliCommand: () => 'orca-dev',
-    senderName: () => null,
+    senderSnapshot: () => ({ name: null, agent: null }),
     host: createStructuredMailboxPointerHost()
   })
   const unsubscribe = await f.rig.host.subscribe({
