@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import capture from '../../shared/__fixtures__/omp-native-commands.json'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session/agent-session-wire'
 import { openHostRig, send } from './acp-structured-host.test-support'
@@ -24,6 +25,7 @@ import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from '../runtime/rpc/me
 import { handleStructuredAgentSessionCreate } from '../runtime/rpc/methods/structured-agent-session-create-handler'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 import { deferred, tick } from './acp-scripted-agent.test-support'
+import { readAcpFixture } from './acp-timeline-fixture.test-support'
 
 afterEach(closeProviderTimelineRigs)
 
@@ -263,7 +265,7 @@ it('answers modern empty-chat first-open through RPC and desktop subscription be
   }
 })
 
-// Shapes from Grok's source (slash_commands.rs builtin `goal`, skill rows): the recorded capture trims command lists.
+// Session rows need sign-in, so their shapes come from Grok's source (slash_commands.rs builtin and skill rows).
 const GROK_GOAL = {
   name: 'goal',
   description: 'Set, manage, or check an autonomous goal',
@@ -280,9 +282,11 @@ it.each([
   // A session whose goal gate closed lets a user skill take the bare name initialize listed.
   [GROK_GOAL_SKILL, false]
 ])('marks a Grok row built-in only when initialize proved it, row %#', async (row, builtin) => {
+  // Grok 1.0.70 initialize, recorded; host-identifying _meta keys removed.
+  const [initialized] = await readAcpFixture('grok-v1.0.70-initialize')
   const { host, ready } = await openHostRig({
     spec: acpLaunchSpecFor('grok')!,
-    initialize: { _meta: { grokShell: true, availableCommands: [GROK_GOAL] } },
+    initialize: z.record(z.string(), z.unknown()).parse(initialized!.message.result),
     script: (agent) => {
       agent.on('session/new', (frame) => {
         agent.notify('session/update', {
