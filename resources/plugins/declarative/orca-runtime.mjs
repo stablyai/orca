@@ -451,43 +451,6 @@ function evaluateOrcaTree(component, editsSeen = /* @__PURE__ */ new Map()) {
   return { tree, callbacks };
 }
 
-// src/shared/plugins/declarative/runtime/declarative-persist-queue.ts
-var PERSIST_DEBOUNCE_MS = 400;
-function createPersistQueue(options) {
-  const pending = /* @__PURE__ */ new Set();
-  let timer = null;
-  function flush() {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    const entries = [];
-    for (const target of pending) {
-      const entry = persistedEntry(target);
-      if (!entry) {
-        continue;
-      }
-      try {
-        assertPlainJson(entry.value, `persisted atom "${entry.key}"`);
-        entries.push(entry);
-      } catch (error) {
-        options.report(error);
-      }
-    }
-    pending.clear();
-    if (entries.length > 0) {
-      options.post(entries);
-    }
-  }
-  return {
-    add(target) {
-      pending.add(target);
-      timer ??= setTimeout(flush, PERSIST_DEBOUNCE_MS);
-    },
-    flush
-  };
-}
-
 // src/shared/plugins/declarative/runtime/declarative-memory-retention.ts
 var RETAIN_DEBOUNCE_MS = 50;
 var RETAIN_BATCH = 64;
@@ -689,6 +652,43 @@ function createPanelContext(onRetain) {
   };
 }
 
+// src/shared/plugins/declarative/runtime/declarative-persist-queue.ts
+var PERSIST_DEBOUNCE_MS = 400;
+function createPersistQueue(options) {
+  const pending = /* @__PURE__ */ new Set();
+  let timer = null;
+  function flush() {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const entries = [];
+    for (const target of pending) {
+      const entry = persistedEntry(target);
+      if (!entry) {
+        continue;
+      }
+      try {
+        assertPlainJson(entry.value, `persisted atom "${entry.key}"`);
+        entries.push(entry);
+      } catch (error) {
+        options.report(error);
+      }
+    }
+    pending.clear();
+    if (entries.length > 0) {
+      options.post(entries);
+    }
+  }
+  return {
+    add(target) {
+      pending.add(target);
+      timer ??= setTimeout(flush, PERSIST_DEBOUNCE_MS);
+    },
+    flush
+  };
+}
+
 // src/shared/plugins/declarative/runtime/declarative-storage-sync.ts
 function createDeclarativeStorageSync(options) {
   const storage2 = options.bridge?.storage;
@@ -735,6 +735,27 @@ function createDeclarativeStorageSync(options) {
     dispose() {
       watchStorageAtoms(null);
       subscription?.dispose();
+    }
+  };
+}
+function createDeclarativePersistence(options) {
+  const storageSync = createDeclarativeStorageSync(options);
+  const queue = createPersistQueue({
+    report: options.report,
+    post: (all) => {
+      const entries = storageSync.write(all);
+      if (entries.length > 0) {
+        options.post(entries);
+      }
+    }
+  });
+  watchPersistedAtoms(queue.add);
+  return {
+    flush: queue.flush,
+    loaded: storageSync.loaded,
+    dispose() {
+      watchPersistedAtoms(null);
+      storageSync.dispose();
     }
   };
 }
@@ -873,18 +894,12 @@ function createOrcaDeclarativeRuntime(options) {
       invalidate(retryAfterMs);
     }
   }
-  const storageSync = createDeclarativeStorageSync({ bridge, report });
-  const persistQueue = createPersistQueue({
+  const persistence = createDeclarativePersistence({
+    bridge,
     report,
-    post: (all) => {
-      const entries = storageSync.write(all);
-      if (entries.length > 0) {
-        post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document: document2, entries });
-      }
-    }
+    post: (entries) => post(PLUGIN_DECLARATIVE_MESSAGES.persist, { document: document2, entries })
   });
-  const flushPersist = persistQueue.flush;
-  watchPersistedAtoms(persistQueue.add);
+  const flushPersist = persistence.flush;
   const bridgeSubscriptions = bridge?.on ? [
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.event, dispatchEvent),
     bridge.on(PLUGIN_DECLARATIVE_MESSAGES.ack, acknowledge),
@@ -914,7 +929,7 @@ function createOrcaDeclarativeRuntime(options) {
     document: document2,
     async boot(module) {
       await panel.hydrated;
-      await storageSync.loaded();
+      await persistence.loaded();
       if (isCallable(module.setup)) {
         const cleanup = module.setup(context);
         setupCleanup = isCallable(cleanup) ? () => void cleanup() : null;
@@ -975,8 +990,7 @@ function createOrcaDeclarativeRuntime(options) {
       component = null;
       scheduled = false;
       unsubscribeAll();
-      watchPersistedAtoms(null);
-      storageSync.dispose();
+      persistence.dispose();
       for (const subscription of [...bridgeSubscriptions, ...context.subscriptions]) {
         try {
           subscription.dispose();

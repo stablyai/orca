@@ -45,8 +45,9 @@
 - `syntaxes` (SyntaxContribution[], since 1.4.245): Syntax highlighting for editor languages. At most 16.
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
+- `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `settings`, `statusBarItems`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `statusBarItems`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -137,6 +138,23 @@ A kind of untitled file the user can create from the tab bar + menu or the comma
 - `extension` (string, required, since 1.4.245): Suffix, with the dot, of the untitled file it creates. The file opens in whatever editor takes that suffix, such as a custom editor from this plugin.
 - `template` (string, since 1.4.245): UTF-8 file copied into the new file, at most 256 KB. Without one the file starts empty.
 - `icon` (string, since 1.4.245): Square image shown beside the menu item. Defaults to the plugin icon. PNG, WEBP, static, at least 128×128, square, at most 256 KB.
+
+## SettingContribution
+
+A setting shown under the plugin in Settings. Requires the `settings:own` capability, which is also how code reads it.
+
+- `key` (string, required, since 1.4.246): Key code reads and writes, unique in this plugin.
+- `title` (string, required, since 1.4.246): Label shown in Settings.
+- `description` (string, since 1.4.246): Help text shown under the label.
+- `type` ("string" | "number" | "integer" | "boolean", required, since 1.4.246): JSON Schema type of the value.
+- `default` (string | number | boolean, since 1.4.246): Value read while the person has not set one.
+- `enum` (string | number[], since 1.4.246): Allowed values; Settings shows a picker.
+- `enumLabels` (string[], since 1.4.246): Picker labels, one per `enum` value.
+- `minimum` (number, since 1.4.246): Numbers: smallest value.
+- `maximum` (number, since 1.4.246): Numbers: largest value.
+- `maxLength` (integer, since 1.4.246): Strings: most characters.
+- `multiline` (boolean, since 1.4.246): Strings: a multi-line text box.
+- `placeholder` (string, since 1.4.246): Strings and numbers: hint shown while empty.
 
 ## Capability
 

@@ -53,18 +53,32 @@ Everything a components panel (`"ui": "components"`) imports comes from `orca`. 
 - `env.locale: string`: Orca's UI language (BCP-47).
 - `env.theme: Theme`: Reading it while rendering re-renders on light/dark switches.
 - `env.client: 'desktop'`
-- `shell.openExternal(url: string)`: Needs a press on one of the panel's controls; see "User gestures".
-- `files.saveAs(options: HostMethods['files.saveAs']['params'])`: Needs a press on one of the panel's controls; see "User gestures".
 - `ui.catalog: number`: Grows with the component catalog.
 - `ui.has(component: string, prop?: string)`: Whether this Orca draws `component` (and accepts `prop` on it, when given).
+- `shell.openExternal(url: string)`: Needs a press on one of the panel's controls; see "User gestures".
+- `files.saveAs(options: HostMethods['files.saveAs']['params'])`: Needs a press on one of the panel's controls; see "User gestures".
+- `plugin: PluginBridgeApi`
+- `storage: StorageApi`
+- `settings: SettingsApi`
+- `secrets: SecretsApi`
+
+## Panel ↔ worker contract
+
+Declare requests and worker posts once with declaration merging, in a file both the panel and the worker include: `declare module 'orca' { interface PluginRequests { 'todos.list': { input: { done?: boolean }; output: Todo[] } } interface PluginPanelEvents { 'todos.changed': { count: number } } }`. Declared names are typed end to end (`plugin.request`, `plugin.on`, the worker's `orca.panels.handle` and `orca.panels.post`, and `orca/testing`'s `requests` and `panel.post`); any other name carries JSON.
 
 ## Types
 
-- `PersistScope = 'memory' | 'plugin' | 'workspace'`: Where a keyed atom survives: this panel run, every run of the plugin, or per workspace.
+- `PersistScope = 'memory' | 'plugin' | 'workspace' | 'storage'`: Where a keyed atom survives: this panel run, every run of the plugin, per workspace, or the plugin's own storage under the atom's key (`storage:own`), shared with its worker and other panels and kept current when they change it.
 - `AtomOptions<T> = { persist?: PersistScope; version?: number; migrate?: (stored: JsonValue, fromVersion: number) => T }`
 - `PanelContext = { subscriptions: Disposable[]; signal: AbortSignal; visible: ReadonlyAtom<boolean>; panel: { id: string } }`: Passed to the module's optional `export function setup(ctx)`.
 - `PanelSetup = (ctx: PanelContext) => void | (() => void)`: Runs once, after persisted atoms load and before the first render.
 - `HostError = Error & { code: string; retryable: boolean; retryAfterMs?: number }`: Rejections carry a `code` (`not_permitted`, `capability_denied`, `timeout`, ...).
+- `PluginRequestOptions = { signal?: AbortSignal; timeoutMs?: number }`: `timeoutMs` (at most 120000, default 30000) is how long the worker may take.
+- `PluginBridgeApi = { request<K extends keyof PluginRequests>(name: K, ...args: PluginRequestArgs<K>): Promise<PluginRequestOutput<K>>; request<N extends string>(name: Undeclared<N, PluginRequests>, input?: JsonValue, options?: PluginRequestOptions): Promise<JsonValue>; on<K extends keyof PluginPanelEvents>(event: K, handler: (payload: PluginPanelEvents[K]) => void): Disposable; on<N extends string>(event: Undeclared<N, PluginPanelEvents>, handler: (payload: JsonValue) => void): Disposable }`: Your plugin's own worker.
+- `DataChange = { key: string }`: A key someone (you, another panel, the worker or the person in Settings) changed.
+- `StorageApi = { get(key: string): Promise<JsonValue | null>; set(key: string, value: JsonValue): Promise<void>; delete(key: string): Promise<void>; keys(): Promise<string[]>; onDidChange(listener: (change: DataChange) => void): Disposable }`: The plugin's own JSON store (`storage:own`), the same one its worker uses.
+- `SettingsApi = { get(): Promise<Record<string, JsonValue>>; get(key: string): Promise<JsonValue | undefined>; set(key: string, value: JsonValue): Promise<void>; onDidChange(listener: (change: DataChange) => void): Disposable }`: The plugin's settings (`settings:own`): those it declares in `contributes.settings` read as their `default` until the person changes them in Settings.
+- `SecretsApi = { get(key: string): Promise<string | null>; set(key: string, value: string): Promise<void>; delete(key: string): Promise<void> }`: The plugin's encrypted secrets (`secrets:own`).
 
 ## Limits
 

@@ -1,4 +1,10 @@
-import { applyStorageValue, watchStorageAtoms, type OrcaPersistedEntry } from './declarative-atoms'
+import {
+  applyStorageValue,
+  watchPersistedAtoms,
+  watchStorageAtoms,
+  type OrcaPersistedEntry
+} from './declarative-atoms'
+import { createPersistQueue } from './declarative-persist-queue'
 import type { OrcaBridge, OrcaDisposable } from './declarative-runtime-types'
 
 /**
@@ -68,6 +74,33 @@ export function createDeclarativeStorageSync(options: {
     dispose() {
       watchStorageAtoms(null)
       subscription?.dispose()
+    }
+  }
+}
+
+/** Persisted atoms that change: `storage` ones go to the plugin's storage, the rest to Orca. */
+export function createDeclarativePersistence(options: {
+  bridge: OrcaBridge | null
+  report: (error: unknown) => void
+  post: (entries: OrcaPersistedEntry[]) => void
+}): { flush: () => void; loaded: () => Promise<void>; dispose: () => void } {
+  const storageSync = createDeclarativeStorageSync(options)
+  const queue = createPersistQueue({
+    report: options.report,
+    post: (all) => {
+      const entries = storageSync.write(all)
+      if (entries.length > 0) {
+        options.post(entries)
+      }
+    }
+  })
+  watchPersistedAtoms(queue.add)
+  return {
+    flush: queue.flush,
+    loaded: storageSync.loaded,
+    dispose() {
+      watchPersistedAtoms(null)
+      storageSync.dispose()
     }
   }
 }

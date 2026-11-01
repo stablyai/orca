@@ -21,8 +21,9 @@ Pass `--json` to every `ORCA plugin` command and branch on `error.code`, not on 
   runs Orca; with `--environment` pass an absolute path on that server.
 - **Types:** `ORCA plugin types <dir>` (also run by `dev load` and `dev watch`) writes
   `.orca/types/`: `orca` (components panels), `orca-frame` (the global `orca` in HTML panels and
-  editors), `orca-worker` (`import type { OrcaWorkerApi } from 'orca/worker'`) and `orca-host`
-  (host methods and event payloads). The plugin's `tsconfig.json` extends
+  editors), `orca-worker` (`import type { OrcaWorkerApi } from 'orca/worker'`), `orca-host`
+  (host methods and event payloads), `orca-services` (the panel ↔ worker contract and plugin data,
+  merged into `orca`) and `orca-testing`. The plugin's `tsconfig.json` extends
   `./.orca/types/tsconfig.json`. Never edit `.orca/`; it ignores itself in Git.
 - **Ground truth:** the generated references below describe the Orca this CLI belongs to. Read
   them instead of guessing props, methods or fields.
@@ -43,13 +44,43 @@ Use the lowest `execution` profile that covers the request; it decides what the 
 | A sidebar panel needing its own HTML, canvas or libraries | `sandboxed-ui`; `panels` entry `.html` (or `.ts`/`.tsx`)            | `--template panel`                               |
 | A palette command or shortcut for a built-in Orca action  | `declarative`; `commands[].action`, `keybindings`                   | hand-written; fields in `references/manifest.md` |
 | A command that runs code, storage, secrets, terminal text | `trusted-worker`; `main`, `commands` (no `action`), `capabilities`  | example `hello-orca`                             |
+| A panel backed by its own Node code, storage or settings  | `trusted-worker`; `main`, a panel, `capabilities`, `settings`       | example `hello-worker-panel`                     |
+| Settings the user edits in Orca's Settings                | `contributes.settings` and `settings:own`                           | `references/manifest.md`                         |
 | Reacting to workspace or agent status changes             | `trusted-worker`; `main`, `contributes.events`, `*:read` capability | example `hello-orca`                             |
 | A virtual machine environment recipe                      | `declarative`; `contributes.vmRecipes`                              | hand-written; fields in `references/manifest.md` |
 
 Examples are in `examples/plugins/` of github.com/stablyai/orca. Status bar items, sidebar cards,
-task sources, connections, MCP servers, skills, hooks and plugin settings UI are reserved and not
-buildable yet: say so instead of faking them. A panel cannot type into a terminal; only a worker
+task sources, connections, MCP servers, skills and hooks are reserved and not buildable yet: say
+so instead of faking them. A panel cannot type into a terminal; only a worker
 with `terminal:send` can.
+
+## Panels, workers and data
+
+A plugin's panels and its worker are one program. Use this when a panel needs Node, long work,
+secrets or state the worker also uses; a panel alone needs none of it.
+
+- Declare the contract once in a file both include (`src/protocol.ts`):
+  `declare module 'orca' { interface PluginRequests { 'todos.list': { input: { done?: boolean }; output: Todo[] } } interface PluginPanelEvents { 'todos.changed': { count: number } } }`.
+  Declared names are typed on both sides; any other name carries JSON.
+- Worker: `orca.panels.handle(name, async (input, { panel, signal }) => output)` answers;
+  `orca.panels.post(event, payload, { panel? })` pushes to every open panel of the plugin, or to
+  `panel.id` from a request. Answers are JSON (1 MiB); posts 256 KiB, 200 per 10 s.
+- Panel: `plugin.request(name, input, { signal, timeoutMs })` (frames: `orca.plugin.request`)
+  starts the worker when needed; `plugin.on(event, handler)` hears posts. It rejects with
+  `unknown_method` (no handler), `timeout` (default 30 s, max 120 s; the handler's `signal`
+  aborts then and when the panel closes), `unavailable` (no worker), or the host error `code` the
+  handler threw. It needs `main`, so the plugin is `trusted-worker`.
+- Every surface shares the plugin's `storage` (`storage:own`), `settings` (`settings:own`) and
+  `secrets` (`secrets:own`), each with `onDidChange(({ key }) => ...)` heard on all surfaces.
+  `atom('todos', [], { persist: 'storage' })` keeps an atom in storage under its key: the worker
+  reads `orca.storage.get('todos')`, and its writes update the atom.
+- `contributes.settings` (with `settings:own`) declares settings the user edits under the plugin
+  in Orca's Settings: `{ key, title, type: 'string'|'number'|'integer'|'boolean', default, enum,
+  minimum, maximum, multiline, ... }`. `settings.get(key)` reads the user's value or the default.
+- Panels hear workspace and agent events with `on('agent.status.changed', ...)` (frames:
+  `orca.on`) and the same `*:read` capability as workers, without `contributes.events`.
+- Test with `mockHost({ requests, storage, settings, secrets })` and `panel.post(event, payload)`
+  (see Test and check).
 
 ## No build step
 
@@ -126,6 +157,10 @@ test('adds a task', async () => {
 - `mockHost({ capabilities, results })` (pass as `host`) refuses what Orca refuses: undeclared
   capabilities, bad params, and `shell.openExternal`/`files.saveAs` without a `press` first.
   `results` values or functions may throw `hostError(code)`; `callsOf(method)` records calls.
+- It keeps `storage`, `settings` and `secrets` in memory (seed them in `mockHost({ ... })`, read
+  them with `host.data()`), so `persist: 'storage'` atoms and `onDidChange` work under `mount`.
+  `requests: { name: answer | (input) => answer }` fakes the worker for `plugin.request`;
+  `panel.post(event, payload)` is a worker post (`plugin.on`); `panel.emit` is an Orca event.
 - Mount the module, never call its default export: without `mount` there is no runtime. A
   control with `value` but no `onChange` is read-only, so `type`/`toggle` throw on it.
 
@@ -161,7 +196,8 @@ Settings → Plugins (on a windowless `orca serve` host, `ORCA plugin system on`
 - `update(atom, fn)` takes an updater function only; `set(atom, value)` stores a value.
 - Keyed atoms (`atom('draft', '')`) survive a hot reload; unkeyed `atom(0)`, module variables and
   `setup` start over. `persist: 'plugin'` or `'workspace'` survive restarts and must be plain
-  JSON; bump `version` (with `migrate`) when the stored shape changes.
+  JSON; bump `version` (with `migrate`) when the stored shape changes. `persist: 'storage'` lives
+  in the plugin's storage (`storage:own`), unversioned, shared with the worker.
 - Components panels have no hooks and no DOM: state lives in atoms, and `read()` while rendering
   subscribes. `set` and `update` throw while rendering. Give reordering list items a `key`.
 - A save that fails to load keeps the last good render with an inline `file:line:column` error.

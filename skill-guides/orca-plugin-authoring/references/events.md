@@ -22,3 +22,4 @@ List each in `contributes.events` (`{ "on": "<event>" }`), with `main`, the `tru
 ## Components panel events (`on(event, handler)` from `orca`)
 
 - `theme: { colorScheme: 'light' | 'dark' }`
+- Every worker event above, with the same payload and capability; a panel needs no `contributes.events` entry, it subscribes while it is open. HTML panels get them on `orca.on` too.
