@@ -93,6 +93,21 @@ describe('title-only status frames are stamped at the PTY status transition', ()
     expect(out).toMatchObject({ state: 'done', updatedAt: idleAt })
   })
 
+  it('dates a shell-title demotion no earlier than the hook status it replaces', () => {
+    const idleAt = titleChangedAt + 90_000
+    const hookWorkingAt = idleAt + 5_000
+    const out = demoteRuntimeMobileAgentStatus(
+      hookStatus('working', hookWorkingAt),
+      makeTuiIdlePty({
+        lastOscTitle: 'zsh',
+        lastOscTitleEpochMs: titleChangedAt,
+        lastAgentStatus: 'idle',
+        lastAgentStatusStartedAtEpochMs: idleAt
+      })
+    )
+    expect(out).toMatchObject({ state: 'done', updatedAt: hookWorkingAt })
+  })
+
   it('stamps the no-hook fallback at the idle transition, not the older title', () => {
     const idleAt = titleChangedAt + 90_000
     const out = buildRuntimeMobileAgentStatus(

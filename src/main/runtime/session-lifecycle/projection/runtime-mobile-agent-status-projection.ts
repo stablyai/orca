@@ -95,9 +95,10 @@ export function demoteRuntimeMobileAgentStatus(
   return {
     state: 'done',
     prompt: '',
+    // A demotion supersedes the status it replaces, so it must never sort behind it.
     updatedAt:
       pty?.lastOscTitleEpochMs != null
-        ? ptyStatusEvidenceAt(pty, pty.lastOscTitleEpochMs)
+        ? Math.max(status.updatedAt, ptyStatusEvidenceAt(pty, pty.lastOscTitleEpochMs))
         : status.updatedAt,
     stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
     paneKey: status.paneKey,
