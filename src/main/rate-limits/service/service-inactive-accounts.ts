@@ -6,7 +6,10 @@ import { delayUnlessAborted } from '../../../shared/abort-aware-delay'
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
-    if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
+    if (
+      !this.isClaudeUsageEnabled() ||
+      Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS
+    ) {
       return
     }
     this.pruneInactiveClaudeState()
@@ -28,8 +31,17 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     }
     this.pushToRenderer()
 
+    let stoppedByOptOut = false
     try {
       for (const account of accounts) {
+        if (!this.isClaudeUsageEnabled()) {
+          stoppedByOptOut = true
+          for (const remaining of accounts) {
+            this.inactiveClaudeFetching.delete(remaining.id)
+          }
+          this.pushToRenderer()
+          break
+        }
         if (
           signal.aborted ||
           fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -48,6 +60,14 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
+          if (!this.isClaudeUsageEnabled()) {
+            stoppedByOptOut = true
+            for (const remaining of accounts) {
+              this.inactiveClaudeFetching.delete(remaining.id)
+            }
+            this.pushToRenderer()
+            break
+          }
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
@@ -76,7 +96,11 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         this.pushToRenderer()
       }
 
-      if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
+      if (
+        !stoppedByOptOut &&
+        !signal.aborted &&
+        fetchGeneration === this.inactiveClaudeAccountsGeneration
+      ) {
         this.lastInactiveClaudeFetchAt = Date.now()
       }
     } finally {

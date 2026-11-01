@@ -87,6 +87,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
     const retryableFailures: ActiveRateLimitProvider[] = []
     for (const { provider, limits } of this.getActiveProviderState()) {
+      if (provider === 'claude' && !this.isClaudeUsageEnabled()) {
+        continue
+      }
       if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
         return { kind: 'full' }
       }
