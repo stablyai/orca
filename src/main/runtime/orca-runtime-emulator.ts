@@ -152,8 +152,10 @@ export class RuntimeEmulatorCommands {
     }
     const device =
       params.device ??
-      settings.mobileEmulatorDefaultDeviceUdid ??
-      (await resolveDefaultAttachDevice(bridge))
+      (await resolveDefaultAttachDevice(bridge, {
+        current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
+        configured: settings.mobileEmulatorDefaultDeviceUdid ?? undefined
+      }))
     if (!device) {
       throw new EmulatorError('emulator_device_not_found', emulatorFailureText('noDeviceSpecified'))
     }

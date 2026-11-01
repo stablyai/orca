@@ -589,7 +589,13 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
   it('keeps the live workspace device when reopened without a device', async () => {
     listSimulatorDevicesMock.mockImplementation(async () => [
-      { udid: 'iphone-1', name: 'iPhone 16', state: 'Shutdown', isAvailable: true }
+      {
+        udid: 'iphone-1',
+        name: 'iPhone 16',
+        state: 'Shutdown',
+        runtime: 'iOS 18.0',
+        isAvailable: true
+      }
     ])
     const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })

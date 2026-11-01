@@ -186,7 +186,7 @@ export function useEmulatorPaneSession({
         if (list.length === 0 && deviceRefreshErrorRef.current) {
           throw deviceRefreshErrorRef.current
         }
-        if (list.length === 0) {
+        if (list.length === 0 && !deviceTarget && !configuredDefaultUdid) {
           throw noEmulatorDevicesError()
         }
         // Untargeted attaches let the host choose so a live workspace session is kept.
@@ -239,7 +239,16 @@ export function useEmulatorPaneSession({
         }
       }
     },
-    [applySession, devices, loading, refreshDevices, resetVisualOrientation, tabId, worktreeId]
+    [
+      applySession,
+      configuredDefaultUdid,
+      devices,
+      loading,
+      refreshDevices,
+      resetVisualOrientation,
+      tabId,
+      worktreeId
+    ]
   )
 
   useEffect(() => {
