@@ -274,6 +274,13 @@ describe('registerPtyHandlers', () => {
         : null
     )
 
+    const storedLaunchConfig = (
+      runtime as unknown as { ptysById: Map<string, { launchConfig: unknown }> }
+    ).ptysById.get(result.id)?.launchConfig
+    expect(storedLaunchConfig ?? null).toEqual(
+      testCase.expectedToken ? { agentCommand: 'claude', agentArgs: '', agentEnv: {} } : null
+    )
+
     if (testCase.expectedToken) {
       runtime.registerPty(result.id, worktreeId, null, {
         tabId,

@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { copySleepingAgentLaunchConfig } from '../../../runtime/runtime-agent-launch-resolution'
 
 const AGENT_LAUNCH_TOKEN_MAX_LENGTH = 128
 
@@ -13,7 +14,11 @@ export function admitRendererAgentLaunchAuthority(args: {
   isReattach: boolean
   hasStablePaneOwner: boolean
   incarnationId: unknown
-}): { launchToken: string; launchAgent: TuiAgent } | null {
+}): {
+  launchToken: string
+  launchAgent: TuiAgent
+  launchConfig?: SleepingAgentLaunchConfig
+} | null {
   if (
     args.isReattach ||
     args.hasStablePaneOwner ||
@@ -27,7 +32,13 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
-  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+  return {
+    launchToken: args.launchToken,
+    launchAgent: args.launchAgent,
+    ...(args.launchConfig.unrecorded
+      ? {}
+      : { launchConfig: copySleepingAgentLaunchConfig(args.launchConfig) })
+  }
 }
 
 export function admitProviderReattachLaunchIdentity(args: {

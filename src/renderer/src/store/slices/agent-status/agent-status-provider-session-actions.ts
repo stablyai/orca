@@ -19,7 +19,7 @@ import {
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
+import { recordedRecipe, registryEntryMatchesStatus } from './agent-status-launch-config'
 import { copyLaunchConfig } from '../../../../../shared/agent-resume-record-from-status'
 import { agentVerdictFields } from '../../../../../shared/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
@@ -91,7 +91,7 @@ export function createAgentStatusProviderSessionActions(
           const preservesQuitOrigin =
             existingRecordMatchesProviderSession && existingRecord?.origin === 'quit'
           const launchConfig =
-            (registryMatches ? registryEntry?.launchConfig : undefined) ??
+            (registryMatches ? recordedRecipe(registryEntry) : undefined) ??
             (existingRecordMatchesProviderSession ? existingRecord.launchConfig : undefined)
           const record: SleepingAgentSessionRecord = {
             paneKey,
