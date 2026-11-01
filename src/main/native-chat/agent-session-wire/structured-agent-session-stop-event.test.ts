@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
@@ -29,13 +29,8 @@ function journal() {
 }
 
 function stopEvents(): JournalStopEvent[] {
-  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-  if (!since.ok) {
-    throw new Error(`expected rows, got reset ${since.reset}`)
-  }
-  return since.rows.flatMap((row) =>
-    row.kind === 'tombstone' && row.stopEvent ? [row.stopEvent] : []
-  )
+  const mark = journal().stopMarks.latest()
+  return mark ? [mark.event] : []
 }
 
 async function turnRow(turnId: string, state: 'running' | 'interrupted', userId?: string) {

@@ -1,6 +1,6 @@
-import type { AgentSessionQueuedMessage } from './agent-session-wire'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
-import { agentSessionSendBodyFingerprint } from './structured-agent-session-send-mutation'
+import type { AgentSessionQueuedMessage } from './agent-session/requests/agent-session-queued-message-wire'
+import type { AgentJournalSubmission } from './agent-session/journal/agent-session-journal-types'
+import { agentSessionSendBodyFingerprint } from './agent-session/requests/structured-agent-session-send-mutation'
 
 /** React container identity is not a new host publication. */
 export function queuedEditPublicationKey(

@@ -3,23 +3,23 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat-messages-waiting-behind-live-turn'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat-live-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
 import { nativeChatTurnBarRows } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
+import { nativeChatRowRendersContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import {
   type NativeChatRowTypography,
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
   NO_NATIVE_CHAT_SUBAGENT_CHOICES,

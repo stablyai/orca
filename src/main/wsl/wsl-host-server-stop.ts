@@ -36,6 +36,8 @@ export type WslHostServerStopSteps = {
     servingRuntimeId: string | null
   ) => Promise<OrcadDecommissionResult>
   sleep?: (ms: number) => Promise<void>
+  /** A census that already waits on its own needs no retries; default 20, 250 ms apart. */
+  censusAttempts?: number
 }
 
 function describeLeftovers(leftovers: readonly WslHostTerminalLeftover[]): string {
@@ -78,7 +80,8 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
   }
   // PTY close is not shell-exit proof; wait for zero-session census.
   let census = await steps.census()
-  for (let attempt = 1; attempt < CENSUS_ATTEMPTS && census.liveSessions !== 0; attempt += 1) {
+  const attempts = steps.censusAttempts ?? CENSUS_ATTEMPTS
+  for (let attempt = 1; attempt < attempts && census.liveSessions !== 0; attempt += 1) {
     await sleep(CENSUS_INTERVAL_MS)
     census = await steps.census()
   }

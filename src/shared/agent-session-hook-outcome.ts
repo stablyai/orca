@@ -1,6 +1,6 @@
 // Keep blocked/stopped prompt hooks as visible rows using the hook's reason, consistently across agents.
 
-import type { AgentJournalPlainStatusItem } from './agent-session-journal-types'
+import type { AgentJournalPlainStatusItem } from './agent-session/journal/agent-session-journal-types'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-notice'
 
 export type AgentSessionHookOutcome = 'blocked' | 'stopped'

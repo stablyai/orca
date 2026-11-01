@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 import { isAbortSignalReason } from '../../shared/abort-signal-reason'
 import {
@@ -8,7 +8,7 @@ import {
   retireWaiter,
   waitForReplay
 } from './claude-structured-dispatch-waiters'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
   ClaudeDispatchWaiter,
@@ -23,7 +23,7 @@ import {
   claudeDispatchRejection
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
   agentSessionFailureFact,
   providerDiagnostic,

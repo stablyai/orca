@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { translate } from '../../i18n/mobile-i18n'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -230,7 +230,7 @@ export function PRChecksSection({
           {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
           {actions && count > 0 ? (
             <Pressable
-              style={styles.iconButton}
+              style={({ pressed }) => [styles.iconButton, pressed && pressedStyle]}
               onPress={() => actions.rerunFailingChecks()}
               disabled={rerunBusy}
               accessibilityRole="button"
@@ -310,7 +310,10 @@ export function PRChecksSection({
         return (
           <View key={key}>
             <Pressable
-              style={styles.row}
+              style={({ pressed }) => [
+                styles.row,
+                pressed && { backgroundColor: colors.translucentFill }
+              ]}
               onPress={() => toggle(check)}
               accessibilityRole="button"
               accessibilityLabel={t(
@@ -332,7 +335,7 @@ export function PRChecksSection({
               </Text>
               {url ? (
                 <Pressable
-                  style={styles.rowTrailing}
+                  style={({ pressed }) => [styles.rowTrailing, pressed && pressedStyle]}
                   onPress={() => openExternalLink(url)}
                   hitSlop={6}
                   accessibilityRole="button"

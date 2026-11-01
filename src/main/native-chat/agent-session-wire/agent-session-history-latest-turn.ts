@@ -1,4 +1,4 @@
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import { latestStructuredAgentSessionTurn } from '../../../shared/structured-agent-session-live-turn'
 

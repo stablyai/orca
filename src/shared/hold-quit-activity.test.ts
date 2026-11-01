@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from './agent-status-types'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import { structuredAgentSessionAgentStatus } from './structured-agent-session-agent-status'
 import { projectStructuredAgentSessionStatusSummary } from './structured-agent-session-projection'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import { withMirroredEvidenceReceipt, AGENT_STATUS_STALE_AFTER_MS } from './agent-status-freshness'
 
 const now = 10_000_000

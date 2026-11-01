@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import * as stopProjection from '../../native-chat/agent-session-journal/journal-stop-note-projection'
 import * as lineage from './structured-session-lineage'
-import * as journalPosition from '../../../shared/agent-session-journal-position'
+import * as journalPosition from '../../../shared/agent-session/journal/agent-session-journal-position'
 import * as liveTurn from '../../../shared/structured-agent-session-live-turn'
 import {
   openTestAgentSessionRecordStore,

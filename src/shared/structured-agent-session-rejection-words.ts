@@ -8,9 +8,9 @@ import {
   type AgentSessionFailureFact
 } from './agent-session-failure'
 import type { AgentSessionFailureWordsContext } from './agent-session-failure-words'
-import type { AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentJournalSubmission } from './agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureStatedByRow } from './agent-session-visible-failures'
-import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
+import { classifyDispatchRejection } from './agent-session/requests/structured-agent-session-dispatch-rejection'
 
 /** Show provider content refusals verbatim, but replace internal transport markers with actionable copy across desktop/mobile.
  * Proven non-delivery permits resend without duplication; a null reason claims no unknown cause or next step. */

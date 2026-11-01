@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AgentSessionQueuedMessageMoveResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionQueuedMessageMoveResult } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { QueuedEditTransport } from './use-structured-agent-session-queued-edit'

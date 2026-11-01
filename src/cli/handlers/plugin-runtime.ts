@@ -164,6 +164,22 @@ async function setEnabled(ctx: HandlerContext, enabled: boolean): Promise<void> 
   )
 }
 
+async function setSystemEnabled(ctx: HandlerContext, enabled: boolean): Promise<void> {
+  const result = await callPlugins<{ enabled: boolean; plugins: PluginHostListEntry[] }>(
+    ctx,
+    'plugins.setSystemEnabled',
+    { enabled }
+  )
+  const rows = result.plugins.map(formatPluginRow)
+  printPluginResult(
+    ctx,
+    result,
+    enabled
+      ? ['Plugins are on. Only plugins approved earlier run.', ...rows].join('\n')
+      : 'Plugins are off. No plugin runs; installs and approvals are kept.'
+  )
+}
+
 export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
   'plugin list': async (ctx) => {
     const plugins = await callPlugins<PluginHostListEntry[]>(ctx, 'plugins.list')
@@ -189,6 +205,8 @@ export const PLUGIN_RUNTIME_HANDLERS: Record<string, CommandHandler> = {
   },
   'plugin enable': (ctx) => setEnabled(ctx, true),
   'plugin disable': (ctx) => setEnabled(ctx, false),
+  'plugin system on': (ctx) => setSystemEnabled(ctx, true),
+  'plugin system off': (ctx) => setSystemEnabled(ctx, false),
   'plugin dev load': (ctx) =>
     devLoad(ctx, resolveHostPluginPath(ctx, requirePluginPathArg(ctx, 'dir'))),
   'plugin dev reload': async (ctx) => {

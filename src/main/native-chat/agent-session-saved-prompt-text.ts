@@ -1,15 +1,15 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalQuestionItem
-} from '../../shared/agent-session-journal-types'
-import { agentJournalItemRowOrigin } from '../../shared/agent-session-journal-position'
-import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemRowOrigin } from '../../shared/agent-session/journal/agent-session-journal-position'
+import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
 import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
 } from '../../shared/agent-session-question-answer'
-import { nativeChatReceiptAnswers } from '../../shared/native-chat-resolution-receipt'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { nativeChatReceiptAnswers } from '../../shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
 
 function questionInterpretation(body: AgentJournalQuestionItem): string[] {

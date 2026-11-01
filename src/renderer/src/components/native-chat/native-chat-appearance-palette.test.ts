@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
+import { TERMINAL_COLOR_OVERRIDES_SETTING } from '../../../../shared/terminal-color-overrides'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
 const css = readFileSync(resolve('src/renderer/src/assets/main.css'), 'utf8')
@@ -31,7 +32,7 @@ function createChat(appScheme: 'light' | 'dark', terminalScheme: 'light' | 'dark
   const style = nativeChatAppearanceStyle(
     createGlobalSettingsFixture({
       theme: appScheme,
-      terminalColorOverrides:
+      [TERMINAL_COLOR_OVERRIDES_SETTING[appScheme]]:
         terminalScheme === 'light'
           ? { background: '#ffffff', foreground: '#000000' }
           : { background: '#000000', foreground: '#ffffff' },
@@ -55,9 +56,9 @@ const statusRoles = [
   '--status-warning',
   '--git-decoration-added',
   '--git-decoration-deleted',
-  '--diff-added-ground',
+  '--diff-added-background',
   '--diff-added-gutter',
-  '--diff-removed-ground',
+  '--diff-removed-background',
   '--diff-removed-gutter'
 ]
 

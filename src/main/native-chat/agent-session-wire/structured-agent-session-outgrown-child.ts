@@ -1,8 +1,8 @@
 // Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -12,7 +12,11 @@ import {
 } from './structured-agent-session-idle-sweep'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentSessionAccountHomesEqual,
+  type AgentSessionAccountHome
+} from '../../../shared/agent-session-account-home'
 
 type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<
@@ -102,6 +106,19 @@ function picksNewLaunchModel(
   )
 }
 
+/** Loop-free while a start launches under the account `current` reads; a read that throws is no
+ *  answer, so unreadable account evidence replaces nothing. */
+async function launchedUnderOtherAccount(
+  child: OutgrownChildReading['child'],
+  current: (() => Promise<AgentSessionAccountHome | null>) | undefined
+): Promise<boolean> {
+  if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
+    return false
+  }
+  const home = await current().catch(() => null)
+  return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
+}
+
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
@@ -112,6 +129,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
       childWork: () => readonly AgentChildWorkView[] | undefined
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+    launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission
     requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
@@ -129,7 +147,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
         session.child,
         deps.launchPermission,
         deps.permissionRequiresAcquisition
-      ))
+      )) ||
+      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
     ) ||
     structuredAgentSessionChildOwesWork(session.journal, deps.work)
   ) {

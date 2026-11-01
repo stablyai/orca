@@ -6,13 +6,13 @@ import {
   readProviderRetry
 } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/tui-agent-display-names'
 import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import {
   readCodexErrorAdditionalDetails,
   readCodexErrorInfo,

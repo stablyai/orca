@@ -3,10 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import {
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import * as rowSchema from '../agent-session-journal/journal-row-schema'
 import {

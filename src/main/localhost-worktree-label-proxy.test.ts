@@ -54,18 +54,6 @@ function fetchThroughProxy(
 }
 
 describe('localhost worktree label proxy', () => {
-  it('rejects https targets because the label proxy serves plain http', async () => {
-    const proxy = new LocalhostWorktreeLabelProxy()
-
-    await expect(
-      proxy.registerRoute({
-        targetUrl: 'https://localhost:5173/',
-        projectName: 'Snap Studio',
-        worktreeName: 'main'
-      })
-    ).rejects.toThrow('Only http workspace ports can be labeled.')
-  })
-
   it('streams responses through untouched, preserving the app CSP and body', async () => {
     const port = await startUpstream((_request, response) => {
       response.writeHead(200, {

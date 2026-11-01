@@ -1,4 +1,4 @@
-import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'
+import type { AgentSessionCurrentRequestsMarker } from './agent-session/requests/agent-session-current-requests-wire'
 import {
   hostClockField,
   replacePage,
@@ -10,25 +10,27 @@ import {
   currentRequestsState,
   applyCurrentRequestsMarker,
   type AgentSessionCurrentRequestsState
-} from './agent-session-current-requests'
+} from './agent-session/requests/agent-session-current-requests'
+import type { AgentJournalCursor } from './agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import type {
-  AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionHistoryPage,
   AgentSessionLatestTurn,
-  AgentSessionQueuedMessage,
-  AgentSessionQueuePause,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import type {
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from './agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-wire'
 import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
-import { admitAgentSessionBackgroundTaskState } from './agent-session-background-task-state-admission'
+import { backgroundTaskStatesEqual } from './agent-session/agent-session-background-task-state-equality'
+import { admitAgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-state-admission'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,
@@ -38,7 +40,7 @@ import {
 } from './structured-agent-session-item-retention'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from './agent-session-context-clear'
-import { queuePublicationField } from './structured-agent-session-queue-publication-field'
+import { queuePublicationField } from './agent-session/requests/structured-agent-session-queue-publication-field'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
   hostWorkingAfterStructuredAgentSessionBatch,

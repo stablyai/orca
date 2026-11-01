@@ -66,11 +66,11 @@ import {
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   NativeChatInterruptedContinueButton,
@@ -376,7 +376,14 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
       fence: 1,
       submissions: [],
       queuedMessageIds: [],
-      queue: { capability: 'unsupported', enabled: false },
+      queue: {
+        capability: 'unsupported',
+        followUpsQueue: false,
+        isWorking: false,
+        stopping: false,
+        session: {},
+        prompts: []
+      },
       historyLoaded: false,
       sendOptions: () => options
     })

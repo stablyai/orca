@@ -403,7 +403,7 @@ it.each(['unchanged', 'hook', 'config', 'incarnation', 'handle'] as const)(
       sendDesktopMultiplexSubscribe(harness.handlers)
       await vi.waitFor(() => expect(snapshotStarted).toBe(true))
       if (change === 'hook') {
-        runtime.recordCliWriterConversation({
+        runtime.clearSavedTerminalLaunchOnAgentHook({
           paneKey: 'saved-tab:11111111-1111-4111-8111-111111111111',
           connectionId: null,
           receivedAt: 1,

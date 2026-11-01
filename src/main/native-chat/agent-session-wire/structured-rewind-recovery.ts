@@ -1,5 +1,10 @@
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
+import type {
+  StructuredAgentSessionHostDeps,
+  StructuredAgentSessionHostSession
+} from './structured-agent-session-host-types'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import { isDeepStrictEqual } from 'node:util'
 import { structuredRewindCut, type StructuredRewindCut } from './structured-rewind-cut'
@@ -11,7 +16,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 
 type RewindRecoveryDeps = {
   store: AgentSessionRecordStore
@@ -273,6 +278,24 @@ export async function applyStructuredRewindRecovery(
       rewind: { itemId: rewind.itemId, epoch: cursor.epoch }
     }
   })
+}
+
+/** Settle prepared rewinds orphaned across processes; provider-only proof waits for the next proven start. */
+export async function settleInterruptedStructuredAgentSessionCommands(
+  deps: StructuredAgentSessionHostDeps,
+  sessionId: string,
+  session: StructuredAgentSessionHostSession
+): Promise<void> {
+  const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
+  try {
+    await recoverStructuredRewind(deps, sessionId, session.journal, fence)
+  } catch (error) {
+    deps.logger.warn('settling an interrupted rewind on open failed', {
+      scope: 'rewind-recovery',
+      sessionId,
+      error
+    })
+  }
 }
 
 function inheritForkName(

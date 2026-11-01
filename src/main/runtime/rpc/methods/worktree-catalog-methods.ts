@@ -36,15 +36,12 @@ export const WORKTREE_CATALOG_METHODS = [
         ),
         context
       )
-      // Why: callers that never send the field get the byte-exact legacy response.
-      if (params.afterSnapshotId === undefined) {
+      // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
+      if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
         return result
       }
-      // Why: snapshot pollers get activity at poll-friendly granularity so the id survives terminal output.
-      return resolveWorktreeCatalogSnapshot(
-        coarsenWorktreePsActivity(result),
-        params.afterSnapshotId
-      )
+      // Why: pollers get activity at poll-friendly granularity so the id survives terminal output.
+      return resolveWorktreeCatalogSnapshot(coarsenWorktreePsActivity(result), params)
     }
   }),
   defineMethod({

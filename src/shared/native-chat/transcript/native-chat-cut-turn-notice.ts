@@ -6,9 +6,12 @@ import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../agent-session-failure-words'
-import { agentJournalItemKey, parseAgentJournalItemKey } from '../../agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../agent-session-journal-producer'
-import type { AgentJournalRenderItem } from '../../agent-session-journal-types'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../agent-session/journal/agent-session-journal-producer'
+import type { AgentJournalRenderItem } from '../../agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../../agent-session-turn-record'
 import { agentTurnVerdict } from '../../agent-turn-outcome'
 import {
@@ -17,7 +20,7 @@ import {
   STALE_SESSION_ROW_PREFIX
 } from '../../agent-session-stop-row-identity'
 import { isStructuredAgentSessionStartFailureRow } from '../../structured-agent-session-start-failure-row-key'
-import { hostStatesTurnScopes } from '../../native-chat-turn-membership'
+import { hostStatesTurnScopes } from './native-chat-turn-membership'
 
 const CUT_TURN_NOTICE_ROW = 'cut-turn-notice:'
 

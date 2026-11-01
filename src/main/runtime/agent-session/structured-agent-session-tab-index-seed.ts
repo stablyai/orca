@@ -19,7 +19,7 @@ export function chatTabChangesMatchingIndex(
     for (const tab of tabs) {
       const sessionId = savedSessionId(tab)
       if (sessionId && retired(sessionId)) {
-        add(worktreeId, { close: sessionId })
+        add(worktreeId, { close: sessionId, tabId: tab.id })
       }
     }
   }

@@ -30,7 +30,7 @@ import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
 } from '../../../../shared/agent-session-context-clear'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 
 /** How long a confirmed rewind waits for its new conversation before letting go. */
 export const NATIVE_CHAT_REWIND_RESET_TIMEOUT_MS = 120_000

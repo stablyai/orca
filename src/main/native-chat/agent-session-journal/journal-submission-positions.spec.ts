@@ -9,12 +9,12 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalMessageItem,
-  type AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { readAgentSessionHydrationPage } from '../agent-session-wire/agent-session-history-page'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'

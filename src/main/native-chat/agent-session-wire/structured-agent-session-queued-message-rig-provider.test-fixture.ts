@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
 import {
   claudeProviderHandle,
@@ -99,7 +99,7 @@ export function createQueuedRigProvider(
         link: {
           linkId: `link-${fence}`,
           handle:
-            options.agent === 'claude'
+            identity.agent === 'claude'
               ? claudeProviderHandle(thread, null)
               : codexProviderHandle(thread),
           origin: resumes ? ('resumed' as const) : ('created' as const),

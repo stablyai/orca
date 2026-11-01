@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../src/shared/agent-status-types'
-import type { NativeChatMessage } from '../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../src/shared/native-chat/native-chat-types'
 import { eraseRpcMethods, type RpcContext } from '../../src/main/runtime/rpc/core'
 import { NATIVE_CHAT_METHODS } from '../../src/main/runtime/rpc/methods/native-chat'
 
@@ -108,7 +108,7 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
     async (modern) => {
       const { NativeChatSession } = await import('../../src/shared/rpc-contract/native-chat-params')
       const { compareNativeChatTranscriptMessages } =
-        await import('../../src/shared/native-chat-transcript-projection')
+        await import('../../src/shared/native-chat/transcript/native-chat-transcript-projection')
       const { parseRuntimeNativeChatReadSessionResult } =
         await import('../../src/renderer/src/components/native-chat/native-chat-runtime-contract')
       const { createNativeChatMessageListProjection } =

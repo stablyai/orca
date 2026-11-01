@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../agent-session-journal-types'
+import type { AgentJournalSubmission } from '../agent-session/journal/agent-session-journal-types'
 
 type SendTimes = Pick<AgentJournalSubmission, 'submittedSequence' | 'submittedAt'>
 

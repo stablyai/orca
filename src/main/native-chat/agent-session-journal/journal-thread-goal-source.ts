@@ -1,10 +1,10 @@
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalItemIdentity,
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from '../../../shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session-thread-goal'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 
 export type JournalThreadGoalSource = {
   goal: AgentJournalThreadGoal | null
