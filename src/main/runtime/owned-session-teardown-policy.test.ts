@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
-import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
+import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import {
   OWNED_SESSION_KINDS,
   OWNED_SESSION_TEARDOWN,

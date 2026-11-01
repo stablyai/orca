@@ -9,6 +9,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
+import { isTerminalForegroundObservation } from '../../shared/terminal-foreground-observation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
@@ -70,6 +71,7 @@ function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
 export async function readLaunchedAgentForeground(
   controller: Pick<
     RuntimePtyController,
+    | 'supportsForegroundObservation'
     | 'getForegroundProcess'
     | 'confirmForegroundProcess'
     | 'confirmShellForeground'
@@ -78,7 +80,8 @@ export async function readLaunchedAgentForeground(
   > | null,
   host: { remote: boolean; windows: boolean },
   ptyId: string,
-  agent: TuiAgent
+  agent: TuiAgent,
+  expectedIncarnationId?: string
 ): Promise<LaunchedAgentForeground> {
   if (!controller) {
     return 'unknown'
@@ -88,10 +91,43 @@ export async function readLaunchedAgentForeground(
       // Windows SSH relays lack even the shell-alone check.
       return (await controller.confirmShellForeground?.(ptyId)) ? 'shell' : 'unknown'
     }
+    if (controller.supportsForegroundObservation?.(ptyId)) {
+      const result = await controller.inspectProcess?.(ptyId, {
+        foregroundOnly: true,
+        ...(expectedIncarnationId ? { expectedIncarnationId } : {})
+      })
+      if (result && result.foregroundObservation !== undefined) {
+        const observation = result.foregroundObservation
+        if (
+          !isTerminalForegroundObservation(observation) ||
+          observation.ptyId !== ptyId ||
+          (expectedIncarnationId && observation.ptyIncarnationId !== expectedIncarnationId) ||
+          observation.verdict !== 'observed'
+        ) {
+          return 'unknown'
+        }
+        // Local policy has always admitted any non-shell, including user wrappers.
+        if (!host.remote) {
+          return observation.foregroundKind === 'shell' ? 'shell' : 'agent'
+        }
+        return judgeFreshForeground(observation.processName, agent)
+      }
+    }
     if (!host.remote) {
-      const rootPid = (await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID))?.find(
-        (pane) => pane.id === ptyId
-      )?.rootProcessId
+      const target = (
+        await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID, {
+          ptyIds: [ptyId],
+          targetOwnerOnly: true
+        })
+      )?.find((pane) => pane.id === ptyId)
+      if (
+        expectedIncarnationId &&
+        target?.incarnationId &&
+        target.incarnationId !== expectedIncarnationId
+      ) {
+        return 'unknown'
+      }
+      const rootPid = target?.rootProcessId
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null
       return rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
     }

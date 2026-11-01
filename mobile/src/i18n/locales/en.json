@@ -1348,18 +1348,8 @@
       "reopenConfirmTitle": "Reopen pull request?",
       "reopenConfirmMessage": "#{{number}} will be reopened.",
       "reopenButton": "Reopen",
-      "mergeAccessibilityLabel": "Merge pull request",
-      "recheckAccessibilityLabel": "Recheck merge status",
-      "recheckButton": "Recheck",
-      "markReadyAccessibilityLabel": "Mark pull request ready for review",
       "markReadyButton": "Ready for review",
-      "autoMergeLabel": "Auto-merge when ready",
-      "autoMergeAccessibilityLabel": "Toggle auto-merge",
-      "autoMergeOn": "On",
-      "autoMergeOff": "Off",
-      "closeAccessibilityLabel": "Close pull request",
       "reopenAccessibilityLabel": "Reopen pull request",
-      "unlinkAccessibilityLabel": "Unlink pull request",
       "unlinkButton": "Unlink"
     },
     "prCheckDetail": {
@@ -1369,31 +1359,10 @@
       "jobsTruncated": "Showing first 100 jobs"
     },
     "checksSection": {
-      "unavailable": "Checks unavailable",
       "noChecks": "No checks",
       "failing": "{{count}} failing",
-      "pendingCount": "{{count}} pending",
       "passed": "{{count}} passed",
-      "neutralCount": "{{count}} neutral",
-      "successful": "Successful",
-      "failed": "Failed",
-      "cancelled": "Cancelled",
-      "timedOut": "Timed out",
-      "actionRequired": "Action required",
-      "neutral": "Neutral",
-      "skipped": "Skipped",
-      "queued": "Queued",
-      "inProgress": "In progress",
-      "pending": "Pending",
-      "loadDetailsFailed": "Failed to load check details",
       "title": "Checks",
-      "rerunFailing": "Rerun failing checks",
-      "failingChecks_one": "{{count}} failing check",
-      "failingChecks_other": "{{count}} failing checks",
-      "inspectOrFix": "Inspect details or start an AI fix pass.",
-      "fixFailing": "Fix failing checks with AI",
-      "fix": "Fix",
-      "checkDetails": "{{name}} check details",
       "openOnWeb": "Open {{name}} on the web"
     },
     "commentCard": {
@@ -1442,22 +1411,8 @@
       "resolvedThreadSingle": "Resolved thread by {{author}}",
       "resolvedThreadCount": "Resolved thread by {{author}} ({{count}})",
       "resolvedCommentSingle": "Resolved comment by {{author}}",
-      "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})"
-    },
-    "conflictingFilesSection": {
-      "detailsUnavailable": "Conflict file details are unavailable",
-      "refreshing": "Refreshing conflict details…",
-      "localMergeClean": "GitHub reports conflicts, but local Git did not reproduce them. Refresh the PR or push the branch to recalculate mergeability.",
-      "copyFailed": "Failed to copy text",
-      "copyCommands": "Copy commands",
-      "commitsBehind_one": "{{count}} commit behind (base commit: {{baseCommit}})",
-      "commitsBehind_other": "{{count}} commits behind (base commit: {{baseCommit}})",
-      "title": "Conflicts",
-      "mustResolve": "This branch has conflicts that must be resolved",
-      "runFromWorktree": "Run from this worktree",
-      "copyRefreshCommands": "Copy mergeability refresh commands",
-      "filesHeading": "Conflicting files",
-      "resolveWithAi": "Resolve conflicts with AI"
+      "resolvedCommentCount": "Resolved comment by {{author}} ({{count}})",
+      "commentsLoadFailedRetry": "Could not load comments."
     },
     "reviewersSection": {
       "requested": "Requested",
@@ -1467,42 +1422,22 @@
       "dismissed": "Dismissed",
       "pending": "Pending",
       "reviewed": "Reviewed",
-      "addOrRemove": "Add or remove reviewers",
       "title": "Reviewers",
-      "loading": "Loading reviewers…",
       "loadFailed": "Could not load reviewers. Tap refresh to try again.",
       "noReviewers": "No reviewers requested",
       "removeReviewer": "Remove {{login}}"
     },
-    "prSidebarHeader": {
-      "openOnWeb": "Open pull request #{{number}} on the web",
-      "openInBrowser": "Open pull request #{{number}} in browser",
-      "cancelEditingTitle": "Cancel editing title",
-      "saveTitle": "Save title",
-      "editTitle": "Edit pull request title"
-    },
     "prSidebarCreateEmptyState": {
       "branchRequired": "Check out a branch before creating a pull request.",
-      "createFailed": "Failed to create pull request.",
-      "title": "Pull request",
-      "refreshPullRequest": "Refresh pull request",
-      "createPullRequest": "Create pull request",
-      "createPr": "Create PR",
       "linkedPrUnavailable": "Linked PR #{{number}} unavailable",
-      "noOpenPullRequest": "No open pull request",
       "refreshOrCreate": "Refresh to check again, or create a new PR for this branch.",
       "branchNotLinked": "{{branch}} is not linked to an open PR.",
       "currentBranchNotLinked": "The current branch is not linked to an open PR.",
-      "linkExistingPullRequest": "Link an existing pull request",
-      "linkExistingPr": "Link an existing PR"
+      "linkExistingPullRequest": "Link an existing pull request"
     },
     "reviewerPickerDrawer": {
-      "title": "Reviewers",
-      "searchPeople": "Search people",
       "loadFailed": "Failed to load people",
-      "noMatches": "No matching people",
-      "removeReviewer": "Remove {{login}}",
-      "requestReviewer": "Request {{login}}"
+      "noMatches": "No matching people"
     },
     "markdownBlocks": {
       "details": "Details"
@@ -1589,6 +1524,156 @@
       "noBotComments": "No bot comments.",
       "noHumanComments": "No human comments.",
       "noComments": "No comments yet."
+    },
+    "tab": {
+      "updated": "updated {{time}}",
+      "moreActions": "More pull request actions",
+      "unlinkConfirmTitle": "Unlink pull request?",
+      "unlinkConfirmMessage": "#{{number}} stays open on GitHub; this workspace stops tracking it.",
+      "createPullRequest": "Create pull request",
+      "mergedInto": "Merged into {{base}}",
+      "merged": "Merged",
+      "cantMergeYet": "Can’t merge yet:",
+      "willMergeWhenReady": "Will merge when ready",
+      "mergeWhenReady": "Merge when ready",
+      "viewedOf": "{{viewed}} of {{total}} viewed",
+      "commentsOnFiles": "{{comments}} comments on {{files}} files",
+      "filesChanged_one": "{{count}} file changed",
+      "filesChanged_other": "{{count}} files changed",
+      "editDescription": "Edit description",
+      "edit": "Edit",
+      "showLess": "Show less",
+      "showMore": "Show more"
+    },
+    "menu": {
+      "refresh": "Refresh",
+      "openOnGitHub": "Open on GitHub",
+      "copied": "Copied",
+      "copyLink": "Copy link",
+      "editTitle": "Edit title",
+      "autoMerge": "Auto-merge",
+      "markDraft": "Mark as draft",
+      "unlink": "Unlink from workspace",
+      "close": "Close pull request"
+    },
+    "mergeSheet": {
+      "squashDetail": "One commit on {{base}}",
+      "mergeDetail": "Keeps every commit",
+      "rebaseDetail": "Replays each commit onto {{base}}",
+      "title": "Merge #{{number}}",
+      "subtitle": "Into {{base}}"
+    },
+    "editSheet": {
+      "title": "Edit title",
+      "description": "Edit description"
+    },
+    "createSheet": {
+      "base": "Base",
+      "searchBranches": "Search branches",
+      "branchSearchFailed": "Branch search failed.",
+      "noBranches": "No matching branches",
+      "title": "Create {{reviewLabel}}",
+      "titleLabel": "Title",
+      "descriptionLabel": "Description",
+      "writeWithAi": "Write with AI",
+      "descriptionPlaceholder": "Optional",
+      "draft": "Create as draft"
+    },
+    "screens": {
+      "hideLog": "Hide log",
+      "viewLog": "View log",
+      "copyError": "Copy error",
+      "openOnGitHub": "Open on GitHub",
+      "failedAfter": "Failed after {{duration}}",
+      "failed": "Failed",
+      "checkActions": "More for {{name}}",
+      "rerun": "Rerun",
+      "copyErrorFailed": "Could not copy the error.",
+      "durationSeconds": "{{seconds}}s",
+      "durationMinutes": "{{minutes}}m {{seconds}}s",
+      "durationHours": "{{hours}}h {{minutes}}m",
+      "failing": "Failing",
+      "fixWithAi": "Fix with AI",
+      "runningSection": "Running",
+      "queued": "Queued",
+      "inProgress": "In progress",
+      "passedSection": "Passed",
+      "neutralSection": "Neutral",
+      "namesAndMore": "{{names}} and {{count}} more",
+      "running": "{{count}} running",
+      "filterComments": "Filter comments",
+      "commentOnPr": "Comment on #{{number}}…",
+      "unresolvedCount": "Unresolved {{count}}",
+      "allCount": "All {{count}}",
+      "noUnresolved": "No unresolved threads.",
+      "resolvedCount": "Resolved {{count}}",
+      "hideBots": "Hide bots",
+      "bot": "bot",
+      "commentActions": "More for this comment",
+      "replyAndMore": "{{body}} (+{{count}} more)",
+      "severityCritical": "Critical",
+      "severityMajor": "Major",
+      "severityMinor": "Minor",
+      "severityTrivial": "Trivial",
+      "thread": "Thread",
+      "backToComments": "Back to comments",
+      "threadGone": "This thread is no longer on the pull request.",
+      "threadSubtitle_one": "{{author}} · {{count}} message",
+      "threadSubtitle_other": "{{author}} · {{count}} messages",
+      "replyPlaceholder": "Reply…",
+      "back": "Back to pull request",
+      "noPullRequest": "This branch has no pull request now.",
+      "fixWith": "Fix with {{agent}}",
+      "live": "Live",
+      "askToFix": "Ask {{agent}} to fix",
+      "askAiToFix": "Ask AI to fix"
+    },
+    "reviewersSheet": {
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals",
+      "addReviewer": "Add a reviewer"
+    },
+    "emptyState": {
+      "commitsReady_one": "{{count}} commit on {{branch}} is ready to go into {{base}}.",
+      "commitsReady_other": "{{count}} commits on {{branch}} are ready to go into {{base}}.",
+      "title": "No pull request yet"
+    },
+    "gates": {
+      "checksUnavailable": "Checks unavailable",
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "checksRunning_one": "{{count}} check running",
+      "checksRunning_other": "{{count}} checks running",
+      "checksPassedSoFar": "{{count}} passed so far",
+      "noChecks": "No checks",
+      "checksFinished": "Checks finished",
+      "checksPassed_one": "{{count}} check passed",
+      "checksPassed_other": "{{count}} checks passed",
+      "checksNeutral": "{{count}} neutral",
+      "threads": "Review threads",
+      "commentsUnavailable": "Comments unavailable",
+      "allThreadsResolved": "All threads resolved",
+      "noThreads": "No review threads",
+      "threadAuthorOnFile": "{{author}} on {{file}}",
+      "fromBots_one": "{{count}} from a bot",
+      "fromBots_other": "{{count}} from bots",
+      "unresolvedThreads_one": "{{count}} unresolved thread",
+      "unresolvedThreads_other": "{{count}} unresolved threads",
+      "changesRequested": "Changes requested",
+      "requestedChangesBy": "{{logins}} requested changes",
+      "approvedBy": "{{logins}} approved",
+      "reviewRequestedFrom": "{{logins}} requested",
+      "reviewRequired": "Review required",
+      "noApprovals": "No approvals yet",
+      "approvals_one": "{{count}} approval",
+      "approvals_other": "{{count}} approvals",
+      "conflictsWithBase": "Conflicts with {{base}}",
+      "conflicts": "Merge conflicts",
+      "conflictFiles_one": "{{count}} file",
+      "conflictFiles_other": "{{count}} files",
+      "conflictsChecking": "Checking for conflicts",
+      "noConflictsWithBase": "No conflicts with {{base}}",
+      "noConflicts": "No conflicts"
     }
   },
   "workspace": {
@@ -2278,8 +2363,7 @@
       "actionFailed": "Comment action failed"
     },
     "usePrTitleAction": {
-      "disconnected": "Not connected to desktop.",
-      "updateFailed": "Failed to update title."
+      "disconnected": "Not connected to desktop."
     },
     "useAccessorySelection": {
       "copyFailed": "Couldn't copy",
@@ -2627,6 +2711,9 @@
     },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Waiting for desktop..."
+    },
+    "usePrTextAction": {
+      "updateFailed": "Failed to update pull request."
     }
   },
   "chat": {
@@ -3117,7 +3204,6 @@
       "createPr": "Create PR",
       "pushAndCreatePr": "Push & Create PR",
       "switchBranch": "Switch branch",
-      "commits": "Commits",
       "committing": "Commit in progress.",
       "forcePushing": "Force push in progress.",
       "remoteOperationInProgress": "Remote operation in progress.",
@@ -3139,7 +3225,8 @@
       "pullCommits_other": "Pull {{count}} commits.",
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commits.",
-      "upToDate": "Nothing to commit. Branch is up to date."
+      "upToDate": "Nothing to commit. Branch is up to date.",
+      "openCommits": "Open commits"
     },
     "dropdownCounts": {
       "pushCount_one": "Push {{count}} commit",
@@ -3197,20 +3284,11 @@
       "loading": "Loading commits…"
     },
     "branchCard": {
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "cherryPickState": "cherry-pick",
-      "changedCount": "{{count}} changed",
-      "stagedCount": "{{count}} staged",
-      "branchCount": "{{count}} on branch",
       "completingMerge": "Completing…",
       "completeMerge": "Complete merge"
     },
     "content": {
       "reconnecting": "Reconnecting to desktop...",
-      "stageAll": "Stage All",
-      "unstageAll": "Unstage All",
-      "openActions": "Open source control actions",
       "emptyTitle": "No local changes",
       "emptyMessage": "Working tree is clean.",
       "commitMessageDisabled": "Commit message disabled. No staged files.",
@@ -3218,9 +3296,6 @@
       "regenerateHint": "Clear the message to regenerate.",
       "cancelGeneration": "Cancel commit message generation",
       "generateMessage": "Generate commit message with AI"
-    },
-    "fileList": {
-      "committedSection": "Committed on Branch"
     },
     "fileRows": {
       "bothModified": "Both modified",
@@ -3236,10 +3311,10 @@
       "unstageFile": "Unstage {{path}}",
       "stageFile": "Stage {{path}}",
       "discardFile": "Discard {{path}}",
-      "committedSection": "Committed on Branch",
       "loadingCommitted": "Loading committed changes...",
       "committedUnavailable": "Committed changes unavailable.",
-      "openCommittedChange": "Open committed change {{path}}"
+      "openCommittedChange": "Open committed change {{path}}",
+      "discard": "Discard"
     },
     "header": {
       "close": "Close source control",
@@ -3251,7 +3326,6 @@
       "moreActions": "More source control actions"
     },
     "modals": {
-      "actionsTitle": "Source Control",
       "discardTitle": "Discard Change",
       "discardConfirmMessage": "Discard changes to \"{{path}}\"? This cannot be undone.",
       "discardButton": "Discard",
@@ -3264,15 +3338,6 @@
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
       "loading": "Loading changes…"
-    },
-    "prChip": {
-      "loading": "Loading pull request…",
-      "createPr": "Create pull request",
-      "loadingLabel": "Loading pull request",
-      "unavailableLabel": "Pull request unavailable: {{message}}",
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
-      "openLabel": "Pull request #{{number}}, {{state}}, {{checks}}. Open pull request."
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
@@ -3292,13 +3357,7 @@
       "loadFailed": "Unable to load committed changes"
     },
     "branchCompare": {
-      "sectionTitle": "Committed on Branch",
-      "summary": "{{files}} - vs {{baseRef}}",
-      "summaryWithCommits": "{{files}} - {{commits}} - vs {{baseRef}}",
-      "files_one": "{{count}} file",
-      "files_other": "{{count}} files",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits"
+      "sectionTitle": "Committed on Branch"
     },
     "commitMessageAi": {
       "generateFailed": "Failed to generate commit message"
@@ -3320,8 +3379,8 @@
     },
     "gitStatus": {
       "conflicts": "Conflicts",
-      "changes": "Changes",
-      "stagedChanges": "Staged Changes"
+      "uncommitted": "Uncommitted",
+      "staged": "Staged"
     },
     "hostedReviewCreateIntent": {
       "resolveConflicts": "Resolve conflicts before creating a pull request.",
@@ -3396,8 +3455,7 @@
       "actionFailed": "Source control action failed"
     },
     "state": {
-      "syncStatus": "{{ahead}} ahead, {{behind}} behind",
-      "noUpstream": "No upstream"
+      "syncStatus": "{{ahead}} ahead, {{behind}} behind"
     },
     "textGenerationFailure": {
       "openCodeInvalidEvents": "OpenCode returned invalid JSON events.",
@@ -3536,6 +3594,36 @@
       "checksRunning_other": "{{count}} checks still running",
       "waitingOnReviewer": "Waiting on review from {{login}}",
       "waitingOnReview": "Waiting on review"
+    },
+    "prCreateDraft": {
+      "generateFailed": "Failed to write a description"
+    },
+    "changesHeader": {
+      "merging": "Merging",
+      "rebasing": "Rebasing",
+      "cherryPicking": "Cherry-picking",
+      "notPublished": "Not published",
+      "notPushed": "{{count}} not pushed",
+      "behind": "{{count}} behind",
+      "upToDate": "Up to date",
+      "switchBranch": "Switch branch from {{branch}}",
+      "mergeInProgress": "Merge in progress",
+      "rebaseInProgress": "Rebase in progress",
+      "cherryPickInProgress": "Cherry-pick in progress",
+      "filesNeedDecision_one": "{{count}} file needs a decision before you can finish.",
+      "filesNeedDecision_other": "{{count}} files need a decision before you can finish.",
+      "conflictsResolved": "Every conflict is resolved. Finish from the bar below.",
+      "continueOnComputer": "Every conflict is resolved. Continue on your computer to finish.",
+      "commits_one": "{{count}} commit",
+      "commits_other": "{{count}} commits",
+      "conflictsMayRemain": "Not every file is listed, so conflicts may remain. Check on your computer."
+    },
+    "fileList": {
+      "stageAll": "Stage all",
+      "mergedCleanly": "Merged cleanly",
+      "unstageAll": "Unstage all",
+      "onThisBranch": "On this branch {{count}}",
+      "versusBase": "vs {{base}}"
     }
   },
   "newWorkspace": {

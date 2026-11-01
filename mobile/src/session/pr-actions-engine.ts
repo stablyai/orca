@@ -176,22 +176,20 @@ export class PrActionsEngine {
     this.setError(outcome.error)
   }
 
-  async merge(method?: GitHubPRMergeMethod): Promise<void> {
-    const cfg = this.cfg
-    const identity = this.identity
+  async merge(method?: GitHubPRMergeMethod): Promise<boolean> {
+    const { cfg, identity } = this
+    const { prNumber, prRepo } = cfg
     this.setBusy({ kind: 'merge' })
     this.setError(null)
     try {
-      const outcome = await cfg.mutations.mergePR({
-        prNumber: cfg.prNumber,
-        method,
-        prRepo: cfg.prRepo
-      })
+      const outcome = await cfg.mutations.mergePR({ prNumber, method, prRepo })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
+      return outcome.ok
     } catch (err) {
       if (this.identity === identity) {
         this.setError(err instanceof Error ? err.message : mergeFailureMessage())
       }
+      return false
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'merge' })
     }
@@ -240,17 +238,17 @@ export class PrActionsEngine {
     }
   }
 
-  async markReadyForReview(): Promise<void> {
-    const cfg = this.cfg
-    const identity = this.identity
-    const seq = this.stateField.begin('open')
+  // Draft and Ready for review are one toggle on the host; only the method and target state differ.
+  async setDraft(draft: boolean): Promise<void> {
+    const { cfg, identity } = this
+    const seq = this.stateField.begin(draft ? 'draft' : 'open')
     this.setBusy({ kind: 'state' })
     this.setError(null)
     try {
-      const outcome = await cfg.mutations.markReadyForReview({
-        prNumber: cfg.prNumber,
-        prRepo: cfg.prRepo
-      })
+      const args = { prNumber: cfg.prNumber, prRepo: cfg.prRepo }
+      const outcome = await (draft
+        ? cfg.mutations.markDraft(args)
+        : cfg.mutations.markReadyForReview(args))
       await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
         onRevert: () => this.stateField.settleFailure(seq)

@@ -20,6 +20,7 @@ vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' 
 vi.mock('lucide-react-native', () => ({
   CircleAlert: 'Icon',
   GitBranch: 'Icon',
+  RefreshCw: 'Icon',
   WifiOff: 'Icon'
 }))
 vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () => null }))
@@ -44,10 +45,18 @@ vi.mock('../components/BottomDrawer', () => ({
   useOptionPager: () => ({ page: null, open: () => {}, close: () => {}, forget: () => {} }),
   OptionPager: ({ main }: { main: unknown }) => main
 }))
-vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
+vi.mock('../components/MobilePRSidebar', () => ({ MobilePrTabBody: () => null }))
+vi.mock('../components/pr-sidebar/MobilePrTabSheets', () => ({ MobilePrTabSheets: () => null }))
+vi.mock('../components/pr-sidebar/PrChecksScreen', () => ({ PrChecksScreen: () => null }))
+vi.mock('../components/pr-sidebar/PrCommentsScreen', () => ({ PrCommentsScreen: () => null }))
+vi.mock('../components/pr-sidebar/use-mobile-pr-tab', () => ({
+  useMobilePrTab: () => ({ openCreatePrSheet: () => {} })
+}))
+vi.mock('../components/pr-sidebar/use-pr-tab-menu', () => ({ usePrTabMenuGroups: () => null }))
+vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
-  useMobileSourceControlActionSheet: () => ({})
+  useMobileSourceControlActionSheet: () => []
 }))
 vi.mock('../session/use-mobile-pr-sidebar-controller', () => ({
   useMobilePrSidebarController: () => ({
@@ -74,7 +83,6 @@ vi.mock('./use-mobile-source-control-state', () => ({
     status: null,
     branchCompareResult: null,
     branchLabel: '',
-    syncLabel: '',
     unstagedCount: 0,
     stagedCount: 0,
     branchEntries: [],

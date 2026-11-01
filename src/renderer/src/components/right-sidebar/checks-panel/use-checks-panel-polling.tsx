@@ -1,6 +1,9 @@
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
-import { ChecksDetailPollingPolicy } from './checks-detail-polling-policy'
+import {
+  ChecksDetailPollingPolicy,
+  nextChecksPollBackoffMs
+} from '../../../../../shared/github/checks-detail-polling-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   gitLabPipelineJobsToPRChecks,
@@ -126,10 +129,10 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
 
         // Unchanged details back off; a changed result restores the selected cadence.
         const signature = policyRef.current.accept(result)
-        pollIntervalRef.current =
-          signature === prevChecksRef.current
-            ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 60_000
+        pollIntervalRef.current = nextChecksPollBackoffMs(
+          pollIntervalRef.current,
+          signature === prevChecksRef.current ? 'unchanged' : 'changed'
+        )
         prevChecksRef.current = signature
       } catch (err) {
         if (
@@ -145,7 +148,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         }
         setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
         policyRef.current.fail()
-        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
+        pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
       } finally {
         if (
           isCurrentAsyncResult(
@@ -240,10 +243,10 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         setChecks(result, pipelineCheck)
         setComments(gitLabMRCommentsToPRComments(details?.comments))
         const signature = policyRef.current.accept(result, pipelineCheck)
-        pollIntervalRef.current =
-          signature === prevChecksRef.current
-            ? Math.min(pollIntervalRef.current * 2, 120_000)
-            : 60_000
+        pollIntervalRef.current = nextChecksPollBackoffMs(
+          pollIntervalRef.current,
+          signature === prevChecksRef.current ? 'unchanged' : 'changed'
+        )
         prevChecksRef.current = signature
       } catch (err) {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
@@ -257,7 +260,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         setChecksError(message)
         setCommentsError(message)
         policyRef.current.fail()
-        pollIntervalRef.current = Math.min(Math.max(60_000, pollIntervalRef.current * 2), 900_000)
+        pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
       } finally {
         if (
           gitLabDetailsLoadingGenerationRef.current === loadingGeneration &&

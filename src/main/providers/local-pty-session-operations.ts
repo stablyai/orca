@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type * as pty from 'node-pty'
 import { readPtsName } from '../pty/node-pty-pts-name'
+import { readPtyForegroundGroup } from '../pty/pty-master-foreground-observation'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { ptyShellProcessId } from '../windows/windows-pty-job'
 import { isWslAvailableAsync } from '../wsl'
@@ -88,6 +89,7 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
   // Real SIGWINCH reaches the tty foreground group, which excludes proc.pid (posix-pty-foreground-group).
   if (signal === 'SIGWINCH') {
     await signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid, {
+      readForegroundGroup: () => readPtyForegroundGroup(proc),
       ownsRoot: () => ptyProcesses.get(id) === proc
     })
     return

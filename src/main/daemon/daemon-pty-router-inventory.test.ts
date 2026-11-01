@@ -218,3 +218,50 @@ describe('DaemonPtyRouter inventory identity', () => {
     }
   })
 })
+
+describe('target-scoped foreground inventory', () => {
+  it('keeps a known target usable while preserving incomplete full-inventory failure', async () => {
+    const current = createAdapter('current', ['target'])
+    const legacy = createAdapter('legacy', ['unrelated'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.listProcesses()
+    legacy.emitIdentityChange()
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('unreachable'))
+    await expect(
+      router.listProcesses({ ptyIds: ['target'], targetOwnerOnly: true })
+    ).resolves.toMatchObject([{ id: 'target' }])
+    expect(legacy.listProcesses).toHaveBeenCalledTimes(1)
+    await expect(router.listProcesses()).rejects.toThrow()
+    // Stop and liveness proofs keep complete-inventory semantics.
+    await expect(router.listProcesses({ ptyIds: ['target'] })).rejects.toThrow()
+  })
+  it('never routes an unresolved or ambiguous owner to current', async () => {
+    const current = createAdapter('current')
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+    expect(router.supportsForegroundObservation('unadopted')).toBe(false)
+    await expect(router.inspectProcess('unadopted', { foregroundOnly: true })).rejects.toThrow(
+      'terminal_gone'
+    )
+    // No established route: owner resolution, as for every other caller, finds no target.
+    await expect(
+      router.listProcesses({ ptyIds: ['unadopted'], targetOwnerOnly: true })
+    ).resolves.toEqual([])
+    expect(current.inspectProcess).not.toHaveBeenCalled()
+    expect(current.spawn).not.toHaveBeenCalled()
+  })
+  it('discards target responses if the established owner changed while reading', async () => {
+    const current = createAdapter('current', ['target'])
+    const replacement = createAdapter('replacement', [])
+    const router = new DaemonPtyRouter({ current, legacy: [replacement] })
+    await router.listProcesses()
+    vi.mocked(current.inspectProcess).mockImplementation(async () => {
+      current.emitIdentityChange()
+      vi.mocked(current.hasPty).mockReturnValue(false)
+      vi.mocked(replacement.hasPty).mockReturnValue(true)
+      return { foregroundProcess: 'claude', hasChildProcesses: true }
+    })
+    await expect(router.inspectProcess('target', { foregroundOnly: true })).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+  })
+})
