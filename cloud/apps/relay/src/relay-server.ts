@@ -481,7 +481,8 @@ export function createRelayServer(
     recordAdmissionServiceMs: (lane, durationMs) =>
       observability.recordAdmissionServiceMs?.(lane, durationMs),
     recordStickySlot: (sample) => observability.recordStickySlot?.(sample),
-    recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
+    recordAssignmentUnavailable: (cause, ownRetry) =>
+      observability.recordAssignmentUnavailable?.(cause, ownRetry),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
     reservePlacement,

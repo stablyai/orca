@@ -1,6 +1,7 @@
-import type {
-  AssignmentAdmissionRejection,
-  RelayPublicAssignmentAdmission
+import {
+  isOwnRetryRejection,
+  type AssignmentAdmissionRejection,
+  type RelayPublicAssignmentAdmission
 } from './public-assignment-admission.js'
 
 export type DrainReturnGrant = { kind: 'admitted'; lease: { release(): void } }
@@ -68,9 +69,8 @@ export class RelayDrainReturnAdmission {
   }
 
   private retryAfter(relayHostId: string, reason: AssignmentAdmissionRejection): number {
-    // The host's own retry (a row-busy redial, a duplicate dial) is not a lane
-    // overflow: it gets the per-host interval, not a place behind the cohort.
-    if (reason === 'host-rate-limited' || reason === 'host-in-flight') {
+    // A row-busy redial or duplicate dial gets the per-host interval, not a place behind the cohort.
+    if (isOwnRetryRejection(reason)) {
       return DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS
     }
     const now = this.now()
