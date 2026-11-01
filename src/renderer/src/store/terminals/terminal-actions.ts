@@ -102,6 +102,8 @@ export type TerminalActions = {
       reason?: TerminalTabCloseReason
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
+      /** See closeUnifiedTab. */
+      preserveWorktreeSelection?: boolean
       localPtyTeardownOwnedExternally?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }

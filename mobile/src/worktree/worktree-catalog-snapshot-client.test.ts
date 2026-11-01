@@ -135,6 +135,27 @@ describe('WorktreeCatalogSnapshotClient', () => {
     })
   })
 
+  // An older host coarsens any read that names a snapshot; with no token, exact readers name none.
+  it('reads exact activity without a token until the host proves it keeps snapshots', async () => {
+    const client = clientWithResults(
+      { worktrees: [] },
+      { worktrees: [], snapshotId: 'snapshot-1' },
+      { unchanged: true, snapshotId: 'snapshot-1' }
+    )
+    const snapshots = new WorktreeCatalogSnapshotClient({ exactActivity: true })
+
+    for (let read = 0; read < 3; read += 1) {
+      admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
+    }
+
+    const exact = { limit: 10_000, acceptRowDelta: true, exactActivity: true }
+    expect(vi.mocked(client.sendRequest).mock.calls.map((call) => call[1])).toEqual([
+      exact,
+      exact,
+      { ...exact, afterSnapshotId: 'snapshot-1' }
+    ])
+  })
+
   it('does not advance the token until the caller admits a response', async () => {
     const client = clientWithResults(
       { worktrees: [], snapshotId: 'snapshot-1' },

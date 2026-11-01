@@ -1,5 +1,8 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
+import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
+import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
@@ -30,6 +33,8 @@ export function useDocumentAppearance(): void {
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
+  const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
@@ -47,7 +52,7 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (pluginThemesLoaded && theme) {
-      applyPluginAppTheme(pluginTheme)
+      const painted = applyPluginAppTheme(pluginTheme)
       // Why read the document: the editor should match what was painted, built-ins included.
       const computed = getComputedStyle(document.documentElement)
       usePluginMonacoThemeStore.setState({
@@ -55,6 +60,7 @@ export function useDocumentAppearance(): void {
           ? derivePluginMonacoTheme({
               base: pluginTheme.base,
               read: (token) => computed.getPropertyValue(token),
+              painted,
               probe: browserColorProbe,
               tokenColors: pluginTheme.tokenColors
             })
@@ -69,4 +75,15 @@ export function useDocumentAppearance(): void {
       buildAppFontFamily(appFontFamily)
     )
   }, [appFontFamily])
+
+  useEffect(() => {
+    applyMarkdownCodeFontFamily(editorFontFamily)
+  }, [editorFontFamily])
+
+  useEffect(() => {
+    // WebGL glyph atlases keep the smoothing they were created with; rebuild only on a real change.
+    if (applyCodeFontSmoothing(codeFontSmoothing)) {
+      rebuildAllTerminalWebglRenderers('code-font-smoothing')
+    }
+  }, [codeFontSmoothing])
 }

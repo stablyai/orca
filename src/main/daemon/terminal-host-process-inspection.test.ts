@@ -8,10 +8,6 @@ import type { WindowsProcessRow } from '../windows/windows-process-table'
 import { createPtyForegroundProcessTracker } from './pty-subprocess/foreground-process-tracker'
 import { inspectSpawnFileWindowsChildProcesses } from './pty-subprocess/spawn-file-child-processes'
 import { inspectionShowsShellAlone } from '../runtime/run-terminal-shell-alone'
-import {
-  assertCliConversationWritersExited,
-  type CliWriterHost
-} from '../runtime/structured-agent-cli-writers'
 const { fullTable, identityTable, jobMembers, consoleMembers } = vi.hoisted(() => ({
   fullTable: vi.fn(),
   identityTable: vi.fn(),
@@ -201,45 +197,13 @@ describe('TerminalHost process inspection', () => {
             jobMembers.mockReturnValue(new Set(rows.map((row) => row.pid)))
             consoleMembers.mockResolvedValue(new Set([100]))
             getForegroundProcess.mockClear()
-            const terminal = () => ({
-              pane: {
-                ptyId: 'decision',
-                incarnationId: created.incarnationId,
-                identity: 'decision'
-              }
-            })
-            let alone: boolean | undefined
-            const writer: CliWriterHost = {
-              rows: () => [],
-              saved: () => [],
-              observation: () => null,
-              sleeping: () => false,
-              terminal,
-              links: () => [
-                {
-                  agent: 'claude',
-                  id: 'conversation',
-                  paneOwned: true,
-                  worktreeId: 'workspace',
-                  terminal
-                }
-              ],
-              shellAlone: async () => {
-                const inspected = await host.inspectProcess('decision', {
-                  expectedIncarnationId: created.incarnationId,
-                  scanChildProcesses: true,
-                  ignoreDetached: true
-                })
-                alone = inspectionShowsShellAlone(inspected)
-                return alone
-              }
-            }
-            const run = () => assertCliConversationWritersExited(writer, 'claude', 'conversation')
-            const result = expect(run())
-            await (admits
-              ? result.resolves.toBeUndefined()
-              : result.rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } }))
-            expect(alone, name).toBe(admits)
+            const run = () =>
+              host.inspectProcess('decision', {
+                expectedIncarnationId: created.incarnationId,
+                scanChildProcesses: true,
+                ignoreDetached: true
+              })
+            expect(inspectionShowsShellAlone(await run()), name).toBe(admits)
             expect(fullTable, name).toHaveBeenCalledTimes(1)
             expect(getForegroundProcess, name).not.toHaveBeenCalled()
             if (name === 'D1') {

@@ -1,3 +1,4 @@
+import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import { useNativeChatFormSession } from './use-native-chat-form-session'
 import { NativeChatSettledBodyContext } from './native-chat-settled-body'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
@@ -38,7 +39,6 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
-import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import { NativeChatPromptSlotNotices } from './NativeChatComposerNotices'
 import { NativeChatInstallSlot, useNativeChatInstallSlot } from './NativeChatInstallSlot'
@@ -295,7 +295,13 @@ export function NativeChatStructuredSession(
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
             <NativeChatRewindContext.Provider value={controller.rewind.surface}>
-              <NativeChatOrcaStopContext.Provider value={continuation.view}>
+              <NativeChatUsageLimitActionsProvider
+                recovery={controller}
+                pane={props}
+                directory={fileLinkContext}
+                messages={controller.messages}
+                view={continuation.view}
+              >
                 <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
                   <NativeChatMessageList
                     // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
@@ -321,7 +327,7 @@ export function NativeChatStructuredSession(
                     deliveryNotices={deliveryNotices}
                   />
                 </NativeChatClaudeSignInContext.Provider>
-              </NativeChatOrcaStopContext.Provider>
+              </NativeChatUsageLimitActionsProvider>
             </NativeChatRewindContext.Provider>
           )}
         </NativeChatContextClearFade>

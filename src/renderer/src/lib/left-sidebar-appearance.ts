@@ -70,9 +70,15 @@ function buildSurfaceVariables(args: {
     '--sidebar-accent': accent,
     '--sidebar-accent-foreground': foreground,
     '--sidebar-border': border,
-    '--sidebar-ring': ring
+    '--sidebar-ring': ring,
+    // Why `initial`: the chosen appearance owns this subtree, so a plugin theme's row colors yield
+    // to each consumer's built-in fallback derived from the tokens above.
+    '--worktree-sidebar-active': 'initial',
+    '--worktree-sidebar-active-border': 'initial'
   }
   if (overrideTextTokens) {
+    vars['--host-badge'] = 'initial'
+    vars['--host-badge-foreground'] = 'initial'
     vars['--background'] = background
     vars['--foreground'] = foreground
     vars.color = foreground

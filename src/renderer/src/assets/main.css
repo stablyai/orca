@@ -147,10 +147,16 @@
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
-  --color-tab-group-split-divider: var(--tab-group-split-divider);
-  --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
   --color-tab-active: var(--tab-active);
   --color-tab-inactive: var(--tab-inactive);
+  /* Public tokens a theme may omit; resolved per element so unthemed tabs paint exactly as before. */
+  --color-tab-bar: var(--tab-bar, var(--card));
+  --color-tab-active-foreground: var(--tab-active-foreground, var(--foreground));
+  --color-tab-active-indicator: var(
+    --tab-active-indicator,
+    var(--tab-active-foreground, var(--foreground))
+  );
+  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -295,11 +301,12 @@
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Split dividers must clear 3:1 against --card even before hover; --border is too faint. */
-  --tab-group-split-divider: #868690;
-  --tab-group-split-divider-strong: #71717a;
+  --split-divider: #868690;
+  --split-divider-hover: #71717a;
+  /* `--tab-bar` is set only by themes; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
   /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
-  --tab-active: var(--card);
-  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--card));
+  --tab-active: var(--tab-bar, var(--card));
+  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar, var(--card)));
 }
 
 .dark {
@@ -412,10 +419,10 @@
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
-  --tab-group-split-divider: #71717a;
-  --tab-group-split-divider-strong: #a1a1aa;
-  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--card));
-  --tab-inactive: var(--card);
+  --split-divider: #71717a;
+  --split-divider-hover: #a1a1aa;
+  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar, var(--card)));
+  --tab-inactive: var(--tab-bar, var(--card));
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
@@ -447,10 +454,14 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 26%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 15%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 22%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 15%, transparent);
 }
 
 .dark,
@@ -478,10 +489,14 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
-  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
-  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 30%, transparent);
+  --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 20%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 32%, transparent);
+  --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 20%, transparent);
 }
 
 .plugin-security-chrome {
@@ -632,10 +647,9 @@ body[data-modal-overlay-open]
     var(--chat-source-muted-foreground) var(--chat-faint-mix),
     var(--chat-canvas)
   );
-  --chat-user-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-user-mix),
-    var(--chat-canvas)
+  --chat-user-surface: var(
+    --chat-user-message,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-user-mix), var(--chat-canvas))
   );
   --chat-user-border: color-mix(
     in srgb,
@@ -674,16 +688,8 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
   --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
-  --chat-diff-added: color-mix(
-    in srgb,
-    var(--git-decoration-added) 70%,
-    var(--chat-source-foreground)
-  );
-  --chat-diff-removed: color-mix(
-    in srgb,
-    var(--git-decoration-deleted) 70%,
-    var(--chat-source-foreground)
-  );
+  --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
+  --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
 }
 
 @layer base {
@@ -711,6 +717,11 @@ body[data-modal-overlay-open]
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* macOS opt-in: native smoothing draws heavier code glyphs than the app-wide grayscale. */
+  :root[data-code-font-smoothing] :is(.xterm, .monaco-editor, .editor-typography-surface) {
+    -webkit-font-smoothing: auto;
   }
 
   ul {
@@ -950,7 +961,7 @@ html.native-shell .app-layout {
   content: '';
   position: absolute;
   border-radius: 1px;
-  background: var(--tab-group-split-divider);
+  background: var(--split-divider);
   transition: background 100ms ease;
 }
 
@@ -972,7 +983,7 @@ html.native-shell .app-layout {
 
 .tab-group-split-resize-handle:hover::after,
 .tab-group-split-resize-handle.is-dragging::after {
-  background: var(--tab-group-split-divider-strong);
+  background: var(--split-divider-hover);
 }
 
 /* Electron drag hit-testing ignores z-index; every overlapping Radix portal needs explicit no-drag. */
@@ -996,7 +1007,8 @@ html.native-shell .app-layout {
   display: flex;
   flex-direction: row;
   align-items: center;
-  background: var(--bg-titlebar, var(--card));
+  /* Tabs can sit in the title bar, so it paints the tab strip color. */
+  background: var(--bg-titlebar, var(--tab-bar, var(--card)));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -1420,18 +1432,26 @@ html.native-shell .app-layout {
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+  border-color: var(
+    --worktree-sidebar-active-border,
+    color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent)
+  );
+  background: var(
+    --worktree-sidebar-active,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent)
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(
-    in srgb,
-    var(--worktree-sidebar-foreground) 18%,
-    var(--worktree-sidebar-border)
+  border-color: var(
+    --worktree-sidebar-active-border,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 18%, var(--worktree-sidebar-border))
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+  background: var(
+    --worktree-sidebar-active,
+    color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent)
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
@@ -2421,7 +2441,7 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: #58a6ff !important;
+  color: var(--text-link, #58a6ff) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;

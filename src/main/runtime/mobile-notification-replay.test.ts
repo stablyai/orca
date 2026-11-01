@@ -3,7 +3,7 @@ import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
 } from './mobile-notification-replay'
-import type { MobileNotificationDispatchEvent } from './orca-runtime'
+import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 
 function dispatch(
   buffer: MobileNotificationReplayBuffer,
