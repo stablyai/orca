@@ -179,8 +179,6 @@ export type AutomationRun = {
   lastOccurrenceAt?: number
   /** When the run first reached a final status; absent on older records. */
   finishedAt?: number
-  /** Set when the agent prompt carried result-reporting instructions; silence then means none reported, not verified. */
-  resultReporting?: 'offered'
   warnings?: AutomationRunWarning[]
   outputs?: AutomationRunOutput[]
   /** The agent said it could not do the task; completion records the run as failed with this message. */
