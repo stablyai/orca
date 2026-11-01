@@ -11,6 +11,7 @@ import {
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved
 } from '../tasks/setup-hook-trust'
+import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { RpcClient } from '../transport/rpc-client'
 import { removeWorktreeRow } from '../worktree/worktree-host-row-identity'
 import type { Worktree } from '../worktree/workspace-list-sections'
@@ -137,7 +138,10 @@ export function useHostWorktreeDelete(args: {
           // The host runs the archive hook before it replies; outlast it as desktop does (#19334).
           { timeoutMs: worktreeRemovalReplyTimeoutMs(hooks.runHooks) }
         )
-        if (!worktreeRemove.interpret(reply).accepted) {
+        if (worktreeRemove.interpret(reply).accepted) {
+          triggerSuccess()
+        } else {
+          triggerError()
           restoreRow(item)
           if (!reply.ok && reply.error.code === ARCHIVE_HOOK_FAILED_REMOVAL_CODE) {
             setArchiveHookFailure({
@@ -150,6 +154,7 @@ export function useHostWorktreeDelete(args: {
         }
         void fetchWorktrees()
       } catch {
+        triggerError()
         restoreRow(item)
       }
     },
