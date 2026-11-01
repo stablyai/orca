@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { agentSessionFailureSentence } from '../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpSignInPromptError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'

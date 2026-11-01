@@ -22,13 +22,13 @@ import {
   hostTestOperationId
 } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import { getDefaultSettings } from '../../../src/shared/constants'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {

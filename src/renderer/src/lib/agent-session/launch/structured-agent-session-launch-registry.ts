@@ -4,7 +4,7 @@ import { forgetStructuredSessionSelection } from '../../structured-agent-session
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { StructuredLaunchFailure } from '../../structured-agent-session-launch-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from '../../structured-agent-session-launch-options'
@@ -18,8 +18,10 @@ import {
   readStructuredAgentLaunchRecord,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
-import type { StructuredAgentLaunchPersistedRecord } from './structured-agent-session-launch-record'
-import { structuredAgentLaunchRecordFor } from './structured-agent-session-launch-record'
+import {
+  type StructuredAgentLaunchPersistedRecord,
+  structuredAgentLaunchRecordFor
+} from './structured-agent-session-launch-record'
 import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,

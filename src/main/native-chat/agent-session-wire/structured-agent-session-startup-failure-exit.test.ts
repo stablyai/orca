@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
 import {
   settleStructuredAgentSessionChildExit,
@@ -11,7 +11,7 @@ import {
   type StructuredAgentSessionChildExitSession
 } from './structured-agent-session-child-exit'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { exitJournalDouble } from './structured-agent-session-settlement-double.test-fixture'
 
 const SESSION = 'session-1'

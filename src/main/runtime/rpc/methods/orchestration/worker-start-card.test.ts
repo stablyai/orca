@@ -15,7 +15,7 @@ import {
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../../../shared/agent-session-journal-types'
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY

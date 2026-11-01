@@ -8,7 +8,7 @@ import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-clien
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
-} from '../../../src/shared/agent-session-host-authority'
+} from '../../../src/shared/agent-session/agent-session-host-authority'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'

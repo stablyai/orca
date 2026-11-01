@@ -1,10 +1,10 @@
 import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
 import { expect, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionAgentStatus } from '../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
   claudeFrame as frame,
   claudeWasSent as wrote,

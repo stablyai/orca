@@ -291,7 +291,8 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 Make, validate, load and manage Orca plugins with `ORCA plugin ...`. Themes, icons, syntaxes and
 translations load without approval; anything that runs code returns `approval_required` with
 exactly what it would get and an `--approve <fingerprint>` re-run command. Load
-`references/plugins.md` before creating, loading, enabling or publishing a plugin.
+`references/plugins.md` before creating, loading, enabling or publishing a plugin. To design,
+write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
 
 ## Agent Session Search
 

@@ -225,7 +225,7 @@ describe('hook title evidence and completion recovery', () => {
     }
   }, 15_000)
 
-  it('Pi controlled hooks retract rest and preserve a subsequently recorded native title', async () => {
+  it('Pi controlled hooks preserve titleless and native-title panes', async () => {
     vi.useFakeTimers()
     const { runtime, status, dispose } = producerFixture('pi')
     try {
@@ -246,13 +246,15 @@ describe('hook title evidence and completion recovery', () => {
       )
       await runtime.listTerminals()
       status('done')
-      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('Pi ready')
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBeNull()
       status('working')
-      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('⠋ Pi')
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBeNull()
       await expect(runtime.getTerminalAgentStatus(TERMINAL_HANDLE)).resolves.toMatchObject({
         status: 'working'
       })
       runtime.onPtyData(PTY_ID, nativeFrame, 1)
+      expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')
+      status('done')
       expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')
       status('working')
       expect(runtime.getTrackedPtyTitle(PTY_ID)).toBe('π - work')

@@ -2,16 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   classifyDispatchRejection,
   DISPATCH_REJECTED_WRITE_FAILED,
   isWriteFailureSubmission
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalDispatchReasonBoundTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

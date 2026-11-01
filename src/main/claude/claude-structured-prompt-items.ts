@@ -1,15 +1,15 @@
 import type {
   AgentJournalApprovalItem,
-  AgentJournalItemIdentity,
   AgentJournalPromptOption,
   AgentJournalQuestion,
   AgentJournalQuestionItem
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import {
   formatToolInput,
   truncateToolDetail
 } from '../../shared/native-chat/tools/native-chat-tool-summary'
-import { isPlanApprovalSubject } from '../../shared/agent-session-approval-subject'
+import { isPlanApprovalSubject } from '../../shared/agent-session/agent-session-approval-subject'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {

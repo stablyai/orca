@@ -8,7 +8,7 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity,
   AgentSessionRecord
-} from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {

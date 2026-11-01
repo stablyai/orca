@@ -1,6 +1,6 @@
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session/agent-session-message-source'
 
 export function registerJournalUnsentSendHoldQueueTests(

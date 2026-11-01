@@ -36,7 +36,7 @@ import {
 } from '../telemetry/wsl-move-orchestrator-telemetry'
 import { runTrackedWslMove } from '../telemetry/wsl-move-telemetry'
 import { readWslDistroRegistrations } from '../wsl/wsl-distro-registry-id'
-import { wslHostsAcceptNewWork, wslHostsGateOpen } from '../wsl/wsl-host-gate'
+import { wslHostsAcceptNewWork, wslHostsGateOpen, wslHostsOptedIn } from '../wsl/wsl-host-gate'
 import { wslHostAddRefusal } from '../wsl/wsl-host-add-admission'
 import { runAsWslUserAct } from '../wsl/wsl-unc-access-gate'
 import { getWslHostService } from '../wsl/wsl-host-service-instance'
@@ -127,9 +127,9 @@ function createOrchestrator(
   return new WslMoveOrchestrator({
     now: () => Date.now(),
     appVersion: app.getVersion(),
-    // A block learned this run stops automatic moves at once, like the opt-out env.
+    // A block learned this run, or the setting turned off, stops automatic moves at once.
     autoMoveEnabled: () =>
-      process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0' && wslHostsAcceptNewWork(),
+      process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0' && wslHostsOptedIn(store.getSettings()),
     autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects,
     prepareHost: (distro, stillWanted) => prepareHost(userDataPath, distro, stillWanted),
     isDistroInUse: (distro) => isDistroInUse(store, userDataPath, distro),
@@ -214,6 +214,7 @@ export function registerWslMoveOrchestrator(
   }
   const isMainWindow = (sender: WebContents | undefined): boolean =>
     !!sender && getTrustedUIRendererWebContents()?.id === sender.id
+  // Not setting-gated: a move already in flight when the setting turns off stays visible.
   ipcMain.handle('wslMoveOrchestrator:list', (): WslMoveOrchestratorRecord[] =>
     orchestrator && wslHostsGateOpen() ? orchestrator.list() : []
   )
@@ -223,7 +224,7 @@ export function registerWslMoveOrchestrator(
     (event: { sender?: WebContents }, distro: unknown): void => {
       if (
         orchestrator &&
-        wslHostsAcceptNewWork() &&
+        wslHostsOptedIn(store.getSettings()) &&
         isMainWindow(event.sender) &&
         typeof distro === 'string'
       ) {
@@ -247,8 +248,8 @@ export function registerWslMoveOrchestrator(
         return null
       }
       const action = USER_ACTIONS.find((candidate) => candidate === request.action)
-      // Retry starts a move; Restore and Not now stay available after a block learned this run.
-      if (!action || (action === 'retry' && !wslHostsAcceptNewWork())) {
+      // Retry starts a move; Restore and Not now stay available after a block or with the setting off.
+      if (!action || (action === 'retry' && !wslHostsOptedIn(store.getSettings()))) {
         return null
       }
       const unsaved =

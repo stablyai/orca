@@ -3,7 +3,7 @@
 import type {
   AgentJournalProducerLinkage,
   AgentJournalRowAttribution
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexSubagentExecutions } from './codex-subagent-executions'
 
 export type CodexRowAttribution = (

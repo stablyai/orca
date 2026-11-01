@@ -1,8 +1,8 @@
 import type { createFixture } from './journal-store-contract-test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readdir } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import {
   boundInlineText,
   boundPayload,
