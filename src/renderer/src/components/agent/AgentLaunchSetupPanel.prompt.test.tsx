@@ -112,6 +112,10 @@ it('shows the prompt placeholder from the German catalog', async () => {
       )
     )
     expect(prompt().getAttribute('aria-label')).toBe(de.agentPicker.promptPlaceholder)
+    // The longer translation may wrap: the empty editor's placeholder float keeps its height,
+    // with a zero-width margin box so the empty line and caret stay where they are.
+    expect(prompt().className).toContain('[&_p.is-editor-empty:first-child]:before:!h-auto')
+    expect(prompt().className).toContain('[&_p.is-editor-empty:first-child]:before:mr-[-100%]')
     expect(de.agentPicker.promptPlaceholder).toBe(
       'Prompt hinzufügen (optional): / für Skills, @ für Dateien'
     )

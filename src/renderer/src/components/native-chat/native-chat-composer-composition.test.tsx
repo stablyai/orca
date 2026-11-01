@@ -138,6 +138,10 @@ describe('queued edit placeholder ownership', () => {
     expect(
       screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
     ).toBe('false')
+    // Only the launch prompt sizes to its placeholder; this composer keeps its own minimum height.
+    expect(screen.getByRole('textbox', { name: 'Edit message' }).className).not.toContain(
+      'before:!h-auto'
+    )
     expect(view.container.querySelector('[data-placeholder="Edit message"]')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
     const cancelButton = screen.getByRole('button', { name: 'Cancel' })
