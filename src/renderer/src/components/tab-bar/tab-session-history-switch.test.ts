@@ -17,7 +17,14 @@ import { resolveCliChatResumeSource } from './cli-chat-resume-source'
 import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { getDefaultSettings } from '../../../../shared/constants'
-import * as protocol from '../../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+} from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import * as sessionRefresh from '../right-sidebar/ai-vault-session-refresh'
 import * as listCache from '../right-sidebar/ai-vault-session-list-request'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -53,8 +60,8 @@ vi.mock('@/lib/conversation-surface-switch', () => ({ runConversationSwitch: moc
 vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
-    protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-    protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 }))
 vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
@@ -141,12 +148,10 @@ const serverWithChat = (resumeHistory: boolean): AppState['runtimeStatusByEnviro
           liveTabCount: 1,
           liveLeafCount: 1,
           capabilities: [
-            protocol.STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-            protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-            protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-            ...(resumeHistory
-              ? [protocol.STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY]
-              : [])
+            STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+            STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+            STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+            ...(resumeHistory ? [STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY] : [])
           ]
         }
       }

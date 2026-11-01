@@ -57,15 +57,19 @@ it.each([true, false])(
     )
     expect(answer).toEqual({ status: 'completed', sessionId: id })
     const destination = `agent-session:${id}`
+    // The layout keeps the id the host recorded for the conversation's tab; clients see `destination`.
+    const layoutDestination = session().unifiedTabs?.[WORKTREE_ID]?.find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === id
+    )?.id
     const group = session().tabGroups?.[WORKTREE_ID]?.find((row) =>
-      row.tabOrder.includes(destination)
+      row.tabOrder.includes(layoutDestination ?? destination)
     )
     expect(group?.tabOrder).toEqual(
       named
-        ? [TAB_ID, destination, 'agent-session:later-tab']
-        : [TAB_ID, 'agent-session:later-tab', destination]
+        ? [TAB_ID, layoutDestination, 'agent-session:later-tab']
+        : [TAB_ID, 'agent-session:later-tab', layoutDestination]
     )
-    expect(group?.activeTabId).toBe(destination)
+    expect(group?.activeTabId).toBe(layoutDestination)
     const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     const row = published.tabs.find((tab) => tab.id === destination)
     if (named) {

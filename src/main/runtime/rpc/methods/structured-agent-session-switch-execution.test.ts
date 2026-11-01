@@ -192,16 +192,20 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
     await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions + 1))
     expect(stopped).toHaveBeenCalledOnce()
     const destination = `agent-session:${sessionId}`
-    const savedDestination = existingDestination?.tabId ?? destination
+    // The layout keeps the id the host recorded for the conversation's tab; clients see `destination`.
+    const layoutDestination = session().unifiedTabs?.[destinationWorkspace]?.find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+    )?.id
+    const savedDestination = existingDestination?.tabId ?? layoutDestination
     const group = session().tabGroups?.[destinationWorkspace]?.find((row) =>
       existingDestination
         ? row.id === existingDestination.groupId
-        : row.tabOrder.includes(destination)
+        : row.tabOrder.includes(layoutDestination ?? destination)
     )
     expect(group?.tabOrder).toEqual(
       existingDestination?.tabOrder ?? [
         ...(split ? [TAB_ID] : []),
-        destination,
+        layoutDestination,
         ...(elsewhere ? [] : ['agent-session:later-tab'])
       ]
     )
