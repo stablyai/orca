@@ -9,9 +9,14 @@ import {
 
 type BookEntry = NativeChatTask & { id?: string }
 
+/** A task row that still knows its provider id, so a later TaskUpdate matches it. */
+export type NativeChatTaskSeed = NativeChatTask & { id?: string }
+export type NativeChatTaskSeedList = { tasks: NativeChatTaskSeed[]; explanation?: string }
+
 export type NativeChatTaskBook = {
-  replace(list: NativeChatTaskList): void
+  replace(list: NativeChatTaskSeedList): void
   list(): NativeChatTaskList | null
+  seed(): NativeChatTaskSeedList | null
 }
 
 export function createNativeChatTaskBook(): NativeChatTaskBook & {
@@ -21,6 +26,7 @@ export function createNativeChatTaskBook(): NativeChatTaskBook & {
   return {
     replace: (list) => book.replace(list),
     list: () => book.list(),
+    seed: () => book.seed(),
     applyClaude: (name, input, output) => applyClaudeTaskTool(book, name, input, output)
   }
 }
@@ -31,19 +37,30 @@ class TaskBook {
   private explanation: string | undefined
   private seen = false
 
-  replace(list: NativeChatTaskList): void {
+  replace(list: NativeChatTaskSeedList): void {
     this.entries = list.tasks.map((task) => ({ ...task }))
-    this.byId.clear()
     this.explanation = list.explanation
+    this.reindex()
     this.seen = true
   }
 
   list(): NativeChatTaskList | null {
+    const seed = this.seed()
+    if (!seed) {
+      return null
+    }
+    return {
+      tasks: seed.tasks.map(({ id: _id, ...task }) => task),
+      ...(seed.explanation ? { explanation: seed.explanation } : {})
+    }
+  }
+
+  seed(): NativeChatTaskSeedList | null {
     if (!this.seen) {
       return null
     }
     return {
-      tasks: this.entries.map(({ id: _id, ...task }) => task),
+      tasks: this.entries.map((entry) => ({ ...entry })),
       ...(this.explanation ? { explanation: this.explanation } : {})
     }
   }
@@ -126,7 +143,11 @@ function applyClaudeTaskTool(book: TaskBook, name: string, input: unknown, outpu
   if (tool === 'taskcreate') {
     const created = record(result?.task)
     const id = nonempty(created?.id) ?? nonempty(result?.id) ?? idInText(output)
-    const content = nonempty(created?.subject) ?? nonempty(args?.subject) ?? nonempty(args?.content)
+    const content =
+      nonempty(created?.subject) ??
+      nonempty(args?.subject) ??
+      nonempty(args?.content) ??
+      subjectInText(output)
     if (!id || !content) {
       return
     }
@@ -140,7 +161,11 @@ function applyClaudeTaskTool(book: TaskBook, name: string, input: unknown, outpu
   if (result?.success === false) {
     return
   }
-  const id = nonempty(args?.taskId) ?? nonempty(args?.task_id) ?? nonempty(result?.taskId)
+  const id =
+    nonempty(args?.taskId) ??
+    nonempty(args?.task_id) ??
+    nonempty(result?.taskId) ??
+    idInText(output)
   if (!id) {
     return
   }
@@ -194,8 +219,49 @@ function idInText(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
-  const match = /"id"\s*:\s*"([^"]+)"/.exec(value)
-  return match?.[1]
+  const quoted = /"id"\s*:\s*"([^"]+)"/.exec(value)
+  if (quoted?.[1]) {
+    return quoted[1]
+  }
+  // Current Claude Code writes `Task #1 created successfully: …`, not `"id"`.
+  return /(?:^|\s)Task #([A-Za-z0-9][\w.-]*)/i.exec(value)?.[1]
+}
+
+function subjectInText(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const subject = /Task #[A-Za-z0-9][\w.-]* created successfully:\s*(.+)$/i.exec(value.trim())?.[1]
+  return subject?.trim() || undefined
+}
+
+/** Accept a wire task list. Anything that is not one becomes null so a bad frame cannot invent rows. */
+export function readNativeChatTaskSeedList(value: unknown): NativeChatTaskSeedList | null {
+  const list = record(value)
+  if (!list || !Array.isArray(list.tasks)) {
+    return null
+  }
+  const tasks: NativeChatTaskSeed[] = []
+  for (const item of list.tasks) {
+    const task = record(item)
+    const content = nonempty(task?.content)
+    if (!task || !content) {
+      continue
+    }
+    const activeForm = nonempty(task.activeForm)
+    const id = nonempty(task.id)
+    tasks.push({
+      content,
+      status: nativeChatTaskStatus(task.status),
+      ...(activeForm ? { activeForm } : {}),
+      ...(id ? { id } : {})
+    })
+  }
+  if (tasks.length === 0) {
+    return null
+  }
+  const explanation = nonempty(list.explanation)
+  return { tasks, ...(explanation ? { explanation } : {}) }
 }
 
 function record(value: unknown): Record<string, unknown> | null {

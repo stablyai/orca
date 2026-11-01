@@ -7,9 +7,13 @@ import type { NativeChatTranscriptFrame } from '../../../../src/shared/native-ch
 type SnapshotFrame = Extract<NativeChatTranscriptFrame, { type: 'snapshot' }>
 
 // Every field optional: a frame is read before it is checked. `message` is a transport error's text.
-export type MobileNativeChatStreamFrame = { type?: string; message?: string } & Partial<
-  Omit<SnapshotFrame, 'type'>
->
+export type MobileNativeChatStreamFrame = {
+  type?: string
+  message?: string
+  // Whole-file task list. Older clients ignore this frame type.
+  taskList?: unknown
+  subagents?: unknown
+} & Partial<Omit<SnapshotFrame, 'type'>>
 
 export type AppliedMobileNativeChatFrame =
   | { kind: 'ignored' }

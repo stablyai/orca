@@ -10,6 +10,7 @@ import {
   runtimeNativeChatReadError
 } from './native-chat-runtime-contract'
 import { translate } from '@/i18n/i18n'
+import { readNativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 
 /** Match local IPC so session consumers can read local or runtime-owned transcripts. */
 export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'subscribe'>
@@ -99,7 +100,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 sessionId,
                 transcriptPath,
                 limit,
-                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
+                capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 }
               },
               timeoutMs: 15_000
             },
@@ -130,6 +131,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   error?: string
                   lifecycle?: unknown
                   pending?: boolean
+                  taskList?: unknown
+                }
+                if (frame?.type === 'task-list') {
+                  onFrame({
+                    type: 'task-list',
+                    taskList: readNativeChatTaskSeedList(frame.taskList)
+                  })
+                  return
                 }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 // Pending frames stop the spinner without claiming a settled initial transcript.

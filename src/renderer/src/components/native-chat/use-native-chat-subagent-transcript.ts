@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { nativeChatSubagentActivities } from '../../../../shared/native-chat/input/native-chat-activity'
+import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/structured-agent-session-subagent-roster'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -9,7 +10,7 @@ const NO_SUBAGENT_ROWS: ReadonlyMap<string, readonly NativeChatSubagentRow[]> = 
 
 /** Which transcript the chat is showing, and the parent turn chrome to hide while a child is open. */
 export function useNativeChatSubagentTranscript({
-  sessionId,
+  session,
   messages,
   subagentRows,
   subagentRoster,
@@ -19,7 +20,7 @@ export function useNativeChatSubagentTranscript({
   activityText,
   lifecycleWorking
 }: {
-  sessionId: string | null
+  session: { sessionId: string | null; taskList?: NativeChatTaskSeedList | null }
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   subagentRoster: StructuredAgentSubagentRoster | undefined
@@ -42,8 +43,10 @@ export function useNativeChatSubagentTranscript({
     subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
     focusedSubagentId: string | null
     onFocusSubagent: (agentId: string | null) => void
+    taskList: NativeChatTaskSeedList | null
   }
 } {
+  const { sessionId, taskList = null } = session
   const [focus, setFocus] = useState<{ sessionId: string | null; agentId: string | null }>({
     sessionId,
     agentId: null
@@ -82,6 +85,6 @@ export function useNativeChatSubagentTranscript({
     shownStopping: viewingSubagent ? false : stopping,
     shownActivityText: viewingSubagent ? undefined : activityText,
     shownLifecycleWorking: viewingSubagent ? false : lifecycleWorking,
-    activity: { messages, subagentRows, focusedSubagentId, onFocusSubagent }
+    activity: { messages, subagentRows, focusedSubagentId, onFocusSubagent, taskList }
   }
 }

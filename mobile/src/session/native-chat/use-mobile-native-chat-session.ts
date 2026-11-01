@@ -12,6 +12,10 @@ import type {
   NativeChatTurnLifecycle
 } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptPage } from '../../../../src/shared/native-chat/native-chat-transcript-frames'
+import {
+  readNativeChatTaskSeedList,
+  type NativeChatTaskSeedList
+} from '../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import { buildNativeChatSubscriptionId } from '../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../../transport/rpc-client'
 import { nativeChatSessionPageRead } from '../mobile-session-read-operations'
@@ -52,6 +56,8 @@ export type MobileNativeChatSession = {
   loadEarlier: () => void
   /** Latest provider turn boundary from the transcript feed; absent from older hosts. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  /** Tasks from history outside the loaded tail. */
+  taskList?: NativeChatTaskSeedList | null
 }
 
 const INITIAL_LIMIT = 40
@@ -115,6 +121,10 @@ export function useMobileNativeChatSession(args: {
     lifecycle: NativeChatTurnLifecycle | undefined
   } | null>(null)
   const [hasMore, setHasMore] = useState(false)
+  const [taskSeed, setTaskSeed] = useState<{
+    identity: string
+    taskList: NativeChatTaskSeedList | null
+  } | null>(null)
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const beforeOffsetRef = useRef<number | null>(null)
   // Cache the id index so live appends cost incoming rows rather than rescanning all history.
@@ -168,7 +178,7 @@ export function useMobileNativeChatSession(args: {
         limit: limitRef.current,
         // Use a distinct token per screen so another viewer cannot evict this host feed.
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId, randomV4Uuid()),
-        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 },
+        capabilities: { transcriptPending: 1, transcriptSourceOrder: 1, taskList: 1 },
         ...(transcriptPath ? { transcriptPath } : {}),
         ...(resumeAfter ? { resumeAfter } : {})
       },
@@ -177,6 +187,13 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        if (frame.type === 'task-list') {
+          setTaskSeed({ identity, taskList: readNativeChatTaskSeedList(frame.taskList) })
+          return
+        }
+        if (frame.type === 'replacement') {
+          setTaskSeed(null)
+        }
         // No file yet says nothing about rows this subscription already holds: unsettle the read, keep the rows.
         if (resumeAfter && frame.type === 'snapshot' && frame.pending) {
           setRead({ client, identity, status: 'awaiting-transcript' })
@@ -329,6 +346,7 @@ export function useMobileNativeChatSession(args: {
     loadingEarlier: olderPages === 'loading',
     olderPages,
     loadEarlier,
-    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined
+    transcriptLifecycle: lifecycle?.identity === identity ? lifecycle.lifecycle : undefined,
+    taskList: taskSeed?.identity === identity ? taskSeed.taskList : undefined
   }
 }

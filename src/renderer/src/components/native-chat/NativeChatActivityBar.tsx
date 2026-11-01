@@ -9,6 +9,7 @@ import {
   type NativeChatSubagentActivity
 } from '../../../../shared/native-chat/input/native-chat-activity'
 import { nativeChatCompletedTaskCount } from '../../../../shared/native-chat/input/native-chat-task-list'
+import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type {
   NativeChatMessage,
@@ -47,19 +48,21 @@ export function NativeChatActivityBar({
   messages,
   subagentRows,
   focusedSubagentId,
-  onFocusSubagent
+  onFocusSubagent,
+  taskList: sessionTaskList = null
 }: {
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   focusedSubagentId: string | null
   onFocusSubagent: (agentId: string | null) => void
+  taskList?: NativeChatTaskSeedList | null
 }): React.JSX.Element | null {
   const list = useMemo(() => {
     const focusedMessages = focusedSubagentId
       ? (subagentRows.get(focusedSubagentId)?.map((row) => row.message) ?? [])
       : null
-    return nativeChatVisibleTaskList(messages, focusedMessages)
-  }, [focusedSubagentId, messages, subagentRows])
+    return nativeChatVisibleTaskList(messages, focusedMessages, sessionTaskList)
+  }, [focusedSubagentId, messages, sessionTaskList, subagentRows])
   const subagents = useMemo(
     () => nativeChatSubagentActivities(messages, subagentRows),
     [messages, subagentRows]

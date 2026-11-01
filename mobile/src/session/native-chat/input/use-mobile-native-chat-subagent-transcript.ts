@@ -6,6 +6,7 @@ import {
   type NativeChatSubagentActivity
 } from '../../../../../src/shared/native-chat/input/native-chat-activity'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+import type { NativeChatTaskSeedList } from '../../../../../src/shared/native-chat/input/native-chat-claude-task-updates'
 import { projectNativeChatTranscript } from '../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
@@ -20,7 +21,8 @@ export function useMobileNativeChatSubagentTranscript({
   streaming,
   pending,
   agent,
-  sendSurfaceId
+  sendSurfaceId,
+  taskList: sessionTaskList = null
 }: {
   messages: readonly NativeChatMessage[]
   folded: NativeChatMessage[]
@@ -28,6 +30,7 @@ export function useMobileNativeChatSubagentTranscript({
   pending: MobileNativeChatPendingItem[]
   agent: string | null | undefined
   sendSurfaceId: string
+  taskList?: NativeChatTaskSeedList | null
 }): {
   shownFolded: NativeChatMessage[]
   shownStreaming: string | null
@@ -79,8 +82,12 @@ export function useMobileNativeChatSubagentTranscript({
   )
   const taskList = useMemo(
     () =>
-      nativeChatVisibleTaskList(focusedId ? folded : shownFolded, focusedId ? shownFolded : null),
-    [focusedId, folded, shownFolded]
+      nativeChatVisibleTaskList(
+        focusedId ? folded : shownFolded,
+        focusedId ? shownFolded : null,
+        sessionTaskList
+      ),
+    [focusedId, folded, sessionTaskList, shownFolded]
   )
   return {
     shownFolded,
