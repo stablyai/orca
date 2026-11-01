@@ -204,7 +204,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
-    this.removeWindowlessAgentSessionTab(sessionId)
     try {
       const db = this.getExistingOrchestrationDb()
       for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {

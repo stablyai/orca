@@ -1,4 +1,5 @@
 import { STRUCTURED_AGENT_SESSION_SLEEP_WORKSPACE_METHODS } from './structured-agent-session-sleep-workspace'
+import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from './structured-agent-session-close-method'
 import { clientRequestsCommands } from './structured-agent-session-policy'
 import {
   clientReadsCurrentRequests,
@@ -62,19 +63,14 @@ import {
   CreateParams,
   CreateSupportParams,
   HistoryParams,
-  OptionsParams,
   RewindParams,
   SendParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
 import { sendStructuredAgentSessionForClient } from './structured-agent-session-send-compatibility'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import {
-  noteStructuredAgentSessionClose,
-  refusingStructuredAgentSessionCreatesClosedFirst
-} from './structured-agent-session-close-before-create'
+import { refusingStructuredAgentSessionCreatesClosedFirst } from './structured-agent-session-close-before-create'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
@@ -144,31 +140,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
   }),
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
-  defineMethod({
-    // Close only provider/in-memory state, preserving record/journal for future attachment.
-    name: 'agentSession.close',
-    permission: 'workspace',
-    params: OptionsParams,
-    handler: async (params, ctx) => {
-      requireStructuredCapability(ctx)
-      // Record close before requiring host so even failed closes fence racing creates.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-        noteStructuredAgentSessionClose(
-          params.sessionId,
-          (getStructuredAgentSessionHost()?.deps.store.getConversation(params.sessionId) ??
-            null) !== null
-        )
-      }
-      const host = requireStructuredCleanupHost(ctx)
-      // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
-      if (typeof host.setSessionTabVisibility === 'function') {
-        await host.setSessionTabVisibility(params.sessionId, false)
-      }
-      // Clients call this only when the user closes this chat's tab or cancels its launch.
-      await host.close(params.sessionId, 'user-close')
-      return { ok: true as const }
-    }
-  }),
+  STRUCTURED_AGENT_SESSION_CLOSE_METHOD,
   ...STRUCTURED_AGENT_SESSION_SLEEP_WORKSPACE_METHODS,
   ...STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS,
   defineMethod({

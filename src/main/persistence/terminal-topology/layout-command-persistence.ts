@@ -1,4 +1,5 @@
 import type { TerminalSurfaceCloseCapture } from '../../../shared/terminal-tab-close'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type {
   CommandOf,
   LayoutApplyOutcome,
@@ -82,7 +83,7 @@ export class LayoutCommandPersistence {
     hostIds: readonly string[] = [],
     run: {
       originalPresentation?: TerminalSurfaceCloseCapture
-      admit?: () => boolean
+      admit?: (partitions?: readonly WorkspaceSessionState[]) => boolean
       onApplied?: () => void
       live?: LayoutLiveContext
       stopBeforeWrite?: (ptyIds: readonly string[]) => boolean
@@ -91,6 +92,7 @@ export class LayoutCommandPersistence {
   ): Promise<LayoutApplyOutcome> {
     const context = this[layoutCommandPersistenceContext]
     const resolved = hostIds.length > 0 ? hostIds.map(resolveHostId) : [resolveHostId()]
+    const partitions = () => resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId))
     if (run.originalPresentation && isTerminalClose(command)) {
       const original = run.originalPresentation
       const source = original.identity
@@ -121,7 +123,7 @@ export class LayoutCommandPersistence {
             },
             requestedSession: context.sessions.getWorkspaceSession(resolved[0]),
             ownerMatches: () =>
-              (run.admit?.() ?? true) &&
+              (run.admit?.(partitions()) ?? true) &&
               command.workspace === source.worktreeId &&
               ('tabId' in command
                 ? command.tabId === source.tabId
@@ -152,7 +154,7 @@ export class LayoutCommandPersistence {
         })
     }
     let effects: LayoutEffects | undefined
-    const apply = raisingBindingGenerations(
+    const commit = raisingBindingGenerations(
       context.runtime,
       resolved,
       (hostId) => context.sessions.getWorkspaceSession(hostId),
@@ -162,11 +164,11 @@ export class LayoutCommandPersistence {
         noteEffects: (noted) => (effects = noted)
       })
     )
-    const commit = () => {
-      if (run.admit && !run.admit()) {
-        return { value: { ok: false as const, code: 'tab_not_found' as const }, persist: false }
+    const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> => {
+      if (run.admit && !run.admit(partitions())) {
+        return { value: { ok: false, code: 'tab_not_found' }, persist: false }
       }
-      const mutation = apply()
+      const mutation = commit()
       if (!(mutation.value instanceof Error) && mutation.value.ok) {
         run.onApplied?.()
       }
@@ -177,10 +179,10 @@ export class LayoutCommandPersistence {
       ORCA_LAYOUT_OWNER_IS_MAIN && context.writeLater && isTerminalClose(command)
         ? keptOnWriteFailure(
             (mutate) => context.runtime.runDurableMutation(mutate),
-            writingOnly(resolved, commit),
+            writingOnly(resolved, admitted),
             context.writeLater
           )
-        : context.runtime.runDurableMutation(writingOnly(resolved, commit))
+        : context.runtime.runDurableMutation(writingOnly(resolved, admitted))
     if (!run.onEffects) {
       return applied
     }

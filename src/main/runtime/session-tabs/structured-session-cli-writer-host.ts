@@ -82,7 +82,8 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
     })
   }
 
-  recordCliWriterConversation(event: EnrichedAgentHookEventPayload): void {
+  /** A local hook that names its agent process supersedes the launch result saved for this PTY. */
+  clearSavedTerminalLaunchOnAgentHook(event: EnrichedAgentHookEventPayload): void {
     const pty = this.getPtyRecordForPaneKey(event.paneKey)
     if (
       pty &&
@@ -109,8 +110,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
 
   async assertStructuredAdoptionTerminalWritersExited(
     agent: StructuredAgentId,
-    providerSessionId: string,
-    _source?: { workspaceId: string; paneKey: string }
+    providerSessionId: string
   ): Promise<void> {
     await assertCliConversationWritersExited(
       {

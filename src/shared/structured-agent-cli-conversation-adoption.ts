@@ -68,3 +68,20 @@ export function inPlaceSwitchExecutionCapability(agent: string): string {
 
 /** `saved`: built from a pane's saved facts; `switch`: the terminal half of a chat's switch. */
 export type TerminalResumeOrigin = 'saved' | 'switch'
+
+/** A local status row naming the conversation a chat of `agent` would take over: the host's
+ * writer admission and the renderer's open-chat lookup read rows the same way. */
+export function namesCliConversation(
+  row: { connectionId?: string | null; agentType?: string; providerSession?: { id: string } },
+  agent: string,
+  providerSessionId: string
+): boolean {
+  return (
+    !row.connectionId &&
+    adoptsCliConversations(row.agentType) &&
+    row.providerSession?.id === providerSessionId &&
+    CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>
+      chatAgentsShareConversations(chat, agent)
+    )
+  )
+}

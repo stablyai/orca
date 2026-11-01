@@ -77,9 +77,9 @@ vi.mock('@/components/native-chat/structured-agent-session-read-owner-registry',
   findStructuredAgentSessionReadOwner: mocks.reader
 }))
 vi.mock('@/components/tab-bar/cli-chat-resume-run', () => ({
-  runLegacyCliChatResume: mocks.legacy
+  runCliChatResume: mocks.legacy
 }))
-vi.mock('@/components/tab-bar/cli-chat-resume-feedback', () => ({
+vi.mock('@/components/tab-bar/cli-chat-resume-owner-return', () => ({
   switchIntoOwnerLegacy: mocks.legacy
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
@@ -170,7 +170,7 @@ it('keeps the earlier chat resume where the agent or host has no in-place switch
   await expect(
     runConversationSwitch({ direction: 'chat', ...source, source, agent: 'omp' })
   ).resolves.toBe(false)
-  expect(mocks.legacy).toHaveBeenCalledWith(source, expect.any(Function))
+  expect(mocks.legacy).toHaveBeenCalledWith(source)
   expect(mocks.call).not.toHaveBeenCalled()
 })
 

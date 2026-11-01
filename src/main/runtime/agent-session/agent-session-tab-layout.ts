@@ -12,6 +12,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { randomUUID } from 'node:crypto'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
+import { isReopenedChatTabId } from './agent-session-tab-identity'
 
 /** Placement in the creating client's host-owned group/tab ids. */
 export type ChatTabPlacement = { groupId?: string; afterTabId?: string; index?: number }
@@ -27,7 +28,7 @@ export type ChatTabChange =
         replaces?: string
       }
     }
-  | { close: string }
+  | { close: string; tabId?: string }
 
 export type ChatTabLayoutCommand =
   | (CommandOf<'openAgentSessionTab'> & { tabId: string })
@@ -60,10 +61,15 @@ export function chatTabLayoutCommand(
     workspace?.tabs.find((tab) => tab.kind === 'agent-session' && tab.entityId === sessionId)?.id ??
     null
   if ('close' in change) {
-    return tabId ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true } : null
+    return tabId && change.tabId === tabId
+      ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
+      : null
   }
   if (tabId) {
-    return null
+    return (isReopenedChatTabId(change.open.tabId) || isReopenedChatTabId(tabId)) &&
+      tabId !== change.open.tabId
+      ? { type: 'closeTabs', workspace: worktreeId, tabIds: [tabId], force: true }
+      : null
   }
   const { sessionId: openedSessionId, agent, tabId: openedTabId } = change.open
   return {
@@ -100,21 +106,26 @@ export function withChatTabChanges(
   const { loaded, activeGroupId } = loadChatTabLayout(hostId, session, worktreeId)
   let layout = loaded.layout
   for (const change of changes) {
-    const command = chatTabLayoutCommand(
-      layout.workspaces[worktreeId],
-      activeGroupId,
-      worktreeId,
-      change
-    )
-    const applied = command
-      ? applyLayoutCommand(layout, command, {
-          mintId: randomUUID,
-          mintLeafId: randomUUID,
-          now: Date.now
-        })
-      : null
-    if (applied?.ok) {
-      layout = applied.model
+    for (let step = 0; step < 2; step++) {
+      const command = chatTabLayoutCommand(
+        layout.workspaces[worktreeId],
+        activeGroupId,
+        worktreeId,
+        change
+      )
+      const applied = command
+        ? applyLayoutCommand(layout, command, {
+            mintId: randomUUID,
+            mintLeafId: randomUUID,
+            now: Date.now
+          })
+        : null
+      if (applied?.ok) {
+        layout = applied.model
+      }
+      if (!applied?.ok || !('open' in change) || command?.type !== 'closeTabs') {
+        break
+      }
     }
   }
   return layout === loaded.layout ? null : saveWorkspaceLayout({ ...loaded, layout })

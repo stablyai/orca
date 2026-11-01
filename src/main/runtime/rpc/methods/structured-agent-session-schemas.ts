@@ -19,6 +19,7 @@ export {
   OptionsParams,
   SwitchToChatParams,
   SwitchToTerminalParams,
+  RevealParams,
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,

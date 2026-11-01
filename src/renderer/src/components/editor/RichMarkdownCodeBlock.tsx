@@ -138,13 +138,12 @@ export function RichMarkdownCodeBlock({
         )}
       </button>
       <NodeViewContent<'pre'> as="pre" />
-      {/* Keep Mermaid source editable; native SVG labels survive the preview’s sanitization. */}
+      {/* Keep Mermaid source editable; the diagram below is read-only output. */}
       {isMermaid && node.textContent.trim() && (
         <div contentEditable={false} className="mermaid-preview">
           <MermaidBlock
             content={node.textContent.trim()}
             isDark={isDark}
-            htmlLabels={false}
             onExpand={expandMermaidDiagram}
           />
         </div>

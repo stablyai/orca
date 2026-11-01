@@ -8,7 +8,6 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import {
   pendingNativeChatCliSwitches as pending,
-  pendingCliChatResumes,
   subscribeConversationSwitch as subscribe
 } from './pending-conversation-surface-switches'
 import type { AiVaultSession, AiVaultAgent } from '../../../shared/ai-vault-types'
@@ -45,12 +44,7 @@ export const keyFor = (args: ConversationSwitch) =>
 export function pendingNow(args: ConversationSwitch) {
   return (
     pending.has(keyFor(args)) ||
-    Boolean(args.sessionId && pending.has(`${args.executionHostId}\0${args.sessionId}`)) ||
-    [...pendingCliChatResumes.values()].some(
-      ({ source }) =>
-        source.executionHostId === args.executionHostId &&
-        source.providerSessionId === args.source?.providerSessionId
-    )
+    Boolean(args.sessionId && pending.has(`${args.executionHostId}\0${args.sessionId}`))
   )
 }
 

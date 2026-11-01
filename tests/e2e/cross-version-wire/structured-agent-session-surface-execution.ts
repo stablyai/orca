@@ -1,5 +1,9 @@
+import { availableRevealWorkspace } from '../../../src/main/runtime/session-tabs/structured-workspace-authority.test-fixture'
 import { expect, vi } from 'vitest'
+import type { structuredHostStub } from './structured-agent-session-host-fixture'
 import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
+import type { StructuredSessionSurfaceRuntime } from '../../../src/main/runtime/agent-session/structured-agent-session-close'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import { resetStructuredAgentSessionClosesBeforeCreateForTests } from '../../../src/main/runtime/rpc/methods/structured-agent-session-close-before-create'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
@@ -7,7 +11,7 @@ import { inPlaceSwitchCapability } from '../../../src/shared/structured-agent-cl
 import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session-journal-types'
 import type { AiVaultSessionResumePreparation } from '../../../src/shared/ai-vault-resume-preparation'
-import { structuredSwitchSource } from './structured-agent-session-host-fixture'
+import { structuredSwitchSource } from './structured-agent-session-switch-source-fixture'
 import {
   attachParams,
   ATTENTION_READ,
@@ -25,14 +29,52 @@ import type {
   RpcReply
 } from './versioned-agent-session-wire'
 
-export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
+export function runtimeStub(overrides: Record<string, unknown> = {}) {
   // A fresh runtime remembers no chat closed before its create; scenarios reuse one session id.
   resetStructuredAgentSessionClosesBeforeCreateForTests()
   const subscriptions = new RuntimeSubscriptionRegistry()
+  let raw: ReturnType<
+    StructuredSessionSurfaceRuntime['currentLocalStructuredSessionPresentation']
+  > = {
+    worktreeId: WORKSPACE,
+    tabId: `tab-${SESSION}`
+  }
+  let saved = [{ ...raw }]
+  const presentation = {
+    currentLocalStructuredSessionPresentation: vi.fn<
+      StructuredSessionSurfaceRuntime['currentLocalStructuredSessionPresentation']
+    >((id) => (id === SESSION ? raw : null)),
+    captureStructuredAgentSessionPresentation: vi.fn<
+      StructuredSessionSurfaceRuntime['captureStructuredAgentSessionPresentation']
+    >((id) => (id === SESSION ? { raw, saved: [...saved] } : { raw: null, saved: [] })),
+    retireStructuredAgentSessionTabFromSnapshot: vi.fn<
+      StructuredSessionSurfaceRuntime['retireStructuredAgentSessionTabFromSnapshot']
+    >((id, tabId, worktreeId) => {
+      if (id !== SESSION || !raw || raw.tabId !== tabId || raw.worktreeId !== worktreeId) {
+        return false
+      }
+      raw = null
+      return true
+    }),
+    removeCapturedStructuredSessionSavedTabs: vi.fn<
+      StructuredSessionSurfaceRuntime['removeCapturedStructuredSessionSavedTabs']
+    >((id, targets) => {
+      if (id === SESSION && raw === null) {
+        saved = saved.filter(
+          (tab) =>
+            !targets.some(
+              (target) => target.tabId === tab.tabId && target.worktreeId === tab.worktreeId
+            )
+        )
+      }
+    })
+  } satisfies StructuredSessionSurfaceRuntime
   return {
+    ...presentation,
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
+    prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async () => {
@@ -43,7 +85,13 @@ export function runtimeStub(overrides: Record<string, unknown> = {}): unknown {
       } = attachParams(null)
       return resolved
     },
-    publishStructuredAgentSessionTab: () => {},
+    publishStructuredAgentSessionTab: vi.fn<OrcaRuntimeService['publishStructuredAgentSessionTab']>(
+      async (input) =>
+        input.capture?.({
+          tableId: raw?.tabId ?? null,
+          presentation: { raw, saved: [...saved] }
+        })
+    ),
     subscribeStructuredAgentAvailability: (read: (agents: unknown[]) => void) => {
       read([])
       return () => {}
@@ -77,7 +125,7 @@ export async function callBuild(
 // Require every declared method to reach its host and return its declared result in each build pairing.
 export async function expectDeclaredSurfaceExecutes(
   build: AgentSessionWireBuild,
-  hostCalls: Record<string, ReturnType<typeof vi.fn>>,
+  hostCalls: ReturnType<typeof structuredHostStub>,
   clientCapabilities: readonly string[]
 ): Promise<void> {
   const retirement = vi.fn()
@@ -132,6 +180,9 @@ export async function expectDeclaredSurfaceExecutes(
       // true from the earlier one: only this call's own delta pins the pairing.
       const before = expectedHostMethod ? hostCalls[expectedHostMethod].mock.calls.length : 0
       const otherBefore = otherCreateMethod ? hostCalls[otherCreateMethod].mock.calls.length : 0
+      if (method === 'agentSession.readVisual') {
+        hostCalls.getConversation.mockReturnValueOnce(null)
+      }
       const replies = await callBuild(
         build,
         method,
@@ -159,6 +210,27 @@ export async function expectDeclaredSurfaceExecutes(
       }
       if (otherCreateMethod) {
         expect(hostCalls[otherCreateMethod].mock.calls.length - otherBefore).toBe(0)
+      }
+      if (method === 'agentSession.close') {
+        const target = { worktreeId: WORKSPACE, tabId: `tab-${SESSION}` }
+        expect(runtime.captureStructuredAgentSessionPresentation).toHaveBeenCalledExactlyOnceWith(
+          SESSION
+        )
+        expect(runtime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledExactlyOnceWith(
+          SESSION,
+          target.tabId,
+          target.worktreeId
+        )
+        expect(runtime.removeCapturedStructuredSessionSavedTabs).toHaveBeenCalledExactlyOnceWith(
+          SESSION,
+          [target]
+        )
+        expect(hostCalls.getSessionTabId(SESSION)).toBeNull()
+        expect(hostCalls.notifySessionTabHidden).toHaveBeenCalledExactlyOnceWith(SESSION)
+        expect(runtime.captureStructuredAgentSessionPresentation(SESSION)).toEqual({
+          raw: null,
+          saved: []
+        })
       }
       if (method === 'agentSession.acknowledgeAttention') {
         expect(retirement).toHaveBeenCalledExactlyOnceWith(ATTENTION_READ)

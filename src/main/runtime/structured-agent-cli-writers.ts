@@ -1,10 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
-import {
-  adoptsCliConversations,
-  chatAgentsShareConversations,
-  CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../shared/structured-agent-cli-conversation-adoption'
+import { namesCliConversation } from '../../shared/structured-agent-cli-conversation-adoption'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { CliWriterObservation } from '../agent-hooks/server/cli-writer-observation'
 
@@ -20,23 +16,12 @@ export async function assertCliConversationWritersExited(
   providerSessionId: string
 ): Promise<void> {
   for (const row of host.rows()) {
-    if (
-      row.connectionId ||
-      row.structuredHost ||
-      !adoptsCliConversations(row.agentType) ||
-      row.providerSession?.id !== providerSessionId ||
-      !CLI_CONVERSATION_ADOPTING_AGENTS[row.agentType].some((chat) =>
-        chatAgentsShareConversations(chat, agent)
-      )
-    ) {
+    if (row.structuredHost || !namesCliConversation(row, agent, providerSessionId)) {
       continue
     }
     const observation = host.observation(row)
-    const presence = await observation?.presence()
-    if (
-      observation?.current() &&
-      (presence === 'live' || (presence === null && !row.providerSessionOnly))
-    ) {
+    // Only a process proven running refuses; no recorded process, exited and unverifiable admit.
+    if ((await observation?.presence()) === 'live' && observation?.current()) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere'
       })

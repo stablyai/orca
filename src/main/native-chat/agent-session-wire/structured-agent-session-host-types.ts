@@ -181,7 +181,7 @@ export type StructuredAgentSessionHostDeps = {
     record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
   ) => boolean
   /** Advisory tab-hidden notice; failures are logged. */
-  onSessionTabHidden?: (sessionId: string) => void
+  onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   captureSessionSwitchStop?: (sessionId: string) => ((proven: boolean) => void) | undefined
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
   assertNoTerminalWriter?: (record: AgentSessionRecord) => Promise<void>

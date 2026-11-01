@@ -10,12 +10,12 @@ export function cliConversationExitGuidance(
   return fromTerminal
     ? translate(
         'components.native-chat.resumeInNewChat.exitUnconfirmedFromTerminal',
-        'Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.',
+        '{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then open this conversation from Session History.',
         values
       )
     : translate(
         'components.native-chat.resumeInNewChat.exitUnconfirmed',
-        'Orca could not confirm {{agent}} stopped. Quit {{agent}} in its terminal, then try this action again.',
+        '{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
         values
       )
 }

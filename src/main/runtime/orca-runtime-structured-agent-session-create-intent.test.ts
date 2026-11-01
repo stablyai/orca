@@ -187,7 +187,7 @@ describe('structured agent-session create intent', () => {
       }
     })
     expect(support).not.toHaveBeenCalled()
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', undefined)
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('refuses a switch out of a live terminal before naming the chat that owns the conversation', async () => {
@@ -217,10 +217,7 @@ describe('structured agent-session create intent', () => {
     await expect(intent()).rejects.toMatchObject({
       refusal: { details: { owner: { sessionId: record.sessionId } } }
     })
-    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1', {
-      workspaceId: 'another-workspace',
-      paneKey: 'pane-1'
-    })
+    expect(writers).toHaveBeenCalledWith('claude', 'provider-session-alpha-1')
   })
 
   it('pins the selected Codex launch home after normal launch preparation', async () => {

@@ -476,4 +476,44 @@ describe('orchestration agent views', () => {
     expect(stdout).not.toContain('read-only')
     expect(stdout).not.toContain('Next:')
   })
+
+  it('previews inbox bodies and keeps only payload ids', async () => {
+    const huge = 'x'.repeat(10_000)
+    const inbox = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          {
+            id: 'msg_1',
+            from_handle: 'dispatch:ctx_1',
+            to_handle: 'run:run_1',
+            subject: 'Done',
+            body: huge,
+            type: 'worker_done',
+            payload: JSON.stringify({ taskId: 'task_1', dispatchId: { spec: huge }, notes: huge })
+          }
+        ],
+        count: 1
+      },
+      true
+    )
+    const [row] = JSON.parse(inbox.stdout).result.messages
+    expect(row.body).toBe(`${'x'.repeat(200)}… (truncated; --full)`)
+    expect(row.payload).toEqual({ taskId: 'task_1' })
+    const emoji = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          { id: 'msg_2', from_handle: 'term_1', body: `${'x'.repeat(199)}${'😀'.repeat(5)}` }
+        ],
+        count: 1
+      },
+      true
+    )
+    expect(JSON.parse(emoji.stdout).result.messages[0].body).toBe(
+      `${'x'.repeat(199)}😀… (truncated; --full)`
+    )
+  })
 })

@@ -503,6 +503,7 @@ import {
   PluginReadPanelEntryParams,
   PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -601,6 +602,7 @@ import {
   RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
+  RevealParams,
   RewindParams,
   SendParams,
   SetOptionParams,
@@ -792,7 +794,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
-  'agentSession.reveal': OptionsParams,
+  'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
@@ -1317,6 +1319,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.readPanelEntry': PluginReadPanelEntryParams,
   'plugins.refresh': null,
   'plugins.setEnabled': PluginSetEnabledParams,
+  'plugins.setSystemEnabled': PluginSetSystemEnabledParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

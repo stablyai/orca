@@ -15,6 +15,10 @@ import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import {
+  captureStructuredSessionSurface,
+  closeCapturedStructuredSession
+} from './agent-session/structured-agent-session-close'
 import { OrcaRuntimeService } from './orca-runtime'
 import { withChatTabChanges } from './agent-session/agent-session-tab-layout'
 import {
@@ -172,7 +176,13 @@ describe('a windowless chat tab against the chat host', () => {
     const host = await installHost(runtime)
     expect(host.deps.store.getRecord(CHAT_A)).not.toBeNull()
 
-    await host.setSessionTabVisibility(CHAT_A, false)
+    await closeCapturedStructuredSession(
+      host,
+      CHAT_A,
+      'user-close',
+      captureStructuredSessionSurface(host, CHAT_A, runtime),
+      runtime
+    )
     await settled()
 
     expect(savedChatIds(state)).toEqual([CHAT_B])

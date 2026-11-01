@@ -16,7 +16,7 @@ import {
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../../shared/native-chat-types'
-import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath } from '../session-file-resolver'
 import {
   decodeClaudeTranscriptLine,

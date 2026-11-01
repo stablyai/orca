@@ -13,8 +13,27 @@ import {
 } from '../../session-tabs/main-layout-close-command'
 import type { ExplicitCloseStop } from '../../session-tabs/explicit-terminal-close-pty-stops'
 import { retireTerminalSurfacesFromSnapshot } from '../../mobile-session-terminal-retirement'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
+  abstract retireStructuredAgentSessionTabFromSnapshot(
+    sessionId: string,
+    expectedTabId?: string,
+    expectedWorktreeId?: string
+  ): boolean
+
+  abstract currentLocalStructuredSessionPresentation(
+    ...args: Parameters<ChatPresentation['currentLocalStructuredSessionPresentation']>
+  ): ReturnType<ChatPresentation['currentLocalStructuredSessionPresentation']>
+
+  abstract captureStructuredAgentSessionPresentation(
+    ...args: Parameters<ChatPresentation['captureStructuredAgentSessionPresentation']>
+  ): ReturnType<ChatPresentation['captureStructuredAgentSessionPresentation']>
+
+  abstract removeCapturedStructuredSessionSavedTabs(
+    ...args: Parameters<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+  ): ReturnType<ChatPresentation['removeCapturedStructuredSessionSavedTabs']>
+
   protected abstract stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string

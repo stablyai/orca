@@ -6,7 +6,7 @@ import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope
 import {
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
-} from './native-chat-agent-support'
+} from './native-chat/native-chat-agent-support'
 
 export type PendingPromptOption = { id: string; label: string; description?: string }
 

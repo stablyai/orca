@@ -1,4 +1,3 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { setStructuredAgentSessionHost } from './structured-agent-session-registry'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {

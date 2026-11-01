@@ -77,11 +77,12 @@ export async function applyWindowLayoutCommand(
     // Window closes already confirmed/stopped terminals: force removal without killing shared PTYs. Honor pinned-tab refusals from CLI/new phones.
     // Read intent before close removes the record.
     const terminalTabId = terminalIdOf(store, hostIds[0], command.workspace, command.tabIds[0])
-    const close = { ...command, force: command.refusePinned ? command.force === true : true }
-    const reply = await (run
-      ? store.applyLayoutCommand(close, holders, run)
-      : store.applyLayoutCommand(close, holders))
-    // Only a tab the close took: a refused (pinned) tab's launches still finish into it.
+    const reply = await store.applyLayoutCommand(
+      { ...command, force: command.refusePinned ? command.force === true : true },
+      holders,
+      run
+    )
+    // Cancel launches only for tabs actually closed; refused pinned tabs still receive theirs.
     if (
       command.recordClose === 'user' &&
       reply.ok &&
@@ -107,7 +108,8 @@ export async function applyWindowLayoutCommand(
             : {})
         }
       },
-      holders
+      holders,
+      run
     )
     if (reply.ok && reply.result.tabId) {
       const move = {

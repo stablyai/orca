@@ -16,7 +16,7 @@ import type {
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import type { CodexTurnOrdinals } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import {
   codexTurnLifecycleBody,

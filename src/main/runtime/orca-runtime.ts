@@ -297,11 +297,6 @@ export type {
 } from './runtime-terminal-contracts'
 export type { MessageWaitResult } from './runtime-message-waiters'
 export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
-export type {
-  MobileNotificationDispatchEvent,
-  MobileNotificationDismissEvent,
-  MobileNotificationEvent
-} from './runtime-mobile-notification-controller'
 export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 export {

@@ -329,6 +329,9 @@
     "worktreeNavigationActions": {
       "sourceControl": "Source Control",
       "agentSessionHistory": "Agent Session History"
+    },
+    "resume": {
+      "hostConnectionChanged": "Host connection changed. Retry resume."
     }
   },
   "diagnostics": {
@@ -1292,6 +1295,16 @@
     },
     "sheetHeader": {
       "close": "Close"
+    },
+    "svgPreview": {
+      "drawFailed": "Unable to draw this SVG",
+      "label": "{{title}} drawing",
+      "previewDrawing": "Preview drawing",
+      "viewSource": "View SVG source"
+    },
+    "mermaidDiagram": {
+      "label": "Mermaid diagram",
+      "expand": "Expand diagram"
     }
   },
   "pullRequest": {
@@ -2541,6 +2554,16 @@
     "terminalSplitLayout": {
       "saveFailedTitle": "Layout could not be saved",
       "saveFailedMessage": "This layout applies for now. Choose it again to retry saving."
+    },
+    "structuredOpen": {
+      "goneGeneric": "Agent's chat is no longer on this host, so it cannot be reopened here.",
+      "unknownGeneric": "Agent's chat could not be found on this host. Reconnect to its computer and try again.",
+      "unsupportedGeneric": "Agent's chat can't be reopened until Orca is updated.",
+      "unreachableGeneric": "Agent's chat is not available yet. Retry in a moment.",
+      "gone": "{{agent}}'s chat is no longer on this host, so it cannot be reopened here.",
+      "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
+      "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
+      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment."
     }
   },
   "chat": {

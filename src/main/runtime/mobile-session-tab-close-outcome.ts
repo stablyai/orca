@@ -7,6 +7,21 @@ import type {
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import type { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 
+export type MobileSessionTabCloseOptions = {
+  originalPresentation?: TerminalSurfaceCloseCapture
+  rendererOwnsPresentation?: boolean
+  retirementProofs?: RuntimeMobileSessionRetiredTerminalSurface[]
+  /** The pane's presentation is already gone (a replace's write or its own exit); retire only its bookkeeping. */
+  presentationRetired?: boolean
+  reason?: RuntimeSessionTabCloseReason
+  expectedPublicationEpoch?: string
+  expectedTerminalHandle?: string
+  clientNavigationId?: string
+  localPtyTeardownOwnedExternally?: boolean
+  expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
+  force?: boolean
+}
+
 // Tombstones hide tabs until activation; only proven host retirement may hide a still-published tab.
 
 // Type-only brand adds no field to mixed-version RPC replies.
@@ -55,18 +70,3 @@ export type TerminalPaneRetirementOptions = Pick<
   MobileSessionTabCloseOptions,
   'originalPresentation' | 'rendererOwnsPresentation' | 'retirementProofs' | 'presentationRetired'
 >
-
-export type MobileSessionTabCloseOptions = {
-  originalPresentation?: TerminalSurfaceCloseCapture
-  rendererOwnsPresentation?: boolean
-  retirementProofs?: RuntimeMobileSessionRetiredTerminalSurface[]
-  /** The pane's presentation is already gone (a replace's write or its own exit); retire only its bookkeeping. */
-  presentationRetired?: boolean
-  reason?: RuntimeSessionTabCloseReason
-  expectedPublicationEpoch?: string
-  expectedTerminalHandle?: string
-  clientNavigationId?: string
-  localPtyTeardownOwnedExternally?: boolean
-  expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
-  force?: boolean
-}
