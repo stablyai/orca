@@ -368,6 +368,27 @@ describe('a pane without a proven owner', () => {
   )
 })
 
+describe('a scoped provider’s session binding', () => {
+  it('keeps a Claude run under Hermes out, then lets the pane’s next Claude own it', async () => {
+    const server = await createServer()
+    runningPane(
+      49960,
+      [49960, 101, 49960, 'hermes', 'S+'],
+      [49975, 49960, 49975, '/bin/bash -c claude -p summarize', 'Ss', '??'],
+      [49980, 49975, 49975, 'claude -p summarize', 'S', '??']
+    )
+    const hermes = { pid: null, source: 'hermes', session: 'hermes-root' }
+    await hook(server, 'pre_llm_call', hermes)
+    await hook(server, 'UserPromptSubmit', { session: 'nested', pid: 49980, prompt: 'nested' })
+    expect(server.presence()).toEqual({ agent: 'hermes' })
+    expect(server.row()?.agentType).toBe('hermes')
+    // Hermes exits and the user starts Claude in the same pane.
+    runningPane(49969, CLAUDE)
+    await hook(server, 'SessionStart', { session: 'session-a' })
+    expect(server.presence()).toMatchObject({ agent: 'claude', process: capture(49969) })
+  })
+})
+
 describe('the pane root’s exit', () => {
   it('retires an unproven record of its own agent once, whatever session it names', async () => {
     const server = await createServer()
