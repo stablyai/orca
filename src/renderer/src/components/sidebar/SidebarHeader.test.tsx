@@ -170,6 +170,16 @@ describe('SidebarHeader', () => {
     expect(button.getAttribute('aria-describedby')).toBe(status?.id)
   })
 
+  it('lays the status mark and the count out in one row beside the bell', () => {
+    mocks.bucketCounts.working = 3
+    act(() => root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />))
+    const status = headerButton('View activity').querySelector('[aria-label="Working: 3"]')
+    expect(status?.className).toContain('flex')
+    expect(status?.className).not.toMatch(/flex-col|absolute/)
+    expect(status?.querySelector('.rounded-full')?.parentElement?.parentElement).toBe(status)
+    expect(status?.querySelector('.icon-superscript-count')?.parentElement).toBe(status)
+  })
+
   it('keeps New workspace clickable with zero projects, since the composer adds the first one', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
