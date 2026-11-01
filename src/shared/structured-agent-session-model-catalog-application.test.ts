@@ -9,7 +9,8 @@ import {
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot,
   canSetStructuredAgentSessionOption,
-  commitStructuredAgentSessionOption
+  commitStructuredAgentSessionOption,
+  settleStructuredAgentSessionBuiltinCatalog
 } from './structured-agent-session-options'
 
 const SEED = getAgentSessionOptionCatalog('codex')!
@@ -210,35 +211,92 @@ describe('structured option state from the host model catalog', () => {
     }
   )
 
-  it('a running chat that lists its own models keeps its menus while the host listing runs', () => {
-    const seed = structuredAgentSessionSeedCatalog('grok')!
+  it('records a running host listing without disabling controls drawn from data', () => {
     const efforts = [
       { value: 'low', label: 'Low' },
       { value: 'high', label: 'High' }
     ]
-    const listing: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
-    const started = applyStructuredAgentSessionModelCatalog(
-      createStructuredAgentSessionOptionState('grok', seed),
-      seed,
-      listing,
-      LAUNCH
-    )
-    const answered = applyStructuredAgentSessionOptions(
-      started,
-      seed,
+    const codexRows = [
       {
-        models: [{ id: 'A', label: 'A', isDefault: true, efforts }],
-        current: { model: 'A', effort: 'low', defaulted: [] }
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        isDefault: true,
+        efforts,
+        serviceTiers: [{ value: 'priority', label: 'Fast' }]
       },
-      LAUNCH
-    )
-    const relisted = applyStructuredAgentSessionModelCatalog(answered, seed, listing, {
-      newLaunch: false
-    })
-    for (const state of [answered, relisted]) {
-      const effort = structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'effort')
-      expect(effort).toMatchObject({ settable: true })
+      {
+        id: 'gpt-5.5-mini',
+        label: 'GPT-5.5 Mini',
+        isDefault: false,
+        efforts,
+        supportsFastMode: true
+      }
+    ]
+    const grokRows = [
+      { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, efforts },
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: false, efforts }
+    ]
+    const listing: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
+    const launch = { newLaunch: true, coherentCatalog: true }
+    const capabilities = (state: ReturnType<typeof createStructuredAgentSessionOptionState>) =>
+      structuredAgentSessionOptionSnapshot(state).filter(({ id }) =>
+        ['effort', 'serviceTier', 'fastMode'].includes(id)
+      )
+    const answered = (
+      agent: 'codex' | 'grok',
+      hostList: AgentSessionModelCatalogResult,
+      models: typeof codexRows | typeof grokRows
+    ) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)!
+      const start = createStructuredAgentSessionOptionState(agent, seed)
+      return applyStructuredAgentSessionOptions(
+        applyStructuredAgentSessionModelCatalog(start, seed, hostList, launch),
+        seed,
+        {
+          models,
+          listedModelIds: models.map(({ id }) => id),
+          fastModeSupport: { supported: true },
+          current: { model: models[0]!.id, effort: 'low', serviceTier: 'default', defaulted: [] }
+        },
+        launch
+      )
     }
+    // Claude/Codex menus from a list the host is refreshing; Grok's from its own answer.
+    const refreshing = answered(
+      'codex',
+      {
+        origin: 'probe',
+        models: codexRows,
+        fetchedAt: 1,
+        fastModeSupport: { supported: true },
+        listingInProgress: true
+      },
+      codexRows
+    )
+    const own = answered('grok', listing, grokRows)
+    for (const state of [
+      refreshing,
+      own,
+      settleStructuredAgentSessionBuiltinCatalog(refreshing, true),
+      settleStructuredAgentSessionBuiltinCatalog(own, true)
+    ]) {
+      expect(state.listingInProgress).toBe(true)
+      expect(capabilities(state).map(({ id }) => id)).toContain('effort')
+      expect(capabilities(state).every(({ settable }) => settable)).toBe(true)
+    }
+    expect(capabilities(refreshing).map(({ id }) => id)).toEqual(['effort', 'serviceTier'])
+    const fast = commitStructuredAgentSessionOption(refreshing, 'model', 'gpt-5.5-mini')
+    expect(capabilities(fast).find(({ id }) => id === 'fastMode')).toMatchObject({ settable: true })
+    // An installed chat that answered before any list exists holds its effort, offering no choices.
+    const unknown = answered('codex', listing, codexRows)
+    expect(unknown.catalogSource).toBe('seed')
+    expect(capabilities(unknown)).toEqual([
+      expect.objectContaining({
+        id: 'effort',
+        settable: false,
+        kind: expect.objectContaining({ currentValue: 'low', choices: [expect.anything()] })
+      })
+    ])
   })
 })
 

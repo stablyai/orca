@@ -8,6 +8,9 @@ describe('labelFromModelId', () => {
     expect(labelFromModelId('claude-3-5-sonnet-20241022')).toBe('Claude 3.5 Sonnet 20241022')
     expect(labelFromModelId('xai/grok-4-1-fast')).toBe('Xai Grok 4.1 Fast')
     expect(labelFromModelId('gpt-4o-2024-08-06')).toBe('GPT 4O 2024 08 06')
+    expect(labelFromModelId('gemini-2.5-flash-preview-05-20')).toBe(
+      'Gemini 2.5 Flash Preview 05 20'
+    )
     expect(labelFromModelId('llama-3-8b')).toBe('Llama 3 8B')
   })
 })

@@ -70,6 +70,7 @@ export type StructuredAgentSessionOptionState = {
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
   reportedEffort?: string
+  /** The host is still listing models; it only keeps a seed from settling to built-in, since controls follow their data. */
   listingInProgress?: boolean
   fastModeRestricted?: boolean
 }
@@ -131,9 +132,7 @@ export function applyStructuredAgentSessionModelCatalog(
   options: { newLaunch: boolean; coherentCatalog?: boolean }
 ): StructuredAgentSessionOptionState {
   const installed = usesInstalledAgentModelCatalog(state.record.agent, options.coherentCatalog)
-  // A running chat that lists its own models keeps its menus while the host's listing runs.
-  const listingInProgress =
-    catalog.listingInProgress === true && (installed || state.catalogSource !== 'live')
+  const listingInProgress = catalog.listingInProgress === true
   if (Boolean(state.listingInProgress) !== listingInProgress) {
     state = { ...state, listingInProgress }
   }
@@ -213,8 +212,6 @@ export function applyStructuredAgentSessionOptions(
     catalog: keepCatalog
       ? state.catalog
       : structuredAgentSessionOptionCatalog(seed, result, state.record.agent),
-    // The chat's own answer now supplies its menus, so the host's listing no longer holds them.
-    listingInProgress: keepCatalog ? state.listingInProgress : false,
     fastModeRestricted:
       installed &&
       result.fastModeSupport?.supported === false &&

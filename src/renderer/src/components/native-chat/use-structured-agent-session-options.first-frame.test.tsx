@@ -302,7 +302,9 @@ describe('a new chat picker’s first frame', () => {
     await waitFor(() => expect(effort()?.settable).toBe(true))
     raw = { ...raw, listingInProgress: true }
     await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
-    expect(effort()?.settable).toBe(false)
+    // A refresh of a list already shown leaves its controls usable.
+    expect(effort()?.settable).toBe(true)
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
     await act(async () =>
       next.resolve({
         ...raw,
@@ -320,6 +322,76 @@ describe('a new chat picker’s first frame', () => {
       model: { value: 'A' },
       effort: { value: 'low' }
     })
+    view.unmount()
+  })
+
+  it('grok: a running chat keeps its own effort menu while the picker rejoins a host listing', async () => {
+    mocks.coherent = true
+    const efforts = [
+      { value: 'high', label: 'High' },
+      { value: 'low', label: 'Low' }
+    ]
+    const child: AgentSessionOptionsResult = {
+      models: [
+        { id: 'grok-4.7', label: 'Grok 4.7', isDefault: true, efforts },
+        { id: 'grok-4.6', label: 'Grok 4.6', isDefault: false, efforts }
+      ],
+      listedModelIds: ['grok-4.7', 'grok-4.6'],
+      current: { model: 'grok-4.6', effort: 'high', defaulted: [] }
+    }
+    const next = deferred<AgentSessionModelCatalogResult>()
+    mocks.call.mockImplementation(
+      (_target: unknown, method: string, params: { waitForListing?: boolean }) =>
+        method === 'agentSession.options'
+          ? Promise.resolve(child)
+          : method === 'agentSession.modelCatalog'
+            ? params.waitForListing
+              ? next.promise
+              : Promise.resolve({ origin: 'unknown', listingInProgress: true })
+            : new Promise(() => {})
+    )
+    const view = renderHook(
+      ({ isVisible }) =>
+        useStructuredAgentSessionOptions({
+          agent: 'grok',
+          sessionId: 'grok-running',
+          target: LOCAL_TARGET,
+          transportEnabled: true,
+          isVisible,
+          providerVisible: true,
+          fence: 1,
+          turnId: null,
+          unloadedTurnRevisions: undefined,
+          mutate: vi.fn()
+        }),
+      { initialProps: { isVisible: true } }
+    )
+    const capabilities = () =>
+      view.result.current.optionSnapshot.filter(({ id }) =>
+        ['effort', 'serviceTier', 'fastMode'].includes(id)
+      )
+    const usable = () => {
+      expect(capabilities().map(({ id }) => id)).toContain('effort')
+      expect(capabilities().every((row) => row.settable)).toBe(true)
+    }
+    await waitFor(() =>
+      expect(
+        mocks.call.mock.calls.some(
+          ([, method, params]) =>
+            method === 'agentSession.modelCatalog' &&
+            (params as { waitForListing?: boolean }).waitForListing
+        )
+      ).toBe(true)
+    )
+    await waitFor(usable)
+    await act(async () => view.result.current.optionSurface.demandModelCatalog?.())
+    usable()
+    view.rerender({ isVisible: false })
+    view.rerender({ isVisible: true })
+    await act(async () => {})
+    usable()
+    expect(view.result.current.sendSource.optionStateRef.current.listingInProgress).toBe(true)
+    await act(async () => next.resolve({ origin: 'unknown' }))
     view.unmount()
   })
 
