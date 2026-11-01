@@ -137,10 +137,8 @@ function BarButton(props: {
       ]}
       onPress={props.onPress}
     >
-      <Icon size={19} color={foreground} strokeWidth={2.2} />
-      <Text style={[styles.buttonLabel, { color: foreground }]} numberOfLines={1}>
-        {props.label}
-      </Text>
+      <Icon size={19} color={foreground} strokeWidth={2.2} style={styles.icon} />
+      <Text style={[styles.buttonLabel, { color: foreground }]}>{props.label}</Text>
     </Pressable>
   )
 }
@@ -160,20 +158,24 @@ const styles = themedStyleSheet(() => ({
     textAlign: 'center',
     marginBottom: 10
   },
-  buttons: { flexDirection: 'row', gap: 10 },
+  buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   button: {
     flex: 1,
+    flexBasis: 160,
+    minWidth: 0,
     minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: radii.control
   },
   primaryButton: { backgroundColor: colors.surfaceBright },
   secondaryButton: { backgroundColor: colors.bgRaised },
   buttonPressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
   buttonDisabled: { opacity: 0.4 },
-  buttonLabel: { fontSize: 17, fontWeight: '600' }
+  icon: { flexShrink: 0 },
+  buttonLabel: { flexShrink: 1, minWidth: 0, fontSize: 17, fontWeight: '600' }
 }))
