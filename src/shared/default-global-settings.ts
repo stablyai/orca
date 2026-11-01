@@ -111,6 +111,8 @@ export function buildDefaultSettings(args: {
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Why: opt-in only, matching Ghostty's default (upgrades never enable it unexpectedly).
     terminalFocusFollowsMouse: false,
+    // Why: opt-in only — clicking a TUI keeps working unless the user asks for Alt gating.
+    terminalMouseEventsRequireAlt: false,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
     minimizeToTrayOnClose: false,

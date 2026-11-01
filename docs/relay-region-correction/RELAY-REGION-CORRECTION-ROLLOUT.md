@@ -42,9 +42,9 @@ These are rollout proposals, not measurements of production baseline or authoriz
   (require>=100 attempts in each comparison group); investigate lower-count failures
   individually. Existing production incident limits always take precedence.
 - Performance acceptance: matched post-move assigned-cell control RTT improves by
-  >=25ms AND>=20% median per host for at least80% of evaluable moved hosts; require
-  two independent samples before and after. Identify samples using
-  assignment epoch/cell identity. Log sample insufficiency as unevaluable.
+  > =25ms AND>=20% median per host for at least80% of evaluable moved hosts; require
+  > two independent samples before and after. Identify samples using
+  > assignment epoch/cell identity. Log sample insufficiency as unevaluable.
 - Client connection setup p95 must not regress by>10% versus its matched baseline
   after accounting for the unchanged cohort. Setup is not application command
   latency; separately record physical-phone interaction timings on validation runs.
