@@ -22,12 +22,9 @@ import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source
 import { agentHookRuntimeDeps } from '../agent-hooks/agent-hook-runtime-deps'
 import { getDaemonProvider } from '../daemon/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
-import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
-import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import { fingerprintOrchestrationPeer } from '../runtime/orchestration/environment-transport'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
@@ -64,28 +61,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
   }
-  const orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport = {
-    resolve: (selector) => {
-      const environment = resolveEnvironment(getRuntimeEnvironmentRegistryRoot(), selector)
-      const connection = getPreferredPairedRuntimeConnection(environment)
-      return {
-        environmentId: environment.id,
-        name: environment.name,
-        peerFingerprint: fingerprintOrchestrationPeer(connection.hostPublicKeyB64),
-        pairingRevision: environment.pairingRevision ?? environment.createdAt
-      }
-    },
-    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
-      callRuntimeEnvironment(
-        getRuntimeEnvironmentRegistryRoot(),
-        selector,
-        method,
-        params,
-        timeoutMs,
-        expectedPairingRevision,
-        envelope
-      )
-  }
+  const orchestrationEnvironmentTransport = createOrchestrationEnvironmentTransport(
+    getRuntimeEnvironmentRegistryRoot
+  )
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {

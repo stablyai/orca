@@ -81,11 +81,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Unwired gap (follow-up): client-hosted browser rows show no paired-device name.'
   },
   {
-    wiring: 'ctor:orchestrationEnvironmentTransport',
-    missingOn: 'orcad',
-    reason: 'Cross-environment orchestration dials paired environments from the desktop only.'
-  },
-  {
     wiring: 'ctor:skillTransactionRecovery',
     missingOn: 'orcad',
     reason:
@@ -210,6 +205,10 @@ const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
   'accountLaunch?.runtimeDeps': {
     file: 'src/main/orcad/orcad-account-services.ts',
     anchor: 'runtimeDeps: {'
+  },
+  "(await import('./orcad-orchestration-transport')).orcadOrchestrationTransportOptions()": {
+    file: 'src/main/orcad/orcad-orchestration-transport.ts',
+    anchor: 'return {'
   },
   'orcadWsPortOptions(': { file: 'src/main/orcad/orcad-ws-port-policy.ts', anchor: 'wsPort: port' }
 }
@@ -425,6 +424,9 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'ctor:getLocalProvider',
       'ctor:onTerminalAgentStatus',
       'ctor:agentSessionClaimSigner',
+      // #36853: without it a headless serve as Run home refuses every worker-start on a
+      // connected server with server_required; the desktop wired this all along.
+      'ctor:orchestrationEnvironmentTransport',
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
       'runtime.setAccountServices',

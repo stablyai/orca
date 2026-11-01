@@ -208,6 +208,7 @@ async function startOrcadRuntime(
     ),
     // Resolve lazily because daemon swaps replace the provider after construction.
     getLocalProvider: () => getLocalPtyProvider(),
+    ...(await import('./orcad-orchestration-transport')).orcadOrchestrationTransportOptions(),
     // Read current daemon ownership; failed/degraded launch cannot claim fresh PTY persistence.
     canRecoverPersistentLocalPtys: () => daemonOwnsFreshPersistentPtys(),
     // Node hosts cannot promote into desktop windows; override the constructor’s openable default.
