@@ -1,5 +1,8 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
+import type {
+  OrchestrationCrewRow,
+  OrchestrationCrewSnapshot
+} from '../../../../shared/orchestration-crew'
 import { CrewPanelContent } from './OrchestrationCrewPanel'
 
 const snapshot = (name: string): OrchestrationCrewSnapshot => ({
@@ -58,3 +61,215 @@ export const keyboardPanes = defineFixture({
     </div>
   )
 })
+
+type Agent = {
+  name: string
+  agent: string
+  status: string
+  task?: string
+  taskState?: string
+  message?: string
+  question?: string
+  minutesAgo: number
+}
+
+// Fixture times are relative to load so the "15h ago" labels read as written.
+function row(
+  role: OrchestrationCrewRow['role'],
+  agent: Agent,
+  index: number
+): OrchestrationCrewRow {
+  const at = new Date(Date.now() - agent.minutesAgo * 60_000).toISOString()
+  return {
+    partyKey: `${role}-${index}`,
+    role,
+    label: agent.name,
+    agentKind: agent.agent,
+    status: agent.status,
+    sendAddress: `term_${role}_${index}`,
+    ...(agent.task ? { task: { title: agent.task, state: agent.taskState ?? 'active' } } : {}),
+    ...(agent.message
+      ? {
+          latest: {
+            direction: 'from' as const,
+            preview: agent.message,
+            at,
+            sequence: 10_000 - agent.minutesAgo
+          }
+        }
+      : {}),
+    ...(agent.question ? { pendingQuestion: { preview: agent.question, at } } : {})
+  }
+}
+
+const WORKERS: Agent[] = [
+  {
+    name: 'worker-task_a1',
+    agent: 'claude',
+    status: 'waiting',
+    task: 'Draft release notes for 1.4 from the merged pull requests and the changelog',
+    message: 'Collected 38 merged pull requests',
+    question: 'Include the two reverted pull requests in the notes?',
+    minutesAgo: 1
+  },
+  {
+    name: 'worker-task_b2',
+    agent: 'codex',
+    status: 'working',
+    task: 'Read README.md and report what the repo is for',
+    message: 'Reading README.md and the docs folder',
+    minutesAgo: 2
+  },
+  {
+    name: 'worker-task_c3',
+    agent: 'codex',
+    status: 'blocked',
+    task: 'Write contract tests for the sessions API',
+    message: 'Drafted four cases',
+    question: 'Should the tests hit the real database?',
+    minutesAgo: 4
+  },
+  {
+    name: 'release-notes',
+    agent: 'claude',
+    status: 'working',
+    message: 'Adjusted padding on the generated tables',
+    minutesAgo: 9
+  },
+  {
+    name: 'worker-task_e5',
+    agent: 'gemini',
+    status: 'working',
+    task: 'Update the CLI reference for the new flags',
+    message: 'Updated 6 of 9 flag sections',
+    minutesAgo: 11
+  },
+  {
+    name: 'worker-task_f6',
+    agent: 'claude',
+    status: 'done',
+    task: 'Add the sessions table and its backfill',
+    message: 'Done: table added, backfill tested on a copy',
+    minutesAgo: 47
+  },
+  {
+    name: 'worker-task_g7',
+    agent: 'opencode',
+    status: 'working',
+    task: 'Find why the observer test times out on cold runners',
+    message: 'Timing each mode separately',
+    minutesAgo: 70
+  },
+  {
+    name: 'worker-task_h8',
+    agent: 'codex',
+    status: 'done',
+    task: 'Remove unused exports flagged by the linter',
+    message: 'Removed 14 exports; tests pass',
+    minutesAgo: 180
+  },
+  {
+    name: 'worker-task_i9',
+    agent: 'claude',
+    status: 'done',
+    task: 'Fix long-path failures in the Windows build',
+    taskState: 'failed',
+    message: 'Build failed: path too long in the packaging step',
+    minutesAgo: 900
+  },
+  {
+    name: 'worker-task_j10',
+    agent: 'pi',
+    status: 'unknown',
+    task: 'Check the docs links',
+    minutesAgo: 2000
+  }
+]
+
+const MANAGER: Agent = {
+  name: 'Coordinator',
+  agent: 'claude',
+  status: 'working',
+  task: 'Plan the sessions migration',
+  message: 'Assigned the backfill script to you',
+  minutesAgo: 6
+}
+
+const PEER: Agent = {
+  name: 'Reviewer',
+  agent: 'codex',
+  status: 'done',
+  task: 'Fix long-path failures in the Windows build',
+  taskState: 'failed',
+  message: 'Build failed: path too long in the packaging step',
+  minutesAgo: 120
+}
+
+function crew(managedBy: Agent[], managing: Agent[], talkingWith: Agent[]) {
+  return {
+    status: 'ok' as const,
+    sections: {
+      managedBy: managedBy.map((agent, index) => row('manager', agent, index)),
+      managing: managing.map((agent, index) => row('worker', agent, index)),
+      talkingWith: talkingWith.map((agent, index) => row('peer', agent, index))
+    }
+  }
+}
+
+// A chat-sized pane with placeholder lines, so any chat showing above the panel is visible.
+function pane(value: OrchestrationCrewSnapshot) {
+  return defineFixture({
+    width: 900,
+    render: () => (
+      <div className="pane relative h-130 overflow-hidden rounded-md border border-border bg-background p-4">
+        <div className="grid max-w-md gap-3 pt-6">
+          {Array.from({ length: 14 }, (_, index) => (
+            <div
+              key={index}
+              className="h-2 rounded bg-muted"
+              style={{ width: `${90 - index * 4}%` }}
+            />
+          ))}
+        </div>
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_self"
+          canMention
+          mention={() => {}}
+          snapshot={value}
+        />
+      </div>
+    )
+  })
+}
+
+function expanded(value: OrchestrationCrewSnapshot) {
+  return {
+    ...pane(value),
+    interact: (frame: HTMLElement) =>
+      frame.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+  }
+}
+
+const twoWorkers = crew([], [WORKERS[1], WORKERS[5]], [])
+const fiveWorkers = crew([], [WORKERS[1], WORKERS[2], WORKERS[4], WORKERS[5], WORKERS[8]], [])
+const tenWorkers = crew([], WORKERS, [])
+const managerAndThree = crew([MANAGER], [WORKERS[2], WORKERS[4], WORKERS[5]], [])
+const managedByOnly = crew([MANAGER], [], [])
+const peerOnly = crew([], [], [PEER])
+// Mention all is dimmed once no worker still runs.
+const allFinished = crew([], [WORKERS[5], WORKERS[7]], [])
+
+export const twoWorkersCollapsed = pane(twoWorkers)
+export const twoWorkersExpanded = expanded(twoWorkers)
+export const fiveWorkersCollapsed = pane(fiveWorkers)
+export const fiveWorkersExpanded = expanded(fiveWorkers)
+export const tenWorkersCollapsed = pane(tenWorkers)
+export const tenWorkersExpanded = expanded(tenWorkers)
+export const managerAndThreeWorkersCollapsed = pane(managerAndThree)
+export const managerAndThreeWorkersExpanded = expanded(managerAndThree)
+export const managedByOnlyCollapsed = pane(managedByOnly)
+export const managedByOnlyExpanded = expanded(managedByOnly)
+export const peerOnlyCollapsed = pane(peerOnly)
+export const peerOnlyExpanded = expanded(peerOnly)
+export const allFinishedExpanded = expanded(allFinished)

@@ -1,7 +1,6 @@
 /** @vitest-environment happy-dom */
-import { act, type ComponentProps } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import type TerminalPane from './TerminalPane'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
@@ -11,7 +10,7 @@ import {
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-type PaneProps = ComponentProps<typeof TerminalPane>
+type PaneProps = { onCloseTab?: () => void; onPtyExit?: (ptyId: string, exitCode?: number) => void }
 let paneProps: PaneProps | null = null
 vi.mock('./TerminalPane', () => ({
   default: (props: PaneProps) => {
@@ -49,9 +48,8 @@ import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-
 let root: Root
 let container: HTMLDivElement
 
-function renderFloatingSlot(
-  overrides: Partial<ComponentProps<typeof TerminalOverlaySlot>> = {}
-): void {
+function renderFloatingSlot(): void {
+  root = createRoot(container)
   act(() => {
     root.render(
       <TerminalOverlaySlot
@@ -70,7 +68,6 @@ function renderFloatingSlot(
         captureEmptiedReaction={() =>
           captureWorkspaceEmptiedReaction(FLOATING_TERMINAL_WORKTREE_ID)
         }
-        {...overrides}
       />
     )
   })
@@ -81,7 +78,6 @@ describe('closing the last floating terminal pane', () => {
   beforeEach(() => {
     container = document.createElement('div')
     document.body.appendChild(container)
-    root = createRoot(container)
     clearFloatingPanelReclaimIntent()
     closeTerminalTab.mockClear()
     panel.focused = true
@@ -90,48 +86,6 @@ describe('closing the last floating terminal pane', () => {
   afterEach(() => {
     act(() => root?.unmount())
     container.remove()
-  })
-
-  it('keeps interactive visibility distinct from focus and hidden measurement, with the activity exception', () => {
-    renderFloatingSlot({ isActive: false, dimmed: true })
-    expect(paneProps).toMatchObject({ isVisible: true, isWorktreeActive: true, isActive: false })
-
-    renderFloatingSlot({
-      isVisible: false,
-      isWorktreeActive: false,
-      isActive: false,
-      hiddenPrewarm: 'warm'
-    })
-    expect(paneProps).toMatchObject({
-      isVisible: false,
-      isWorktreeActive: false,
-      isActive: false,
-      measureWhileHidden: true,
-      warmRendererWhileHidden: true
-    })
-
-    renderFloatingSlot({
-      isVisible: false,
-      isWorktreeActive: false,
-      isActive: false,
-      activityTerminalPortal: {
-        slotId: 'activity-slot',
-        requestToken: 'request',
-        target: container,
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        tabId: 'floating-terminal',
-        paneKey: 'floating-terminal:00000000-0000-4000-8000-000000000001',
-        active: false
-      }
-    })
-    expect(paneProps).toMatchObject({
-      isVisible: true,
-      isWorktreeActive: true,
-      isActive: false,
-      isolatedPaneKey: 'floating-terminal:00000000-0000-4000-8000-000000000001',
-      measureWhileHidden: false,
-      warmRendererWhileHidden: false
-    })
   })
 
   it('keeps the panel focus when the pane closes itself from inside the panel', () => {

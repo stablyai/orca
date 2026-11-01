@@ -170,7 +170,9 @@ function mount(insertion?: {
 function fixture(acceptance: boolean | Promise<boolean> | undefined, split = false) {
   const test = mount({ acceptance, split })
   const pane = test.first
-  fireEvent.click(within(pane.container).getByRole('button', { name: 'Show crew: 1 workers' }))
+  fireEvent.click(
+    within(pane.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
+  )
   return {
     ...test,
     pane,
@@ -196,7 +198,7 @@ it.each(['row', 'all', 'menu'] as const)(
       })
       const button =
         route === 'row'
-          ? pane.getByRole('button', { name: 'Codex Worker Inspect' })
+          ? pane.getByRole('button', { name: /Inspect/ })
           : route === 'all'
             ? pane.getByRole('button', { name: 'Mention all' })
             : test.more
@@ -220,7 +222,7 @@ it.each(['row', 'all', 'menu'] as const)(
         'driving'
       )
       expect(test.input).toHaveFocus()
-      expect(pane.getByRole('button', { name: 'Collapse crew panel' })).toBeInTheDocument()
+      expect(pane.getByRole('button', { name: 'Collapse orchestration panel' })).toBeInTheDocument()
       const returned = vi.spyOn(test.more, 'focus')
       if (route === 'menu') {
         expect(tasks).toHaveLength(1)
@@ -317,7 +319,7 @@ it('retires only the hidden menu before deferred physical close and never replay
   const user = userEvent.setup()
   const { controller, first, update } = mount()
   const pane = within(first.container)
-  await user.click(pane.getByRole('button', { name: 'Show crew: 1 workers' }))
+  await user.click(pane.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
   const disclosure = pane.getByRole('button', { name: "Show Worker's task and latest message" })
   await user.click(disclosure)
   const oldMore = pane.getByRole('button', { name: 'More for Worker' })
@@ -332,8 +334,8 @@ it('retires only the hidden menu before deferred physical close and never replay
   expect(oldMore.isConnected).toBe(false)
   expect(tasks).toHaveLength(1)
   expect(disclosure).toHaveAttribute('aria-expanded', 'true')
-  expect(pane.getByText('Keep this disclosure')).toBeInTheDocument()
-  expect(pane.getByRole('button', { name: 'Collapse crew panel' })).toBeInTheDocument()
+  expect(pane.getByText('Latest')).toBeInTheDocument()
+  expect(pane.getByRole('button', { name: 'Collapse orchestration panel' })).toBeInTheDocument()
   act(() => {
     controller.isRendererVisible = true
     update()
@@ -368,8 +370,8 @@ it('uses numeric expansion and exact activity leaf identity without dismissing a
   const { controller, first, second, manager, update } = mount()
   const a = within(first.container)
   const b = within(second.container)
-  await user.click(a.getByRole('button', { name: 'Show crew: 1 workers' }))
-  await user.click(b.getByRole('button', { name: 'Show crew: 1 workers' }))
+  await user.click(a.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
+  await user.click(b.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
   await user.click(a.getByRole('button', { name: 'More for Worker' }))
   const popup = screen.getByRole('menu')
   // Existing overlay focus preservation allows a visible split to remain open when another is active.

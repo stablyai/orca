@@ -363,7 +363,7 @@ it('keeps direct, Mention all and real menu Mention on the current native handle
       input.focus()
       input.setSelectionRange(6, 6)
     })
-    await user.click(view.getByRole('button', { name: 'Show crew: 1 workers' }))
+    await user.click(view.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
     const more = view.getByRole('button', { name: `More for ${first.label}` })
     const insert = vi.spyOn(view.handle.current!, 'insertAgentReferences')
     if (route === 'menu') {
@@ -378,12 +378,16 @@ it('keeps direct, Mention all and real menu Mention on the current native handle
         ? within(document.body).getByRole('menuitem', { name: 'Mention in message' })
         : route === 'all'
           ? view.getByRole('button', { name: 'Mention all' })
-          : view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) })
+          : within(view.getByRole('complementary', { name: 'Orchestration' }))
+              .getByText(first.label)
+              .closest('button')!
     )
     expect(insert).toHaveBeenCalledExactlyOnceWith([{ ...first, hostKey: 'captured-host' }])
     expect(insert.mock.results[0]?.value).toBe(true)
     expect(input.contains?.(document.activeElement)).toBe(true)
-    expect(view.getByRole('button', { name: 'Collapse crew panel' }).isConnected).toBe(true)
+    expect(view.getByRole('button', { name: 'Collapse orchestration panel' }).isConnected).toBe(
+      true
+    )
     await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull())
     if (popup) {
       await waitFor(() => expect(closed).toHaveBeenCalledOnce())
@@ -412,8 +416,12 @@ it('preserves the exact QA3773 ordinary draft around a native row Mention at car
     input.focus()
     input.setSelectionRange(14, 14)
   })
-  await user.click(view.getByRole('button', { name: 'Show crew: 1 workers' }))
-  await user.click(view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) }))
+  await user.click(view.getByRole('button', { name: /^Show orchestration: 1 worker,/ }))
+  await user.click(
+    within(view.getByRole('complementary', { name: 'Orchestration' }))
+      .getByText(first.label)
+      .closest('button')!
+  )
   expect(input.value).toBe(`QA3773 before ${agentReferenceToken(first)} after`)
   expect(readNativeChatComposerDraft('menu').document?.content?.[0]?.content).toEqual([
     { type: 'text', text: 'QA3773 before ' },
@@ -427,5 +435,5 @@ it('preserves the exact QA3773 ordinary draft around a native row Mention at car
   ).toBe(first.address)
   expect(input.selectionStart).toBe(`QA3773 before ${agentReferenceToken(first)}`.length)
   expect(input.contains?.(document.activeElement)).toBe(true)
-  expect(view.getByRole('button', { name: 'Collapse crew panel' }).isConnected).toBe(true)
+  expect(view.getByRole('button', { name: 'Collapse orchestration panel' }).isConnected).toBe(true)
 })
