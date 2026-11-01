@@ -2,11 +2,11 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),

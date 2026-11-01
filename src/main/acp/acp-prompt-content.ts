@@ -4,15 +4,15 @@ import {
   agentSessionFailureFact,
   type AgentSessionAttachmentProblem,
   type SubmissionRejectionFact
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
-} from '../../shared/agent-session-failure-words'
+} from '../../shared/agent-session/failures/agent-session-failure-words'
 import { formatNativeChatFileReference } from '../../shared/agent-image-paste'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
-import type { NativeChatImageRefBlock } from '../../shared/native-chat-types'
+import type { NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit

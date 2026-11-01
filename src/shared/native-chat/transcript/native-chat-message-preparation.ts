@@ -1,11 +1,11 @@
 // Share transcript preparation across desktop/mobile so neither drops turns the other renders.
 
 import type { AgentType } from '../../agent-status-types'
-import { getVerifiedNativeChatCommands } from '../../native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../native-chat-command-envelope'
 import { surfaceNativeChatCommandOutputs } from '../tools/native-chat-command-output'
 import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 
 /** Surface skill invocation text and reporting-command output before noise filtering hides their harness envelopes. */
 export function surfaceNativeChatHarnessTurns(

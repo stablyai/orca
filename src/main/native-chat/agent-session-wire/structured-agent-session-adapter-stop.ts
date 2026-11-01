@@ -8,8 +8,8 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalDispatchState,
   AgentJournalQuestionItem
-} from '../../../shared/agent-session-journal-types'
-import type { ProviderDiagnostic } from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { ProviderDiagnostic } from '../../../shared/agent-session/failures/agent-session-failure'
 
 export type AgentSessionCloseEvidence = {
   root?: 'live' | 'unverifiable' | 'exited'

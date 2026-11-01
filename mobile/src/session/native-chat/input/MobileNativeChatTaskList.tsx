@@ -10,7 +10,7 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import { nativeChatTaskListCopy } from './native-chat-task-list-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors } from '../../../theme/mobile-theme'
+import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { toolStyles as styles, toolType } from '../transcript/mobile-native-chat-tool-styles'
 import { useMobileNativeChatDisclosure } from '../transcript/mobile-native-chat-disclosure-store'
@@ -107,7 +107,7 @@ function FullList({
   return (
     <View>
       <Pressable
-        style={styles.taskDisclosure}
+        style={({ pressed }) => [styles.taskDisclosure, pressed && pressedStyle]}
         onPress={() => setOpen(!open)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}

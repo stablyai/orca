@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import { openTestJournalHostDatabase } from './journal-host-database-test-support'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'

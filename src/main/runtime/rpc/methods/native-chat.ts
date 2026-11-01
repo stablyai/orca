@@ -1,6 +1,6 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { hydrateNativeChatImageRefs } from '../../../native-chat/transcript-image-cache'
-import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat-agent-support'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,

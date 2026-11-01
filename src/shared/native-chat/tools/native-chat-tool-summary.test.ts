@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 import {
   briefToolArg,
   createToolInputDisplay,

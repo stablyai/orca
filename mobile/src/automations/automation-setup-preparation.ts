@@ -6,7 +6,7 @@ import {
   newWorkspaceSetupHooksRead,
   newWorkspaceUiStateRead
 } from '../components/new-workspace-operations'
-import type { SetupTrustPrompt } from '../components/SetupHookTrustDrawer'
+import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
 import { newTabRepoListRead } from '../session/mobile-session-read-operations'
 import {
   isSetupHookTrusted,
@@ -31,7 +31,7 @@ export async function prepareAutomationSetup(args: {
   targets: AutomationTargets
   current: () => boolean
   confirm: (
-    prompt: SetupTrustPrompt,
+    prompt: OrcaHookTrustPrompt,
     trust: PersistedTrustedOrcaHooks
   ) => Promise<'run' | 'skip' | null>
 }): Promise<AutomationDraft | null> {
@@ -119,6 +119,7 @@ export async function prepareAutomationSetup(args: {
   }
   const approved = await args.confirm(
     {
+      kind: 'setup',
       repoId: setup.repoId,
       repoName: setup.displayName,
       ...setupTrust,

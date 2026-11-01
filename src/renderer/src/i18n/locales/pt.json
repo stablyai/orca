@@ -432,8 +432,7 @@
       "cancel": "Manter filtros"
     },
     "startupWorktreeRefresh": {
-      "loading": "Descobrindo espaços de trabalho…",
-      "description": "Mais espaços de trabalho podem aparecer enquanto os projetos locais e remotos são carregados."
+      "loading": "Descobrindo espaços de trabalho…"
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",
@@ -481,6 +480,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} já é um host.",
         "distroStopped": "{{distro}} parou após a leitura da lista. Escolha “Iniciar e adicionar” para iniciá-la.",
+        "distroUnverifiable": "O WSL não respondeu se {{distro}} está em execução. Atualize a lista ou adicione-a pela caixa de diálogo, que a inicia se necessário.",
         "wsl1": "{{distro}} usa WSL 1, que o Orca não suporta mais. Converta-a para WSL 2 em um terminal do Windows com: {{command}}",
         "notRegistered": "{{distro}} não é uma distribuição WSL instalada. Execute {{command}} em um terminal do Windows para ver as instaladas ou reinstale-a e tente novamente.",
         "sshManaged": "{{distro}} já executa o servidor Orca de “{{server}}”, que este computador acessa por SSH. Remova esse servidor primeiro; ainda não há suporte para movê-lo para um host WSL."
@@ -2095,6 +2095,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} não está mais disponível. Ative o plugin dele novamente.",
         "failed": "Não foi possível criar o arquivo."
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} atualizado para {{value1}}",
+        "many": "{{value0}} plugins atualizados"
+      },
+      "pluginInstallLink": {
+        "invalid": "Esse link de plugin não é válido."
       }
     },
     "hooks": {
@@ -5170,7 +5177,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Cor magenta ANSI",
-          "03c855d15f": "Redefinir todas as substituições de cor",
           "63f8d9336e": "Substituições de Cor",
           "e86e09b5c7": "Substitui cores individuais do terminal.",
           "1d1920dc8a": "Oculta o cursor do mouse ao digitar no terminal.",
@@ -5237,7 +5243,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar agora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado."
+          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado.",
+          "color_overrides_dark_description": "Substitui cores individuais do tema escuro do terminal.",
+          "color_overrides_light_description": "Substitui cores individuais do tema claro do terminal.",
+          "reset_dark_color_overrides": "Redefinir as substituições de cor do tema escuro",
+          "reset_light_color_overrides": "Redefinir as substituições de cor do tema claro"
         },
         "agents": {
           "search": {
@@ -6463,7 +6473,8 @@
             "storage": "Guardar os próprios dados",
             "secrets": "Guardar os próprios segredos criptografados",
             "settingsOwn": "Ler e alterar as próprias configurações",
-            "terminalRun": "Executar comandos nos seus terminais, incluindo SSH"
+            "terminalRun": "Executar comandos nos seus terminais, incluindo SSH",
+            "agentsRead": "Receber avisos quando o status de um agente mudar"
           },
           "decisionFailed": "Não foi possível salvar a decisão de permissão. Tente novamente.",
           "fullAccessWarning": "Acesso total: é executado como um programa normal e pode ler seus arquivos, usar a rede e executar outros programas.",
@@ -6594,7 +6605,8 @@
           "viewLogs": "Ver logs",
           "disableLabel": "Desativar {{value0}}",
           "enableLabel": "Ativar {{value0}}",
-          "invalidPluginError": "O manifesto do plugin ou os arquivos instalados são inválidos. Corrija o plugin e atualize."
+          "invalidPluginError": "O manifesto do plugin ou os arquivos instalados são inválidos. Corrija o plugin e atualize.",
+          "syntaxFailed": "O realce parou: esta gramática falhou."
         },
         "WslCliRegistration": {
           "c6f6f89d7c": "Cancelar",
@@ -7306,7 +7318,9 @@
           "fbb428db98": "Selecionado:",
           "search_terminal_themes": "Pesquisar temas de terminal",
           "cb330ef7f8": " de {{value0}}",
-          "c822571b2e": " correspondendo a \"{{value0}}\""
+          "c822571b2e": " correspondendo a \"{{value0}}\"",
+          "plugin_themes": "Plugins",
+          "from_plugin": "De {{value0}}"
         },
         "auto": {
           "rename": {
@@ -7568,7 +7582,10 @@
           "title": "Plugins",
           "description": "Temas, idiomas, comandos e mais.",
           "logsFailed": "Não foi possível carregar os logs do plugin.",
-          "rollbackFailed": "Não foi possível reverter este plugin. Uma versão imutável anterior pode não estar disponível."
+          "rollbackFailed": "Não foi possível reverter este plugin. Uma versão imutável anterior pode não estar disponível.",
+          "alpha": "Alfa",
+          "fileTypeSuggestionsLabel": "Sugerir plugins para arquivos desconhecidos",
+          "restartFailed": "Não foi possível reiniciar {{value0}}."
         },
         "OpenInMenuSetting": {
           "03b00b1f64": "App personalizado",
@@ -8286,7 +8303,8 @@
           "pathLabel": "Caminho da pasta do plugin de desenvolvimento",
           "placeholder": "Caminho para uma pasta de plugin",
           "add": "Adicionar caminho",
-          "reviewHelp": "Revisado uma vez. Edições de código depois rodam sem perguntar."
+          "reviewHelp": "Revisado uma vez. Edições de código depois rodam sem perguntar.",
+          "dialogTitle": "Pastas de desenvolvimento"
         },
         "GeneralPane": {
           "confirm_running_work_close": "Confirmar antes de fechar chats ou terminais ativos",
@@ -8990,7 +9008,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "O Orca executa um servidor dentro de cada distribuição. Uma distribuição parada só é iniciada quando você abre um dos projetos dela ou a conecta aqui.",
+          "description": "O Orca executa um servidor dentro de cada distribuição. Abrir um projeto nunca inicia uma distribuição parada: clique em Iniciar, abra um novo terminal ou conecte-a aqui.",
           "add": "Adicionar distribuição WSL",
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",
@@ -9218,7 +9236,11 @@
         },
         "PluginContributionActionCommand": {
           "needsWorkspace": "Requer um workspace aberto",
-          "seeLogs": "Veja os logs abaixo"
+          "seeLogs": "Veja os logs abaixo",
+          "run": "Executar",
+          "runName": "Executar {{value0}}",
+          "ran": "{{value0}} executado",
+          "failed": "{{value0}} falhou"
         },
         "PluginContributionActionPanel": {
           "open": "Abrir painel",
@@ -9239,7 +9261,15 @@
           "repository": "Repositório",
           "newerBody": "O catálogo mudou enquanto você estava aqui.",
           "showNewer": "Ver a nova",
-          "stoppedDataBody": "Não foi possível carregar os arquivos. Reinicie para tentar de novo."
+          "stoppedDataBody": "Não foi possível carregar os arquivos. Reinicie para tentar de novo.",
+          "bundled": "Incluído no Orca",
+          "localFolder": "Pasta local",
+          "gitUrl": "URL do Git",
+          "stoppedTitle": "Parado após um erro",
+          "invalidTitle": "O Orca não consegue carregar este plugin",
+          "needsOrcaTitle": "Requer o Orca {{value0}} ou posterior",
+          "newerTitle": "Versão mais recente disponível",
+          "alsoListedBy": "Também listado por {{value0}}. As atualizações vêm apenas do catálogo de onde foi instalado; para trocar, remova-o e instale-o novamente."
         },
         "PluginDetailSections": {
           "typeLanguagePack": "Idioma da interface",
@@ -9259,14 +9289,20 @@
           "accessFailed": "Não foi possível ler o acesso",
           "retry": "Tentar de novo",
           "noAccessReach": "Nada fora dos próprios arquivos",
-          "customEditor": "Editor"
+          "customEditor": "Editor",
+          "panel": "Painel da barra lateral",
+          "recipe": "Receita de máquina",
+          "logs": "Logs",
+          "copyLogs": "Copiar"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "Nenhum outro acesso",
           "replacesShortcut": "{{value0}} ({{value1}}) substitui seu atalho de {{value2}}.",
           "updatesKeepApproval": "Atualizações só perguntam de novo por novo acesso",
           "fullAccessUpdates": "Atualizações podem mudar o código sem perguntar",
-          "editsFileTypes": "Abre e edita arquivos {{value0}} no Orca. Pode ler os arquivos que abre."
+          "editsFileTypes": "Abre e edita arquivos {{value0}} no Orca. Pode ler os arquivos que abre.",
+          "install": "Instalar e ativar",
+          "keepOff": "Manter desativado"
         },
         "PluginManagerRows": {
           "reinstall": "Reinstalar",
@@ -9287,13 +9323,24 @@
           "rollbackTo": "Reverter para {{value0}}…",
           "copyContentHash": "Copiar hash do conteúdo",
           "reviewUpdate": "Revisar atualização",
-          "dataLoadFailed": "Não foi possível carregar os arquivos"
+          "dataLoadFailed": "Não foi possível carregar os arquivos",
+          "copied": "ID do plugin copiado",
+          "copyFailed": "Não foi possível copiar o ID do plugin.",
+          "details": "Detalhes",
+          "unverified": "Não verificado",
+          "updateAvailable": "atualização {{value0}} disponível",
+          "updateNeedsReview": "atualização {{value0}} precisa de revisão",
+          "updatedTo": "atualizado para {{value0}}"
         },
         "PluginPageAction": {
-          "contentOnly": "Somente conteúdo"
+          "contentOnly": "Somente conteúdo",
+          "failedTitle": "Não foi possível instalar {{value0}}"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "Só pergunta de novo por novo acesso"
+          "autoUpdateHint": "Só pergunta de novo por novo acesso",
+          "label": "Configurações de plugins",
+          "development": "Pastas de desenvolvimento…",
+          "autoUpdateLabel": "Atualizar plugins automaticamente"
         },
         "PluginUpdateAllDialog": {
           "allAccess": "Ver todo o acesso",
@@ -9309,20 +9356,34 @@
           "previewError": "Não foi possível ler esta atualização",
           "sourceMoved": "Nova fonte: {{value0}} (antes {{value1}})",
           "update": "Atualizar",
-          "review": "Revisar"
+          "review": "Revisar",
+          "failed": "Não foi possível atualizar {{value0}}. Os outros foram atualizados.",
+          "cancel": "Cancelar",
+          "updateOne": "Atualizar 1 plugin",
+          "updateMany": "Atualizar {{value0}} plugins",
+          "failedAll": "Não foi possível atualizar {{value0}}. Nada foi atualizado.",
+          "close": "Fechar",
+          "retry": "Tentar novamente",
+          "updated": "Atualizado"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
           "useForDark": "Usar no escuro:",
           "assignedLight": "{{value0}} definido como tema claro",
           "assignedDark": "{{value0}} definido como tema escuro",
-          "saveFailed": "Não foi possível salvar o tema. Tente novamente."
+          "saveFailed": "Não foi possível salvar o tema. Tente novamente.",
+          "label": "Usar agora:"
         },
         "AppearanceInterfaceSection": {
           "lightTheme": "Tema claro",
           "darkTheme": "Tema escuro",
           "themeSlot": {
             "description": "Cores do app para este modo."
+          },
+          "pluginIconTheme": {
+            "title": "Tema de ícones",
+            "description": "Ícones de arquivos e pastas de um plugin ativado.",
+            "builtIn": "Integrado"
           }
         },
         "PluginInUseAction": {
@@ -9341,7 +9402,11 @@
           "needsReview": "Precisa de revisão",
           "restarting": "Reiniciando",
           "running": "Em execução",
-          "blocked": "Bloqueado"
+          "blocked": "Bloqueado",
+          "stopped": "Parado",
+          "cantLoad": "Não carrega",
+          "off": "Desativado",
+          "on": "Ativado"
         },
         "notification": {
           "settings": {
@@ -9425,7 +9490,10 @@
           "updated": "Atualizado",
           "license": "Licença",
           "whatsNew": "Novidades",
-          "installs": "Instalações"
+          "installs": "Instalações",
+          "hashCopied": "Hash de conteúdo copiado",
+          "hashCopyFailed": "Não foi possível copiar o hash.",
+          "readme": "Ler o README no {{value0}}"
         },
         "PluginFilterPopover": {
           "kind": "Categoria",
@@ -9461,7 +9529,18 @@
           "updateAll": "Atualizar tudo…",
           "notFromCatalog": "fora de catálogo",
           "allInstalledTitle": "Todos os plugins do catálogo estão instalados",
-          "showInstalled": "Mostrar plugins instalados"
+          "showInstalled": "Mostrar plugins instalados",
+          "verified": "verificado",
+          "unverified": "não verificado",
+          "catalogLoading": "Catálogo",
+          "catalogFailedTitle": "Não foi possível carregar o catálogo de plugins.",
+          "catalogFailedBody": "Seus plugins instalados continuam funcionando.",
+          "sourceFailedTitle": "Não foi possível carregar este catálogo.",
+          "sourceFailedBody": "Seus plugins instalados continuam funcionando.",
+          "sources": "Fontes…",
+          "sourceStaleTitle": "Não foi possível atualizar este catálogo.",
+          "sourceStaleBody": "Mostrando a cópia de {{value0}}.",
+          "shownOf": "{{value0}} de {{value1}}"
         },
         "pluginThemeApply": {
           "nowUsing": "Usando {{value0}}",
@@ -9487,6 +9566,63 @@
           "manyDescription": "Não serão atualizadas até você revisá-las.",
           "review": "Revisar",
           "dismiss": "Dispensar"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "Confirme que você confia nesta pasta",
+          "title": "Confirme que você confia em {{value0}}",
+          "theme": "Este tema é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "content": "Este plugin é de {{value0}}, não do Orca. Instale apenas plugins de autores em quem você confia.",
+          "translations": "Esta tradução é de {{value0}}, não do Orca. Traduções podem alterar qualquer texto do Orca, então instale-as apenas de autores em quem você confia.",
+          "code": "Este plugin é de {{value0}}, não do Orca. Ele executa o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "git": "O Orca não verificou este repositório. Um plugin dele pode executar o código do publicador dentro do Orca, então instale-o apenas se você confia em {{value0}}.",
+          "localFolder": "Esta é uma pasta local não verificada. Um plugin dela pode executar código dentro do Orca, então instale-o apenas se você confia na origem.",
+          "devFolder": "Esta é uma pasta local não verificada. O Orca carrega o plugin como está, e edições de código posteriores são executadas sem perguntar, então adicione apenas pastas em que você confia.",
+          "publisher": "Publicador",
+          "repository": "Repositório",
+          "folder": "Pasta",
+          "catalog": "Catálogo",
+          "cancel": "Cancelar",
+          "addFolder": "Adicionar pasta",
+          "install": "Instalar"
+        },
+        "PluginAddMenu": {
+          "add": "Adicionar plugin",
+          "folder": "De uma pasta…",
+          "git": "De uma URL do Git…",
+          "sources": "Fontes do catálogo…"
+        },
+        "PluginSettingsOverview": {
+          "offTitle": "Os plugins estão desativados"
+        },
+        "pluginContributions": {
+          "dark": "Escuro",
+          "light": "Claro",
+          "languageIncomplete": "{{value0}}% traduzido, incompleto demais para usar como idioma do Orca",
+          "languageCoverage": "Idioma da interface · {{value0}}% traduzido",
+          "newFileMenu": "Adiciona ao menu +",
+          "editorReplacesViewer": "Abre {{value0}} em vez do visualizador do Orca",
+          "editorMayReplaceViewer": "Pode abrir {{value0}} em vez do visualizador do Orca"
+        },
+        "PluginPageHero": {
+          "screenshots": "Capturas de tela",
+          "openScreenshot": "Abrir captura de tela: {{value0}}",
+          "position": "{{value0}} de {{value1}}",
+          "previous": "Captura anterior",
+          "next": "Próxima captura"
+        },
+        "PluginContributionActionEvents": {
+          "worktreeCreated": "Quando um workspace é criado",
+          "worktreeRemoved": "Quando um workspace é removido",
+          "agentStatusChanged": "Quando o status de um agente muda",
+          "detail": "Código em segundo plano é executado"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "Atualização precisa de revisão",
+          "updatedTo": "Atualizado para {{value0}}",
+          "devUnverified": "Dev · não verificado"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "Criar"
         }
       },
       "right": {
@@ -10594,7 +10730,8 @@
                   "79aa06bb2c": "Não foi possível atualizar. A API do GitHub está temporariamente indisponível. Mostrando o último status conhecido.",
                   "6ec12cee0c": "Não foi possível atualizar. O GitHub está inacessível agora. Mostrando o último status conhecido.",
                   "de088015e8": "Não foi possível atualizar. O GitHub está limitando as requisições. Mostrando o último status conhecido.",
-                  "d9dd7c6687": "Não foi possível atualizar a partir do GitHub. Mostrando o último status conhecido."
+                  "d9dd7c6687": "Não foi possível atualizar a partir do GitHub. Mostrando o último status conhecido.",
+                  "manual_provider": "Não foi possível atualizar a partir do {{provider}}. Tente novamente."
                 }
               }
             },
@@ -12461,12 +12598,14 @@
           "added": "Já é um host",
           "running": "Em execução",
           "stopped": "Parada",
+          "unverifiable": "Desconhecido",
           "title": "Adicionar distribuição WSL",
           "description": "O Orca executa seu servidor dentro da distribuição, para que git, arquivos e terminais funcionem nativamente no Linux. Os projetos desta distribuição que você abriu por \\\\wsl.localhost são movidos automaticamente para este host quando seus terminais ficam ociosos; projetos em uma unidade do Windows (/mnt/…) permanecem neste computador. Você pode trazer de volta um projeto movido pela barra lateral.",
           "distro": "Distribuição",
           "loading": "Procurando distribuições WSL…",
           "placeholder": "Escolha uma distribuição",
           "stoppedHint": "{{value0}} está parada. Adicioná-la irá iniciá-la.",
+          "unverifiableHint": "O WSL não informou se {{value0}} está em execução. Adicioná-la a inicia se necessário.",
           "addingHint": "Instalando e iniciando o servidor Orca na distribuição. Na primeira vez, pode levar um minuto.",
           "adding": "Configurando…",
           "startAndAdd": "Iniciar e adicionar",
@@ -13075,11 +13214,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Aumentar zoom",
-          "6c89c73d9f": "Redefinir zoom",
           "be27304574": "Diminuir zoom",
-          "77bfc9b35a": "Abrir imagem em popup",
           "3ef9551ba2": "Carregando pré-visualização...",
-          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo"
+          "d9d2944855": "Falha ao carregar a pré-visualização do arquivo",
+          "fitToView": "Ajustar à visualização",
+          "actualSize": "Tamanho real",
+          "expand": "Expandir imagem"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "sem-titulo.md",
@@ -13228,11 +13368,6 @@
           "57aac3979a": "Original",
           "fb0ae4f3c0": "Sem pré-visualização"
         },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Pressione Esc para fechar",
-          "535f4e2b56": "Fechar",
-          "9e27b2ecaf": "Pré-visualização de imagem em tamanho completo"
-        },
         "MonacoEditor": {
           "68cb83f4a7": "Adicionar nota no texto selecionado",
           "fd68ae03b3": "Buscar nos Arquivos",
@@ -13378,7 +13513,10 @@
           "zoomOut": "Diminuir zoom",
           "zoomIn": "Aumentar zoom",
           "fit": "Ajustar à tela",
-          "close": "Fechar"
+          "close": "Fechar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "Não foi possível copiar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",
@@ -13439,6 +13577,28 @@
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "Não foi possível salvar a imagem colada ao lado do documento. Ela pode não carregar após reiniciar o Orca."
+        },
+        "PluginFileTypeSuggestion": {
+          "message": "Um plugin pode abrir arquivos .{{value0}}: {{value1}}",
+          "view": "Ver plugin",
+          "notNow": "Agora não",
+          "never": "Não sugerir para .{{value0}}",
+          "editorMessage": "Um plugin adiciona um editor para arquivos .{{value0}}: {{value1}}"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "Carregando editor…",
+          "unresponsive": "{{value0}} parou de responder. Mude para Código-fonte para continuar editando.",
+          "loadFailed": "Não foi possível carregar {{value0}}. Mude para Código-fonte para editar este arquivo.",
+          "editTooLarge": "Este arquivo é grande demais para {{value0}} salvar alterações. Use Código-fonte.",
+          "saveBlocked": "Não foi possível salvar as alterações mais recentes de {{value0}}.",
+          "editsHeld": "{{value0}} está enviando alterações rápido demais; o Orca aplicará a mais recente em breve.",
+          "largeFile": "Arquivo grande — pode levar um momento."
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "Tentar novamente",
+          "tooLarge": "{{value0}} é grande demais para abrir no {{value1}} ({{value2}}; o limite é {{value3}}).",
+          "unsupported": "{{value0}} não consegue ler este arquivo de onde ele está armazenado. Atualize o servidor do Orca que o hospeda ou mude para Código-fonte.",
+          "readFailed": "Não foi possível ler {{value0}} para {{value1}}. {{value2}}"
         }
       },
       "skills": {
@@ -18136,7 +18296,8 @@
           },
           "pluginQuickActions": {
             "description": "Comando de plugin {{value0}}",
-            "keyword": "comando de plugin"
+            "keyword": "comando de plugin",
+            "newFileDescription": "Cria um arquivo {{value0}} sem título no workspace ativo."
           }
         }
       },
@@ -19312,6 +19473,10 @@
         },
         "PluginListRow": {
           "official": "Oficial"
+        },
+        "PluginListGroup": {
+          "showAll": "Mostrar mais {{value0}}",
+          "showAllTotal": "Mostrar todos os {{value0}} plugins"
         }
       },
       "native": {
@@ -19744,6 +19909,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} instalações"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "Não foi possível adicionar este catálogo.",
+          "title": "Adicionar o catálogo {{value0}}?",
+          "cancel": "Cancelar",
+          "add": "Adicionar catálogo",
+          "body": "Um link pediu para mostrar {{value0}} deste catálogo. Adicione catálogos apenas de pessoas em quem você confia."
         }
       }
     },
@@ -19860,6 +20032,8 @@
       },
       "composer": {
         "send": "Enviar",
+        "alternateSteerHint": "{{shortcut}} para orientar",
+        "alternateQueueHint": "{{shortcut}} para colocar na fila",
         "noPty": "Nenhum terminal ativo — alterne de volta para reconectar.",
         "locked": "A entrada está retida por outro dispositivo.",
         "placeholder": "Enviar uma mensagem…",
@@ -20486,8 +20660,6 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
-        "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
@@ -20588,7 +20760,6 @@
         "editMessage": "Editar mensagem",
         "showFullMessage": "Mostrar mensagem completa",
         "showLess": "Mostrar menos",
-        "turnOffQueueing": "Desativar fila",
         "listLabel": "Mensagens na fila",
         "alreadySent": "Esta mensagem já foi enviada.",
         "withdrawnHold": "Interrompida antes do envio",
@@ -20633,7 +20804,8 @@
         "stopped": "{{distro}} está parado",
         "start": "Iniciar",
         "unverifiable": "O Orca não conseguiu verificar se {{distro}} está em execução",
-        "startToSend": "Inicie {{distro}} para enviar."
+        "startToSend": "Inicie {{distro}} para enviar.",
+        "startDistro": "Iniciar {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuar",
@@ -21184,12 +21356,11 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Colocar mensagens de acompanhamento na fila",
+        "followUpBehaviorTitle": "Colocar mensagens de acompanhamento na fila",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
-        "queueFollowUpsCopy": "As mensagens enviadas enquanto o agente trabalha aguardam como cartões que você pode usar para orientá-lo, editar ou excluir. Mensagens com imagens são enviadas imediatamente.",
-        "queueFollowUpsToggleLabel": "Ativar ou desativar fila de mensagens de acompanhamento",
+        "followUpBehaviorCopy": "Mensagens enviadas enquanto o agente trabalha aguardam como cartões até o turno terminar, em vez de entrar no turno em andamento. Cmd/Ctrl+Enter faz o contrário para uma mensagem.",
         "behaviorTitle": "Comportamento",
         "resumeSearchUpdate": "atualizar",
         "resumeSearchRelaunch": "reiniciar",
@@ -22217,7 +22388,6 @@
       "workspace": "Espaço de trabalho",
       "binding": "Aba",
       "idCopied": "ID da sessão do Orca copiado",
-      "cancel": "Cancelar",
       "unassigned": "Não atribuído",
       "thisComputer": "Este computador",
       "retry": "Tentar novamente",
@@ -22235,19 +22405,16 @@
       "agentOwnership": "Evidência de vínculo com o agente",
       "observationTime": "Horário da observação",
       "goToTerminal": "Ir para o terminal",
-      "endTitle": "Encerrar {{terminal}}?",
       "checkingTabs": "Verificando abas…",
       "detailsNamed": "Detalhes para {{terminal}}",
       "copyId": "Copiar ID da sessão do Orca",
       "ending": "Encerrando…",
       "localOwnedCount_one": "{{count}} PTY do Orca neste computador",
-      "endDescription": "Isso encerra o terminal e seus processos filhos. O trabalho não salvo pode ser perdido.",
       "lastProcess": "Último processo visto: {{process}}",
       "localOwnedCount_other": "{{count}} PTYs do Orca neste computador",
       "localOwnedCount_many": "{{count}} PTYs do Orca neste computador",
       "loading": "Carregando terminais…",
       "endNamed": "Encerrar {{terminal}}",
-      "end": "Encerrar terminal",
       "openNamed": "Abrir {{terminal}}",
       "withoutTab": "{{count}} sem aba",
       "observedTime": "Última observação: {{time}}",

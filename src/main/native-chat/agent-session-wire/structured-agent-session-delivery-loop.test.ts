@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import {
   acceptedDispatch,

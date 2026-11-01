@@ -3,7 +3,7 @@
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import {
   structuredAgentSessionAgentStatus,

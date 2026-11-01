@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,7 +28,12 @@ export function HostRouteNoticeBanner({
     >
       <Text style={styles.text}>{message}</Text>
       {action ? (
-        <Pressable onPress={action.onPress} accessibilityRole="button" hitSlop={spacing.sm}>
+        <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
+          onPress={action.onPress}
+          accessibilityRole="button"
+          hitSlop={spacing.sm}
+        >
           <Text style={styles.action}>{action.label}</Text>
         </Pressable>
       ) : null}
@@ -38,7 +43,7 @@ export function HostRouteNoticeBanner({
           accessibilityRole="button"
           accessibilityLabel={t('components.hostRouteNoticeBanner.dismissNotice', 'Dismiss notice')}
           hitSlop={spacing.sm}
-          style={styles.dismiss}
+          style={({ pressed }) => [styles.dismiss, pressed && pressedStyle]}
         >
           <X size={16} color={colors.textMuted} />
         </Pressable>

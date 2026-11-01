@@ -8,10 +8,10 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentJournalCursor,
   type AgentJournalMessageItem
-} from '../../src/shared/agent-session-journal-types'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../src/shared/agent-session-current-requests-capability'
+} from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryRequest,
@@ -26,7 +26,7 @@ import {
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { withNativeChatCutTurnNotices } from '../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { nativeChatRowsInDrawOrder } from '../../src/shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../src/shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { projectStructuredAgentSessionMessages } from '../../src/shared/structured-agent-session-message-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,

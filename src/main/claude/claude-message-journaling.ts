@@ -1,6 +1,6 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'

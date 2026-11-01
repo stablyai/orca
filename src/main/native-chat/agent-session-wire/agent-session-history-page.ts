@@ -4,15 +4,15 @@ export { resolveHistoryLimit } from './agent-session-history-limit'
 // late revisions keep old creation positions and would be skipped by item windows. Only catch-up
 // can therefore return cursor_compacted.
 
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { snapshotLatestTurn } from './agent-session-history-latest-turn'
-import { isSubagentBlock } from '../../../shared/native-chat-types'
+import { isSubagentBlock } from '../../../shared/native-chat/native-chat-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSnapshot
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryDirection,

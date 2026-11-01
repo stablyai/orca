@@ -1,25 +1,27 @@
+export { serializeJournalRow, journalRowByteLength } from './journal-row-encoding'
+import type { JournalInputContext, JournalInputLineage } from './journal-input-lineage'
 import type { JournalItemEcho } from './journal-item-echo'
 // Upcast on read; preserve unknown versions/kinds and fail load instead of skipping history.
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
 // Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
 
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
-  type AgentJournalProducerLinkage,
-  type AgentJournalTurnScope,
-  type AgentSessionJournalProviderHandle
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
+import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session-journal-identity'
 import {
   readAgentJournalItemBody,
   readAgentJournalMessageBody,
   type AgentJournalContentVerdict
-} from '../../../shared/agent-session-journal-body-admission'
-import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
+} from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
+import { isJournalTag } from '../../../shared/agent-session/journal/agent-session-journal-open-union'
 import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
 import { journalRowDeclaresMore } from './journal-storage-row-schema'
@@ -42,6 +44,7 @@ export type JournalEpochRow = JournalRowBase & {
   kind: 'epoch'
   reason: AgentJournalEpochReason
   providerHandle: AgentSessionJournalProviderHandle
+  inputOrderLineage?: JournalInputLineage
   /** Preserve original adoption through same-conversation epoch replacement. */
   historyOrigin?: unknown
 }
@@ -119,6 +122,7 @@ export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrR
 /** Persist before dispatch; the optimistic bubble gives provider echoes a slot without duplication. */
 export type JournalSubmissionRow = JournalRowBase & {
   kind: 'submission'
+  inputOrderContext?: JournalInputContext
   clientMessageId: string
   payloadFingerprint: string
   providerHandle: AgentSessionJournalProviderHandle
@@ -189,10 +193,6 @@ export type JournalRowParse =
   | { ok: false; unreadable: false }
   /** Future content forbids writing/compacting this journal. */
   | { ok: false; unreadable: true }
-
-export function serializeJournalRow(row: JournalRow): string {
-  return JSON.stringify(row)
-}
 
 export function parseJournalRow(line: string): JournalRowParse {
   let parsed: unknown
@@ -356,8 +356,4 @@ function lifecycleMutationContent(value: unknown): AgentJournalContentVerdict {
     return contentCheck(value)
   }
   return isJournalTag(kind) ? 'unreadable' : 'malformed'
-}
-
-export function journalRowByteLength(row: JournalRow): number {
-  return Buffer.byteLength(serializeJournalRow(row), 'utf8') + 1
 }

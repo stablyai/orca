@@ -893,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}} は利用できなくなりました。プラグインを再度オンにしてください。",
         "failed": "ファイルを作成できませんでした。"
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}} を {{value1}} にアップデートしました",
+        "many": "{{value0}} 件のプラグインをアップデートしました"
+      },
+      "pluginInstallLink": {
+        "invalid": "このプラグインのリンクは無効です。"
       }
     },
     "lib": {
@@ -6504,12 +6511,14 @@
           "added": "すでにホストです",
           "running": "実行中",
           "stopped": "停止中",
+          "unverifiable": "不明",
           "title": "WSL ディストリビューションを追加",
           "description": "Orca はディストリビューション内でサーバーを実行するため、git、ファイル、ターミナルは Linux 上でネイティブに動作します。このディストリビューション内で \\\\wsl.localhost 経由で開いたプロジェクトは、ターミナルがアイドル状態になると自動的にこのホストへ移動します。Windows ドライブ (/mnt/…) 上のプロジェクトはこのコンピューターに残ります。移動したプロジェクトはサイドバーから戻せます。",
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
           "stoppedHint": "{{value0}} は停止しています。追加すると起動します。",
+          "unverifiableHint": "WSL から {{value0}} が実行中かどうかの応答がありません。追加すると必要に応じて起動します。",
           "addingHint": "ディストリビューション内に Orca サーバーをインストールして起動しています。初回は 1 分ほどかかることがあります。",
           "adding": "セットアップ中…",
           "startAndAdd": "起動して追加",
@@ -8665,7 +8674,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSIマゼンタ色",
-          "03c855d15f": "すべての色のオーバーライドをリセット",
           "63f8d9336e": "色のオーバーライド",
           "e86e09b5c7": "個々のターミナルの色をオーバーライドします。",
           "1d1920dc8a": "ターミナルに入力するときにマウスカーソルを非表示にします。",
@@ -8732,7 +8740,11 @@
           "cf37ff69f6": "ベース",
           "8abdab9f7c": "今すぐ再起動",
           "907131d741": "再起動中…",
-          "605a35d600": "ターミナルのレンダラーではまだ適用されません。xterm.js に太字用の色スロットがないためです。保存した値は保持されます。"
+          "605a35d600": "ターミナルのレンダラーではまだ適用されません。xterm.js に太字用の色スロットがないためです。保存した値は保持されます。",
+          "color_overrides_dark_description": "ダークターミナルテーマの個々の色をオーバーライドします。",
+          "color_overrides_light_description": "ライトターミナルテーマの個々の色をオーバーライドします。",
+          "reset_dark_color_overrides": "ダークテーマの色のオーバーライドをリセット",
+          "reset_light_color_overrides": "ライトテーマの色のオーバーライドをリセット"
         },
         "UIZoomControl": {
           "c2c64b24d0": "リセット"
@@ -11280,7 +11292,8 @@
           "pathLabel": "開発用プラグインのフォルダーパス",
           "placeholder": "プラグインフォルダーのパス",
           "add": "パスを追加",
-          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。"
+          "reviewHelp": "確認は一度だけ。その後のコード変更は確認なしで実行されます。",
+          "dialogTitle": "開発フォルダー"
         },
         "PluginInstallDialog": {
           "localRequired": "プラグインフォルダーのパスを入力してください。",
@@ -12166,7 +12179,7 @@
         "wslHosts": {
           "title": "WSL ホスト",
           "experimental": "実験的機能",
-          "description": "Orca は各ディストリビューション内でサーバーを実行します。停止中のディストリビューションは、そのプロジェクトを開くか、ここで接続したときにのみ起動します。",
+          "description": "Orca は各ディストリビューション内でサーバーを実行します。プロジェクトを開いても、停止中のディストリビューションは起動しません。[起動] をクリックするか、新しいターミナルを開くか、ここで接続してください。",
           "add": "WSL ディストリビューションを追加",
           "connect": "接続",
           "turnOn": "実験的機能でオンにする",
@@ -12452,7 +12465,9 @@
           "repository": "リポジトリ",
           "stoppedDataBody": "ファイルを読み込めませんでした。再起動して再試行してください。",
           "newerBody": "表示中にカタログが更新されました。",
-          "showNewer": "新しい版を表示"
+          "showNewer": "新しい版を表示",
+          "newerTitle": "新しいバージョンがあります",
+          "alsoListedBy": "{{value0}} にも掲載されています。アップデートはインストール元のカタログからのみ届きます。切り替えるには、削除してから再インストールしてください。"
         },
         "PluginDetailSections": {
           "typeLanguagePack": "表示言語",
@@ -12502,7 +12517,9 @@
           "rollbackTo": "{{value0}} に戻す…",
           "copyContentHash": "コンテンツハッシュをコピー",
           "reviewUpdate": "アップデートを確認",
-          "dataLoadFailed": "ファイルを読み込めませんでした"
+          "dataLoadFailed": "ファイルを読み込めませんでした",
+          "updateNeedsReview": "アップデート {{value0}} のレビューが必要です",
+          "updatedTo": "{{value0}} にアップデート済み"
         },
         "PluginSettingsOverview": {
           "offTitle": "プラグインはオフです"
@@ -12565,20 +12582,29 @@
           "dark": "ダーク",
           "light": "ライト",
           "languageIncomplete": "{{value0}}% 翻訳済み。Orca の言語として使うには不完全です",
-          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み"
+          "languageCoverage": "インターフェース言語 · {{value0}}% 翻訳済み",
+          "newFileMenu": "+ メニューに追加",
+          "editorReplacesViewer": "Orca のビューアーの代わりに {{value0}} を開きます",
+          "editorMayReplaceViewer": "Orca のビューアーの代わりに {{value0}} を開く場合があります"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "その他のアクセスはありません",
           "replacesShortcut": "{{value0}}（{{value1}}）が {{value2}} のショートカットを置き換えます。",
           "updatesKeepApproval": "アップデートは新しいアクセスがあるときだけ確認します",
           "fullAccessUpdates": "アップデートで確認なしにコードが変わることがあります",
-          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。"
+          "editsFileTypes": "Orca で {{value0}} ファイルを開いて編集します。開いたファイルを読み取れます。",
+          "install": "インストールして有効化",
+          "keepOff": "オフのままにする"
         },
         "PluginPageAction": {
-          "contentOnly": "コンテンツのみ"
+          "contentOnly": "コンテンツのみ",
+          "failedTitle": "{{value0}} をインストールできませんでした"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "新しいアクセスがあるときだけ確認します"
+          "autoUpdateHint": "新しいアクセスがあるときだけ確認します",
+          "label": "プラグイン設定",
+          "development": "開発フォルダー…",
+          "autoUpdateLabel": "プラグインを自動でアップデート"
         },
         "PluginInUseAction": {
           "inUseDark": "使用中 · ダーク",
@@ -12681,6 +12707,39 @@
           "manyDescription": "確認するまで更新されません。",
           "review": "確認",
           "dismiss": "閉じる"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "このフォルダーを信頼できることを確認してください",
+          "title": "{{value0}} を信頼できることを確認してください",
+          "theme": "このテーマは Orca ではなく {{value0}} によるものです。信頼できる作者のプラグインだけをインストールしてください。",
+          "content": "このプラグインは Orca ではなく {{value0}} によるものです。信頼できる作者のプラグインだけをインストールしてください。",
+          "translations": "この翻訳は Orca ではなく {{value0}} によるものです。翻訳は Orca 内のあらゆるテキストを変更できるため、信頼できる作者のものだけをインストールしてください。",
+          "code": "このプラグインは Orca ではなく {{value0}} によるものです。公開元のコードを Orca 内で実行するため、{{value0}} を信頼できる場合にのみインストールしてください。",
+          "git": "Orca はこのリポジトリを確認していません。ここからのプラグインは公開元のコードを Orca 内で実行できるため、{{value0}} を信頼できる場合にのみインストールしてください。",
+          "localFolder": "これは未検証のローカルフォルダーです。ここからのプラグインは Orca 内でコードを実行できるため、入手元を信頼できる場合にのみインストールしてください。",
+          "devFolder": "これは未検証のローカルフォルダーです。Orca はそのプラグインをそのまま読み込み、以降のコード変更は確認なしで実行されます。信頼できるフォルダーだけを追加してください。",
+          "publisher": "公開元",
+          "repository": "リポジトリ",
+          "folder": "フォルダー",
+          "catalog": "カタログ",
+          "cancel": "キャンセル",
+          "addFolder": "フォルダーを追加",
+          "install": "インストール"
+        },
+        "PluginPageHero": {
+          "screenshots": "スクリーンショット",
+          "openScreenshot": "スクリーンショットを開く: {{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "前のスクリーンショット",
+          "next": "次のスクリーンショット"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "アップデートのレビューが必要",
+          "updatedTo": "{{value0}} にアップデート済み",
+          "devUnverified": "開発 · 未検証"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "作成"
         }
       },
       "right": {
@@ -14063,7 +14122,8 @@
                   "79aa06bb2c": "更新できませんでした。GitHub の API を一時的に利用できません。最後に取得した状態を表示しています。",
                   "6ec12cee0c": "更新できませんでした。現在 GitHub に接続できません。最後に取得した状態を表示しています。",
                   "de088015e8": "更新できませんでした。GitHub がリクエストを制限しています。最後に取得した状態を表示しています。",
-                  "d9dd7c6687": "GitHub から更新できませんでした。最後に取得した状態を表示しています。"
+                  "d9dd7c6687": "GitHub から更新できませんでした。最後に取得した状態を表示しています。",
+                  "manual_provider": "{{provider}} から更新できませんでした。もう一度お試しください。"
                 }
               }
             },
@@ -15435,16 +15495,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "ズームイン",
-          "6c89c73d9f": "ズームをリセットする",
           "be27304574": "ズームアウト",
-          "77bfc9b35a": "ポップアップで画像を開く",
           "3ef9551ba2": "プレビューを読み込んでいます…",
-          "d9d2944855": "ファイルプレビューのロードに失敗しました"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Escを押して閉じます",
-          "535f4e2b56": "閉じる",
-          "9e27b2ecaf": "フルサイズの画像プレビュー"
+          "d9d2944855": "ファイルプレビューのロードに失敗しました",
+          "fitToView": "画面に合わせる",
+          "actualSize": "実際のサイズ",
+          "expand": "画像を拡大表示"
         },
         "IpynbViewer": {
           "859bf9fc21": "セルを実行する",
@@ -15565,7 +15621,10 @@
           "zoomOut": "ズームアウト",
           "zoomIn": "ズームイン",
           "fit": "画面に合わせる",
-          "close": "閉じる"
+          "close": "閉じる",
+          "copyPng": "PNG としてコピー",
+          "copiedPng": "PNG としてコピーしました",
+          "copyPngFailed": "画像をコピーできませんでした"
         },
         "MermaidBlock": {
           "dcc132e691": "図のエラー:",
@@ -16094,13 +16153,29 @@
           "message": ".{{value0}} ファイルを開けるプラグインがあります: {{value1}}",
           "view": "プラグインを表示",
           "notNow": "今はしない",
-          "never": ".{{value0}} では提案しない"
+          "never": ".{{value0}} では提案しない",
+          "editorMessage": "プラグインが .{{value0}} ファイル用のエディターを追加します: {{value1}}"
         },
         "RichMarkdownEmojiMenu": {
           "chooseEmoji": "絵文字を選択"
         },
         "richMarkdownBlobImagePaste": {
           "saveFailed": "貼り付けた画像をドキュメントの隣に保存できませんでした。Orca の再起動後に読み込めない場合があります。"
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "エディターを読み込み中…",
+          "unresponsive": "{{value0}} が応答しなくなりました。編集を続けるにはソースに切り替えてください。",
+          "loadFailed": "{{value0}} を読み込めませんでした。このファイルを編集するにはソースに切り替えてください。",
+          "editTooLarge": "このファイルは大きすぎるため、{{value0}} では変更を保存できません。代わりにソースを使用してください。",
+          "saveBlocked": "{{value0}} からの最新の変更を保存できませんでした。",
+          "editsHeld": "{{value0}} からの変更の送信が速すぎます。Orca はまもなく最新の変更を適用します。",
+          "largeFile": "大きなファイルです。少し時間がかかる場合があります。"
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "再試行",
+          "tooLarge": "{{value0}} は大きすぎるため {{value1}} で開けません（{{value2}}、上限は {{value3}}）。",
+          "unsupported": "{{value0}} はこのファイルの保存場所から読み取れません。ホストしている Orca サーバーをアップデートするか、ソースに切り替えてください。",
+          "readFailed": "{{value1}} 用に {{value0}} を読み取れませんでした。{{value2}}"
         }
       },
       "diff": {
@@ -16423,7 +16498,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} プラグインのコマンド",
-            "keyword": "プラグインのコマンド"
+            "keyword": "プラグインのコマンド",
+            "newFileDescription": "アクティブなワークスペースに無題の {{value0}} ファイルを作成します。"
           }
         }
       },
@@ -17660,7 +17736,8 @@
           "notInstalled": "未インストール"
         },
         "PluginListGroup": {
-          "showAll": "さらに {{value0}} 件を表示"
+          "showAll": "さらに {{value0}} 件を表示",
+          "showAllTotal": "{{value0}} 件のプラグインをすべて表示"
         },
         "PluginListRow": {
           "official": "公式"
@@ -18156,6 +18233,13 @@
         },
         "pluginInstallCount": {
           "installs": "{{value0}} 件のインストール"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "このカタログを追加できませんでした。",
+          "title": "カタログ {{value0}} を追加しますか？",
+          "cancel": "キャンセル",
+          "add": "カタログを追加",
+          "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
         }
       }
     },
@@ -18518,6 +18602,8 @@
       },
       "composer": {
         "send": "送信",
+        "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
         "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
@@ -18731,9 +18817,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "チャット UI で続けるには、このホストの Orca を更新してください。",
-        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。",
-        "exitUnconfirmedFromTerminal": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。",
-        "exitUnconfirmed": "{{agent}} は別のターミナルですでにこの会話を実行しています。そちらの {{agent}} を終了するか、そのターミナルを閉じてから、セッション履歴でこの会話を開いてください。"
+        "notSavedYet": "{{agent}} はまだこの会話を保存していません。応答してから再度お試しください。"
       },
       "state": {
         "loading": {
@@ -18989,7 +19073,6 @@
         "editMessage": "メッセージを編集",
         "showFullMessage": "メッセージ全体を表示",
         "showLess": "折りたたむ",
-        "turnOffQueueing": "キューへの追加をオフにする",
         "withdrawnHold": "送信前に停止されました",
         "pausedSendFailed": "送信できませんでした。「送信」を押して再試行してください。",
         "paused": "一時停止中",
@@ -19027,13 +19110,15 @@
         "stopped": "{{distro}} は停止しています",
         "start": "起動",
         "unverifiable": "Orca は {{distro}} が実行中かどうかを確認できませんでした",
-        "startToSend": "送信するには {{distro}} を開始してください。"
+        "startToSend": "送信するには {{distro}} を開始してください。",
+        "startDistro": "{{distro}} を開始"
       },
       "interruptedContinue": {
         "continue": "続行",
         "failed": "このチャットを続行できませんでした。もう一度試すか、メッセージを送信してください。",
         "explanation": "続行すると、Agent はまず最後の手順が完了したかどうかを確認します。",
-        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。"
+        "unconfirmed": "{{agent}} が続行を受信したかどうかを確認できませんでした。もう一度試す前にチャットを確認してください。",
+        "usageLimitExplanation": "中断したところから続けるよう Agent に依頼します。上限がリセットされてから使ってください。"
       },
       "rewind": {
         "unsupported": "このチャットは以前のメッセージに戻れません。",
@@ -19215,6 +19300,13 @@
         "effortPickerFailed": "推論レベル選択画面を開けませんでした。",
         "modelApplyFailed": "モデル {{value}} を適用できませんでした。",
         "effortApplyFailed": "推論レベル {{value}} を適用できませんでした。"
+      },
+      "usageLimitActions": {
+        "continueNow": "今すぐ続ける",
+        "leadIn": "待たずにこのチャットを続ける：",
+        "switchAccount": "アカウントを切り替え",
+        "addAccount": "アカウントを追加…",
+        "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       }
     },
     "tab": {
@@ -19595,9 +19687,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "フォローアップをキューに入れる",
-        "queueFollowUpsCopy": "Agent の作業中に送信したメッセージは、今すぐ送信・編集・削除できるカードとして待機します。画像付きのメッセージはすぐに送信されます。",
-        "queueFollowUpsToggleLabel": "フォローアップのキューを切り替え",
+        "followUpBehaviorTitle": "フォローアップをキューに入れる",
+        "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、実行中のターンに送られる代わりに、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter では 1 件だけその逆になります。",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
         "inlineVisualsToggleLabel": "インライン表示を切り替え",
@@ -20125,8 +20216,7 @@
       "quitDuringMoveConfirm": "終了する"
     },
     "startupWorktreeRefresh": {
-      "loading": "ワークスペースを検出中…",
-      "description": "ローカルおよびリモートのプロジェクトを読み込む間に、さらにワークスペースが表示されることがあります。"
+      "loading": "ワークスペースを検出中…"
     },
     "createProject": {
       "errors": {
@@ -20149,6 +20239,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} はすでにホストです。",
         "distroStopped": "一覧の読み取り後に {{distro}} が停止しました。「起動して追加」を選択して起動してください。",
+        "distroUnverifiable": "WSL から {{distro}} が実行中かどうかの応答がありませんでした。一覧を更新するか、ダイアログから追加してください（必要に応じて起動します）。",
         "wsl1": "{{distro}} は Orca がサポートを終了した WSL 1 を使用しています。Windows のターミナルで次のコマンドを実行し、WSL 2 に変換してください: {{command}}",
         "notRegistered": "{{distro}} はインストール済みの WSL ディストリビューションではありません。Windows のターミナルで {{command}} を実行してインストール済みのものを確認するか、再インストールしてからやり直してください。",
         "sshManaged": "{{distro}} ではすでに「{{server}}」の Orca サーバーが実行されており、このコンピューターは SSH 経由で接続しています。先にそのサーバーを削除してください。WSL ホストへの移行はまだサポートされていません。"
@@ -20898,7 +20989,7 @@
     },
     "claude": {
       "added": "アカウントを追加しました。次に起動する Claude で使用するには、これを選択してください。",
-      "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude はこれを使用します。実行中のセッションはそれぞれのアカウントを維持します。",
+      "nextLaunch": "{{value0}} → {{value1}}。次に起動する Claude ターミナルはこのアカウントを使用します。実行中の Claude ターミナルはそれぞれのアカウントを維持します。",
       "profileSwitching": "切り替えは、任意のタブで次に起動する Claude に適用されます。実行中のセッションはそれぞれのアカウントを維持します。",
       "systemDefault": "システムのデフォルト",
       "unnamedAccount": "Claude アカウント",
@@ -20929,8 +21020,8 @@
         "restartOne": "セッションを再起動",
         "keep": "そのままにする",
         "session": "Claude セッション",
-        "settingDescription": "再起動すると、新規アカウントで実行中の各会話が継続されます。",
-        "settingTitle": "Claude の実行中にアカウントを切り替える場合",
+        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。",
+        "settingTitle": "ターミナルで Claude を実行中にアカウントを切り替える場合",
         "restartingOne": "{{account}} で Claude セッションを 1 件再起動中",
         "restartingOther": "{{account}} で Claude セッションを {{count}} 件再起動中",
         "settingRestart": "常に再起動する",
@@ -21594,12 +21685,8 @@
       "refreshBeforeEnd": "PTY を更新するまで終了できません。",
       "endUnsupported": "このターミナルは終了できません。ホストが必要な安全チェックをサポートしていません。タブまたはホスト上で閉じてください。",
       "checkingTabs": "タブを確認中…",
-      "endTitle": "{{terminal}} を終了しますか？",
-      "endDescription": "このターミナルとその子プロセスを終了します。未保存の作業が失われる可能性があります。",
       "lastProcess": "最後に確認されたプロセス: {{process}}",
-      "cancel": "キャンセル",
       "ending": "終了中…",
-      "end": "ターミナルを終了",
       "unassigned": "未割り当て",
       "thisComputer": "このコンピューター",
       "localOwnedCount_one": "このコンピューターの Orca PTY {{count}} 個",

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../../native-chat-types'
+import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../native-chat-types'
 import { nativeChatToolLineIdentity } from './native-chat-tool-line-identity'
 
 it('keys an anonymous mobile row by a bounded summary, so a refetched copy keeps it', () => {

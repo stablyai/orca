@@ -82,13 +82,14 @@ describe('WSL hosts policy live update', () => {
   const respond = (body: string, status = 200) => vi.fn(async () => new Response(body, { status }))
   const updater = (
     fetch: (url: string) => Promise<Response>,
-    options: { appVersion?: string; isPackaged?: boolean } = {}
+    options: { appVersion?: string; isPackaged?: boolean; onBlock?: () => void } = {}
   ) =>
     new WslHostsPolicyLiveUpdater({
       userDataPath,
       appVersion: options.appVersion ?? STABLE,
       isPackaged: options.isPackaged ?? true,
-      fetch
+      fetch,
+      onBlock: options.onBlock
     })
   const seedCache = (text: string, appVersion = STABLE) => {
     const channel = wslHostsPolicyChannelForAppVersion(appVersion)
@@ -140,6 +141,25 @@ describe('WSL hosts policy live update', () => {
     // This build reads its own fields from it, and a newer parser still finds the later one.
     expect(readCachedWslHostsPolicy(userDataPath, STABLE)?.wslHosts).toBe('block')
     expect(JSON.parse(cachedText)).toMatchObject({ someLaterField: { keep: true } })
+  })
+
+  // The newest known block stops new work this run: a fresh one, or one already cached.
+  it.each([
+    ['a newer block', null, policy(2, 'block'), true],
+    ['an already cached block re-served', policy(2, 'block'), policy(2, 'block'), true],
+    ['a stale allow behind a cached block', policy(3, 'block'), policy(2, 'allow'), true],
+    ['a newer allow', policy(1, 'block'), policy(2, 'allow'), false],
+    ['an allow', null, policy(1, 'allow'), false]
+  ])('reports %s to this run', async (_label, cachedText, downloaded, blocks) => {
+    if (cachedText) {
+      seedCache(cachedText)
+    }
+    const onBlock = vi.fn()
+    const live = updater(respond(downloaded), { onBlock })
+    await live.start()
+    live.stop()
+
+    expect(onBlock).toHaveBeenCalledTimes(blocks ? 1 : 0)
   })
 
   it('never lets a lower or equal revision replace the cache', async () => {

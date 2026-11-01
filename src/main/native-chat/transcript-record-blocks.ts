@@ -2,7 +2,7 @@ import type {
   NativeChatBlock,
   NativeChatImageRefBlock,
   NativeChatToolResultBlock
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import { buildImageDataUri } from '../../shared/image-data-uri'
 import { isKnownRasterImageMimeType } from '../../shared/raster-image-preview-limits'
 import { asRecord, extractString } from '../ai-vault/session-scanner-values'

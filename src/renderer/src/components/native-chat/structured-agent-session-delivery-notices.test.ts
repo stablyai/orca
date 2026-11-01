@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { agentSessionFailureWords } from '../../../../shared/agent-session-failure-words'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../../shared/agent-session-journal-item-key'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/structured-agent-session-start-failure-row-key'
-import {
-  structuredAgentSessionDeliveryNotices,
-  structuredAgentSessionStartFailureFacts
-} from './structured-agent-session-delivery-notices'
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
+import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 const SENDING = 'Sending…'
@@ -153,7 +151,7 @@ describe('the line under each of the chat own messages', () => {
 
     it('reads only the start-failure rows', () => {
       expect(
-        structuredAgentSessionStartFailureFacts([
+        agentSessionVisibleFailureFacts([
           statusRow(startRowKey, startFailed),
           statusRow(agentJournalSubmissionKey('exit-row'), { kind: 'providerExited' })
         ])
@@ -161,7 +159,7 @@ describe('the line under each of the chat own messages', () => {
     })
 
     it('says only that it was not sent, and words a rejection no row states in full', () => {
-      const facts = structuredAgentSessionStartFailureFacts([statusRow(startRowKey, startFailed)])
+      const facts = agentSessionVisibleFailureFacts([statusRow(startRowKey, startFailed)])
       const recorded = (id: string) =>
         row(id, 'rejected', { reason: 'Written by the host.', rejection: startFailed })
       expect(

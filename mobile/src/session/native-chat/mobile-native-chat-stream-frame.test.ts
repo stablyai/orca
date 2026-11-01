@@ -3,7 +3,7 @@ import {
   createNativeChatMerger,
   replaceList
 } from '../../../../src/shared/native-chat/native-chat-merge'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import { applyMobileNativeChatStreamFrame } from './mobile-native-chat-stream-frame'
 
 function message(id: string): NativeChatMessage {

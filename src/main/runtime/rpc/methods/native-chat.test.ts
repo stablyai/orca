@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   NativeChatMessage,
   NativeChatSubagentEntry
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/vitest-host-ports-setup'
 import type { RpcContext } from '../core'
 

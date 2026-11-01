@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionTurnCompletionFeed } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { projectStructuredAgentSessionStatusState } from '../../../src/shared/structured-agent-session-projection'
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,

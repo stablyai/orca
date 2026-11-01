@@ -6,11 +6,13 @@ import {
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
-import { commandReceiptScope } from '../agent-session-journal/command-receipt-schema'
-import type { CommandReceipt } from '../agent-session-journal/command-receipt-schema'
+import {
+  commandReceiptScope,
+  type CommandReceipt
+} from '../agent-session-journal/command-receipt-schema'
 import type { ExistingCommandReceipt } from '../agent-session-journal/command-receipt-table'
 import { CommandReceiptExistsError } from '../agent-session-journal/command-receipt-transaction'
 import {

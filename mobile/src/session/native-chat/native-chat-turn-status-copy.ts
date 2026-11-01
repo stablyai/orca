@@ -2,7 +2,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import {
   describeNativeChatActiveTurnLabel,
   describeNativeChatTurnStatus
-} from '../../../../src/shared/native-chat-turn-status'
+} from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 
 export function formatMobileNativeChatDuration(seconds: number, t: Translate): string {
   const totalSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0

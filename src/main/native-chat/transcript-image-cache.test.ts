@@ -15,7 +15,7 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { supportsPosixFileModes } from '../daemon/daemon-private-file-modes'
 import {
   hydrateNativeChatImageRefs,

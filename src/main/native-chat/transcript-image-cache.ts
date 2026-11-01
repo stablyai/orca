@@ -16,7 +16,7 @@ import type {
   NativeChatBlock,
   NativeChatImageRefBlock,
   NativeChatMessage
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import { isKnownRasterImageMimeType } from '../../shared/raster-image-preview-limits'
 import {
   PRIVATE_FILE_MODE,

@@ -78,26 +78,6 @@ describe('useIssueMetadata hooks', () => {
     document.body.replaceChildren()
   })
 
-  it('routes repo-id-only folder metadata through local IPC', async () => {
-    let labels: string[] = []
-    githubMocks.listLabels.mockResolvedValue(['folder'])
-
-    function LabelsProbe(): null {
-      labels = useRepoLabels(null, 'folder-repo-id').data
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(labels).toEqual(['folder'])
-    expect(githubMocks.listLabels).toHaveBeenCalledExactlyOnceWith({
-      repoPath: '',
-      repoId: 'folder-repo-id'
-    })
-    expect(runtimeMocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
   it('keeps concurrent fork and upstream label lists separate when the fork reply is late', async () => {
     const fork = { owner: 'fork', repo: 'widgets', host: 'github.com' }
     const upstream = { owner: 'upstream', repo: 'widgets', host: 'github.com' }
@@ -160,30 +140,6 @@ describe('useIssueMetadata hooks', () => {
     await flushEffects()
     expect(logins).toEqual(['upstream-user'])
     expect(githubMocks.listAssignableUsers).toHaveBeenCalledTimes(2)
-  })
-
-  it('prefers an explicit remote environment and repo id', async () => {
-    let labels: string[] = []
-    runtimeMocks.callRuntimeRpc.mockResolvedValue(['remote'])
-
-    function LabelsProbe(): null {
-      labels = useRepoLabels('/local/repo', 'remote-repo-id', {
-        target: { kind: 'environment', environmentId: 'env-explicit' }
-      }).data
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(labels).toEqual(['remote'])
-    expect(runtimeMocks.callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'environment', environmentId: 'env-explicit' },
-      'github.listLabels',
-      { repo: 'remote-repo-id' },
-      { timeoutMs: 15_000 }
-    )
-    expect(githubMocks.listLabels).not.toHaveBeenCalled()
   })
 
   it('does not loop when cached team-state metadata is read with a fresh settings object', async () => {

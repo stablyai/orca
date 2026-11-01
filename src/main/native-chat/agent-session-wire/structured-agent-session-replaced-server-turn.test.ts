@@ -1,11 +1,11 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'

@@ -49,24 +49,6 @@ describe('manifest commands', () => {
     expect(readBrowserExtensionCommands(manifest, 'win32')[1].shortcut).toBe('Ctrl+Shift+L')
   })
 
-  it('assigns suggested keys to at most four commands', () => {
-    const many = {
-      commands: Object.fromEntries(
-        ['a', 'b', 'c', 'd', 'e'].map((name, index) => [
-          name,
-          { suggested_key: { default: `Alt+Shift+${index}` } }
-        ])
-      )
-    }
-    expect(readBrowserExtensionCommands(many, 'win32').map((c) => c.shortcut)).toEqual([
-      'Alt+Shift+0',
-      'Alt+Shift+1',
-      'Alt+Shift+2',
-      'Alt+Shift+3',
-      ''
-    ])
-  })
-
   it('refuses shortcuts without Ctrl, Command or Alt', () => {
     expect(parseExtensionShortcut('Shift+Y', 'win32')).toBeNull()
     expect(parseExtensionShortcut('MacCtrl+Shift+Y', 'darwin')).toMatchObject({

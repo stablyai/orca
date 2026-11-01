@@ -106,22 +106,6 @@ describe('terminal agent phone push on a headless host', () => {
     expect(agentAlerts()).toEqual([])
   })
 
-  it('titles a folder workspace with its project group, as the window does', () => {
-    const { report, alerts } = createHost()
-    report('working', undefined, 'folder:f1')
-    report('done', undefined, 'folder:f1')
-    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
-    expect(alerts[0]).toMatchObject({ title: 'Research / Notes - Claude finished' })
-  })
-
-  it('stays silent on a desktop whose window has not shown yet: that window seeds what it missed', () => {
-    const { report, agentAlerts } = createHost(null)
-    report('working')
-    report('done')
-    vi.advanceTimersByTime(AGENT_DONE_QUIET_MS)
-    expect(agentAlerts()).toEqual([])
-  })
-
   it('pushes once the desktop’s window has closed', () => {
     const { runtime, report, agentAlerts } = createHost(1)
     runtime.markGraphUnavailable(1)

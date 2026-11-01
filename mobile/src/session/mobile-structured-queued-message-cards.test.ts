@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session-wire'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
+import {
+  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
+  type AgentSessionQueuedMessage
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import { mobileQueuedMessageCards } from './mobile-structured-queued-message-cards'
 
 function returnedAs(fact: Parameters<typeof agentSessionFailureWords>[0]) {

@@ -1,4 +1,4 @@
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 
 export function retireRewoundJournalSubmission(state: JournalReducerState, itemId: string): void {

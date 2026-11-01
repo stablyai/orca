@@ -21,7 +21,6 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此範圍內沒有過往的代理程式工作階段。",
-      "loadFailed": "無法載入",
       "missingResumeId": "此工作階段缺少恢復識別碼。",
       "noSearchResults": "沒有符合搜尋條件的工作階段。",
       "noSessions": "沒有代理程式工作階段",
@@ -186,7 +185,11 @@
       "cancelEditing": "取消編輯",
       "placeholder": "隨心輸入，@ 引用檔案，/ 使用命令",
       "saveEditedMessage": "儲存編輯後的訊息",
-      "sendMessage": "傳送訊息"
+      "sendMessage": "傳送訊息",
+      "sendQueue": "加入佇列",
+      "sendSteer": "引導",
+      "sendQueueHint": "在目前回合結束後執行",
+      "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
@@ -650,7 +653,6 @@
       "loadingDiff": "正在載入差異…",
       "loadingReview": "正在載入審查…",
       "noReviewableChanges": "沒有可審查的變更",
-      "retryLabel": "重新載入審查內容",
       "reviewUnavailable": "無法使用審查功能",
       "selectFile": "請選取要審查的檔案。",
       "tooLargeMessage": "此差異過大，無法在手機上預覽。",
@@ -844,10 +846,8 @@
       "selectRunTarget": "選擇執行目標"
     },
     "prSidebar": {
-      "loadFailed": "發生錯誤。",
       "loading": "正在載入 PR…",
-      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。",
-      "retryLoading": "重新嘗試載入 PR"
+      "notPermitted": "無存取權限：尚未連結 GitHub 帳戶。"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主機清單",
@@ -996,6 +996,16 @@
       "title": "發生錯誤",
       "tryAgain": "再試一次",
       "home": "首頁"
+    },
+    "svgPreview": {
+      "drawFailed": "無法繪製此 SVG",
+      "label": "{{title}} 圖形",
+      "previewDrawing": "預覽圖形",
+      "viewSource": "檢視 SVG 原始碼"
+    },
+    "mermaidDiagram": {
+      "expand": "展開圖表",
+      "label": "Mermaid 圖表"
     }
   },
   "connection": {
@@ -3061,7 +3071,6 @@
       "waitingForDesktop": "等待電腦…"
     },
     "panel": {
-      "loadFailedTitle": "無法載入",
       "unavailableTitle": "無法使用原始碼控制"
     },
     "prChip": {
@@ -3889,8 +3898,7 @@
       "noFilterMatches": "沒有符合篩選條件的工作區",
       "noMatches": "找不到相符的工作區",
       "reopen": "重新開啟以更新",
-      "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。",
-      "retrying": "worktree.ps 執行失敗（{{error}}），正在自動重試"
+      "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
     "workspaceListSections": {
       "all": "全部",

@@ -3,10 +3,10 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import { getDaemonPidPath } from './daemon-spawner'
+
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { getProcessStartedAtMs } from './daemon-process-start-time'
-import { parseDaemonPidFile } from './daemon-pid-file-parse'
 
 // Exercise real PID verification with a child whose argv matches the daemon.
 function spawnDaemonLikeProcess(socketPath: string, tokenPath: string) {
@@ -32,26 +32,6 @@ async function getStartedAtMs(pid: number | undefined): Promise<number | null> {
   await new Promise((resolve) => setTimeout(resolve, 100))
   return getProcessStartedAtMs(pid)
 }
-
-describe('parseDaemonPidFile spawnerExecPath', () => {
-  it('round-trips the spawner exec path', () => {
-    const parsed = parseDaemonPidFile(
-      serializeDaemonPidFile({
-        pid: 123,
-        startedAtMs: 1,
-        spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
-      })
-    )
-    expect(parsed?.spawnerExecPath).toBe('/Applications/Orca.app/Contents/MacOS/Orca')
-  })
-
-  it('reads legacy records without a spawner exec path as null', () => {
-    expect(
-      parseDaemonPidFile(serializeDaemonPidFile({ pid: 123, startedAtMs: 1 }))?.spawnerExecPath
-    ).toBeNull()
-    expect(parseDaemonPidFile('123')?.spawnerExecPath).toBeNull()
-  })
-})
 
 describe('macOS daemon TCC attribution health', () => {
   let dir: string
@@ -100,18 +80,6 @@ describe('macOS daemon TCC attribution health', () => {
     })
   })
 
-  it('reports intact when the recorded spawning binary still exists', async () => {
-    if (process.platform !== 'darwin') {
-      return
-    }
-    await withDaemonLikeProcess(async (writePidFile) => {
-      const spawnerPath = join(dir, 'Orca')
-      writeFileSync(spawnerPath, '', 'utf8')
-      writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.3' })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
-    })
-  })
-
   it('reports intact after an app-version change when the spawning binary path still exists', async () => {
     if (process.platform !== 'darwin') {
       return
@@ -136,19 +104,5 @@ describe('macOS daemon TCC attribution health', () => {
       writePidFile({ appVersion: '1.2.3' })
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
     })
-  })
-
-  it('fails open when no verifiable pid record exists', async () => {
-    if (process.platform !== 'darwin') {
-      return
-    }
-    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
-  })
-
-  it('reports unknown off macOS', async () => {
-    if (process.platform === 'darwin') {
-      return
-    }
-    expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
   })
 })

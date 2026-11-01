@@ -54,6 +54,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
     scrcpyVideoRegistry.stop(serial)
     throw error
   }
+  scrcpyVideoRegistry.attachControl(serial, session)
 
   let closed = false
   return {

@@ -1,8 +1,8 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
