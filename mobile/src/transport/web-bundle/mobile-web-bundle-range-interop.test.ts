@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { gunzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { encodeMobileWebBundleRange } from '../../../src/main/runtime/rpc/methods/mobile-web-bundle-range-encoding'
-import { MOBILE_WEB_BUNDLE_RANGE_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import { encodeMobileWebBundleRange } from '../../../../src/main/runtime/rpc/methods/mobile-web-bundle-range-encoding'
+import { MOBILE_WEB_BUNDLE_RANGE_BYTES } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 
 /** Script-like and a full range long, so the host's level-6 deflate emits dynamic Huffman blocks. */
 function scriptRange(): Buffer {

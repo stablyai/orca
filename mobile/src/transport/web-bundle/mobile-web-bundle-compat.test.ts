@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import {
   evaluateMobileWebBundleCompat,
   type MobileWebBundleCompatManifest,

@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
-import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
+import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   fetchMobileWebBundle,
   type MobileWebBundleFetchProgress,
@@ -8,8 +8,8 @@ import {
 } from './mobile-web-bundle-fetch'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { readMobileWebBundleErrorCode } from './mobile-web-bundle-operations'
-import type { RpcClient } from './rpc-client'
-import type { RpcResponse } from './types'
+import type { RpcClient } from '../rpc-client'
+import type { RpcResponse } from '../types'
 
 // Hashed before it resolves, as the native module's synchronous digest is.
 vi.mock('expo-crypto', async () => {

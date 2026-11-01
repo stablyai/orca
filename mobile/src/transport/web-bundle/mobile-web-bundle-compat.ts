@@ -1,5 +1,5 @@
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
-import type { HostStatusReply } from './host-status-reply-schema'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+import type { HostStatusReply } from '../host-status-reply-schema'
 
 // Keep this shell’s page floor explicit; older pages require updating the desktop.
 export const MOBILE_WEB_PAGE_VERSION_FLOOR = 1

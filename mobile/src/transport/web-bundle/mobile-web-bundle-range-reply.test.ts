@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runRpcOperation } from './rpc-operation'
+import { runRpcOperation } from '../rpc-operation'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+} from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES
-} from '../../../src/shared/mobile-web-bundle/manifest-contract'
+} from '../../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   mobileWebBundleManifestRead,
   mobileWebBundleRangeRead

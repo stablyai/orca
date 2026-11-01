@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_FETCH_REFUSALS,
   MobileWebBundleFetchError
-} from '../transport/mobile-web-bundle-fetch-refusal'
+} from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'

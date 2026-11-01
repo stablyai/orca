@@ -3,11 +3,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import { sealMobileE2EEV2Frame } from '../../../src/shared/mobile-e2ee-v2-framing'
-import { RpcClientRequestTracker } from './rpc-client-request-tracker'
-import type { RpcClient } from './rpc-client'
-import type { RpcResponse } from './types'
+import { computeMobileWebBundleId } from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+import { sealMobileE2EEV2Frame } from '../../../../src/shared/mobile-e2ee-v2-framing'
+import { RpcClientRequestTracker } from '../rpc-client-request-tracker'
+import type { RpcClient } from '../rpc-client'
+import type { RpcResponse } from '../types'
 import { fetchMobileWebBundle } from './mobile-web-bundle-fetch'
 
 vi.mock('expo-crypto', async () => {
@@ -22,8 +22,8 @@ vi.mock('expo-crypto', async () => {
 import {
   installMobileWebBundleAppPath,
   mobileWebBundleDispatcher
-} from '../../../src/main/runtime/rpc/methods/mobile-web-bundle.test-fixture'
-import { resetBundledMobileWebBundleCacheForTests } from '../../../src/main/runtime/bundled-mobile-web-bundle'
+} from '../../../../src/main/runtime/rpc/methods/mobile-web-bundle.test-fixture'
+import { resetBundledMobileWebBundleCacheForTests } from '../../../../src/main/runtime/bundled-mobile-web-bundle'
 
 let scratch: string | undefined
 

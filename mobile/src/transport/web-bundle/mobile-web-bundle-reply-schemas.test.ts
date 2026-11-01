@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
   MobileWebBundleRouteSchema,
   MOBILE_WEB_BUNDLE_MAX_ASSETS,
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
-} from '../../../src/shared/mobile-web-bundle/manifest-contract'
-import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+} from '../../../../src/shared/mobile-web-bundle/manifest-contract'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import { evaluateMobileWebBundleCompat } from './mobile-web-bundle-compat'
 import {
   isMobileWebBundleTransportFailure,
@@ -15,15 +15,15 @@ import {
   mobileWebBundleManifestRead,
   readMobileWebBundleErrorCode
 } from './mobile-web-bundle-operations'
-import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
 import {
   MobileWebBundleManifestReadSchema,
   MobileWebBundleManifestReplySchema
 } from './mobile-web-bundle-reply-schemas'
-import type { RpcReadResult } from './rpc-operation-contract'
-import { runRpcOperation } from './rpc-operation'
-import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
-import type { RpcResponse } from './types'
+import type { RpcReadResult } from '../rpc-operation-contract'
+import { runRpcOperation } from '../rpc-operation'
+import { RpcIncompatibleReplyError } from '../rpc-incompatible-reply-error'
+import type { RpcResponse } from '../types'
 
 const ASSET_SHA = 'b'.repeat(64)
 const MAX_DATA_BASE64_LENGTH = Math.ceil(MOBILE_WEB_BUNDLE_CHUNK_BYTES / 3) * 4 + 8

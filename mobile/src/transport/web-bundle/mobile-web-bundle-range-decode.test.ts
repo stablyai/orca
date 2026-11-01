@@ -1,6 +1,6 @@
 import { gzipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import gunzipVectors from '../../modules/orca-gzip-utf8-codec/tests/gunzip-vectors.json'
+import gunzipVectors from '../../../modules/orca-gzip-utf8-codec/tests/gunzip-vectors.json'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 

@@ -3,7 +3,7 @@ import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+} from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
   MobileWebBundleAssetPathSchema,
@@ -13,7 +13,7 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
   MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
   SHA256_PATTERN
-} from '../../../src/shared/mobile-web-bundle/manifest-contract'
+} from '../../../../src/shared/mobile-web-bundle/manifest-contract'
 
 // Hoist reusable readers and accept added host fields; strict writer contracts must not become released-client compatibility gates.
 

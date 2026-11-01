@@ -1,5 +1,5 @@
 import { gunzipSync } from 'fflate'
-import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
+import { pairedE2EENativeCodec } from '../paired-e2ee-native-codec'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 
 // Inflate into a fixed buffer one byte past the slot so gzip bombs stay memory-bounded and length checks can reject excess.

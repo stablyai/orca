@@ -1,11 +1,11 @@
-import { decodeBase64Bytes } from './base64-byte-codec'
-import { pairedE2EENativeCodec } from './paired-e2ee-native-codec'
+import { decodeBase64Bytes } from '../base64-byte-codec'
+import { pairedE2EENativeCodec } from '../paired-e2ee-native-codec'
 import { mobileWebBundleChunkRead, mobileWebBundleRangeRead } from './mobile-web-bundle-operations'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 import type { MobileWebBundleManifestReply } from './mobile-web-bundle-reply-schemas'
-import type { RpcClient } from './rpc-client'
-import { runRpcOperation } from './rpc-operation'
-import type { SendRequestOptions } from './unvalidated-rpc-request-port'
+import type { RpcClient } from '../rpc-client'
+import { runRpcOperation } from '../rpc-operation'
+import type { SendRequestOptions } from '../unvalidated-rpc-request-port'
 
 export type MobileWebBundleWindowHeader = {
   readonly buildId: string

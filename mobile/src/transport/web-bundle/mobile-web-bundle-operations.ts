@@ -4,16 +4,16 @@ import {
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
   type MobileWebBundleErrorCode
-} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+} from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   MobileWebBundleChunkReplySchema,
   MobileWebBundleManifestReplySchema,
   MobileWebBundleRangeReplySchema
 } from './mobile-web-bundle-reply-schemas'
-import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
-import { defineRpcOperation } from './rpc-operation'
-import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
-import { rpcResultVariant } from './rpc-operation-result-reader'
+import { isRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
+import { defineRpcOperation } from '../rpc-operation'
+import { isLogicalClientCutoverError } from '../stable-logical-rpc-client'
+import { rpcResultVariant } from '../rpc-operation-result-reader'
 
 // Require whole results and settle immediately; salvaging would hide corruption, and deferred refusals would leave sibling reads running.
 
