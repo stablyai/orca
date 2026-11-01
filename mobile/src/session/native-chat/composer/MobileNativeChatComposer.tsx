@@ -376,7 +376,7 @@ export function MobileNativeChatComposer({
                 onPress={editSession.cancel}
                 hitSlop={COMPOSER_CONTROL_HIT_SLOP}
               >
-                <Text style={styles.textButtonLabel}>{t('common.cancel', 'Cancel')}</Text>
+                <Text style={inputStyles.textButtonLabel}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
             ) : null}
             <MobileNativeChatControlSwap
