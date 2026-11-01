@@ -201,10 +201,10 @@ export type StructuredAgentSessionHostDeps = {
   modelCatalog?: AgentModelCatalogService
   /** The account home a start of this chat would launch under now, read without side effects;
    *  null for an agent whose chats keep the account they were created on. The default read may
-   *  throw while that account's folder is missing; `identity` names it regardless. */
+   *  throw while that account's folder is missing; `identity` names it regardless; `launch` prepares it. */
   launchAccountHome?: (
     record: AgentSessionRecord,
-    purpose?: 'read' | 'identity'
+    purpose?: 'read' | 'identity' | 'launch'
   ) => Promise<AgentSessionAccountHome | null>
   parentAccountWork?: (
     record: AgentSessionRecord,
