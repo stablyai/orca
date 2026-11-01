@@ -242,4 +242,26 @@ describe('server rows as snapshots', () => {
       { hostId: host.hostId, afterSnapshotId: 's2', acceptRowDelta: true }
     ])
   })
+
+  // A slow read on a replaced client must not take the snapshot back from the new one.
+  it('keeps each client its own snapshot across a client switch and back', async () => {
+    const a = serverClient(
+      { worktrees: [row('a')], snapshotId: 's1' },
+      { unchanged: true, snapshotId: 's1' }
+    )
+    const b = serverClient({ worktrees: [row('b')], snapshotId: 's2' })
+    const snapshots = new ServerRowSnapshots(true)
+
+    await fetchServerWorkspaces(a.client, snapshots)
+    await fetchServerWorkspaces(b.client, snapshots)
+    const back = await fetchServerWorkspaces(a.client, snapshots)
+
+    expect(b.sent).toEqual([{ hostId: host.hostId, afterSnapshotId: null, acceptRowDelta: true }])
+    expect(a.sent.at(-1)).toEqual({
+      hostId: host.hostId,
+      afterSnapshotId: 's1',
+      acceptRowDelta: true
+    })
+    expect(back?.rows).toEqual([[row('a')]])
+  })
 })

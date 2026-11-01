@@ -136,7 +136,7 @@ export class WorktreeCatalogSnapshotClient {
 
   /**
    * Fetches and admits one catalog, null when refused or not rebuildable after one full re-read.
-   * One read per client and host at a time: concurrent reads from one base would discard each other's
+   * Callers keep one instance per client; a switch resets the snapshot. One read per client and host at a time: concurrent reads from one base would discard each other's
    * delta. A read asked mid-flight joins one trailing read, so it never settles with rows older than its ask.
    */
   read(client: RpcClient, hostId: string): Promise<Worktree[] | null> {
@@ -176,8 +176,9 @@ export class WorktreeCatalogSnapshotClient {
         return null
       }
       const rows = this.admit(fetched.pending)
-      // Only a delta that failed to rebuild is worth one full re-read.
-      if (rows || fetched.pending.admission.kind !== 'delta') {
+      // Only a delta that failed to rebuild for the current owner is worth one full re-read.
+      const owner = this.client === client && this.hostId === hostId
+      if (rows || !owner || fetched.pending.admission.kind !== 'delta') {
         return rows
       }
     }

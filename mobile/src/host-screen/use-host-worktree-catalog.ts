@@ -65,14 +65,15 @@ export function useHostWorktreeCatalog(args: {
     setWorktrees,
     setWorktreesLoaded,
     worktreeCatalogRef,
-    worktrees
+    worktrees,
+    worktreesLoaded
   } = state
   // Keyed by client: a fetch still running on a replaced client must not skip the new one's.
   const serverFetchInFlightRef = useRef<RpcClient | null>(null)
   const firstPageRef = useRef<Worktree[] | null>(null)
   const serverRowSnapshotsRef = useRef<ServerRowSnapshots | null>(null)
-  // A first page only helps an empty screen whose full read is not already failing.
-  const firstPageUseful = worktrees.length === 0 && catalogError === null
+  // A first page only helps a never-loaded empty screen whose full read is not already failing.
+  const firstPageUseful = !worktreesLoaded && worktrees.length === 0 && catalogError === null
   const firstPageUsefulRef = useRef(firstPageUseful)
   useEffect(() => {
     firstPageUsefulRef.current = firstPageUseful

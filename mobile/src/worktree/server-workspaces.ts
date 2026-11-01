@@ -87,25 +87,38 @@ function serverCatalogRequest(hostId: ExecutionHostId, deltas: boolean): Worktre
 
 /** Per-server catalog snapshots; row deltas only when the desktop advertises them. */
 export class ServerRowSnapshots {
-  private readonly byHost = new Map<ExecutionHostId, WorktreeCatalogSnapshotClient>()
+  // Per client, so a slow read on a replaced client can never take a snapshot back from the new one.
+  private readonly byClient = new WeakMap<
+    RpcClient,
+    Map<ExecutionHostId, WorktreeCatalogSnapshotClient>
+  >()
 
   constructor(readonly deltas: boolean) {}
 
   async read(client: RpcClient, hosts: readonly MobileRelayHost[]): Promise<(Worktree[] | null)[]> {
+    let byHost = this.byClient.get(client)
+    if (!byHost) {
+      byHost = new Map()
+      this.byClient.set(client, byHost)
+    }
     const listed = new Set<ExecutionHostId>(hosts.map((host) => host.hostId))
-    for (const hostId of this.byHost.keys()) {
+    for (const hostId of byHost.keys()) {
       if (!listed.has(hostId)) {
-        this.byHost.delete(hostId)
+        byHost.delete(hostId)
       }
     }
-    return Promise.all(hosts.map((host) => this.readHost(client, host.hostId)))
+    return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
   }
 
-  private async readHost(client: RpcClient, hostId: ExecutionHostId): Promise<Worktree[] | null> {
-    let snapshots = this.byHost.get(hostId)
+  private async readHost(
+    client: RpcClient,
+    byHost: Map<ExecutionHostId, WorktreeCatalogSnapshotClient>,
+    hostId: ExecutionHostId
+  ): Promise<Worktree[] | null> {
+    let snapshots = byHost.get(hostId)
     if (!snapshots) {
       snapshots = new WorktreeCatalogSnapshotClient(serverCatalogRequest(hostId, this.deltas))
-      this.byHost.set(hostId, snapshots)
+      byHost.set(hostId, snapshots)
     }
     try {
       const rows = await snapshots.read(client, hostId)
