@@ -135,8 +135,24 @@ function groupRow(groupId: string, members: readonly NativeChatMessage[]): Nativ
   return row
 }
 
+/** A later start or completion for the same child replaces the earlier row. */
+function latestSubagentBlocks(
+  blocks: readonly NativeChatSubagentBlock[]
+): NativeChatSubagentBlock[] {
+  const latest = new Map<string, NativeChatSubagentBlock>()
+  const order: string[] = []
+  for (const block of blocks) {
+    if (!latest.has(block.id)) {
+      order.push(block.id)
+    }
+    latest.set(block.id, block)
+  }
+  return order.map((id) => latest.get(id)!)
+}
+
 /** Disambiguate duplicate provider labels with ordinals that avoid existing names, including provider-authored Audit 2. */
-function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
+function labelledEntries(incoming: readonly NativeChatSubagentBlock[]): NativeChatSubagentEntry[] {
+  const blocks = latestSubagentBlocks(incoming)
   const taken = new Set<string>()
   const repeated = new Set<string>()
   for (const block of blocks) {

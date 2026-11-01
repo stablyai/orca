@@ -1,5 +1,6 @@
 import {
   isBackgroundTaskBlock,
+  isSubagentBlock,
   isSubagentGroupBlock,
   isToolCallBlock,
   isToolResultBlock,
@@ -43,6 +44,14 @@ function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {
 /** Mid-turn roster chrome must not end the tool run that later messages join. */
 function isSubagentRosterMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isSubagentGroupBlock)
+}
+
+/** A child start, completion, or roster sits between a spawn and its output. It is not the tool run. */
+function isSubagentActivityMessage(message: NativeChatMessage): boolean {
+  return (
+    message.blocks.length > 0 &&
+    message.blocks.every((block) => isSubagentBlock(block) || isSubagentGroupBlock(block))
+  )
 }
 
 function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
@@ -126,6 +135,9 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
       continue
     }
     output.push(message)
+    if (isSubagentActivityMessage(message)) {
+      continue
+    }
     if (message.role === 'assistant') {
       mutableAssistantIndex = output.length - 1
       clonedAssistantIndex = -1
