@@ -8,7 +8,7 @@ import {
   editPersistedTestAgentSessionStore
 } from './agent-session-record-store-test-harness'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './rpc/methods/structured-agent-session-status-stream'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
@@ -26,7 +26,7 @@ import {
   replaceSaved,
   savedIds
 } from './structured-agent-session-tab-authority.test-support'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { chatTabCommandsSettled } from './session-layout-apply.test-fixture'
 import * as journalFactory from '../native-chat/agent-session-journal/journal-store-factory'
 import { discardStructuredWorkerSession } from './rpc/methods/orchestration-structured-worker-session'

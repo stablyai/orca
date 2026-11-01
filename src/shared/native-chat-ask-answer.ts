@@ -20,13 +20,18 @@ function answerLabels(question: AskQuestion, sel: AskAnswerSelection | undefined
   return other ? [...labels, other] : labels
 }
 
+/** The quote a message reply opens each answered question with. */
+export function askAnswerQuote(question: AskQuestion): string {
+  return `> ${question.question.replaceAll(/[\r\n]+/g, ' ')}\n\n`
+}
+
 /** One answer line per question, including unanswered empty lines. Message replies quote answered questions as > question\n\nanswer, matching Codex clients. */
 export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): string {
   if (prompt.replyAsMessage) {
     return prompt.questions
       .flatMap((q, i) => {
         const answer = answerLabels(q, selections[i]).join(', ')
-        return answer ? [`> ${q.question.replaceAll(/[\r\n]+/g, ' ')}\n\n${answer}`] : []
+        return answer ? [`${askAnswerQuote(q)}${answer}`] : []
       })
       .join('\n\n')
   }

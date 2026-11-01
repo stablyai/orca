@@ -3,14 +3,17 @@
 import {
   readAgentSessionOrcaStop,
   type AgentSessionOrcaStopCause
-} from '../agent-session-orca-stop'
+} from '../agent-session/lifecycle/agent-session-orca-stop'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../agent-session/journal/agent-session-journal-types'
-import { STALE_SESSION_ROW_PREFIX } from '../agent-session-stop-row-identity'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from '../agent-session-turn-record'
+import { STALE_SESSION_ROW_PREFIX } from '../agent-session/lifecycle/agent-session-stop-row-identity'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from '../agent-session/lifecycle/agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from '../agent-turn-outcome'
 import { structuredAgentSessionCommandTurnItemIds } from '../agent-session/structured-agent-session-command-entry'
 import {

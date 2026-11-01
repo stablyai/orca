@@ -3,13 +3,18 @@ import {
   formatAskAnswer,
   type AskAnswerSelection
 } from '../../../src/shared/native-chat-ask-answer'
+import { nativeChatAnswerSendIntent } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { AskPrompt } from '../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { QueuedMessageCard } from '../../../src/shared/structured-agent-session-queued-cards'
 import type { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 export type MobileStructuredAskSession = Pick<
   ReturnType<typeof useMobileStructuredAgentSession>,
-  'permission' | 'question' | 'sendWithOutcome'
->
+  'permission' | 'question' | 'sendWithOutcome' | 'sendFollowUp'
+> & {
+  /** Cards waiting in the chat's queue; one quoting a question holds it as answered. */
+  queued?: { cards: readonly Pick<QueuedMessageCard, 'text'>[] }
+}
 
 // Card answers reach the current turn without touching the composer draft.
 export function useMobileStructuredAsyncQuestion(args: {
@@ -26,6 +31,7 @@ export function useMobileStructuredAsyncQuestion(args: {
     structured !== null && !structured.permission && !structured.question && !transcriptLoading
   const ask = readable ? pendingAsk : null
   const sendWithOutcome = structured?.sendWithOutcome
+  const sendFollowUp = structured?.sendFollowUp
   const answer = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]) =>
       sendWithOutcome !== undefined &&
@@ -35,11 +41,9 @@ export function useMobileStructuredAsyncQuestion(args: {
         undefined,
         undefined,
         undefined,
-        {
-          delivery: 'immediate'
-        }
+        nativeChatAnswerSendIntent(sendFollowUp)
       )) !== 'rejected',
-    [sendWithOutcome]
+    [sendWithOutcome, sendFollowUp]
   )
   return { ask, answer: structured ? answer : null }
 }

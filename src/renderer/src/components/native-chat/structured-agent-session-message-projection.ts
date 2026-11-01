@@ -2,8 +2,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
-import { projectStructuredAgentSessionMessages as projectMessages } from '../../../../shared/structured-agent-session-message-projection'
+import {
+  type StructuredAgentSessionOptimisticMessage,
+  projectStructuredAgentSessionMessages as projectMessages
+} from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { createStructuredQuestionProjection } from '../../../../shared/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../shared/structured-agent-start-projection'
 

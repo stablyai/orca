@@ -1,4 +1,4 @@
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 // Journal-open refusal leaves the file intact and other runtime work available.

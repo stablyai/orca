@@ -51,7 +51,7 @@ import {
   activateAiVaultStructuredSession,
   openDesktopStructuredSession
 } from './activate-ai-vault-structured-session'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 const TARGET = { kind: 'environment', environmentId: 'remote-2' } as const
 function tab(id: string, host: 'local' | 'runtime:remote-2'): Tab {

@@ -163,10 +163,17 @@ const profile = vi.hoisted(() => ({
   repos: [{ id: 'r1', path: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\app', connectionId: null }]
 }))
 
+// The user's WSL hosts setting: moves are new work, so they need it on.
+const setting = { on: true }
+
 async function register(): Promise<void> {
   const { registerWslMoveOrchestrator } = await import('./wsl-move-orchestrator-wiring')
-  const store = { getRepos: () => profile.repos, getFolderWorkspaces: () => [] }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The wiring reads only the projects of the store, and the driver is mocked.
+  const store = {
+    getRepos: () => profile.repos,
+    getFolderWorkspaces: () => [],
+    getSettings: () => ({ experimentalWslHosts: setting.on })
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The wiring reads only the projects and the WSL hosts setting of the store, and the driver is mocked.
   registerWslMoveOrchestrator(store as never, () => ({ now: () => new Date(0) }) as never)
 }
 
@@ -364,6 +371,54 @@ describe('WSL move orchestrator wiring', () => {
       expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
     } finally {
       stage.autoMoves = true
+    }
+  })
+
+  // Setting off is like serve-only: moved projects keep serving, but nothing moves or is added.
+  it('moves nothing and adds no host with the WSL hosts setting off', async () => {
+    setting.on = false
+    try {
+      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+      await register()
+      await handlers.get('wslMoveOrchestrator:projectOpened')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        'Ubuntu'
+      )
+      const retry = await handlers.get('wslMoveOrchestrator:userAction')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        { distro: 'Ubuntu', action: 'retry' }
+      )
+      await answerWindow()
+      expect(retry).toBeNull()
+      expect(host.added).toEqual([])
+      expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+    } finally {
+      setting.on = true
+    }
+  })
+
+  // Like a live block: a move already under way stays listed and can still be settled.
+  it('keeps listing a recorded move and accepts Not now with the setting off', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '1')
+    await register()
+    for (const listener of releases.listeners) {
+      listener('Ubuntu')
+    }
+    setting.on = false
+    try {
+      expect(await handlers.get('wslMoveOrchestrator:list')?.({})).toEqual([
+        expect.objectContaining({ distro: 'Ubuntu' })
+      ])
+      const notNow = await handlers.get('wslMoveOrchestrator:userAction')?.(
+        { sender: { id: MAIN_WINDOW_ID } },
+        { distro: 'Ubuntu', action: 'not-now' }
+      )
+      expect(notNow).toEqual({ record: expect.objectContaining({ distro: 'Ubuntu' }) })
+      await answerWindow()
+      expect(host.added).toEqual([])
+      expect(driver.moveProjectsToWslHost).not.toHaveBeenCalled()
+    } finally {
+      setting.on = true
     }
   })
 

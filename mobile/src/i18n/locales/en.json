@@ -1331,6 +1331,15 @@
     "mermaidDiagram": {
       "label": "Mermaid diagram",
       "expand": "Expand diagram"
+    },
+    "worktreeAgentList": {
+      "hideChildAgents_one": "Hide {{count}} child agent",
+      "hideChildAgents_other": "Hide {{count}} child agents",
+      "showChildAgents_one": "Show {{count}} child agent",
+      "showChildAgents_other": "Show {{count}} child agents",
+      "hideIdleChildren": "Hide {{count}} idle child agents",
+      "showIdleChildren": "Show {{count}} idle child agents",
+      "idleChildCount": "{{count}} idle"
     }
   },
   "pullRequest": {

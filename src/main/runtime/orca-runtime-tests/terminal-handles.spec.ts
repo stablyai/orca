@@ -396,7 +396,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 
@@ -577,7 +578,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 

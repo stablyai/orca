@@ -5,7 +5,7 @@ import { agentJournalSubmissionKey } from '../agent-session/journal/agent-sessio
 import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import { projectNativeChatTranscript } from './transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from './native-chat-types'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
 
 let sequence = 0
 

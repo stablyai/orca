@@ -16,7 +16,7 @@ import {
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
 
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 const statusFrames = vi.hoisted(() => ({ emit: (_event: AgentSessionStatusEvent): void => {} }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

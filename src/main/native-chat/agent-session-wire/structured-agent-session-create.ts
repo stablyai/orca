@@ -1,7 +1,7 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { isAgentSessionCreateAdmissionRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/agent-session/structured-agent-session-create'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   refuse,
@@ -10,7 +10,7 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { journalOpenRefusalError } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'

@@ -3,7 +3,7 @@ import type { AgentJournalRenderItem } from './agent-session/journal/agent-sessi
 import {
   projectStructuredAgentSessionStatusState,
   projectStructuredAgentSessionStatusSummary
-} from './structured-agent-session-projection'
+} from './agent-session/view/structured-agent-session-projection'
 
 function item(
   itemId: string,

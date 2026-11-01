@@ -113,14 +113,14 @@ vi.mock('electron', () => ({
 import { setAppEnvironment } from '../../shared/app-environment'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  type AgentSessionAccountHome,
   type AgentSessionRecord
-} from '../../shared/agent-session-record'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+} from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,

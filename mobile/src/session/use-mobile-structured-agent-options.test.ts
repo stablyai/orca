@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionOptionResult
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'

@@ -6,7 +6,7 @@ import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/empty-workspace
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
 import { toast } from 'sonner'
 import { structuredChatUnavailableText } from '@/lib/structured-agent-session-launch-failure'
-import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/structured-agent-session-launch-permission-notice'
 import { useSyncExternalStore } from 'react'

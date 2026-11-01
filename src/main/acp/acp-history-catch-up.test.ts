@@ -24,7 +24,10 @@ import {
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
-import { agentJournalTurnBody, readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import {
+  agentJournalTurnBody,
+  readAgentJournalTurn
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { acpNamedTextKey } from './acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../native-chat/agent-session-timeline/provider-timeline-history'
 import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/structured-agent-session-current-work'

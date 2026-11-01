@@ -18,13 +18,13 @@ import { structuredSendResultFixture } from './structured-agent-send-result.test
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
-import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-runtime-capabilities'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session-create-capabilities'
+} from '../../../src/shared/agent-session/agent-session-create-capabilities'
 import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport

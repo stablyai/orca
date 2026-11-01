@@ -1,6 +1,6 @@
 import { expect, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 const inputWorkSamples = new Map<string, Record<string, number>>()

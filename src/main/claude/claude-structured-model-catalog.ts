@@ -1,7 +1,7 @@
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../shared/agent-session/options/agent-session-option-catalog-types'
 

@@ -9,7 +9,7 @@ import { completeNativeChatStructuredUserAction } from './native-chat-structured
 import {
   isStructuredAgentSessionHostCommand,
   structuredAgentSessionCommandChangesConversation
-} from '../../../../shared/structured-agent-session-composer'
+} from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'

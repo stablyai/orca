@@ -8,14 +8,14 @@ import {
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionRefusalDetailsByCode } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type {
   AgentSessionOperationOutcome,
   AgentSessionOperationRow
-} from '../../../shared/agent-session-operation-ledger'
-import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionLeaseOwnerVerdict } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAcquisitionExitProof } from '../../runtime/agent-session-acquisition-failure-settlement'
 import {
   AgentSessionAcquisitionExitProvenError,

@@ -10,7 +10,7 @@ import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-typ
 import type { Repo } from '../../../shared/repo-types'
 import { resetWindowsTerminalCapabilitiesForTests } from '@/lib/windows-terminal-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../shared/agent-session/agent-session-runtime-capabilities'
 
 const testState = vi.hoisted(() => ({
   settings: null as GlobalSettings | null,

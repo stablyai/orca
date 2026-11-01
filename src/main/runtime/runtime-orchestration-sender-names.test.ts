@@ -2,11 +2,11 @@ import { agentSessionConversationView } from '../../shared/agent-session-convers
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 import { OrchestrationDb } from './orchestration/db'
@@ -14,7 +14,7 @@ import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixtur
 import { reconcileLifecycleMessage } from './orchestration/lifecycle-reconciliation'
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 import { structuredMailSource } from './orchestration/structured-mail-source'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { MessageRow } from './orchestration/types'
 import { parseStartOptions } from './rpc/methods/orchestration/worker/worker-earlier-work'
 

@@ -1,5 +1,5 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from './structured-composer-command-error-text'
 import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
 import type {
