@@ -1,7 +1,7 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
 import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
-import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { stripNoiseMessages } from '../../../src/shared/native-chat/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../src/shared/native-chat/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {

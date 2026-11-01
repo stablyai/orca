@@ -5,12 +5,13 @@ import {
   getRepoRegistrationHostIds
 } from '../../../../shared/repo-host-identity'
 import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import { useAppStore } from '@/store'
 import {
   getRepoWorkspaceCreationTargetHint,
   type WorkspaceCreationTargetHint
 } from '@/lib/project-host-workspace-target'
 
-/** A host-section header's create target, when its repo id alone can't pick the host. */
+/** A single-host project header's create target, when its repo id alone can't pick the host. */
 export function getHeaderCreateWorkspaceTarget(
   repo: Repo,
   repos: readonly Repo[],
@@ -27,4 +28,14 @@ export function getHeaderCreateWorkspaceTarget(
   )
     ? { initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, projectHostSetups) }
     : {}
+}
+
+/** A project header's Create: the composer seeded with its repo, pinned to its host when its rows all sit there. */
+export function openHeaderCreateComposer(repo: Repo, { pinHost }: { pinHost: boolean }): void {
+  const { repos, projectHostSetups, openModal } = useAppStore.getState()
+  openModal('new-workspace-composer', {
+    initialRepoId: repo.id,
+    ...(pinHost ? getHeaderCreateWorkspaceTarget(repo, repos, projectHostSetups) : {}),
+    telemetrySource: 'sidebar'
+  })
 }

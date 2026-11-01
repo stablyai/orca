@@ -7664,7 +7664,9 @@
           "complete": "worktree.ps#1",
           "params": {
             "limit": 10000,
-            "supportsWorktreeVisibilitySourceDefaults": true
+            "supportsWorktreeVisibilitySourceDefaults": true,
+            "acceptRowDelta": true,
+            "exactActivity": true
           },
           "reply": {
             "ok": true,
@@ -7710,7 +7712,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true,
@@ -7750,7 +7753,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "afterSnapshotId": null
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true

@@ -234,7 +234,7 @@ function SshHostFilterField({
         value={value}
         aria-label={label}
         placeholder={label}
-        className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+        className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && value !== '' && !event.nativeEvent.isComposing) {

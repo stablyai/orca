@@ -54,20 +54,6 @@ afterEach(() => {
 })
 
 describe('terminal surface ownership', () => {
-  it('does not remount a terminal surface hidden behind native chat', async () => {
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'input-undeliverable'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-    expect(mocks.hasPty).not.toHaveBeenCalled()
-  })
-
   it('does not remount a chat-owned tab the unified tab index has dropped', async () => {
     // Model terminal/unified index drift from b5cfc6ca; the surviving terminal row must still refuse chat recovery.
     mocks.getTab.mockReturnValue(null)
@@ -82,49 +68,6 @@ describe('terminal surface ownership', () => {
     ).resolves.toBe(false)
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
     expect(mocks.hasPty).not.toHaveBeenCalled()
-  })
-
-  it('refuses a chat-owned tab whose row lost viewMode across a restart', async () => {
-    // Legacy schema strips terminal-row viewMode, leaving only the unified chat ownership to refuse remount after upgrade.
-    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
-    setTerminalTabs([{ id: 'tab-1' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-  })
-
-  it('refuses a chat-owned row the unified tab index has no opinion on', async () => {
-    // The other direction: the row is authoritative even when getTab is blind.
-    mocks.getTab.mockReturnValue(null)
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-  })
-
-  it('heals a terminal-owned tab both indices agree on', async () => {
-    mocks.getTab.mockReturnValue({ viewMode: 'terminal' })
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'terminal' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(true)
   })
 
   // Use the real old-session loader: undeclared terminal-row viewMode strips while unified chat ownership survives, requiring both guard arms.

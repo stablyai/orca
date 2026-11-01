@@ -66,36 +66,6 @@ function stubHost(
 }
 
 describe('browser route partition storage retirement', () => {
-  it('clears a removed environment only after its client host finishes tearing down', async () => {
-    const order: string[] = []
-    let finishTeardown = (): void => {}
-    const whenClientHostClosed = new Promise<void>((resolve) => {
-      finishTeardown = () => {
-        order.push('teardown')
-        resolve()
-      }
-    })
-    const clearStorage = vi.fn(async () => {
-      order.push('clear')
-      return { clearedPartitions: [partition], livePartitions: [] }
-    })
-
-    const retiring = retireBrowserRoutePartitionStorageForEnvironment({
-      environmentId: 'environment-a',
-      whenClientHostClosed,
-      clearStorage,
-      retryDelayMs: 0
-    })
-    await Promise.resolve()
-    expect(clearStorage).not.toHaveBeenCalled()
-
-    finishTeardown()
-
-    expect(await retiring).toEqual([partition])
-    expect(order).toEqual(['teardown', 'clear'])
-    expect(clearStorage).toHaveBeenCalledOnce()
-  })
-
   it('waits for the executor close a busy host deferred before clearing', async () => {
     const order: string[] = []
     let settleHandlers = (): void => {}

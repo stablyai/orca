@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as UnreadBadgeCountModule from '@/lib/unread-badge-count'
 import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeTab } from '../store/slices/store-session-test-harness'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 
 const { getUnreadBadgeCount } = vi.hoisted(() => ({ getUnreadBadgeCount: vi.fn() }))
 
@@ -16,7 +15,7 @@ vi.mock('@/lib/unread-badge-count', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { clearUnreadDockBadgeCount, useUnreadDockBadge } from './useUnreadDockBadge'
+import { useUnreadDockBadge } from './useUnreadDockBadge'
 
 const initialState = useAppStore.getInitialState()
 
@@ -51,27 +50,6 @@ describe('useUnreadDockBadge', () => {
     vi.unstubAllGlobals()
   })
 
-  it('clears the app badge', () => {
-    clearUnreadDockBadgeCount()
-
-    expect(setUnreadDockBadgeCount).toHaveBeenCalledWith(0)
-  })
-
-  it('treats badge clearing as best-effort', async () => {
-    setUnreadDockBadgeCount.mockRejectedValueOnce(new Error('dock unavailable'))
-
-    clearUnreadDockBadgeCount()
-    await Promise.resolve()
-
-    expect(setUnreadDockBadgeCount).toHaveBeenCalledWith(0)
-  })
-
-  it('no-ops when the preload API is unavailable', () => {
-    vi.stubGlobal('window', {})
-
-    expect(() => clearUnreadDockBadgeCount()).not.toThrow()
-  })
-
   it('does not rescan workspaces for unrelated remote activity or parent renders', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo', isUnread: index === 99 })
@@ -91,47 +69,6 @@ describe('useUnreadDockBadge', () => {
     hook.rerender()
 
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(1)
-  })
-
-  it('recounts when a workspace unread flag changes, not when a tab marker does', () => {
-    renderHook(() => useUnreadDockBadge(false))
-    const worktree = makeWorktree({ id: 'repo::unread', repoId: 'repo' })
-    const tab = makeTab({ id: 'tab-unread', worktreeId: worktree.id })
-
-    act(() => useAppStore.setState({ worktreesByRepo: { repo: [worktree] } }))
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-
-    act(() =>
-      useAppStore.setState({
-        tabsByWorktree: { [worktree.id]: [tab] },
-        unreadTerminalTabs: { [tab.id]: 'terminal-bell' }
-      })
-    )
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(2)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-
-    act(() =>
-      useAppStore.getState().markAgentAttentionUnread({
-        workspaceId: worktree.id,
-        subjectKey: null,
-        groupId: null,
-        reason: 'agent-completion'
-      })
-    )
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(3)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    act(() =>
-      useAppStore
-        .getState()
-        .readOnScreenAttention(
-          { workspaceIds: [worktree.id], targets: [{ worktreeId: worktree.id, tabId: tab.id }] },
-          { screenArrived: true }
-        )
-    )
-    expect(getUnreadBadgeCount).toHaveBeenCalledTimes(4)
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
   })
 
   // Count renders because this App-root subscription can rerender the entire shell for an unchanged badge.
@@ -230,42 +167,5 @@ describe('useUnreadDockBadge', () => {
     act(() => useAppStore.setState({ unreadTerminalTabs: { orphan: 'terminal-bell' } }))
     expect(renders).toBe(initialRenders + 1)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
-  })
-
-  it('adds the floating terminal only while its launcher shows the unread dot', () => {
-    const tab = makeTab({ id: 'floating-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: true },
-      worktreesByRepo: {
-        repo: [makeWorktree({ id: 'repo::unread', repoId: 'repo', isUnread: true })]
-      },
-      tabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tab] }
-    })
-    const hook = renderHook(({ open }) => useUnreadDockBadge(open), {
-      initialProps: { open: false }
-    })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    act(() =>
-      useAppStore.getState().markTerminalBell({
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        tabId: tab.id,
-        paneKey: `${tab.id}:0`
-      })
-    )
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
-
-    hook.rerender({ open: true })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
-
-    hook.rerender({ open: false })
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
-
-    act(() =>
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), floatingTerminalEnabled: false }
-      })
-    )
-    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
   })
 })

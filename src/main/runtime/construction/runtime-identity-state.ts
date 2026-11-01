@@ -374,7 +374,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     {
       ...this.tuiIdleEvidenceSource,
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
-      getTerminalPty: (handle) => this.getTerminalPtyForHandle(handle),
+      getTerminalPty: (handle, condition) =>
+        condition === 'exit'
+          ? this.getExitWaitPtyForHandle(handle)
+          : this.getTerminalPtyForHandle(handle),
       exitUnsettled: (pty) =>
         pty.lastExitCode === null &&
         mainBindsUnendedTerminal(this, pty.ptyId, this.ptyLivenessVerdictByPtyId.get(pty.ptyId)),
