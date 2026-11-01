@@ -105,9 +105,6 @@ export class RuntimeClient {
     const terminalPromptMutation = isTerminalPromptMutation(method, params)
     const legacyTerminalPrompt = options?.legacyTerminalPrompt === true && terminalPromptMutation
     const durableMutation = !legacyTerminalPrompt && isDurableMutation(method, params)
-    if (orchestrationMutation) {
-      await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
-    }
     const orchestrationRequestId = durableMutation
       ? (options?.orchestrationRequestId ?? randomUUID())
       : undefined
@@ -130,6 +127,14 @@ export class RuntimeClient {
         return attachUnverifiedTerminalPromptRecovery(error)
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
+    }
+    if (orchestrationMutation) {
+      try {
+        await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
+      } catch (error) {
+        // A caller-chosen request id is the only rerun handle, so keep it when the probe fails first.
+        throw options?.orchestrationRequestId ? recover(error, null) : error
+      }
     }
     const compatibilityEnvelope = method.startsWith('orchestration.')
       ? {

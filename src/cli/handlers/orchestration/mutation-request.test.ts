@@ -248,4 +248,61 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
     },
     15_000
   )
+
+  // Windows cannot use this temporary Unix socket path.
+  it.skipIf(process.platform === 'win32')(
+    'names the request id when a frozen runtime times out the contract probe',
+    async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-worker-done-frozen-'))
+      tempDirs.add(userDataPath)
+      const endpoint = join(userDataPath, 'runtime.sock')
+      const methods: string[] = []
+      // A frozen runtime accepts the connection but never answers.
+      const server = createServer((socket) => {
+        socket.setTimeout(1_000, () => socket.destroy())
+        socket.setEncoding('utf8')
+        socket.once('data', (line: string) => {
+          methods.push(RuntimeRequest.parse(JSON.parse(line.trim())).method)
+        })
+      })
+      servers.add(server)
+      await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+      writeFileSync(
+        join(userDataPath, 'orca-runtime.json'),
+        JSON.stringify({
+          runtimeId: 'runtime-1',
+          pid: 1,
+          transports: [{ kind: 'unix', endpoint }],
+          authToken: 'token',
+          startedAt: 1
+        })
+      )
+      const argv = ['orchestration', 'send', '--type', 'worker_done', '--subject', 'done']
+      const client = new RuntimeClient(userDataPath, 60_000, null, null, 'orca', argv)
+      const error = await callOrchestrationMutation(
+        client,
+        new Map(),
+        'orchestration.send',
+        WORKER_DONE,
+        { timeoutMs: 200 },
+        RETRY_MS
+      ).catch((caught: unknown) => caught)
+      expect(methods).toEqual(['status.get'])
+      expect(error).toMatchObject({
+        code: 'runtime_timeout',
+        message: expect.stringMatching(/--retry-request [0-9a-f-]{36}/),
+        data: {
+          recovery: {
+            retryCommand: [
+              'orca',
+              ...argv,
+              '--retry-request',
+              expect.stringMatching(/^[0-9a-f-]{36}$/)
+            ]
+          }
+        }
+      })
+    },
+    15_000
+  )
 })
