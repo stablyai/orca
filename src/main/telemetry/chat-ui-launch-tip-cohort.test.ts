@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatUiLaunchTipVariant } from '../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { TelemetrySettings } from '../../shared/telemetry-settings-types'
 import type { Store } from '../persistence'
-import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
+import {
+  ensureChatUiLaunchTipCohort,
+  isChatUiLaunchTipDeferredForConsent
+} from './chat-ui-launch-tip-cohort'
 import { makeFakeSettings, restoreConsentEnv, stashAndClearConsentEnv } from './client-test-harness'
 
 function makeStore(
@@ -46,12 +49,38 @@ describe('ensureChatUiLaunchTipCohort', () => {
     expect(store.updateSettings).toHaveBeenCalledTimes(1)
   })
 
+  it('holds the tip unenrolled while the banner is pending, then enrolls after acknowledgement', () => {
+    const pending = makeStore({ optedIn: null })
+    expect(ensureChatUiLaunchTipCohort(pending)).toBeUndefined()
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(true)
+    expect(pending.updateSettings).not.toHaveBeenCalled()
+
+    // Acknowledging the banner persists optedIn=true; the next launch enrolls the still-unseen tip.
+    pending.getSettings().telemetry!.optedIn = true
+    const cohort = ensureChatUiLaunchTipCohort(pending)
+    expect(['control', 'treatment']).toContain(cohort)
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
+    expect(pending.getSettings().telemetry?.chatUiLaunchTipCohort).toBe(cohort)
+  })
+
+  it('releases a pending profile unenrolled after the banner is declined, so the tip shows as before', () => {
+    const pending = makeStore({ optedIn: null })
+    ensureChatUiLaunchTipCohort(pending)
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(true)
+
+    pending.getSettings().telemetry!.optedIn = false
+    expect(ensureChatUiLaunchTipCohort(pending)).toBeUndefined()
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
+    expect(pending.updateSettings).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['outside the audience', makeStore({}, 'none')],
     ['already shown the tip', makeStore({}, 'chat-ui-off', ['chat-ui-here'])],
     ['opted out', makeStore({ optedIn: false })]
   ])('leaves a profile %s unenrolled, so it keeps today’s behaviour', (_label, store) => {
     expect(ensureChatUiLaunchTipCohort(store)).toBeUndefined()
+    expect(isChatUiLaunchTipDeferredForConsent()).toBe(false)
     expect(store.updateSettings).not.toHaveBeenCalled()
   })
 })
