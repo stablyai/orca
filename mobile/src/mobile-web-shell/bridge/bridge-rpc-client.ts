@@ -149,13 +149,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
-  function snapshot(): BridgeConnectionSnapshot {
-    const held = cache.read()
-    if (held === null) {
-      throw new BridgeClientNotReadyError()
-    }
-    return held
-  }
+  const snapshot = () => cache.require()
 
   // Repeated init for the same session updates route/insets/cache while preserving exchanges and the original storage snapshot. A different session id invalidates prior work.
   const shellSession = createBridgeClientShellSession({

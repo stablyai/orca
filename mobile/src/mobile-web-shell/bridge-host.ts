@@ -9,8 +9,7 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
   readBridgeClientMessage,
-  type BridgeClientMessage,
-  type BridgeConnectionSnapshot
+  type BridgeClientMessage
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
@@ -21,6 +20,7 @@ import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
+import { readBridgeConnectionSnapshot } from './bridge/bridge-connection-snapshot'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
@@ -87,15 +87,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
 
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  function snapshot(state?: ConnectionState): BridgeConnectionSnapshot {
-    return {
-      state: state ?? client.getState(),
-      reconnectAttempt: client.getReconnectAttempt(),
-      lastConnectedAt: client.getLastConnectedAt(),
-      lastInboundAt: client.getLastInboundAt?.() ?? null,
-      generation: client.getGeneration?.() ?? null
-    }
-  }
+  const snapshot = (state?: ConnectionState) => readBridgeConnectionSnapshot(client, state)
 
   /**
    * Posts `init`, and answers nothing (ruling 34).

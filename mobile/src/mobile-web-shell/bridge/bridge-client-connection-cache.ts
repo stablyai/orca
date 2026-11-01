@@ -1,5 +1,6 @@
 import type { ConnectionState } from '../../transport/types'
-import type { BridgeConnectionSnapshot } from './bridge-envelope'
+import { BridgeClientNotReadyError } from './bridge-client-errors'
+import type { BridgeConnectionSnapshot } from './bridge-connection-snapshot'
 
 export type BridgeSnapshotOutcome = 'applied' | 'stale' | 'unprimed'
 
@@ -9,6 +10,14 @@ export class BridgeConnectionCache {
   private readonly listeners = new Set<(state: ConnectionState) => void>()
 
   read(): BridgeConnectionSnapshot | null {
+    return this.held
+  }
+
+  // Getters run only after init primed the cache; reading earlier is a page bug, not a disconnect.
+  require(): BridgeConnectionSnapshot {
+    if (this.held === null) {
+      throw new BridgeClientNotReadyError()
+    }
     return this.held
   }
 
