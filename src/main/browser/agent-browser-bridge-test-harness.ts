@@ -44,6 +44,7 @@ export function mockBrowserManager(
       end: () => {}
     }),
     showAgentPointer: async () => {},
+    creditPageInput: () => {},
     isAgentUsingPage: () => false,
     handOverAgentActivity: () => {},
     ...overrides

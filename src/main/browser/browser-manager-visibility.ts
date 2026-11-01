@@ -43,8 +43,8 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
-  /** Credits a guest's activating input to the command delivering it, under the tab a link it opens would join. */
-  protected creditPageInput(guestWebContentsId: number): void {
+  /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */
+  creditPageInput(guestWebContentsId: number): void {
     const ownerTabId = this.resolvePopupOwnerContext(guestWebContentsId)?.browserTabId
     if (ownerTabId) {
       const pageId =
