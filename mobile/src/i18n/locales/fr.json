@@ -560,6 +560,10 @@
       "disconnected": "Échec de l'ajout (déconnecté)",
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Confié à un agent",
+      "startedAgent": "Agent démarré"
     }
   },
   "common": {

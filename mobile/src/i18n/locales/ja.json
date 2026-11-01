@@ -521,6 +521,10 @@
       "disconnected": "添付に失敗しました（接続切断）。",
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Agentに引き継ぎました",
+      "startedAgent": "Agentを開始しました"
     }
   },
   "common": {

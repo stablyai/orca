@@ -525,6 +525,10 @@
       "disconnected": "Eklenemedi (bağlantı yok)",
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Ajana devredildi",
+      "startedAgent": "Ajan başlatıldı"
     }
   },
   "common": {

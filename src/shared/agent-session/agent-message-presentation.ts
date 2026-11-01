@@ -29,13 +29,13 @@ export type AgentMessageSenderView = Readonly<{
     | 'permission'
 }>
 
-/** Takes the message's creation flags and text together, so no caller can show a handoff as a started
- *  worker, or claim work was handed over when no task reached the new agent. */
+/** Takes the message's creation flags and text together, and requires them, so no caller can show a
+ *  creation card as a plain message, a handoff as a started worker, or a handoff with no task as work handed over. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  creation?: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
 ): AgentMessageHeading {
-  if (creation?.agentStart) {
+  if (creation.agentStart) {
     if (!creation.agentHandoff) {
       return 'started'
     }

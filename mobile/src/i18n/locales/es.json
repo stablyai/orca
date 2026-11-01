@@ -560,6 +560,10 @@
       "disconnected": "No se pudo adjuntar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
+    },
+    "agentMessage": {
+      "handedOffToAgent": "Entregado a un agente",
+      "startedAgent": "Agente iniciado"
     }
   },
   "common": {
