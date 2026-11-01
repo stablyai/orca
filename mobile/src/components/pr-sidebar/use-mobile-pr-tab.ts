@@ -8,6 +8,7 @@ import {
 } from '../../session/mobile-pr-sidebar-state'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { PrSidebarLoadOptions } from '../../session/use-mobile-pr-sidebar-controller'
+import type { PrSidebarLoadResult } from '../../session/pr-sidebar-load-result'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import { useMobilePrActions, type MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { useMobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
@@ -15,6 +16,7 @@ import { useMobilePrTextAction } from '../../session/use-mobile-pr-text-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../../session/use-mobile-pr-ai-triage'
 import { usePRBotAuthorOverrides } from '../../session/use-pr-bot-author-overrides'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
+import { useMobilePrPolling, type PrTabLive } from './use-mobile-pr-polling'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
@@ -30,7 +32,9 @@ export type PrTabConfirm = 'close' | 'reopen' | 'unlink'
 
 type Input = {
   state: PrSidebarState
-  refetch: (options?: PrSidebarLoadOptions) => void
+  refetch: (options?: PrSidebarLoadOptions) => Promise<PrSidebarLoadResult> | void
+  /** What is on screen, so the PR keeps itself fresh only while someone is looking. */
+  live?: PrTabLive
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -69,6 +73,10 @@ export function useMobilePrTab(input: Input) {
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
   // Keep stable PRInfo.prRepo identity; cloning owner/repo thrashes mutation/comment/title hooks.
   const prRepo = state.kind === 'ready' ? (state.data.pr.prRepo ?? null) : null
+  // Mutations refetch and wait; they do not care whether the read landed.
+  const refetchAfterMutation = useCallback(async (): Promise<void> => {
+    await refetch()
+  }, [refetch])
   const ownActions = useMobilePrActions({
     client,
     connState,
@@ -76,7 +84,7 @@ export function useMobilePrTab(input: Input) {
     prNumber,
     headSha: input.headSha,
     prRepo,
-    refetch
+    refetch: refetchAfterMutation
   })
   const commentActions = useMobilePrCommentActions({
     client,
@@ -84,7 +92,7 @@ export function useMobilePrTab(input: Input) {
     worktreeId,
     prNumber,
     prRepo,
-    refetch
+    refetch: refetchAfterMutation
   })
   const textAction = useMobilePrTextAction({
     client,
@@ -92,9 +100,15 @@ export function useMobilePrTab(input: Input) {
     worktreeId,
     prNumber,
     prRepo,
-    refetch
+    refetch: refetchAfterMutation
   })
   const clearTextError = textAction.clearError
+  const { polling } = useMobilePrPolling({
+    state,
+    refetch,
+    live: input.live ?? false,
+    connected: connState === 'connected'
+  })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const ownTriage = useMobilePrAiTriage({
     client,
@@ -256,6 +270,7 @@ export function useMobilePrTab(input: Input) {
       },
       [setSheet]
     ),
+    polling,
     creatingPr,
     setCreatingPr,
     checkDetails,

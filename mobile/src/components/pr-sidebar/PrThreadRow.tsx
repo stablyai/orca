@@ -1,12 +1,20 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { ExternalLink, FileText, MoreHorizontal, Pencil, Trash2 } from 'lucide-react-native'
+import {
+  ExternalLink,
+  FileText,
+  MoreHorizontal,
+  Pencil,
+  Sparkles,
+  Trash2
+} from 'lucide-react-native'
 import type { PRComment } from '../../../../src/shared/github/comment-types'
 import {
   getPRCommentGroupRoot,
   type PRCommentGroup
 } from '../../../../src/shared/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/pr-comment-audience'
+import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -19,6 +27,8 @@ import type { ActionSheetAction } from '../ActionSheetModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
+import { PrThreadCode } from './PrThreadCode'
+import { PrTextLink } from './PrTextLink'
 import { commentRelativeTime } from './pr-comment-relative-time'
 import { prCommentSeverity, type PrCommentSeverity } from './pr-comment-severity'
 
@@ -37,6 +47,8 @@ export type PrThreadActions = {
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }
+
+export type PrAskToFix = { label: string; onPress: () => void; busy: boolean; disabled: boolean }
 
 export const PR_COMMENT_AVATAR = 28
 export const PR_COMMENT_INDENT = PR_COMMENT_AVATAR + spacing.md
@@ -61,7 +73,8 @@ export function PrThreadRow({
   botAuthorOverrides,
   now,
   onOpenFile,
-  onOpenThread
+  onOpenThread,
+  askToFix
 }: {
   group: PRCommentGroup
   actions?: PrThreadActions
@@ -69,6 +82,8 @@ export function PrThreadRow({
   now: number
   onOpenFile?: (filePath: string) => void
   onOpenThread?: (focusReply: boolean) => void
+  /** Bot findings offer the same agent launch as desktop's Resolve comments with AI. */
+  askToFix?: PrAskToFix
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -88,6 +103,8 @@ export function PrThreadRow({
   const canMutate =
     actions !== undefined && group.kind === 'standalone' && canEditComment(root, actions.prRepo)
   const openThread = group.kind === 'thread' && onOpenThread ? () => onOpenThread(false) : undefined
+  const ask =
+    askToFix && bot && group.kind === 'thread' && root.isResolved !== true ? askToFix : null
   const replyInThread =
     group.kind === 'thread' && onOpenThread ? () => onOpenThread(true) : undefined
   const menuGroups: ActionSheetAction[][] = [
@@ -155,6 +172,9 @@ export function PrThreadRow({
             onPress={filePath && onOpenFile ? () => onOpenFile(filePath) : openThread}
           />
         ) : null}
+        {root.diffHunk && root.line ? (
+          <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line).slice(-1)} />
+        ) : null}
         {editing && actions ? (
           <PRCommentComposer
             placeholder={t('pullRequest.commentCard.editPlaceholder', 'Edit comment…')}
@@ -191,7 +211,16 @@ export function PrThreadRow({
         ) : null}
         {actions && !editing && (openThread || canResolve) ? (
           <View style={styles.links}>
-            {openThread ? (
+            {ask ? (
+              <PrTextLink
+                accent
+                icon={<Sparkles size={14} color={colors.accentBlue} strokeWidth={2.2} />}
+                label={ask.label}
+                onPress={ask.onPress}
+                busy={ask.busy}
+                disabled={ask.disabled}
+              />
+            ) : openThread ? (
               <PrTextLink
                 label={t('pullRequest.commentCard.reply', 'Reply')}
                 onPress={replyInThread ?? openThread}
@@ -277,36 +306,6 @@ export function PrCommentFileLink({
   )
 }
 
-export function PrTextLink({
-  label,
-  onPress,
-  busy = false,
-  accent = false,
-  icon
-}: {
-  label: string
-  onPress: () => void
-  busy?: boolean
-  accent?: boolean
-  icon?: ReactNode
-}) {
-  useMobileColorScheme()
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={busy}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ busy }}
-      style={({ pressed }) => [styles.link, pressed && pressedStyle]}
-    >
-      {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : icon}
-      <Text style={[styles.linkText, accent && styles.linkAccent]}>{label}</Text>
-    </Pressable>
-  )
-}
-
 function SeverityPill({ severity }: { severity: PrCommentSeverity }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -376,9 +375,6 @@ const styles = themedStyleSheet(() => ({
   replyText: { flex: 1, color: colors.textSecondary, fontSize: 13 },
   replyAuthor: { color: colors.textPrimary, fontWeight: '600' },
   links: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, minHeight: 28 },
-  link: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  linkText: { color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  linkAccent: { color: colors.accentBlue },
   severity: {
     borderWidth: 1,
     borderRadius: radii.pill,

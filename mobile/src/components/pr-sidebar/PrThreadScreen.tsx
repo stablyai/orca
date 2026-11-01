@@ -1,5 +1,6 @@
 import { ScrollView, Text, View } from 'react-native'
 import type { PRCommentGroup } from '../../../../src/shared/pr-comment-groups'
+import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -12,6 +13,7 @@ import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrMiniButton } from './PrMiniButton'
+import { PrThreadCode } from './PrThreadCode'
 import {
   PR_COMMENT_AVATAR,
   PR_COMMENT_INDENT,
@@ -136,6 +138,9 @@ export function PrThreadScreen({
                   : undefined
             }
           />
+        ) : null}
+        {root.diffHunk && root.line ? (
+          <PrThreadCode lines={threadDiffLines(root.diffHunk, root.line, root.startLine)} />
         ) : null}
         {messages.map((comment) => (
           <View key={comment.id} style={styles.message}>

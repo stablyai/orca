@@ -252,7 +252,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
+      this.terminalIdentity.setPtyIncarnationId(pty, incarnationId)
     }
   }
 
