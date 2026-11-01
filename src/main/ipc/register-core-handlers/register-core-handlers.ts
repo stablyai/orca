@@ -234,7 +234,7 @@ export function registerCoreHandlers(
     })
   }
   if (pluginService) {
-    registerPluginHandlers(store, pluginService, runtime, marketplaceServices)
+    registerPluginHandlers(store, pluginService, marketplaceServices)
   }
   registerTelemetryHandlers(store)
   registerOrcaProfileHandlers(store, {
