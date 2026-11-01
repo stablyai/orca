@@ -7,8 +7,10 @@ import {
   createRuntime,
   driveToLiveIdle,
   insertDirectRunMessage,
+  isMailboxPointer,
   pointerCount,
   temporaryDirectories,
+  PTY_ID,
   TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
 
@@ -57,6 +59,60 @@ describe('orchestration typed pointer submission', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(pointerCount(harness.write)).toBe(2)
     expect(enterCount()).toBe(2)
+    db.close()
+  })
+
+  it('stops typing the pointer once its delivery is acknowledged', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const harness = createRuntime(db)
+    const run = createBoundRun(db, 'Ack-gated notice Run')
+    const message = insertDirectRunMessage(db, run.id, 'First wake')
+    const enterCount = (): number =>
+      harness.write.mock.calls.filter(([, payload]) => payload === '\r').length
+
+    await driveToLiveIdle(harness.runtime)
+    expect(pointerCount(harness.write)).toBe(1)
+    const checked = await checkBoundMailbox(harness.runtime)
+    expect(checked.deliveryId).toEqual(expect.any(String))
+    await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
+    expect(db.getMessageById(message.id)?.read).toBe(1)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(enterCount()).toBe(1)
+
+    // Repeated redrive edges (idle events, pending redeliveries, timers) after the ack.
+    for (let round = 0; round < 3; round += 1) {
+      harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      harness.runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(pointerCount(harness.write)).toBe(1)
+    expect(enterCount()).toBe(1)
+    db.close()
+  })
+
+  it('does not name an acknowledged delivery in a later pointer', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const harness = createRuntime(db)
+    const run = createBoundRun(db, 'Ack-gated notice Run')
+    insertDirectRunMessage(db, run.id, 'First wake')
+
+    await driveToLiveIdle(harness.runtime)
+    expect(pointerCount(harness.write)).toBe(1)
+    const checked = await checkBoundMailbox(harness.runtime)
+    expect(checked.deliveryId).toEqual(expect.any(String))
+    await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
+
+    insertDirectRunMessage(db, run.id, 'Newer mail after the ack')
+    harness.runtime.deliverPendingMessagesForHandle(TERMINAL_HANDLE)
+    await vi.advanceTimersByTimeAsync(500)
+    const pointers = harness.write.mock.calls.filter(([, payload]) => isMailboxPointer(payload))
+    expect(pointers).toHaveLength(2)
+    // The named batch is acknowledged; a later reminder must not hold the agent to it again.
+    expect(String(pointers[1]![1])).not.toContain('which you have not acknowledged')
+    expect(String(pointers[1]![1])).not.toContain(checked.deliveryId!)
     db.close()
   })
 })
