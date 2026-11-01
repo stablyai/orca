@@ -14,6 +14,8 @@ import type {
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 
+export { agentModelCatalogReleasedOwner }
+
 export type AgentModelCatalogBinding = {
   identity: string
   params: AgentModelCatalogReadParams
