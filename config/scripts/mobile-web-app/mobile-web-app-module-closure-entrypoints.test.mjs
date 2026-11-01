@@ -37,3 +37,17 @@ it('resolves local entry paths against the requested tree and selects browser si
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it('does not load plugin artifact validator or security tables in mobile i18n closure', async () => {
+  const { local } = await mobileWebAppModuleClosure(['src/i18n/mobile-i18n.ts'], {
+    absWorkingDir: join(process.cwd(), 'mobile')
+  })
+  const pluginSecurityFiles = local.filter(
+    (file) =>
+      file.includes('plugin-language-pack-artifact') ||
+      file.includes('plugin-protected-copy') ||
+      file.includes('protected-copy-keys.json')
+  )
+  expect(pluginSecurityFiles).toEqual([])
+  expect(local.some((file) => file.includes('i18n-catalog-object'))).toBe(true)
+})
