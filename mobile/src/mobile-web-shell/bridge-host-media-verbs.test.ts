@@ -9,6 +9,7 @@ import {
 } from './bridge/bridge-media-verbs'
 import {
   createFakeBridgePortPair,
+  fillFreeDesktopSlots,
   type BridgePortPair
 } from './bridge/bridge-port-pair-test-harness'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
@@ -111,6 +112,18 @@ async function ready(pair: BridgePortPair<FakeRpcClient>): Promise<void> {
   await pair.flush()
 }
 
+async function pickedHandle(probe: Pair): Promise<string> {
+  const picked = mediaPickResultSchema.parse(
+    (
+      await probe.pair.client.callNativeVerb('native.media.pick', {
+        source: 'library',
+        multiple: false
+      })
+    ).result
+  )
+  return picked.items[0]?.handle ?? ''
+}
+
 describe('a granted page moving a picked image across the bridge', () => {
   it('picks, reads every chunk in order to eof, and releases', async () => {
     const probe = pairWith()
@@ -192,18 +205,6 @@ describe('a page that was not granted the verbs', () => {
 })
 
 describe('a handle the page no longer has', () => {
-  async function pickedHandle(probe: Pair): Promise<string> {
-    const picked = mediaPickResultSchema.parse(
-      (
-        await probe.pair.client.callNativeVerb('native.media.pick', {
-          source: 'library',
-          multiple: false
-        })
-      ).result
-    )
-    return picked.items[0]?.handle ?? ''
-  }
-
   it('refuses a chunk of one the page released', async () => {
     const probe = pairWith({ byteLength: 4096 })
     await ready(probe.pair)
@@ -250,5 +251,32 @@ describe('a handle the page no longer has', () => {
       probe.pair.client.callNativeVerb('native.media.pick', { source: 'library', multiple: false })
     ).rejects.toMatchObject({ code: 'native_media_handle_cap' })
     warn.mockRestore()
+  })
+})
+
+// Desktop calls can sit unanswered through a whole reconnect; they take every slot they may, and photos must still attach and clean up.
+describe('a page whose desktop calls are all waiting on the desktop', () => {
+  async function answerDesktopCalls(pair: BridgePortPair<FakeRpcClient>): Promise<void> {
+    for (const request of pair.rpc.requests.splice(0)) {
+      request.resolve({ id: 'wire', ok: true, result: [], _meta: { runtimeId: 'desktop' } })
+    }
+    await pair.flush()
+  }
+
+  it('still picks, reads and releases, so later picks are not refused once the desktop answers', async () => {
+    const probe = pairWith({ byteLength: 64 })
+    await ready(probe.pair)
+    for (let round = 0; round <= BRIDGE_MEDIA_MAX_LIVE_HANDLES; round += 1) {
+      await fillFreeDesktopSlots(probe.pair)
+      const handle = await pickedHandle(probe)
+      await probe.pair.client.callNativeVerb('native.media.read', { handle, offset: 0, length: 64 })
+      // Like the page’s releaseStagedMedia: a refused release is logged, never thrown.
+      await probe.pair.client
+        .callNativeVerb('native.media.release', { handle })
+        .catch(() => undefined)
+      await answerDesktopCalls(probe.pair)
+    }
+    expect(probe.picker).toHaveBeenCalledTimes(BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1)
+    expect(probe.registry.liveCount()).toBe(0)
   })
 })
