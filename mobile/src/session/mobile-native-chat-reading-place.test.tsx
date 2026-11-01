@@ -289,7 +289,7 @@ function Chat(props: {
   joined?: number
   runs?: boolean
   status?: boolean
-  settledTurns?: import('../../../src/shared/native-chat-turn-status').NativeChatSettledTurns
+  settledTurns?: import('../../../src/shared/native-chat/transcript/native-chat-turn-status').NativeChatSettledTurns
 }): ReactElement {
   const folded = useMemo(
     () => foldMobileNativeChatMessages(props.messages, 'claude'),
@@ -355,7 +355,7 @@ function mount(
     live: boolean
     runs?: boolean
     status?: boolean
-    settledTurns?: import('../../../src/shared/native-chat-turn-status').NativeChatSettledTurns
+    settledTurns?: import('../../../src/shared/native-chat/transcript/native-chat-turn-status').NativeChatSettledTurns
   } = {
     following: false,
     live: false
