@@ -1,4 +1,5 @@
 import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import type { LiveLeafHolders } from '../terminal-topology/terminal-leaf-live-owner'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -54,6 +55,11 @@ export class StoreRuntimeState {
   readonly storageAuthority: AutomationStorageAuthority
   readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined
   readonly paneShellPath: (defaultShell: string | undefined) => string
+  /** Mutations applied in memory whose write has not yet settled; a failed one rolls back. */
+  uncommittedDurableMutations = 0
+  /** Leaf holders as of the last moment no durable mutation was unsettled; a rollback never enters it. */
+  committedLeafHolders: LiveLeafHolders | null = null
+  captureCommittedLeafHolders: (() => LiveLeafHolders) | null = null
   readonly deferredShellHistoryWorktreeIds = new Set<string>()
   automationListProjectionCache: AutomationListProjectionCache | null = null
   activeViewPreference!: ActiveViewPreference

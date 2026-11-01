@@ -67,7 +67,15 @@ export function installTerminalPaneMountEvents(args: {
           direction: detail.direction
         })
       } else {
-        const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        // Only a request naming a side routes through the subtree split, which can insert before.
+        const createdPane = detail.placement
+          ? mgr.splitPaneAroundLeafIds(
+              detail.sourceLeafId ? [detail.sourceLeafId] : [],
+              sourcePaneId,
+              detail.direction,
+              { ...splitOptions, placement: detail.placement }
+            )
+          : mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         const telemetrySuppressed = createdPane
           ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
           : false

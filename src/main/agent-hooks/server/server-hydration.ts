@@ -9,7 +9,9 @@ import {
   seedClaudeSubagentRosterFromSnapshots
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status-legacy-adapter'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { HYDRATE_MAX_AGE_MS, LAST_STATUS_FILE_VERSION } from './server-constants'
 import type { EnrichedAgentHookEventPayload, LastStatusFile } from './server-types'
 import {
@@ -21,6 +23,15 @@ import {
 } from './server-persistence-validation'
 import { AgentHookServerTabCleanup } from './server-tab-cleanup'
 import { readPersistedAgentExits, recordAgentExit } from './agent-exit-evidence'
+
+/** A saved row moved to `paneKey`; its tab half follows the key, or the id-match check drops it. */
+function readdressHydratedRow(
+  row: Record<string, unknown>,
+  paneKey: string
+): Record<string, unknown> {
+  const movedTab = typeof row.tabId === 'string'
+  return { ...row, paneKey, ...(movedTab ? { tabId: parsePaneKey(paneKey)?.tabId } : {}) }
+}
 
 export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup {
   protected hydrateLastStatusFromDisk(): void {
@@ -74,9 +85,9 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
       const rawResolvedEntry =
-        resolvedPaneKey === paneKey || typeof rawEntry !== 'object' || rawEntry === null
+        resolvedPaneKey === paneKey || !isRecord(rawEntry)
           ? rawEntry
-          : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
+          : readdressHydratedRow(rawEntry, resolvedPaneKey)
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
