@@ -100,6 +100,7 @@ orca worktree create --repo id:<repoId> --name fix-login --json
 orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
 orca worktree set --worktree active --workspace-status in-review --unread --json
+orca worktree set --worktree active --pin --json
 orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
@@ -108,6 +109,8 @@ When `worktree create` runs from inside an Orca-managed worktree, Orca records t
 Pass `--branch DAT-111-fix-login` to name the Git branch yourself instead of applying the configured branch prefix. `--name` still sets the workspace name and `--base-branch` the starting ref. If that branch already exists and cannot be reused, or the workspace path is already taken, Orca appends a numeric suffix to both, as it does in the new-workspace composer, so `--name task --branch exact` can produce branch `exact-2` even when `exact` is free.
 
 `worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
+
+`worktree set --pin` moves the workspace into the sidebar's Pinned section; `--unpin` takes it out again. `worktree ps` and `worktree list` report the current value as `pinned` (`isPinned` in `--json`).
 
 Agent startup flags:
 

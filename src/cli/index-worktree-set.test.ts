@@ -566,7 +566,9 @@ describe('orca cli worktree awareness', () => {
     [['--read=false'], '--read takes no value'],
     [['--read='], '--read takes no value'],
     [['--unread=false'], '--unread takes no value'],
-    [['--unread='], '--unread takes no value']
+    [['--unread='], '--unread takes no value'],
+    [['--read=false', '--read'], '--read takes no value'],
+    [['--unread=x', '--unread'], '--unread takes no value']
   ])('rejects %j on worktree.set before resolving selectors', async (flags, message) => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -577,6 +579,92 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(message)
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it.each([
+    { flag: '--pin', isPinned: true },
+    { flag: '--unpin', isPinned: false }
+  ])('passes $flag through worktree.set', async ({ flag, isPinned }) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_pin', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), isPinned }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', flag, '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ worktree: 'id:repo::/tmp/repo/child', isPinned })
+    )
+  })
+
+  it('leaves the pin untouched when neither pin flag is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_comment', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), comment: 'hello' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--comment', 'hello', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ isPinned: undefined })
+    )
+  })
+
+  it.each([
+    { flags: ['--pin=true'] },
+    { flags: ['--unpin=false'] },
+    { flags: ['--pin=false', '--pin'] },
+    { flags: ['--unpin=x', '--unpin'] }
+  ])('rejects $flags instead of dropping the write', async ({ flags }) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', ...flags, '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'takes no value.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects contradictory pin flags on worktree.set', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--pin', '--unpin', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --pin or --unpin, not both.'
+    )
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
