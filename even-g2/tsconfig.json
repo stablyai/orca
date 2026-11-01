@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    // Match the repo's lib (ESNext) so imported @orca-shared/* modules — authored against the
+    // root tsconfig — typecheck here too (e.g. Array.findLast). See config/tsconfig.*.json.
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@orca-shared/*": ["../src/shared/*"]
+    },
+    "strict": true,
+    // The repo does not enable noUncheckedIndexedAccess; keep parity so shared modules compile.
+    "noUncheckedIndexedAccess": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["vitest/globals"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}

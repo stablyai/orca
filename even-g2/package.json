@@ -1,0 +1,27 @@
+{
+  "name": "orca-even-g2",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "sim": "vite --host 0.0.0.0 --port 5173 --open /sim.html",
+    "qr": "evenhub qr --http --port 5173",
+    "build": "vite build",
+    "pack": "vite build && evenhub pack app.json dist -o orca-g2.ehpk",
+    "test": "vitest run",
+    "tc": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "0.0.14",
+    "tweetnacl": "^1.0.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "latest",
+    "happy-dom": "^15.11.7",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  }
+}
