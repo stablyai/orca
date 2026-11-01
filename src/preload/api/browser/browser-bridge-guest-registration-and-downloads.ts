@@ -1,23 +1,23 @@
-import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
-import type { BrowserViewportOverride } from '../../shared/browser-workspace-types'
+import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+} from '../../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
-} from '../../shared/browser-webauthn-account'
+} from '../../../shared/browser-webauthn-account'
 import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../shared/browser-page-prompt'
-import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
-import { browserClientPageRendererRequests } from '../preload-runtime-support'
-import type { PreloadApi } from '../api-types'
+} from '../../../shared/browser-page-prompt'
+import { readBrowserClientHostIdArgument } from '../../../shared/browser-client-host-id-argument'
+import { browserClientPageRendererRequests } from '../../preload-runtime-support'
+import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {
   onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,

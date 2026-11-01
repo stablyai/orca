@@ -1,10 +1,10 @@
 import { ipcRenderer } from 'electron'
-import type { PreloadApi } from '../api-types'
+import type { PreloadApi } from '../../api-types'
 import {
   BROWSER_EXTENSIONS_CHANGED_CHANNEL,
   type BrowserExtensionActionResult,
   type BrowserExtensionListResult
-} from '../../shared/browser-extension-types'
+} from '../../../shared/browser-extension-types'
 
 /** Settings › Browser › Extensions. */
 export const browserExtensionsApi = {

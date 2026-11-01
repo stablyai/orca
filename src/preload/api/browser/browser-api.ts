@@ -1,46 +1,46 @@
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
-import type { BrowserDevToolsDockBounds } from '../../shared/browser-devtools-dock'
-import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
+import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser-annotation-viewport-bridge'
 import type {
   BrowserAgentActivityEvent,
   BrowserAgentCursorEvent
-} from '../../shared/browser-agent-activity-contract'
-import type { ManagedBrowserProfileOwner } from '../../shared/browser-profile-scope'
+} from '../../../shared/browser-agent-activity-contract'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
 import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListResult
-} from '../../shared/browser-extension-types'
+} from '../../../shared/browser-extension-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+} from '../../../shared/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../shared/browser-user-agent-mode'
+} from '../../../shared/browser-user-agent-mode'
 import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
-} from '../../shared/browser-client-page-metadata-protocol'
+} from '../../../shared/browser-client-page-metadata-protocol'
 import type {
   BrowserWebAuthnAccountRequest,
   BrowserWebAuthnAccountResponse
-} from '../../shared/browser-webauthn-account'
+} from '../../../shared/browser-webauthn-account'
 import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../shared/browser-page-prompt'
+} from '../../../shared/browser-page-prompt'
 import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
-} from '../../shared/browser-site-permission'
+} from '../../../shared/browser-site-permission'
 import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
@@ -52,7 +52,7 @@ import type {
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult,
   GrabIntent
-} from '../../shared/browser-grab-types'
+} from '../../../shared/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -62,7 +62,7 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent,
   BrowserTargetUrlChangedEvent
-} from '../../shared/browser-guest-events'
+} from '../../../shared/browser-guest-events'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -73,11 +73,11 @@ import type {
   BrowserSessionProfileSource,
   BrowserViewportOverride,
   BrowserViewportScrollState
-} from '../../shared/browser-workspace-types'
+} from '../../../shared/browser-workspace-types'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../shared/browser-client-page-renderer-protocol'
+} from '../../../shared/browser-client-page-renderer-protocol'
 
 export type BrowserApi = {
   /** Absent on clients that host no browser guests, including web clients. */

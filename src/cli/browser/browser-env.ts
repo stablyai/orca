@@ -1,4 +1,7 @@
-import type { BrowserGeolocationResult, BrowserViewportResult } from '../../shared/runtime-types'
+import type {
+  BrowserGeolocationResult,
+  BrowserViewportResult
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -8,7 +11,7 @@ import {
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from '../selectors'
 
 export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {

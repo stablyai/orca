@@ -3,16 +3,17 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-types'
+} from '../../shared/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
-import { formatTabList, formatTabListWithProfiles, formatTabShow, printResult } from '../format'
+import { formatTabList, formatTabListWithProfiles, formatTabShow } from './browser-format'
+import { printResult } from '../format'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getPresentStringFlag,
   getRequiredStringFlag
 } from '../flags'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError } from '../runtime/types'
 import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 

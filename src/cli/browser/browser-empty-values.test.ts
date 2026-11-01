@@ -1,14 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RuntimeTypes from '../runtime/types'
 
 const callMock = vi.fn()
 
-vi.mock('./runtime-client', () => {
-  class RuntimeClient {
-    call = callMock
-    getCliStatus = vi.fn()
-    openOrca = vi.fn()
-  }
-
+vi.mock('../runtime/types', () => {
   class RuntimeClientError extends Error {
     readonly code: string
 
@@ -27,6 +22,19 @@ vi.mock('./runtime-client', () => {
     }
   }
 
+  return { RuntimeClientError, RuntimeRpcFailureError }
+})
+
+vi.mock('../runtime-client', async () => {
+  class RuntimeClient {
+    call = callMock
+    getCliStatus = vi.fn()
+    openOrca = vi.fn()
+  }
+
+  const { RuntimeClientError, RuntimeRpcFailureError } =
+    await vi.importMock<typeof RuntimeTypes>('../runtime/types')
+
   return {
     RuntimeClient,
     RuntimeClientError,
@@ -34,8 +42,8 @@ vi.mock('./runtime-client', () => {
   }
 })
 
-import { main } from './index'
-import { okFixture, queueFixtures } from './test-fixtures'
+import { main } from '../index'
+import { okFixture, queueFixtures } from '../test-fixtures'
 
 describe('orca cli storage set preserves an empty value', () => {
   beforeEach(() => {

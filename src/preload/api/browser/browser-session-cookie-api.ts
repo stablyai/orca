@@ -1,8 +1,8 @@
 import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearResult
-} from '../../shared/browser-google-cookie-clear'
-import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
+} from '../../../shared/browser-google-cookie-clear'
+import type { BrowserCookieImportResult } from '../../../shared/browser-workspace-types'
 
 export type BrowserSessionCookieApi = {
   /** Null when the environment's pages are not client-hosted on this desktop. */
