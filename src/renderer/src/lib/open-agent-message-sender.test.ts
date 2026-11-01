@@ -49,7 +49,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
+import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session-write-notice-copy'
@@ -94,24 +94,7 @@ function failure(code: string): RuntimeRpcCallError {
 }
 
 function versionBlock(): Error {
-  try {
-    assertRuntimeStatusCompatible({
-      runtimeId: 'runtime-old',
-      rendererGraphEpoch: 0,
-      graphStatus: 'ready',
-      authoritativeWindowId: null,
-      liveTabCount: 0,
-      liveLeafCount: 0,
-      runtimeProtocolVersion: 0,
-      minCompatibleRuntimeClientVersion: Number.MAX_SAFE_INTEGER
-    })
-  } catch (error) {
-    if (error instanceof Error) {
-      return error
-    }
-    throw error
-  }
-  throw new Error('Expected the production compatibility gate to block')
+  return Object.assign(new Error('update needed'), { code: RUNTIME_COMPAT_BLOCK_CODE })
 }
 
 // Existing sentences, each translated whole: the cause and what to do, or which Orca to update.

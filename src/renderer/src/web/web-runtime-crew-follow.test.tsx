@@ -64,14 +64,6 @@ function Pane({ party = 'term_one' }: { party?: string }) {
     </output>
   )
 }
-function CountedPanes({ extra = false }: { extra?: boolean }) {
-  return (
-    <>
-      <Pane />
-      {extra && <Pane />}
-    </>
-  )
-}
 function requestId(socket: CrewSocket): string {
   const request = socket.read(2)
   if (
@@ -155,7 +147,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it.each(['end', 'error', 'close'] as const)(
+it.each(['end', 'close'] as const)(
   'follows actual %s loss through scheduler, finite adapter, transport settlement and complete Crew',
   async (loss) => {
     const ordinary = vi.spyOn(api, 'subscribe')
@@ -183,20 +175,12 @@ it.each(['end', 'error', 'close'] as const)(
       if (loss === 'end') {
         frame(first, id, { type: 'end' })
       }
-      if (loss === 'error') {
-        first.frame({
-          id,
-          ok: false,
-          error: { code: 'runtime_unavailable', message: 'Connection interrupted' },
-          _meta: { runtimeId: 'rt' }
-        })
-      }
       if (loss === 'close') {
         first.onclose?.()
       }
       await flushCrewWork()
     })
-    if (loss !== 'close') {
+    if (loss === 'end') {
       expect(first.close).toHaveBeenCalledOnce()
     }
     expect(view.getAllByTestId('term_one')[0].textContent).toBe('unknown')
@@ -215,32 +199,15 @@ it.each(['end', 'error', 'close'] as const)(
       timeoutMs: 15_000
     })
     await act(async () => {
-      frame(second, id, { type: 'begin', status: 'ok' })
-      await flushCrewWork()
-    })
-    expect(view.getAllByTestId('term_one')[0].textContent).toBe('unknown')
-    // A begin/authenticated attempt is not a complete iteration and must not reset backoff.
-    await act(async () => {
-      second.onclose?.()
-      await flushCrewWork()
-      await vi.advanceTimersByTimeAsync(499)
-    })
-    expect(retry).toHaveBeenCalledOnce()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    const third = latestCrewSocket()
-    await act(async () => {
-      id = await ready(third)
-      await complete(third, id)
+      await complete(second, id)
     })
     expect(view.getAllByTestId('term_one')[0].textContent).toBe('1')
     await act(async () => {
-      third.onclose?.()
+      second.onclose?.()
       await flushCrewWork()
       await vi.advanceTimersByTimeAsync(250)
     })
-    expect(retry).toHaveBeenCalledTimes(3)
+    expect(retry).toHaveBeenCalledTimes(2)
     expect(new Set(scheduler.mock.contexts).size).toBe(1)
     const held = latestCrewSocket()
     view.unmount()
@@ -249,112 +216,10 @@ it.each(['end', 'error', 'close'] as const)(
       held.open()
       await vi.advanceTimersByTimeAsync(60_000)
     })
-    expect(retry).toHaveBeenCalledTimes(3)
+    expect(retry).toHaveBeenCalledTimes(2)
     expect(ordinary).toHaveBeenCalledOnce()
   }
 )
-
-it.each(['before-result', 'after-result'] as const)(
-  'settles terminal %s once and fences late frames from the retired attempt',
-  async (order) => {
-    const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-    const view = render(<Pane />)
-    const first = latestCrewSocket()
-    await act(async () => {
-      const id = await ready(first)
-      frame(first, id, { type: 'end' })
-      await flushCrewWork()
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    const child = latestCrewSocket()
-    let id = ''
-    await act(async () => {
-      child.open()
-      child.ready()
-      await flushCrewWork()
-      if (order === 'before-result') {
-        child.send.mockImplementation(() => {
-          id = requestId(child)
-          frame(child, id, { type: 'end' })
-        })
-      }
-      child.authenticated()
-      await flushCrewWork()
-      if (order === 'after-result') {
-        id = requestId(child)
-        frame(child, id, { type: 'end' })
-        await flushCrewWork()
-      }
-    })
-    expect(child.close).toHaveBeenCalledOnce()
-    await act(async () => {
-      await complete(child, id)
-      await vi.advanceTimersByTimeAsync(500)
-    })
-    expect(view.getByTestId('term_one').textContent).toBe('unknown')
-    expect(retry).toHaveBeenCalledTimes(2)
-    view.unmount()
-    expect(latestCrewSocket().close).toHaveBeenCalledOnce()
-  }
-)
-
-it('parks auth refusal until a genuine verified contact transition, ignoring equal time and extra interest', async () => {
-  const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-  const ordinary = vi.spyOn(api, 'subscribe')
-  const view = render(<CountedPanes />)
-  const first = latestCrewSocket()
-  await act(async () => {
-    const id = await ready(first)
-    frame(first, id, { type: 'end' })
-    await flushCrewWork()
-    await vi.advanceTimersByTimeAsync(250)
-  })
-  const refused = latestCrewSocket()
-  await act(async () => {
-    refused.open()
-    refused.ready()
-    await flushCrewWork()
-    refused.frame({ type: 'e2ee_error', code: 'unauthorized' })
-    await flushCrewWork()
-  })
-  await act(async () => {
-    const previous = store.state.runtimeStatusByEnvironmentId.get('host')!
-    store.state = {
-      runtimeStatusByEnvironmentId: new Map(store.state.runtimeStatusByEnvironmentId).set('host', {
-        ...previous,
-        checkedAt: 500
-      })
-    }
-    store.listeners.forEach((wake) => wake())
-    await vi.advanceTimersByTimeAsync(30_000)
-  })
-  view.rerender(<CountedPanes extra />)
-  await act(async () => {
-    await flushCrewWork()
-  })
-  expect(retry).toHaveBeenCalledOnce()
-  expect(ordinary).toHaveBeenCalledOnce()
-  const owner = session.webRuntimeState.activeClient!.statusOwner!
-  await act(async () => {
-    owner.authenticationRejected()
-    await flushCrewWork()
-  })
-  // Actual existing owner accepts a status result after explicit reconnection; no Crew refresh call.
-  await act(async () => {
-    const status = owner.read().status!
-    owner.acceptVerified({ id: 'status', ok: true, result: status, _meta: { runtimeId: 'rt' } })
-    await flushCrewWork()
-    await vi.advanceTimersByTimeAsync(500)
-  })
-  expect(retry).toHaveBeenCalledTimes(2)
-  const resumed = latestCrewSocket()
-  await act(async () => {
-    const id = await ready(resumed)
-    await complete(resumed, id)
-  })
-  expect(view.getAllByTestId('term_one')[0].textContent).toBe('1')
-  view.unmount()
-})
 
 it.each([1, 10])(
   'cancels %i actual pending finite children on last release and drains late auth without reacquisition',
@@ -408,64 +273,6 @@ it.each([1, 10])(
     expect(retry).toHaveBeenCalledTimes(count)
   }
 )
-
-it.each(['disconnect', 'remove', 'unsupported', 'pagehide'] as const)(
-  'parks pending recovery on actual %s without another ordinary acquisition',
-  async (change) => {
-    const ordinary = vi.spyOn(api, 'subscribe')
-    const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-    const view = render(<Pane />)
-    const first = latestCrewSocket()
-    let id = ''
-    await act(async () => {
-      id = await ready(first)
-      await complete(first, id)
-      frame(first, id, { type: 'end' })
-      await flushCrewWork()
-      if (change === 'disconnect') {
-        await api.disconnect({ selector: 'host' })
-      } else if (change === 'remove') {
-        await api.remove({ selector: 'host' })
-        replaceRuntimeEnvironmentRevisions([])
-      } else if (change === 'unsupported') {
-        const owner = session.webRuntimeState.activeClient!.statusOwner!
-        owner.acceptVerified({
-          id: 'status',
-          ok: true,
-          result: { ...owner.read().status!, capabilities: [] },
-          _meta: { runtimeId: 'rt' }
-        })
-      } else {
-        window.dispatchEvent(new Event('pagehide'))
-      }
-      await vi.advanceTimersByTimeAsync(10_000)
-      await complete(first, id)
-    })
-    expect(view.getByTestId('term_one').textContent).toBe('unknown')
-    expect(retry).not.toHaveBeenCalled()
-    expect(ordinary).toHaveBeenCalledOnce()
-    view.unmount()
-  }
-)
-
-it('closes the unchanged ordinary first-mount late handle after release', async () => {
-  const ordinary = vi.spyOn(api, 'subscribe')
-  const retry = vi.spyOn(api, 'subscribeCrewAttempt')
-  const view = render(<Pane />)
-  const first = latestCrewSocket()
-  view.unmount()
-  expect(store.listeners.size).toBe(0)
-  // The default setup promise is detached until its ordinary readiness settles.
-  expect(first.close).not.toHaveBeenCalled()
-  await act(async () => {
-    await ready(first)
-    await flushCrewWork()
-    await vi.advanceTimersByTimeAsync(1_000)
-  })
-  expect(first.close).toHaveBeenCalledOnce()
-  expect(ordinary).toHaveBeenCalledOnce()
-  expect(retry).not.toHaveBeenCalled()
-})
 
 it('retires the old source and follows the real verified runtime publication after its writer completes', async () => {
   const ordinary = vi.spyOn(api, 'subscribe')

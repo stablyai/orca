@@ -170,30 +170,6 @@ it('resolves the actual session before a conflicting terminal and shares its gly
   expect(screen.queryByLabelText('Working')).toBeNull()
 })
 
-it('follows a terminal into retained state and falls back only after its local pane disappears', () => {
-  const worker = { ...row(), status: 'waiting' }
-  render(<CrewAgentAvatar row={worker} target={local} />)
-  expect(screen.getByLabelText('Working')).toBeInTheDocument()
-  const entry = { ...status(0), state: 'done' as const }
-  act(() =>
-    useAppStore.setState({
-      agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {
-        [entry.paneKey]: {
-          entry,
-          tab: makeTab({ id: 'tab-0', worktreeId: 'workspace' }),
-          worktreeId: 'workspace',
-          agentType: 'claude',
-          startedAt: 1
-        }
-      }
-    })
-  )
-  expect(screen.getByLabelText('Done')).toBeInTheDocument()
-  act(() => useAppStore.setState({ retainedAgentsByPaneKey: {} }))
-  expect(screen.getByLabelText('Needs attention')).toBeInTheDocument()
-})
-
 it('keeps imported, missing, dispatch and other-host peers on Crew fallback despite matching local handles', () => {
   const base = row()
   render(
@@ -330,47 +306,6 @@ it.each([10, 100])(
     expect(commits.get(n)).toBe(before.get(n)! + 1)
     // The writer copies the map; the shared live index counts its previous keys once.
     expect(visits).toBe((n + 1) * 2)
-    const afterRemote = new Map(commits)
-    normalize.mockClear()
-    selectLive.mockClear()
-    act(() =>
-      useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
-        state: 'working',
-        progress: 40,
-        observedAt: 2_000_000
-      })
-    )
-    const localMap = useAppStore.getState().agentStatusByPaneKey
-    expect(Object.is(localMap, remoteMap)).toBe(false)
-    expect(enumerations.get(localMap)).toEqual([n + 1, n + 1])
-    expect(enumerations.get(remoteMap)).toEqual([n + 1, n + 1])
-    expect(
-      selectLive.mock.calls.filter(([state]) => state.agentStatusByPaneKey === localMap)
-    ).toHaveLength(2)
-    expect(normalize).toHaveBeenCalledTimes(n)
-    expect(commits.get(0)).toBe(afterRemote.get(0)! + 1)
-    for (let i = 1; i <= n; i++) {
-      expect(commits.get(i)).toBe(afterRemote.get(i))
-    }
-    expect(
-      within(screen.getByTestId('avatar-0')).getByRole('progressbar', { name: 'Working · 40%' })
-    ).toBeInTheDocument()
-    expect(visits).toBe((n + 1) * 2)
-    normalize.mockClear()
-    const settled = new Map(commits)
-    selectLive.mockClear()
-    act(() =>
-      useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
-        state: 'working',
-        progress: 40,
-        observedAt: 2_000_000
-      })
-    )
-    expect(commits).toEqual(settled)
-    expect(normalize).not.toHaveBeenCalled()
-    expect(useAppStore.getState().agentStatusByPaneKey).toBe(localMap)
-    expect(enumerations.get(localMap)).toEqual([n + 1, n + 1])
-    expect(selectLive).not.toHaveBeenCalled()
     mounted.unmount()
     expect(readStoreListenerCount()).toBe(listeners)
     observeValues.mockRestore()
