@@ -1006,6 +1006,10 @@
       "label": "{{title}} 图形",
       "previewDrawing": "预览图形",
       "viewSource": "查看 SVG 源代码"
+    },
+    "mermaidDiagram": {
+      "expand": "展开图表",
+      "label": "Mermaid 图表"
     }
   },
   "connection": {

@@ -1010,6 +1010,10 @@
       "label": "{{title}} çizimi",
       "previewDrawing": "Çizimi önizle",
       "viewSource": "SVG kaynağını görüntüle"
+    },
+    "mermaidDiagram": {
+      "expand": "Diyagramı genişlet",
+      "label": "Mermaid diyagramı"
     }
   },
   "connection": {

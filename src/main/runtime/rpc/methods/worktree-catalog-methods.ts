@@ -43,7 +43,8 @@ export const WORKTREE_CATALOG_METHODS = [
       // Why: snapshot pollers get activity at poll-friendly granularity so the id survives terminal output.
       return resolveWorktreeCatalogSnapshot(
         coarsenWorktreePsActivity(result),
-        params.afterSnapshotId
+        params.afterSnapshotId,
+        { acceptRowDelta: params.acceptRowDelta === true }
       )
     }
   }),

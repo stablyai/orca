@@ -12179,7 +12179,7 @@
         "wslHosts": {
           "title": "WSL 호스트",
           "experimental": "실험적",
-          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 중지된 배포판은 해당 배포판의 프로젝트를 열거나 여기에서 연결할 때만 시작됩니다.",
+          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 프로젝트를 열어도 중지된 배포판은 시작되지 않습니다. [시작]을 클릭하거나, 새 터미널을 열거나, 여기에서 연결하세요.",
           "add": "WSL 배포판 추가",
           "connect": "연결",
           "turnOn": "실험적에서 켜기",
@@ -18817,9 +18817,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "채팅 UI에서 계속하려면 이 호스트의 Orca를 업데이트하세요.",
-        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
-        "exitUnconfirmedFromTerminal": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요.",
-        "exitUnconfirmed": "{{agent}}이(가) 다른 터미널에서 이미 이 대화를 실행 중입니다. 그곳에서 {{agent}}을(를) 종료하거나 해당 터미널을 닫은 다음 세션 기록에서 이 대화를 여세요."
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요."
       },
       "state": {
         "loading": {
@@ -21680,12 +21678,8 @@
       "refreshBeforeEnd": "PTY를 새로 고칠 때까지 종료할 수 없습니다.",
       "endUnsupported": "이 터미널은 종료할 수 없습니다. 호스트가 필요한 안전 검사를 지원하지 않습니다. 탭이나 호스트에서 닫으세요.",
       "checkingTabs": "탭 확인 중…",
-      "endTitle": "{{terminal}}을(를) 종료할까요?",
-      "endDescription": "이 터미널과 하위 프로세스를 종료합니다. 저장하지 않은 작업이 손실될 수 있습니다.",
       "lastProcess": "마지막으로 확인된 프로세스: {{process}}",
-      "cancel": "취소",
       "ending": "종료 중…",
-      "end": "터미널 종료",
       "unassigned": "할당되지 않음",
       "thisComputer": "이 컴퓨터",
       "localOwnedCount_one": "이 컴퓨터의 Orca PTY {{count}}개",

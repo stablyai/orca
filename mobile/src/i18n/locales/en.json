@@ -1298,6 +1298,10 @@
       "label": "{{title}} drawing",
       "previewDrawing": "Preview drawing",
       "viewSource": "View SVG source"
+    },
+    "mermaidDiagram": {
+      "label": "Mermaid diagram",
+      "expand": "Expand diagram"
     }
   },
   "pullRequest": {

@@ -1006,6 +1006,10 @@
       "label": "{{title}} の図",
       "previewDrawing": "図をプレビュー",
       "viewSource": "SVG ソースを表示"
+    },
+    "mermaidDiagram": {
+      "expand": "図を拡大",
+      "label": "Mermaid 図"
     }
   },
   "connection": {

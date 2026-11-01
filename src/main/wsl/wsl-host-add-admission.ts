@@ -27,16 +27,16 @@ export function wslHostAddRefusal(
 export const WSL_HOST_REMOVING_MESSAGE = 'This WSL host is being removed.'
 
 export function wslHostNotConnectedMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t connected. Open one of its projects or connect it in Settings → Remote Orca Servers.`
+  return `The WSL host ${distro} isn’t connected. If it’s stopped, click Start; otherwise open one of its projects or connect it in Settings → Remote Orca Servers.`
 }
 
 export function wslHostStoppedMessage(distro: string): string {
-  return `${distro} was stopped. Switch to one of its projects, or reconnect it in Settings → Remote Orca Servers, to start it again.`
+  return `${distro} is stopped. To start it, click Start or open a new terminal in one of its projects.`
 }
 
 /** Shown on a paired phone once a stop is confirmed: only the desktop starts a distro. */
 export function wslHostStoppedForPhoneMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t running. Open one of its projects on your computer to start it.`
+  return `The WSL host ${distro} is stopped. To start it, click Start or open a new terminal in one of its projects on your computer.`
 }
 
 /** Shown on a paired phone while WSL hosts are switched off, or this one is being removed. */
@@ -46,7 +46,7 @@ export function wslHostHiddenFromPhoneMessage(distro: string): string {
 
 /** Shown on a paired phone while the desktop can't confirm the host runs (starting, reconnecting). */
 export function wslHostUnavailableForPhoneMessage(distro: string): string {
-  return `The WSL host ${distro} isn’t available from your phone right now. Open one of its projects on your computer to connect it.`
+  return `The WSL host ${distro} isn’t available from your phone right now. On your computer, click Start if it’s stopped; otherwise open one of its projects to connect it.`
 }
 
 export function wslHostRemovalPendingMessage(distro: string): string {

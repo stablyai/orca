@@ -1,5 +1,6 @@
 import { CLIPBOARD_IMAGE_MAX_PIXELS } from '../../../../shared/clipboard-image'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
+import { svgMarkupDataUri } from '../../../../shared/svg-document'
 
 const PREFERRED_PIXEL_RATIO = 2
 // Chromium returns a blank canvas when a side exceeds this.
@@ -40,6 +41,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+// Chromium taints a canvas drawn from a blob-URL SVG with HTML (foreignObject) labels; a data URL does not.
+async function drawableSrc(src: string): Promise<string> {
+  if (!src.startsWith('blob:')) {
+    return src
+  }
+  const blob = await (await fetch(src)).blob()
+  return blob.type === 'image/svg+xml' ? svgMarkupDataUri(await blob.text()) : src
+}
+
 /** Rasterizes an image, vectors included, to a PNG data URL; `background` keeps light-on-dark diagrams readable when pasted. */
 export async function renderImagePngDataUrl(
   src: string,
@@ -50,7 +60,7 @@ export async function renderImagePngDataUrl(
   if (!layout) {
     throw new Error('Image has no size')
   }
-  const image = await loadImage(src)
+  const image = await loadImage(await drawableSrc(src))
   const canvas = document.createElement('canvas')
   canvas.width = layout.width
   canvas.height = layout.height

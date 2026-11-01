@@ -93,7 +93,7 @@ export async function createUninstallFixture() {
   })
   services.push(service)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The exercised removal IPC uses only these settings reads, writes and registration methods.
-  registerPluginHandlers(store as never, service, null)
+  registerPluginHandlers(store as never, service)
   await service.initialize()
 
   async function install(

@@ -1,5 +1,5 @@
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
-import { isTextBlock, type NativeChatMessage } from './native-chat-types'
+import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
+import { isTextBlock, type NativeChatMessage } from '../native-chat-types'
 
 function messageText(message: NativeChatMessage): string {
   return message.blocks

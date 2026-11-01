@@ -5,9 +5,9 @@ import { WslHostPhoneGate } from './wsl-host-phone-reach'
 import type { WslOrcadConnection } from './wsl-orcad-connection-types'
 
 const STOPPED =
-  'The WSL host Ubuntu isn’t running. Open one of its projects on your computer to start it.'
+  'The WSL host Ubuntu is stopped. To start it, click Start or open a new terminal in one of its projects on your computer.'
 const NEUTRAL =
-  'The WSL host Ubuntu isn’t available from your phone right now. Open one of its projects on your computer to connect it.'
+  'The WSL host Ubuntu isn’t available from your phone right now. On your computer, click Start if it’s stopped; otherwise open one of its projects to connect it.'
 
 const BRIDGE: WslOrcadConnection = {
   distro: 'Ubuntu',

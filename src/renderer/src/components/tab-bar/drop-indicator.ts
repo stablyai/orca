@@ -17,8 +17,8 @@ export const ACTIVE_TAB_INDICATOR_CLASSES =
 
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive
-    ? 'bg-[color-mix(in_srgb,var(--foreground)_6%,var(--card))] text-foreground'
-    : 'bg-card text-muted-foreground hover:text-foreground'
+    ? 'bg-tab-active text-foreground'
+    : 'bg-tab-inactive text-muted-foreground hover:text-foreground'
 }
 
 export function getTabStripBorderClasses(

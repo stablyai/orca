@@ -1010,6 +1010,10 @@
       "label": "Zeichnung {{title}}",
       "previewDrawing": "Zeichnung anzeigen",
       "viewSource": "SVG-Quelltext anzeigen"
+    },
+    "mermaidDiagram": {
+      "expand": "Diagramm vergrößern",
+      "label": "Mermaid-Diagramm"
     }
   },
   "connection": {
