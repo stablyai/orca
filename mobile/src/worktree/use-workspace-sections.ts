@@ -17,6 +17,34 @@ import {
 } from './workspace-list-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
 
+export function getSectionCollapsedKeys(
+  section: Section,
+  collapsedGroups: ReadonlySet<string>
+): string[] {
+  const candidates = new Set<string>()
+  candidates.add(section.key)
+  const collapseKey = section.collapseKey ?? section.key
+  candidates.add(collapseKey)
+  const repoId = section.repo?.id
+  if (repoId) {
+    candidates.add(`repo:${repoId}`)
+    candidates.add(`project:repo:${repoId}`)
+  }
+  if (section.key.startsWith('project:repo:')) {
+    candidates.add(section.key.slice('project:'.length))
+  } else if (section.key.startsWith('repo:')) {
+    candidates.add(`project:${section.key}`)
+  }
+  return Array.from(candidates).filter((k) => collapsedGroups.has(k))
+}
+
+export function isSectionCollapsed(
+  section: Section,
+  collapsedGroups: ReadonlySet<string>
+): boolean {
+  return getSectionCollapsedKeys(section, collapsedGroups).length > 0
+}
+
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
   sortMode: WorkspaceSortBy
@@ -100,7 +128,7 @@ export function useWorkspaceSections(args: {
     () =>
       rawSections.map((s) => ({
         ...s,
-        data: collapsedGroups.has(s.key) ? [] : s.data
+        data: isSectionCollapsed(s, collapsedGroups) ? [] : s.data
       })),
     [rawSections, collapsedGroups]
   )

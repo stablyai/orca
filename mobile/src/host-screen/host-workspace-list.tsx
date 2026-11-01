@@ -33,6 +33,7 @@ import { buildRepoLookById } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
+import { getSectionCollapsedKeys } from '../worktree/use-workspace-sections'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostWorkspaceList({
@@ -207,7 +208,11 @@ export function HostWorkspaceList({
               return pendingCreations ? <>{pendingCreations}</> : null
             }
             const collapseKey = section.collapseKey ?? section.key
-            const isCollapsed = controller.collapsedGroups.has(collapseKey)
+            const matchingCollapsedKeys = getSectionCollapsedKeys(
+              section,
+              controller.collapsedGroups
+            )
+            const isCollapsed = matchingCollapsedKeys.length > 0
             const count =
               section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
             const repoSectionLook =
@@ -230,7 +235,15 @@ export function HostWorkspaceList({
                       : null,
                     pressed && { backgroundColor: colors.translucentFill }
                   ]}
-                  onPress={() => settings.toggleCollapsed(collapseKey)}
+                  onPress={() => {
+                    if (isCollapsed) {
+                      for (const key of matchingCollapsedKeys) {
+                        settings.toggleCollapsed(key)
+                      }
+                    } else {
+                      settings.toggleCollapsed(collapseKey)
+                    }
+                  }}
                 >
                   <View style={styles.sectionChevron}>
                     <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>

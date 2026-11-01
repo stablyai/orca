@@ -5,7 +5,7 @@ import { repoIconFeedKey } from '../../../src/shared/sidebar-list/repo-icon-data
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
-import { useWorkspaceSections } from '../worktree/use-workspace-sections'
+import { isSectionCollapsed, useWorkspaceSections } from '../worktree/use-workspace-sections'
 import { buildFilterRepos, type WorkspaceSectionRepo } from '../worktree/workspace-filter-repos'
 import type { Section, SectionRepo, Worktree } from '../worktree/workspace-list-types'
 import { useLastVisitedWorktreeOnHost } from '../worktree/use-last-visited-worktree-on-host'
@@ -177,7 +177,23 @@ function useFeedHostListSections({
     )
   }, [served, state.desktopRepos, domains, iconDataUrls])
 
-  return { sections, rawSections: sections, uniqueRepos, repoById, collapsedGroups, projectOrderBy }
+  const collapsedSections = useMemo(
+    () =>
+      sections.map((s) => ({
+        ...s,
+        data: isSectionCollapsed(s, collapsedGroups) ? [] : s.data
+      })),
+    [sections, collapsedGroups]
+  )
+
+  return {
+    sections: collapsedSections,
+    rawSections: sections,
+    uniqueRepos,
+    repoById,
+    collapsedGroups,
+    projectOrderBy
+  }
 }
 
 export const useHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
