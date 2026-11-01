@@ -42,7 +42,6 @@ vi.mock('../components/composer-input/TextField', async () => {
   const { createElement: element } = await import('react')
   return { TextField: (props: object) => element('TextField', props) }
 })
-vi.mock('../components/composer-input/composer-input-styles', () => ({ composerInputStyles: {} }))
 vi.mock('../components/BottomDrawer', async () => {
   const { createElement: element } = await import('react')
   return {
