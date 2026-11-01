@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useTabGroupTabCloseCommands } from '../tab-group/useTabGroupTabCloseCommands'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
+import type { NativeChatSplitDirection } from './native-chat-split-shortcut'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 const EMPTY_TABS: Tab[] = []
@@ -22,6 +23,12 @@ export function useStructuredChatPaneActions(tabId: string, worktreeId: string, 
       runNativeChatSplitTarget({ kind: 'workspace-tab', unifiedTabId: tabId, groupId }, 'right'),
     onSplitDown: () =>
       runNativeChatSplitTarget({ kind: 'workspace-tab', unifiedTabId: tabId, groupId }, 'down'),
+    onSplitWithTerminal: (direction: NativeChatSplitDirection) =>
+      runNativeChatSplitTarget(
+        { kind: 'workspace-tab', unifiedTabId: tabId, groupId },
+        direction,
+        true
+      ),
     canClosePane: groups.length > 1 || !groupTabs.find((tab) => tab.id === tabId)?.isPinned,
     closeLabel,
     onClosePane: () => closeItem(tabId)

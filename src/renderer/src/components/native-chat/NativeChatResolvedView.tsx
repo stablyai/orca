@@ -55,9 +55,11 @@ import { useNativeChatFileLinkContext } from './use-native-chat-file-link-contex
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
-import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import {
+  matchNativeChatSplitShortcut,
+  nativeChatSplitShortcutLabels
+} from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 export function NativeChatResolvedView({
   paneKey,
@@ -301,10 +303,7 @@ export function NativeChatResolvedView({
     composerRef,
     enabled: isVisible,
     onSwitchToTerminal,
-    splitShortcutLabels: {
-      right: formatShortcutLabel('terminal.splitRight', keybindings),
-      down: formatShortcutLabel('terminal.splitDown', keybindings)
-    },
+    splitShortcutLabels: nativeChatSplitShortcutLabels(getShortcutPlatform(), keybindings),
     actions: { onPaste, ...(contextMenuActions ?? emptyNativeChatContextMenuActions) },
     messageListRef,
     fileLinkContext,
@@ -328,13 +327,15 @@ export function NativeChatResolvedView({
       }}
       onKeyDownCapture={(event) => {
         find.onKeyDownCapture(event)
-        const splitDirection = event.repeat
+        const split = event.repeat
           ? null
           : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
-        if (splitDirection && contextMenuActions) {
+        if (split && contextMenuActions) {
           event.preventDefault()
           event.stopPropagation()
-          if (splitDirection === 'right') {
+          if (split.opensTerminal && contextMenuActions.onSplitWithTerminal) {
+            contextMenuActions.onSplitWithTerminal(split.direction)
+          } else if (split.direction === 'right') {
             contextMenuActions.onSplitRight()
           } else {
             contextMenuActions.onSplitDown()

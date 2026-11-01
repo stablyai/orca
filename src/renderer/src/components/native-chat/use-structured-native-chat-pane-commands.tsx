@@ -1,6 +1,5 @@
 import { useCallback, useMemo, type KeyboardEventHandler, type RefObject } from 'react'
 import { useAppStore } from '@/store'
-import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { isOrcaSessionId } from '../../../../shared/orca-session-address'
 import { resolveStructuredSessionOrcaSessionId } from '../../runtime/structured-session-orca-session-id'
@@ -13,7 +12,10 @@ import {
   useNativeChatContextMenu,
   type NativeChatContextMenuTargetArgs
 } from './use-native-chat-context-menu'
-import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import {
+  matchNativeChatSplitShortcut,
+  nativeChatSplitShortcutLabels
+} from './native-chat-split-shortcut'
 import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 
 export function useStructuredNativeChatPaneCommands({
@@ -62,10 +64,7 @@ export function useStructuredNativeChatPaneCommands({
     resolveOrcaSessionId,
     composerRef,
     showTerminalPaneActions: terminalPaneActions !== undefined,
-    splitShortcutLabels: {
-      right: formatShortcutLabel('terminal.splitRight', keybindings),
-      down: formatShortcutLabel('terminal.splitDown', keybindings)
-    },
+    splitShortcutLabels: nativeChatSplitShortcutLabels(getShortcutPlatform(), keybindings),
     chatPane:
       ownerWorktreeId && groupId && terminalPaneActions === undefined
         ? { tabId, worktreeId: ownerWorktreeId, groupId }
@@ -76,13 +75,13 @@ export function useStructuredNativeChatPaneCommands({
       if (event.repeat) {
         return
       }
-      const direction = matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
-      if (!direction) {
+      const split = matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+      if (!split) {
         return
       }
       let handled = false
       if (terminalPaneActions) {
-        if (direction === 'right') {
+        if (split.direction === 'right') {
           terminalPaneActions.onSplitRight()
         } else {
           terminalPaneActions.onSplitDown()
@@ -91,7 +90,8 @@ export function useStructuredNativeChatPaneCommands({
       } else if (groupId) {
         handled = runNativeChatSplitTarget(
           { kind: 'workspace-tab', unifiedTabId: tabId, groupId },
-          direction
+          split.direction,
+          split.opensTerminal
         )
       }
       if (!handled) {
