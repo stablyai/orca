@@ -165,7 +165,7 @@ export class WslHostService {
       return
     }
     if (enabled) {
-      // Nothing boots here: the window re-reports its focused host, the only one that may (E9).
+      // Nothing boots here: the window re-reports its focused host, which connects only if running (E9).
       return
     }
     this.disableGeneration += 1

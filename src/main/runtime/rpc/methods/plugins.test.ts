@@ -114,3 +114,36 @@ describe('plugin approval over RPC', () => {
     )
   })
 })
+
+describe('plugin system switch over RPC', () => {
+  it('is host-admin and turns the system on without approving anything', async () => {
+    const applyConsent = vi.fn()
+    const setPluginSystemEnabled = vi.fn()
+    const refresh = vi.fn().mockResolvedValue(undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch handler only waits, refreshes and lists.
+    const service = {
+      whenReady: vi.fn().mockResolvedValue(undefined),
+      refresh
+    } as unknown as PluginService
+    setPluginServiceForRpc(service, {
+      applyConsent,
+      applyEnablement: vi.fn(),
+      setPluginSystemEnabled
+    })
+    const switchMethod = method('plugins.setSystemEnabled')
+
+    expect(switchMethod.permission).toBe('host-admin')
+    const context: RpcContext = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: plugin handlers never touch the runtime.
+      runtime: {} as RpcContext['runtime'],
+      caller: { kind: 'local-cli' }
+    }
+    await expect(switchMethod.handler({ enabled: true }, context)).resolves.toEqual({
+      enabled: true,
+      plugins: []
+    })
+    expect(setPluginSystemEnabled).toHaveBeenCalledWith(true)
+    expect(refresh).toHaveBeenCalledAfter(setPluginSystemEnabled)
+    expect(applyConsent).not.toHaveBeenCalled()
+  })
+})

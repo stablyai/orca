@@ -12756,7 +12756,7 @@
         "wslHosts": {
           "title": "WSL-Hosts",
           "experimental": "Experimentell",
-          "description": "Orca führt in jeder Distribution einen Server aus. Eine gestoppte Distribution startet erst, wenn eines ihrer Projekte geöffnet oder hier eine Verbindung zu ihr hergestellt wird.",
+          "description": "Orca führt in jeder Distribution einen Server aus. Das Öffnen eines Projekts startet eine gestoppte Distribution nie: Klicke auf „Starten“, öffne ein neues Terminal oder verbinde sie hier.",
           "add": "WSL-Distribution hinzufügen",
           "connect": "Verbinden",
           "forceUpdate": "Update erzwingen",
@@ -19609,8 +19609,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "exitUnconfirmedFromTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
-        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
         "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
       },
       "state": {

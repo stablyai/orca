@@ -12467,7 +12467,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "Orca ejecuta un servidor dentro de cada distro. Una distro detenida solo se inicia cuando abres uno de sus proyectos o la conectas aquí.",
+          "description": "Orca ejecuta un servidor dentro de cada distro. Abrir un proyecto nunca inicia una distro detenida: haz clic en Iniciar, abre una terminal nueva o conéctala aquí.",
           "add": "Agregar distro WSL",
           "connect": "Conectar",
           "turnOn": "Activar en Experimental",
@@ -19306,9 +19306,7 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Actualiza Orca en este host para continuar en la interfaz de chat.",
-        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda.",
-        "exitUnconfirmed": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones.",
-        "exitUnconfirmedFromTerminal": "{{agent}} ya está ejecutando esta conversación en otra terminal. Sal de {{agent}} allí o cierra esa terminal; luego abre esta conversación desde el Historial de sesiones."
+        "notSavedYet": "{{agent}} aún no ha guardado esta conversación. Inténtalo de nuevo cuando responda."
       },
       "state": {
         "loading": {

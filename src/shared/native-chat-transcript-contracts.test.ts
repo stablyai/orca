@@ -1,5 +1,5 @@
 import './native-chat/transcript/native-chat-reasoning-row.spec'
-import './native-chat-reasoning-order.spec'
+import './native-chat/native-chat-reasoning-order.spec'
 import './native-chat/tools/native-chat-tool-activity.spec'
 import './native-chat/tools/native-chat-tool-pair-limit.spec'
 import './native-chat/tools/native-chat-tool-fold-attribution.spec'

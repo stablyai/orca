@@ -9009,7 +9009,7 @@
         "wslHosts": {
           "title": "Hosts WSL",
           "experimental": "Experimental",
-          "description": "O Orca executa um servidor dentro de cada distribuição. Uma distribuição parada só é iniciada quando você abre um dos projetos dela ou a conecta aqui.",
+          "description": "O Orca executa um servidor dentro de cada distribuição. Abrir um projeto nunca inicia uma distribuição parada: clique em Iniciar, abra um novo terminal ou conecte-a aqui.",
           "add": "Adicionar distribuição WSL",
           "connect": "Conectar",
           "forceUpdate": "Forçar atualização",
@@ -20661,8 +20661,6 @@
       "transcriptLabel": "Conversa",
       "resumeInNewChat": {
         "hostUpdateRequired": "Atualize o Orca neste host para continuar na interface de chat.",
-        "exitUnconfirmedFromTerminal": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
-        "exitUnconfirmed": "{{agent}} já está executando esta conversa em outro terminal. Encerre o {{agent}} lá ou feche esse terminal e abra esta conversa no Histórico de sessões.",
         "notSavedYet": "O {{agent}} ainda não salvou esta conversa. Tente novamente depois que ele responder."
       },
       "loadingEarlierMessages": "Carregando mensagens anteriores…",
