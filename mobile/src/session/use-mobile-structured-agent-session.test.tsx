@@ -690,6 +690,10 @@ describe('useMobileStructuredAgentSession', () => {
         settable: true
       })
     })
+    // The picker is usable before fence 3's own read answers; only a read issued after the pick settles it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
     let reconcile!: (response: Awaited<ReturnType<typeof defaultSendRequest>>) => void
     sendRequest.mockImplementation(async (method, params) => {
       if (method === 'agentSession.setOption') {

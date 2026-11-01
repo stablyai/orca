@@ -375,11 +375,12 @@ describe('useStructuredAgentSession options', () => {
     })
     fence = 4
     rerender()
-    expect(result.current.optionSnapshot.every((entry) => !entry.settable)).toBe(true)
-    await act(async () => refreshedOptions.resolve(OPTIONS))
+    // The replacement process's options read is still pending; the known model stays pickable.
+    expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')?.settable).toBe(true)
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(true)
     })
+    await act(async () => refreshedOptions.resolve(OPTIONS))
 
     const mutations = mocks.call.mock.calls.filter(
       ([, method]) => method === 'agentSession.setOption'

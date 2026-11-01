@@ -56,7 +56,7 @@ export function useMobileStructuredAgentOptions(args: {
   )
   // An options answer made before the account's listing landed listed none of it.
   const {
-    projectPermission,
+    projectRuntimeReports,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
@@ -107,7 +107,7 @@ export function useMobileStructuredAgentOptions(args: {
     optionState.permissionMode === null
   const readOptionState = useCallback(
     () =>
-      projectPermission({
+      projectRuntimeReports({
         ...structuredAgentSessionOptionView(
           optionStateRef.current,
           undefined,
@@ -115,7 +115,7 @@ export function useMobileStructuredAgentOptions(args: {
         ),
         permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
       }),
-    [controller, projectPermission, hostSupport?.permissionOwn]
+    [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
   const shown = structuredAgentSessionShownSnapshot(readOptionState())
   const optionSnapshot = legacyHostPermissions
@@ -123,7 +123,7 @@ export function useMobileStructuredAgentOptions(args: {
     : shown
 
   const readWriteContext = () => {
-    const currentState = projectPermission({
+    const currentState = projectRuntimeReports({
       ...optionStateRef.current,
       permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
     })
