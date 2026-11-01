@@ -258,17 +258,25 @@ describe('parseAntigravityUsageEnvelope', () => {
     expect(reading?.buckets.map((bucket) => bucket.usedPercent)).toEqual([0, 100])
   })
 
-  it('reads a missing or unparsable reset time as unknown', () => {
+  it('reads a missing, unparsable, or pre-epoch reset time as unknown', () => {
     const reading = parseAntigravityUsageEnvelope(
       envelope([
         {
           name: 'G',
-          buckets: [{ id: 'a', window: 'weekly', remaining_fraction: 1, reset_time: 'soon' }]
+          buckets: [
+            { id: 'a', window: 'weekly', remaining_fraction: 1, reset_time: 'soon' },
+            {
+              id: 'b',
+              window: '5h',
+              remaining_fraction: 1,
+              reset_time: '0001-01-01T00:00:00Z'
+            }
+          ]
         }
       ])
     )
 
-    expect(reading?.buckets[0]?.resetsAt).toBeNull()
+    expect(reading?.buckets.map((bucket) => bucket.resetsAt)).toEqual([null, null])
   })
 
   it.each([

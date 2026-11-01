@@ -53,7 +53,7 @@ function parseResetsAt(value: unknown): number | null {
     return null
   }
   const parsed = new Date(text).getTime()
-  return Number.isFinite(parsed) ? parsed : null
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
 /** Group names distinguish identical quota labels; append bucket names only for multiple windows. */
