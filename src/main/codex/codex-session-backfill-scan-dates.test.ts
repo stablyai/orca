@@ -12,18 +12,37 @@ import {
 import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
 
 describe('codex session backfill scan dates', () => {
-  it('reads UTC parts so a local evening never lands on the wrong directory', () => {
-    expect(getCodexSessionBackfillDate(new Date('2026-08-05T23:59:59Z'))).toEqual([
+  it('reads local parts because Codex names rollout directories in local time', () => {
+    expect(getCodexSessionBackfillDate(new Date(2026, 7, 5, 23, 59, 59))).toEqual([
       '2026',
       '08',
       '05'
     ])
-    expect(getCodexSessionBackfillDate(new Date('2026-01-02T00:00:00Z'))).toEqual([
-      '2026',
-      '01',
-      '02'
-    ])
+    expect(getCodexSessionBackfillDate(new Date(2026, 0, 2, 0, 0, 0))).toEqual(['2026', '01', '02'])
   })
+
+  it.each<[string, string, CodexSessionBackfillDate]>([
+    ['Asia/Seoul', '2026-10-26T15:53:24Z', ['2026', '10', '27']],
+    ['America/Los_Angeles', '2026-10-27T05:00:00Z', ['2026', '10', '26']]
+  ])(
+    'targets the directory a %s launch writes, not the UTC date',
+    (timeZone, instant, expected) => {
+      const previousTimeZone = process.env.TZ
+      process.env.TZ = timeZone
+      try {
+        expect(getCodexSessionBackfillDate(new Date(instant))).toEqual(expected)
+        expect(getCodexSessionBackfillDatesBetween(new Date(instant), new Date(instant))).toEqual([
+          expected
+        ])
+      } finally {
+        if (previousTimeZone === undefined) {
+          delete process.env.TZ
+        } else {
+          process.env.TZ = previousTimeZone
+        }
+      }
+    }
+  )
 
   it('rejects anything that is not a zero-padded YYYY/MM/DD triple', () => {
     expect(isCodexSessionBackfillDate(['2026', '08', '05'])).toBe(true)
@@ -71,8 +90,8 @@ describe('codex session backfill scan dates', () => {
   it('walks every date a launch could have spanned, including across a month end', () => {
     expect(
       getCodexSessionBackfillDatesBetween(
-        new Date('2026-07-31T23:00:00Z'),
-        new Date('2026-08-02T01:00:00Z')
+        new Date(2026, 6, 31, 23, 0, 0),
+        new Date(2026, 7, 2, 1, 0, 0)
       )
     ).toEqual([
       ['2026', '07', '31'],
@@ -144,8 +163,8 @@ describe('bounded backfill range construction', () => {
     ['30-day month end', ['2026', '04', '29'], ['2026', '05', '02']],
     ['single day', ['2026', '09', '07'], ['2026', '09', '07']]
   ])('matches the enumerated range at the %s cap boundary', (_label, from, to) => {
-    const start = new Date(Date.UTC(Number(from[0]), Number(from[1]) - 1, Number(from[2])))
-    const end = new Date(Date.UTC(Number(to[0]), Number(to[1]) - 1, Number(to[2])))
+    const start = new Date(Number(from[0]), Number(from[1]) - 1, Number(from[2]))
+    const end = new Date(Number(to[0]), Number(to[1]) - 1, Number(to[2]))
     const enumerated = getCodexSessionBackfillDatesBetween(start, end)
     const pending = [from]
 

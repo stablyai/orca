@@ -60,10 +60,7 @@ function writeFullBaseline(
 }
 
 function overflowingDates(): CodexSessionBackfillDate[] {
-  return getCodexSessionBackfillDatesBetween(
-    new Date(Date.UTC(2026, 6, 1)),
-    new Date(Date.UTC(2026, 7, 9))
-  )
+  return getCodexSessionBackfillDatesBetween(new Date(2026, 6, 1), new Date(2026, 7, 9))
 }
 
 function readMarker(): Record<string, unknown> {
