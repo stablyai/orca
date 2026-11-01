@@ -18,13 +18,13 @@ import {
   type AgentSessionOperationDecision,
   type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   admitAgentSessionMutation,
   agentSessionLedgerRefusal,
   type AgentSessionMutationAdmission
-} from '../../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export type AgentSessionOperationAdmission = {

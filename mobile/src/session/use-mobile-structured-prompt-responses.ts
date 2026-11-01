@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { AgentSessionPromptResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionPromptResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentJournalQuestionItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH,
@@ -7,8 +7,8 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionSelectedOptionId,
   type AgentSessionQuestionAnswer
-} from '../../../src/shared/agent-session-question-answer'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+} from '../../../src/shared/agent-session/agent-session-question-answer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion

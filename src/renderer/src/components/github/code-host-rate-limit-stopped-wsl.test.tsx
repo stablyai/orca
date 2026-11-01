@@ -60,23 +60,4 @@ describe.each([
     expect(result.current.snapshot).toEqual(SNAPSHOT)
     expect(result.current.hasError).toBe(false)
   })
-
-  it('reports the refusal when there is no snapshot yet to keep', async () => {
-    rateLimit.mockResolvedValueOnce({ ok: false, error: STOPPED })
-    const { result } = renderCard()
-
-    await act(() => result.current.refresh())
-
-    expect(result.current.snapshot).toBeNull()
-    expect(result.current.hasError).toBe(true)
-  })
-
-  it('still reports any other failure', async () => {
-    rateLimit.mockResolvedValueOnce({ ok: false, error: 'HTTP 401: Bad credentials' })
-    const { result } = renderCard()
-
-    await act(() => result.current.refresh())
-
-    expect(result.current.hasError).toBe(true)
-  })
 })

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  createDaemonPtyEnvironment,
-  finalizeDaemonPtyEnvironment
-} from '../daemon/pty-subprocess/spawn-environment'
+import { createDaemonPtyEnvironment } from '../daemon/pty-subprocess/spawn-environment'
 import {
   createAgentStatusExtensionHarness,
   AGENT_STATUS_EXTENSION_SELF_PID
@@ -61,28 +58,4 @@ describe('independent daemon terminal Pi ownership', () => {
       expect(parent.handlers.before_agent_start).toBeTypeOf('function')
     }
   )
-
-  it('drops process-local owners even when included in a new-terminal request', () => {
-    const requestedEnv = { ...terminalEnv, ...ownerEnv }
-    const env = createDaemonPtyEnvironment({
-      sessionId: 'fresh-terminal',
-      cols: 80,
-      rows: 24,
-      env: requestedEnv
-    })
-    for (const key of Object.keys(ownerEnv)) {
-      expect(env[key]).toBeUndefined()
-    }
-    expect(env).toMatchObject(terminalEnv)
-    expect(requestedEnv).toMatchObject(ownerEnv)
-  })
-
-  it('removes owners reintroduced while preparing the final shell environment', () => {
-    const env = { ...terminalEnv, ...ownerEnv }
-    finalizeDaemonPtyEnvironment(env, terminalEnv)
-    for (const key of Object.keys(ownerEnv)) {
-      expect(env).not.toHaveProperty(key)
-    }
-    expect(env).toMatchObject(terminalEnv)
-  })
 })

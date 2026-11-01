@@ -9,7 +9,7 @@ import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
-import type { useMobileNativeChatFullMessage } from '../../MobileNativeChatFullContent'
+import type { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 const FOLDED_HEIGHT =

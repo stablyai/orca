@@ -17,6 +17,8 @@ function rememberHost(store: GrantStore, pluginId: string, host: string): void {
   store.updateSettings({ pluginExternalHostGrants: grants })
 }
 
+export type PluginExternalOpenConsent = 'allowed' | 'cancelled' | 'unavailable'
+
 export function truncatedUrl(url: string): string {
   return url.length > URL_DETAIL_MAX_LENGTH ? `${url.slice(0, URL_DETAIL_MAX_LENGTH - 1)}…` : url
 }
@@ -32,16 +34,26 @@ export async function confirmPluginExternalOpen(input: {
   pluginId: string
   pluginName: string
   url: string
-}): Promise<boolean> {
+  log?: (line: string) => void
+  /** Spends the rate budget (it may throw): before an open or a prompt, never for nothing. */
+  admit?: () => void
+}): Promise<PluginExternalOpenConsent> {
   const parsed = new URL(input.url)
-  if (parsed.protocol === 'mailto:') {
-    return true
-  }
   // Punycode host (`URL` normalizes it), so a lookalike name shows as what it is.
   const host = parsed.host.toLowerCase()
-  if (grantedHosts(input.store, input.pluginId).includes(host)) {
-    return true
+  if (parsed.protocol === 'mailto:' || grantedHosts(input.store, input.pluginId).includes(host)) {
+    input.admit?.()
+    return 'allowed'
   }
+  // A sheet on a hidden or minimized window would wait, unseen, forever.
+  if (input.window.isDestroyed() || !input.window.isVisible() || input.window.isMinimized()) {
+    input.log?.(
+      `shell.openExternal(${host}): not opened; Orca's window is hidden, so nobody can confirm it`
+    )
+    return 'unavailable'
+  }
+  input.admit?.()
+  input.log?.(`shell.openExternal(${host}): waiting for the person to confirm`)
   const { response, checkboxChecked } = await dialog.showMessageBox(input.window, {
     type: 'question',
     buttons: [
@@ -67,10 +79,10 @@ export async function confirmPluginExternalOpen(input: {
     )
   })
   if (response !== 0) {
-    return false
+    return 'cancelled'
   }
   if (checkboxChecked) {
     rememberHost(input.store, input.pluginId, host)
   }
-  return true
+  return 'allowed'
 }

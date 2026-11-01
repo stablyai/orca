@@ -10,7 +10,7 @@ import { projectNativeChatTranscript } from './native-chat-transcript-projection
 import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
 import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import { DISPATCH_REJECTED_CANCELLED } from '../../agent-session/requests/structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
 
 const STOPPED_ROW = 'stopped-before-start:'
 const key = agentJournalSubmissionKey

@@ -5,11 +5,11 @@ import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../durable-file-write'
 import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import type { AgentSessionOrcaStopCause } from '../../shared/agent-session-orca-stop'
+import type { AgentSessionOrcaStopCause } from '../../shared/agent-session/lifecycle/agent-session-orca-stop'
 import {
   AGENT_SESSION_RESUME_TRIGGERS,
   type AgentSessionResumeTrigger
-} from '../../shared/agent-session-resume-marker'
+} from '../../shared/agent-session/lifecycle/agent-session-resume-marker'
 
 const RUNTIMES_DIRECTORY = 'agent-session-runtimes'
 // Retain enough history to attribute owners from recent restarts.

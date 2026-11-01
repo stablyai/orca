@@ -5,8 +5,8 @@ import {
   claudeFrame,
   identityFor,
   USER_MESSAGE
-} from '../claude-structured-session-test-support'
-import { claudeOpened } from '../claude-structured-startup-settled-test-support'
+} from './claude-structured-session-test-support'
+import { claudeOpened } from './claude-structured-startup-settled-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'

@@ -4,6 +4,7 @@ import {
   PLUGIN_APP_THEME_TOKENS
 } from './plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from './plugin-theme-css-fallbacks'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../frames/plugin-panel-design-tokens'
 
 const REQUIRED = new Set<string>(PLUGIN_APP_THEME_REQUIRED_TOKENS)
 
@@ -135,6 +136,16 @@ export function renderPluginThemeTokenReference(): string {
     ...PLUGIN_APP_THEME_TOKENS.map(
       (token) =>
         `| \`${token}\` | ${TOKEN_ROLES[token]} | ${REQUIRED.has(token) ? 'yes' : 'no'} | ${REQUIRED.has(token) ? '' : omittedValue(token)} |`
+    ),
+    '',
+    '## Frame CSS variables',
+    '',
+    "Panel and custom editor frames get these stable variables, set from Orca's active theme and updated in place when it changes. Other tokens are not exposed to frames.",
+    '',
+    '| Variable | Orca token |',
+    '| --- | --- |',
+    ...PANEL_DESIGN_TOKEN_ALLOWLIST.map(
+      (token) => `| \`--orca-${token.slice(2)}\` | \`${token}\` |`
     )
   ]
   return `${lines.join('\n')}\n`

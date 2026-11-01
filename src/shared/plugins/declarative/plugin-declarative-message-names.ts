@@ -14,16 +14,21 @@ export const PLUGIN_DECLARATIVE_MESSAGES = {
   ack: 'ui.ack',
   /** guest → host, `{ document }`: the runtime is up and waits for `ui.hydrate` to render. */
   ready: 'ui.ready',
-  /** host → guest, `{ panel?, visible?, plugin?, workspace? }`: persisted state and context. */
+  /**
+   * host → guest, `{ panel?, visible?, plugin?, workspace?, memory?, retain? }`: persisted state and
+   * context; `memory` hands keyed memory atoms to a dev hot reload, `retain` asks for `ui.retain`.
+   */
   hydrate: 'ui.hydrate',
   /** host → guest, `{ visible }` */
   visibility: 'ui.visibility',
   /** guest → host, `{ entries: [{ scope, key, version, value }] }`: persisted atoms changed. */
-  persist: 'ui.persist'
+  persist: 'ui.persist',
+  /** guest → host, `{ document, entries: [{ key, version, value? }] }`: keyed memory atoms changed. */
+  retain: 'ui.retain'
 } as const
 
 /** Grows with the component catalog, so plugins can feature-detect with `ui.catalog`. */
-export const PLUGIN_DECLARATIVE_CATALOG_VERSION = 1
+export const PLUGIN_DECLARATIVE_CATALOG_VERSION = 3
 
 /** Each catalog component's prop names, mirrored by the zod catalog (parity-tested). */
 export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
@@ -31,8 +36,8 @@ export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Row: ['gap', 'align', 'justify', 'wrap'],
   Text: ['tone', 'muted', 'size', 'weight', 'truncate'],
   Heading: ['level'],
-  Button: ['variant', 'tone', 'size', 'icon', 'disabled', 'onPress'],
-  IconButton: ['icon', 'label', 'variant', 'tone', 'size', 'disabled', 'onPress'],
+  Button: ['variant', 'tone', 'size', 'icon', 'tooltip', 'disabled', 'onPress'],
+  IconButton: ['icon', 'label', 'tooltip', 'variant', 'tone', 'size', 'disabled', 'onPress'],
   Badge: ['tone'],
   Card: ['title', 'description'],
   List: ['label'],
@@ -66,17 +71,120 @@ export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
   Spinner: ['label', 'labelHidden'],
   EmptyState: ['title', 'description', 'icon'],
   Link: ['href', 'onPress'],
-  Code: ['block']
+  Code: ['block'],
+  // Catalog 2 (Orca 1.4.247).
+  Textarea: [
+    'label',
+    'labelHidden',
+    'value',
+    'defaultValue',
+    'placeholder',
+    'rows',
+    'maxLength',
+    'invalid',
+    'disabled',
+    'onChange',
+    'onSubmit'
+  ],
+  Checkbox: ['label', 'description', 'checked', 'defaultChecked', 'disabled', 'onChange'],
+  RadioGroup: [
+    'label',
+    'labelHidden',
+    'value',
+    'defaultValue',
+    'options',
+    'orientation',
+    'disabled',
+    'onChange'
+  ],
+  Slider: [
+    'label',
+    'labelHidden',
+    'value',
+    'defaultValue',
+    'min',
+    'max',
+    'step',
+    'showValue',
+    'disabled',
+    'onChange'
+  ],
+  Field: ['label', 'description', 'error', 'required'],
+  Tabs: ['label', 'value', 'defaultValue', 'onChange'],
+  Tab: ['value', 'label', 'icon', 'disabled'],
+  Collapsible: ['title', 'description', 'open', 'defaultOpen', 'disabled', 'onChange'],
+  Toolbar: ['label', 'gap'],
+  Grid: ['columns', 'minItemWidth', 'gap'],
+  Table: [
+    'label',
+    'columns',
+    'rows',
+    'sort',
+    'selectionMode',
+    'selected',
+    'defaultSelected',
+    'hasMore',
+    'loading',
+    'emptyText',
+    'maxHeight',
+    'onSortChange',
+    'onSelectionChange',
+    'onRowAction',
+    'onLoadMore'
+  ],
+  Tree: [
+    'label',
+    'items',
+    'selected',
+    'defaultSelected',
+    'expanded',
+    'defaultExpanded',
+    'maxHeight',
+    'onSelect',
+    'onToggle',
+    'onAction'
+  ],
+  Markdown: ['content'],
+  CodeView: ['code', 'language', 'label', 'lineNumbers', 'wrap', 'maxHeight'],
+  Image: ['src', 'alt', 'size', 'fit', 'rounded'],
+  KeyValue: ['label', 'items'],
+  Callout: ['tone', 'title', 'icon'],
+  Skeleton: ['shape', 'lines', 'label'],
+  // Catalog 3 (also Orca 1.4.247).
+  RelativeTime: ['at', 'format', 'tone', 'muted']
 } as const satisfies Record<string, readonly string[]>
 
 export type PluginDeclarativeComponentTag = keyof typeof PLUGIN_DECLARATIVE_COMPONENT_PROPS
 
-/** Controls whose value Orca owns while the person edits; the runtime tags their renders. */
-export const PLUGIN_DECLARATIVE_VALUE_CONTROLS: readonly PluginDeclarativeComponentTag[] = [
-  'Input',
-  'Switch',
-  'Select'
-]
+/**
+ * Controls whose value Orca owns while the person edits, by the prop holding the value and the
+ * callback reporting each edit; the runtime tags their renders with the edits they have seen.
+ */
+export const PLUGIN_DECLARATIVE_VALUE_CONTROLS = {
+  Input: { value: 'value', change: 'onChange' },
+  Textarea: { value: 'value', change: 'onChange' },
+  Switch: { value: 'checked', change: 'onChange' },
+  Checkbox: { value: 'checked', change: 'onChange' },
+  Select: { value: 'value', change: 'onChange' },
+  RadioGroup: { value: 'value', change: 'onChange' },
+  Slider: { value: 'value', change: 'onChange' },
+  Tabs: { value: 'value', change: 'onChange' },
+  Collapsible: { value: 'open', change: 'onChange' },
+  Table: { value: 'selected', change: 'onSelectionChange' },
+  Tree: { value: 'selected', change: 'onSelect' }
+} as const satisfies Partial<
+  Record<PluginDeclarativeComponentTag, { value: string; change: string }>
+>
+
+const VALUE_CONTROL_BY_TYPE: ReadonlyMap<string, { value: string; change: string }> = new Map(
+  Object.entries(PLUGIN_DECLARATIVE_VALUE_CONTROLS)
+)
+
+export function pluginDeclarativeValueControl(
+  type: string
+): { value: string; change: string } | null {
+  return VALUE_CONTROL_BY_TYPE.get(type) ?? null
+}
 
 /**
  * Wire-only prop on value controls: the newest edit id the guest had processed for that control

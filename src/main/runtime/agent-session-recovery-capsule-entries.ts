@@ -8,7 +8,7 @@ import {
   parseAgentSessionResumeMarker,
   type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker
-} from '../../shared/agent-session-resume-marker'
+} from '../../shared/agent-session/lifecycle/agent-session-resume-marker'
 
 const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 export const MAX_FAILURE_FIELD_LENGTH = 512

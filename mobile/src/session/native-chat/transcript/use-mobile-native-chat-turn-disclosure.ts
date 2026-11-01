@@ -22,7 +22,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shar
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../../mobile-native-chat-run-descriptors'
+import type { MobileNativeChatRunPresentation } from '../mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows

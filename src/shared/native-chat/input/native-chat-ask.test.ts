@@ -9,7 +9,7 @@ import {
   type AgentMessageSource
 } from '../../agent-session/agent-session-message-source'
 import { nativeChatAskDismissKey } from '../../native-chat-ask-dismiss-key'
-import { projectStructuredItemToNativeChat } from '../../structured-agent-session-projection'
+import { projectStructuredItemToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
 import {
   extractPendingAsk,
   extractPendingMessageReplyAsk,

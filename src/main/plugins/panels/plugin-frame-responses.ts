@@ -35,6 +35,7 @@ const MIME_TYPES: Record<string, string> = {
 }
 
 export const HTML_CONTENT_TYPE = 'text/html; charset=utf-8'
+export const JAVASCRIPT_CONTENT_TYPE = 'text/javascript; charset=utf-8'
 
 export function pluginFrameContentType(path: string): string {
   return MIME_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream'

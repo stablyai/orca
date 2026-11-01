@@ -5,8 +5,8 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
   type AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import { nextAgentSessionFence } from '../../../../shared/agent-session-next-fence'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../../agent-session-record-store'
 

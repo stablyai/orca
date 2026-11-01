@@ -9,7 +9,7 @@ import {
   createStructuredAgentSessionOptionState
 } from '../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {

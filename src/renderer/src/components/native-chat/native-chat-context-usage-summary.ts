@@ -1,4 +1,4 @@
-import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
+import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
 
 /** Reduce provider context breakdowns to the rows shown by the composer ring. */
 export type NativeChatContextUsageSummary = {

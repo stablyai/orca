@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionPromptAttentionKey } from '../../shared/agent-session-attention'
-import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session-wire'
-import { projectStructuredAgentSessionStatusState } from '../../shared/structured-agent-session-projection'
+import { agentSessionPromptAttentionKey } from '../../shared/agent-session/agent-session-attention'
+import type { AgentSessionTurnCompletionEvent } from '../../shared/agent-session/view/agent-session-turn-completion-wire'
+import { projectStructuredAgentSessionStatusState } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { StructuredAgentSessionTurnCompletionFeed } from '../native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
@@ -87,6 +87,7 @@ describe('host prompt delivery and retirement', () => {
           readNotificationSettings: () => ({
             enabled: true,
             agentTaskComplete: true,
+            agentNeedsInput: true,
             terminalBell: true,
             suppressWhenFocused: false,
             customSoundId: 'system',
@@ -97,6 +98,7 @@ describe('host prompt delivery and retirement', () => {
           }),
           readWorkspaceLabels: () => ({}),
           isWorkspaceMuted: () => false,
+          readOrchestration: () => undefined,
           dispatch: (event) => controller.dispatch(event),
           reconcile: (state) => controller.reconcileStructuredPromptAttention(state),
           now: () => 42
@@ -112,6 +114,7 @@ describe('host prompt delivery and retirement', () => {
             ]
           ]),
           readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readChildWork: () => undefined,
           now: () => 42
         })
         feed.subscribe({ id: 'legacy', emit: (event) => legacy.push(event) })

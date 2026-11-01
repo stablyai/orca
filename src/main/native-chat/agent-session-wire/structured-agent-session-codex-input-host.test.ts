@@ -17,7 +17,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import {
   type AgentSessionSubscribeEvent,
   agentSessionSendSubmission as submission
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import {
@@ -28,7 +28,7 @@ import { journalDatabasePath } from '../agent-session-journal/journal-host-datab
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
 import {
   THREAD_ID as THREAD,

@@ -1,12 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import React, { useCallback, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import { PLUGIN_DECLARATIVE_MESSAGES } from '../../../../shared/plugins/declarative/plugin-declarative-message-names'
 import type { PluginFrameGuest } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { pluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_FRAME_USER_METHODS } from '../../../../shared/plugins/workers/plugin-host-api'
 import { PluginDeclarativeView } from '@/components/plugins/declarative/PluginDeclarativeView'
-import { pluginDeclarativeGestureId } from '@/components/plugins/declarative/plugin-declarative-gesture-geometry'
 import type { PluginDeclarativeEmit } from '@/components/plugins/declarative/PluginDeclarativeControls'
-import { translate } from '@/i18n/i18n'
 import { callPanelActionViaPreload } from './plugin-frame-host'
 import {
   PluginFrameView,
@@ -16,15 +14,25 @@ import {
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginDeclarativeTree } from './use-plugin-declarative-tree'
 import { usePluginDeclarativeState } from './use-plugin-declarative-state'
+import { useReportDeclarativePanelDraw } from './use-plugin-panel-draw-report'
+import { usePluginDeclarativeImages } from './use-plugin-declarative-images'
+import { usePluginPanelActDriver } from './plugin-panel-act-driver'
 import { useAppStore } from '@/store'
+import {
+  PluginDeclarativeIssueNotice,
+  PluginDeclarativeReloadedNotice
+} from './PluginDeclarativePanelNotices'
 
 type PluginDeclarativePanelProps = {
+  tabKey: string
   panelId: string
   title: string
   guest: PluginFrameGuest
   frameKey: string
   sessionToken: string | null
   onUnresponsive: () => void
+  /** Dev folder: saves swap the guest under this panel, keeping its last tree and memory atoms. */
+  hotReload?: boolean
 }
 
 function subscribeDocumentVisibility(onChange: () => void): () => void {
@@ -39,12 +47,14 @@ function subscribeDocumentVisibility(onChange: () => void): () => void {
  * ends the guest, and only persisted atoms carry over.
  */
 export function PluginDeclarativePanel({
+  tabKey,
   panelId,
   title,
   guest,
   frameKey,
   sessionToken,
-  onUnresponsive
+  onUnresponsive,
+  hotReload = false
 }: PluginDeclarativePanelProps): React.JSX.Element {
   const frameRef = useRef<PluginFrameElement | null>(null)
   const sendToGuest = useCallback((event: string, payload: unknown) => {
@@ -59,11 +69,14 @@ export function PluginDeclarativePanel({
     panelId,
     sessionToken,
     visible: sidebarOpen && windowVisible,
-    sendToGuest
+    sendToGuest,
+    hotReload
   })
   const {
     rendered,
     issue,
+    reloads,
+    dismissIssue,
     channel,
     gestures,
     admitPress,
@@ -73,16 +86,20 @@ export function PluginDeclarativePanel({
   } = usePluginDeclarativeTree(sendToGuest, {
     onGuestEvent: (event, payload) => state.onGuestEvent(event, payload)
   })
-  // A reload or navigation brings a fresh runtime that counts revisions from 1 again.
-  useEffect(() => {
+  // A reload, navigation or (dev save) new guest brings a fresh runtime counting revisions from 1.
+  useLayoutEffect(() => {
+    resetDocument()
     const frame = frameRef.current
     frame?.addEventListener('did-start-loading', resetDocument)
     return () => frame?.removeEventListener('did-start-loading', resetDocument)
-  }, [resetDocument])
+  }, [frameKey, resetDocument])
+  const loadImage = usePluginDeclarativeImages(sessionToken)
   const sessionTokenRef = useRef(sessionToken)
   useLayoutEffect(() => {
     sessionTokenRef.current = sessionToken
   })
+
+  useReportDeclarativePanelDraw(tabKey, guest.url, rendered?.document ?? null, issue)
 
   usePluginFrameHost({
     surface: 'panel',
@@ -113,11 +130,12 @@ export function PluginDeclarativePanel({
     },
     [admitPress, revision, sendToGuest, shownDocument]
   )
-  // A click on Orca's own Link: no frame-activation check, but the Link must have settled, and
-  // main keeps the URL allowlist and rate limit.
-  const onOpenLink = (href: string): void => {
+  usePluginPanelActDriver(tabKey, rendered?.tree ?? null, onEvent)
+  // A click on Orca's own Link (or a Markdown link): no frame-activation check, but its control
+  // must have settled, and main keeps the URL allowlist and rate limit.
+  const onOpenLink = (href: string, gestureId: string): void => {
     const token = sessionTokenRef.current
-    if (token && isGestureSettled(pluginDeclarativeGestureId.href(href))) {
+    if (token && isGestureSettled(gestureId)) {
       void callPanelActionViaPreload({
         sessionToken: token,
         action: PLUGIN_FRAME_USER_METHODS.openExternal,
@@ -129,6 +147,8 @@ export function PluginDeclarativePanel({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <PluginFrameView
+        // A dev save's new guest URL is a new webview; the tree below stays until it renders.
+        key={frameKey}
         frameRef={frameRef}
         guest={guest}
         hidden
@@ -138,26 +158,21 @@ export function PluginDeclarativePanel({
         title={title}
       />
       {issue ? (
-        // Polite and plugin-attributed: this is the plugin's text, not an Orca failure.
-        <div
-          role="status"
-          className="border-b border-border px-3 py-1.5 text-xs break-words text-muted-foreground"
-        >
-          {issue.source === 'plugin'
-            ? translate(
-                'auto.components.rightSidebar.PluginDeclarativePanel.pluginMessage',
-                'Message from {{value0}}: {{value1}}',
-                { value0: title, value1: issue.message }
-              )
-            : issue.message}
-        </div>
+        <PluginDeclarativeIssueNotice
+          issue={issue}
+          title={title}
+          showingLastGood={rendered !== null}
+          onDismiss={dismissIssue}
+        />
       ) : null}
+      {reloads > 0 ? <PluginDeclarativeReloadedNotice key={reloads} /> : null}
       <PluginDeclarativeView
         // A new guest document starts its value controls' edit counts over.
         key={shownDocument}
         tree={rendered?.tree ?? null}
         onEvent={onEvent}
         onOpenLink={onOpenLink}
+        onLoadImage={loadImage}
         gestures={gestures}
       />
     </div>

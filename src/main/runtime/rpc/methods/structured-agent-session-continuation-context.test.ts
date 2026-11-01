@@ -2,16 +2,16 @@ import * as fileOperations from 'node:fs/promises'
 import { readFile, rm } from 'node:fs/promises'
 import * as contextSnapshots from '../../../native-chat/agent-session-context-snapshots'
 import { piRpcDialogPresentation } from '../../../pi/rpc-extension-dialogs'
-import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session-question-answer'
-import type {
-  AgentJournalItemBody,
-  AgentJournalResolution,
-  AgentJournalQuestionItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { legacyAgentSessionSelectedOptionId } from '../../../../shared/agent-session/agent-session-question-answer'
 import '../unused-default-rpc-methods.test-fixture'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  type AgentJournalItemBody,
+  type AgentJournalResolution,
+  type AgentJournalQuestionItem,
+  AGENT_JOURNAL_THREAD_SCOPE
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { hostTestMessage } from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {

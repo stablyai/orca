@@ -40,6 +40,15 @@ export function foldAgentLeadStatus(input: AgentLeadStatusFoldInput): AgentLeadS
   return { stateName: 'done' }
 }
 
+/** A turn held open by live work still counts as finished when it failed, or when only monitoring holds a turn the user started; agent work holds it until the row reaches done, and a turn the agent started itself stays held by a monitor that will wake it again. */
+export function heldTurnCountsAsFinished(
+  resolution: AgentLeadStatusResolution,
+  outcome: AgentMainAgentStatus['outcome'],
+  selfStarted: boolean
+): boolean {
+  return outcome === 'failure' || (resolution.workingMode === 'monitoring' && !selfStarted)
+}
+
 /** Derive child-held status from lead and combined states; storing it could contradict either fact. */
 export function isAgentStatusHeldOpenByChildWork(row: {
   state: AgentStatusState

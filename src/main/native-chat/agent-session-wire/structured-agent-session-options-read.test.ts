@@ -18,12 +18,12 @@ import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-ser
 import { structuredAgentSessionDrawnValues } from '../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
-import { claudeFallbackModelOptions } from '../../claude/claude-structured-session-options'
+import { claudeFallbackModelOptions } from '../../claude/structured/launch/claude-structured-session-options'
 import {
   acquired,
   fakeClaude,
   USER_MESSAGE
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { getAgentSessionOptionCatalog } from '../../../shared/agent-session/options/agent-session-option-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -32,10 +32,10 @@ import {
 } from '../../../shared/agent-session/options/structured-agent-session-options'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import {
   createAgentModelCatalogService,
   type AgentModelCatalogService

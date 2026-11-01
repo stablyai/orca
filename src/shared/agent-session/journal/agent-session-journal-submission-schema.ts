@@ -1,7 +1,7 @@
 // Deep-validate dispatch submissions with open string vocabularies, as in agent-session-journal-schemas.ts.
 
 import { z } from 'zod'
-import { AgentJournalAnsweredTurnSchema } from '../../agent-session-answered-turn-schema'
+import { AgentJournalAnsweredTurnSchema } from '../view/agent-session-answered-turn-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import { AgentSessionExecutionOptionsSchema } from '../options/agent-session-execution-options'
