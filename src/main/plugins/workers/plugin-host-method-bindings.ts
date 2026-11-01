@@ -2,13 +2,15 @@ import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
   PLUGIN_HOST_METHOD_NAMES,
-  PLUGIN_TERMINAL_ID_MAX_LENGTH,
-  PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
-  PLUGIN_WORKSPACE_TERMINAL_LIMIT,
   type PluginHostMethodName,
   type PluginJsonValue
 } from '../../../shared/plugins/workers/plugin-host-api'
-import { shortPluginBranchName } from '../../../shared/plugins/events/plugin-events'
+import {
+  projectPluginWorkspaceAgents,
+  projectPluginWorkspaceContext,
+  type PluginAgentStatusRow,
+  type PluginWorkspaceTerminal
+} from './plugin-workspace-projection'
 import type { PluginHostCallScope } from './plugin-host-call-scope'
 import type { PluginDataArea } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import {
@@ -27,7 +29,11 @@ export type PluginWorktreeContext = {
 
 /** Desktop-only sinks for frame methods; absent in headless serve. */
 export type PluginDesktopFrameServices = {
-  openExternal(pluginId: string, url: string, scope: PluginHostCallScope): Promise<boolean>
+  openExternal(
+    pluginId: string,
+    url: string,
+    scope: PluginHostCallScope
+  ): Promise<{ opened: boolean; reason?: 'cancelled' | 'consent-unavailable' }>
   /** False when the person cancelled the dialog. */
   saveFile(
     pluginId: string,
@@ -38,7 +44,8 @@ export type PluginDesktopFrameServices = {
 
 export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
-  listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
+  listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
+  listAgentStatuses(): readonly PluginAgentStatusRow[]
   sendTerminalText(
     terminalId: string,
     action: { text: string; enter: boolean }
@@ -92,21 +99,21 @@ const OK = { ok: true } as const
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
+    const terminals = context ? await services.listWorktreeTerminals(context.worktreeId) : []
+    return projectPluginWorkspaceContext(context, terminals)
+  }),
+  'agents.list': bind(api['agents.list'], async (_params, { services }) => {
+    const context = await services.resolveActiveWorktreeContext()
     if (!context) {
-      return null
+      return { agents: [] }
     }
     const terminals = await services.listWorktreeTerminals(context.worktreeId)
-    // Worktree IDs embed provider paths; explicitly project safe public fields.
     return {
-      branch: shortPluginBranchName(context.branch).slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-      displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-      terminals: terminals
-        .filter(
-          (terminal) =>
-            terminal.id.length > 0 && terminal.id.length <= PLUGIN_TERMINAL_ID_MAX_LENGTH
-        )
-        .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.id }))
+      agents: projectPluginWorkspaceAgents(
+        context.worktreeId,
+        terminals,
+        services.listAgentStatuses()
+      )
     }
   }),
   'terminal.sendText': bind(api['terminal.sendText'], async (params, { services, scope }) => {
@@ -177,9 +184,8 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   ),
   'shell.openExternal': bind(
     api['shell.openExternal'],
-    async ({ url }, { pluginId, services, scope }) => ({
-      opened: await requireDesktop(services).openExternal(pluginId, url, scope)
-    })
+    async ({ url }, { pluginId, services, scope }) =>
+      requireDesktop(services).openExternal(pluginId, url, scope)
   ),
   'files.saveAs': bind(api['files.saveAs'], async (params, { pluginId, services, scope }) => {
     const saved = await requireDesktop(services).saveFile(pluginId, params, scope)

@@ -81,6 +81,24 @@ secrets or state the worker also uses; a panel alone needs none of it.
   `orca.on`) and the same `*:read` capability as workers, without `contributes.events`.
 - Test with `mockHost({ requests, storage, settings, secrets })` and `panel.post(event, payload)`
   (see Test and check).
+- The worker's `main` exports `activate(orca)` (default export or `export function activate`),
+  called once when it starts, and optionally `deactivate()`, awaited before it stops; an idle
+  worker stops and restarts on its next command, event or panel request.
+
+### Recipe: live agent status in a panel
+
+`sandboxed-ui` is enough; capabilities `agent:read` and `workspace:read`.
+
+1. In `setup(ctx)`, `host.call('agents.list')` once: each agent's `terminalId`, `title`, `agent`,
+   `state` and `stateStartedAt` in the focused workspace.
+2. Push `on('agent.status.changed', ({ terminalId, title, state }) => ...)` into
+   `ctx.subscriptions` and update the row with that `terminalId` (the id
+   `workspace.readContext` lists and `terminal.sendText` takes; `paneKey` is Orca's own id).
+3. Push `on('workspace.changed', ...)` too and re-run `agents.list`: it fires when focus moves
+   or terminals open, close or are renamed, with the new `readContext` answer in `context`.
+4. Keep the rows in an atom and render them as `List`/`ListItem`. Never poll.
+5. Test it with `mockHost({ results: { 'agents.list': { agents: [...] } } })` and
+   `panel.emit('agent.status.changed', payload)`.
 
 ## No build step
 

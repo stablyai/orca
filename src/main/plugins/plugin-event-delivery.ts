@@ -9,6 +9,21 @@ import {
 } from './plugin-discovery'
 import type { PluginWorkerController } from './workers/plugin-worker-controller'
 
+/** Whether an approved worker subscribes to `event` (open panels are asked separately). */
+export function pluginWorkersWantEvent(
+  event: PluginEventName,
+  plugins: readonly DiscoveredPlugin[],
+  isRuntimeApproved: (plugin: ValidDiscoveredPlugin) => boolean
+): boolean {
+  return plugins.some(
+    (plugin) =>
+      !isInvalidDiscoveredPlugin(plugin) &&
+      plugin.manifest.main !== undefined &&
+      plugin.manifest.contributes.events.some((subscription) => subscription.on === event) &&
+      isRuntimeApproved(plugin)
+  )
+}
+
 /** Delivers only to plugins whose manifest subscribes and whose grant covers the event's domain. */
 export function deliverPluginEvent(options: {
   event: PluginEventName

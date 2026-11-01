@@ -136,6 +136,21 @@ describe('PluginPanelBridge pushes', () => {
     expect(quiet).not.toHaveBeenCalled()
   })
 
+  it('keeps a subscription made before the renderer opens the channel', () => {
+    const { bridge } = setup({ capabilities: ['workspace:read'] })
+    bridge.subscribe('acme.todos', caller.id, 'workspace.changed')
+    expect(bridge.hasSubscribers('workspace.changed')).toBe(false)
+    const deliver = vi.fn()
+    bridge.open(caller, 'acme.todos', deliver)
+    expect(bridge.hasSubscribers('workspace.changed')).toBe(true)
+    bridge.publishEvent('workspace.changed', { context: null })
+    expect(deliver).toHaveBeenCalledWith({
+      kind: 'event',
+      event: 'workspace.changed',
+      payload: { context: null }
+    })
+  })
+
   it('tells open panels and the running worker which key changed', () => {
     const { bridge, worker } = setup()
     const deliver = vi.fn()

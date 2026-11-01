@@ -66,7 +66,12 @@ declare module 'orca/frame' {
     /** The plugin's encrypted secrets (`secrets:own`). */
     readonly secrets: SecretsApi
     /** Desktop isolated frames only; needs a click or key press in the frame. */
-    readonly shell?: { openExternal(url: string): Promise<{ opened: boolean }> }
+    readonly shell?: {
+      /** `reason`: the person cancelled, or Orca's window was hidden so nobody could confirm. */
+      openExternal(
+        url: string
+      ): Promise<{ opened: boolean; reason?: 'cancelled' | 'consent-unavailable' }>
+    }
     /** Desktop isolated frames only; `cancelled` when the person closes the dialog. */
     readonly files?: {
       saveAs(options: SaveAsOptions): Promise<{ status: 'saved' | 'cancelled' }>

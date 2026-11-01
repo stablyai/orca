@@ -130,3 +130,26 @@ describe('worker panel requests', () => {
     await expect(setting).resolves.toBe('https://x')
   })
 })
+
+describe('worker entry', () => {
+  it('accepts a named activate export as well as a default one', async () => {
+    const activate = vi.fn()
+    const runtime = createPluginWorkerRuntime({
+      send: vi.fn(),
+      exit: vi.fn(),
+      importModule: async () => ({ activate })
+    })
+    await runtime.handleMessage({
+      orca: 1,
+      kind: 'evt',
+      event: 'init',
+      payload: {
+        pluginId: 'samples.demo',
+        pluginRoot: '/p',
+        mainEntry: 'm.js',
+        grantedCapabilities: []
+      }
+    })
+    expect(activate).toHaveBeenCalledOnce()
+  })
+})

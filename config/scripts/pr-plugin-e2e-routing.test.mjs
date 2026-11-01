@@ -80,6 +80,7 @@ describe('plugin PR E2E routing', () => {
     ['examples/plugins/hello-orca/main.mjs', 'plugin-demo'],
     ['examples/plugins/hello-worker-panel/worker/main.mjs', 'plugin-worker-panel'],
     ['src/main/plugins/panels/plugin-panel-bridge.ts', 'plugin-worker-panel'],
+    ['src/main/plugins/plugin-runtime-binding.ts', 'plugin-panel-agents'],
     ['examples/plugins/test-fixtures/hostile-panel/panel.html', 'plugin-panel-containment']
   ])('routes %s to %s', (file, spec) => {
     expect(selectPrE2eSpecs([file])).toContain(`tests/e2e/${spec}.spec.ts`)

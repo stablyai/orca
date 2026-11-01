@@ -43,7 +43,7 @@ import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { invokePluginWorkerCommand } from './plugin-command-invocation'
-import { deliverPluginEvent } from './plugin-event-delivery'
+import { deliverPluginEvent, pluginWorkersWantEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
 
 export class PluginService {
@@ -83,7 +83,6 @@ export class PluginService {
       runningWorker: (pluginKey) => this.workerController.runningHandle(pluginKey),
       log: (pluginKey) => this.installed.captureLog(pluginKey, 'warn')
     })
-    const panelServices = pluginPanelBridgeServices(this.panelBridge)
     this.hostCall = createPluginServiceHostCall((pluginKey, caller) =>
       resolvePluginServiceHostCallPolicy({
         pluginKey,
@@ -92,8 +91,9 @@ export class PluginService {
         runtimeDelegate: this.runtimeDelegate,
         pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
         desktop: this.options.getDesktopFrameServices?.(),
-        panels: panelServices,
-        audit: this.audit
+        panels: pluginPanelBridgeServices(this.panelBridge),
+        audit: this.audit,
+        log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })
     )
     this.panels = new PluginPanelController({
@@ -276,6 +276,13 @@ export class PluginService {
   invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
     const plugin = this.findApprovedPlugin(pluginKey)
     return invokePluginWorkerCommand(pluginKey, plugin, this.workerController, commandId, args)
+  }
+
+  wantsEvent(event: PluginEventName): boolean {
+    return (
+      this.panelBridge.hasSubscribers(event) ||
+      pluginWorkersWantEvent(event, this.installed.discovered, (p) => this.canStartPluginWork(p))
+    )
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {

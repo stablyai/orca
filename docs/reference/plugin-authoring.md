@@ -133,6 +133,22 @@ Browser clients (`orca serve` in a web browser) still load a frame as one sandbo
 with an opaque origin and `connect-src 'none'`: inline your scripts and styles, use `data:` URLs
 for images and fonts, and do not rely on storage, workers or WASM loaded by URL there.
 
+A worker's `main` module exports `activate(orca)`, as its default export or as
+`export function activate`, and Orca calls it once when the worker starts; it may be `async`.
+An optional `export function deactivate()` runs (and is awaited) before the worker stops, for
+flushing state; the worker may also stop when it has been idle for a while, and starts again on
+its next command, event or panel request.
+
+```ts
+import type { OrcaWorkerApi } from 'orca/worker'
+
+export async function activate(orca: OrcaWorkerApi) {
+  orca.commands.register('hello', () => 'Hello from the worker')
+}
+
+export async function deactivate() {}
+```
+
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
 `orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
@@ -233,6 +249,28 @@ its Settings and checks every value against the declaration:
 Panels hear workspace and agent events the same way workers do, with the same capability:
 `on('agent.status.changed', handler)` needs `agent:read`, the workspace events `workspace:read`.
 A panel needs no `contributes.events` entry for that; it subscribes while it is open.
+
+To show the workspace's agents, list them once with `agents.list` (`agent:read`), then follow
+`agent.status.changed`. Both name each agent's terminal with `terminalId`, the id
+`workspace.readContext` lists (with each terminal's `title`) and `terminal.sendText` takes; an
+event's `paneKey` is Orca's own pane id. `workspace.changed` (`workspace:read`) carries the new
+`workspace.readContext` answer whenever focus moves to another workspace or its terminals open,
+close or are renamed, so a panel never polls.
+
+```ts
+import { atom, host, on, read, set, update } from 'orca'
+const agents = atom<{ terminalId: string | null; title: string | null; state: string }[]>([])
+export async function setup() {
+  set(agents, (await host.call('agents.list')).agents)
+  on('agent.status.changed', ({ terminalId, title, state }) =>
+    update(agents, (list) => [
+      { terminalId: terminalId ?? null, title: title ?? null, state },
+      ...list.filter((agent) => agent.terminalId !== terminalId)
+    ])
+  )
+  on('workspace.changed', async () => set(agents, (await host.call('agents.list')).agents))
+}
+```
 
 ### Custom editors
 

@@ -257,7 +257,7 @@ declare module 'orca' {
   // <generated: host methods, from plugin-host-api.ts>
   export type HostMethods = {
     /** Branch, name and terminal ids of the focused workspace, or null when none is focused. */
-    "workspace.readContext": { params: Record<string, never> | undefined; result: { branch: string; displayName: string; terminals: { id: string }[] } | null }
+    "workspace.readContext": { params: Record<string, never> | undefined; result: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
     /** Shows a desktop notification. */
     "notifications.show": { params: { title: string; body?: string }; result: { delivered: boolean } }
     /** Reads a JSON value from the plugin's private store; null when absent. */
@@ -281,13 +281,15 @@ declare module 'orca' {
     /** Writes one setting the plugin owns. */
     "settings.set": { params: { key: string; value: JsonValue }; result: { ok: true } }
     /** Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel. */
-    "shell.openExternal": { params: { url: string }; result: { opened: boolean } }
+    "shell.openExternal": { params: { url: string }; result: { opened: boolean; reason?: "cancelled" | "consent-unavailable" } }
     /** Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. */
     "files.saveAs": { params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }; result: { status: "saved" | "cancelled" } }
     /** Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. */
     "plugin.request": { params: { name: string; input?: JsonValue; timeoutMs?: number }; result: { output: JsonValue } }
+    /** The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. */
+    "agents.list": { params: Record<string, never> | undefined; result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] } }
     /** Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. */
-    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" }; result: { ok: true } }
+    "events.subscribe": { params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }; result: { ok: true } }
   }
   /** Workspace and agent events `on(event)` delivers, with the read capability of their domain. */
   export type PluginEvents = {
@@ -295,8 +297,10 @@ declare module 'orca' {
     "workspace.created": { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }
     /** A worktree workspace was removed. */
     "workspace.removed": { workspaceId: string; kind: "worktree" | "folder"; path: string }
-    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace. */
-    "agent.status.changed": { workspaceId: string | null; paneKey: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. */
+    "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. */
+    "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
   }
   // </generated>
   export type HostMethod = keyof HostMethods

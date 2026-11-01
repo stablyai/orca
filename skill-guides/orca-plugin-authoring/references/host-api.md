@@ -6,9 +6,9 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 
 ## Methods per surface
 
-- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`
-- Panel: global `orca` in an HTML panel; `host` imported from `orca` in a components panel: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `events.subscribe`
-- Custom editor: global `orca` in the editor frame: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `events.subscribe`
+- Worker (`trusted-worker`, `main`): `orca` passed to `activate(orca)`: `workspace.readContext`, `terminal.sendText`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `agents.list`
+- Panel: global `orca` in an HTML panel; `host` imported from `orca` in a components panel: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
+- Custom editor: global `orca` in the editor frame: `workspace.readContext`, `notifications.show`, `storage.get`, `storage.set`, `storage.delete`, `storage.keys`, `secrets.get`, `secrets.set`, `secrets.delete`, `secrets.protection`, `settings.get`, `settings.set`, `shell.openExternal`, `files.saveAs`, `plugin.request`, `agents.list`, `events.subscribe`
 
 ## Worker API (`import type { OrcaWorkerApi } from 'orca/worker'`)
 
@@ -33,7 +33,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `storage: StorageApi`: The plugin's own storage, the same its worker uses (`storage:own`).
 - `settings: SettingsApi`: The plugin's settings, declared ones with their defaults (`settings:own`).
 - `secrets: SecretsApi`: The plugin's encrypted secrets (`secrets:own`).
-- `shell.openExternal(url: string)`: Desktop isolated frames only; needs a click or key press in the frame.
+- `shell.openExternal(url: string)`: `reason`: the person cancelled, or Orca's window was hidden so nobody could confirm.
 - `files.saveAs(options: SaveAsOptions)`: Desktop isolated frames only; `cancelled` when the person closes the dialog.
 - `document?: EditorDocumentApi`: Custom editors only.
 - `document.get()`
@@ -43,7 +43,7 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 ## Methods
 
 - `workspace.readContext` (capability `workspace:read`; worker, panel, editor; since 1.0): Branch, name and terminal ids of the focused workspace, or null when none is focused.
-  `(params?: {}) => { branch: string; displayName: string; terminals: { id: string }[] } | null`
+  `(params?: {}) => { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null`
 - `terminal.sendText` (capability `terminal:send`; worker; since 1.0): Types text into one terminal named by id, optionally pressing Enter.
   `(params: { terminalId: string; text: string; enter?: boolean }) => { accepted: boolean }`
 - `notifications.show` (capability `notifications:show`; worker, panel, editor; since 1.0): Shows a desktop notification.
@@ -69,13 +69,15 @@ Host API 1.2 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; a
 - `settings.set` (capability `settings:own`; worker, panel, editor; since 1.0): Writes one setting the plugin owns.
   `(params: { key: string; value: JSON }) => { ok: true }`
 - `shell.openExternal` (no capability; panel, editor; since 1.1; needs a user gesture): Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel.
-  `(params: { url: string }) => { opened: boolean }`
+  `(params: { url: string }) => { opened: boolean; reason?: "cancelled" | "consent-unavailable" }`
 - `files.saveAs` (no capability; panel, editor; since 1.1; needs a user gesture): Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only.
   `(params: { suggestedName?: string; mimeType?: string; data: string | ArrayBuffer }) => { status: "saved" | "cancelled" }`
 - `plugin.request` (no capability; panel, editor; since 1.2): Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name.
   `(params: { name: string; input?: JSON; timeoutMs?: number }) => { output: JSON }`
+- `agents.list` (capability `agent:read`; worker, panel, editor; since 1.2): The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.
+  `(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] }`
 - `events.subscribe` (no capability; panel, editor; since 1.2): Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.
-  `(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" }) => { ok: true }`
+  `(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }`
 
 ## Capabilities
 

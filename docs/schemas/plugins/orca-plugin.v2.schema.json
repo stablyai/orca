@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 3.",
+          "description": "Events delivered to the plugin worker. At most 4.",
           "x-orca-since": "1.4.160",
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -691,14 +691,16 @@
           "enum": [
             "workspace.created",
             "workspace.removed",
-            "agent.status.changed"
+            "agent.status.changed",
+            "workspace.changed"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
-            "agent.status.changed": "1.4.160"
+            "agent.status.changed": "1.4.160",
+            "workspace.changed": "1.4.246"
           }
         }
       },

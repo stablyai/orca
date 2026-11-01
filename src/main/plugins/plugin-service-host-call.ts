@@ -30,11 +30,13 @@ type FindApprovedPlugin = (
 export function createPluginHostCallScope(
   admitted: ValidDiscoveredPlugin,
   findApprovedPlugin: FindApprovedPlugin,
-  caller: PluginHostCaller | undefined
+  caller: PluginHostCaller | undefined,
+  log?: (line: string) => void
 ): PluginHostCallScope {
   const manifestRevision = JSON.stringify(admitted.manifest)
   return {
     callerWebContentsId: caller?.webContentsId,
+    log,
     panel: caller?.panel,
     pluginName: admitted.manifest.name,
     assertActive() {
@@ -60,6 +62,7 @@ export function resolvePluginServiceHostCallPolicy(input: {
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
   audit: PluginAuditLog
+  log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
   const plugin = input.findApprovedPlugin(input.pluginKey)
   return {
@@ -75,7 +78,12 @@ export function resolvePluginServiceHostCallPolicy(input: {
       : null,
     audit: input.audit,
     scope: plugin
-      ? createPluginHostCallScope(plugin, input.findApprovedPlugin, input.caller)
+      ? createPluginHostCallScope(
+          plugin,
+          input.findApprovedPlugin,
+          input.caller,
+          input.log?.(plugin.pluginKey)
+        )
       : undefined
   }
 }

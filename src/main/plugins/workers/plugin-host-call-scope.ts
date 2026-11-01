@@ -14,6 +14,8 @@ export type PluginHostCallScope = {
   pluginName?: string
   /** The open panel or editor that made the call; absent for workers. */
   panel?: PluginPanelCaller
+  /** Writes to the plugin's log (`orca plugin logs`). */
+  log?: (line: string) => void
 }
 
 export const UNSCOPED_PLUGIN_HOST_CALL: PluginHostCallScope = { assertActive: () => {} }

@@ -127,9 +127,12 @@ export function createPluginWorkerRuntime(
     const entryUrl = pathToFileURL(join(input.pluginRoot, ...input.mainEntry.split(/[\\/]/))).href
     options.prepareModuleLoading?.(input.pluginRoot)
     const module: unknown = await importModule(entryUrl)
-    const activate = readExport(module, 'default')
+    // Either spelling: `export default function activate` or `export function activate`.
+    const activate = readExport(module, 'default') ?? readExport(module, 'activate')
     if (typeof activate !== 'function') {
-      throw new Error(`plugin entry ${input.mainEntry} has no default-exported activate function`)
+      throw new Error(
+        `plugin entry ${input.mainEntry} exports no activate function (export default, or export function activate)`
+      )
     }
     const deactivateExport = readExport(module, 'deactivate')
     if (deactivateExport !== undefined && typeof deactivateExport !== 'function') {
@@ -290,6 +293,6 @@ export function createPluginWorkerRuntime(
   }
 }
 
-function readExport(module: unknown, name: 'default' | 'deactivate'): unknown {
+function readExport(module: unknown, name: 'default' | 'activate' | 'deactivate'): unknown {
   return typeof module === 'object' && module !== null && name in module ? module[name] : undefined
 }

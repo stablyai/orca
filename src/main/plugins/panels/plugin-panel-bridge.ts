@@ -29,7 +29,6 @@ import { PluginHostCallError } from '../workers/plugin-host-call-scope'
 type PushChannel = {
   pluginKey: string
   deliver: (push: PluginPanelPush) => void
-  events: Set<PluginEventName>
 }
 
 export type PluginPanelBridgeDependencies = {
@@ -58,12 +57,14 @@ export class PluginPanelBridge {
   private readonly channels = new Map<string, PushChannel>()
   private readonly lifetimes = new Map<string, AbortController>()
   private readonly postBudgets = new Map<string, PanelMessageBudget>()
+  // By panel, not channel: a frame may subscribe before its renderer opens the channel.
+  private readonly subscriptions = new Map<string, Set<PluginEventName>>()
 
   constructor(private readonly deps: PluginPanelBridgeDependencies) {}
 
   /** A renderer listens to one open panel; the returned function stops it. */
   open(caller: PluginPanelCaller, pluginKey: string, deliver: PushChannel['deliver']): () => void {
-    const channel: PushChannel = { pluginKey, deliver, events: new Set() }
+    const channel: PushChannel = { pluginKey, deliver }
     this.channels.set(caller.id, channel)
     return () => {
       if (this.channels.get(caller.id) === channel) {
@@ -75,6 +76,7 @@ export class PluginPanelBridge {
   /** The session ended: its channel goes and its in-flight requests see `signal` abort. */
   close(panelId: string): void {
     this.channels.delete(panelId)
+    this.subscriptions.delete(panelId)
     this.lifetimes.get(panelId)?.abort()
     this.lifetimes.delete(panelId)
   }
@@ -87,10 +89,14 @@ export class PluginPanelBridge {
         `plugin does not have the "${required}" capability`
       )
     }
-    const channel = this.channels.get(panelId)
-    if (channel?.pluginKey === pluginKey) {
-      channel.events.add(event)
-    }
+    const events = this.subscriptions.get(panelId) ?? new Set<PluginEventName>()
+    events.add(event)
+    this.subscriptions.set(panelId, events)
+  }
+
+  /** Whether an open panel subscribed to `event`. */
+  hasSubscribers(event: PluginEventName): boolean {
+    return [...this.channels.keys()].some((panelId) => this.subscriptions.get(panelId)?.has(event))
   }
 
   async request(request: PluginPanelRequest): Promise<PluginJsonValue> {
@@ -166,9 +172,9 @@ export class PluginPanelBridge {
     }
     const payload = projected.data
     const required = PLUGIN_EVENT_CAPABILITY[event]
-    for (const channel of this.channels.values()) {
+    for (const [panelId, channel] of this.channels) {
       if (
-        channel.events.has(event) &&
+        this.subscriptions.get(panelId)?.has(event) === true &&
         this.deps.findApprovedPlugin(channel.pluginKey) &&
         this.deps.grantedCapabilities(channel.pluginKey)?.includes(required)
       ) {

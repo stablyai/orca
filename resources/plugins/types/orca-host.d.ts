@@ -37,7 +37,7 @@ declare module 'orca/host' {
     /** Branch, name and terminal ids of the focused workspace, or null when none is focused. Since host API 1.0. */
     "workspace.readContext": {
       params: Record<string, never> | undefined
-      result: { branch: string; displayName: string; terminals: { id: string }[] } | null
+      result: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null
       surfaces: "worker" | "panel" | "editor"
     }
     /** Types text into one terminal named by id, optionally pressing Enter. Since host API 1.0. */
@@ -115,7 +115,7 @@ declare module 'orca/host' {
     /** Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel. Since host API 1.1. */
     "shell.openExternal": {
       params: { url: string }
-      result: { opened: boolean }
+      result: { opened: boolean; reason?: "cancelled" | "consent-unavailable" }
       surfaces: "panel" | "editor"
     }
     /** Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. Since host API 1.1. */
@@ -130,9 +130,15 @@ declare module 'orca/host' {
       result: { output: JsonValue }
       surfaces: "panel" | "editor"
     }
+    /** The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. Since host API 1.2. */
+    "agents.list": {
+      params: Record<string, never> | undefined
+      result: { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] }
+      surfaces: "worker" | "panel" | "editor"
+    }
     /** Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. Since host API 1.2. */
     "events.subscribe": {
-      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" }
+      params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }
       result: { ok: true }
       surfaces: "panel" | "editor"
     }
@@ -160,8 +166,10 @@ declare module 'orca/host' {
     "workspace.created": { workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }
     /** A worktree workspace was removed. */
     "workspace.removed": { workspaceId: string; kind: "worktree" | "folder"; path: string }
-    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace. */
-    "agent.status.changed": { workspaceId: string | null; paneKey: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. */
+    "agent.status.changed": { workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }
+    /** The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. */
+    "workspace.changed": { context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }
   }
   export type PluginEventName = keyof PluginEvents
 }

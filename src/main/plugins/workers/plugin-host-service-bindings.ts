@@ -10,6 +10,7 @@ import { pluginSettingDefaults } from '../../../shared/plugins/contributions/plu
 import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-store'
 import { PluginKvStore } from '../plugin-storage-store'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
@@ -22,7 +23,15 @@ export type PluginRuntimeDelegate = {
     worktreeSelector?: string,
     limit?: number,
     opts?: { includeVisualLayouts?: boolean }
-  ): Promise<{ terminals: { handle: string; title: string | null }[] }>
+  ): Promise<{
+    terminals: {
+      handle: string
+      title: string | null
+      paneTitle?: string
+      tabId?: string
+      leafId?: string
+    }[]
+  }>
   sendTerminal(
     handle: string,
     action: { text?: string; enter?: boolean },
@@ -33,6 +42,8 @@ export type PluginRuntimeDelegate = {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }>
+  /** The hook server's agent rows; absent where no hook server runs. */
+  listAgentStatuses?(): readonly PluginAgentStatusRow[]
 }
 
 export function bindPluginHostServices(input: {
@@ -66,10 +77,15 @@ export function bindPluginHostServices(input: {
         PLUGIN_WORKSPACE_TERMINAL_LIMIT,
         { includeVisualLayouts: false }
       )
-      return result.terminals
-        .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.handle }))
+      return result.terminals.slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT).map((terminal) => ({
+        id: terminal.handle,
+        title: pluginTerminalTitle(terminal),
+        ...(terminal.tabId && terminal.leafId
+          ? { paneKey: `${terminal.tabId}:${terminal.leafId}` }
+          : {})
+      }))
     },
+    listAgentStatuses: () => delegate.listAgentStatuses?.() ?? [],
     sendTerminalText: async (terminalId, action) => {
       const result = await delegate.sendTerminal(terminalId, action, { inputKind: 'driving' })
       return { accepted: result.accepted }

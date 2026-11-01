@@ -10,8 +10,10 @@ List each in `contributes.events` (`{ "on": "<event>" }`), with `main`, the `tru
   `{ workspaceId: string; kind: "worktree" | "folder"; path: string; branch: string }`
 - `workspace.removed` (capability `workspace:read`; since 1.4.245): A worktree workspace was removed.
   `{ workspaceId: string; kind: "worktree" | "folder"; path: string }`
-- `agent.status.changed` (capability `agent:read`; since 1.4.160): An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace.
-  `{ workspaceId: string | null; paneKey: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
+- `agent.status.changed` (capability `agent:read`; since 1.4.160): An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it.
+  `{ workspaceId: string | null; paneKey: string; terminalId?: string; title?: string; state: "working" | "blocked" | "waiting" | "done"; receivedAt: number; mainAgent?: { state: "working" | "blocked" | "waiting" | "done"; outcome?: "success" | "failure" | "cancellation" | "superseded" | "interruption" | "unconfirmed"; stateStartedAt: number } }`
+- `workspace.changed` (capability `workspace:read`; since 1.4.246): The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers.
+  `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null }`
 
 ## Frame events (`orca.on(event, handler)` in HTML panels and custom editors)
 

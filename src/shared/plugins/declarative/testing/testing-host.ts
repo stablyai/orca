@@ -32,7 +32,8 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'workspace.readContext': null,
   'notifications.show': { delivered: true },
   'shell.openExternal': { opened: true },
-  'files.saveAs': { status: 'saved' }
+  'files.saveAs': { status: 'saved' },
+  'agents.list': { agents: [] }
 }
 
 export type MockHost = {

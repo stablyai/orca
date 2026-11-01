@@ -36,7 +36,8 @@ export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
 
 const workspaceReadContextParams = z.strictObject({}).optional()
-const workspaceReadContextResult = z
+/** What `workspace.readContext` answers and `workspace.changed` carries. */
+export const pluginWorkspaceContextSchema = z
   .object({
     branch: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
@@ -46,7 +47,9 @@ const workspaceReadContextResult = z
       .array(
         z
           .object({
-            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH)
+            id: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH),
+            /** The pane's name, or its terminal title; absent when it has neither. */
+            title: z.string().max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH).optional()
           })
           .strict()
       )
@@ -54,6 +57,7 @@ const workspaceReadContextResult = z
   })
   .strict()
   .nullable()
+const workspaceReadContextResult = pluginWorkspaceContextSchema
 
 const terminalSendTextParams = z.strictObject({
   /** Explicit target prevents delayed writes following focus changes into another pane. */
@@ -93,7 +97,11 @@ const shellOpenExternalParams = z.strictObject({
     .max(PLUGIN_EXTERNAL_URL_MAX_LENGTH)
     .refine(isPluginExternalUrl, 'url must be an http:, https: or mailto: URL')
 })
-const shellOpenExternalResult = z.object({ opened: z.boolean() })
+/** `reason`, when not opened: the person said no, or nobody could be asked (Orca's window hidden). */
+const shellOpenExternalResult = z.object({
+  opened: z.boolean(),
+  reason: z.enum(['cancelled', 'consent-unavailable']).optional()
+})
 
 const saveAsDataSchema = z.union([
   z.string().max(PLUGIN_SAVE_AS_MAX_BYTES),

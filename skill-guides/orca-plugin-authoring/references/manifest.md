@@ -35,7 +35,7 @@
 
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
-- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 3.
+- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
 - `vmRecipes` (VmRecipeContribution[], since 1.4.160): Virtual machine environment recipes. At most 64.
@@ -72,7 +72,7 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 
 An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
 
-- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed", required, since 1.4.160): Event delivered to the plugin worker.
+- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed", required, since 1.4.160): Event delivered to the plugin worker.
 
 ## LanguagePackContribution
 

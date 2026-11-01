@@ -28,6 +28,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 | [`shell.openExternal`](#shellopenexternal) | none | panel, editor | no | 1.1 | Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel. |
 | [`files.saveAs`](#filessaveas) | none | panel, editor | yes | 1.1 | Offers data (a string or ArrayBuffer, up to 64 MiB) in Orca's save dialog; the plugin never learns the path. Needs a click or key press in the frame; desktop app only. |
 | [`plugin.request`](#pluginrequest) | none | panel, editor | no | 1.2 | Asks the plugin's own worker to run the handler it registered with `orca.panels.handle(name)`, starting the worker if needed; resolves with what the handler returned. `unknown_method` when no handler has that name. |
+| [`agents.list`](#agentslist) | `agent:read` | worker, panel, editor | no | 1.2 | The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after. |
 | [`events.subscribe`](#eventssubscribe) | none | panel, editor | no | 1.2 | Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you. |
 
 ### `workspace.readContext`
@@ -35,7 +36,7 @@ Methods whose capability is `none` need no capability but still need the plugin 
 Branch, name and terminal ids of the focused workspace, or null when none is focused.
 
 ```ts
-(params?: {}) => { branch: string; displayName: string; terminals: { id: string }[] } | null
+(params?: {}) => { branch: string; displayName: string; terminals: { id: string; title?: string }[] } | null
 ```
 
 ### `terminal.sendText`
@@ -139,7 +140,7 @@ Writes one setting the plugin owns.
 Opens an http:, https: or mailto: URL in the default browser. Needs a click or key press in the frame; desktop app only. Orca asks the person before an http(s) host the plugin was not allowed; `opened` is false if they cancel.
 
 ```ts
-(params: { url: string }) => { opened: boolean }
+(params: { url: string }) => { opened: boolean; reason?: "cancelled" | "consent-unavailable" }
 ```
 
 ### `files.saveAs`
@@ -158,12 +159,20 @@ Asks the plugin's own worker to run the handler it registered with `orca.panels.
 (params: { name: string; input?: JSON; timeoutMs?: number }) => { output: JSON }
 ```
 
+### `agents.list`
+
+The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.
+
+```ts
+(params?: {}) => { agents: { terminalId: string | null; title: string | null; agent: string | null; state: "working" | "blocked" | "waiting" | "done"; stateStartedAt: number }[] }
+```
+
 ### `events.subscribe`
 
 Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.
 
 ```ts
-(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" }) => { ok: true }
+(params: { event: "workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" }) => { ok: true }
 ```
 
 ## Events
@@ -174,7 +183,8 @@ A worker receives the events its manifest lists in `contributes.events` through 
 | --- | --- | --- |
 | `workspace.created` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string; branch: string }` | A worktree workspace was created. |
 | `workspace.removed` | `{ workspaceId: string; kind: "worktree" \| "folder"; path: string }` | A worktree workspace was removed. |
-| `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace. |
+| `agent.status.changed` | `{ workspaceId: string \| null; paneKey: string; terminalId?: string; title?: string; state: "working" \| "blocked" \| "waiting" \| "done"; receivedAt: number; mainAgent?: { state: "working" \| "blocked" \| "waiting" \| "done"; outcome?: "success" \| "failure" \| "cancellation" \| "superseded" \| "interruption" \| "unconfirmed"; stateStartedAt: number } }` | An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, and `terminalId` names its terminal when Orca lists it. |
+| `workspace.changed` | `{ context: { branch: string; displayName: string; terminals: { id: string; title?: string }[] } \| null }` | The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers. |
 
 ## Errors
 

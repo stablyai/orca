@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
-import { FRAMES_ONLY, spec } from './plugin-host-method-spec'
+import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
+import { AGENT_STATUS_STATES } from '../../agent-status-types'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema
@@ -13,6 +14,26 @@ const pluginRequestParams = z.strictObject({
   timeoutMs: z.number().int().min(1).max(PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS).optional()
 })
 const pluginRequestResult = z.object({ output: z.json() })
+
+export const PLUGIN_AGENT_LIST_LIMIT = 50
+const agentsListParams = z.strictObject({}).optional()
+const agentsListResult = z.object({
+  agents: z
+    .array(
+      z.object({
+        /** Its terminal, as `workspace.readContext` and `terminal.sendText` name it; null when
+         *  Orca cannot tie the agent's pane to a terminal it lists. */
+        terminalId: z.string().min(1).max(1024).nullable(),
+        title: z.string().max(512).nullable(),
+        /** Which agent runs there (`claude`, `codex`, ...), when Orca knows. */
+        agent: z.string().max(128).nullable(),
+        state: z.enum(AGENT_STATUS_STATES),
+        /** When it entered `state`, in ms since the epoch. */
+        stateStartedAt: z.number().finite()
+      })
+    )
+    .max(PLUGIN_AGENT_LIST_LIMIT)
+})
 
 const eventsSubscribeParams = z.strictObject({ event: z.enum(PLUGIN_EVENT_NAMES) })
 const eventsSubscribeResult = z.object({ ok: z.literal(true) })
@@ -29,6 +50,17 @@ export const PLUGIN_PANEL_BRIDGE_API = {
     surfaces: FRAMES_ONLY,
     params: pluginRequestParams,
     result: pluginRequestResult
+  }),
+  'agents.list': spec({
+    summary:
+      'The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.',
+    since: 2,
+    scope: 'active-workspace',
+    capability: 'agent:read',
+    mutation: false,
+    surfaces: ALL_SURFACES,
+    params: agentsListParams,
+    result: agentsListResult
   }),
   'events.subscribe': spec({
     summary:

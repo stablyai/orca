@@ -170,6 +170,16 @@ const SPECIFIC_PLUGIN_ROUTES = [
     ].join('|'),
     'plugin-frame-guest|plugin-smoke'
   ),
+  // Agents and workspace changes in panels: agents.list, terminal ids on agent events.
+  pluginRoute(
+    'plugins.panel-agents',
+    ['plugin-panel-agents'],
+    [
+      'src\\/main\\/plugins\\/(?:plugin-runtime-binding|plugin-agent-status-event|workers\\/plugin-workspace-projection)',
+      'src\\/shared\\/plugins\\/events\\/plugin-events'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke|agent-hook-endpoint'
+  ),
   // A panel and its own worker: requests, posts, storage, settings and pushes.
   pluginRoute(
     'plugins.worker-panel',

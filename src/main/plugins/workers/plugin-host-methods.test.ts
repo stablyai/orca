@@ -10,6 +10,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
     resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
     listWorktreeTerminals: vi.fn().mockResolvedValue([]),
     sendTerminalText: vi.fn().mockResolvedValue({ accepted: true }),
+    listAgentStatuses: () => [],
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true }),
     storage: {
       get: vi.fn(),
@@ -328,7 +329,7 @@ describe('executePluginHostCall frame desktop methods', () => {
   const audit = () => ({ record: vi.fn().mockResolvedValue(undefined) })
 
   it('need no capability but still consent, and stay off workers', async () => {
-    const desktop = { openExternal: vi.fn().mockResolvedValue(true), saveFile: vi.fn() }
+    const desktop = { openExternal: vi.fn().mockResolvedValue({ opened: true }), saveFile: vi.fn() }
     const services = { ...createServices(vi.fn()), desktop }
     const call = (overrides: Partial<Parameters<typeof executePluginHostCall>[0]>) =>
       executePluginHostCall({
