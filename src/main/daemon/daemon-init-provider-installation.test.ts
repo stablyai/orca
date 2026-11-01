@@ -340,6 +340,113 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
   })
 
+  it('recovers fresh spawns through the startup-failure legacy fallback probe', async () => {
+    const mod = await importFresh()
+    const failure = new Error('protocol-mismatch')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    ensureRunningOverrides.push(async () => {
+      throw failure
+    })
+    probeSocketExistsMock.mockImplementation(
+      (socketPath?: string) => socketPath?.endsWith('daemon-v49.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v49.sock')
+
+    try {
+      await mod.initDaemonPtyProvider()
+      expect(warn).toHaveBeenCalledWith(
+        '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns',
+        failure
+      )
+      const adoptionWarnIndex = warn.mock.calls.findIndex(
+        (call) =>
+          call[0] ===
+          '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns'
+      )
+      expect(warn.mock.invocationCallOrder[adoptionWarnIndex]).toBeLessThan(
+        setLocalPtyProviderMock.mock.invocationCallOrder[0]
+      )
+    } finally {
+      warn.mockRestore()
+    }
+    checkDaemonHealthMock.mockClear()
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    if (!(provider instanceof DegradedDaemonPtyProvider)) {
+      throw new Error('expected DegradedDaemonPtyProvider')
+    }
+    expect(provider.routesFreshSpawnsToLocalProvider).toBe(true)
+    expect(adapterInstances[0].listProcesses).not.toHaveBeenCalled()
+
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+    expect(checkDaemonHealthMock).toHaveBeenCalledWith(
+      adapterInstances[0].options.socketPath,
+      adapterInstances[0].options.tokenPath
+    )
+    expect(provider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+    await provider.listProcesses()
+    expect(adapterInstances[0].listProcesses).toHaveBeenCalledOnce()
+  })
+
+  it('disconnects legacy adapters when fallback session discovery fails', async () => {
+    const mod = await importFresh()
+    const failure = new Error('protocol-mismatch')
+    const discoveryError = new Error('legacy inventory failed')
+    ensureRunningOverrides.push(async () => {
+      throw failure
+    })
+    probeSocketExistsMock.mockImplementation(
+      (socketPath?: string) => socketPath?.endsWith('daemon-v49.sock') ?? false
+    )
+    mockOnlyDaemonSocketAlive('daemon-v49.sock')
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const discover = vi
+      .spyOn(DegradedDaemonPtyProvider.prototype, 'discoverDaemonSessions')
+      .mockRejectedValueOnce(discoveryError)
+
+    try {
+      const error = await mod.initDaemonPtyProvider().catch((caught: unknown) => caught)
+
+      expect(error).toBeInstanceOf(AggregateError)
+      expect((error as AggregateError).message).toBe('Legacy daemon fallback failed')
+      expect((error as AggregateError).errors).toEqual([failure, discoveryError])
+      expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
+      expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
+      expect(adapterInstances[0].dispose).not.toHaveBeenCalled()
+      expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+      expect(mod.getDaemonProvider()).toBeNull()
+    } finally {
+      discover.mockRestore()
+    }
+  })
+
+  it('disposes the current adapter when disconnectOnly rejects during legacy fallback', async () => {
+    const mod = await importFresh()
+    const failure = new Error('protocol-mismatch')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    ensureRunningOverrides.push(async () => {
+      throw failure
+    })
+    disconnectOnlyErrors.push(new Error('disconnect failed'))
+
+    try {
+      await expect(mod.initDaemonPtyProvider()).rejects.toBe(failure)
+      expect(warn).not.toHaveBeenCalledWith(
+        '[daemon] Current daemon unavailable; adopting legacy daemon sessions with local fresh spawns',
+        failure
+      )
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(adapterInstances).toHaveLength(1)
+    expect(adapterInstances[0].disconnectOnly).toHaveBeenCalledOnce()
+    expect(adapterInstances[0].dispose).toHaveBeenCalledOnce()
+    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+  })
+
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {
     const mod = await importFresh()
     readFileSyncMock.mockReturnValue('{"pid":123}')

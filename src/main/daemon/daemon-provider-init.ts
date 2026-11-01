@@ -34,12 +34,69 @@ import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { isDaemonRestartInFlight } from './daemon-restart-state'
-import { DaemonSpawner, getDaemonPidPath } from './daemon-spawner'
-import { clearSeveredDaemon, installSeveredDaemonController } from './daemon-host-image-state'
+import {
+  DaemonSpawner,
+  getDaemonPidPath,
+  getDaemonSocketPath,
+  getDaemonTokenPath,
+  type DaemonProcessHandle
+} from './daemon-spawner'
+import { tryInstallLegacyFallbackOnCurrentFailure } from './daemon-legacy-fallback-init'
+import {
+  clearSeveredDaemon,
+  getSeveredDaemon,
+  installSeveredDaemonController
+} from './daemon-host-image-state'
 import {
   createSeveredDaemonController,
   hasSeveredDaemonBeenReplaced
 } from './daemon-severed-restart'
+
+// A severed daemon can pass health checks; require a new incarnation before routing fresh terminals.
+function probeCurrentDaemonCanSpawn(
+  socketPath: string,
+  tokenPath: string,
+  runtimeDir: string,
+  quarantine: DaemonProcessHandle['quarantine']
+): () => Promise<boolean> {
+  return async () =>
+    (quarantine !== 'host-image-severed' ||
+      hasSeveredDaemonBeenReplaced(getDaemonPidPath(runtimeDir))) &&
+    (await checkDaemonHealth(socketPath, tokenPath)) === 'healthy'
+}
+
+function createCurrentDaemonAdapter(
+  runtimeDir: string,
+  newSpawner: DaemonSpawner,
+  socketPath = getDaemonSocketPath(runtimeDir),
+  tokenPath = getDaemonTokenPath(runtimeDir)
+): DaemonPtyAdapter {
+  return new DaemonPtyAdapter({
+    socketPath,
+    tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
+    historyPath: getHistoryDir(),
+    respawn: async (reason: DaemonRespawnReason) => {
+      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
+      if (reason === 'daemon_died') {
+        console.warn('[daemon] Daemon process died — respawning')
+        // Synthetic exits during manual restart must not enter the crash bucket.
+        if (!isDaemonRestartInFlight()) {
+          trackDaemonRetired('died_respawn')
+        }
+      } else {
+        // Must reach the launcher below without an await in between; see the consume site.
+        attributeNextDaemonReplacement(reason)
+      }
+      newSpawner.resetHandle()
+      await newSpawner.ensureRunning()
+      return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
+    }
+  })
+}
 
 // Use in-process timestamps: daemon init overlaps window loading and harness stderr can arrive late.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -71,8 +128,30 @@ export async function initDaemonPtyProvider(
     )
   })
 
-  // Publish the spawner and adapter together after initialization succeeds.
-  const info = await newSpawner.ensureRunning()
+  // Current startup failure still installs when a legacy daemon has sessions; otherwise propagate the error.
+  let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+  try {
+    info = await newSpawner.ensureRunning()
+  } catch (error) {
+    const quarantine =
+      newSpawner.getHandle()?.quarantine ??
+      (getSeveredDaemon() ? ('host-image-severed' as const) : undefined)
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter: createCurrentDaemonAdapter(runtimeDir, newSpawner),
+      quarantine,
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        getDaemonSocketPath(runtimeDir),
+        getDaemonTokenPath(runtimeDir),
+        runtimeDir,
+        quarantine
+      )
+    })
+    return
+  }
   // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
@@ -92,36 +171,35 @@ export async function initDaemonPtyProvider(
     return
   }
 
-  const newAdapter = new DaemonPtyAdapter({
-    socketPath: info.socketPath,
-    tokenPath: info.tokenPath,
-    pidPath: getDaemonPidPath(runtimeDir),
-    profileScope: runtimeDir,
+  const newAdapter = createCurrentDaemonAdapter(
     runtimeDir,
-    packagedAppVersion: newSpawner.staleDaemonRecycleVersion,
-    historyPath: getHistoryDir(),
-    respawn: async (reason: DaemonRespawnReason) => {
-      // A wedged daemon can look dead here; launch reports the proven replacement cause after recovery.
-      if (reason === 'daemon_died') {
-        console.warn('[daemon] Daemon process died — respawning')
-        // Synthetic exits during manual restart must not enter the crash bucket.
-        if (!isDaemonRestartInFlight()) {
-          trackDaemonRetired('died_respawn')
-        }
-      } else {
-        // Must reach the launcher below without an await in between; see the consume site.
-        attributeNextDaemonReplacement(reason)
-      }
-      newSpawner.resetHandle()
-      await newSpawner.ensureRunning()
-      return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
-    }
-  })
+    newSpawner,
+    info.socketPath,
+    info.tokenPath
+  )
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
   try {
     // Overlap temporary and permanent leases so adoption never leaves a gap.
     await newAdapter.establishLifecycleLease()
+  } catch (error) {
+    await tryInstallLegacyFallbackOnCurrentFailure({
+      error,
+      signal,
+      runtimeDir,
+      newSpawner,
+      newAdapter,
+      quarantine,
+      probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+        info.socketPath,
+        info.tokenPath,
+        runtimeDir,
+        quarantine
+      )
+    })
+    return
+  }
+  try {
     releaseDaemonAdoptionLease(newSpawner.getHandle())
 
     // Adopt older daemons; newer protocols only hold their tabs.
@@ -136,11 +214,12 @@ export async function initDaemonPtyProvider(
             current: newAdapter,
             legacy: legacyAdapters,
             fallback: getLocalPtyProvider(),
-            // A severed daemon can pass health checks; require a new incarnation before routing fresh terminals.
-            probeCurrentDaemonSpawn: async () =>
-              (quarantine !== 'host-image-severed' ||
-                hasSeveredDaemonBeenReplaced(getDaemonPidPath(runtimeDir))) &&
-              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
+            probeCurrentDaemonSpawn: probeCurrentDaemonCanSpawn(
+              info.socketPath,
+              info.tokenPath,
+              runtimeDir,
+              quarantine
+            )
           })
         : legacyAdapters.length > 0 || isHoldingForNewerProtocolDaemon()
           ? new DaemonPtyRouter({

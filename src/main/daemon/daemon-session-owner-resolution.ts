@@ -43,6 +43,14 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     this.providers = [...providers]
   }
 
+  admitProvider(provider: T): void {
+    if (this.providers.includes(provider)) {
+      return
+    }
+    this.providers.push(provider)
+    this.invalidateInventory()
+  }
+
   // Proven-gone providers contribute no rows, so removing them leaves in-flight inventories valid.
   private forgetProvider(provider: T): void {
     const index = this.providers.indexOf(provider)
