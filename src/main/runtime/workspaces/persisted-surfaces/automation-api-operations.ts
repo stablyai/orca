@@ -14,9 +14,9 @@ import {
   type AutomationChangeSelector,
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
-import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
+import { OrcaRuntimeWithCrewOperations } from './crew-operations'
 
-export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
+export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
 
   private readAutomationRuns<T>(

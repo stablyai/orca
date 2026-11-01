@@ -1,10 +1,3 @@
-import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
-import {
-  readCrewRuntimeInputs,
-  watchCrewRuntimeSources
-} from '../../orchestration/crew/crew-runtime-watch'
-import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
-import { getPublishedHostDescriptor } from '../../host-descriptor'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithAutomationApiOperations } from './automation-api-operations'
@@ -16,12 +9,8 @@ import {
 import { existsSync } from 'node:fs'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithAutomationApiOperations {
-  abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
-
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
   /** Mail a worker left unread when it reported before a restart still continues it. */
@@ -62,41 +51,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
   }
-
-  private unwatchCrewDb: (() => void) | undefined
-
-  private bindCrewChanges(db: OrchestrationDb): void {
-    this.unwatchCrewDb?.()
-    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
-    this.crewChanges.notify()
-  }
-
-  private readonly crewReadModel = new CrewReadModel(
-    (previous) =>
-      readCrewRuntimeInputs(
-        this.crewRuntimeReaders(),
-        this._orchestrationDb,
-        existsSync(this.orchestrationDbPath()),
-        getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
-        previous
-      ),
-    (wake) =>
-      watchCrewRuntimeSources(
-        {
-          store: this.store,
-          watchChanges: this.crewChanges.subscribe,
-          watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
-          watchClient: (listener) => this.onClientEvent(listener)
-        },
-        wake
-      )
-  )
-
-  getOrchestrationCrewSnapshot(party: string) {
-    return this.crewReadModel.read(party)
-  }
-
-  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
 
   private bindMailHandBack(db: OrchestrationDb): void {
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
@@ -167,43 +121,5 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (!inventory) {
       throw new Error('terminal_liveness_unavailable')
     }
-  }
-
-  protected hasExactTerminalSurfaceIdentity(expected: {
-    worktreeId: string
-    tabId: string
-    leafId: string
-    ptyId: string
-    terminalHandle: string
-    incarnationId: string
-  }): boolean {
-    if (this.graphStatus !== 'ready') {
-      return false
-    }
-    const pty = this.ptysById.get(expected.ptyId)
-    if (
-      !pty?.connected ||
-      pty.incarnationId !== expected.incarnationId ||
-      this.paneOfPty(pty).tabId !== expected.tabId ||
-      this.paneOfPty(pty).paneKey !== makePaneKey(expected.tabId, expected.leafId) ||
-      !worktreeIdsEqual(pty.worktreeId, expected.worktreeId) ||
-      this.handleByPtyId.get(expected.ptyId) !== expected.terminalHandle
-    ) {
-      return false
-    }
-    const tab = this.tabs.get(expected.tabId)
-    const leaf = this.leaves.get(this.getLeafKey(expected.tabId, expected.leafId))
-    const ptyLeaves = this.getLeavesForPty(expected.ptyId)
-    return (
-      Boolean(tab && worktreeIdsEqual(tab.worktreeId, expected.worktreeId)) &&
-      Boolean(
-        leaf &&
-        leaf.ptyId === expected.ptyId &&
-        worktreeIdsEqual(leaf.worktreeId, expected.worktreeId)
-      ) &&
-      ptyLeaves.length === 1 &&
-      ptyLeaves[0]?.tabId === expected.tabId &&
-      ptyLeaves[0]?.leafId === expected.leafId
-    )
   }
 }

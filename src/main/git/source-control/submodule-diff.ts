@@ -1,7 +1,7 @@
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { buildDiffResult } from './diff-result'
-import { readGitBlobAtOidPath } from './git-blob-read'
+import { type BlobConversion, blobConversion, readGitBlobAtOidPath } from './git-blob-read'
 import { resolveSubmoduleWorktreePath } from './submodule-paths'
 import {
   readGitlinkOidFromIndex,
@@ -48,18 +48,32 @@ export async function buildSubmoduleInnerCommitRangeDiff(
   innerPath: string,
   fromOid: string,
   toOid: string,
-  options: GitRuntimeOptions
+  options: GitRuntimeOptions,
+  mode: BlobConversion['mode']
 ): Promise<GitDiffResult> {
+  const conversion = blobConversion(submoduleWorktreePath, innerPath, options, mode)
   let originalContent = ''
   let modifiedContent = ''
   let originalIsBinary = false
   let modifiedIsBinary = false
   let tooLarge = false
   try {
-    const left = await readGitBlobAtOidPath(submoduleWorktreePath, fromOid, innerPath, options)
+    const left = await readGitBlobAtOidPath(
+      submoduleWorktreePath,
+      fromOid,
+      innerPath,
+      options,
+      conversion
+    )
     originalContent = left.content
     originalIsBinary = left.isBinary
-    const right = await readGitBlobAtOidPath(submoduleWorktreePath, toOid, innerPath, options)
+    const right = await readGitBlobAtOidPath(
+      submoduleWorktreePath,
+      toOid,
+      innerPath,
+      options,
+      conversion
+    )
     modifiedContent = right.content
     modifiedIsBinary = right.isBinary
     tooLarge = left.tooLarge === true || right.tooLarge === true

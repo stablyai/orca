@@ -2742,7 +2742,6 @@
       "checkingReviewStatus": "Vérification du statut de revue.",
       "checkoutBeforePublish": "Effectuez un checkout d'une branche avant de publier des commits.",
       "commitStagedChanges": "Committer les modifications indexées.",
-      "commits": "Commits",
       "committing": "Commit en cours.",
       "createPr": "Créer une PR",
       "enterCommitMessage": "Saisissez un message de commit pour committer.",
@@ -2772,25 +2771,11 @@
       "resolveFailed": "Impossible de déterminer la base de la branche"
     },
     "branchCard": {
-      "branchCount": "{{count}} sur la branche",
-      "changedCount": "Modifiés : {{count}}",
-      "cherryPickState": "cherry-pick",
-      "mergeState": "merge",
-      "rebaseState": "rebase",
-      "stagedCount": "Indexés : {{count}}",
       "completingMerge": "Finalisation…",
       "completeMerge": "Terminer la fusion"
     },
     "branchCompare": {
-      "commits_many": "{{count}} commits",
-      "commits_one": "{{count}} commit",
-      "commits_other": "{{count}} commits",
-      "files_many": "{{count}} fichiers",
-      "files_one": "{{count}} fichier",
-      "files_other": "{{count}} fichiers",
-      "sectionTitle": "Committé sur la branche",
-      "summary": "{{files}} - par rapport à {{baseRef}}",
-      "summaryWithCommits": "{{files}} - {{commits}} - par rapport à {{baseRef}}"
+      "sectionTitle": "Committé sur la branche"
     },
     "branchCompareOutcome": {
       "baseBranchUnavailable": "Impossible de déterminer la branche de base pour la comparaison.",
@@ -2849,11 +2834,8 @@
       "emptyMessage": "Le worktree est propre.",
       "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "openActions": "Ouvrir les actions de contrôle de code source",
       "reconnecting": "Reconnexion à l'ordinateur…",
-      "regenerateHint": "Effacez le message pour le régénérer.",
-      "stageAll": "Tout indexer",
-      "unstageAll": "Tout désindexer"
+      "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
       "checkingStatus": "Vérification du statut de revue…",
@@ -2889,20 +2871,15 @@
       "titleUnpublishedForcePushCount_one": "Faites un force push avec lease de {{count}} commit de la branche et définissez un upstream si nécessaire.",
       "titleUnpublishedForcePushCount_other": "Faites un force push avec lease de {{count}} commits de la branche et définissez un upstream si nécessaire."
     },
-    "fileList": {
-      "committedSection": "Committé sur la branche"
-    },
     "fileRows": {
       "addedByThem": "Ajouté chez eux",
       "addedByUs": "Ajouté chez nous",
       "bothAdded": "Ajouté des deux côtés",
       "bothDeleted": "Supprimé des deux côtés",
       "bothModified": "Modifié des deux côtés",
-      "committedSection": "Committé sur la branche",
       "committedUnavailable": "Modifications committées indisponibles.",
       "deletedByThem": "Supprimé chez eux",
       "deletedByUs": "Supprimé chez nous",
-      "discardFile": "Abandonner les modifications de {{path}}",
       "loadingCommitted": "Chargement des modifications committées…",
       "openChangedFile": "Ouvrir le fichier modifié {{path}}",
       "openCommittedChange": "Ouvrir la modification committée de {{path}}",
@@ -2940,9 +2917,7 @@
       "waitingForDesktop": "En attente de l'ordinateur…"
     },
     "gitStatus": {
-      "changes": "Modifications",
-      "conflicts": "Conflits",
-      "stagedChanges": "Modifications stagées"
+      "conflicts": "Conflits"
     },
     "header": {
       "backToSession": "Retour à la session",
@@ -3010,7 +2985,6 @@
       "waitingForDesktop": "En attente de l'ordinateur…"
     },
     "modals": {
-      "actionsTitle": "Contrôle de code source",
       "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
@@ -3022,16 +2996,6 @@
     },
     "panel": {
       "unavailableTitle": "Contrôle de code source indisponible"
-    },
-    "prChip": {
-      "createPr": "Créer la pull request",
-      "loading": "Chargement de la pull request…",
-      "loadingLabel": "Chargement de la pull request",
-      "openLabel": "Pull request #{{number}}, {{state}}, {{checks}}. Ouvrir la pull request.",
-      "openWithComments_many": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} commentaires non résolus. Ouvrir la pull request.",
-      "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} commentaire non résolu. Ouvrir la pull request.",
-      "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} commentaires non résolus. Ouvrir la pull request.",
-      "unavailableLabel": "Pull request indisponible : {{message}}"
     },
     "prCreate": {
       "authRequired": "Authentifiez-vous avant de créer une {{reviewLabel}}.",
@@ -3120,7 +3084,6 @@
       "noBranch": "Aucune branche"
     },
     "state": {
-      "noUpstream": "Aucune branche de suivi",
       "syncStatus": "{{ahead}} en avance, {{behind}} en retard"
     },
     "textGenerationFailure": {

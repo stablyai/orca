@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from 'react-native'
-import { Minus, MoreHorizontal, Plus } from 'lucide-react-native'
+import { ActivityIndicator, Animated, Easing, Text, View } from 'react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { SHEET_CURVE } from '../components/sheet-motion-values'
+import { MobileSourceControlChangesHeader } from './MobileSourceControlChangesHeader'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { MobileSourceControlFileList } from './MobileSourceControlFileList'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
@@ -44,31 +44,13 @@ type Props = {
   state: Omit<MobileSourceControlState, 'primaryActionArgs'>
   /** Clears the next-step bar the panel floats over the list. */
   bottomInset: number
+  onOpenCommits: () => void
 }
 
-export function MobileSourceControlContent({ state, bottomInset }: Props) {
+export function MobileSourceControlContent({ state, bottomInset, onOpenCommits }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const {
-    connState,
-    busyAction,
-    setShowActionSheet,
-    setDiscardTarget,
-    actionError,
-    commitFailureRecovery,
-    commitFailureRecoveryAction,
-    sections,
-    hasVisibleChanges,
-    status,
-    stageablePaths,
-    unstageablePaths,
-    stageAll,
-    unstageAll,
-    openDiffForFile,
-    resolveConflict,
-    runGitAction
-  } = state
-  const ioBusy = busyAction !== null
+  const { busyAction, hasVisibleChanges } = state
   // Commit runners keep busyAction set ('commit…') until the refreshed status has landed.
   const [listShown, setListShown] = useState(hasVisibleChanges)
   const [cleanedByCommit, setCleanedByCommit] = useState(false)
@@ -76,56 +58,111 @@ export function MobileSourceControlContent({ state, bottomInset }: Props) {
     setListShown(hasVisibleChanges)
     setCleanedByCommit(!hasVisibleChanges && busyAction?.startsWith('commit') === true)
   }
-  // A capped all-staged prefix can hide unstaged rows.
-  const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
-  const listBottomInset = bottomInset + spacing.lg
-  const fileList = useMemo(
+  // Pick only what the list reads, so commit-message keystrokes never re-render its rows.
+  const {
+    connState,
+    status,
+    branchLabel,
+    branchCompareResult,
+    actionError,
+    commitFailureRecovery,
+    commitFailureRecoveryAction,
+    openBranchPicker,
+    abortConflictOperation,
+    sections,
+    shouldShowBranchCompareSection,
+    branchEntries,
+    branchCompareState,
+    stageablePaths,
+    unstageablePaths,
+    stageAll,
+    unstageAll,
+    openDiffForFile,
+    resolveConflict,
+    runGitAction,
+    setDiscardTarget
+  } = state
+  const header = useMemo(
     () => (
-      <MobileSourceControlFileList
-        bottomInset={listBottomInset}
+      <MobileSourceControlChangesHeader
         state={{
-          sections,
-          openDiffForFile,
-          resolveConflict,
-          runGitAction,
-          setDiscardTarget,
-          shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-          branchCompareSummaryText: state.branchCompareSummaryText,
-          branchEntries: state.branchEntries,
-          branchCompareState: state.branchCompareState,
-          branchCompareResult: state.branchCompareResult,
-          busyAction
+          status,
+          branchLabel,
+          branchCompareResult,
+          busyAction,
+          openBranchPicker,
+          abortConflictOperation
         }}
+        onOpenCommits={onOpenCommits}
       />
     ),
     [
-      listBottomInset,
-      sections,
+      abortConflictOperation,
+      branchCompareResult,
+      branchLabel,
+      busyAction,
+      onOpenCommits,
+      openBranchPicker,
+      status
+    ]
+  )
+  const list = useMemo(
+    () => (
+      <MobileSourceControlFileList
+        state={{
+          sections,
+          status,
+          shouldShowBranchCompareSection,
+          branchEntries,
+          branchCompareState,
+          branchCompareResult,
+          stageablePaths,
+          unstageablePaths,
+          stageAll,
+          unstageAll,
+          busyAction,
+          openDiffForFile,
+          resolveConflict,
+          runGitAction,
+          setDiscardTarget
+        }}
+        header={header}
+        bottomInset={bottomInset + spacing.lg}
+      />
+    ),
+    [
+      bottomInset,
+      branchCompareResult,
+      branchCompareState,
+      branchEntries,
+      busyAction,
+      header,
       openDiffForFile,
       resolveConflict,
       runGitAction,
+      sections,
       setDiscardTarget,
-      state.shouldShowBranchCompareSection,
-      state.branchCompareSummaryText,
-      state.branchEntries,
-      state.branchCompareState,
-      state.branchCompareResult,
-      busyAction
+      shouldShowBranchCompareSection,
+      stageAll,
+      stageablePaths,
+      status,
+      unstageAll,
+      unstageablePaths
     ]
   )
-
-  return (
-    <>
-      {connState !== 'connected' ? (
-        // Retained rows look actionable offline; show reconnect state beside them.
-        <View style={styles.reconnectBanner}>
-          <ActivityIndicator size="small" color={colors.statusAmber} />
-          <Text style={styles.reconnectBannerText}>
-            {t('sourceControl.content.reconnecting', 'Reconnecting to desktop...')}
-          </Text>
-        </View>
-      ) : null}
+  // Outside the list, so a failure stays in view however far the rows are scrolled.
+  const feedback =
+    connState !== 'connected' || commitFailureRecovery || actionError ? (
       <View style={hubStyles.changesControls}>
+        {connState !== 'connected' ? (
+          // Retained rows look actionable offline; show reconnect state beside them.
+          <View style={styles.reconnectBanner}>
+            <ActivityIndicator size="small" color={colors.statusAmber} />
+            <Text style={styles.reconnectBannerText}>
+              {t('sourceControl.content.reconnecting', 'Reconnecting to desktop...')}
+            </Text>
+          </View>
+        ) : null}
         {commitFailureRecovery ? (
           <MobileCommitFailurePanel
             failure={commitFailureRecovery}
@@ -138,63 +175,13 @@ export function MobileSourceControlContent({ state, bottomInset }: Props) {
             </Text>
           </View>
         ) : null}
-        <View style={styles.bulkRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bulkButton,
-              (!canStageAll || ioBusy) && styles.bulkButtonDisabled,
-              pressed && styles.bulkButtonPressed
-            ]}
-            onPress={() => void stageAll()}
-            disabled={ioBusy || !canStageAll}
-          >
-            {busyAction === 'stage-all' ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Plus size={15} color={colors.textPrimary} strokeWidth={2.2} />
-            )}
-            <Text style={styles.bulkButtonText}>
-              {t('sourceControl.content.stageAll', 'Stage All')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bulkButton,
-              (unstageablePaths.length === 0 || ioBusy) && styles.bulkButtonDisabled,
-              pressed && styles.bulkButtonPressed
-            ]}
-            onPress={() => void unstageAll()}
-            disabled={ioBusy || unstageablePaths.length === 0}
-          >
-            {busyAction === 'unstage-all' ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Minus size={15} color={colors.textPrimary} strokeWidth={2.2} />
-            )}
-            <Text style={styles.bulkButtonText}>
-              {t('sourceControl.content.unstageAll', 'Unstage All')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.bulkMenuButton,
-              pressed && styles.bulkButtonPressed,
-              ioBusy && styles.bulkButtonDisabled
-            ]}
-            onPress={() => setShowActionSheet(true)}
-            disabled={ioBusy}
-            hitSlop={8}
-            accessibilityLabel={t(
-              'sourceControl.content.openActions',
-              'Open source control actions'
-            )}
-          >
-            <MoreHorizontal size={18} color={colors.textPrimary} strokeWidth={2.1} />
-          </Pressable>
-        </View>
       </View>
-
-      {!hasVisibleChanges ? (
+    ) : null
+  if (!hasVisibleChanges) {
+    return (
+      <View style={hubStyles.tabBody}>
+        {feedback}
+        <View style={hubStyles.changesControls}>{header}</View>
         <CleanStateFade animate={cleanedByCommit}>
           <Text style={styles.stateTitle}>
             {t('sourceControl.content.emptyTitle', 'No local changes')}
@@ -203,9 +190,13 @@ export function MobileSourceControlContent({ state, bottomInset }: Props) {
             {t('sourceControl.content.emptyMessage', 'Working tree is clean.')}
           </Text>
         </CleanStateFade>
-      ) : (
-        fileList
-      )}
-    </>
+      </View>
+    )
+  }
+  return (
+    <View style={hubStyles.tabBody}>
+      {feedback}
+      {list}
+    </View>
   )
 }
