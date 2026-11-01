@@ -125,13 +125,16 @@ describe('orchestration mailbox crash recovery', () => {
           cols: 80,
           rows: 24,
           seq: 10_000,
-          source: 'headless' as const
+          source: 'headless' as const,
+          alternateScreen: false
         })
       })
       restarted.runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, {
         value: 5_000,
         generation: 'continued'
       })
+      // An earlier capture learns an inline (normal-screen) agent, as for Claude Code.
+      await restarted.runtime.serializeHiddenOutputRecoveryBuffer(PTY_ID)
     } else {
       restarted.runtime.onPtyData(PTY_ID, screen, 1)
     }

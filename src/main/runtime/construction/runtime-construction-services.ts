@@ -114,9 +114,7 @@ export abstract class RuntimeConstructionServices {
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null>
-  protected abstract readCurrentTerminalWaitScreen(
-    ptyId: string
-  ): Promise<RuntimeVisibleTerminalState | null | undefined>
+  protected abstract readComposerDraft(ptyId: string): Promise<string | undefined>
   protected abstract getLeafKey(tabId: string, leafId: string): string
   /** L80: sole reader of a PTY record's tab/pane copies. */
   protected abstract paneOfPty(pty: PtyPaneSource | null | undefined): PtyPane

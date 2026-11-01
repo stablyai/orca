@@ -166,6 +166,19 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
       : null
   }
 
+  /** The composer's unsent text. After a reattach main's model is partial, and once a capture saw
+   *  the normal screen loadVisibleTerminalState reads that model, so the daemon's screen answers. */
+  protected async readComposerDraft(ptyId: string): Promise<string | undefined> {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return (await this.readCurrentTerminalWaitScreen(ptyId))?.draft
+    }
+    const projection = await this.readProviderTerminalTailLines(ptyId, undefined, {
+      visibleScreenOnly: true,
+      timeoutMs: TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS
+    })
+    return projection.draft
+  }
+
   /** Synchronous visible grid of the live emulator, for tui-idle body evidence. Null when the
    *  model is not the whole screen: a provider-restored partial suffix or a pending hydration. */
   protected readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null {
