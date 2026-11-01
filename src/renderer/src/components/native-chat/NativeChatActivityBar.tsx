@@ -4,6 +4,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
+  nativeChatListedSubagents,
   nativeChatSubagentActivities,
   nativeChatVisibleTaskList,
   type NativeChatSubagentActivity
@@ -71,17 +72,18 @@ export function NativeChatActivityBar({
     () => nativeChatSubagentActivities(messages, subagentRows, subagentSeed),
     [messages, subagentRows, subagentSeed]
   )
+  const listed = nativeChatListedSubagents(subagents)
   const [tasksOpen, setTasksOpen] = useState(false)
   const [subagentsOpen, setSubagentsOpen] = useState(false)
   const columnRef = useRef<{ getBoundingClientRect(): DOMRect } | null>(null)
   const focused = subagents.find((agent) => agent.id === focusedSubagentId) ?? null
   const showTasks = list != null && list.tasks.length > 0
-  if (!showTasks && subagents.length === 0 && !focused) {
+  if (!showTasks && listed.length === 0 && !focused) {
     return null
   }
   const completed = list ? nativeChatCompletedTaskCount(list) : 0
   const total = list?.tasks.length ?? 0
-  const working = subagents.some((agent) => agent.state === 'working')
+  const working = listed.some((agent) => agent.state === 'working')
   return (
     <div className="shrink-0 px-3 pb-2 sm:px-4">
       <div
@@ -166,7 +168,7 @@ export function NativeChatActivityBar({
               </PopoverContent>
             </Popover>
           ) : null}
-          {subagents.length > 0 ? (
+          {listed.length > 0 ? (
             <Popover open={subagentsOpen} onOpenChange={setSubagentsOpen}>
               <PopoverAnchor virtualRef={columnRef} />
               <PopoverTrigger
@@ -175,21 +177,21 @@ export function NativeChatActivityBar({
                   'components.native-chat.activity.subagentsLabel',
                   '{{count}} subagents',
                   {
-                    count: subagents.length,
+                    count: listed.length,
                     defaultValue_one: '{{count}} subagent'
                   }
                 )}
               >
                 <Users aria-hidden className="size-3.5 shrink-0" />
                 <span>
-                  {subagents.length === 1
+                  {listed.length === 1
                     ? translate('components.native-chat.activity.subagent', '{{count}} subagent', {
-                        count: subagents.length
+                        count: listed.length
                       })
                     : translate(
                         'components.native-chat.activity.subagents',
                         '{{count}} subagents',
-                        { count: subagents.length }
+                        { count: listed.length }
                       )}
                 </span>
                 {working ? (
@@ -226,7 +228,7 @@ export function NativeChatActivityBar({
                       />
                     </li>
                   ) : null}
-                  {subagents.map((agent) => (
+                  {listed.map((agent) => (
                     <li key={agent.id}>
                       <SubagentChoice
                         agent={agent}

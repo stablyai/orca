@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../native-chat-types'
 import {
   latestNativeChatTaskList,
   latestNativeChatTaskSeed,
+  nativeChatListedSubagents,
   nativeChatSubagentActivities,
   nativeChatTaskListFromPlanDocument,
   nativeChatVisibleTaskList
@@ -369,6 +370,26 @@ describe('nativeChatSubagentActivities', () => {
         activity: 'Found the composer pill.'
       },
       { id: 'child-2', label: 'Review', state: 'completed', activity: null }
+    ])
+  })
+})
+
+describe('nativeChatListedSubagents', () => {
+  it('keeps running and failed children and drops completed, idle, and cancelled', () => {
+    const roster = (
+      [
+        ['run', 'working'],
+        ['wait', 'idle'],
+        ['done', 'completed'],
+        ['bad', 'failed'],
+        ['stop', 'stopped'],
+        ['lost', 'unverifiable']
+      ] as const
+    ).map(([id, state]) => ({ id, label: id, state, activity: null }))
+    expect(nativeChatListedSubagents(roster).map((entry) => entry.id)).toEqual([
+      'run',
+      'bad',
+      'lost'
     ])
   })
 })
