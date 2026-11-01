@@ -220,17 +220,23 @@ export abstract class AgentSessionRecordTabs extends AgentSessionRecordPublicati
     sessionId: string,
     visible: boolean,
     tabId?: string,
-    check?: () => void
+    check?: () => void,
+    capture?: (tabId: string | null) => void
   ): Promise<void> {
     return this.transact((draft) => {
       check?.()
-      return setAgentSessionTabVisibility(
+      const retired =
+        effectiveAgentSessionTabs(draft, this.transactions.legacySessionTabIds).tabIdFor(
+          sessionId
+        ) ?? null
+      setAgentSessionTabVisibility(
         draft,
         sessionId,
         visible,
         tabId,
         this.transactions.legacySessionTabIds
       )
+      capture?.(visible ? (draft.sessionTabs?.tabIdFor(sessionId) ?? null) : retired)
     })
   }
 

@@ -66,11 +66,21 @@ export function admitWorktreeCatalogResponse(
   return { kind: 'invalid' }
 }
 
+export type WorktreeCatalogSnapshotOptions = {
+  /**
+   * Read uncoarsened activity, as a reader that ranks or shows it did before snapshots. With no token
+   * the read sends no snapshot id at all, so a host without row deltas answers its exact legacy catalog.
+   */
+  exactActivity?: boolean
+}
+
 export class WorktreeCatalogSnapshotClient {
   private client: RpcClient | null = null
   private hostId: string | null = null
   private snapshotId: string | null = null
   private confirmedWorktrees: Worktree[] | null = null
+
+  constructor(private readonly options: WorktreeCatalogSnapshotOptions = {}) {}
 
   async fetch(client: RpcClient, hostId: string): Promise<WorktreeCatalogFetchResult> {
     if (this.client !== client || this.hostId !== hostId) {
@@ -80,10 +90,12 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
+    const exact = this.options.exactActivity === true
     const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: requestedSnapshotId,
-      acceptRowDelta: true
+      ...(exact && requestedSnapshotId === null ? {} : { afterSnapshotId: requestedSnapshotId }),
+      acceptRowDelta: true,
+      ...(exact ? { exactActivity: true } : {})
     })
     const catalog = worktreeCatalogRead.interpret(reply)
     if (!catalog.accepted) {

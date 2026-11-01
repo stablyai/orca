@@ -170,7 +170,8 @@ describe('picker window launch contract', () => {
         rows,
         ['claude'],
         (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        () => 'Claude'
+        () => 'Claude',
+        undefined
       )[0]
       entry.catalog = {
         origin: 'probe',

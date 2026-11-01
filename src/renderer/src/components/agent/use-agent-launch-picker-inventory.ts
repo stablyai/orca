@@ -120,6 +120,7 @@ export function useAgentLaunchPickerInventory(
         executionHostId,
         model.state === 'settled' ? model.rows : [],
         model.state === 'settled' ? model.detection.detectedIds : [],
+        model.state === 'settled' ? model.defaultTuiAgent : undefined,
         settings && {
           agentDefaultArgs: settings.agentDefaultArgs,
           agentLaunchChoices: settings.agentLaunchChoices,
@@ -142,7 +143,8 @@ export function useAgentLaunchPickerInventory(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          formatAgentTypeLabel
+          formatAgentTypeLabel,
+          model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,
           ...(!target ||

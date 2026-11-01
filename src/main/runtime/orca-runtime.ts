@@ -38,7 +38,11 @@ import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
-import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
+import {
+  applyWindowLayoutCommand,
+  type WindowLayoutCommand,
+  type LayoutCommandRunOptions
+} from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   installStructuredAgentAvailability,
@@ -258,7 +262,10 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   }
 
   /** Apply a window command to the partitions that hold its tab. */
-  async applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply> {
+  async applyLayoutCommand(
+    command: WindowLayoutCommand,
+    run?: Pick<LayoutCommandRunOptions, 'admit'>
+  ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
@@ -270,7 +277,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        this.layoutCommandRun(command)
+        { ...this.layoutCommandRun(command), ...run }
       )
     // Order sleep/wake after previously accepted hook statuses.
     const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
@@ -308,18 +315,8 @@ export type {
   RuntimeAutomationUpdateInput
 } from './runtime-automation-controller'
 export type { SubscriptionRegistration } from './runtime-subscription-registry'
-export type {
-  OrchestrationCompatibilityCallerAuthority,
-  OrchestrationCompatibilityTerminalAuthority,
-  RuntimeTerminalAgentStatusEvent
-} from './runtime-terminal-contracts'
 export type { MessageWaitResult } from './runtime-message-waiters'
 export type { AccountsSnapshot, CodexRateLimitResetRpcResult } from './runtime-account-controller'
-export type {
-  MobileNotificationDispatchEvent,
-  MobileNotificationDismissEvent,
-  MobileNotificationEvent
-} from './runtime-mobile-notification-controller'
 export type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
 export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 export {
@@ -334,6 +331,9 @@ export { buildRestoredTerminalTailSeed } from './terminal-tail-restore-seed'
 export { projectTerminalTailLines } from './orca-runtime-terminal-projection'
 export { resolveWorktreeScanCacheTtlMs } from './runtime-worktree-scan-cache'
 export type {
+  OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilityTerminalAuthority,
+  RuntimeTerminalAgentStatusEvent,
   RuntimeWorktreeLifecycleEvent,
   DriverState,
   PtyLayoutTarget,

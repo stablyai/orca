@@ -40,7 +40,10 @@ import { launchAgentSessionContinuation } from '@/lib/launch-agent-session-conti
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { chooseInitialContinuationAgent } from './agent-session-continuation-selection'
+import {
+  chooseInitialContinuationAgent,
+  isContinuationAgentAllowed
+} from './agent-session-continuation-selection'
 
 type AgentSessionContinuationDialogProps = {
   open: boolean
@@ -102,12 +105,27 @@ export function AgentSessionContinuationDialog({
     ? agentsOfferedForLaunch(useAppStore.getState(), workspace, detectedIds)
     : []
   const agents = getAgentCatalog().filter(
-    (agent) => offered.includes(agent.id) && isTuiAgentEnabled(agent.id, disabledAgents)
+    (agent) =>
+      isTuiAgentEnabled(agent.id, disabledAgents) &&
+      isContinuationAgentAllowed(agent.id, request?.source.sourceAgent, request?.avoidSourceAgent)
   )
-  const rows = observation.model.state === 'settled' ? observation.model.rows : []
+  const destinationModel =
+    observation.model.state === 'settled'
+      ? {
+          ...observation.model,
+          rows: observation.model.rows.filter((row) =>
+            agents.some((agent) => agent.id === row.agent)
+          )
+        }
+      : observation.model
+  const rows = destinationModel.state === 'settled' ? destinationModel.rows : []
   const pickable = agents
     .map((agent) => agent.id)
-    .filter((agent) => rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable'))
+    .filter(
+      (agent) =>
+        offered.includes(agent) &&
+        rows.some((row) => row.agent === agent && row.kind !== 'chat-unavailable')
+    )
   const preparing = request === null
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
@@ -125,7 +143,7 @@ export function AgentSessionContinuationDialog({
     chooseInitialContinuationAgent({
       availableAgents: pickable,
       automaticAgents: pickable.filter((agent) => detectedIds?.includes(agent)),
-      sourceAgent: request?.source.sourceAgent ?? null,
+      sourceAgent: request?.avoidSourceAgent ? null : (request?.source.sourceAgent ?? null),
       defaultAgent: settings?.defaultTuiAgent
     })
   const selection = observation.selectionFor(selectedAgent, currentPick?.surface)
@@ -225,7 +243,7 @@ export function AgentSessionContinuationDialog({
             <AgentLaunchPicker
               draftScope={draftScope}
               disabled={controlsDisabled}
-              model={observation.model}
+              model={destinationModel}
               worktreeId={request?.worktreeId}
               agent={selectedAgent}
               value={currentPick?.draft}
@@ -255,7 +273,7 @@ export function AgentSessionContinuationDialog({
                     'Could not detect Agents on this workspace host.'
                   )}
                 </p>
-              ) : agents.length === 0 ? (
+              ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
                   {translate(
                     'components.agentSessionContinuation.noAgents',

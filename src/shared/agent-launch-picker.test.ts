@@ -546,7 +546,8 @@ it('keeps offered host Chat independent of preference through the actual row bui
       rows,
       scenario.detected,
       () => ({ terminal: {}, structured: {} }),
-      (agent) => agent
+      (agent) => agent,
+      undefined
     )
     expect(result.surfaces).toEqual(scenario.surfaces)
     expect(result.defaultSurface).toBe(scenario.defaultSurface)
@@ -565,7 +566,8 @@ it('keeps offered host Chat independent of preference through the actual row bui
         rows,
         detected,
         () => ({ terminal: {}, structured: {} }),
-        (agent) => agent
+        (agent) => agent,
+        undefined
       )
       expect(result.rows.some((row) => row.kind === 'chat-unavailable')).toBe(true)
       expect(result.surfaces).toEqual(detected.length ? ['terminal'] : [])
@@ -580,4 +582,24 @@ it('keeps offered host Chat independent of preference through the actual row bui
       chatProgram: () => 'available'
     })
   ).toEqual([])
+})
+
+it('orders setups by agent, not by whether each opens as a chat or its CLI', () => {
+  const rows = buildNewTabAgentMenuRows({
+    settings: { nativeChatProviders: { codex: true, grok: true, claude: false } },
+    detectedOnHost: ['claude', 'codex', 'grok', 'gemini'],
+    chatAgents: ['claude', 'codex', 'grok'],
+    hostChatAnswer: () => 'yes',
+    chatProgram: () => 'available'
+  })
+  const order = (defaultAgent: 'codex' | 'blank') =>
+    agentPickerEntriesFromRows(
+      rows,
+      ['claude', 'codex', 'grok', 'gemini'],
+      () => ({ terminal: {}, structured: {} }),
+      (agent) => agent,
+      defaultAgent
+    ).map((entry) => entry.agent)
+  expect(order('blank')).toEqual(['claude', 'codex', 'grok', 'gemini'])
+  expect(order('codex')).toEqual(['codex', 'claude', 'grok', 'gemini'])
 })

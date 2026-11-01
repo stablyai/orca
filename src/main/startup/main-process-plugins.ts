@@ -210,13 +210,23 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     if (updates.pluginSystemEnabled !== undefined || updates.pluginUpdatePolicy !== undefined) {
       syncPluginAutoUpdate(true)
     }
+    if ('pluginSystemEnabled' in updates || 'devPluginPaths' in updates) {
+      // Main owns lifecycle refresh even when a caller crashes before its follow-up refresh.
+      void pluginService.refresh().catch((error) => {
+        console.warn('[plugins] failed to apply plugin settings change:', error)
+      })
+    }
   })
+  // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
+  pluginService.setRuntimeDelegate(runtime)
   // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
   setPluginServiceForRpc(state.pluginService, {
     applyConsent: (request) =>
       applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
     applyEnablement: (pluginKey, enabled) =>
       applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
+    setPluginSystemEnabled: (pluginSystemEnabled) =>
+      store.updateSettings({ pluginSystemEnabled }, { notifyListeners: true }),
     setDevPluginPaths: (devPluginPaths) =>
       store.updateSettings({ devPluginPaths }, { notifyListeners: true })
   })

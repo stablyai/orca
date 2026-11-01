@@ -224,4 +224,27 @@ describe('worktree.ps row deltas', () => {
     expect(optedOut.worktrees).toHaveLength(2)
     expect(unknownBase.worktrees).toHaveLength(3)
   })
+
+  it('serves exact activity with a snapshot id to a first read that sends no token', async () => {
+    const live = psRow({ lastOutputAt: 1_700_000_039_000, preview: 'step 2' })
+    const dispatcher = new RpcDispatcher({
+      runtime: runtimeReturning(catalog(live), catalog(live)),
+      methods: WORKTREE_METHODS
+    })
+    const first = await poll(dispatcher, {
+      limit: 10_000,
+      acceptRowDelta: true,
+      exactActivity: true
+    })
+    const second = await poll(dispatcher, {
+      limit: 10_000,
+      afterSnapshotId: first.snapshotId,
+      acceptRowDelta: true,
+      exactActivity: true
+    })
+
+    expect(first.worktrees).toEqual([live])
+    expect(typeof first.snapshotId).toBe('string')
+    expect(second).toEqual({ unchanged: true, snapshotId: first.snapshotId })
+  })
 })

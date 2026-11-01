@@ -1,5 +1,6 @@
+import { exerciseCommittedAgentPickerSelection } from './agent-launch-picker-committed-selection-test-fixture'
 // @vitest-environment happy-dom
-import { createElement, Suspense, startTransition, useLayoutEffect, useState } from 'react'
+import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
@@ -87,112 +88,7 @@ it('revalidates completed host Chat defaults behind held siblings through the ac
 })
 
 it('publishes only committed selection to physical catalog admission after a suspended render', async () => {
-  const menu = model('committed-priority', ['codex', 'claude', 'gemini', 'cursor', 'amp'])
-  const settings = Promise.withResolvers<ReturnType<typeof projectAgentLaunchSettings>>()
-  mocks.settings.mockReturnValue(settings.promise)
-  const reads: {
-    method: string
-    agent: picker.AgentPickerEntry['agent']
-    resolve: (value: unknown) => void
-  }[] = []
-  mocks.session.mockImplementation((_target, method, params) => {
-    const read = Promise.withResolvers<unknown>()
-    reads.push({ method, agent: params.agent, resolve: read.resolve })
-    return read.promise
-  })
-  const suspended = Promise.withResolvers<void>()
-  const rendered = vi.fn()
-  const committed = vi.fn()
-  type Selection = { selected: picker.AgentPickerEntry['agent']; suspend: boolean }
-  function Inventory({ selected, suspend }: Selection) {
-    const entries = useAgentLaunchPickerInventory('wt', menu, true, selected)
-    rendered(selected, suspend)
-    useLayoutEffect(() => {
-      committed(selected)
-    }, [selected])
-    if (suspend) {
-      throw suspended.promise
-    }
-    return createElement(
-      'div',
-      null,
-      `${selected}:${entries[0]?.defaultsPending ? 'unknown' : 'known'}`
-    )
-  }
-  function Menu() {
-    const [selection, setSelection] = useState<Selection>({ selected: 'claude', suspend: false })
-    return createElement(
-      'div',
-      null,
-      createElement(
-        'button',
-        {
-          onClick: () => startTransition(() => setSelection({ selected: 'amp', suspend: true }))
-        },
-        'Speculate'
-      ),
-      createElement(
-        'button',
-        {
-          onClick: () => setSelection({ selected: 'amp', suspend: false })
-        },
-        'Commit'
-      ),
-      createElement(Suspense, { fallback: 'Waiting' }, createElement(Inventory, selection))
-    )
-  }
-  const view = render(createElement(Menu))
-  const catalogs = () => reads.filter((read) => read.method === 'agentSession.modelCatalog')
-  const stats = () =>
-    agentPickerAcquisitionDiagnostics().filter((s) => s.key.includes('committed-priority'))
-  try {
-    expect(catalogs().map((read) => read.agent)).toEqual(['claude', 'codex'])
-    expect(stats()).toMatchObject([{ observers: 1, catalog: 2, support: 2, settings: 1 }])
-    fireEvent.click(view.getByText('Speculate'))
-    expect(rendered).toHaveBeenCalledWith('amp', true)
-    expect(committed.mock.calls).toEqual([['claude']])
-    expect(view.getByText('claude:unknown')).toBeTruthy()
-    await act(async () => catalogs()[0].resolve(catalog))
-    expect(catalogs().map((read) => read.agent)).toEqual(['claude', 'codex', 'gemini'])
-    expect(committed.mock.calls).toEqual([['claude']])
-    fireEvent.click(view.getByText('Commit'))
-    expect(committed.mock.calls).toEqual([['claude'], ['amp']])
-    expect(catalogs()).toHaveLength(3)
-    await act(async () => catalogs()[1].resolve(catalog))
-    expect(catalogs().map((read) => read.agent)).toEqual(['claude', 'codex', 'gemini', 'amp'])
-    expect(stats()).toMatchObject([{ observers: 1, catalog: 2, support: 2, settings: 1 }])
-    expect(mocks.settings).toHaveBeenCalledTimes(1)
-    await act(async () =>
-      settings.resolve(projectAgentLaunchSettings({ agentPermissionDefault: 'ask' }))
-    )
-    expect(view.getByText('amp:known')).toBeTruthy()
-    expect(stats()).toMatchObject([{ observers: 1, catalog: 2, support: 2, settings: 0 }])
-  } finally {
-    view.unmount()
-    expect(stats()).toMatchObject([{ observers: 0 }])
-    await act(async () => {
-      settings.resolve(projectAgentLaunchSettings({}))
-      suspended.resolve()
-      for (const read of reads) {
-        read.resolve(read.method === 'agentSession.modelCatalog' ? catalog : {})
-      }
-    })
-    expect(stats()).toEqual([])
-  }
-  expect(catalogs().map((read) => read.agent)).toEqual(['claude', 'codex', 'gemini', 'amp'])
-  process.stdout.write(
-    `${JSON.stringify({
-      metric: 'committed-priority',
-      suspendedRenderReachedHook: rendered.mock.calls.some(
-        ([agent, suspend]) => agent === 'amp' && suspend
-      ),
-      committed: committed.mock.calls.map(([agent]) => agent),
-      catalogStarts: catalogs().map((read) => read.agent),
-      supportStarts: reads.filter((read) => read.method === 'agentSession.createSupport').length,
-      settingsStarts: mocks.settings.mock.calls.length,
-      retainedOwnersAfterSettlement: stats().length
-    })}\n`
-  )
+  await exerciseCommittedAgentPickerSelection(mocks)
 })
 
 it('reads host Arguments and remembered chat choices without leaking desktop defaults or refetching for selection', async () => {
@@ -416,6 +312,20 @@ it('updates terminal availability when detection changes while the Chat rows sta
   expect(hook.result.current[0].surfaces).toEqual(['chat', 'terminal'])
 })
 
+it('reorders entries when the default agent changes while the rows stay the same', async () => {
+  const menu = model('default-order', ['codex', 'claude'])
+  const hook = renderHook(
+    ({ value }: { value: Extract<NewTabAgentMenuModel, { state: 'settled' }> }) =>
+      useAgentLaunchPickerInventory('wt', value, true),
+    { initialProps: { value: { ...menu, defaultTuiAgent: 'claude' } } }
+  )
+  await act(async () => {})
+  expect(hook.result.current[0].agent).toBe('claude')
+  hook.rerender({ value: { ...menu, defaultTuiAgent: 'codex' } })
+  await act(async () => {})
+  expect(hook.result.current[0].agent).toBe('codex')
+})
+
 it.each([3, 30])(
   'shares actual unresolved reads and current listeners across %i opens and matching controllers',
   async (count) => {
@@ -432,7 +342,7 @@ it.each([3, 30])(
       reads.push({ method, resolve: read.resolve, reject: read.reject })
       return read.promise
     })
-    const menu = model(`shared-${count}`, ['codex', 'claude', 'gemini'])
+    const menu = model(`shared-${count}`, ['claude', 'codex', 'gemini'])
     const mount = (open = true) =>
       renderHook(({ open }) => useAgentLaunchPickerInventory('wt', menu, open), {
         initialProps: { open }
@@ -470,7 +380,7 @@ it.each([3, 30])(
       settings.resolve(
         projectAgentLaunchSettings({
           agentPermissionDefault: 'ask',
-          agentDefaultArgs: { codex: '--add-dir docs' }
+          agentDefaultArgs: { claude: '--add-dir docs' }
         })
       )
     )
@@ -776,13 +686,17 @@ it.each([3, 30])(
       const beforeFailure = renders,
         beforeOther = otherRenders
       await act(async () => failed.reject(new Error('transport failed')))
-      expect(view.result.current[0].catalogRead).toBe('failed')
+      const failedPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(failedPi).toBeDefined()
+      expect(failedPi?.catalogRead).toBe('failed')
       expect(renders - beforeFailure).toBe(1)
       expect(otherRenders).toBe(beforeOther)
       view.rerender({ open: false })
       view.rerender({ open: true })
       expect(catalogs()).toHaveLength(1) // both physical slots still belong to outstanding sibling reads
-      expect(view.result.current[0].catalogRead).toBe('pending')
+      const pendingPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(pendingPi).toBeDefined()
+      expect(pendingPi?.catalogRead).toBe('pending')
       const sibling = reads.find(
         (r) =>
           r.host === `failed-${count}` &&
@@ -797,7 +711,9 @@ it.each([3, 30])(
       expect(otherRenders).toBe(beforeOther)
       const beforeSuccess = renders
       await act(async () => catalogs()[1].resolve(catalog))
-      expect(view.result.current[0]).toMatchObject({ catalogRead: 'settled', catalog })
+      const settledPi = view.result.current.find((entry) => entry.agent === 'pi')
+      expect(settledPi).toBeDefined()
+      expect(settledPi).toMatchObject({ catalogRead: 'settled', catalog })
       expect(renders - beforeSuccess).toBe(1)
       expect(otherRenders).toBe(beforeOther)
     } finally {
