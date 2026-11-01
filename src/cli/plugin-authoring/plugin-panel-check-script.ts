@@ -51,6 +51,8 @@ for (const { panel, entry, url, fixture } of panels) {
         await mounted.emit(event, payload)
       }
       result.elements = mounted.findAll({}).length
+      result.summary = mounted.summary()
+      result.tree = mounted.tree()
       result.issues.push(...mounted.errors)
       result.warnings.push(...mounted.warnings)
       // Refused even when the code caught it: in Orca the call fails the same way.

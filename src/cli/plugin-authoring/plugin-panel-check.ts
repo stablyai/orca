@@ -22,6 +22,10 @@ export type PluginPanelCheck = {
   scenario?: string
   /** Elements drawn on the first render; 0 when it never rendered. */
   elements: number
+  /** What a person notices first, one line each (headings, callouts, empty states, table sizes). */
+  summary: string[]
+  /** The drawn tree as plain data (handlers as `[handler]`); `orca plugin check --json` only. */
+  tree?: unknown
   issues: PluginPanelCheckIssue[]
   warnings: string[]
 }
@@ -32,6 +36,8 @@ const checkReportSchema = z.array(
     entry: z.string(),
     scenario: z.string().optional(),
     elements: z.number(),
+    summary: z.array(z.string()).default([]),
+    tree: z.unknown().optional(),
     issues: z.array(
       z.object({
         kind: z.enum(['plugin', 'refused']),
@@ -149,6 +155,7 @@ export async function checkPluginPanels(
       panel,
       entry,
       elements: 0,
+      summary: [],
       issues: [{ kind: 'plugin', message: message || `exited with code ${result.code}` }],
       warnings: []
     }))
@@ -171,6 +178,7 @@ export function formatPluginPanelCheck(check: PluginPanelCheck): string[] {
   if (check.issues.length === 0) {
     return [
       `${head}rendered ${check.elements} element(s)`,
+      ...check.summary.map((line) => `  ${line}`),
       ...check.warnings.map((warning) => `  warning: ${warning}`)
     ]
   }

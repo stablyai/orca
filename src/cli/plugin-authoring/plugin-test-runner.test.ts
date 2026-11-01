@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
 import {
   checkPluginPanels,
+  formatPluginPanelCheck,
   pluginPanelCheckIssues,
   pluginStackLocation
 } from './plugin-panel-check'
@@ -265,6 +266,16 @@ describe('orca plugin check', () => {
         { scenario: 'empty', elements: 1, issues: [], warnings: [] },
         { scenario: 'busy', elements: 3, issues: [], warnings: [] }
       ])
+      // What each scenario drew, at a glance, and the full tree for --json.
+      expect(checks.map((check) => check.summary)).toEqual([
+        ['List "Agents": 1 item(s)'],
+        ['List "Agents": 3 item(s)']
+      ])
+      expect(checks[1]?.tree).toMatchObject({ type: 'List', props: { label: 'Agents' } })
+      expect(formatPluginPanelCheck(checks[1]!)).toEqual([
+        'todo-panel (src/panel.tsx, scenario "busy"): rendered 3 element(s)',
+        '  List "Agents": 3 item(s)'
+      ])
 
       await writeFile(join(dir, 'src', 'worker.ts'), 'export function activate(): void {}\n')
       await writeFile(join(dir, 'src', 'panel.check.ts'), 'export default {}\n')
@@ -288,6 +299,8 @@ describe('orca plugin check', () => {
           panel: 'todo-panel',
           entry: 'src/panel.tsx',
           elements: expect.any(Number),
+          summary: ['Heading "Counter"'],
+          tree: expect.objectContaining({ type: 'Stack' }),
           issues: [],
           warnings: []
         }

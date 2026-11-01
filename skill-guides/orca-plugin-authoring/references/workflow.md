@@ -80,8 +80,10 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
   would refuse, props it would drop, and host calls Orca would refuse (`host refused …` warnings,
   even when the panel caught the error). With a worker (`main`), it mounts the worker on the same
   host first, so the panel's `plugin.request` reaches its `orca.panels.handle` handlers; a worker
-  that fails to activate is an issue named `worker (<file>): …`. Exit `0`, `1`
-  `plugin_check_failed`, `2` invalid.
+  that fails to activate is an issue named `worker (<file>): …`. Each result carries a `summary`
+  of what drew (headings, callouts, empty states, table sizes, the selected tab) and, with
+  `--json`, the whole `tree`: read them to confirm each scenario shows what it should. Exit `0`,
+  `1` `plugin_check_failed`, `2` invalid.
 
 The full kit API, generated from this Orca, is in `references/testing.md`.
 

@@ -14,7 +14,8 @@ export async function checkPluginDevFolder(dir: string): Promise<PluginDevWatchC
   if (!report.valid) {
     return { ok: false, invalid: report.errors, panels: [] }
   }
-  const panels = await checkPluginPanels(report.path)
+  // Why no tree: a watch prints one line per save; the summary says what drew.
+  const panels = (await checkPluginPanels(report.path)).map(({ tree: _tree, ...panel }) => panel)
   return { ok: panels.every((panel) => panel.issues.length === 0), invalid: [], panels }
 }
 

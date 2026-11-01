@@ -27,6 +27,7 @@
 - `find(query: TestQuery)`: The innermost match, or null.
 - `findAll(query: TestQuery)`
 - `tree()`: The drawn tree as plain data, for snapshots; handlers show as `[handler]`.
+- `summary()`: One line per thing a person notices first: headings, callouts, empty states, table and tree sizes, the selected tab, loading placeholders, danger or warning text.
 - `press(target: Target)`: Each act grants one gesture (a press) and resolves once the panel has settled.
 - `type(target: Target, text: string, options?: { replace?: boolean; submit?: boolean })`: Types after what the field holds (`replace` clears it first); `submit` presses Enter.
 - `submit(target: Target)`
@@ -42,6 +43,7 @@
 - `selectItem(target: Target, key: string)`
 - `activateItem(target: Target, key: string)`
 - `expandedOf(target: Target)`: Tree: the items Orca shows expanded.
+- `columnsOf(target: Target, view?: { width?: number })`: Table: the column keys Orca shows at `width` px (wide when omitted), after `hideBelow`.
 - `rowsOf(target: Target)`: Table: row keys in the order Orca draws them.
 - `valueOf(target: Target)`: What Orca shows in a value control: text, a flag, a number, a tab, or selected keys.
 - `emit(event: E, payload: OrcaEvents[E])`: An Orca event: `theme`, or a workspace or agent event the panel subscribed to.
