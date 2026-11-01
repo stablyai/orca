@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 
+import { buildDevCli } from './dev-cli-build.mjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
@@ -462,6 +463,9 @@ if (!isHelpOrVersion) {
 }
 
 if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
+  if (!isHelpOrVersion) {
+    await buildDevCli()
+  }
   prepareDevCliWrapper(devProfile.userDataPath)
 }
 
