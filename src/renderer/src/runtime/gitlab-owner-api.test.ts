@@ -20,6 +20,39 @@ beforeEach(() => {
 })
 
 describe('gitLabApiFor', () => {
+  it('rejects scoped MR filters on an older host instead of silently listing all MRs', async () => {
+    rpc.supports.mockResolvedValue(false)
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
+    }
+    await expect(
+      gitLabApiFor(selector).listMRs({ ...selector, involvement: 'mine' })
+    ).rejects.toThrow('Update the server')
+    expect(rpc.call).not.toHaveBeenCalled()
+  })
+
+  it('sends the involvement filter to the runtime that owns the GitLab credentials', async () => {
+    const selector = {
+      repoPath: '/work/app',
+      repoId: 'repo',
+      repoOwnerExecutionHostId: 'runtime:owner-server'
+    }
+    await gitLabApiFor(selector).listMRs({
+      ...selector,
+      state: 'opened',
+      involvement: 'needs-review',
+      page: 2
+    })
+    expect(rpc.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'owner-server' },
+      'gitlab.listMRs',
+      expect.objectContaining({ repo: 'id:repo', involvement: 'needs-review', page: 2 }),
+      expect.anything()
+    )
+  })
+
   it('offers no reviewers from a server older than the reviewer RPC', async () => {
     rpc.call.mockRejectedValue(
       Object.assign(new Error('Unknown method'), { code: 'method_not_found' })

@@ -294,6 +294,8 @@ export type GitLabMRUpdate = {
 }
 
 // Why: GitLab-native MR list filter replacing GitHub's search-DSL; 'all' maps to no state filter.
+export type GitLabMRInvolvement = 'mine' | 'needs-review'
+
 export type MRListState = 'opened' | 'merged' | 'closed' | 'all'
 
 // Why: totalCount / totalPages come from X-Total / X-Total-Pages headers via `glab api -i`.

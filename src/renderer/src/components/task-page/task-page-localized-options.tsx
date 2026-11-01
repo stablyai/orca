@@ -18,7 +18,7 @@ import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 
-export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
+export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all' | 'mine' | 'needs-review'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
 
 export type TaskQueryPreset = {
@@ -53,6 +53,8 @@ export function LinearIcon({ className }: { className?: string }): React.JSX.Ele
 
 export const getGitLabMRFilters = createLocalizedCatalog(
   (): { id: GitLabTaskFilter; label: string }[] => [
+    { id: 'mine', label: translate('auto.components.TaskPage.7698af5263', 'Mine') },
+    { id: 'needs-review', label: translate('auto.components.TaskPage.524f095d55', 'Needs review') },
     { id: 'opened', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
     { id: 'merged', label: translate('auto.components.TaskPage.37a82eaaf8', 'Merged') },
     { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') },

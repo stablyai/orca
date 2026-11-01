@@ -1,4 +1,9 @@
-import type { GitLabProjectRef, GitLabWorkItem, MRListState } from '../../shared/gitlab-types'
+import type {
+  GitLabMRInvolvement,
+  GitLabProjectRef,
+  GitLabWorkItem,
+  MRListState
+} from '../../shared/gitlab-types'
 import type { Repo } from '../../shared/repo-types'
 import {
   diagnoseAuth,
@@ -56,7 +61,8 @@ export class RuntimeGitLabQueryCommands {
     state?: MRListState,
     page?: number,
     perPage?: number,
-    query?: string
+    query?: string,
+    involvement?: GitLabMRInvolvement
   ): Promise<Awaited<ReturnType<typeof listMergeRequests>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return listMergeRequests(
@@ -67,7 +73,8 @@ export class RuntimeGitLabQueryCommands {
       repo.issueSourcePreference,
       query,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0] ?? {},
+      involvement
     )
   }
 

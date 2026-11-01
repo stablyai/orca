@@ -9,6 +9,7 @@ import type {
   GitLabIssueInfo,
   GitLabIssueUpdate,
   GitLabJobTraceResult,
+  GitLabMRInvolvement,
   GitLabMRInlineCommentInput,
   GitLabMRReviewersUpdateResult,
   GitLabMRUpdate,
@@ -49,6 +50,7 @@ export type GitLabApi = {
       page?: number
       perPage?: number
       query?: string
+      involvement?: GitLabMRInvolvement
     }
   ) => Promise<ListMergeRequestsResult>
   /** The merged filter excludes issues. */

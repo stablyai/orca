@@ -27,7 +27,14 @@ import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 export function isGitLabMRFilter(
   value: GitLabTaskFilter | GitLabIssueFilter
 ): value is GitLabTaskFilter {
-  return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
+  return (
+    value === 'opened' ||
+    value === 'merged' ||
+    value === 'closed' ||
+    value === 'all' ||
+    value === 'mine' ||
+    value === 'needs-review'
+  )
 }
 export function isGitLabIssueFilter(
   value: GitLabTaskFilter | GitLabIssueFilter

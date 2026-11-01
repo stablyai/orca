@@ -119,7 +119,8 @@ describe('gitlab RPC methods', () => {
         state: 'opened',
         page: 3,
         perPage: 1,
-        query: 'bug'
+        query: 'bug',
+        involvement: 'mine'
       })
     )
     const workItems = await dispatcher.dispatch(
@@ -269,7 +270,14 @@ describe('gitlab RPC methods', () => {
     })
     expect(mergeRequests).toMatchObject({ ok: true, result: pagedResult })
     expect(workItems).toMatchObject({ ok: true, result: pagedResult })
-    expect(runtime.listGitLabRepoMRs).toHaveBeenCalledWith('id:repo-1', 'opened', 3, 1, 'bug')
+    expect(runtime.listGitLabRepoMRs).toHaveBeenCalledWith(
+      'id:repo-1',
+      'opened',
+      3,
+      1,
+      'bug',
+      'mine'
+    )
     expect(runtime.listGitLabRepoWorkItems).toHaveBeenCalledWith('id:repo-1', 'opened', 3, 1, 'bug')
     expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50, 2)
     expect(runtime.createGitLabRepoIssue).toHaveBeenCalledWith('id:repo-1', 'Fix bug', 'Details')
