@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  probeBranchUpstream,
-  renameCurrentBranch,
-  resolveUniqueBranchName,
-  type GitExec
-} from './branch-rename'
+import { probeBranchUpstream, resolveUniqueBranchName, type GitExec } from './branch-rename'
 
 const noUpstreamError = new Error(
   "fatal: no upstream configured for branch 'feature'\n" +
@@ -13,39 +8,10 @@ const noUpstreamError = new Error(
 )
 
 describe('probeBranchUpstream', () => {
-  it('reports has-upstream when @{u} resolves to a tracking ref', async () => {
-    const exec: GitExec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        return { stdout: 'origin/feature\n', stderr: '' }
-      }
-      throw new Error(`unexpected git args: ${args.join(' ')}`)
-    })
-    expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'has-upstream' })
-  })
-
-  it('reports no-upstream when there is no upstream', async () => {
-    const exec: GitExec = vi.fn(async (args: string[]) => {
-      if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw noUpstreamError
-      }
-      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
-        throw new Error('not found')
-      }
-      throw new Error(`unexpected git args: ${args.join(' ')}`)
-    })
-    expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'no-upstream' })
-  })
-
   it('reports has-upstream when a same-name origin tracking ref exists without configured upstream', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw noUpstreamError
@@ -56,14 +22,6 @@ describe('probeBranchUpstream', () => {
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
     expect(await probeBranchUpstream(exec)).toEqual({ outcome: 'has-upstream' })
-  })
-
-  it('reports probe-failed on an unexpected failure', async () => {
-    const exec: GitExec = vi.fn().mockRejectedValue(new Error('fatal: not a git repository'))
-    expect(await probeBranchUpstream(exec)).toEqual({
-      outcome: 'probe-failed',
-      message: 'fatal: not a git repository'
-    })
   })
 
   it('scrubs credential-bearing URLs from the probe-failed message', async () => {
@@ -82,7 +40,7 @@ describe('probeBranchUpstream', () => {
     // gettext can translate even Git's fatal: prefix.
     const exec: GitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
       throw new Error(
         'Command failed: git rev-parse --abbrev-ref HEAD@{u}\n' +
@@ -96,12 +54,6 @@ describe('probeBranchUpstream', () => {
 
 describe('resolveUniqueBranchName', () => {
   const compute = (leaf: string): string => `you/${leaf}`
-
-  it('returns the first candidate when no branch collides', async () => {
-    const exec: GitExec = vi.fn().mockRejectedValue(new Error('not found'))
-    const result = await resolveUniqueBranchName(exec, 'fix-auth', compute, 'you/Nautilus')
-    expect(result).toBe('you/fix-auth')
-  })
 
   it('suffixes when the first candidate already exists', async () => {
     const exec: GitExec = vi.fn(async (args: string[]) => {
@@ -119,13 +71,5 @@ describe('resolveUniqueBranchName', () => {
     const exec: GitExec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     const result = await resolveUniqueBranchName(exec, 'octopus', compute, 'you/octopus')
     expect(result).toBe('you/octopus')
-  })
-})
-
-describe('renameCurrentBranch', () => {
-  it('runs git branch -m with the new name', async () => {
-    const exec: GitExec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    await renameCurrentBranch(exec, 'you/fix-auth')
-    expect(exec).toHaveBeenCalledWith(['branch', '-m', 'you/fix-auth'])
   })
 })

@@ -1,7 +1,11 @@
+import {
+  ptyRecordForPaneKey,
+  type TerminalIdentityReadContext
+} from '../terminal/query/terminal-identity-read-context'
 import type { RuntimeTerminalAgentPresenceOptions } from '../runtime-terminal-agent-presence'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {
   detectAgentStatusFromTitle,
   isClaudeManagementTitle
@@ -10,62 +14,51 @@ import {
   GENERIC_PROCESS_NAME_AGENTS,
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
-import {
-  resolveStructuredWorkerAuthority,
-  resolveStructuredWorkerIdentityForSession
-} from '../structured-worker-authority'
+import { resolveStructuredWorkerAuthority } from '../structured-worker-authority'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
-import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 import {
   chatDispatchMailTarget,
   handleLessCoordinatorSessionId,
   structuredSessionAddressTarget,
   structuredSessionMailTarget,
-  structuredSessionIdleEdgeMailboxes,
-  restoredSessionMailboxes
+  structuredSessionIdleEdgeMailboxes
 } from './structured-session-mail-target'
 import { exitedChatDispatchesForSession } from './chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../shared/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../terminal-identity-probe'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
-  protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
-    const parsed = parsePaneKey(paneKey)
-    let leafPty: RuntimePtyWorktreeRecord | null = null
-    if (parsed) {
-      const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
-      const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-      if (pty?.connected) {
-        return pty
-      }
-      leafPty = pty ?? null
-      for (const candidate of this.leaves.values()) {
-        if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
-          continue
-        }
-        const remintedPty = this.ptysById.get(candidate.ptyId)
-        if (remintedPty?.connected) {
-          return remintedPty
-        }
-        leafPty ??= remintedPty ?? null
-      }
-    }
-    let newestMatch: RuntimePtyWorktreeRecord | null = null
-    for (const pty of this.ptysById.values()) {
-      const recordedPaneKey = this.paneOfPty(pty).paneKey
-      const ptyPane = parsePaneKey(recordedPaneKey ?? '')
-      if (recordedPaneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
-        if (pty.connected) {
-          return pty
-        }
-        newestMatch = pty
-      }
-    }
-    return leafPty ?? newestMatch
+  protected terminalIdentitySources = () => ({
+    handles: this.handles,
+    sshTerminals: this.orchestrationCompatibilitySshTerminals,
+    reverse: this.handleByPtyId,
+    leaves: this.leaves,
+    ptys: this.ptysById,
+    capturePaneOf: () => this.captureTerminalPaneReader()
+  })
+
+  protected getPtyRecordForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): RuntimePtyWorktreeRecord | null {
+    return ptyRecordForPaneKey(
+      paneKey,
+      {
+        leaves: this.leaves,
+        ptys: this.ptysById,
+        leafKey: (tab, leaf) => this.getLeafKey(tab, leaf),
+        capturePaneOf: () => this.captureTerminalPaneReader()
+      },
+      context
+    )
   }
 
-  protected getPaneKeyForTerminalHandle(handle: string): string | null {
-    const livePaneKey = this.paneOfPty(this.getLivePtyForHandle(handle)?.pty).paneKey
+  protected getPaneKeyForTerminalHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null {
+    const pty = this.getLivePtyForHandle(handle, context)?.pty
+    const livePaneKey = (context && pty ? context.paneOf(pty) : this.paneOfPty(pty)).paneKey
     if (livePaneKey) {
       return livePaneKey
     }
@@ -76,8 +69,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     return makePaneKey(record.tabId, record.leafId)
   }
 
-  getTerminalWorktreeIdForHandle(handle: string): string | null {
-    const livePty = this.getLivePtyForHandle(handle)
+  getTerminalWorktreeIdForHandle(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null {
+    const livePty = this.getLivePtyForHandle(handle, context)
     if (livePty?.pty.worktreeId) {
       return livePty.pty.worktreeId
     }
@@ -126,11 +122,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
     try {
-      const livePty = this.getLivePtyForHandle(handle)
-      const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
-      const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
-      const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
-      if (!ptyId || !trackedPty || !this.ptyController) {
+      const { pty: trackedPty } = this.getTerminalPtyForHandle(handle)
+      const { ptyId } = trackedPty
+      if (!this.ptyController) {
         return false
       }
       let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
@@ -166,14 +160,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     })
   }
 
-  /** Pane keys authorize mailbox access; resolve locally and never expose them through renderer-embedded session ids. */
-  getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
-    const identity = resolveStructuredWorkerIdentityForSession(sessionId, this._orchestrationDb)
-    return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
-      ? identity.paneKey
-      : null
-  }
-
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
   }
@@ -183,21 +169,21 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
   }
 
-  private readonly mailIdle = new Map<string, boolean>()
-
-  /** Discover on actual idle transitions; descriptive status changes are not mail changes. */
+  /** Retry parked mail on working/idle edges; at idle re-derive owned mailboxes for workers and chats. */
   onStructuredSessionStatusForMail(summary: {
     sessionId: string
     status: 'working' | 'attention' | 'idle' | null
   }): void {
-    const idle = summary.status === 'idle' || summary.status === null
-    const prior = this.mailIdle.get(summary.sessionId)
-    this.mailIdle.set(summary.sessionId, idle)
-    if (!idle || prior === true) {
+    if (summary.status === 'attention') {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
     try {
+      // A working edge can follow a human answer, unblocking parked mail too.
+      this.notifyStructuredSessionJournalActivity(summary.sessionId)
+      if (summary.status === 'working') {
+        return
+      }
       const openDb = () => this.getExistingOrchestrationDb()
       const deliver = (mailbox: string) => this.deliverPendingMessagesForHandle(mailbox)
       structuredSessionIdleEdgeMailboxes(summary.sessionId, openDb).forEach(deliver)
@@ -211,7 +197,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** Settle ended chat Dispatches on tab hide; /clear successors retain their work. */
   onStructuredSessionTabHidden(sessionId: string): void {
-    this.removeWindowlessAgentSessionTab(sessionId)
     try {
       const db = this.getExistingOrchestrationDb()
       for (const dispatch of db ? exitedChatDispatchesForSession(sessionId, db) : []) {
@@ -226,7 +211,6 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
-    this.mailIdle.delete(sessionId)
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
   }
 
@@ -298,7 +282,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   protected scheduleRestoredMessageRepoints(): void {
     let handles: Set<string>
     try {
-      handles = restoredSessionMailboxes(this._orchestrationDb)
+      const db = this._orchestrationDb
+      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
+      handles = new Set([
+        ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
+        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+      ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
       return
@@ -325,14 +314,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
-      this.orchestrationStructuredMailboxPointerDelivery.retryForHandle(handle)
       this.deliverPendingMessagesForHandle(handle)
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.
     }
-  }
-
-  protected deliverPendingMessagesForLeaf(leaf: OrchestrationMailboxLeaf): void {
-    this.orchestrationMailboxNotifications.deliverForLeaf(leaf)
   }
 }

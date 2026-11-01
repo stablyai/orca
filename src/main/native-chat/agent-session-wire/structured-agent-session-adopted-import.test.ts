@@ -1,12 +1,11 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   attachFingerprintFields,
@@ -16,10 +15,14 @@ import { openTestAttachConversation } from './structured-agent-session-attach-te
 import { performAttach, type AttachFlowInput } from './structured-agent-session-attach-flow'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
+import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   NO_STRUCTURED_AGENTS,
   structuredAgentsDeclaringNothing
@@ -48,6 +51,7 @@ let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
   root = null
@@ -97,6 +101,11 @@ function attachParams(
     runtimeKind: 'native',
     adopt: {
       providerHandle: codexProviderHandle(THREAD),
+      source: {
+        providerSessionId: THREAD,
+        workspaceCwd: '/workspace',
+        conversationStore: root ?? undefined
+      },
       ...(transcriptPath ? { transcriptPath } : {})
     },
     ...overrides
@@ -114,7 +123,7 @@ function attachParams(
   }
 }
 
-function adapter(origin: 'created' | 'resumed' = 'resumed'): StructuredAgentSessionAdapter {
+function adapter(): StructuredAgentSessionAdapter {
   return {
     open: async () => ({
       reportedOptions: { model: '' }
@@ -127,7 +136,7 @@ function adapter(origin: 'created' | 'resumed' = 'resumed'): StructuredAgentSess
         link: {
           linkId: 'resumed-link',
           handle: codexProviderHandle(THREAD),
-          origin,
+          origin: 'resumed',
           mintedAtFence: fence,
           observedAt: NOW
         }
@@ -169,26 +178,19 @@ async function attach(
 }
 
 describe('adopting a provider conversation on create', () => {
-  it.each([false, true])(
-    'does not seed fresh mail permission for import or providerHandle without adopt (%s)',
-    async (providerOnly) => {
-      root = await mkdtemp(join(tmpdir(), 'orca-adopt-import-'))
-      const transcriptPath = join(root, 'rollout.jsonl')
-      await writeCodexRollout(transcriptPath, 'token ORCA-ADOPT-1')
-      const sessionAdapter = adapter(providerOnly ? 'created' : 'resumed')
-      const providerHandle = { kind: 'codex', threadId: THREAD } as const
-      const params = providerOnly
-        ? attachParams(undefined, { adopt: undefined, providerHandle })
-        : attachParams(transcriptPath)
-      const result = await attach(transcriptPath, sessionAdapter, undefined, params)
-      expect(result).toMatchObject({ ok: true })
-      // The seeded chain must resume the adopted conversation.
-      const page = (result as { value: { page: { items: unknown[] } } }).value.page
-      if (!providerOnly) {
-        expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
-      }
-    }
-  )
+  it('seeds the chain from the adopted handle and fills the journal from its transcript', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-adopt-import-'))
+    const transcriptPath = join(root, 'rollout.jsonl')
+    await writeCodexRollout(transcriptPath, 'token ORCA-ADOPT-1')
+    const sessionAdapter = adapter()
+
+    const result = await attach(transcriptPath, sessionAdapter)
+
+    expect(result).toMatchObject({ ok: true })
+    // The seeded chain must resume the adopted conversation.
+    const page = (result as { value: { page: { items: unknown[] } } }).value.page
+    expect(JSON.stringify(page.items)).toContain('ORCA-ADOPT-1')
+  })
 
   it.each([
     {
@@ -303,7 +305,7 @@ describe('adopting a provider conversation on create', () => {
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['missing', 'oversized', 'empty', 'invalid', 'source-less'] as const)(
+  it.each(['missing', 'oversized', 'empty', 'metadata-only', 'invalid', 'source-less'] as const)(
     'refuses %s source before claiming a conversation',
     async (kind) => {
       root = await mkdtemp(join(tmpdir(), 'orca-adopt-preflight-'))
@@ -311,6 +313,11 @@ describe('adopting a provider conversation on create', () => {
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
         await appendFile(transcriptPath, 'x'.repeat(16 * 1024 * 1024 + 1))
+      } else if (kind === 'metadata-only') {
+        await writeFile(
+          transcriptPath,
+          `${JSON.stringify({ type: 'session_meta', payload: { id: THREAD, cwd: '/workspace' } })}\n`
+        )
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
@@ -395,14 +402,23 @@ describe('adopting a provider conversation on create', () => {
 
   it('prepares a valid source once before acquisition and imports those exact items', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-adopt-once-'))
-    const transcriptPath = join(root, 'rollout.jsonl')
-    await writeCodexRollout(transcriptPath, 'prepared before acquiring')
+    const parent = await writeCodexHistoryFixture(root, '01a17c7f-6f58-7a73-b87a-a8702ff2da17', [
+      'sky'
+    ])
+    const { filePath: transcriptPath } = await writeCodexHistoryFixture(
+      root,
+      THREAD,
+      ['prepared before acquiring'],
+      parent.position
+    )
+    await appendFile(transcriptPath, '{"ordinal":')
     const prepare = vi.spyOn(legacyImport, 'prepareLegacyTranscriptImport')
     const sessionAdapter = adapter()
     const acquire = sessionAdapter.acquire
     sessionAdapter.acquire = vi.fn(async (input) => {
       expect(prepare).toHaveBeenCalledTimes(1)
       await rm(transcriptPath)
+      await rm(parent.filePath)
       return acquire(input)
     })
     const result = await attach(transcriptPath, sessionAdapter, async ({ journal }) =>
@@ -413,54 +429,9 @@ describe('adopting a provider conversation on create', () => {
       throw new Error('attach failed')
     }
     expect(JSON.stringify(result.value.page.items)).toContain('prepared before acquiring')
+    expect(JSON.stringify(result.value.page.items)).toContain('sky answer')
+    expect(result.value.page.items).toHaveLength(4)
+    expect(sessionAdapter.dispatch).not.toHaveBeenCalled()
     expect(prepare).toHaveBeenCalledTimes(1)
   })
-})
-
-it('actual attach imports prepared history over only the exact saved bookkeeping baseline', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-q-baseline-attach-'))
-  const transcriptPath = join(root, 'rollout.jsonl')
-  await writeCodexRollout(transcriptPath, 'retained adopted transcript')
-  const database = openTestJournalHostDatabase(root)
-  const journal = new AgentSessionJournal({
-    database,
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: null
-    }
-  })
-  await journal.open()
-  const { epoch } = journal.cursor()
-  const { agentJournalItemKey } = await import('../../../shared/agent-session-journal-item-key')
-  database.db
-    .prepare(
-      'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(
-      SESSION,
-      epoch,
-      2,
-      NOW,
-      JSON.stringify({
-        v: 1,
-        epoch,
-        seq: 2,
-        fence: 0,
-        ts: NOW,
-        kind: 'tombstone',
-        itemId: agentJournalItemKey({ provider: 'orca', clientMessageId: 'mail-boundary' }),
-        revision: 1,
-        mailBoundary: { status: 'held', stop: null, cuts: [], members: [], ambiguous: true }
-      })
-    )
-  await journal.close()
-  const result = await attach(transcriptPath, adapter())
-  expect(result).toMatchObject({ ok: true })
-  if (!result.ok) {
-    throw new Error('attach failed')
-  }
-  expect(JSON.stringify(result.value.page.items)).toContain('retained adopted transcript')
 })

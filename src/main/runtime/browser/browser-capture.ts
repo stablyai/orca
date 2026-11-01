@@ -1,3 +1,4 @@
+import type { BrowserScreenshotOptions } from '../../../shared/rpc-contract/browser-observation-params'
 import type {
   BrowserScreenshotResult,
   BrowserCaptureStartResult,
@@ -18,14 +19,12 @@ export class RuntimeBrowserCapture {
   ) {}
 
   async browserScreenshot(
-    params: {
-      format?: 'png' | 'jpeg'
-    } & BrowserCommandTargetParams
+    params: BrowserScreenshotOptions & BrowserCommandTargetParams
   ): Promise<BrowserScreenshotResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     return this.targets
       .requireAgentBrowserBridge()
-      .screenshot(params.format, target.worktreeId, target.browserPageId)
+      .screenshot(params, target.worktreeId, target.browserPageId)
   }
 
   async browserPdf(params: BrowserCommandTargetParams): Promise<BrowserPdfResult> {

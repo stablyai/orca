@@ -83,9 +83,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
 
   protected joinPendingWorktreeRemoval(
     worktreeId: string,
-    options: RemoveManagedWorktreeOptions
+    { hostId, deleteBranch }: RemoveManagedWorktreeOptions
   ): Promise<RemoveWorktreeResult> | undefined {
-    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(options.hostId)?.id)
+    return waitForPendingWorktreeRemoval(worktreeId, parseExecutionHostId(hostId)?.id, deleteBranch)
   }
 
   /** Failed intent schedules a retry; current Git/filesystem proof still controls every deletion. */
@@ -119,7 +119,8 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
                   allowUnverifiedStop: allowUnverifiedPtyStop
                 })
             }),
-          options.force === true
+          options.force === true,
+          options.deleteBranch
         )
     )
   }

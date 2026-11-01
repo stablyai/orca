@@ -183,6 +183,25 @@ describe('orca serve service', () => {
     ).resolves.toMatchObject({ dryRun: true })
   })
 
+  it('keeps an AppImage launch and profile directories out of the unit PATH (#36000)', async () => {
+    const profileBin = join(home, 'profile', 'cli', 'bin')
+    const d = deps('linux')
+    d.env = {
+      ...d.env,
+      PATH: [
+        '/tmp/.mount_orca-lonOeOb',
+        '/tmp/.mount_orca-lonOeOb/usr/sbin',
+        '/tmp/appimage_extracted_0f3a/usr/bin',
+        profileBin,
+        'relative/bin',
+        '/usr/local/bin',
+        bin
+      ].join(':')
+    }
+    const result = await installServeService({ command: join(bin, 'orca-ide'), dryRun: true }, d)
+    expect(String(result.content)).toContain(`Environment=PATH=/usr/local/bin:${bin}\n`)
+  })
+
   it('refuses a --command tied to one Orca version', async () => {
     const scoped = join(home, 'profile', 'cli', 'bin')
     await mkdir(scoped, { recursive: true })
@@ -191,6 +210,19 @@ describe('orca serve service', () => {
     expect(() =>
       resolveServiceCommand(join(scoped, 'orca'), {
         platform: 'darwin',
+        env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
+      })
+    ).toThrow(/one Orca version/)
+  })
+
+  it('refuses a --command inside an extract-and-run AppImage copy', async () => {
+    const extracted = join(home, 'appimage_extracted_0f3a')
+    await mkdir(extracted)
+    await writeFile(join(extracted, 'AppRun'), '#!/bin/sh\n')
+    await chmod(join(extracted, 'AppRun'), 0o755)
+    expect(() =>
+      resolveServiceCommand(join(extracted, 'AppRun'), {
+        platform: 'linux',
         env: { ORCA_USER_DATA_PATH: join(home, 'profile') }
       })
     ).toThrow(/one Orca version/)

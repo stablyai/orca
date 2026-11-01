@@ -1,16 +1,16 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
-import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -150,21 +150,9 @@ export function acceptSubmissionFromProviderItem(
 /** Any provider-accepted turn may lift queue pauses. */
 export function noteTurnAccepted(
   state: JournalReducerState,
-  submission: Pick<AgentJournalSubmission, 'acceptedSequence' | 'origin'>
+  submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
 ): void {
   if (submission.acceptedSequence !== undefined) {
-    const release = state.mailBoundary
-    if (
-      submission.origin === 'client' ||
-      (release?.status === 'released' &&
-        release.at.epoch === state.epoch &&
-        release.at.sequence === submission.acceptedSequence)
-    ) {
-      state.latestAcceptedPersonalTurnSequence = Math.max(
-        state.latestAcceptedPersonalTurnSequence,
-        submission.acceptedSequence
-      )
-    }
     state.latestAcceptedTurnSequence = Math.max(
       state.latestAcceptedTurnSequence,
       submission.acceptedSequence

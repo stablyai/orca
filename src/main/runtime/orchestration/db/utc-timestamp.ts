@@ -9,13 +9,15 @@ export function exposeUtcTimestamp(timestamp: string | null): string | null {
   return `${timestamp.replace(' ', 'T')}Z`
 }
 
-export function exposeMessageTimestamps(
-  message: MessageRow & { creation_proof?: unknown }
-): MessageRow {
-  const { creation_proof: _private, ...publicMessage } = message
+/** SQLite's datetime('now') spelling, so stored deadlines compare against its timestamps. */
+export function toSqliteUtcTimestamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ')
+}
+
+export function exposeMessageTimestamps(message: MessageRow): MessageRow {
   // RPC/CLI consumers need an explicit UTC offset on SQLite's timezone-less timestamps.
   return {
-    ...publicMessage,
+    ...message,
     created_at: exposeUtcTimestamp(message.created_at) ?? message.created_at,
     delivered_at: exposeUtcTimestamp(message.delivered_at)
   }
@@ -25,10 +27,9 @@ export function exposeMessageListTimestamps(messages: MessageRow[]): MessageRow[
   return messages.map(exposeMessageTimestamps)
 }
 
-export function exposeRunTimestamps(run: RunRow & { mail_creation_domain?: unknown }): RunRow {
-  const { mail_creation_domain: _private, ...publicRun } = run
+export function exposeRunTimestamps(run: RunRow): RunRow {
   return {
-    ...publicRun,
+    ...run,
     created_at: exposeUtcTimestamp(run.created_at) ?? run.created_at,
     updated_at: exposeUtcTimestamp(run.updated_at) ?? run.updated_at
   }

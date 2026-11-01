@@ -21,3 +21,14 @@ export function buildUpdatePRTitleParams(
   }
   return { prNumber, title: draft.trim() }
 }
+
+export type UpdatePRBodyParams = { prNumber: number; body: string }
+
+// An empty description is a valid edit; only an unchanged one is skipped.
+export function buildUpdatePRBodyParams(
+  prNumber: number,
+  draft: string,
+  current: string
+): UpdatePRBodyParams | null {
+  return draft.trim() === current.trim() ? null : { prNumber, body: draft.trim() }
+}

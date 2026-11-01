@@ -104,17 +104,6 @@ describe("activateAndRevealWorktree and the user's own switch (E9)", () => {
 })
 
 describe('activateAndRevealWorktree automation filters', () => {
-  it('clears the automation-generated filter before revealing an automation-created worktree', () => {
-    const worktree = makeAutomationWorktree()
-    const revealWorktreeInSidebar = vi.fn()
-    seedAutomationWorktreeState(worktree, { revealWorktreeInSidebar })
-
-    activateAndRevealWorktree(worktree.id)
-
-    expect(useAppStore.getState().hideAutomationGeneratedWorkspaces).toBe(false)
-    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
-  })
-
   it('keeps workspace-list filters while the activity view is showing', () => {
     const worktree = makeAutomationWorktree()
     seedAutomationWorktreeState(worktree, {

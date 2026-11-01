@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
+import { waitForStructuredAgentSessionRecovery } from './agent-session/structured-agent-session-runtime'
 
 export function createCoordinatorMailObservationClock(
   getHost: () => StructuredAgentSessionHost,
@@ -25,13 +25,15 @@ export function createCoordinatorMailObservationClock(
     },
     async edgesAnswered(
       runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
-      _wait: { timeout: number }
+      wait: { timeout: number }
     ): Promise<void> {
+      const reads = vi.spyOn(getHost(), 'journalSnapshot')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-      await waitForStructuredAgentSessionRecovery()
-      await getHost().flushStreamedEvents(sessionId)
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await vi.waitFor(() => expect(reads).toHaveBeenCalled(), wait)
+      await Promise.all(reads.mock.results.map((read) => read.value))
+      await new Promise((resolve) => setImmediate(resolve))
+      reads.mockRestore()
     },
     async drainClosedDatabaseRepair(): Promise<void> {
       if (!active) {

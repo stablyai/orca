@@ -1,4 +1,3 @@
-import { MessageWaitScope } from '../../../../runtime-message-waiters'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
@@ -14,6 +13,10 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import {
+  askedQuestionReceipt,
+  waitForQuestionAnswer
+} from '../../../../orchestration/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
@@ -139,76 +142,18 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
 
       const questionId = question.message_id
-      recordMutationReceipt?.({
-        accepted: true,
-        answer: null,
-        messageId: questionId,
-        threadId: questionId,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        timeoutMs
-      })
-      const deadline = Date.now() + timeoutMs
-      const waitScope = new MessageWaitScope()
-      try {
-        runtime.observeMessageCheck(`dispatch:${activeDispatch.id}`, waitScope)
-        runtime.observeMessageCheck(from, waitScope)
-        if (activeDispatch.assignee_handle) {
-          runtime.observeMessageCheck(activeDispatch.assignee_handle, waitScope)
-        }
-        while (true) {
-          const current = db.getQuestion(questionId)
-          if (!current || current.status === 'closed') {
-            throw new OrchestrationError(
-              'dispatch_inactive',
-              `Question ${questionId} closed because its Dispatch is inactive.`
-            )
-          }
-          if (current.status === 'answered') {
-            return {
-              answer: current.answer_body,
-              messageId: questionId,
-              answerMessageId: current.answer_message_id,
-              threadId: questionId,
-              timedOut: false,
-              cancelled: false,
-              connectionLost: false,
-              timeoutMs
-            }
-          }
-          if (signal?.aborted) {
-            return {
-              answer: null,
-              messageId: questionId,
-              threadId: questionId,
-              timedOut: false,
-              cancelled: true,
-              connectionLost: true,
-              timeoutMs
-            }
-          }
-          const remainingMs = deadline - Date.now()
-          if (remainingMs <= 0) {
-            return {
-              answer: null,
-              messageId: questionId,
-              threadId: questionId,
-              timedOut: true,
-              cancelled: false,
-              connectionLost: false,
-              timeoutMs
-            }
-          }
-          await runtime.waitForMessage(`dispatch:${activeDispatch.id}`, {
-            scope: waitScope,
-            timeoutMs: remainingMs,
-            signal
-          })
-        }
-      } finally {
-        waitScope.complete()
+      if (!params.resume && params.wait === false) {
+        return askedQuestionReceipt(questionId, recordMutationReceipt)
       }
+      return waitForQuestionAnswer({
+        runtime,
+        questionId,
+        readQuestion: () => db.getQuestion(questionId),
+        closedMessage: `Question ${questionId} closed because its Dispatch is inactive.`,
+        timeoutMs,
+        signal,
+        recordMutationReceipt
+      })
     }
   })
 ]

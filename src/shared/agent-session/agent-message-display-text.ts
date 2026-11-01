@@ -1,5 +1,5 @@
 import type { AgentMessageSource } from './agent-session-message-source'
-import type { NativeChatBlock } from '../native-chat-types'
+import type { NativeChatBlock } from '../native-chat/native-chat-types'
 import { nativeChatProseToMarkdown } from '../native-chat/transcript/native-chat-prose'
 import { orcaDispatchTaskBodyOffset } from '../orca-dispatch-status-prompt'
 

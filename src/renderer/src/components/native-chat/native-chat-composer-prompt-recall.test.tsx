@@ -3,8 +3,8 @@ import { changePrompt, promptValue } from './native-chat-prompt-editor.test-supp
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type * as nativeChatAgentProfiles from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -51,7 +51,7 @@ vi.mock('./native-chat-runtime-image-send', () => ({
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn()
 }))
-vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
+vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (importOriginal) => ({
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))

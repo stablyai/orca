@@ -17,6 +17,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+import { nativeChatQueueFollowUps } from '../../shared/native-chat-follow-up-behavior'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -88,10 +89,6 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      experimentalNativeChat: settings.experimentalNativeChat === true,
-      // Older clients use this key to fall back to terminal-backed chat. Keep their default terminal.
-      openAgentTabsInChatByDefault: false,
-      experimentalStructuredNativeChat: settings.experimentalNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
@@ -112,8 +109,8 @@ export class RuntimeClientSettingsController {
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),
       machineName: settings.machineName ?? '',
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
-      // Phone sends queue mid-turn only while this is on; absence from older hosts means on.
-      nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps !== false,
+      // Mirror the host preference; delivery still depends on queue capability.
+      nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
       // Why projected: a paired client's AI buttons start these actions' agents, and must honour
       // the agent saved for each one as the desktop does. Absent on older hosts.
       sourceControlAi: projectSourceControlLaunchRecipes(settings),
@@ -131,18 +128,16 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
+    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
-        ...updates,
+        ...otherUpdates,
         // An older client writes Arguments as it reads them, flag included.
-        ...(updates.agentDefaultArgs !== undefined || updates.agentDefaultEnv !== undefined
+        ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(
               beforeSettings,
-              {
-                agentDefaultArgs: updates.agentDefaultArgs,
-                agentDefaultEnv: updates.agentDefaultEnv
-              },
+              { agentDefaultArgs, agentDefaultEnv },
               process.platform
             )
           : {}),

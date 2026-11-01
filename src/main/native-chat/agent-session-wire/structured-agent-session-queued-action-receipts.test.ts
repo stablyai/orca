@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { holdLane } from './structured-agent-session-delivery-hold.test-fixture'
-import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
+import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session/agent-session-host-authority'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
@@ -400,7 +400,6 @@ describe('Resume', () => {
   })
 
   it('records a no-op Resume and replays it', async () => {
-    await rig.workingSend()
     const id = opId(FUTURE)
     expect(await rig.resume(id)).toMatchObject({
       ok: true,
@@ -437,7 +436,6 @@ describe('Resume', () => {
   })
 
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
-    await rig.workingSend()
     const id = opId()
     const restore = failReceiptWrites()
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)

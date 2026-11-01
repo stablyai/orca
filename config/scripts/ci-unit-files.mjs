@@ -29,7 +29,6 @@ export const UNIT_EXCLUDE = [
   'src/main/daemon/shell-ready.test.ts',
   'src/main/daemon/node-pty-fd-leak.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
-  'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
   'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',

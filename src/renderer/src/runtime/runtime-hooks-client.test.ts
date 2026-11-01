@@ -101,7 +101,8 @@ describe('runtime hooks client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'repo.hooksCheck',
-      params: { repo: 'repo-1' },
+      // A server needs a launch's explicit wake; older servers wake without `background`.
+      params: { repo: 'repo-1', wakeWslDistro: true },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {

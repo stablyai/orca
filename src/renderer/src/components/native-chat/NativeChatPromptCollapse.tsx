@@ -52,7 +52,7 @@ export function NativeChatPromptStrip({
   const title =
     card.kind === 'approval' ? card.approval.title : (card.prompt.questions[0]?.question ?? '')
   return (
-    <div className="shrink-0 bg-chat-canvas">
+    <div className="shrink-0 bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 sm:px-4">
         <div
           data-native-chat-prompt-strip="true"

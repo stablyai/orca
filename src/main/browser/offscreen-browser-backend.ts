@@ -7,6 +7,7 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
+import { installBrowserJavaScriptDialogs } from './browser-javascript-dialogs'
 import type { ServeBrowserPageState } from '../runtime/serve-browser-tab-layout'
 
 // orca serve has no renderer for webviews; hidden BrowserWindows host its pages.
@@ -59,6 +60,8 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     })
 
     this.windowsByPageId.set(browserPageId, win)
+    // Server pages have no window to ask in; agents and phones answer their dialogs.
+    installBrowserJavaScriptDialogs(win.webContents, () => null)
 
     // Do not wait for navigation: slow or failed loads must leave an operable tab.
     const registered = this.browserManager.registerOffscreenGuest({

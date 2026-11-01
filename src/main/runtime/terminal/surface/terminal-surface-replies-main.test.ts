@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
+
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -40,42 +40,6 @@ describe('terminal replies from main (switch on)', () => {
     )
     const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     expect(listed.terminals.map((terminal) => terminal.verdict)).toEqual(['live', 'live'])
-  })
-
-  it('list the saved panes with no window, under their saved tab', async () => {
-    const { runtime } = surfaceRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-
-    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(
-      listed.terminals.map(({ tabId, leafId, ptyId, title, connected }) => ({
-        tabId,
-        leafId,
-        ptyId,
-        title,
-        connected
-      }))
-    ).toEqual([
-      {
-        tabId: SURFACE_TAB_ID,
-        leafId: HEADLESS_LEAF_ID,
-        ptyId: 'pty-a',
-        title: 'Persisted Terminal',
-        connected: true
-      },
-      {
-        tabId: SURFACE_TAB_ID,
-        leafId: HEADLESS_SECOND_LEAF_ID,
-        ptyId: 'pty-b',
-        title: 'Persisted Terminal',
-        connected: true
-      }
-    ])
-    expect(runtime.getStatus()).toMatchObject({
-      graphStatus: 'ready',
-      liveTabCount: 1,
-      liveLeafCount: 2
-    })
   })
 
   it('keep answering after the window closes', async () => {
@@ -191,24 +155,6 @@ describe('terminal replies from main (switch on)', () => {
     const layout = store.getSession().terminalLayoutsByTabId[SURFACE_TAB_ID]
     expect(layout?.root).toEqual({ type: 'leaf', leafId: HEADLESS_LEAF_ID })
     expect(killed).toEqual(['pty-b'])
-  })
-
-  it("answer the pane main's layout binds, over a caller's stale claim", () => {
-    const { runtime } = surfaceRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
-
-    runtime.registerPty('pty-b', TEST_WORKTREE_ID, null, {
-      tabId: 'stale-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ptysById is the runtime's PTY registry; the test reads the record it keeps.
-    const { ptysById } = runtime as unknown as { ptysById: Map<string, { ptyId: string }> }
-    expect(runtime['paneOfPty'](ptysById.get('pty-b')!)).toMatchObject({
-      tabId: SURFACE_TAB_ID,
-      paneKey: `${SURFACE_TAB_ID}:${HEADLESS_SECOND_LEAF_ID}`
-    })
   })
 
   // Main-owned liveness comes from host inventory, so graph sync must not reconnect disconnected records.

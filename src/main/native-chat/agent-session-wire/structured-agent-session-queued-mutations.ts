@@ -2,14 +2,16 @@
 // Published cards own rendered text; mutation answers carry none.
 
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
-  AgentSessionQueuedMessageDeleteResult,
-  AgentSessionQueuedMessagesResumeResult,
   AgentSessionSendResult
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionQueuedMessageDeleteResult,
+  AgentSessionQueuedMessagesResumeResult
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import { refusingNewerOrcaJournal } from '../agent-session-journal/journal-open-failure'
 import {
@@ -121,8 +123,6 @@ export function sendQueuedStructuredAgentMessage(
             clientMessageId: submissionId,
             // Personal handoffs return as cards on close/restart.
             origin: 'client',
-            humanRelease: true,
-            ...(row.body.from ? { source: { kind: 'agent' } } : { source: { kind: 'user' } }),
             payloadFingerprint: row.fingerprint,
             body: row.body,
             ...(row.options ? { options: row.options } : {}),

@@ -297,7 +297,8 @@ export class WslHookRelayManager {
     markWslRelayFailed(state, message, options, this.deps, this.recovery)
   }
   private async resolveDefaultDistro(): Promise<string | null> {
-    const distro = await resolveWslDefaultDistro(this.defaultDistro, this.deps.listDistros)
+    // Fresh each ensure (the source is cached): a user act's pinned default must win over an older one.
+    const distro = await resolveWslDefaultDistro(null, this.deps.listDistros)
     this.defaultDistro = distro
     return distro
   }

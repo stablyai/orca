@@ -1,3 +1,4 @@
+import { OrchestrationDb } from './db'
 import { describe, expect, it, vi } from 'vitest'
 import { readAgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { agentMessageHeading } from '../../../shared/agent-session/agent-message-presentation'
@@ -8,73 +9,75 @@ import {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { orchestrationSenderName } from './orchestration-sender-name'
 import * as relations from './agent-message-relation'
 import * as lineage from './structured-session-lineage'
 import { structuredMailSource, type MailSourceMessage } from './structured-mail-source'
 
-import { z } from 'zod'
-import { OrchestrationDb } from './db'
-import { locateOrchestrationParty } from './orchestration-party-location'
+const SESSION = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
 
 describe('who delivered mail is from', () => {
-  it('keeps sender recovery readable by a client from before full-content mail', () => {
-    const db = new OrchestrationDb(':memory:')
-    try {
-      const message = db.insertMessage({
-        from: 'term_previous',
-        to: 'run:r1',
-        subject: 'report',
-        senderPaneKey: 'pane-worker'
+  it("names each sender once, without the pane key that would open its mailbox, and each message's own sender", () => {
+    // No database: a terminal handle and a session address name their party by themselves.
+    const source = structuredMailSource({
+      db: null,
+      mailboxHandle: 'run:r1',
+      dispatchId: null,
+      batch: [
+        { id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null },
+        {
+          id: 'm2',
+          from_handle: `orca_session_id:${SESSION}`,
+          run_id: 'r2',
+          type: 'status',
+          payload: null
+        },
+        { id: 'm3', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }
+      ],
+      senderSnapshot: (party) => ({
+        name: party.terminalHandle === 'term_a' ? 'Build tab' : null,
+        agent: null
       })
-      const source = structuredMailSource({
-        db,
-        mailboxHandle: message.to_handle,
-        dispatchId: null,
-        message,
-        senderName: () => 'Worker'
-      })
-      // The published mail schema before full-content delivery; unknown fields are stripped.
-      const legacy = z
-        .object({
-          message: z.literal('mail-notice'),
-          mailbox: z.string(),
-          dispatchId: z.string().nullable(),
-          messages: z.array(
-            z.object({ messageId: z.string(), runId: z.string(), from: z.string() })
-          )
-        })
-        .parse(source.orchestration)
-      const messageIds = legacy.messages
-        .filter((mail) => mail.from === 'term_previous')
-        .map((mail) => mail.messageId)
-      expect(
-        locateOrchestrationParty(
-          'term_previous',
-          {
-            db,
-            records: null,
-            terminalPaneKey: () => null,
-            terminalHandleForPaneKey: (pane) => (pane === 'pane-worker' ? 'term_current' : null)
+    })
+    expect(source).toEqual({
+      kind: 'agent',
+      senders: [
+        {
+          party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+          name: 'Build tab'
+        },
+        {
+          party: {
+            address: `orca_session_id:${SESSION}`,
+            terminalHandle: null,
+            orcaSessionId: SESSION
           },
-          messageIds
-        )
-      ).toEqual({ location: { kind: 'terminal', handle: 'term_current' } })
-    } finally {
-      db.close()
-    }
+          name: null
+        }
+      ],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:r1',
+        dispatchId: null,
+        messages: [
+          { messageId: 'm1', runId: 'r1', from: 'term_a' },
+          { messageId: 'm2', runId: 'r2', from: `orca_session_id:${SESSION}` },
+          { messageId: 'm3', runId: 'r1', from: 'term_a' }
+        ]
+      }
+    })
   })
 
   it('bounds a snapshot name, and a naming failure costs only the name', () => {
-    const named = (senderName: (party: unknown) => string | null) =>
+    const named = (name: (party: unknown) => string | null) =>
       structuredMailSource({
         db: null,
         mailboxHandle: 'run:r1',
         dispatchId: null,
-        message: { id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null },
-        senderName
+        batch: [{ id: 'm1', from_handle: 'term_a', run_id: 'r1', type: 'status', payload: null }],
+        senderSnapshot: (party) => ({ name: name(party), agent: null })
       }).senders[0]?.name
     expect(named(() => `  Build\n${'x'.repeat(400)}`)).toHaveLength(200)
     expect(named(() => '   ')).toBeNull()
@@ -106,7 +109,7 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
     const child = assign('term_child', 'term_worker')
     const mail = (
       recipient: string,
-      address: string,
+      addresses: string[],
       dispatchId: string | null = null,
       report?: string
     ) =>
@@ -114,39 +117,36 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         db,
         mailboxHandle: recipient,
         dispatchId,
-        senderName: () => 'Sender',
-        message: {
-          id: 'm1',
+        senderSnapshot: () => ({ name: 'Sender', agent: null }),
+        batch: addresses.map<MailSourceMessage>((address, i) => ({
+          id: `m${i}`,
           from_handle: address,
           run_id: run.id,
           type: report ? 'worker_done' : 'status',
           payload: report ? JSON.stringify({ dispatchId: report }) : null
-        }
+        }))
       })
-    expect(mail('term_coord', 'term_worker').senders[0].relation).toBe('worker')
-    expect(agentMessageHeading(mail('term_coord', 'term_worker'))).toBe('worker')
-    expect(mail('term_worker', 'term_coord', worker.id).senders[0].relation).toBe('coordinator')
-    expect(agentMessageHeading(mail('term_worker', 'term_coord', worker.id))).toBe('coordinator')
-    expect(mail('term_coord', 'term_child').senders[0].relation).toBe('none')
-    const delivered = [
-      mail('term_worker', 'term_child', worker.id),
-      mail('term_worker', 'term_peer', worker.id)
-    ]
+    expect(mail('term_coord', ['term_worker']).senders[0].relation).toBe('worker')
+    expect(agentMessageHeading(mail('term_coord', ['term_worker']), { blocks: [] })).toBe('worker')
+    expect(mail('term_worker', ['term_coord'], worker.id).senders[0].relation).toBe('coordinator')
+    expect(
+      agentMessageHeading(mail('term_worker', ['term_coord'], worker.id), { blocks: [] })
+    ).toBe('coordinator')
+    expect(mail('term_coord', ['term_child']).senders[0].relation).toBe('none')
+    const delivered = mail('term_worker', ['term_child', 'term_peer'], worker.id)
     db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(child.id)
-    const reload = delivered.map((source) =>
-      readAgentMessageSource(JSON.parse(JSON.stringify(source)))!
-    )
-    expect(reload.map((source) => source.senders[0].relation)).toEqual(['worker', 'none'])
-    expect(reload.map((source) => agentMessageHeading(source))).toEqual(['worker', 'generic'])
-    expect(mail('term_worker', 'term_child', worker.id).senders[0].relation).toBeUndefined()
-    expect(mail('term_worker', 'term_child', worker.id, child.id).senders[0].relation).toBe(
+    const reload = readAgentMessageSource(JSON.parse(JSON.stringify(delivered)))!
+    expect(reload.senders.map((sender) => sender.relation)).toEqual(['worker', 'none'])
+    expect(agentMessageHeading(reload, { blocks: [] })).toBe('generic')
+    expect(mail('term_worker', ['term_child'], worker.id).senders[0].relation).toBeUndefined()
+    expect(mail('term_worker', ['term_child'], worker.id, child.id).senders[0].relation).toBe(
       'worker'
     )
-    expect(mail('term_coord', 'unknown').senders[0].relation).toBeUndefined()
+    expect(mail('term_coord', ['unknown']).senders[0].relation).toBeUndefined()
     db.db
       .prepare('UPDATE dispatch_contexts SET creator_handle = NULL, depth = 1 WHERE id = ?')
       .run(worker.id)
-    expect(mail('term_coord', 'term_worker').senders[0].relation).toBeUndefined()
+    expect(mail('term_coord', ['term_worker']).senders[0].relation).toBeUndefined()
     db.db
       .prepare('UPDATE dispatch_contexts SET creator_handle = ? WHERE id = ?')
       .run('term_coord', worker.id)
@@ -157,15 +157,6 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
       type: 'worker_done',
       payload: JSON.stringify({ dispatchId: worker.id })
     }
-    expect(
-      structuredMailSource({
-        db,
-        mailboxHandle: 'term_coord',
-        dispatchId: null,
-        message: good,
-        senderName: () => 'Sender'
-      }).senders[0].relation
-    ).toBe('worker')
     for (const bad of [
       { ...good, id: 'foreign', run_id: 'missing' },
       { ...good, id: 'wrong-report', payload: JSON.stringify({ dispatchId: child.id }) },
@@ -175,18 +166,18 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
         db,
         mailboxHandle: 'term_coord',
         dispatchId: null,
-        message: bad,
-        senderName: () => 'Sender'
+        batch: [good, bad],
+        senderSnapshot: () => ({ name: 'Sender', agent: null })
       })
       expect(source.senders[0].relation).toBeUndefined()
       expect(source.orchestration).toMatchObject({
-        messages: [{ messageId: bad.id }]
+        messages: [{ messageId: 'good' }, { messageId: bad.id }]
       })
     }
     db.db
       .prepare('UPDATE dispatch_contexts SET host_scope = ? WHERE id = ?')
       .run(JSON.stringify({ kind: 'ssh', targetId: 'elsewhere' }), worker.id)
-    expect(mail('term_coord', 'term_worker').senders[0].relation).toBeUndefined()
+    expect(mail('term_coord', ['term_worker']).senders[0].relation).toBeUndefined()
   } finally {
     vi.restoreAllMocks()
     db.close()
@@ -194,7 +185,7 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
 })
 
 it.each([100, 1000])(
-  'counts real canonical record work per ordinary report with %i workers',
+  'bounds real canonical record work for repeated/distinct/unknown notices with %i workers',
   (n) => {
     const db = new OrchestrationDb(':memory:')
     const coordinator = testOrcaSessionId('coordinator')
@@ -274,46 +265,41 @@ it.each([100, 1000])(
           })
         )
         visits = 0
-        const sources = batch.map((message) =>
-          structuredMailSource({
-            db,
-            mailboxHandle: `orca_session_id:${coordinator}`,
-            dispatchId: null,
-            message,
-            senderName: (party, report) =>
-              orchestrationSenderName(
-                party,
-                {
-                  db,
-                  records: reader,
-                  chatTab: () => null,
-                  terminal: () => null,
-                  generatedTitlesEnabled: true
-                },
-                report
-              )
+        const source = structuredMailSource({
+          db,
+          mailboxHandle: `orca_session_id:${coordinator}`,
+          dispatchId: null,
+          batch,
+          senderSnapshot: (party, report) => ({
+            name: orchestrationSenderName(
+              party,
+              {
+                db,
+                records: reader,
+                chatTab: () => null,
+                terminal: () => null,
+                generatedTitlesEnabled: true
+              },
+              report
+            ),
+            agent: null
           })
-        )
-        // Each ordinary card resolves its own sender and informational relation.
-        expect(visits).toBe((evidence === 'unknown' ? 1 : 8) * n * records.length)
-        expect(relation).toHaveBeenCalledTimes(n)
-        expect(batchReads).toBe(n)
-        expect(sources[0].senders[0].party.orcaSessionId).toBe(sessions[0])
-        expect(
-          sources.map((source) => [source.senders[0].name, source.senders[0].relation])
-        ).toEqual(
-          Array.from({ length: n }, (_, i) => [
-            `Worker ${distinct ? i % 10 : 0}`,
+        })
+        const groups = distinct ? 10 : 1
+        // Known groups walk canonical records eight times; a missing Run ends after sender canonicalization.
+        expect(visits).toBe((evidence === 'unknown' ? 1 : 8 * groups) * records.length)
+        expect(relation).toHaveBeenCalledTimes(groups)
+        expect(batchReads).toBe(2 * n)
+        expect(source.senders[0].party.orcaSessionId).toBe(sessions[0])
+        expect(source.senders.map((sender) => [sender.name, sender.relation])).toEqual(
+          Array.from({ length: groups }, (_, i) => [
+            `Worker ${i}`,
             evidence === 'unknown' ? undefined : 'worker'
           ])
         )
         expect(
-          sources.every(
-            (source) =>
-              source.orchestration?.message === 'mail-notice' &&
-              source.orchestration.messages.length === 1
-          )
-        ).toBe(true)
+          source.orchestration?.message === 'mail-notice' && source.orchestration.messages
+        ).toHaveLength(n)
       }
     } finally {
       vi.restoreAllMocks()

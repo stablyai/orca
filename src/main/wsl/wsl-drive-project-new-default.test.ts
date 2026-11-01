@@ -11,7 +11,11 @@ import {
 } from './wsl-drive-project-new-default'
 
 const gate = vi.hoisted(() => ({ open: true }))
-vi.mock('./wsl-host-gate', () => ({ wslHostsGateOpen: () => gate.open }))
+vi.mock('./wsl-host-gate', () => ({
+  wslHostsGateOpen: () => gate.open,
+  wslHostsOptedIn: (settings: { experimentalWslHosts?: boolean } | undefined) =>
+    gate.open && settings?.experimentalWslHosts === true
+}))
 
 const WSL_DEFAULT = { kind: 'wsl', distro: 'Ubuntu' }
 
@@ -66,11 +70,15 @@ describe('applyNewWindowsDriveProjectDefault', () => {
     gate.open = true
   })
 
-  function state(localWindowsRuntimePreference?: LocalWindowsRuntimePreference) {
+  function state(
+    localWindowsRuntimePreference?: LocalWindowsRuntimePreference,
+    experimentalWslHosts = true
+  ) {
     return {
       projects: [{ sourceRepoIds: ['r1'], localWindowsRuntimePreference }],
       settings: {
-        localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
+        localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' },
+        experimentalWslHosts
       }
     }
   }
@@ -93,6 +101,13 @@ describe('applyNewWindowsDriveProjectDefault', () => {
     expect(current.projects[0].localWindowsRuntimePreference).toEqual({
       kind: 'windows-host'
     })
+  })
+
+  // Stage 1 is opt-in: with the setting off, a new project keeps today's Git.
+  it('does nothing while the WSL hosts setting is off, though the gate is open', () => {
+    const current = state(undefined, false)
+    expect(applyNewWindowsDriveProjectDefault(current, repo, env)).toBe(false)
+    expect(current.projects[0].localWindowsRuntimePreference).toBeUndefined()
   })
 
   it('does nothing while the WSL hosts gate is closed', () => {

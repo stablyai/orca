@@ -13,7 +13,8 @@ const FROM: AgentMessageSource = {
   senders: [
     {
       party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
-      name: 'Build tab'
+      name: 'Build tab',
+      agent: 'claude'
     },
     {
       party: {
@@ -38,22 +39,25 @@ describe("a message's sender, read through its one reader", () => {
     expect(readAgentMessageSource(structuredClone(FROM))).toEqual(FROM)
   })
 
-  it.each([
-    { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'ctx_1' },
-    {
-      message: 'mail-notice',
-      mailbox: 'run:r1',
-      dispatchId: null,
-      messages: [{ messageId: 'm1', runId: 'r1', from: 'term_a' }]
+  it("reads a Dispatch's task back whole", () => {
+    const task: AgentMessageSource = {
+      ...FROM,
+      orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'ctx_1' }
     }
-  ] as const)("reads a Dispatch's task and a whole mail message back whole", (orchestration) => {
-    const source: AgentMessageSource = { ...FROM, orchestration }
-    expect(readAgentMessageSource(structuredClone(source))).toEqual(source)
+    expect(readAgentMessageSource(structuredClone(task))).toEqual(task)
     const parsed = readAgentMessageSource({
-      ...source,
+      ...task,
       senders: FROM.senders.map((sender) => ({ ...sender, relation: 'future' }))
     })
-    expect(parsed).toEqual(source)
+    expect(parsed).toEqual(task)
+  })
+
+  it("keeps a sender's agent this build does not know, and drops only an unreadable one", () => {
+    const withAgent = (agent: unknown) =>
+      readAgentMessageSource({ ...FROM, senders: [{ ...FROM.senders[0], agent }] })?.senders[0]
+    expect(withAgent('future-agent')?.agent).toBe('future-agent')
+    expect(withAgent('x'.repeat(200))).toEqual({ ...FROM.senders[0], agent: undefined })
+    expect(withAgent(7)?.name).toBe('Build tab')
   })
 
   it('keeps an agent an agent when its orchestration kind is newer than this build', () => {

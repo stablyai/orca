@@ -1,3 +1,4 @@
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -14,7 +15,7 @@ import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
@@ -62,6 +63,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
   placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]

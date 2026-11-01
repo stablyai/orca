@@ -81,11 +81,7 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
     return []
   }
   const mailboxes = db.runsBoundToCoordinator(party).map((run) => `run:${run.id}`)
-  if (
-    db.db
-      .prepare('SELECT 1 FROM messages WHERE to_handle = ? AND delivered_at IS NULL LIMIT 1')
-      .get(party.address)
-  ) {
+  if (db.getUnreadDirectMessageTypes(party.address).length > 0) {
     mailboxes.push(party.address)
   }
   // Re-derive Dispatch mail through current party identity; a cleared or restarted session has no future idle edge.
@@ -112,15 +108,4 @@ export function structuredSessionIdleEdgeMailboxes(
     return []
   }
   return db ? structuredSessionOwnedMailboxes(sessionId, db) : []
-}
-
-/** Include read rows for accepted-creation reconciliation and pointer-phase rows for terminal repair. */
-export function restoredSessionMailboxes(db: OrchestrationDb | null | undefined): Set<string> {
-  return new Set([
-    ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
-    ...(db?.db
-      .prepare('SELECT DISTINCT to_handle FROM messages WHERE delivered_at IS NULL')
-      .all()
-      .map((row) => String(row.to_handle)) ?? [])
-  ])
 }

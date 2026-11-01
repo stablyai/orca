@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalPayload } from '../agent-session-journal/journal-payload-bounds'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import { agentJournalItemForWire, shortenedAgentJournalItem } from './agent-session-item-wire-form'

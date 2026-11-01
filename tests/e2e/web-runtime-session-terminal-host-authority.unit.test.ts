@@ -134,11 +134,13 @@ describe('createWebRuntimeSessionTerminal', () => {
           agent,
           worktreeId: WORKTREE_ID,
           environmentId: ENVIRONMENT_ID,
-          startupPlan: plan,
+          buildStartup: () => ({
+            startupPlan: plan,
+            pasteDraftAfterLaunch: null,
+            submitPastedPrompt: false
+          }),
           prompt: 'Fix checks',
           promptDelivery: 'auto-submit',
-          pastePromptAfterReady: null,
-          submitPastedPrompt: false,
           activate: false
         })
       ).resolves.toEqual({
@@ -710,7 +712,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         command: "claude --prefill 'https://github.com/o/r/issues/12'",
         launchDraft: 'https://github.com/o/r/issues/12'
       })
-    ).resolves.toEqual({ status: 'created' })
+    ).resolves.toEqual({ outcome: { status: 'created' }, promptDelivered: true })
 
     // Argv-prefill sends no paste, so only this seeds the mirrored composer.
     expect(mocks.deliverLaunchPromptToAgentTab).not.toHaveBeenCalled()

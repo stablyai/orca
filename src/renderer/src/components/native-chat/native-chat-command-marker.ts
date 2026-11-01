@@ -1,6 +1,6 @@
 // Slash-command feedback and transcript boundaries stay separate from optimistic user-send pruning.
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
 import { translate } from '@/i18n/i18n'
 

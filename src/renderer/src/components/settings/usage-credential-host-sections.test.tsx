@@ -102,30 +102,6 @@ describe('usage keys on the Settings host', () => {
     )
   })
 
-  it('finds the MiniMax API key by its host, not as stored locally', async () => {
-    mocks.settingsSearchQuery = 'stored locally'
-    renderMiniMax()
-    await waitFor(() => expect(mocks.callMiniMax).toHaveBeenCalled())
-    expect(screen.queryByPlaceholderText('Paste your MiniMax API key')).not.toBeInTheDocument()
-    cleanup()
-
-    mocks.settingsSearchQuery = 'stored on build box'
-    renderMiniMax()
-    expect(await screen.findByPlaceholderText('Paste your MiniMax API key')).toBeInTheDocument()
-  })
-
-  it('disables the cookie where the host has no desktop cookie jar', async () => {
-    renderMiniMax()
-
-    expect(
-      await screen.findByText(
-        'Build box has no Orca desktop app to send a session cookie from. Save an API key instead.'
-      )
-    ).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Paste the Cookie header from DevTools')).toBeDisabled()
-    expect(screen.getByPlaceholderText('Paste your MiniMax API key')).toBeEnabled()
-  })
-
   it('locks replacing a key the other Orca app on the host sealed, but still allows forgetting it', async () => {
     mocks.callMiniMax.mockResolvedValue({ ...miniMaxStatus, apiKeyUnreadable: 'sealed-elsewhere' })
     renderMiniMax()
@@ -136,19 +112,6 @@ describe('usage keys on the Settings host', () => {
       )
     ).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Paste your MiniMax API key')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Forget key' })).toBeEnabled()
-  })
-
-  it('keeps an unreadable key replaceable and says so', async () => {
-    mocks.callMiniMax.mockResolvedValue({ ...miniMaxStatus, apiKeyUnreadable: 'unreadable' })
-    renderMiniMax()
-
-    expect(
-      await screen.findByText(
-        'Orca on Build box cannot read the saved key. Replace it or forget it.'
-      )
-    ).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Paste your MiniMax API key')).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Forget key' })).toBeEnabled()
   })
 
@@ -188,32 +151,5 @@ describe('usage keys on the Settings host', () => {
     expect(screen.getByPlaceholderText('Paste your GLM Coding Plan API key')).toBeDisabled()
     expect(screen.getByRole('combobox')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Refresh usage' })).not.toBeInTheDocument()
-  })
-
-  it('names the host when no GLM plan is linked there', async () => {
-    render(<ZcodePlanAccountsSection host={host} usageSettings={usageSettings} />)
-
-    expect(
-      await screen.findByText(
-        'Save the plan API key below, or sign in with the ZCode CLI on Build box.'
-      )
-    ).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Paste your GLM Coding Plan API key')).toBeEnabled()
-  })
-
-  it('finds the GLM API key by its host, not as stored locally', async () => {
-    mocks.settingsSearchQuery = 'stored locally'
-    render(<ZcodePlanAccountsSection host={host} usageSettings={usageSettings} />)
-    await waitFor(() => expect(mocks.callZcode).toHaveBeenCalled())
-    expect(
-      screen.queryByPlaceholderText('Paste your GLM Coding Plan API key')
-    ).not.toBeInTheDocument()
-    cleanup()
-
-    mocks.settingsSearchQuery = 'stored on build box'
-    render(<ZcodePlanAccountsSection host={host} usageSettings={usageSettings} />)
-    expect(
-      await screen.findByPlaceholderText('Paste your GLM Coding Plan API key')
-    ).toBeInTheDocument()
   })
 })

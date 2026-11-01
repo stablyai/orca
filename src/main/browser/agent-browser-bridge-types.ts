@@ -11,6 +11,9 @@ export const AGENT_BROWSER_EXIT_DRAIN_MS = 500
 export const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
 export const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
 export const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
+export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
+// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
+export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
@@ -27,6 +30,8 @@ export type SessionState = {
   // Revalidate after queue delay, when the tab may have disappeared.
   webContentsId: number
   activeProcess: ChildProcess | null
+  // agent-browser keeps the `snapshot --delta` baseline in this session's daemon.
+  hasDeltaBaseline?: boolean
 }
 
 export type QueuedCommand = {
@@ -60,8 +65,12 @@ export type AgentBrowserExecOptions = {
 
 export type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
+  /** Page actions report what they caused when an agent runs them. */
+  reportEffects?: boolean
   // Text mutations must not fall back to a global tab from another worktree.
   requireScopedTarget?: boolean
+  // Element arguments that may be snapshot refs.
+  elements?: readonly (string | undefined)[]
 }
 
 export type AgentBrowserBridgeOptions = {

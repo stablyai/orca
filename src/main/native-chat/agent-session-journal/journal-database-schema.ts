@@ -1,7 +1,7 @@
 // Keep legacy repair/import/set-aside tables for older clients using the same schema version.
 
 /** Database version is independent of row versions; newer databases must remain read-only. */
-export const JOURNAL_DB_SCHEMA_VERSION = 5
+export const JOURNAL_DB_SCHEMA_VERSION = 4
 
 // Versions 1–2 existed only in unreleased builds.
 export const JOURNAL_DB_OLDEST_RELEASED_VERSION = 3
@@ -41,12 +41,18 @@ CREATE TABLE IF NOT EXISTS journal_set_aside (
 }
 
 // JSON rows preserve unreadable records byte-for-byte.
+export const AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS idx_agent_session_clear_successor
+  ON agent_session_records(CASE WHEN json_valid(record_json) THEN json_extract(record_json, '$.conversationCommand.replacementSessionId') END);
+`
+
 export function createAgentSessionRecordTablesSql(): string {
   return `
 CREATE TABLE IF NOT EXISTS agent_session_records (
   session_id  TEXT PRIMARY KEY,
   record_json TEXT NOT NULL
 );
+${AGENT_SESSION_CLEAR_SUCCESSOR_INDEX_SQL}
 CREATE TABLE IF NOT EXISTS agent_session_operations (
   operation_key TEXT PRIMARY KEY,
   row_json      TEXT NOT NULL

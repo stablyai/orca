@@ -66,10 +66,7 @@ export function importFederatedRelayItem(
 
     let message = this.getMessageById(params.message.id)
     if (!message) {
-      message = this.insertMessage({
-        ...params.message,
-        orderingOrigin: 'imported'
-      })
+      message = this.insertMessage(params.message)
     } else if (
       message.run_id !== params.message.runId ||
       message.to_handle !== params.message.to ||

@@ -1,5 +1,4 @@
-import { journalQueueSelection } from './journal-queue-selection'
-import type { JournalMailSource } from './journal-mail-boundary'
+import { journalInputOrder } from './journal-input-order'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -7,21 +6,21 @@ import {
 } from './journal-submission-hook'
 // Fold cards from journal rows, without a second mutable copy. Drafts never count as active work.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessageMoveAnchor,
   AgentSessionQueuedMessageMoveResult,
   AgentSessionQueuedMessageUpdateResult
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import { retainedQueueFacts } from './journal-queue-retention'
 import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
 import {
+  deriveQueuePauses,
   journalUserStopInForce,
-  nextSendableQueuedCard,
   type DerivedQueuePause,
   type JournalQueuePauseMarks
 } from './queued-message-pause'
@@ -47,20 +46,29 @@ export type JournalQueueRestatement = {
 }
 
 export class JournalQueuedMessages {
-  readonly editLeases = new QueuedMessageEditLeases(() => this.list())
+  readonly editLeases = new QueuedMessageEditLeases(
+    () => this.list(),
+    undefined,
+    (id) => this.get(id)
+  )
   private readonly legacy: LegacyQueuedCards
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
   constructor(private readonly deps: JournalQueuedMessagesDeps) {
     this.legacy = new LegacyQueuedCards(deps)
-    this.selection = journalQueueSelection(deps)
   }
 
   get sessionId(): string {
     return this.deps.sessionId
   }
 
+  inputState(): JournalReducerState {
+    const state = this.deps.state()
+    journalInputOrder(state).overlay(state, this.legacy.cards())
+    return state
+  }
   displayState(): JournalReducerState {
+    this.inputState()
     return this.legacy.displayState()
   }
 
@@ -68,10 +76,6 @@ export class JournalQueuedMessages {
     const { epoch, queue } = this.deps.state()
     return `${epoch}:${queue.revision}:${this.legacy.key()}`
   }
-
-  private readonly selection: ReturnType<typeof journalQueueSelection>
-  mailEligible = (card: QueuedMessageRow) => this.selection.mailEligible(card)
-  selectionRevision = () => this.selection.revision(this.revision(), this.editLeases.revision())
 
   list(): readonly QueuedMessageRow[] {
     const key = this.revision()
@@ -83,11 +87,20 @@ export class JournalQueuedMessages {
   }
 
   get(messageId: string): QueuedMessageRow | null {
-    return (
-      this.deps.state().queue.cards.get(messageId) ??
-      this.legacy.cards().find((card) => card.messageId === messageId) ??
-      null
-    )
+    return this.deps.state().queue.cards.get(messageId) ?? this.legacy.get(messageId) ?? null
+  }
+
+  /** Selection reads identity summaries; current values are resolved after edits. */
+  nextInputCard(automatic = true): QueuedMessageRow | null {
+    const state = this.inputState()
+    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
+    const card = identity ? this.get(identity.messageId) : null
+    return !card ||
+      card.state === 'returned' ||
+      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
+      (automatic && this.editLeases.isHeld(card.messageId))
+      ? null
+      : card
   }
 
   // Card insertion, attachment claims and send receipt must commit together.
@@ -96,9 +109,6 @@ export class JournalQueuedMessages {
       messageId: string
       body: AgentJournalMessageItem
       requireAttachments?: true
-      beforeInsert?: () => void
-      humanRelease?: true
-      mailSource?: JournalMailSource
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
     },
@@ -114,12 +124,10 @@ export class JournalQueuedMessages {
         if (this.get(messageId)) {
           return { changes: [], result: undefined }
         }
-        input.beforeInsert?.()
         const { epoch, lastSequence } = this.deps.state()
         const position = Math.max(0, ...this.list().map((card) => card.position)) + 1
         const change = {
           op: 'queued' as const,
-          ...(input.mailSource ? { mailSource: input.mailSource } : {}),
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },
@@ -128,8 +136,7 @@ export class JournalQueuedMessages {
         }
         return { changes: [{ messageId, change }], result: undefined }
       },
-      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : [])),
-      input.humanRelease
+      composeJournalOperationReceipts(claims, ...(receipt ? [receipt] : []))
     ).then(() => {
       const card = this.get(messageId)
       if (!card) {
@@ -207,8 +214,8 @@ export class JournalQueuedMessages {
   }
 
   /** Plan on the journal lane; adopt/delete legacy cards in the same transaction before changing them. */
-  plan(changes: readonly JournalQueueCardChange[], humanRelease?: true): JournalQueuePlan {
-    return journalQueueAdoptionPlan(this.deps, this.legacy, changes, humanRelease)
+  plan(changes: readonly JournalQueueCardChange[]): JournalQueuePlan {
+    return journalQueueAdoptionPlan(this.deps, this.legacy, changes)
   }
 
   /** Validate the acted-on card on the lane; automatic drain must still own the next queued card. */
@@ -222,14 +229,7 @@ export class JournalQueuedMessages {
       card.fingerprint === input.fingerprint &&
       input.consumedAs !== input.messageId
     if (consumable && input.yieldsToPause) {
-      const cards = this.list()
-      const held = this.editLeases.heldIds(cards)
-      const next = nextSendableQueuedCard(
-        this.selection.pauses(cards),
-        cards,
-        held,
-        this.mailEligible
-      )
+      const next = this.nextInputCard()
       if (next?.messageId === input.messageId) {
         return
       }
@@ -264,7 +264,7 @@ export class JournalQueuedMessages {
   }
 
   pauses(): DerivedQueuePause[] {
-    return this.selection.pauses(this.list())
+    return this.derivePauses(this.list())
   }
 
   awaitReopenMark(): boolean {
@@ -288,18 +288,28 @@ export class JournalQueuedMessages {
     return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
   }
 
+  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      cards,
+      reopenFloor: this.deps.reopenFloor()
+    })
+  }
+
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */
   private write<T>(
     plan: () => { changes: readonly JournalQueueCardChange[]; result: T },
-    receipt?: JournalOperationReceipt,
-    humanRelease?: true
+    receipt?: JournalOperationReceipt
   ): Promise<T> {
     let planned: { result: T; plan: JournalQueuePlan } | undefined
     return this.deps.writer
       .enqueueRows(
         () => {
           const next = plan()
-          planned = { result: next.result, plan: this.plan(next.changes, humanRelease) }
+          planned = { result: next.result, plan: this.plan(next.changes) }
           return planned.plan.rows
         },
         {

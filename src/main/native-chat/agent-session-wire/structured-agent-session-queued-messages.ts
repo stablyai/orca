@@ -1,48 +1,42 @@
-import type { JournalMailSource } from '../agent-session-journal/journal-mail-boundary'
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
+import {
+  type AgentSessionTurnContext,
+  agentSessionAttachmentExpiredRefusal
+} from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
+import {
+  selectStructuredAgentSessionInput,
+  structuredInputExecutionWorking
+} from './structured-agent-session-input-selection'
 
 /** Preserve order and holds; only automatic drain stops at edit leases, which still count as admission backlog. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>,
   automatic: boolean
 ): QueuedMessageRow | null {
-  const rows = journal.queuedMessages.list()
-  if (!rows.some((row) => row.state === 'waiting')) {
-    return null
-  }
-  const edited = automatic ? journal.queuedMessages.editLeases.heldIds(rows) : undefined
-  return nextSendableQueuedCard(structuredQueuePauses(journal), rows, edited, (card) =>
-    journal.queuedMessages.mailEligible(card)
-  )
+  return journal.queuedMessages.nextInputCard(automatic)
 }
 
 /** Host-local gate shared by admission, drain and Send-now; only Send-now overrides working. */
@@ -69,15 +63,20 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 export function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal }
 ): QueuedMessageRow | null {
-  // Token frames must not walk a paused queue prefix.
-  if (input.work.working()) {
+  if (structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
-  const next = oldestActionableQueuedMessage(input.journal, true)
+  const selected = selectStructuredAgentSessionInput(input.journal)
+  const next = selected.kind === 'card' ? selected.card : null
+  // Check cheap working state before the prompt scan on every streamed frame.
   if (next === null) {
     return null
   }
-  return structuredQueueHold(input) === null ? next : null
+  return !input.record ||
+    structuredAgentSessionSendBlock(input.record) ||
+    input.work.hasActionablePrompt()
+    ? null
+    : next
 }
 
 /** Queue behind work/actionable backlog; held or returned cards cannot trap a fresh send that lifts their pause. */
@@ -115,9 +114,6 @@ export async function maybeQueueStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
-    queueAlways?: true
-    mailSource?: JournalMailSource
-    beforeRun?: () => void
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
@@ -132,7 +128,7 @@ export async function maybeQueueStructuredAgentSessionSend(
 > {
   const clientMessageId = params.envelope.clientOperationId
   if (
-    (!params.queueAlways && params.delivery !== 'queue-if-active') ||
+    params.delivery !== 'queue-if-active' ||
     (params.queuedImageCards === false &&
       params.body.blocks.some((block) => block.type === 'image-ref'))
   ) {
@@ -147,7 +143,6 @@ export async function maybeQueueStructuredAgentSessionSend(
     return null
   }
   if (
-    !params.queueAlways &&
     !shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
@@ -175,9 +170,6 @@ export async function maybeQueueStructuredAgentSessionSend(
       {
         messageId: clientMessageId,
         body: params.body,
-        ...(params.beforeRun ? { beforeInsert: params.beforeRun } : {}),
-        ...(params.userSend || params.personsMessage ? { humanRelease: true as const } : {}),
-        ...(params.mailSource ? { mailSource: params.mailSource } : {}),
         options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },
@@ -228,9 +220,11 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     // Skip serialized work during token streams; settlement/generation-end schedules a fresh gate check.
     try {
+      const work = this.deps.currentWork(sessionId)
       if (
-        this.deps.currentWork(sessionId)?.working() !== false ||
-        oldestActionableQueuedMessage(journal, true) === null
+        !work ||
+        nextStructuredQueuedMessage({ journal, record: this.deps.getRecord(sessionId), work }) ===
+          null
       ) {
         return
       }
@@ -277,7 +271,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
           clientMessageId: submissionId,
           // Automatic handoffs never become personal kept cards on close/restart.
           origin: 'host',
-          ...(next.body.from ? { source: { kind: 'agent' } } : { source: { kind: 'user' } }),
           payloadFingerprint: next.fingerprint,
           body: next.body,
           ...(next.options ? { options: next.options } : {}),

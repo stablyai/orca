@@ -2,12 +2,12 @@ import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-permission-modes-capability'
+} from '../../../../shared/agent-session/agent-session-permission-modes-capability'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 // @vitest-environment happy-dom
 
@@ -237,14 +237,12 @@ describe('a permission pick on this device', () => {
         envelope: expect.objectContaining({ expectedRuntimeFence: 1 })
       })
     )
-    expect(result.current.sendSource.optionStateRef.current.pendingId).toBeNull()
     expect(result.current.optionSnapshot.find((row) => row.id === 'model')?.settable).toBe(true)
     await act(async () => {
       reply.resolve(acceptedReply('permissionMode', 'own'))
       await picking
     })
     await expect(picking).resolves.toBe(true)
-    expect(result.current.sendSource.optionStateRef.current.pendingId).toBeNull()
     expect(result.current.optionSnapshot.find((row) => row.id === 'model')?.settable).toBe(true)
     unmount()
   })
@@ -271,7 +269,7 @@ describe('a permission pick on this device', () => {
     expect(permission(result.current.optionSnapshot)).toBe('auto')
     unmount()
 
-    // A permission commit clears generic pendingId while the model request still runs.
+    // A permission pick stays available while the model request still runs.
     let model = 'model-a'
     forgetStructuredSessionSelection('session-1', LOCAL_TARGET)
     mocks.call.mockImplementation((_target: unknown, method: string, params: unknown) =>

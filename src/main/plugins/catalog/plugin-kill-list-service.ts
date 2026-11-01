@@ -6,6 +6,7 @@ import {
   type PluginKillListEntry
 } from '../../../shared/plugins/catalog/plugin-kill-list'
 import { PluginKillListStore } from './plugin-kill-list-store'
+import { fetchBoundedJson } from './plugin-bounded-json-fetch'
 
 export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
@@ -155,43 +156,13 @@ export async function fetchPluginKillList(
   fetcher: typeof fetch = fetch,
   url = PLUGIN_KILL_LIST_URL
 ): Promise<PluginKillList> {
-  const response = await fetcher(url, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(PLUGIN_KILL_LIST_FETCH_TIMEOUT_MS)
+  const json = await fetchBoundedJson(fetcher, url, {
+    label: 'plugin kill-list',
+    maxBytes: PLUGIN_KILL_LIST_DOWNLOAD_LIMIT,
+    timeoutMs: PLUGIN_KILL_LIST_FETCH_TIMEOUT_MS
   })
-  if (!response.ok) {
-    throw new Error(`plugin kill-list request failed with HTTP ${response.status}`)
-  }
-  const declaredBytes = Number(response.headers.get('content-length') ?? '0')
-  if (Number.isFinite(declaredBytes) && declaredBytes > PLUGIN_KILL_LIST_DOWNLOAD_LIMIT) {
-    throw new Error('plugin kill-list response exceeds its size limit')
-  }
-  if (!response.body) {
-    throw new Error('plugin kill-list response has no body')
-  }
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let totalBytes = 0
-  while (true) {
-    const chunk = await reader.read()
-    if (chunk.done) {
-      break
-    }
-    totalBytes += chunk.value.byteLength
-    if (totalBytes > PLUGIN_KILL_LIST_DOWNLOAD_LIMIT) {
-      await reader.cancel()
-      throw new Error('plugin kill-list response exceeds its size limit')
-    }
-    chunks.push(chunk.value)
-  }
-  const bytes = new Uint8Array(totalBytes)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
   try {
-    const parsed = pluginKillListSchema.parse(JSON.parse(new TextDecoder().decode(bytes)))
+    const parsed = pluginKillListSchema.parse(json)
     if (isPluginKillListTooFarInFuture(parsed)) {
       throw new Error('generatedAt is too far in the future')
     }

@@ -88,7 +88,7 @@ describe('agent.launch with the real floating workspace resolver', () => {
       vi.spyOn(runtime, 'requireStore').mockReturnValue({
         getSettings: () => ({
           ...STRUCTURED_PREFERENCE,
-          experimentalNativeChat: structuredPreference
+          nativeChatProviders: { codex: structuredPreference }
         })
       } as never)
       const scope = vi.spyOn(runtime, 'showTerminalWorkspaceLaunchScope')

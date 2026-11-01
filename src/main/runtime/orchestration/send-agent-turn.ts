@@ -1,17 +1,16 @@
-import type { JournalMailSource } from '../../native-chat/agent-session-journal/journal-mail-boundary'
 /** Use the composer's structured send/envelope/waiter or the terminal prompt writer; callers interpret the shared outcome. */
 
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionSendSubmission,
   type AgentSessionQueuedSendReceipt
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
-import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
@@ -32,8 +31,6 @@ export type StructuredSessionTurn = {
   operationId: string
   expectedRuntimeFence: number
   delivery: AgentTurnDelivery
-  queueAlways?: true
-  mailSource?: JournalMailSource
   /** Host-local admission for an automated send. */
   beforeRun?: () => void
 }
@@ -141,12 +138,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    {
-      ...message,
-      ...(turn.beforeRun ? { beforeRun: turn.beforeRun } : {}),
-      ...(turn.queueAlways ? { queueAlways: true } : {}),
-      ...(turn.mailSource ? { mailSource: turn.mailSource } : {})
-    }
+    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

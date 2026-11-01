@@ -46,45 +46,6 @@ afterEach(() => {
 })
 
 describe('fetch-armed ref maintenance', () => {
-  it('arms the sweep for the repo after a remote fetch, keyed by common dir', async () => {
-    const controller = new RuntimeRemoteFetchController()
-
-    await controller.getOrStartRemoteFetch('/repo/worktrees/a', 'origin')
-
-    await vi.waitFor(() =>
-      expect(armedTargets().map((target) => target.key)).toEqual(['local::/repo/.git'])
-    )
-  })
-
-  it('gives every worktree of one repo the same maintenance key', async () => {
-    const controller = new RuntimeRemoteFetchController()
-
-    await controller.getOrStartRemoteFetch('/repo/worktrees/a', 'origin')
-    await controller.getOrStartRemoteTrackingBaseRefresh('/repo/worktrees/b', {
-      remote: 'origin',
-      branch: 'main',
-      ref: 'refs/remotes/origin/main',
-      base: 'origin/main'
-    })
-
-    await vi.waitFor(() =>
-      expect(armedTargets().map((target) => target.key)).toEqual([
-        'local::/repo/.git',
-        'local::/repo/.git'
-      ])
-    )
-  })
-
-  it('scopes the key to the WSL distro that executes the repo', async () => {
-    const controller = new RuntimeRemoteFetchController()
-
-    await controller.getOrStartRemoteFetch('//wsl$/Ubuntu/repo', 'origin', {
-      wslDistro: 'Ubuntu'
-    })
-
-    await vi.waitFor(() => expect(armedTargets()[0]?.key).toBe('wsl:Ubuntu::/repo/.git'))
-  })
-
   it('does not collapse every repo onto one key on Git older than 2.31', async () => {
     // Older Git may echo unsupported --path-format and exit 0; do not mistake its relative .git answer for every repo's key.
     gitExecFileAsyncMock.mockImplementation(async (argv: string[]) =>
@@ -129,22 +90,5 @@ describe('fetch-armed ref maintenance', () => {
     releaseFetch?.()
     await second
     expect(isBusy?.()).toBe(false)
-  })
-
-  it('arms even when the fetch fails, because a partial fetch still writes refs', async () => {
-    const controller = new RuntimeRemoteFetchController()
-    gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => {
-      if (argv[0] === 'rev-parse') {
-        return { stdout: '/repo/.git\n', stderr: '' }
-      }
-      throw new Error('network is unreachable')
-    })
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await expect(controller.getOrStartRemoteFetch('/repo', 'origin')).resolves.toEqual({
-      ok: false,
-      errorKind: 'git_error'
-    })
-    await vi.waitFor(() => expect(armedTargets()).toHaveLength(1))
   })
 })

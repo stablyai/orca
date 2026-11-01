@@ -18,7 +18,7 @@ CMD = os.path.join(state_dir, "cmd")
 instance = os.environ["BENCH_INSTANCE"]
 ack = None
 sequence = 0
-s = {"count": 0, "returns": 0, "menuHits": 0, "last": None}
+s = {"count": 0, "returns": 0, "submittedText": None, "clickedColor": None, "menuHits": 0, "last": None}
 
 
 def named(widget, name):
@@ -48,11 +48,21 @@ edit.set_submenu(sub)
 menubar.append(edit)
 box.pack_start(menubar, False, False, 0)
 
+def increment(_button):
+    s["count"] += 1
+    s["clickedColor"] = combo.get_active_text()
+
+
+def submit(entry):
+    s["returns"] += 1
+    s["submittedText"] = entry.get_text()
+
+
 button = Gtk.Button(label="Increment")
-button.connect("clicked", lambda _b: s.__setitem__("count", s["count"] + 1))
+button.connect("clicked", increment)
 check = Gtk.CheckButton(label="Check me")
 field = named(Gtk.Entry(), "field")
-field.connect("activate", lambda _e: s.__setitem__("returns", s["returns"] + 1))
+field.connect("activate", submit)
 decoy = named(Gtk.Entry(), "decoy")
 combo = named(Gtk.ComboBoxText(), "Color")
 for item in ("Red", "Green", "Blue"):
@@ -74,6 +84,7 @@ def command(c):
     if c["instance"] != instance:
         return
     s["count"] = s["returns"] = s["menuHits"] = 0
+    s["submittedText"] = s["clickedColor"] = None
     check.set_active(False)
     sub.popdown()
     combo.set_active(0)
@@ -105,6 +116,7 @@ def tick():
         "instance": instance, "ack": ack, "seq": sequence, "decoyText": decoy.get_text(),
         "logicalFocus": "field" if win.get_focus() is field else "decoy" if win.get_focus() is decoy else "other",
         "count": s["count"], "check": check.get_active(), "text": field.get_text(), "returns": s["returns"],
+        "submittedText": s["submittedText"], "clickedColor": s["clickedColor"],
         "selStart": sel[0], "selLen": sel[1] - sel[0], "combo": combo.get_active_text(),
         "top": scroll.get_vadjustment().get_value(), "menuHits": s["menuHits"], "dropOpen": sub.get_visible(),
         "activeForm": win.is_active(), "fieldFocused": win.get_focus() is field, "pid": os.getpid(),

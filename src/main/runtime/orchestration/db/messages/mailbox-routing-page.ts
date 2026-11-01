@@ -11,10 +11,3 @@ export type MailboxRoutingPage = {
 export type ForeignDirectMailboxRoutingPage = MailboxRoutingPage & {
   mailboxes: { mailboxHandle: string; types: MessageType[] }[]
 }
-
-export type MailboxMessagePageOptions = {
-  excludeTypes?: readonly string[]
-  excludeIds?: readonly string[]
-  limit?: number
-  afterSequence?: number
-}

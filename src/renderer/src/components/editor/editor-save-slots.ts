@@ -1,6 +1,17 @@
+import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 
+export type EditorSaveAcquisition =
+  | {
+      operation: ReturnType<typeof acquireEditorFileOperation>
+      access: LocalFileAccess | undefined
+    }
+  | { error: unknown }
+
 export type EditorSaveRequest = {
+  invocation: EditorSaveAcquisition
+  viewIds: readonly string[]
   fileId: string
   fallbackContent: string
   trigger: EditorSaveTrigger
@@ -50,8 +61,8 @@ export function createEditorSaveSlots(
       }
       request.fallbackContent = incoming.fallbackContent
       request.requestedDirty ||= incoming.requestedDirty
-      if (TRIGGER_RANK[incoming.trigger] > TRIGGER_RANK[request.trigger]) {
-        request.trigger = incoming.trigger
+      if (TRIGGER_RANK[incoming.trigger] >= TRIGGER_RANK[request.trigger]) {
+        Object.assign(request, incoming, { requestedDirty: request.requestedDirty })
       }
       return slot.queued.promise
     }

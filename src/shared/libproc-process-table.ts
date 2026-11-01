@@ -11,6 +11,7 @@ import {
   registerNativeRequest
 } from './libproc-native-reads'
 import { completeCommands } from './libproc-argv-completion'
+import { registerPsFallbackRequest, runPsFallback } from './libproc-ps-fallback'
 import {
   compareLikePs,
   formatDarwinDevice,
@@ -21,12 +22,12 @@ import {
 
 /** Shaped like a process-host ProcessResult so call sites can substitute it for ps's. */
 export type LibprocPsResult = {
-  code: 0 | 1 | null
+  code: number | null
   signal: NodeJS.Signals | null
   stdout: string
-  stderr: ''
+  stderr: string
   timedOut: boolean
-  outputTruncated: boolean
+  outputTruncated?: boolean
 }
 
 export type InProcessPsOptions = {
@@ -35,6 +36,14 @@ export type InProcessPsOptions = {
   /** The caller's ps timeout: past it the read resolves timed out, as the killed ps would. */
   timeoutMs: number
   maxOutputBytes?: number
+  /** A display poll: any ps it needs waits behind interactive and fresh readers in the fork budget. */
+  background?: boolean
+  /** Called with when (monotonic ms) the result's oldest recovered argv was read, when that predates this request:
+   * evidence built on the result is as old as that input, not as the table read. */
+  onArgvReadAt?: (monotonicMs: number) => void
+  /** The caller runs its own ps when the in-process reader is down, rather than share the fallback budget, which may
+   * time it out (signalling paths that must not lose their read). */
+  callerRunsPs?: boolean
 }
 
 const TIMED_OUT: LibprocPsResult = {
@@ -95,19 +104,33 @@ export function inProcessDeadlineAllowanceMs(timeoutMs: number): number {
   return loadLibprocAddon() && isNativeReaderHealthy() ? inProcessSliceMs(timeoutMs) : 0
 }
 
-/** ps output for `args`, read in process; null when the addon or the invocation is unsupported so callers run ps. */
+/** ps output for `args`, read in process, or by one budgeted /bin/ps while the reader is down; null when the addon or
+ * the invocation is unsupported (or `callerRunsPs`) so callers run ps. */
 export async function runPsInProcess(
   args: readonly string[],
   options: InProcessPsOptions
 ): Promise<LibprocPsResult | null> {
   const addon = loadLibprocAddon()
   const query = addon ? parsePsQuery(args) : null
-  if (!addon || !query || !isNativeReaderHealthy()) {
+  if (!addon || !query) {
     return null
   }
   const registeredSequence = registerNativeRequest()
-  const deadline = monotonicNow() + options.timeoutMs
+  const fallbackSequence = registerPsFallbackRequest()
+  const requestedAtMs = monotonicNow()
+  const deadline = requestedAtMs + options.timeoutMs
   const env = options.env ?? process.env
+  // ps gets the caller's whole timeout from the moment the reader gives up, as the caller's own ps did.
+  const fallback = async (): Promise<LibprocPsResult | null> =>
+    options.callerRunsPs
+      ? null
+      : runPsFallback(
+          args,
+          { env, maxOutputBytes: options.maxOutputBytes },
+          fallbackSequence,
+          monotonicNow() + options.timeoutMs,
+          options.background
+        )
   const utc = lstartZoneIsUtc(env)
   const needsLstart = query.columns.includes('lstart')
   // lstart is `%c`: only the C and en_US forms are reproduced.
@@ -116,6 +139,9 @@ export async function runPsInProcess(
     (utc === null || !/^(?:C|POSIX|en_US(?:\..*)?)$/.test(localeCategory(env, 'LC_TIME')))
   ) {
     return null
+  }
+  if (!isNativeReaderHealthy()) {
+    return fallback()
   }
   const includeCommand = query.columns.includes('command')
   const ctype = localeCategory(env, 'LC_CTYPE')
@@ -130,7 +156,7 @@ export async function runPsInProcess(
   try {
     const read = await readFreshNativeTable(addon, nativeQuery, registeredSequence, deadline)
     if (read === 'stalled') {
-      return null
+      return fallback()
     }
     if (read === DEADLINE_PASSED) {
       return TIMED_OUT
@@ -144,7 +170,7 @@ export async function runPsInProcess(
       if (devices.size > 0) {
         const named = await nameTerminals(devices, deadline)
         if (named === 'stalled') {
-          return null
+          return fallback()
         }
         if (named === DEADLINE_PASSED) {
           return TIMED_OUT
@@ -153,13 +179,24 @@ export async function runPsInProcess(
       }
     }
     if (rows && includeCommand) {
-      await completeCommands(rows, query.pids !== null, ctype, env, deadline)
+      await completeCommands(
+        rows,
+        query.pids !== null ? 'pids' : query.tty !== null ? 'tty' : 'all',
+        ctype,
+        env,
+        deadline,
+        options.background === true
+      )
     }
   } catch {
-    return null
+    return fallback()
   }
   if (monotonicNow() > deadline) {
     return TIMED_OUT
+  }
+  const argvReadAt = Math.min(...(rows ?? []).map((row) => row.commandReadAtMs ?? Infinity))
+  if (argvReadAt < requestedAtMs) {
+    options.onArgvReadAt?.(argvReadAt)
   }
   // ps exits 1 when -t names no terminal or a -p/-t selection matched nothing.
   if (rows === null) {
@@ -207,18 +244,12 @@ export async function runPsInProcess(
   }
 }
 
-/** execFile-shaped: rejects on a nonzero exit or timeout like a failed ps child; null when ps must run. */
-export async function readPsStdoutInProcess(
-  args: readonly string[],
-  options: InProcessPsOptions
-): Promise<string | null> {
-  const result = await runPsInProcess(args, options)
-  if (!result) {
-    return null
-  }
+function stdoutLikeExecFile(args: readonly string[], result: LibprocPsResult): string {
   if (result.timedOut || result.code !== 0) {
     throw Object.assign(
-      new Error(`Command failed: ps ${args.join(' ')}${result.timedOut ? ' (timed out)' : ''}`),
+      new Error(
+        `Command failed: ps ${args.join(' ')}${result.timedOut ? ' (timed out)' : ''}\n${result.stderr}`
+      ),
       { code: result.code, killed: result.timedOut, signal: result.signal }
     )
   }
@@ -228,4 +259,35 @@ export async function readPsStdoutInProcess(
     })
   }
   return result.stdout
+}
+
+/** execFile-shaped: rejects on a nonzero exit or timeout like a failed ps child; null when ps must run. */
+export async function readPsStdoutInProcess(
+  args: readonly string[],
+  options: InProcessPsOptions
+): Promise<string | null> {
+  const result = await runPsInProcess(args, options)
+  return result ? stdoutLikeExecFile(args, result) : null
+}
+
+/** execFile-shaped /bin/ps through the shared fork budget, for captures that must run ps (a held naming pass);
+ * only a ps spawned after this call answers it. */
+export async function readPsStdoutBudgeted(
+  args: readonly string[],
+  options: {
+    env: NodeJS.ProcessEnv
+    timeoutMs: number
+    maxOutputBytes?: number
+    background?: boolean
+  }
+): Promise<string> {
+  const registered = registerPsFallbackRequest()
+  const result = await runPsFallback(
+    args,
+    { env: options.env, maxOutputBytes: options.maxOutputBytes },
+    registered,
+    monotonicNow() + options.timeoutMs,
+    options.background
+  )
+  return stdoutLikeExecFile(args, result)
 }

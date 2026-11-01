@@ -46,7 +46,6 @@ describe('remote runtime request connection integration', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: repo.list over the real socket only calls the runtime methods defined below.
       const runtime = {
         configureNotificationDismissalStore: () => {},
-        disposeMessageWaiters: () => {},
         getRuntimeId: () => 'fetch-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},
@@ -118,9 +117,9 @@ describe('remote runtime request connection integration', () => {
       ]
       const clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
       const subscriptionCleanups = new Map<string, () => void>()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this socket fixture implements every runtime method used by client-events subscribe and repo.list.
       const runtime = {
         configureNotificationDismissalStore: () => {},
-        disposeMessageWaiters: () => {},
         getRuntimeId: () => 'events-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -145,6 +144,7 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -286,9 +286,9 @@ describe('remote runtime request connection integration', () => {
           listener(event)
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this sleep socket fixture implements every runtime method reached by its subscriptions and list requests.
       const runtime = {
         configureNotificationDismissalStore: () => {},
-        disposeMessageWaiters: () => {},
         getRuntimeId: () => 'remote-sleep-runtime-test',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
@@ -307,6 +307,7 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.delete(id)
         },
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
@@ -518,7 +519,6 @@ describe('remote runtime request connection integration', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface the shared-control and status paths under test read.
       const runtime = {
         configureNotificationDismissalStore: () => {},
-        disposeMessageWaiters: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
         machineNameReady: async () => undefined,
@@ -555,11 +555,13 @@ describe('remote runtime request connection integration', () => {
           }
         },
         onClientDisconnected: () => {},
+        getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
         onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
         getAccountsSnapshot: () => ({ claude: null, codex: null }),
+        getAccountsStreamSnapshot: () => ({ claude: null, codex: null }),
         refreshAccountsForMobile: async () => {
           for (const listener of accountsListeners) {
             listener({ claude: null, codex: null })

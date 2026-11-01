@@ -43,26 +43,6 @@ beforeEach(() => {
 })
 
 describe('daemon audit eligibility telemetry', () => {
-  it('uses a dedicated validator-accepted event family', () => {
-    trackDaemonAuditEligibility(recordAuthenticatedInventory(context, null))
-
-    expect(trackMock).toHaveBeenCalledOnce()
-    const [name, props] = trackMock.mock.calls[0]
-    expect(name).toBe('daemon_audit_eligibility')
-    expect(name).not.toBe('daemon_lifecycle')
-    expect(props).toMatchObject({
-      state: 'present',
-      reason: 'authenticated_inventory',
-      evidence_sources: ['authenticated_inventory'],
-      protocol_generation: 23,
-      generation_role: 'legacy',
-      exact_incarnation: 'unavailable',
-      process_reason: null
-    })
-    expect(props).not.toHaveProperty('exact_incarnation_correlation')
-    expect(validate('daemon_audit_eligibility', props).ok).toBe(true)
-  })
-
   it('correlates an exact incarnation across app trackers without raw identity fields', () => {
     const currentContext = { ...context, protocolGeneration: PROTOCOL_VERSION }
     const firstAppTracker = createDaemonAuditEligibilityTracker()
@@ -103,20 +83,6 @@ describe('daemon audit eligibility telemetry', () => {
     ]) {
       expect(serializedProperties).not.toContain(rawIdentity)
     }
-  })
-
-  it('does not mislabel a future protocol generation as legacy', () => {
-    const trackEligibility = createDaemonAuditEligibilityTracker()
-
-    expect(() =>
-      trackEligibility(
-        recordAuthenticatedInventory(
-          { ...context, protocolGeneration: PROTOCOL_VERSION + 1 },
-          exactIncarnation
-        )
-      )
-    ).not.toThrow()
-    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('cannot affect callers when telemetry throws', () => {

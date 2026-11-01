@@ -4,6 +4,7 @@ import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
 import { isFuseMountPoint } from './daemon-appimage-launch'
+import { appImageEphemeralRootOf } from '../../shared/appimage-ephemeral-root'
 
 export type DaemonHostImageVerdict = 'intact' | 'severed' | 'unknown' | 'not-ephemeral'
 
@@ -71,12 +72,12 @@ export function inspectDaemonHostImage(
     const deleted = executable.endsWith(DELETED_SUFFIX)
     const path = deleted ? executable.slice(0, -DELETED_SUFFIX.length) : executable
     const ephemeralOrigin = [record.spawnerExecPath, record.entryPath, path].some(
-      (candidate) => candidate !== null && ephemeralRootOf(candidate) !== null
+      (candidate) => candidate !== null && appImageEphemeralRootOf(candidate) !== null
     )
     if (!ephemeralOrigin) {
       return result('not-ephemeral')
     }
-    const root = ephemeralRootOf(path)
+    const root = appImageEphemeralRootOf(path)
     if (root?.kind === 'mount') {
       const mounted = isFuseMountPoint(proc.readFile(`/proc/${record.pid}/mountinfo`), root.path)
       return result(mounted && !deleted ? 'intact' : 'severed')
@@ -94,22 +95,6 @@ export function inspectDaemonHostImage(
     // Unreadable proc evidence cannot establish image loss.
     return unknown()
   }
-}
-
-type EphemeralRoot = { kind: 'mount' | 'extract'; path: string }
-
-export function ephemeralRootOf(path: string): EphemeralRoot | null {
-  const segments = path.split('/')
-  for (let index = 1; index < segments.length - 1; index += 1) {
-    const segment = segments[index]!
-    if (segment.startsWith('.mount_')) {
-      return { kind: 'mount', path: segments.slice(0, index + 1).join('/') }
-    }
-    if (segment.startsWith('appimage_extracted_')) {
-      return { kind: 'extract', path: segments.slice(0, index + 1).join('/') }
-    }
-  }
-  return null
 }
 
 function hasErrorCode(error: unknown, code: string): boolean {

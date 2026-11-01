@@ -24,8 +24,8 @@ export type BrowserScreencastParams = {
 export type BrowserScreencastStartResult = {
   subscriptionId: string
   ready: Extract<BrowserScreencastResult, { type: 'ready' }>
-  // Shared-page budget/dialog ownership must not leak through subscriber handles.
-  session: Omit<BrowserScreencastSession, 'updateFrameBudget' | 'settleDialog'>
+  // Shared-page budget ownership must not leak through subscriber handles.
+  session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
   // Replay the joining snapshot once the caller's pre-ready gate opens.
   flushPendingFrame: () => void
 }

@@ -6,6 +6,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { MessageWake } from '../runtime-message-waiters'
 
 // Lightweight Runs lack coordinator_runs rows; worker exits must escalate through their own reachable Run mailbox (STA-4604).
 
@@ -313,7 +314,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       })
       runtime.onPtyExit(WORKER_PTY_ID, 137)
 
-      await expect(waiting).resolves.toBe('notified')
+      await expect(waiting).resolves.toBeInstanceOf(MessageWake)
       // A notification can wake waitForMessage without durable mail; assert the stored message too.
       expect(db.getUnreadRunMailbox(run.id, 100, ['escalation'])).toEqual([
         expect.objectContaining({
@@ -446,33 +447,43 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
 
   it('preserves the dispatch Run when legacy coordinator routing is used', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
-    const insertMessage = vi.fn((message: { to: string }) => ({
-      ...message,
-      to_handle: message.to,
-      type: 'escalation'
-    }))
-    runtime.setOrchestrationDb({
-      mailSourceMutations: {
-        subscribe: () => () => {},
-        flushCommitted: () => {},
-        dispose: () => {}
-      },
-      getActiveDispatchForTerminal: (handle: string) =>
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const task = db.createTask({ spec: 'orphan work', runId: LEGACY_RUN_ID })
+      const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
+      db.createCoordinatorRun({ spec: 'legacy coordinator', coordinatorHandle })
+      const message = db.insertMessage({
+        from: workerHandle,
+        to: coordinatorHandle,
+        subject: 'fixture',
+        type: 'escalation',
+        runId: LEGACY_RUN_ID
+      })
+      vi.spyOn(db, 'getActiveDispatchForTerminal').mockImplementation((handle) =>
         handle === workerHandle
-          ? { id: 'ctx-orphan', run_id: 'run-that-no-longer-exists', task_id: 'task-orphan' }
-          : undefined,
-      failDispatch: vi.fn(),
-      getRun: () => undefined,
-      getActiveCoordinatorRun: () => ({ id: 'run-legacy', coordinator_handle: coordinatorHandle }),
-      insertMessage
-    } as never)
+          ? {
+              ...dispatch,
+              id: 'ctx-orphan',
+              run_id: 'run-that-no-longer-exists',
+              task_id: 'task-orphan'
+            }
+          : undefined
+      )
+      vi.spyOn(db, 'failDispatch').mockReturnValue(undefined)
+      vi.spyOn(db, 'getRun').mockReturnValue(undefined)
+      const insertMessage = vi.spyOn(db, 'insertMessage').mockReturnValue(message)
+      runtime.setOrchestrationDb(db)
 
-    runtime.onPtyExit(WORKER_PTY_ID, 137)
+      runtime.onPtyExit(WORKER_PTY_ID, 137)
 
-    expect(insertMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ to: coordinatorHandle, type: 'escalation' })
-    )
-    expect(insertMessage.mock.calls[0]?.[0]).toHaveProperty('runId', 'run-that-no-longer-exists')
+      expect(insertMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ to: coordinatorHandle, type: 'escalation' })
+      )
+      expect(insertMessage.mock.calls[0]?.[0]).toHaveProperty('runId', 'run-that-no-longer-exists')
+    } finally {
+      vi.restoreAllMocks()
+      db.close()
+    }
   })
 
   it('still reaches the Run mailbox when the Run has no bound coordinator', async () => {
@@ -486,11 +497,12 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       })
       const task = db.createTask({ spec: 'work outliving its coordinator', runId: run.id })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
-      db.createRun({
+      const newer = db.createRun({
         objective: 'newer run on the same coordinator pane',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+      db.bindRun({ runId: newer.id, coordinatorHandle, coordinatorPaneKey: COORDINATOR_PANE_KEY })
       expect(db.getRun(run.id)?.coordinator_handle).toBeNull()
       runtime.setOrchestrationDb(db as never)
 
@@ -507,52 +519,105 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   })
 
   // Protect recipient lookup as well as insertion from DB errors.
-  it.each([
-    [
-      'the recipient lookup',
-      {
-        getRun: () => {
-          throw new Error('database is closed')
+  it.each(['the recipient lookup', 'the mailbox insert'] as const)(
+    'still finishes PTY exit when %s fails',
+    (_case) => {
+      const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+      const db = new OrchestrationDb(':memory:')
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const run = db.createRun({
+          objective: 'exit fault',
+          coordinatorHandle,
+          coordinatorPaneKey: COORDINATOR_PANE_KEY
+        })
+        const task = db.createTask({ runId: run.id, spec: 'work' })
+        const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
+        vi.spyOn(db, 'getActiveDispatchForTerminal').mockImplementation((handle) =>
+          handle === workerHandle
+            ? { ...dispatch, id: 'ctx-1', run_id: 'run-1', task_id: 'task-1' }
+            : undefined
+        )
+        const failDispatch = vi.spyOn(db, 'failDispatch').mockReturnValue(undefined)
+        if (_case === 'the recipient lookup') {
+          vi.spyOn(db, 'getRun').mockImplementation(() => {
+            throw new Error('database is closed')
+          })
+        } else {
+          vi.spyOn(db, 'getRun').mockReturnValue({ ...run, id: 'run-1' })
+          vi.spyOn(db, 'insertMessage').mockImplementation(() => {
+            throw new Error('Run not found: run-1')
+          })
         }
-      }
-    ],
-    [
-      'the mailbox insert',
-      {
-        getRun: () => ({ id: 'run-1', legacy: 0, coordinator_handle: 'term_coord' }),
-        insertMessage: () => {
-          throw new Error('Run not found: run-1')
-        }
-      }
-    ]
-  ])('still finishes PTY exit when %s fails', (_case, dbOverrides) => {
-    const { runtime, workerHandle } = makeRuntimeWithTwoPanes()
-    const failDispatch = vi.fn()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    runtime.setOrchestrationDb({
-      mailSourceMutations: {
-        subscribe: () => () => {},
-        flushCommitted: () => {},
-        dispose: () => {}
-      },
-      getActiveDispatchForTerminal: (handle: string) =>
-        handle === workerHandle ? { id: 'ctx-1', run_id: 'run-1', task_id: 'task-1' } : undefined,
-      failDispatch,
-      getActiveCoordinatorRun: () => undefined,
-      insertMessage: () => ({ to_handle: 'run:run-1', type: 'escalation' }),
-      ...dbOverrides
-    } as never)
+        runtime.setOrchestrationDb(db)
 
-    // Synchronous exit handling must survive a throwing mailbox and still record worker death.
-    expect(() => runtime.onPtyExit(WORKER_PTY_ID, 137)).not.toThrow()
-    expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent process exited with code 137', {
-      workerProcessExited: true,
-      terminationReason: 'exited'
-    })
-    expect(warn).toHaveBeenCalledWith(
-      '[orchestration] failed to escalate worker failure',
-      expect.objectContaining({ dispatchId: 'ctx-1', runId: 'run-1' })
-    )
-    warn.mockRestore()
+        // Synchronous exit handling must survive a throwing mailbox and still record worker death.
+        expect(() => runtime.onPtyExit(WORKER_PTY_ID, 137)).not.toThrow()
+        expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent process exited with code 137', {
+          workerProcessExited: true,
+          terminationReason: 'exited'
+        })
+        expect(warn).toHaveBeenCalledWith(
+          '[orchestration] failed to escalate worker failure',
+          expect.objectContaining({ dispatchId: 'ctx-1', runId: 'run-1' })
+        )
+      } finally {
+        vi.restoreAllMocks()
+        db.close()
+      }
+    }
+  )
+
+  it('relays a paired-server worker exit to the Run home even while its ask is waiting', async () => {
+    const { runtime, workerHandle } = makeRuntimeWithTwoPanes()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      db.createRemoteDispatchAttachment({
+        runId: 'run_home',
+        dispatchId: 'ctx_remote',
+        taskId: 'task_remote',
+        homePeerFingerprint: 'home_peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'worker_epoch',
+        mutationReceipt: {
+          callerFingerprint: 'home_peer',
+          requestId: 'remote_start',
+          method: 'orchestration.federationAttachStart',
+          payloadHash: 'remote_payload'
+        }
+      })
+      db.prepareRemoteAttachmentAuthority({
+        dispatchId: 'ctx_remote',
+        paneKey: WORKER_PANE_KEY,
+        processIncarnation: runtime.getTerminalProcessIncarnation(workerHandle) ?? '',
+        worktreeId: WORKTREE_ID,
+        terminalHandle: workerHandle,
+        setupState: 'not_applicable',
+        effects: []
+      })
+      db.markRemoteAttachmentReady('ctx_remote')
+      const relay = vi.spyOn(db, 'enqueueFederationRelay')
+      runtime.setOrchestrationDb(db)
+      const abort = new AbortController()
+      // The process is gone, so a blocked `ask` can never report the exit itself.
+      void runtime.waitForMessage('dispatch:ctx_remote', { signal: abort.signal })
+
+      runtime.onPtyExit(WORKER_PTY_ID, 137)
+      await settle()
+      abort.abort()
+
+      expect(relay).toHaveBeenCalledTimes(1)
+      const [{ dispatchId, direction, kind, payload }] = relay.mock.calls[0]
+      expect({ dispatchId, direction, kind }).toEqual({
+        dispatchId: 'ctx_remote',
+        direction: 'to_home',
+        kind: 'escalation'
+      })
+      const relayed = JSON.parse(payload)
+      expect(relayed.body).toContain('exited (Agent process exited with code 137)')
+      expect(JSON.parse(relayed.payload)).toMatchObject({ stopReason: 'exited' })
+    } finally {
+      db.close()
+    }
   })
 })

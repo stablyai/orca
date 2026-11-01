@@ -7,7 +7,13 @@ import path from 'node:path'
 import type { CDPSession, Locator } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 type Key = { key: string; code: string; keyCode: number }
 
@@ -102,7 +108,11 @@ test('Linux Sogou commits land in the native chat composer', async ({ orcaPage }
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
+  const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
   const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+  expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
   const [tabId] = descriptor.paneKey.split(':')
   const sessionId = `e2e-sogou-composer-${randomUUID()}`
   const transcriptPath = path.join(
@@ -114,7 +124,7 @@ test('Linux Sogou commits land in the native chat composer', async ({ orcaPage }
   await orcaPage.evaluate(
     async ({ paneKey, worktreeId, tabId, sessionId, transcriptPath }) => {
       const settings = await window.api.settings.set({
-        experimentalNativeChat: true
+        nativeChatProviders: { claude: true, codex: true }
       })
       const store = window.__store
       if (!store) {
@@ -212,4 +222,9 @@ test('Linux Sogou commits land in the native chat composer', async ({ orcaPage }
 
   await composer.pressSequentially(' ok')
   await expect.poll(() => draft(composer)).toBe('你浩你好你好 ok')
+  const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+  expect(finalPane.tabId).toBe(boundPane.tabId)
+  expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+  expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+  await expect(chat).toBeVisible()
 })

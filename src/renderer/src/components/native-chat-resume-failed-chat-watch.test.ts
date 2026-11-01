@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
   _resetNativeChatRestartOffer,
@@ -84,31 +84,6 @@ afterEach(() => {
   _resetNativeChatRestartOffer()
   resetStructuredAgentSessionStatusFeedsForTests()
   vi.useRealTimers()
-})
-
-it('re-reads once when the user sends in an offered chat, and the count drops', async () => {
-  const { failedAt: _failedAt, outcome: _outcome, reason: _reason, ...candidate } = failure
-  mocks.rpc
-    .mockResolvedValueOnce({ sessions: [candidate], failed: [] })
-    .mockResolvedValue({ sessions: [], failed: [] })
-  await refreshNativeChatRestartOffer()
-  await vi.advanceTimersByTimeAsync(0)
-  expect(getNativeChatRestartOffer().candidates).toHaveLength(1)
-  expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
-
-  hostEmit()({ type: 'status', session: summary('working', 'Something else', Date.now() + 10_000) })
-  await vi.advanceTimersByTimeAsync(500)
-
-  expect(offerReads()).toBe(2)
-  expect(getNativeChatRestartOffer().candidates).toEqual([])
-  expect(mocks.unsubscribe).toHaveBeenCalledOnce()
-})
-
-it('opens no status stream while nothing is offered or failed', async () => {
-  mocks.rpc.mockResolvedValue({ sessions: [], failed: [] })
-  await refreshNativeChatRestartOffer()
-  await vi.advanceTimersByTimeAsync(0)
-  expect(mocks.subscribeStatus).not.toHaveBeenCalled()
 })
 
 it('re-reads once when the user replies in a failed chat, then lets the stream go', async () => {

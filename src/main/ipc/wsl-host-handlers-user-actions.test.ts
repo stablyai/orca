@@ -3,8 +3,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type Handler = (event: unknown, request?: unknown) => unknown
 
 const handlers = vi.hoisted(() => new Map<string, Handler>())
+const sent = vi.hoisted((): { channel: string; payload: unknown }[] => [])
 vi.mock('electron', () => ({
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: {
+    getAllWindows: () => [
+      {
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel: string, payload: unknown) => sent.push({ channel, payload })
+        }
+      }
+    ]
+  },
   ipcMain: {
     removeHandler: (channel: string) => handlers.delete(channel),
     handle: (channel: string, handler: Handler) => handlers.set(channel, handler)
@@ -51,7 +61,13 @@ vi.mock('../wsl/wsl-host-service-instance', () => ({
 }))
 
 import { registerWslHostHandlers } from './wsl-host-handlers'
-import { configureWslHostsGate, resetWslHostsGateForTests } from '../wsl/wsl-host-gate'
+import {
+  configureWslHostsGate,
+  noteWslHostsLivePolicyBlock,
+  resetWslHostsGateForTests,
+  wslHostsServing
+} from '../wsl/wsl-host-gate'
+import { WSL_HOST_CAPABILITY_CHANNEL } from '../../shared/wsl-host-types'
 import { onWslHostUserAction, type WslHostUserAction } from '../wsl/wsl-host-user-actions'
 
 function register(): void {
@@ -115,6 +131,39 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
         kind: 'disabled'
       })
       expect(service.add).not.toHaveBeenCalled()
+      service.remove.mockClear()
+      await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
+      expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
+    } finally {
+      resetWslHostsGateForTests()
+    }
+  })
+
+  // A block published while Orca runs must stop new hosts now, not at the next launch.
+  it('a live policy block refuses an Add at once, tells the window, and keeps the saved host served', async () => {
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+    configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+    try {
+      register()
+      expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
+        acceptsNewWork: true
+      })
+      sent.length = 0
+
+      noteWslHostsLivePolicyBlock()
+
+      expect(sent).toEqual([
+        {
+          channel: WSL_HOST_CAPABILITY_CHANNEL,
+          payload: { serverFiles: true, acceptsNewWork: false }
+        }
+      ])
+      expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Debian' })).toMatchObject({
+        ok: false,
+        kind: 'disabled'
+      })
+      expect(service.add).not.toHaveBeenCalled()
+      expect(wslHostsServing()).toBe(true)
       service.remove.mockClear()
       await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
       expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')

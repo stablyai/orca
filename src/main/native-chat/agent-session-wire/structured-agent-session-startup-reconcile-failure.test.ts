@@ -1,10 +1,10 @@
 import { cp, readdir, readFile, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as AgentSessionRecordRows from '../../runtime/agent-session-record-rows'
+import type * as AgentSessionRecordRows from '../../runtime/agent-session/records/agent-session-record-rows'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
-} from '../../runtime/agent-session-record-store-test-harness'
+} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
 import { JOURNAL_NEWER_SCHEMA_MESSAGE } from '../agent-session-journal/journal-open-failure'
 import {
@@ -24,12 +24,15 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const writes = vi.hoisted(() => ({ failing: false }))
 
-vi.mock('../../runtime/agent-session-record-rows', async (importOriginal) => {
+vi.mock('../../runtime/agent-session/records/agent-session-record-rows', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentSessionRecordRows>()
   return {
     ...actual,
@@ -48,6 +51,7 @@ const relaunchedRoots: string[] = []
 
 afterEach(async () => {
   writes.failing = false
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )

@@ -1,3 +1,4 @@
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 import { beforeEach, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import type { AppState } from '@/store/types'
@@ -35,26 +36,29 @@ const initialProjects: Pick<Project, 'id' | 'localWindowsRuntimePreference'>[] =
   { id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }
 ]
 
+const settings: {
+  agentCmdOverrides: Record<string, string>
+  agentDefaultArgs: Record<string, string>
+  agentDefaultEnv: Record<string, Record<string, string>>
+  activeRuntimeEnvironmentId: string | null
+  terminalWindowsShell?: string
+  agentDefaultSurface?: 'chat' | 'terminal'
+  nativeChatProviders?: Record<string, boolean>
+  nativeChatSessionOptions?: Record<
+    string,
+    { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
+  >
+} = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  activeRuntimeEnvironmentId: null
+}
+
 export const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: {
-    agentCmdOverrides: {},
-    agentDefaultArgs: {} as Record<string, string>,
-    agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: null as string | null
-  } as {
-    agentCmdOverrides: Record<string, string>
-    agentDefaultArgs: Record<string, string>
-    agentDefaultEnv: Record<string, Record<string, string>>
-    activeRuntimeEnvironmentId: string | null
-    terminalWindowsShell?: string
-    experimentalNativeChat?: boolean
-    nativeChatSessionOptions?: Record<
-      string,
-      { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
-    >
-  },
+  settings,
   projects: initialProjects,
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
   sshConnectionStates: new Map([
@@ -100,6 +104,12 @@ export const store = {
   markNativeChatLaunchPromptFailed: mockMarkNativeChatLaunchPromptFailed
 }
 
+vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'tab-1' }))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  runtimeEnvironmentSupportsCapability: async () => false,
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => store
@@ -124,12 +134,6 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
-}))
-
-// Cover window-planned launches/paste here; AI-button host launches share delivery but have separate ownership tests.
-vi.mock('@/lib/launch-agent-new-tab-host-route', () => ({
-  newTabPromptLaunchesThroughHost: () => false,
-  launchNewTabPromptThroughHost: vi.fn()
 }))
 
 vi.mock('@/lib/agent-ready-wait', () => ({
@@ -176,7 +180,10 @@ beforeEach(() => {
   setLocalRuntimeCapabilitiesForTests([])
   mockIsWebRuntimeSessionActive.mockReturnValue(false)
   mockCreateWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
-  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({ status: 'created' })
+  mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft.mockResolvedValue({
+    outcome: { status: 'created' },
+    promptDelivered: true
+  })
   store.activeRepoId = 'repo-1'
   store.activeWorktreeId = 'wt-1'
   store.settings = {
@@ -214,7 +221,15 @@ beforeEach(() => {
   store.tabBarOrderByWorktree = {}
   store.terminalLayoutsByTabId = {}
   store.ptyIdsByTabId = {}
-  mockCreateTab.mockReturnValue({ id: 'tab-1' })
+  mockCreateTab.mockImplementation((_worktreeId, _groupId, _unused, options) => {
+    const tab = { id: options?.id ?? 'tab-1' }
+    store.tabsByWorktree['wt-1'].push(tab)
+    const leafId = options?.initialLeafId
+    if (options?.pendingStartup?.agentLaunch && leafId) {
+      queueMicrotask(() => settleAgentLaunchPaneStart(tab.id, leafId, 'pty-1'))
+    }
+    return tab
+  })
   mockPasteDraftWhenAgentReady.mockResolvedValue(true)
   mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
 })

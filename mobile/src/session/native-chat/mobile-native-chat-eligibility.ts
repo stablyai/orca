@@ -1,4 +1,4 @@
-import { isStructuredAgentId } from '../../../../src/shared/agent-session-provider-handle'
+import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status-types'
 import {
   isNativeChatAgentAvailable,

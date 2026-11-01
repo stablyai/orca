@@ -1,20 +1,24 @@
+import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
 import {
   BottomDrawer,
   View,
   Text,
-  TextInput,
+  TextField,
+  Search,
   colors,
   Pressable,
   AlertTriangle,
   ActivityIndicator,
   githubProjectKey,
-  Check,
-  PickerModal
+  PickerModal,
+  type GitHubProjectRef
 } from './mobile-tasks-dependencies'
+import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { styles } from './mobile-tasks-legacy-styles'
 import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
   const {
@@ -44,6 +48,33 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
     taskUiReady
   } = model
   const count = githubProjectPartialFailures.length
+  const isActiveProject = (project: GitHubProjectRef) =>
+    activeGitHubProject !== null &&
+    githubProjectKey(activeGitHubProject) === githubProjectKey(project)
+  const inlineAction = (label: string, run: () => void) => (
+    <Pressable
+      style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
+      onPress={(event) => {
+        event.stopPropagation()
+        run()
+      }}
+    >
+      <Text style={styles.inlineSaveText}>{label}</Text>
+    </Pressable>
+  )
+  const projectRow = (key: string, project: GitHubProjectRef, title: string, action: ReactNode) => (
+    <ListRow
+      key={key}
+      title={title}
+      subtitle={`${project.owner} · #${project.number}`}
+      accessory={action}
+      selected={isActiveProject(project)}
+      onPress={() => {
+        setShowGitHubProjectPicker(false)
+        void selectGitHubProject(project)
+      }}
+    />
+  )
   return (
     <BottomDrawer
       visible={taskUiReady && showGitHubProjectPicker}
@@ -62,18 +93,17 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
       </View>
 
       <View style={styles.projectPickerControls}>
-        <TextInput
-          style={styles.input}
+        <TextField
           value={githubProjectPickerSearch}
           onChangeText={setGithubProjectPickerSearch}
           placeholder={translate('tasks.githubProjectPickers.searchProjects', 'Search projects')}
-          placeholderTextColor={colors.textMuted}
+          leading={<Search size={16} color={colors.textMuted} />}
           autoCapitalize="none"
           autoCorrect={false}
         />
         <View style={styles.projectPasteRow}>
-          <TextInput
-            style={[styles.input, styles.projectPasteInput]}
+          <TextField
+            style={styles.projectPasteInput}
             value={githubProjectPasteInput}
             onChangeText={(next) => {
               setGithubProjectPasteInput(next)
@@ -84,12 +114,15 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
               'tasks.githubProjectPickers.addPlaceholder',
               'Add by URL or owner/number'
             )}
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
           />
           <Pressable
-            style={[styles.inlineSaveButtonCompact, styles.projectPasteButton]}
+            style={({ pressed }) => [
+              styles.inlineSaveButtonCompact,
+              styles.projectPasteButton,
+              pressed && pressedStyle
+            ]}
             disabled={githubProjectPasteBusy || githubProjectPasteInput.trim().length === 0}
             onPress={() => void resolveGitHubProjectFromInput()}
           >
@@ -150,16 +183,20 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
         </View>
       ) : null}
 
-      <View style={styles.repoPickerGroup}>
-        {githubProjectLoading && githubProjects.length === 0 ? (
-          <View style={styles.drawerLoadingRow}>
+      {githubProjectLoading && githubProjects.length === 0 ? (
+        <ListGroup>
+          <View key="loading" style={styles.drawerLoadingRow}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
           </View>
-        ) : githubProjects.length === 0 &&
-          pinnedGitHubProjects.length === 0 &&
-          recentGitHubProjects.length === 0 ? (
-          <Pressable
-            style={styles.repoPickerRow}
+        </ListGroup>
+      ) : githubProjects.length === 0 &&
+        pinnedGitHubProjects.length === 0 &&
+        recentGitHubProjects.length === 0 ? (
+        <ListGroup>
+          <ListRow
+            key="retry"
+            title={translate('tasks.githubProjectPickers.noProjects', 'No projects loaded')}
+            subtitle={translate('tasks.githubProjectPickers.retryHint', 'Tap to retry.')}
             onPress={() =>
               void loadGitHubProjects().catch((err) => {
                 setGithubProjectError(
@@ -169,170 +206,90 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                 )
               })
             }
-          >
-            <View style={styles.repoPickerTextWrap}>
-              <Text style={styles.repoPickerTitle}>
-                {translate('tasks.githubProjectPickers.noProjects', 'No projects loaded')}
-              </Text>
-              <Text style={styles.repoPickerSubtitle}>
-                {translate('tasks.githubProjectPickers.retryHint', 'Tap to retry.')}
-              </Text>
-            </View>
-          </Pressable>
-        ) : (
-          <>
-            {pinnedGitHubProjects.length > 0 ? (
-              <>
-                <Text style={styles.linearStatesTitle}>
-                  {translate('tasks.githubProjectPickers.pinned', 'Pinned')}
-                </Text>
-                {pinnedGitHubProjects.map((project, index) => {
+          />
+        </ListGroup>
+      ) : (
+        <>
+          {pinnedGitHubProjects.length > 0 ? (
+            <>
+              <SectionHeader
+                title={translate('tasks.githubProjectPickers.pinned', 'Pinned')}
+                first
+              />
+              <ListGroup>
+                {pinnedGitHubProjects.map((project) => {
                   const key = githubProjectKey(project)
-                  const selected =
-                    activeGitHubProject !== null && githubProjectKey(activeGitHubProject) === key
-                  return (
-                    <View key={`pinned:${key}`}>
-                      {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                      <Pressable
-                        style={styles.repoPickerRow}
-                        onPress={() => {
-                          setShowGitHubProjectPicker(false)
-                          void selectGitHubProject(project)
-                        }}
-                      >
-                        <View style={styles.repoPickerTextWrap}>
-                          <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                            {project.summary?.title ?? `#${project.number}`}
-                          </Text>
-                          <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                            {project.owner} · #{project.number}
-                          </Text>
-                        </View>
-                        <Pressable
-                          style={styles.inlineSaveButtonCompact}
-                          onPress={(event) => {
-                            event.stopPropagation()
-                            persistGitHubProjectSettings({
-                              ...githubProjectSettings,
-                              pinned: githubProjectSettings.pinned.filter(
-                                (entry) => githubProjectKey(entry) !== key
-                              )
-                            })
-                          }}
-                        >
-                          <Text style={styles.inlineSaveText}>
-                            {translate('common.remove', 'Remove')}
-                          </Text>
-                        </Pressable>
-                        {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                      </Pressable>
-                    </View>
+                  return projectRow(
+                    `pinned:${key}`,
+                    project,
+                    project.summary?.title ?? `#${project.number}`,
+                    inlineAction(translate('common.remove', 'Remove'), () =>
+                      persistGitHubProjectSettings({
+                        ...githubProjectSettings,
+                        pinned: githubProjectSettings.pinned.filter(
+                          (entry) => githubProjectKey(entry) !== key
+                        )
+                      })
+                    )
                   )
                 })}
-              </>
-            ) : null}
+              </ListGroup>
+            </>
+          ) : null}
 
-            {recentGitHubProjects.length > 0 ? (
-              <>
-                <Text style={styles.linearStatesTitle}>
-                  {translate('tasks.githubProjectPickers.recent', 'Recent')}
-                </Text>
-                {recentGitHubProjects.map((project, index) => {
+          {recentGitHubProjects.length > 0 ? (
+            <>
+              <SectionHeader title={translate('tasks.githubProjectPickers.recent', 'Recent')} />
+              <ListGroup>
+                {recentGitHubProjects.map((project) => {
                   const key = githubProjectKey(project)
-                  const selected =
-                    activeGitHubProject !== null && githubProjectKey(activeGitHubProject) === key
-                  return (
-                    <View key={`recent:${key}`}>
-                      {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                      <Pressable
-                        style={styles.repoPickerRow}
-                        onPress={() => {
-                          setShowGitHubProjectPicker(false)
-                          void selectGitHubProject(project)
-                        }}
-                      >
-                        <View style={styles.repoPickerTextWrap}>
-                          <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                            {project.summary?.title ?? `#${project.number}`}
-                          </Text>
-                          <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                            {project.owner} · #{project.number}
-                          </Text>
-                        </View>
-                        {githubProjectSettings.lastViewByProject[key]?.viewId ? (
-                          <Pressable
-                            style={styles.inlineSaveButtonCompact}
-                            onPress={(event) => {
-                              event.stopPropagation()
-                              persistGitHubProjectSettings({
-                                ...githubProjectSettings,
-                                pinned: [
-                                  ...githubProjectSettings.pinned,
-                                  {
-                                    owner: project.owner,
-                                    ownerType: project.ownerType,
-                                    number: project.number
-                                  }
-                                ].slice(0, 20)
-                              })
-                            }}
-                          >
-                            <Text style={styles.inlineSaveText}>
-                              {translate('tasks.githubProjectPickers.pin', 'Pin')}
-                            </Text>
-                          </Pressable>
-                        ) : null}
-                        {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                      </Pressable>
-                    </View>
+                  return projectRow(
+                    `recent:${key}`,
+                    project,
+                    project.summary?.title ?? `#${project.number}`,
+                    githubProjectSettings.lastViewByProject[key]?.viewId
+                      ? inlineAction(translate('tasks.githubProjectPickers.pin', 'Pin'), () =>
+                          persistGitHubProjectSettings({
+                            ...githubProjectSettings,
+                            pinned: [
+                              ...githubProjectSettings.pinned,
+                              {
+                                owner: project.owner,
+                                ownerType: project.ownerType,
+                                number: project.number
+                              }
+                            ].slice(0, 20)
+                          })
+                        )
+                      : undefined
                   )
                 })}
-              </>
-            ) : null}
+              </ListGroup>
+            </>
+          ) : null}
 
-            <Text style={styles.linearStatesTitle}>
-              {githubProjectLoading
+          <SectionHeader
+            title={
+              githubProjectLoading
                 ? translate('tasks.githubProjectPickers.browseLoading', 'Browse all (loading...)')
-                : translate('tasks.githubProjectPickers.browseAll', 'Browse all')}
+                : translate('tasks.githubProjectPickers.browseAll', 'Browse all')
+            }
+          />
+          {browseGitHubProjects.length === 0 ? (
+            <Text style={styles.emptyInlineText}>
+              {githubProjectPickerSearch.trim()
+                ? translate('tasks.githubProjectPickers.noMatches', 'No matching projects.')
+                : translate('tasks.githubProjectPickers.noMoreProjects', 'No more projects.')}
             </Text>
-            {browseGitHubProjects.length === 0 ? (
-              <Text style={styles.emptyInlineText}>
-                {githubProjectPickerSearch.trim()
-                  ? translate('tasks.githubProjectPickers.noMatches', 'No matching projects.')
-                  : translate('tasks.githubProjectPickers.noMoreProjects', 'No more projects.')}
-              </Text>
-            ) : (
-              browseGitHubProjects.map((project, index) => {
-                const selected =
-                  activeGitHubProject !== null &&
-                  githubProjectKey(activeGitHubProject) === githubProjectKey(project)
-                return (
-                  <View key={project.id}>
-                    {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                    <Pressable
-                      style={styles.repoPickerRow}
-                      onPress={() => {
-                        setShowGitHubProjectPicker(false)
-                        void selectGitHubProject(project)
-                      }}
-                    >
-                      <View style={styles.repoPickerTextWrap}>
-                        <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                          {project.title}
-                        </Text>
-                        <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                          {project.owner} · #{project.number}
-                        </Text>
-                      </View>
-                      {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                    </Pressable>
-                  </View>
-                )
-              })
-            )}
-          </>
-        )}
-      </View>
+          ) : (
+            <ListGroup>
+              {browseGitHubProjects.map((project) =>
+                projectRow(project.id, project, project.title, undefined)
+              )}
+            </ListGroup>
+          )}
+        </>
+      )}
     </BottomDrawer>
   )
 }
@@ -381,29 +338,22 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
   )
 }
 
-export function renderMobileTasksGitHubProjectSortPicker(model: ConnectionPresentationModel) {
-  return (
-    <PickerModal
-      visible={model.taskUiReady && model.showGitHubProjectSortPicker}
-      title={translate('tasks.githubProjectPickers.sort', 'Project Sort')}
-      options={model.githubProjectSortOptions}
-      selected={model.githubProjectSortOverride?.fieldId ?? PROJECT_VIEW_DEFAULT_SORT}
-      onSelect={(fieldId) => {
-        if (fieldId === PROJECT_VIEW_DEFAULT_SORT) {
-          model.setGithubProjectSortOverride(null)
-          return
-        }
-        model.setGithubProjectSortOverride((current) => {
-          if (!current || current.fieldId !== fieldId) {
-            return { fieldId, direction: 'ASC' }
-          }
-          if (current.direction === 'ASC') {
-            return { fieldId, direction: 'DESC' }
-          }
-          return null
-        })
-      }}
-      onClose={() => model.setShowGitHubProjectSortPicker(false)}
-    />
-  )
+// Picking the active field again flips it to descending, then back to the view's own order.
+export function cycleMobileTasksGitHubProjectSort(
+  model: ConnectionPresentationModel,
+  fieldId: string
+) {
+  if (fieldId === PROJECT_VIEW_DEFAULT_SORT) {
+    model.setGithubProjectSortOverride(null)
+    return
+  }
+  model.setGithubProjectSortOverride((current) => {
+    if (!current || current.fieldId !== fieldId) {
+      return { fieldId, direction: 'ASC' }
+    }
+    if (current.direction === 'ASC') {
+      return { fieldId, direction: 'DESC' }
+    }
+    return null
+  })
 }

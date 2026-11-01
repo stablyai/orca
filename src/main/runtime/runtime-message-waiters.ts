@@ -1,40 +1,26 @@
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 
-export type MessageWaitResult = 'notified' | 'timed_out' | 'cancelled'
+import type { MailboxDeliveryBatch } from './orchestration/db/messages/role-mailbox-delivery'
 
-/** A notified check retains its opportunity until its actual read/reserve continuation finishes. */
-export class MessageWaitScope {
-  private readonly observations = new Map<string, () => void>()
-  private notification: (() => void) | undefined
-  private completed = false
-  observe(key: string, install: () => () => void): void {
-    if (!this.completed && !this.observations.has(key)) {
-      this.observations.set(key, install())
+/** One notification: consuming checks it wakes share the batch the first of them takes. */
+export class MessageWake {
+  private readonly taken = new Map<string, MailboxDeliveryBatch>()
+
+  share(mailboxKey: string, take: () => MailboxDeliveryBatch | undefined) {
+    const shared = this.taken.get(mailboxKey)
+    if (shared) {
+      return { ...shared, replayed: true }
     }
-  }
-  bind(release: () => void): void {
-    const previous = this.notification
-    this.notification = this.completed ? undefined : release
-    previous?.()
-    if (this.completed) {
-      release()
+    const batch = take()
+    if (batch) {
+      this.taken.set(mailboxKey, batch)
     }
-  }
-  complete(): boolean {
-    if (this.completed) {
-      return false
-    }
-    this.completed = true
-    this.notification?.()
-    this.notification = undefined
-    const hadObservation = this.observations.size !== 0
-    for (const release of this.observations.values()) {
-      release()
-    }
-    this.observations.clear()
-    return hadObservation
+    return batch
   }
 }
+
+/** A notified wait resolves with its notification's wake. */
+export type MessageWaitResult = MessageWake | 'timed_out' | 'cancelled'
 
 export type RuntimeMessageWaiter = {
   handle: string
@@ -42,12 +28,9 @@ export type RuntimeMessageWaiter = {
   resolve: (result: MessageWaitResult) => void
   timeout: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
-  notified: boolean
-  scope?: MessageWaitScope
 }
 
 export class RuntimeMessageWaiters {
-  constructor(private readonly onRelease?: (handle: string, types?: readonly string[]) => void) {}
   private readonly waitersByHandle = new Map<string, Set<RuntimeMessageWaiter>>()
 
   notifyRouted(handle: string, types: readonly string[]): void {
@@ -55,37 +38,19 @@ export class RuntimeMessageWaiters {
       return
     }
     const waiters = [...(this.waitersByHandle.get(handle) ?? [])]
+    if (waiters.length === 0) {
+      return
+    }
     queueMicrotask(() => {
-      for (const waiter of waiters) {
-        if (
-          this.waitersByHandle.get(handle)?.has(waiter) &&
-          (!waiter.typeFilter || types.some((type) => waiter.typeFilter?.includes(type)))
-        ) {
-          this.resolve(waiter, 'notified')
-        }
-      }
+      const liveWaiters = this.waitersByHandle.get(handle)
+      this.resolveNotified(
+        waiters.filter(
+          (waiter) =>
+            liveWaiters?.has(waiter) &&
+            (!waiter.typeFilter || types.some((type) => waiter.typeFilter?.includes(type)))
+        )
+      )
     })
-  }
-
-  observe(handle: string, scope: MessageWaitScope, typeFilter?: string[]): void {
-    scope.observe(
-      JSON.stringify([handle, typeFilter ? [...new Set(typeFilter)].sort() : null]),
-      () => {
-        const waiter: RuntimeMessageWaiter = {
-          handle,
-          typeFilter,
-          scope,
-          resolve: () => {},
-          timeout: null,
-          abortCleanup: null,
-          notified: true
-        }
-        const waiters = this.waitersByHandle.get(handle) ?? new Set<RuntimeMessageWaiter>()
-        this.waitersByHandle.set(handle, waiters)
-        waiters.add(waiter)
-        return () => this.remove(waiter)
-      }
-    )
   }
 
   wait(
@@ -94,108 +59,107 @@ export class RuntimeMessageWaiters {
       typeFilter?: string[]
       timeoutMs?: number
       signal?: AbortSignal
-      scope?: MessageWaitScope
     }
   ): Promise<MessageWaitResult> {
-    if (options?.scope) {
-      this.observe(handle, options.scope, options.typeFilter)
-    }
     return new Promise((resolve) => {
       const waiter: RuntimeMessageWaiter = {
         handle,
         typeFilter: options?.typeFilter,
         resolve,
         timeout: null,
-        abortCleanup: null,
-        notified: false,
-        scope: options?.scope
-      }
-      const waiters = this.waitersByHandle.get(handle) ?? new Set()
-      this.waitersByHandle.set(handle, waiters)
-      waiters.add(waiter)
-      options?.scope?.bind(() => this.resolve(waiter, 'cancelled'))
-      if (waiter.notified) {
-        return
+        abortCleanup: null
       }
       const signal = options?.signal
-      if (signal?.aborted) {
-        this.resolve(waiter, 'cancelled')
-        return
+      const onAbort = (): void => {
+        this.remove(waiter)
+        resolve('cancelled')
       }
       if (signal) {
-        const onAbort = () => this.resolve(waiter, 'cancelled')
+        if (signal.aborted) {
+          resolve('cancelled')
+          return
+        }
         waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
         signal.addEventListener('abort', onAbort, { once: true })
       }
-      waiter.timeout = setTimeout(
-        () => this.resolve(waiter, 'timed_out'),
-        options?.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS
-      )
+      waiter.timeout = setTimeout(() => {
+        this.remove(waiter)
+        resolve('timed_out')
+      }, options?.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS)
+      let waiters = this.waitersByHandle.get(handle)
+      if (!waiters) {
+        waiters = new Set()
+        this.waitersByHandle.set(handle, waiters)
+      }
+      waiters.add(waiter)
     })
   }
 
+  /** Wake every waiter on the handle as one notification; false when none is waiting. */
+  notify(handle: string): boolean {
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters) {
+      return false
+    }
+    this.resolveNotified([...waiters])
+    return true
+  }
+
+  /** Wake the waiters of every handle with this prefix, one notification per handle. */
+  notifyPrefix(prefix: string): void {
+    for (const handle of this.waitersByHandle.keys()) {
+      if (handle.startsWith(prefix)) {
+        this.notify(handle)
+      }
+    }
+  }
+
   cancel(handle: string): void {
-    for (const waiter of this.waitersByHandle.get(handle) ?? []) {
+    const waiters = this.waitersByHandle.get(handle)
+    if (!waiters) {
+      return
+    }
+    for (const waiter of waiters) {
       this.resolve(waiter, 'cancelled')
     }
   }
 
-  dispose(): void {
-    for (const waiters of this.waitersByHandle.values()) {
-      for (const waiter of waiters) {
-        this.remove(waiter, false)
-        this.resolve(waiter, 'cancelled')
-      }
-    }
-  }
-
-  consumerCompleted(handle: string, types?: readonly string[]): void {
-    try {
-      this.onRelease?.(handle, types)
-    } catch (error) {
-      console.warn('[orchestration] notifying completed mail consumer failed', error)
-    }
-  }
-
+  /** Internal mailbox routing needs a read-only view of active waiters. */
   get(handle: string): ReadonlySet<RuntimeMessageWaiter> | undefined {
     return this.waitersByHandle.get(handle)
   }
+
   get map(): ReadonlyMap<string, ReadonlySet<RuntimeMessageWaiter>> {
     return this.waitersByHandle
   }
-  resolveNotified(waiter: RuntimeMessageWaiter): void {
-    this.resolve(waiter, 'notified')
+
+  /** Resolve the waiters one notification selected, sharing a single wake among them. */
+  resolveNotified(waiters: readonly RuntimeMessageWaiter[]): void {
+    const wake = new MessageWake()
+    for (const waiter of waiters) {
+      this.resolve(waiter, wake)
+    }
   }
 
   private resolve(waiter: RuntimeMessageWaiter, result: MessageWaitResult): void {
-    if (waiter.notified) {
-      return
-    }
-    waiter.notified = true
-    this.cleanup(waiter)
-    this.remove(waiter, !waiter.scope)
+    this.remove(waiter)
     waiter.resolve(result)
   }
 
-  private cleanup(waiter: RuntimeMessageWaiter): void {
+  private remove(waiter: RuntimeMessageWaiter): void {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
     }
     waiter.timeout = null
     waiter.abortCleanup?.()
     waiter.abortCleanup = null
-  }
-  private remove(waiter: RuntimeMessageWaiter, notify = true): void {
-    this.cleanup(waiter)
     const waiters = this.waitersByHandle.get(waiter.handle)
-    if (!waiters?.delete(waiter)) {
+    if (!waiters) {
       return
     }
+    waiters.delete(waiter)
     if (waiters.size === 0) {
       this.waitersByHandle.delete(waiter.handle)
-    }
-    if (notify) {
-      this.consumerCompleted(waiter.handle, waiter.typeFilter)
     }
   }
 }

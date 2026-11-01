@@ -1,7 +1,7 @@
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalContextController } from './journal-context-controller'
 import { JournalEpochController } from './journal-epoch-controller'
@@ -26,7 +26,6 @@ import { JournalGoalAttachmentInverse } from './journal-goal-attachment-inverse'
 import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
 
 export type JournalStoreHost = {
-  queueOrigin?: () => 'fresh' | undefined
   /** Notify readers of durable draft-only transactions that append no journal row. */
   notifyCommitted: () => void
   identity: AgentSessionJournalIdentity
@@ -38,6 +37,7 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
+  prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
@@ -84,13 +84,9 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     state: host.state,
     queuePauseRestatement: () =>
       journalQueuePauseRestatement(
-        {
-          ...host.state().queuePauseMarks,
-          latestStop: host.state().queuePauseMarks.personalStop ?? null
-        },
-        host.state().latestAcceptedPersonalTurnSequence,
-        host.journal().queuedMessages.pauses(),
-        host.state().mailBoundary
+        host.state().queuePauseMarks,
+        host.state().latestAcceptedTurnSequence,
+        host.journal().queuedMessages.pauses()
       ),
     queueRestatement: () => host.journal().queuedMessages.restatement(),
     cursor: host.cursor,
@@ -104,13 +100,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
+    prepare: host.prepare,
     commit: host.commit,
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
   })
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
   const queuedMessages = new JournalQueuedMessages({
-    queueOrigin: host.queueOrigin,
     sessionId: host.identity.sessionId,
     serialize: host.serialize,
     database: host.database,
@@ -136,17 +132,14 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       writer: rowWriter,
       cards: queuedMessages
     }),
-    stops: new JournalStopAcceptor({
-      writer: rowWriter,
-      state: host.state,
-      sessionId: host.identity.sessionId
-    }),
+    stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.
     restore: () =>
       restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
+      reopenFloor: () => host.journal().reopenFloor(),
       identity: host.identity,
       rowWriter,
       queuedMessages,

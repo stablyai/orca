@@ -146,13 +146,20 @@ describe('Electron shutdown with inherited pipes', () => {
   it('does not release pipes if shutdown times out without confirmed process exit', async () => {
     vi.useFakeTimers()
     const { proc, app } = exitedAppFixture()
-    const closing = closeElectronAppForE2E(app)
-    await vi.advanceTimersByTimeAsync(10_000)
-    await closing
-    expect(proc.stdio.every((stream) => !stream.destroyed)).toBe(true)
-    expect(proc.listenerCount('exit')).toBe(0)
-    for (const stream of proc.stdio) {
-      stream.destroy()
+    let closingSettled = false
+    const closing = closeElectronAppForE2E(app).then(() => {
+      closingSettled = true
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(closingSettled).toBe(true)
+      await closing
+      expect(proc.stdio.every((stream) => !stream.destroyed)).toBe(true)
+      expect(proc.listenerCount('exit')).toBe(0)
+    } finally {
+      for (const stream of proc.stdio) {
+        stream.destroy()
+      }
     }
   })
 })

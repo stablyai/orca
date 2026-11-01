@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 type ResumeParams = { envelope: { clientOperationId: string } }
 
@@ -135,38 +135,6 @@ describe('Resume on a held queue', () => {
     expect(method).toBe('agentSession.queuedMessagesResume')
     expect(Object.keys(params ?? {})).toEqual(['envelope'])
     expect(mocks.toastError).not.toHaveBeenCalled()
-  })
-
-  it('keeps Resume actionable for an ordinary worker report behind a returned personal prefix, then applies the host release', async () => {
-    mocks.call.mockResolvedValue(RESUMED)
-    const worker = card('worker', {
-      position: 2,
-      body: {
-        kind: 'message',
-        role: 'user',
-        blocks: [],
-        from: {
-          kind: 'agent',
-          senders: [],
-          orchestration: {
-            message: 'mail-notice',
-            mailbox: 'run:r',
-            dispatchId: null,
-            messages: []
-          }
-        }
-      }
-    })
-    const queuedMessages = [card('returned', { state: 'returned', returnedReason: null }), worker]
-    const hook = renderController({ queuedMessages })
-    expect(hook.result.current.pause).toEqual({ reason: 'stopped' })
-    expect(hook.result.current.cards.find((card) => card.messageId === 'worker')?.hold).toBe('turn')
-    await act(async () => expect(await hook.result.current.resume()).toBe(true))
-    expect(mocks.call.mock.calls[0]?.[1]).toBe('agentSession.queuedMessagesResume')
-    hook.rerender({ queuedMessages, queuePause: null })
-    expect(hook.result.current.pause).toBeNull()
-    hook.rerender({ queuedMessages: [worker], queuePause: { reason: 'stopped' } })
-    expect(hook.result.current.pause).toEqual({ reason: 'stopped' })
   })
 
   it('a second press while one is in flight sends nothing', async () => {

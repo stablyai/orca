@@ -1,5 +1,5 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalQueueCardChange, JournalQueuedChange } from './journal-queue-events'
 import type { QueuedMessageRow } from './queued-message-table'
 
@@ -37,14 +37,13 @@ export function retainedQueueFacts(
 }
 
 export function queuedChangeOf(
-  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options' | 'mailSource'>
+  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options'>
 ): JournalQueuedChange {
   return {
     op: 'queued',
     body: card.body,
     position: card.position,
     queuedAt: card.queuedAt,
-    ...(card.mailSource ? { mailSource: card.mailSource } : {}),
     ...(card.options ? { options: card.options } : {})
   }
 }

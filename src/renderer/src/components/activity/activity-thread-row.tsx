@@ -113,23 +113,30 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
             <ThreadAgentStateIndicator thread={thread} />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            {/* Keep the activation target separate from markdown links and row actions. */}
-            <button
-              type="button"
-              aria-label={taskTitle}
-              aria-keyshortcuts="Enter Space"
-              onClick={(event) => {
-                event.stopPropagation()
-                onSelect(thread, event)
-              }}
-              className={cn(
-                'block min-w-0 w-full cursor-pointer text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                compactMode ? 'truncate' : 'line-clamp-2 break-words',
-                thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
-              )}
-            >
-              {taskTitle}
-            </button>
+            <div className="flex min-w-0 items-start gap-2">
+              {/* Keep the activation target separate from markdown links and row actions. */}
+              <button
+                type="button"
+                aria-label={taskTitle}
+                aria-keyshortcuts="Enter Space"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onSelect(thread, event)
+                }}
+                className={cn(
+                  'block min-w-0 flex-1 cursor-pointer text-left text-[13px] leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                  compactMode ? 'truncate' : 'line-clamp-2 break-words',
+                  thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                )}
+              >
+                {taskTitle}
+              </button>
+              <EventTime
+                timestamp={thread.latestTimestamp}
+                compact
+                className="shrink-0 whitespace-nowrap py-0.5 text-xs font-medium text-foreground/60 hover:text-foreground/60"
+              />
+            </div>
 
             {statusLine ? (
               showMarkdownStatus ? (
@@ -251,7 +258,6 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                   </Tooltip>
                 )}
               </span>
-              <EventTime timestamp={thread.latestTimestamp} compact />
             </div>
           </div>
         </div>

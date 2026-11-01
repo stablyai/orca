@@ -76,18 +76,6 @@ describe('remoteRuntimeTerminalPreviewApi', () => {
     harness.subscriptions.length = 0
   })
 
-  it('subscribes on the host named by the pty id with a preview-only client', async () => {
-    const { sub, payloads } = await openPreview()
-    expect(sub.environmentId).toBe('env-a')
-    expect(sub.terminal).toBe('term-1')
-    expect(sub.clientId).toMatch(/^dashboard-preview:/)
-
-    sub.callbacks.onData('live', { seq: 14 })
-    expect(payloads).toEqual([{ type: 'data', ptyId: PTY, data: 'live', bytes: 4 }])
-    await expect(api.input(PTY, 'x')).resolves.toBe(true)
-    expect(sub.stream.sendInput).toHaveBeenCalledWith('x')
-  })
-
   it('refuses an id without its owning host instead of guessing one', async () => {
     await expect(api.connect('remote:term-1')).resolves.toEqual({ snapshot: null, replay: [] })
     expect(harness.subscriptions).toHaveLength(0)

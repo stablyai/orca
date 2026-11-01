@@ -30,7 +30,11 @@ Do not generalize these results to every application on a platform.
 - Strict selectors require a unique matching role and label. References are fresh
   before the task and after every step. There is no label-only or role-only fallback.
 - Completion requires exact independent final state, including unchanged decoy text
-  and exactly one click/submit. Raw text is never cleaned. API errors, missing final
+  and exactly one click/submit. Submission handlers capture the submitted text;
+  Increment handlers capture the selected color at click time. Submit tasks require
+  the marker in the submission, and choose-and-click requires Blue at the click.
+  Final text/color alone cannot prove those events carried the intended values.
+  Raw text is never cleaned. API errors, missing final
   observations and observed interference remain separate from task completion.
 - The observer starts before provider initialization and initial selector snapshot,
   and stays active through all steps, reads, shutdown and settling. No sentinel
@@ -63,6 +67,20 @@ accepts typing at the focused field and does not expose an element target for te
 Failure of this probe identifies a capability to consider adding; it does not prove
 a violation of the current public typing contract. Click-then-type tasks exercise
 the existing sequence, although this benchmark still bypasses public transports.
+
+The Linux Electron job also records restoration stages in `focus-probe/results.json`.
+It records the AT-SPI focus acknowledgment, selected ACTIVE state, manual legacy PID
+fallback, managed/native IDs, explicit singleton activation, minimized restoration
+and the candidate's behavior with two same-PID windows. Managed windows include
+minimized windows and exclude unmanaged helper windows.
+The primary fixture publishes its native ID, checked against its PID before the probe.
+Probe success establishes restoration behavior; actual text-and-submit completion
+comes from the separate task results above.
+
+AT-SPI ACTIVE is the runtime's focus authority. Global input can still race a later
+focus change, and singleton accessibility/native counts do not establish an atomic
+identity mapping if a window closes or the accessibility tree is stale. The probe
+covers stable fixtures and detected ambiguity, not those concurrent lifecycle races.
 
 ## Headless contract checks
 

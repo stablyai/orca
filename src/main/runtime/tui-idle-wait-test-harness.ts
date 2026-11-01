@@ -1,6 +1,6 @@
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 /** Centralize narrow wait-path fixtures and checked field contracts; wide unused runtime members stay confined to these doubles. */
@@ -12,29 +12,10 @@ export type TuiIdlePtyFixture = Pick<
 > &
   Partial<RuntimePtyWorktreeRecord>
 
-/** The fields the tui-idle wait path actually reads off a leaf record. */
-export type TuiIdleLeafFixture = Pick<
-  RuntimeLeafRecord,
-  | 'tabId'
-  | 'leafId'
-  | 'ptyId'
-  | 'lastAgentStatus'
-  | 'lastOscTitle'
-  | 'lastOutputAt'
-  | 'paneTitle'
-  | 'tailBuffer'
-  | 'preview'
-> &
-  Partial<RuntimeLeafRecord>
-
 // Fixture types check every consumed field; other record members are inert here.
 const asPty = (fixture: TuiIdlePtyFixture): RuntimePtyWorktreeRecord =>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TuiIdlePtyFixture pins every field the wait path reads.
   fixture as unknown as RuntimePtyWorktreeRecord
-
-const asLeaf = (fixture: TuiIdleLeafFixture): RuntimeLeafRecord =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: TuiIdleLeafFixture pins every field the wait path reads.
-  fixture as unknown as RuntimeLeafRecord
 
 export function makeTuiIdlePty(
   overrides: Partial<RuntimePtyWorktreeRecord> = {}
@@ -47,25 +28,6 @@ export function makeTuiIdlePty(
     lastAgentStatus: null,
     lastOscTitle: null,
     lastOutputAt: Date.now(),
-    tailBuffer: [],
-    tailPartialLine: '',
-    preview: '',
-    ...overrides
-  })
-}
-
-export function makeTuiIdleLeaf(overrides: Partial<RuntimeLeafRecord> = {}): RuntimeLeafRecord {
-  return asLeaf({
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    ptyId: 'pty-1',
-    connected: true,
-    lastExitCode: null,
-    lastExitCause: null,
-    lastAgentStatus: null,
-    lastOscTitle: null,
-    lastOutputAt: Date.now(),
-    paneTitle: null,
     tailBuffer: [],
     tailPartialLine: '',
     preview: '',

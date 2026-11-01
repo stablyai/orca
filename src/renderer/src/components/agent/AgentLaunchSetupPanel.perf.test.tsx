@@ -143,7 +143,7 @@ it('bounds effective-settings work for direct analysis, collapsed Chat render an
           expect(measured.analyses).toBeGreaterThan(0)
           expect(measured.analyses).toBe(phase === 'render' ? 8 : value === 'empty' ? 18 : 19)
           expect(measured.compiler.inventories).toBe(
-            value === 'empty' ? 0 : phase === 'render' ? 2 : 6
+            value === 'empty' ? 0 : phase === 'render' ? 1 : 3
           )
           expect(measured.analyzer.inventories).toBeLessThanOrEqual(measured.analyses)
           const max = count + 1

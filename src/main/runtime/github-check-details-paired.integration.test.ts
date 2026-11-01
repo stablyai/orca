@@ -109,7 +109,6 @@ describe('paired check details over real encrypted loopback transport', () => {
       let hostSettled = false
       const runtime = {
         configureNotificationDismissalStore: () => {},
-        disposeMessageWaiters: () => {},
         getRuntimeId: () => 'paired-check-host',
         getStartedAt: () => 1,
         cleanupSubscriptionsForConnection: () => {},

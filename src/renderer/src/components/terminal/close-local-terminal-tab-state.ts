@@ -10,6 +10,7 @@ export function closeLocalTerminalTabState(
     reason?: TerminalTabCloseReason
     captureRecentlyClosed?: boolean
     remoteCloseOwnedByHost?: boolean
+    preserveWorktreeSelection?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
   }
@@ -23,6 +24,7 @@ export function closeLocalTerminalTabState(
       options?.reason ||
       options?.captureRecentlyClosed !== undefined ||
       options?.remoteCloseOwnedByHost ||
+      options?.preserveWorktreeSelection ||
       options?.localPtyTeardownOwnedExternally ||
       options?.precomputedRetirementPlan
     ) {

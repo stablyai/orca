@@ -1,9 +1,3 @@
-vi.mock('../node-runtime/pinned-zip-members', () => ({
-  extractPinnedZipMembers: () => {
-    throw new Error('Mail fixtures must not install a runtime')
-  }
-}))
-
 import './rpc/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -114,7 +108,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(task).toContain('build it')
     expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
     expect(task).toContain('The coordinator cannot see this chat')
-    expect(task).toContain('it will send this chat a fresh')
+    expect(task).toContain('More supervised work arrives in this chat')
     expect(task).not.toContain('this terminal')
     expect(task).not.toMatch(/exit the shell/i)
     expect(task).not.toMatch(/address/i)
@@ -240,7 +234,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(dispatchCount()).toEqual({ n: 0 })
   })
 
-  it("sends the chat its coordinator's mail whole while independent check replays until ack", async () => {
+  it("points the chat at its coordinator's mail to the Dispatch, which its own check reads", async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { taskId } = await coordinatorRunAndTask()
@@ -258,22 +252,14 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     )
 
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    // A Dispatch mailbox's reply needs no `--from`: the CLI resolves the live sender.
     expect(turnText(worker.turns[0]!)).toMatch(
-      /\*\*Subject:\*\* also check the tests[\s\S]*`orca(-dev)? orchestration reply --id msg_\w+ --body "\.\.\."`$/
+      /^You have 1 orchestration message\. Run `orca(-dev)? orchestration check`\.$/
     )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
-    await settleTurn(PEER_CHAT, 0, 'completed')
-    const check = await call('orchestration.check', {}, { sessionId: PEER_CHAT })
-    expect(check).toMatchObject({ count: 1, messages: [{ subject: 'also check the tests' }] })
+    await settleTurn(PEER_CHAT, 0)
     expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-      deliveryId: check.deliveryId,
-      count: 1,
-      replayed: true
+      messages: [expect.objectContaining({ subject: 'also check the tests' })]
     })
-    expect(
-      await call('orchestration.check', { ack: check.deliveryId }, { sessionId: PEER_CHAT })
-    ).toMatchObject({ count: 0 })
   })
 
   it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {

@@ -292,7 +292,7 @@ describe('synthetic outcome payloads through real sidebar and header actions', (
       expect(fetch).toHaveBeenCalledWith(
         '/repo',
         { checkRunId: 42, workflowRunId: 55, checkName: 'verify', url: check.url, prRepo: null },
-        { repoId: 'repo-1' }
+        { repoId: 'repo-1', repoOwnerExecutionHostId: 'local' }
       )
       const during = useAppStore.getState().openFiles[0].checkRunDetails
       const positions = [...scrollTopCache]

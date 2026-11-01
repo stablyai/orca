@@ -9,61 +9,15 @@ const baseStyles = themedStyleSheet(() => ({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  // NavBar draws the bar and its border; this fills the safe-area inset above it.
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 2
-  },
-  refreshButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  refreshButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  refreshButtonDisabled: {
-    opacity: 0.45
+    backgroundColor: colors.bgBase
   },
   summaryCard: {
     margin: spacing.lg,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
@@ -120,28 +74,13 @@ const baseStyles = themedStyleSheet(() => ({
     minHeight: 32,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.statusAmber,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0
-  },
-  completeMergeButton: {
-    minHeight: 32,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  completeMergeText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   },
   abortPressed: {
     opacity: 0.75
@@ -164,7 +103,7 @@ const baseStyles = themedStyleSheet(() => ({
     marginBottom: -spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusAmber
@@ -177,7 +116,7 @@ const baseStyles = themedStyleSheet(() => ({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.statusRed
@@ -195,7 +134,7 @@ const baseStyles = themedStyleSheet(() => ({
   bulkButton: {
     flex: 1,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center',
@@ -205,7 +144,7 @@ const baseStyles = themedStyleSheet(() => ({
   bulkMenuButton: {
     width: 42,
     minHeight: 36,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
@@ -220,42 +159,6 @@ const baseStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
-  },
-  createPrBlock: {
-    marginTop: spacing.md
-  },
-  createPrButton: {
-    height: 42,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md
-  },
-  createPrButtonDisabled: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  createPrButtonPressed: {
-    opacity: 0.78
-  },
-  createPrButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  createPrButtonTextDisabled: {
-    color: colors.textSecondary
-  },
-  createPrButtonHint: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    lineHeight: 16,
-    textAlign: 'center',
-    flexShrink: 1
   }
 }))
 

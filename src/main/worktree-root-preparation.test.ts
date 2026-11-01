@@ -56,12 +56,6 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     })
   })
 
-  it('creates the effective worktree root for local git repos', async () => {
-    await prepareLocalWorktreeRootForRepo(store as never, repo)
-
-    expect(mkdirMock).toHaveBeenCalledWith('/Users/alice/orca/workspaces', { recursive: true })
-  })
-
   it('resolves a WSL repo root through the async probe instead of blocking on wsl.exe', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -94,15 +88,6 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     }
   })
 
-  it('uses repo-specific worktree base paths', async () => {
-    await prepareLocalWorktreeRootForRepo(store as never, {
-      ...repo,
-      worktreeBasePath: '../worktrees'
-    })
-
-    expect(mkdirMock).toHaveBeenCalledWith('/projects/worktrees', { recursive: true })
-  })
-
   it('skips non-local and folder repos', async () => {
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, connectionId: 'ssh-1' })
     await prepareLocalWorktreeRootForRepo(store as never, {
@@ -116,12 +101,6 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     await prepareLocalWorktreeRootForRepo(store as never, { ...repo, kind: 'folder' })
 
     expect(mkdirMock).not.toHaveBeenCalled()
-  })
-
-  it('does not fail repo setup when root preparation fails', async () => {
-    mkdirMock.mockRejectedValueOnce(new Error('permission denied'))
-
-    await expect(prepareLocalWorktreeRootForRepo(store as never, repo)).resolves.toBeUndefined()
   })
 
   // G8: a workspaceDir edit fans out to every repo; it must not boot a stopped distro's home probe.

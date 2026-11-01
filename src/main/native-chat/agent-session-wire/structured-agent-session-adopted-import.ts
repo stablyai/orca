@@ -3,8 +3,8 @@ import {
   isAgentSessionRefusalError,
   refuse,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
@@ -95,7 +95,7 @@ export async function importAdoptedTranscript(
 ): Promise<void> {
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
-    if (prepared || attached.journal.hasConversationHistory()) {
+    if (prepared || attached.journal.cursor().sequence > 1) {
       await attached.journal.replaceEpochItems(
         params.adopt ? 'legacy_import' : 'session_created',
         record.lease.runtimeFence,
@@ -116,7 +116,7 @@ async function applyAdoptedTranscript(
 ): Promise<void> {
   const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
-  if (!adopt || attached.journal.hasConversationHistory()) {
+  if (!adopt || attached.journal.cursor().sequence > 1) {
     return
   }
   if (prepared) {

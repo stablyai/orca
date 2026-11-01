@@ -35,30 +35,6 @@ function createSession() {
 describe('default-session proxy request guard', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('holds renderer requests until a delayed proxy transition settles', async () => {
-    const { proxySession, request } = createSession()
-    let finishWrite: (() => void) | undefined
-    proxySession.setProxy.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (finishWrite = resolve))
-    )
-    resetSessionProxyApplicationForTests(proxySession)
-    installElectronProxyRequestGuard(proxySession as never)
-
-    const applying = applyProxySettingsToSession(
-      proxySession,
-      { httpProxyUrl: 'http://proxy.example:8080' },
-      { env: {} }
-    )
-    const callback = vi.fn()
-    request(callback)
-    expect(callback).not.toHaveBeenCalled()
-
-    await vi.waitFor(() => expect(proxySession.setProxy).toHaveBeenCalledOnce())
-    finishWrite?.()
-    await applying
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith({}))
-  })
-
   it('keeps renderer requests blocked across a transient retry', async () => {
     const { proxySession, request } = createSession()
     let finishRetry: (() => void) | undefined

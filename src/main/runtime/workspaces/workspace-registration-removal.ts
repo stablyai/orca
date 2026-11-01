@@ -109,18 +109,23 @@ export async function removeOrphanOrFolderWorktree({
   // Use the resolved SSH owner, including executionHostId-only rows; runtime-nested targets belong to that environment's namespace.
   const folderHost = parseExecutionHostId(removalHostId)
   const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
-  await teardownFolderWorkspacePtys(
-    {
-      runtime,
-      getLocalProvider: () => runtime.getLocalProvider(),
-      onPtyStopped: runtime.onPtyStopped
-    },
-    removalTarget.id,
-    folderConnectionId
-  )
-  runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
-  runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
-  runtime.invalidateResolvedWorktreeCache()
-  runtime.notifyWorktreesChanged(repo.id)
-  return {}
+  const gate = await runtime.acquireFileWatcherRemoval(repo.path, folderConnectionId ?? undefined)
+  try {
+    await teardownFolderWorkspacePtys(
+      {
+        runtime,
+        getLocalProvider: () => runtime.getLocalProvider(),
+        onPtyStopped: runtime.onPtyStopped
+      },
+      removalTarget.id,
+      folderConnectionId
+    )
+    runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+    runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
+    runtime.invalidateResolvedWorktreeCache()
+    runtime.notifyWorktreesChanged(repo.id)
+    return {}
+  } finally {
+    await gate.finish(false)
+  }
 }

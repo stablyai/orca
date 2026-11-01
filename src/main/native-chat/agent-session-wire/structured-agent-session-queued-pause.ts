@@ -30,12 +30,11 @@ export async function markStructuredQueueReopen(
 }
 
 export async function resumeStructuredQueue(
-  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume' | 'mailHoldFacts'>,
+  journal: Pick<AgentSessionJournal, 'queuedMessages' | 'appendQueueResume'>,
   fence: number,
   receipt?: JournalOperationReceipt
 ): Promise<boolean> {
-  const mail = journal.mailHoldFacts()
-  if (structuredQueuePauses(journal).length === 0 && !mail.held) {
+  if (structuredQueuePauses(journal).length === 0) {
     return false
   }
   await journal.appendQueueResume(fence, receipt)

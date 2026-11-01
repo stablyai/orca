@@ -66,10 +66,10 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
       getRuntimeMetadataPath(userDataPath),
       JSON.stringify({
         runtimeId: 'runtime-legacy',
-        pid: process.pid,
+        pid: 424242,
         transport: { kind: 'unix', endpoint },
         authToken: 'token',
-        startedAt: Date.now()
+        startedAt: 1
       })
     )
 
@@ -85,51 +85,67 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   })
 })
 
-// EPERM proves a PID exists under another uid; it must not mark a live runtime dead.
-describe.skipIf(process.platform === 'win32')('CLI status pid fallback', () => {
-  async function statusWithUnreachableRuntime(
-    killError: NodeJS.ErrnoException
-  ): Promise<Awaited<ReturnType<RuntimeClient['getCliStatus']>>> {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-probe-'))
+// A persisted host PID cannot establish liveness in the caller's namespace.
+describe.skipIf(process.platform === 'win32')('CLI status connection authority', () => {
+  it.each(['EPERM', 'ESRCH'])(
+    'reports an unavailable endpoint without using a PID probe (%s)',
+    async (code) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-probe-'))
+      writeFileSync(
+        getRuntimeMetadataPath(userDataPath),
+        JSON.stringify({
+          runtimeId: 'runtime-unreachable',
+          pid: 424242,
+          transport: { kind: 'unix', endpoint: join(userDataPath, 'absent.sock') },
+          authToken: 'token',
+          startedAt: 1
+        })
+      )
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+        throw Object.assign(new Error(`kill ${code}`), { code })
+      })
+      try {
+        await expect(new RuntimeClient(userDataPath).getCliStatus()).rejects.toMatchObject({
+          code: 'runtime_unavailable'
+        })
+        expect(killSpy).not.toHaveBeenCalled()
+      } finally {
+        killSpy.mockRestore()
+      }
+    }
+  )
+
+  it('reports a status timeout from a live listener without declaring its hidden PID dead', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-status-timeout-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.resume()
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
     writeFileSync(
       getRuntimeMetadataPath(userDataPath),
       JSON.stringify({
-        runtimeId: 'runtime-unreachable',
+        runtimeId: 'runtime-timeout',
         pid: 424242,
-        // Nothing is listening here, so `status.get` fails and the pid probe decides.
-        transport: { kind: 'unix', endpoint: join(userDataPath, 'absent.sock') },
+        transports: [{ kind: 'unix', endpoint }],
         authToken: 'token',
-        startedAt: Date.now()
+        startedAt: 1
       })
     )
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw killError
+      throw Object.assign(new Error('hidden PID'), { code: 'ESRCH' })
     })
     try {
-      return await new RuntimeClient(userDataPath).getCliStatus()
+      await expect(new RuntimeClient(userDataPath).getCliStatus()).rejects.toMatchObject({
+        code: 'runtime_timeout'
+      })
+      expect(killSpy).not.toHaveBeenCalled()
     } finally {
       killSpy.mockRestore()
     }
-  }
-
-  it('keeps an unsignalable app running rather than calling the bootstrap stale', async () => {
-    const status = await statusWithUnreachableRuntime(
-      Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
-    )
-
-    expect(status.result.app).toMatchObject({ running: true, pid: 424242 })
-    expect(status.result.runtime.state).toBe('starting')
-    expect(status.result.graph.state).toBe('starting')
-  })
-
-  it('still reports a stale bootstrap when the host proves the pid is gone', async () => {
-    const status = await statusWithUnreachableRuntime(
-      Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
-    )
-
-    expect(status.result.app).toMatchObject({ running: false, pid: null })
-    expect(status.result.runtime.state).toBe('stale_bootstrap')
-    expect(status.result.graph.state).toBe('not_running')
   })
 })
 

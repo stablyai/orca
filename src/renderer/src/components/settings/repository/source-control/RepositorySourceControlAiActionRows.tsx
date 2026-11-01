@@ -262,6 +262,7 @@ export function RepositorySourceControlAiActionRows({
               <div className="flex min-w-0 flex-wrap items-start gap-3">
                 {isLaunchAction ? (
                   <SourceControlActionArguments
+                    agentLaunchChoices={observation.preferences.agentLaunchChoices ?? null}
                     showArguments={shouldShowSourceControlActionArguments({
                       agent: actual.status === 'ready' ? actual.agent : null,
                       settings,
@@ -319,7 +320,7 @@ export function RepositorySourceControlAiActionRows({
                   disabled={!hasOverride}
                   placeholder={inheritedTemplate}
                   spellCheck={false}
-                  className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted/40"
+                  className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted/40"
                 />
                 <SourceControlActionVariableChips
                   actionId={actionId}

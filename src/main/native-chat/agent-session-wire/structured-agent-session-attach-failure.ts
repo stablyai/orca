@@ -1,11 +1,11 @@
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-adapter'
 import { rethrowAfterAgentSessionAcquisitionCleanup } from './structured-agent-session-provider-exit-proof'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionStopVerdict } from './structured-agent-session-host-types'
 import { endProviderChild } from './structured-agent-session-provider-child'

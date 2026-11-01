@@ -19,14 +19,14 @@ it.each(['completion', 'deadline'])(
     trackInflight('repo\0branch', {
       token: oldToken,
       startedAt: 0,
-      promise: Promise.resolve(null),
+      promise: Promise.resolve({ review: null, readOutcome: 'provider' as const }),
       expire: oldExpire
     })
     retireInflightWithPrefix('repo\0')
     const replacement = {
       token: {},
       startedAt: HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
-      promise: Promise.resolve(null),
+      promise: Promise.resolve({ review: null, readOutcome: 'provider' as const }),
       expire: vi.fn()
     }
     trackInflight('repo\0branch', replacement)

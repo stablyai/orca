@@ -2,17 +2,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
-import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
+import { activeProviderContext } from '../../../shared/agent-session/agent-session-provider-context'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuePause } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
-import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
+import {
+  StructuredAgentSessionHost,
+  type StructuredAgentSessionHostDeps
+} from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as DEFAULT_SESSION,
@@ -26,10 +30,11 @@ import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
+import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
-  type QueuedMessageTestRigOptions
+  type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 
@@ -46,16 +51,24 @@ export function eventually(assertion: () => void | Promise<void>): Promise<void>
 
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
 
-export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOptions = {}) {
+export async function createQueuedMessageTestRig(
+  options: QueuedRigProviderOptions & {
+    sessionId?: string
+    legacyInputs?: true
+    idleSweep?: { idleMs: number; intervalMs: number }
+    now?: () => number
+    /** Teardown records its restart offers, which `restartOffers` lists. */
+    recoveryCapsule?: true
+    location?: AgentSessionExecutionLocation
+    /** Defaults to indeterminate. */
+    probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
+  } = {}
+) {
   const SESSION = options.sessionId ?? DEFAULT_SESSION
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  let store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(
-    { getRecord: (id) => store.getRecord(id) },
-    options,
-    () => host
-  )
+  const store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
@@ -89,7 +102,11 @@ export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOp
         } as const)
       : {})
   })
+  const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
   expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  if (pinLegacy) {
+    pinLegacy(host)
+  }
 
   function envelope(
     fields: Record<string, unknown>,
@@ -100,7 +117,7 @@ export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOp
     return {
       sessionId,
       clientOperationId,
-      expectedRuntimeFence: store.getConversation(sessionId)?.currentFence ?? 1,
+      expectedRuntimeFence: 1,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({ method, sessionId, fields })
     }
   }
@@ -241,19 +258,6 @@ export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOp
     crashRestartHostProcess()
   }
 
-  async function coldReopenNativeDatabase(): Promise<void> {
-    await host.flushAllStreamedEvents()
-    for (const session of host.collaboratorsForTests().sessions.values()) {
-      await session.journal.close()
-    }
-    const previous = host.deps.journalDatabase
-    closeTestJournalHostDatabase(root)
-    expect(previous.isClosed).toBe(true)
-    store = await openTestAgentSessionRecordStore(root)
-    host = makeHost()
-    expect(host.deps.journalDatabase).not.toBe(previous)
-  }
-
   async function queuePause(sessionId = SESSION): Promise<AgentSessionQueuePause | null> {
     const page = await host.history({ sessionId, direction: 'tail' })
     if (!page.ok) {
@@ -286,15 +290,13 @@ export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOp
 
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
 
   return {
     root,
-    get store() {
-      return store
-    },
+    store,
     get host() {
       return host
     },
@@ -323,7 +325,6 @@ export async function createQueuedMessageTestRig(options: QueuedMessageTestRigOp
     restartHostProcess,
     crashRestartHostProcess,
     quitRestartHostProcess,
-    coldReopenNativeDatabase,
     queuePause,
     restartOffers,
     resume,

@@ -16,11 +16,12 @@ import {
   colors,
   Pressable,
   Check,
-  TextInput,
+  TextField,
   Linking,
   ExternalLink
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentationModel) {
   const {
@@ -107,7 +108,11 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
               return (
                 <Pressable
                   key={user.login}
-                  style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                  style={({ pressed }) => [
+                    styles.detailChip,
+                    selected ? styles.detailChipSelected : undefined,
+                    pressed && pressedStyle
+                  ]}
                   disabled={projectMutating || selected}
                   onPress={() => void requestProjectGitHubReviewers(projectRowItem, [user.login])}
                 >
@@ -120,16 +125,14 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
             })}
           </View>
         )}
-        <TextInput
-          style={styles.input}
+        <TextField
           value={projectReviewersDraft}
           onChangeText={setProjectReviewersDraft}
           placeholder={translate('tasks.projectReviewPanels.requestReviewers', 'Request reviewers')}
-          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={projectMutating || splitReviewerList(projectReviewersDraft).length === 0}
           onPress={() => void requestProjectGitHubReviewers(projectRowItem)}
         >
@@ -147,14 +150,14 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
             </Text>
             <View style={styles.inlineActionRow}>
               <Pressable
-                style={styles.inlineSaveButtonCompact}
+                style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                 disabled={projectMutating}
                 onPress={() => void refreshProjectGitHubChecks(projectRowItem)}
               >
                 <Text style={styles.inlineSaveText}>{translate('common.refresh', 'Refresh')}</Text>
               </Pressable>
               <Pressable
-                style={styles.inlineSaveButtonCompact}
+                style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                 disabled={projectMutating || !projectRowDetail.checks.some(isBrokenCheck)}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
               >
@@ -163,7 +166,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 </Text>
               </Pressable>
               <Pressable
-                style={styles.inlineSaveButtonCompact}
+                style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                 disabled={projectMutating || projectRowDetail.checks.length === 0}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, false)}
               >
@@ -181,7 +184,10 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
             projectRowDetail.checks.map((check) => (
               <Pressable
                 key={`${check.name}:${check.status}:${check.url ?? ''}`}
-                style={styles.fileActionRow}
+                style={({ pressed }) => [
+                  styles.fileActionRow,
+                  pressed && { backgroundColor: colors.translucentFill }
+                ]}
                 disabled={!check.url}
                 onPress={() => {
                   if (check.url) {
@@ -207,7 +213,10 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           {projectRowDetail.files.map((file) => (
             <View key={file.path} style={styles.fileCard}>
               <Pressable
-                style={styles.fileActionRow}
+                style={({ pressed }) => [
+                  styles.fileActionRow,
+                  pressed && { backgroundColor: colors.translucentFill }
+                ]}
                 disabled={projectMutating}
                 onPress={() => void toggleProjectGitHubFileExpansion(projectRowItem, file)}
               >
@@ -224,7 +233,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 </Text>
               </Pressable>
               <Pressable
-                style={styles.inlineSaveButtonCompact}
+                style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                 disabled={projectMutating || !projectRowDetail.pullRequestId}
                 onPress={() => void toggleProjectGitHubFileViewed(projectRowItem, file)}
               >

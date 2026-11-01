@@ -1,4 +1,5 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { KeybindingActionId } from '../../shared/keybindings'
@@ -154,31 +155,9 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:worktreeHistoryNavigate', listener)
     return () => ipcRenderer.removeListener('ui:worktreeHistoryNavigate', listener)
   },
-  onRequestTabCreate: (
-    callback: (data: {
-      requestId: string
-      url: string
-      worktreeId?: string
-      browserPageId?: string
-      sessionProfileId?: string | null
-      sessionPartition?: string
-      activate?: boolean
-      fallbackWorktreeId?: string
-    }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: {
-        requestId: string
-        url: string
-        worktreeId?: string
-        browserPageId?: string
-        sessionProfileId?: string | null
-        sessionPartition?: string
-        activate?: boolean
-        fallbackWorktreeId?: string
-      }
-    ) => callback(data)
+  onRequestTabCreate: (callback: (data: BrowserTabCreateRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserTabCreateRequest) =>
+      callback(data)
     ipcRenderer.on('browser:requestTabCreate', listener)
     return () => ipcRenderer.removeListener('browser:requestTabCreate', listener)
   },

@@ -12,11 +12,14 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { withReceiptNext } from './receipt-next-text'
+import { printOrchestrationResult } from './agent-view'
+import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string } }>(
+    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
       client,
       flags,
       'orchestration.reply',
@@ -27,30 +30,43 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         from
       }
     )
-    printResult(result, json, (value) => `Replied ${value.message.id}`)
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, {
+        fields: (value) => ({
+          messageId: value.message.id,
+          next: value.next
+        })
+      })
+      return
+    }
+    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
-    const id = getOptionalStringFlag(flags, 'id')
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
     }>('orchestration.inbox', {
-      id,
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
       terminal: getPresentStringFlag(flags, 'terminal')
     })
-    // Older hosts ignore id; never print their unrelated history as an exact lookup.
-    if (id) {
-      result.result.messages = result.result.messages.filter((message) => message.id === id)
-      result.result.count = result.result.messages.length
+    if (!full) {
+      printOrchestrationResult(result, json, {
+        fields: (value): { messages: MessageView[] } => ({
+          messages: value.messages.map((message) =>
+            inboxRowView(toMessageView(message, { recipient: true }))
+          )
+        }),
+        text: (fields) =>
+          fields.messages.length === 0
+            ? 'No messages.'
+            : fields.messages.map((view) => formatMessageViewText(view)).join('\n\n')
+      })
+      return
     }
     printResult(result, json, (value) => {
       if (value.count === 0) {
-        if (id) {
-          return `Message ${id} was not returned; an older host may only search recent history. Rerun the same inbox command without --id, keeping its terminal and execution profile, with --full --limit 100 and look for ${id}; increase --limit to look farther back.`
-        }
         return 'No messages.'
       }
       return value.messages
@@ -71,4 +87,41 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
         .join(full ? '\n\n' : '\n')
     })
   }
+}
+
+const INBOX_BODY_PREVIEW_CHARS = 200
+
+// A sender can put anything under an id key; only short strings are ids.
+function isShortId(value: unknown): boolean {
+  return typeof value === 'string' && value.length <= 64
+}
+
+// inbox is history, not delivery: rows preview the body and keep only payload ids; check and --full print it whole.
+function inboxRowView(view: MessageView): MessageView {
+  const { body, payload, ...rest } = view
+  const ids =
+    payload && typeof payload === 'object'
+      ? Object.entries(payload).filter(
+          ([key, value]) =>
+            /Ids?$/.test(key) &&
+            (isShortId(value) || (Array.isArray(value) && value.every(isShortId)))
+        )
+      : []
+  return {
+    ...rest,
+    ...(body
+      ? {
+          body: previewBody(body)
+        }
+      : {}),
+    ...(ids.length ? { payload: Object.fromEntries(ids) } : {})
+  }
+}
+
+// Code points, not UTF-16 units, so a cut never leaves half of a surrogate pair.
+function previewBody(body: string): string {
+  const characters = Array.from(body)
+  return characters.length > INBOX_BODY_PREVIEW_CHARS
+    ? `${characters.slice(0, INBOX_BODY_PREVIEW_CHARS).join('')}… (truncated; --full)`
+    : body
 }

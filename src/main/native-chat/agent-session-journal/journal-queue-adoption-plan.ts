@@ -1,15 +1,14 @@
 import type { JournalQueuedMessagesDeps } from './journal-store-contracts'
 import type { LegacyQueuedCards } from './journal-queue-import'
 import type { JournalQueuePlan } from './journal-queued-messages'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalQueueRowBuilder, type JournalQueueCardChange } from './journal-queue-events'
 import { journalAttachmentClaimsReceipt } from './journal-submission-hook'
 
 export function journalQueueAdoptionPlan(
   deps: JournalQueuedMessagesDeps,
   legacy: LegacyQueuedCards,
-  changes: readonly JournalQueueCardChange[],
-  humanRelease?: true
+  changes: readonly JournalQueueCardChange[]
 ): JournalQueuePlan {
   const rows: JournalQueuePlan['rows'] = []
   const adopted: string[] = []
@@ -19,11 +18,11 @@ export function journalQueueAdoptionPlan(
     const adoption = own ? null : legacy.adoption(messageId)
     if (adoption) {
       bodies.push(adoption.body)
-      rows.push(journalQueueRowBuilder(deps.state, messageId, adoption, humanRelease))
+      rows.push(journalQueueRowBuilder(deps.state, messageId, adoption))
       adopted.push(messageId)
     }
     if (change) {
-      rows.push(journalQueueRowBuilder(deps.state, messageId, change, humanRelease))
+      rows.push(journalQueueRowBuilder(deps.state, messageId, change))
     }
   }
   return {

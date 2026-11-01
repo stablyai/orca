@@ -1,7 +1,6 @@
-import { releasedJournalMailBoundary } from './journal-mail-boundary'
 // Additive tombstone fields keep Stop/Resume/reopen marks compatible with older row-kind readers.
 
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import { journalRowBase } from './journal-row-builders'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
@@ -82,13 +81,7 @@ export function journalQueueResumeRowBuilder(
   state: () => JournalReducerState,
   fence: number
 ): (seq: number, ts: number) => JournalTombstoneRow {
-  return (seq, ts) => {
-    const current = state()
-    return {
-      ...buildJournalQueueResumeRow({ state: current, seq, fence, ts }),
-      mailBoundary: releasedJournalMailBoundary(current.sessionId, current.epoch, seq)
-    }
-  }
+  return (seq, ts) => buildJournalQueueResumeRow({ state: state(), seq, fence, ts })
 }
 
 export function journalQueueReopenRowBuilder(

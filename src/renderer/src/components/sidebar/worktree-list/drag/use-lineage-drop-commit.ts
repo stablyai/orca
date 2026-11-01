@@ -9,6 +9,7 @@ import { isEligibleWorktreeParent } from '../../worktree-parent-candidates'
 import { getCyclicProjectedWorktreeLineageIds } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
 import { getReorderedWorktreeIdsToUnnest } from '../../worktree-lineage-drag-drop'
 import { unnestWorktrees } from '../../worktree-unnest'
+import { getWorktreeIdFromHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 
@@ -95,7 +96,8 @@ export function useWorktreeLineageDropCommit(args: {
       }
       const ids = getReorderedWorktreeIdsToUnnest({
         draggedIds: unnestArgs.draggedIds,
-        sourceGroupIds: sourceGroup.worktreeIds,
+        // Lineage is keyed by worktree id; drag groups key members by host identity.
+        sourceGroupIds: sourceGroup.worktreeIds.map(getWorktreeIdFromHostIdentity),
         lineageById: worktreeLineageById,
         worktreeMap,
         cyclicLineageIds

@@ -1,10 +1,10 @@
-import { MessageWaitScope } from '../../../../runtime-message-waiters'
 import type { MessageRow, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/formatter'
-import { exposeMessages } from './mailbox-message-receipt'
+import { deliveryReceipt, exposeMessages, handsOverBatch } from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from '../schemas'
 import { resolveRunScope } from '../runs/run-scope'
@@ -29,39 +29,54 @@ export async function checkRunMailbox(args: {
   orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
 }): Promise<unknown> {
-  const waitScope = new MessageWaitScope()
-  let completionMailbox = args.handle
-  const opportunityTypes =
-    args.params.peek || args.params.all || args.params.unread === false
-      ? args.typeFilter
-      : undefined
-  try {
-    args.runtime.observeMessageCheck(args.handle, waitScope, opportunityTypes)
-    const {
-      params,
-      runtime,
-      db,
-      handle,
-      paneKey,
-      callerSession,
-      typeFilter,
-      signal,
-      legacyCoordinatorRunId,
-      revalidateLegacyCoordinator,
-      orchestrationCompatibilityEvidence
-    } = args
-    const routeDirectSnapshot = async (
-      runId: string,
-      directHandle: string,
-      routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
-    ): Promise<void> => {
-      const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
-      if (throughSequence !== undefined) {
-        await routeAllMailboxPages(() => routePage(throughSequence), signal)
-      }
+  const {
+    params,
+    runtime,
+    db,
+    handle,
+    paneKey,
+    callerSession,
+    typeFilter,
+    signal,
+    legacyCoordinatorRunId,
+    revalidateLegacyCoordinator,
+    orchestrationCompatibilityEvidence
+  } = args
+  const routeDirectSnapshot = async (
+    runId: string,
+    directHandle: string,
+    routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
+  ): Promise<void> => {
+    const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
+    if (throughSequence !== undefined) {
+      await routeAllMailboxPages(() => routePage(throughSequence), signal)
     }
-    const run = resolveRunScope(runtime, {
-      runId: params.run,
+  }
+  const run = resolveRunScope(runtime, {
+    runId: params.run,
+    callerTerminalHandle: handle,
+    callerPaneKey: paneKey,
+    callerSession,
+    requireCurrentConsumer: true,
+    legacyCoordinatorRunId,
+    callerEvidence: orchestrationCompatibilityEvidence
+  })
+  const generation = run.consumer_generation
+  const address = `run:${run.id}`
+  runtime.ensureOrchestrationFederationRelay(run.id)
+  await routeDirectSnapshot(run.id, handle, (throughSequence) =>
+    db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
+  )
+  const coordinatorHandle = run.coordinator_handle
+  if (coordinatorHandle && coordinatorHandle !== handle) {
+    await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
+      db.routeUnreadDirectMessagesToRunMailbox(run.id, coordinatorHandle, throughSequence)
+    )
+  }
+  const revalidateConsumer = (): void => {
+    revalidateLegacyCoordinator?.()
+    const currentRun = resolveRunScope(runtime, {
+      runId: run.id,
       callerTerminalHandle: handle,
       callerPaneKey: paneKey,
       callerSession,
@@ -69,205 +84,121 @@ export async function checkRunMailbox(args: {
       legacyCoordinatorRunId,
       callerEvidence: orchestrationCompatibilityEvidence
     })
-    const generation = run.consumer_generation
-    const address = `run:${run.id}`
-    completionMailbox = address
-    runtime.observeMessageCheck(address, waitScope, opportunityTypes)
-    if (run.coordinator_handle) {
-      runtime.observeMessageCheck(run.coordinator_handle, waitScope, opportunityTypes)
-    }
-    runtime.ensureOrchestrationFederationRelay(run.id)
-    await routeDirectSnapshot(run.id, handle, (throughSequence) =>
-      db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
-    )
-    const coordinatorHandle = run.coordinator_handle
-    if (coordinatorHandle && coordinatorHandle !== handle) {
-      await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
-        db.routeUnreadDirectMessagesToRunMailbox(run.id, coordinatorHandle, throughSequence)
-      )
-    }
-    const revalidateConsumer = (): void => {
-      revalidateLegacyCoordinator?.()
-      const currentRun = resolveRunScope(runtime, {
-        runId: run.id,
-        callerTerminalHandle: handle,
-        callerPaneKey: paneKey,
-        callerSession,
-        requireCurrentConsumer: true,
-        legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
-      })
-      if (currentRun.consumer_generation !== generation) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'This mailbox consumer was replaced while routing pending mail.'
-        )
-      }
-    }
-    revalidateConsumer()
-
-    const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
-    runtime.observeMessageCheck(address, waitScope, opportunityTypes)
-    try {
-      revalidateConsumer()
-    } catch (error) {
-      if (pending.acknowledged) {
-        return interruptedAcknowledgedCheck(run.id, pending.acknowledged, 'consumer_fenced')
-      }
-      throw error
-    }
-    if (pending.result) {
-      return pending.result
-    }
-    const acknowledged = pending.acknowledged
-    if (params.all || (params.unread === false && !params.peek)) {
-      const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
-      const result = {
-        messages: exposeMessages(messages),
-        count: messages.length,
-        acknowledged: acknowledged ?? null
-      }
-      if (params.format || params.inject) {
-        return {
-          ...result,
-          formatted: messages.map(formatMessageBanner).join('\n\n'),
-          runId: run.id
-        }
-      }
-      return { ...result, runId: run.id }
-    }
-
-    const peekResult = (messages: MessageRow[]) => ({
-      runId: run.id,
-      messages: exposeMessages(messages),
-      count: messages.length,
-      acknowledged: acknowledged ?? null,
-      ...(params.format || params.inject
-        ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
-        : {})
-    })
-    const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
-    const readDelivery = (wakeTypes?: MessageType[]) =>
-      db.getOrCreateRunDelivery({ runId: run.id, consumerGeneration: generation, wakeTypes })
-    let peeked = params.peek ? readPeek() : []
-    if (params.peek && peeked.length > 0) {
-      return peekResult(peeked)
-    }
-    let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
-    if (current) {
-      return {
-        runId: run.id,
-        deliveryId: current.delivery.id,
-        messages: exposeMessages(current.messages),
-        count: current.messages.length,
-        replayed: current.replayed,
-        acknowledged: acknowledged ?? null,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        ...(params.format || params.inject
-          ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
-          : {})
-      }
-    }
-    if (!params.wait) {
-      if (params.peek) {
-        return peekResult([])
-      }
-      return {
-        runId: run.id,
-        deliveryId: null,
-        messages: [],
-        count: 0,
-        acknowledged: acknowledged ?? null,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false
-      }
-    }
-
-    const waitResult = await runtime.waitForMessage(address, {
-      scope: waitScope,
-      typeFilter: typeFilter as string[] | undefined,
-      timeoutMs: params.timeoutMs ?? undefined,
-      signal
-    })
-    runtime.observeMessageCheck(address, waitScope, opportunityTypes)
-    try {
-      revalidateConsumer()
-    } catch (error) {
-      if (!acknowledged) {
-        throw error
-      }
-      return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
-    }
-    const latestRun = db.getRun(run.id)
-    if (!latestRun || latestRun.consumer_generation !== generation) {
-      if (acknowledged) {
-        return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
-      }
+    if (currentRun.consumer_generation !== generation) {
       throw new OrchestrationError(
         'consumer_fenced',
-        'This mailbox consumer was replaced while waiting.'
+        'This mailbox consumer was replaced while routing pending mail.'
       )
     }
-    if (waitResult === 'timed_out') {
-      if (params.peek) {
-        return { ...peekResult([]), timedOut: true, cancelled: false, connectionLost: false }
-      }
+  }
+  revalidateConsumer()
+
+  const pending = await checkRunPendingMail({ ...args, run, revalidateConsumer })
+  if (handsOverBatch(pending.result)) {
+    return pending.result
+  }
+  try {
+    revalidateConsumer()
+  } catch (error) {
+    if (pending.acknowledged) {
+      return interruptedAcknowledgedCheck(run.id, pending.acknowledged, 'consumer_fenced')
+    }
+    throw error
+  }
+  if (pending.result) {
+    return pending.result
+  }
+  const acknowledged = pending.acknowledged
+  if (params.all || (params.unread === false && !params.peek)) {
+    const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
+    const result = {
+      messages: exposeMessages(messages),
+      count: messages.length,
+      acknowledged: acknowledged ?? null
+    }
+    if (params.format || params.inject) {
       return {
-        runId: run.id,
-        deliveryId: null,
-        messages: [],
-        count: 0,
-        acknowledged: acknowledged ?? null,
-        timedOut: true,
-        cancelled: false,
-        connectionLost: false
+        ...result,
+        formatted: messages.map(formatMessageBanner).join('\n\n'),
+        runId: run.id
       }
     }
-    if (waitResult === 'cancelled') {
-      if (params.peek) {
-        return {
-          ...peekResult([]),
-          timedOut: false,
-          cancelled: true,
-          connectionLost: signal?.aborted === true
-        }
-      }
-      return {
-        runId: run.id,
-        deliveryId: null,
-        messages: [],
-        count: 0,
-        acknowledged: acknowledged ?? null,
-        timedOut: false,
-        cancelled: true,
-        connectionLost: signal?.aborted === true
-      }
-    }
-    if (params.peek) {
-      peeked = readPeek()
-      return { ...peekResult(peeked), timedOut: false, cancelled: false, connectionLost: false }
-    }
-    current = readDelivery(typeFilter)
-    return {
+    return { ...result, runId: run.id }
+  }
+
+  const peekResult = (messages: MessageRow[]) => ({
+    runId: run.id,
+    messages: exposeMessages(messages),
+    count: messages.length,
+    acknowledged: acknowledged ?? null,
+    ...(params.format || params.inject
+      ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+      : {})
+  })
+  const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
+  const result = (batch: MailboxDeliveryBatch | undefined) =>
+    deliveryReceipt({
+      mailbox: { runId: run.id },
+      batch,
+      acknowledged,
+      format: params.format === true || params.inject === true
+    })
+  // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
+  const takeDelivery = (wakeTypes?: MessageType[]) =>
+    db.takeRunDelivery({
       runId: run.id,
-      deliveryId: current?.delivery.id ?? null,
-      messages: exposeMessages(current?.messages ?? []),
-      count: current?.messages.length ?? 0,
-      replayed: current?.replayed ?? false,
-      acknowledged: acknowledged ?? null,
-      timedOut: false,
-      cancelled: false,
-      connectionLost: false,
-      ...(params.format && current
-        ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
-        : {})
+      consumerGeneration: generation,
+      wakeTypes,
+      recordTaken: (taken) => args.recordMutationReceipt?.(result(taken))
+    })
+  if (params.peek) {
+    const peeked = readPeek()
+    if (peeked.length > 0 || !params.wait) {
+      return peekResult(peeked)
     }
-  } finally {
-    if (!waitScope.complete()) {
-      args.runtime.notifyMessageConsumerCompleted(completionMailbox)
+  } else {
+    const current = takeDelivery(params.wait ? typeFilter : undefined)
+    if (current || !params.wait) {
+      return result(current)
     }
   }
+
+  const waitResult = await runtime.waitForMessage(address, {
+    typeFilter: typeFilter as string[] | undefined,
+    timeoutMs: params.timeoutMs ?? undefined,
+    signal
+  })
+  try {
+    revalidateConsumer()
+  } catch (error) {
+    if (!acknowledged) {
+      throw error
+    }
+    return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
+  }
+  const latestRun = db.getRun(run.id)
+  if (!latestRun || latestRun.consumer_generation !== generation) {
+    if (acknowledged) {
+      return interruptedAcknowledgedCheck(run.id, acknowledged, 'consumer_fenced')
+    }
+    throw new OrchestrationError(
+      'consumer_fenced',
+      'This mailbox consumer was replaced while waiting.'
+    )
+  }
+  if (waitResult === 'timed_out' || waitResult === 'cancelled') {
+    const ended = {
+      timedOut: waitResult === 'timed_out',
+      cancelled: waitResult === 'cancelled',
+      connectionLost: waitResult === 'cancelled' && signal?.aborted === true
+    }
+    return params.peek ? { ...peekResult([]), ...ended } : { ...result(undefined), ...ended }
+  }
+  if (params.peek) {
+    return { ...peekResult(readPeek()), timedOut: false, cancelled: false, connectionLost: false }
+  }
+  const batch = waitResult.share(`${address}:${generation}`, () => takeDelivery(typeFilter))
+  // A waiter that shares another's take has no take transaction, so it receipts the batch on arrival.
+  args.recordMutationReceipt?.(result(batch))
+  return result(batch)
 }

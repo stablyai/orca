@@ -6,7 +6,7 @@ import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
-import { resolveCreateReviewSeedText } from './create-review-draft-title'
+import { resolveCreateReviewSeedText } from '../../../../shared/hosted-review-create-seed'
 import { stripBaseRef } from './create-pull-request-base-ref-normalization'
 import {
   createInitialPullRequestFieldRevisions,

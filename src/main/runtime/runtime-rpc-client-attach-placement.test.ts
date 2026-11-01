@@ -14,7 +14,6 @@ function runtimeRecordingPlacement() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface pairing, authentication and this pass read.
   const runtime = {
     configureNotificationDismissalStore: () => {},
-    disposeMessageWaiters: () => {},
     getRuntimeId: () => 'attach-runtime-test',
     getStartedAt: () => 1,
     machineNameReady: async () => undefined,

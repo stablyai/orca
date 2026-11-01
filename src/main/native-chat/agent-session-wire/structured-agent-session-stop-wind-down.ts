@@ -1,13 +1,13 @@
 import type { AgentSessionStopOutcome } from './structured-agent-session-adapter-stop'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
@@ -28,12 +28,6 @@ export type StructuredAgentSessionStopWindDown = {
   stopNoteWrite?: Promise<void>
   /** End settlement regardless of exit proof; failedOn identifies work still running. */
   settled?: (failedOn?: JournalStopFailedOn) => void
-}
-
-export type StructuredAgentSessionChatStopWindDown = {
-  owed: StructuredAgentSessionStopWindDown
-  ctx: AgentSessionTurnContext
-  stopChild: () => Promise<void>
 }
 
 /** Queue in the Stop’s tick to exclude intervening input; failures revise its note.

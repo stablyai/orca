@@ -27,7 +27,7 @@ export function hasUnfilteredOrchestrationWaiter(
 
 export type OrchestrationPointerBatch = {
   messages: MessageRow[]
-  /** The consumer's unacked batch; set means the nudge waits for its idle edge and names it. */
+  /** The consumer's unacked batch, named in the reminder. */
   heldDeliveryId: string | undefined
 }
 
@@ -39,7 +39,6 @@ export function selectOrchestrationPointerBatch(input: {
   mailboxHandle: string
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
   reservedTypes: ReadonlySet<string> | undefined
-  afterSequence?: number
 }): OrchestrationPointerBatch {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return { messages: [], heldDeliveryId: undefined }
@@ -55,7 +54,6 @@ export function selectOrchestrationPointerBatch(input: {
     messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
       excludeTypes: [...excludedTypes],
       excludeIds: held?.messageIds,
-      afterSequence: input.afterSequence,
       limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
     }),
     heldDeliveryId: held?.id

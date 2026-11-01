@@ -24,7 +24,7 @@ export function browserChromeShortcutOwnsEvent(
     // Why: the floating panel sits over the focused split, so its chords belong to its own browser.
     (chromeShortcutScope === 'focused' &&
       !isEventTargetInsideFloatingWorkspacePanel(event.target)) ||
-    (chromeShortcutScope === 'owned-target' &&
+    ((chromeShortcutScope === 'owned-target' || chromeShortcutScope === 'owned-target-focused') &&
       browserOverlayOwnsShortcutTarget(event.target, workspaceId))
   )
 }

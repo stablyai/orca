@@ -15,6 +15,7 @@ import {
   type OrchestrationCliCommand
 } from './cli-command'
 import { OrchestrationDb } from './db'
+import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import {
   CHAT_REDISPATCH_PARAGRAPH as CHAT_REDISPATCH,
@@ -64,21 +65,18 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    | 'getNestedWorkerMaxDepth'
-    | 'getOrchestrationHeartbeatMinutes'
-    | 'getTerminalOrchestrationCliCommand'
-    | 'sendTerminalAgentPrompt'
-  > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
-    {
-      orchestrationSenderNames: { nameOf: () => null },
-      getNestedWorkerMaxDepth: () => 2,
-      getOrchestrationHeartbeatMinutes: () => 5,
-      getTerminalOrchestrationCliCommand: () => 'orca',
-      sendTerminalAgentPrompt: async (handle, text) => {
-        prompts.push(text)
-        return { handle, accepted: true, bytesWritten: text.length }
-      }
+    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
+  > & {
+    orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'snapshotOf'>
+  } = {
+    orchestrationSenderNames: { snapshotOf: () => ({ name: null, agent: null }) },
+    getNestedWorkerMaxDepth: () => 2,
+    getTerminalOrchestrationCliCommand: () => 'orca',
+    sendTerminalAgentPrompt: async (handle, text) => {
+      prompts.push(text)
+      return { handle, accepted: true, bytesWritten: text.length }
     }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preamble delivery reads only the members the fake implements.
   return fake as OrcaRuntimeService
 }
@@ -110,13 +108,8 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
   return worker === 'chat' ? sent.preambles[0]! : prompts[0]!
 }
 
-/** The turn text the structured lane sends a chat for one message on `mailbox`. */
-async function renderChatMail(mailbox: string): Promise<string> {
-  db.db
-    .prepare(
-      "INSERT OR IGNORE INTO runs (id, objective, coordinator_handle, consumer_generation, legacy) VALUES ('run_parity', 'mail parity', 'coord', 1, 0)"
-    )
-    .run()
+/** Render the structured-lane pointer for one mailbox message. */
+async function renderChatPointer(mailbox: string): Promise<string> {
   const texts: string[] = []
   const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
@@ -124,17 +117,18 @@ async function renderChatMail(mailbox: string): Promise<string> {
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: () => ({ sessionId: CHAT_SESSION, dispatchId: null }),
     getCliCommand: localOrchestrationCliCommand,
-    senderName: () => null,
+    senderSnapshot: () => ({ name: null, agent: null }),
     host: {
-      readCreation: () => 'absent',
-      readHistory: () => ({ members: new Set(), opaque: true }),
-      admission: () => ({ owner: db, generation: 'parity', queuedBytes: 0 }),
+      readSessionFacts: async () => ({ submissions: [] }),
+      hasActionablePromptNow: () => false,
+      isWorkingNow: () => false,
       currentFence: () => 1,
+      currentContextClearOperationId: () => undefined,
       send: async (input) => {
         for (const block of input.body.blocks) {
           texts.push(block.type === 'text' ? block.text : '')
         }
-        return { kind: 'queued' }
+        return { kind: 'sent', state: 'accepted' }
       }
     }
   })
@@ -156,7 +150,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
     expect(chat).not.toContain('this terminal')
     expect(withoutRedispatch).not.toBe(chat)
-    expect(withoutRedispatch.split('this chat')).toHaveLength(4)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(3)
     expect(
       withoutRedispatch
         .replace(SELF_LINE, '')
@@ -170,19 +164,23 @@ describe('a chat agent and a terminal agent see the same text but for how each i
   it.each([
     ['a packaged app', true],
     ['a dev build', false]
-  ])('names the CLI the PTY lane types into a local terminal, in %s', async (_label, packaged) => {
-    installApp(packaged)
-    // What the PTY lane types for a local, non-WSL terminal (`getTerminalOrchestrationCliCommand`).
-    const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
-      connectionId: null,
-      isWsl: false,
-      worktreeId: 'repo::/tmp/wt',
-      runtimeCliCommand: runtimeOrchestrationCliCommand()
-    })
-    expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
+  ])(
+    'renders the pointer the PTY lane types into a local terminal, in %s',
+    async (_label, packaged) => {
+      installApp(packaged)
+      const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
+        connectionId: null,
+        isWsl: false,
+        worktreeId: 'repo::/tmp/wt',
+        runtimeCliCommand: runtimeOrchestrationCliCommand()
+      })
+      expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
 
-    for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
-      expect(await renderChatMail(mailbox)).toContain(`\`${terminalCli} orchestration reply --id`)
+      for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
+        expect(await renderChatPointer(mailbox)).toBe(
+          formatMessagePointer(1, mailbox, terminalCli).trim()
+        )
+      }
     }
-  })
+  )
 })

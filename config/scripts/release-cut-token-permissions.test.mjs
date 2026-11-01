@@ -57,9 +57,6 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#dependency-security -> .github/workflows/dependency-security.yml#rust`]: {
     contents: 'read'
   },
-  [`${RELEASE_WORKFLOW}#dependency-security -> .github/workflows/dependency-security.yml#notify`]: {
-    contents: 'read'
-  },
   [`${RELEASE_WORKFLOW}#docs-production-dispatch`]: { actions: 'write' },
   [`${RELEASE_WORKFLOW}#homebrew-bump`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#homebrew-bump -> .github/workflows/homebrew-bump.yml#bump-cask`]: {

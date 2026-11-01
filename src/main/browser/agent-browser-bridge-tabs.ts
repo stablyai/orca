@@ -24,7 +24,10 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     if (browserPageId) {
       this.browserManager.beginAgentCommand(browserPageId).end()
     }
+    this.watchPopupClose(webContentsId)
   }
+
+  protected abstract watchPopupClose(webContentsId: number): void
 
   // A person's pick never pulls an agent off the tab it is driving; it applies once that tab goes idle.
   private selectForPerson(webContentsId: number, worktreeId?: string): void {
@@ -53,6 +56,38 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     }
   }
 
+  protected recordRefPage(browserPageId: string): void {
+    this.refPageByWorktree.set(
+      this.browserManager.getWorktreeIdForTab(browserPageId),
+      browserPageId
+    )
+  }
+
+  // Refs are numbered per page, so another page's ref would silently match an element here.
+  protected assertRefsFromPage(
+    browserPageId: string,
+    elements: readonly (string | undefined)[]
+  ): void {
+    const ref = elements.find((element) => element !== undefined && isSnapshotRef(element))
+    if (!ref) {
+      return
+    }
+    const snapshotPageId = this.refPageByWorktree.get(
+      this.browserManager.getWorktreeIdForTab(browserPageId)
+    )
+    if (!snapshotPageId || snapshotPageId === browserPageId) {
+      return
+    }
+    // The latest snapshot may have been a pinned look elsewhere, so the snapshot hint comes first.
+    const pinnedRetry = this.browserManager.getWebContentsIdByTabId().has(snapshotPageId)
+      ? `, or pass --page ${snapshotPageId} if ${ref} came from that page's snapshot`
+      : ''
+    throw new BrowserError(
+      'browser_stale_ref',
+      `The latest snapshot was of page ${snapshotPageId}, not the current tab (page ${browserPageId}), so ${ref} may point at the wrong element. Run snapshot to get refs for page ${browserPageId}${pinnedRetry}.`
+    )
+  }
+
   private isAgentUsingTab(webContentsId: number): boolean {
     const browserPageId = this.resolveTabIdSafe(webContentsId)
     return browserPageId !== null && this.browserManager.isAgentUsingPage(browserPageId)
@@ -76,7 +111,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     worktreeId: string,
     excludedWebContentsId?: number
   ): number | null {
-    for (const [, wcId] of this.getRegisteredTabs(worktreeId)) {
+    // A closing tab's popups close with it, so only tabs can take over.
+    for (const [, wcId] of this.registeredTabsWithoutPopups(worktreeId)) {
       if (wcId === excludedWebContentsId) {
         continue
       }
@@ -116,19 +152,18 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
   }
-  getRegisteredTabs(worktreeId?: string): Map<string, number> {
-    const all = this.browserManager.getWebContentsIdByTabId()
-    if (!worktreeId) {
-      return all
-    }
-
-    const filtered = new Map<string, number>()
-    for (const [tabId, wcId] of all) {
-      if (this.browserManager.getWorktreeIdForTab(tabId) === worktreeId) {
-        filtered.set(tabId, wcId)
+  getRegisteredTabs(
+    worktreeId?: string,
+    popupPages = this.browserManager.getPopupPages()
+  ): Map<string, number> {
+    const tabs = this.registeredTabsWithoutPopups(worktreeId)
+    // Popups list after the tabs and share their opener's scope.
+    for (const popup of popupPages) {
+      if (tabs.has(popup.openerBrowserPageId)) {
+        tabs.set(popup.browserPageId, popup.webContentsId)
       }
     }
-    return filtered
+    return tabs
   }
 
   /** Tab list results omit workspace ownership. */
@@ -140,7 +175,11 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
   tabList(worktreeId?: string): BrowserTabListResult {
     this.applyHeldPersonSelections(worktreeId)
-    const tabs = this.getRegisteredTabs(worktreeId)
+    const popupPages = this.browserManager.getPopupPages()
+    const tabs = this.getRegisteredTabs(worktreeId, popupPages)
+    const popupOpeners = new Map(
+      popupPages.map((popup) => [popup.browserPageId, popup.openerBrowserPageId])
+    )
     // Match command routing without changing active-tab selection during discovery.
     let activeWcId =
       (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId)) ?? this.activeWebContentsId
@@ -156,6 +195,7 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       if (firstLiveWcId === null) {
         firstLiveWcId = wcId
       }
+      const openerBrowserPageId = popupOpeners.get(tabId)
       const loadError = this.browserManager.getBrowserPageLoadError(tabId)
       const certificateFailure = this.browserManager.getBrowserPageCertificateFailure(tabId)
       result.push({
@@ -167,7 +207,8 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
         title: wc.getTitle() ?? '',
         active: wcId === activeWcId,
         loadError,
-        certificateFailure
+        certificateFailure,
+        ...(openerBrowserPageId ? { openerBrowserPageId } : {})
       })
     }
     // Infer an active tab for display without changing command routing.
@@ -295,4 +336,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
 
 function routingKeys(worktreeId: string | undefined): (string | undefined)[] {
   return worktreeId ? [undefined, worktreeId] : [undefined]
+}
+
+// agent-browser reads `@e3`, `ref=e3` and bare `e3` as snapshot refs.
+function isSnapshotRef(element: string): boolean {
+  return /^(?:@|ref=)?e\d+$/.test(element)
 }

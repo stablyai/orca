@@ -30,7 +30,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
-  assertExtraAgentArgsSupported,
+  prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
@@ -198,10 +198,10 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
-  await assertExtraAgentArgsSupported(authority, updates.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, updates)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
-    updates: toRuntimeAutomationUpdateInput(updates),
+    updates: toRuntimeAutomationUpdateInput(prepared),
     expectedOwner,
     destination
   })
@@ -237,9 +237,10 @@ export async function deleteAutomationForOwner(
 export async function updateOrphanAutomation(
   authority: AutomationAuthorityRef,
   id: string,
-  updates: AutomationUpdateInput
+  updates: AutomationUpdateInput,
+  destination?: AutomationDestination
 ): Promise<Automation> {
-  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION)
+  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination)
 }
 
 export async function deleteOrphanAutomation(
@@ -293,9 +294,9 @@ export async function createAutomationForDestination(
   }
   await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
-  await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, input)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...toRuntimeAutomationCreateInput(input),
+    ...toRuntimeAutomationCreateInput(prepared),
     destination
   })
   return result.automation

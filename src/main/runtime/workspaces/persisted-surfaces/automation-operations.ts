@@ -1,10 +1,18 @@
-import { captureSessionMailAtStop } from '../../orchestration/session-mail-stop-inventory'
+import type { AgentTransitionDetector } from '../../../agent-hooks/agent-transition-detector'
+import {
+  readCrewRuntimeInputs,
+  watchCrewRuntimeSources
+} from '../../orchestration/crew/crew-runtime-watch'
+import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
+import { getPublishedHostDescriptor } from '../../host-descriptor'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../orchestration/worker-terminal-auto-release-scheduler'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
+import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import type {
   AutomationOwnerPrecondition,
-  AutomationDestination
+  AutomationDestination,
+  AutomationUpdatePreconditions
 } from '../../../../shared/automation-owner-precondition'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type {
@@ -17,22 +25,24 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrchestrationDb } from '../../orchestration/db'
-import { orchestrationDbFile } from '../../orchestration/db/orchestration-db-file'
 import {
   committedHandBackTypes,
   type MailHandBack
 } from '../../orchestration/db/messages/helper-mailbox-hand-back'
 import { existsSync } from 'node:fs'
-import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
-export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
+export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
+  abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
+
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
   abstract ensureOrchestrationFederationRelay(runId?: string): void
   protected abstract scheduleRestoredMessageRepoints(): void
+  /** Mail a worker left unread when it reported before a restart still continues it. */
+  protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
@@ -108,7 +118,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   updateAutomation(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    options?: AutomationUpdatePreconditions
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() => {
       const source = this.automationChangeSelector(id)
@@ -153,10 +163,14 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
-      this.orchestrationStructuredMailboxPointerDelivery.attachDatabase(this._orchestrationDb)
       this.bindMailHandBack(this._orchestrationDb)
+      this.bindCrewChanges(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
+      this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
+      // Recover deadlines armed before a restart.
+      getWorkerTerminalAutoReleaseScheduler(this).rearm()
+      this.continueRestoredWorkerMail(this._orchestrationDb)
     }
     return this._orchestrationDb
   }
@@ -168,38 +182,51 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
       : null
   }
 
-  captureSessionMail = () =>
-    captureSessionMailAtStop(this._orchestrationDb, (db) => {
-      if (this._orchestrationDb !== db) {
-        return
-      }
-      this.messageWaiters.dispose()
-      this.orchestrationStructuredMailboxPointerDelivery.resetForDatabaseChange()
-      this.orchestrationFederation.resetForDatabaseChange()
-      this.mailPointerRepointScheduler.clear()
-      this._orchestrationDb = null
-      try {
-        db.close()
-      } catch (error) {
-        console.warn('[mail] retiring source connection failed', error)
-      }
-    })
-
-  private orchestrationDbPath(): string {
-    return orchestrationDbFile(getAppEnvironment().getPath('userData'))
-  }
-
   setOrchestrationDb(db: OrchestrationDb): void {
-    this.messageWaiters.dispose()
-    this.orchestrationStructuredMailboxPointerDelivery.resetForDatabaseChange()
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
-    this.orchestrationStructuredMailboxPointerDelivery.attachDatabase(db)
     this.bindMailHandBack(db)
+    this.bindCrewChanges(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+    this.bindWorkerTerminalAutoRelease(db)
   }
+
+  private unwatchCrewDb: (() => void) | undefined
+
+  private bindCrewChanges(db: OrchestrationDb): void {
+    this.unwatchCrewDb?.()
+    this.unwatchCrewDb = db.crewChanges.subscribe(this.crewChanges.notify)
+    this.crewChanges.notify()
+  }
+
+  private readonly crewReadModel = new CrewReadModel(
+    (previous) =>
+      readCrewRuntimeInputs(
+        this.crewRuntimeReaders(),
+        this._orchestrationDb,
+        existsSync(this.orchestrationDbPath()),
+        getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
+        previous
+      ),
+    (wake) =>
+      watchCrewRuntimeSources(
+        {
+          store: this.store,
+          watchChanges: this.crewChanges.subscribe,
+          watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
+          watchClient: (listener) => this.onClientEvent(listener)
+        },
+        wake
+      )
+  )
+
+  getOrchestrationCrewSnapshot(party: string) {
+    return this.crewReadModel.read(party)
+  }
+
+  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
 
   private bindMailHandBack(db: OrchestrationDb): void {
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
@@ -216,10 +243,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
         this.mailPointerRepointScheduler.schedule(handBack.mailbox)
         return
       }
-      this.orchestrationStructuredMailboxPointerDelivery.nominateSources(
-        handBack.mailbox,
-        handBack.messageIds
-      )
       // Re-read committed rows so rolled-back settlements wake nobody.
       for (const type of committedHandBackTypes(db, handBack)) {
         this.notifyMessageArrived(handBack.mailbox, type)

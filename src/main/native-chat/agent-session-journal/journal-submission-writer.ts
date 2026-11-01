@@ -1,19 +1,15 @@
-import { releasedJournalMailBoundary } from './journal-mail-boundary'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session-journal-identity'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+import { journalQueueReopenRowBuilder } from './journal-stop-and-resume-rows'
 import type { JournalQueuedMessages, JournalQueuePlan } from './journal-queued-messages'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
-import {
-  finishJournalReceipt,
-  type JournalOperationReceipt,
-  type JournalRowWriter
-} from './journal-row-writer'
+import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
@@ -22,6 +18,7 @@ import type {
 
 export type JournalSubmissionWriterDeps = {
   state: () => JournalReducerState
+  reopenFloor: () => AgentJournalCursor | null
   identity: AgentSessionJournalIdentity
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
@@ -40,22 +37,19 @@ export class JournalSubmissionWriter {
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
-    const build = journalSubmissionRowBuilder(state, identity, input, consume)
-    const submission = (seq: number, ts: number): JournalRow => ({
-      ...build(seq, ts),
-      ...(input.humanRelease
-        ? {
-            mailBoundary: releasedJournalMailBoundary(state().sessionId, state().epoch, seq)
-          }
-        : {})
-    })
+    const submission = journalSubmissionRowBuilder(state, identity, input, consume)
     let claimsCommitted: (() => void) | void
     let card: JournalQueuePlan | undefined
     return rowWriter
       .enqueueRows(
         () => {
+          const floor = this.deps.reopenFloor()
+          const reopen =
+            floor?.epoch === state().epoch
+              ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
+              : []
           if (!consume) {
-            return [submission]
+            return [...reopen, submission]
           }
           queuedMessages.assertConsumable({
             ...consume,
@@ -64,7 +58,7 @@ export class JournalSubmissionWriter {
           })
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...card.rows, submission]
+          return [...reopen, ...card.rows, submission]
         },
         {
           write: (db, row) => {
@@ -76,10 +70,6 @@ export class JournalSubmissionWriter {
               input.origin === 'client' && !consume
             )
             receipt?.write(db, row)
-          },
-          finished: () => {
-            finishJournalReceipt(card?.receipt)
-            finishJournalReceipt(receipt)
           },
           committed: () => {
             claimsCommitted?.()

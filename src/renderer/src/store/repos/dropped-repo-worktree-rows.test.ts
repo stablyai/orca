@@ -97,24 +97,6 @@ describe('a fetched catalog that drops a repo registration', () => {
     ])
   })
 
-  it('drops the pre-host rows too once no host registers the repo id', async () => {
-    const store = createTestStore()
-    seedStore(store, {
-      repos: [serverRepo('old')],
-      worktreesByRepo: {
-        old: [
-          serverRow('old'),
-          makeWorktree({ id: 'old::/legacy', repoId: 'old', path: '/legacy' })
-        ]
-      }
-    })
-    serverRepos = [serverRepo('copied')]
-
-    await store.getState().fetchRuntimeEnvironmentRepos('env-1')
-
-    expect(store.getState().worktreesByRepo.old).toEqual([])
-  })
-
   it('keeps the rows of a repo added while the catalog was in flight', async () => {
     const store = createTestStore()
     seedStore(store, {

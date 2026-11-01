@@ -20,14 +20,6 @@ export class MailPointerRepointScheduler {
     this.timersByHandle.set(handle, timer)
   }
 
-  cancel(handle: string): void {
-    const timer = this.timersByHandle.get(handle)
-    if (timer) {
-      clearTimeout(timer)
-    }
-    this.timersByHandle.delete(handle)
-  }
-
   /** Handles still awaiting a repoint; a quiet scheduler holds none. */
   get pendingCount(): number {
     return this.timersByHandle.size

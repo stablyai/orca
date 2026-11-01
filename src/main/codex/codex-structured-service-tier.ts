@@ -2,12 +2,12 @@ import type {
   AgentSessionFastModeSupport,
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../shared/agent-session-wire'
+} from '../../shared/agent-session/agent-session-wire'
 import { readRecord } from './codex-item-field-readers'
 import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { CodexSession } from './codex-structured-session-state'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
-import { effectiveServiceTier } from '../../shared/structured-agent-session-effective-tier'
+import { effectiveServiceTier } from '../../shared/agent-session/options/structured-agent-session-effective-tier'
 
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
 

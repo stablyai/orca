@@ -5,8 +5,8 @@ import {
   type AgentSessionQueuedMessage,
   type AgentSessionQueuedMessagePausedReason,
   type AgentSessionQueuePause
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+} from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   queuePauseLiftOnItsWay,
@@ -15,7 +15,6 @@ import {
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
   nextStructuredQueuedMessage,
-  structuredQueueHold,
   type StructuredQueueGateInput
 } from './structured-agent-session-queued-messages'
 import {
@@ -85,10 +84,9 @@ type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessa
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
-const publicationKeys = new WeakMap<AgentSessionJournal, string>()
 
 function readPublishedQueuedMessages(journal: AgentSessionJournal): AgentSessionQueuedMessage[] {
-  const key = JSON.stringify([journal.queuedMessages.revision(), journal.mailHoldFacts().key])
+  const key = String(journal.queuedMessages.revision())
   const memo = listMemos.get(journal)
   if (memo && memo.key === key) {
     return memo.list
@@ -116,45 +114,27 @@ export function readQueuePublication(
   journal: AgentSessionJournal,
   gate: QueueSendGate
 ): QueuePublication {
-  const input = gate(journal)
-  const hold = input.work.working() ? 'working' : structuredQueueHold(input)
-  const key = JSON.stringify([
-    journal.queuedMessages.selectionRevision(),
-    journal.mailHoldFacts().key,
-    hold
-  ])
-  const cached = publications.get(journal)
-  if (cached && publicationKeys.get(journal) === key) {
-    return cached
-  }
-  publicationKeys.set(journal, key)
   const queuedMessages = readPublishedQueuedMessages(journal)
-  const rows = journal.queuedMessages.list()
+  // Show personal Stop only when Resume can send a card; hide old pauses after clear/reopen.
+  // Re-derive per emit because submission acceptance can lift a pause.
   const pauses = structuredQueuePauses(journal)
-  const resumable = resumableQueuePause(pauses, rows)
-  const heldReport = rows.some(
-    (row) =>
-      row.state === 'waiting' &&
-      row.holdReason === null &&
-      row.body.from?.orchestration?.message === 'mail-notice' &&
-      !journal.queuedMessages.mailEligible(row)
+  const stop = pauses.find((pause) => pause.reason === 'stopped')?.since
+  const silent = pauses.some(
+    (pause) =>
+      pause.reason === 'cleared' ||
+      (pause.reason === 'restarted' &&
+        (!stop ||
+          !pause.since ||
+          stop.epoch !== pause.since.epoch ||
+          stop.sequence < pause.since.sequence))
   )
-  const intent = journal.mailBoundary()
-  const humanPending = journal
-    .submissions()
-    .filter(
-      (row) =>
-        row.origin === 'client' ||
-        (intent?.status === 'released' &&
-          intent.at.epoch === journal.epoch &&
-          intent.at.sequence === row.acceptedSequence)
-    )
-  const ordinaryPause =
-    resumable?.reason === 'stopped' &&
-    !pauses.some((pause) => pause.reason === 'restarted') &&
-    !queuePauseLiftOnItsWay(resumable, humanPending, () => true)
-  const queuePause = heldReport || ordinaryPause ? { reason: 'stopped' as const } : null
-  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...input })?.messageId ?? null
+  const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
+  // Avoid scanning submissions when no pause can show.
+  const pause =
+    resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
+  const queuePause = pause?.reason === 'stopped' ? { reason: pause.reason } : null
+  const nextQueuedMessageId =
+    nextStructuredQueuedMessage({ journal, ...gate(journal) })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&
