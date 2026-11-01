@@ -118,7 +118,7 @@ export const idleGroupExpanded = defineFixture({
   interact: async (frame) => {
     expand(frame, '[data-agent-child-disclosure-button]')
     await wait()
-    expand(frame, '.idle-child-agent-group-row')
+    expand(frame, '[data-idle-child-agent-group]')
     await wait()
   }
 })
