@@ -151,14 +151,15 @@ describe('Claude profile refresh from the default home', () => {
     expect(fs.existsSync(join(f.profileHome, 'settings.json'))).toBe(false)
   })
   itLinks(
-    'restores settings the profile changed and leaves a linked settings file alone',
+    'saves settings the profile changed to the user and leaves a linked settings file alone',
     async () => {
       const f = fixture()
       f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
       await provision(f)
       f.json(join(f.profileHome, 'settings.json'), { theme: 'x' })
       await provision(f)
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a', theme: 'x' })
+      expect(f.read(join(f.source, 'settings.json'))).toEqual({ theme: 'x' })
+      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ theme: 'x' })
       const elsewhere = join(f.root, 'elsewhere.json')
       f.json(elsewhere, { mine: true })
       fs.rmSync(join(f.profileHome, 'settings.json'))
@@ -313,6 +314,11 @@ describe('Claude profile refresh from the default home', () => {
       },
       mcpServers: { shared: { command: 'default' }, mine: { command: 'mine' } }
     })
+    // Before the first reconcile, an entry only the account has is shared, not dropped.
+    expect(f.read(join(f.userHome, '.claude.json'))).toMatchObject({
+      projects: { '/account-only': { allowedTools: ['Bash'] } },
+      mcpServers: { shared: { command: 'default' }, mine: { command: 'mine' } }
+    })
   })
   it('skips the state write while Claude holds its lock and records nothing for it', async () => {
     const f = fixture()
@@ -400,5 +406,144 @@ describe('Claude profile refresh from the default home', () => {
       expect.objectContaining({ surface: '.claude.json', code: 'unreadable' })
     )
     expect(fs.readFileSync(join(f.profileHome, '.claude.json'), 'utf8')).toBe('{bad')
+  })
+  describe('across accounts', () => {
+    function accounts() {
+      const f = fixture()
+      const dataRoot = join(f.root, 'data')
+      const homes = ['a', 'b'].map((id) => {
+        const home = join(dataRoot, 'claude-profiles', id, 'home')
+        fs.mkdirSync(home, { recursive: true })
+        fs.writeFileSync(join(dataRoot, 'claude-profiles', id, 'profile.json'), '{}')
+        return home
+      })
+      const run = (profileHome: string) =>
+        provisionClaudeProfile({ profileHome, userHome: f.userHome, platform: 'linux', dataRoot })
+      const state = (home: string) => f.read(join(home, '.claude.json'))
+      return { ...f, a: homes[0], b: homes[1], run, state }
+    }
+    // Stand in for Claude saving its config in an account folder.
+    function claudeSaves(file: string, change: (config: Record<string, unknown>) => void): void {
+      const config = JSON.parse(fs.readFileSync(file, 'utf8'))
+      change(config)
+      fs.writeFileSync(file, JSON.stringify(config))
+    }
+
+    it('shares MCP servers added or removed under one account with the user and every account', async () => {
+      const f = accounts()
+      f.json(join(f.userHome, '.claude.json'), {
+        firstStartTime: 'user',
+        mcpServers: { github: { command: 'gh' } }
+      })
+      await f.run(f.a)
+      await f.run(f.b)
+      claudeSaves(join(f.a, '.claude.json'), (config) => {
+        config.firstStartTime = 'a'
+        config.oauthAccount = LOGIN
+        config.mcpServers = { github: { command: 'gh' }, linear: { url: 'https://linear' } }
+        config.projects = { '/repo': { mcpServers: { db: { command: 'db' } } } }
+      })
+      await f.run(f.b)
+      for (const config of [f.state(f.userHome), f.state(f.b)]) {
+        expect(config.mcpServers).toEqual({
+          github: { command: 'gh' },
+          linear: { url: 'https://linear' }
+        })
+        expect(config.projects).toEqual({ '/repo': { mcpServers: { db: { command: 'db' } } } })
+      }
+      expect(f.state(f.userHome).oauthAccount).toBeUndefined()
+
+      claudeSaves(join(f.a, '.claude.json'), (config) => {
+        config.mcpServers = { github: { command: 'gh' } }
+      })
+      await f.run(f.b)
+      expect(f.state(f.userHome).mcpServers).toEqual({ github: { command: 'gh' } })
+      expect(f.state(f.b).mcpServers).toEqual({ github: { command: 'gh' } })
+      await f.run(f.a)
+      expect(f.state(f.a).mcpServers).toEqual({ github: { command: 'gh' } })
+    })
+
+    it('deletes nothing when Claude recreates an account file', async () => {
+      const f = accounts()
+      f.json(join(f.userHome, '.claude.json'), {
+        firstStartTime: 'user',
+        mcpServers: { github: { command: 'gh' } }
+      })
+      await f.run(f.a)
+      claudeSaves(join(f.a, '.claude.json'), (config) => {
+        config.firstStartTime = 'a'
+      })
+      await f.run(f.a)
+      f.json(join(f.a, '.claude.json'), { firstStartTime: 'a-recreated' })
+      await f.run(f.b)
+      expect(f.state(f.userHome).mcpServers).toEqual({ github: { command: 'gh' } })
+      await f.run(f.a)
+      expect(f.state(f.a).mcpServers).toEqual({ github: { command: 'gh' } })
+    })
+
+    it('gives a user with no .claude.json of their own the servers added under an account', async () => {
+      const f = accounts()
+      await f.run(f.a)
+      f.json(join(f.a, '.claude.json'), {
+        firstStartTime: 'a',
+        oauthAccount: LOGIN,
+        mcpServers: { linear: { url: 'https://linear' } }
+      })
+      await f.run(f.b)
+      expect(f.state(f.userHome)).toEqual({ mcpServers: { linear: { url: 'https://linear' } } })
+      expect(f.state(f.b).mcpServers).toEqual({ linear: { url: 'https://linear' } })
+    })
+
+    it("does not turn another writer's overwrite of the user's settings into a deletion", async () => {
+      const f = accounts()
+      f.json(join(f.source, 'settings.json'), { model: 'opus' })
+      await f.run(f.a)
+      await f.run(f.b)
+      claudeSaves(join(f.a, 'settings.json'), (settings) => {
+        settings.enabledPlugins = { 'linear@market': true }
+      })
+      const actual = await vi.importActual<typeof FsUtils>('../codex-accounts/fs-utils')
+      vi.mocked(writeFileAtomically).mockImplementationOnce((target, contents, options) => {
+        actual.writeFileAtomically(target, contents, options)
+        // Orca's hook installer saving the user's settings from an earlier read.
+        f.json(join(f.source, 'settings.json'), { model: 'opus' })
+      })
+      await f.run(f.b)
+      await f.run(f.b)
+      expect(f.read(join(f.source, 'settings.json')).enabledPlugins).toEqual({
+        'linear@market': true
+      })
+      expect(f.read(join(f.a, 'settings.json')).enabledPlugins).toEqual({ 'linear@market': true })
+    })
+
+    it('keeps a plugin enabled under one account and shares it with the others', async () => {
+      const f = accounts()
+      f.json(join(f.source, 'settings.json'), { model: 'opus' })
+      await f.run(f.a)
+      await f.run(f.b)
+      claudeSaves(join(f.a, 'settings.json'), (settings) => {
+        settings.enabledPlugins = { 'linear@market': true }
+      })
+      await f.run(f.a)
+      expect(f.read(join(f.a, 'settings.json')).enabledPlugins).toEqual({ 'linear@market': true })
+      await f.run(f.b)
+      for (const file of [join(f.source, 'settings.json'), join(f.b, 'settings.json')]) {
+        expect(f.read(file)).toEqual({ model: 'opus', enabledPlugins: { 'linear@market': true } })
+      }
+    })
+  })
+
+  itLinks('shares a folder Claude made in the account while the user had none', async () => {
+    const f = fixture()
+    await provision(f)
+    fs.mkdirSync(join(f.profileHome, 'plugins'))
+    fs.writeFileSync(join(f.profileHome, 'plugins', 'installed_plugins.json'), '{"plugins":{}}')
+    expect((await provision(f)).surfaces.plugins).toBe('linked')
+    expect(fs.realpathSync(join(f.profileHome, 'plugins'))).toBe(
+      fs.realpathSync(join(f.source, 'plugins'))
+    )
+    expect(fs.readFileSync(join(f.source, 'plugins', 'installed_plugins.json'), 'utf8')).toBe(
+      '{"plugins":{}}'
+    )
   })
 })

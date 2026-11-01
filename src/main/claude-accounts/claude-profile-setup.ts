@@ -52,7 +52,7 @@ export async function provisionClaudeAccountProfile(args: {
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
   for (const step of [
     () => shareClaudeProfileHistory({ ...shared, platform }),
-    () => provisionClaudeProfile({ ...shared, platform, firstSetup })
+    () => provisionClaudeProfile({ ...shared, platform, firstSetup, dataRoot: args.dataRoot })
   ]) {
     try {
       const part = await step()
