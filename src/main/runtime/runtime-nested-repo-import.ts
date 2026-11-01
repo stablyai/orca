@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
@@ -11,6 +12,7 @@ import type { Repo } from '../../shared/repo-types'
 import { getRepoDialableSshTargetId } from '../../shared/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepoAsync } from '../git/repo'
+import { detectRepoIcon } from '../repo-icon-autodetect'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -113,11 +115,18 @@ export class RuntimeNestedRepoImport {
           results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
           continue
         }
+        // Why no upstream lookup: it calls GitHub per repo; the fork backfill fills it in later.
+        const repoIcon = await detectRepoIcon({
+          repoPath: importRepoPath,
+          kind: 'git',
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        })
         const repo: Repo = {
           id: randomUUID(),
           path: importRepoPath,
           displayName: getRepoName(importRepoPath),
           badgeColor: DEFAULT_REPO_BADGE_COLOR,
+          ...(repoIcon ? { repoIcon } : {}),
           addedAt: Date.now(),
           kind: 'git',
           externalWorktreeVisibilityLegacy: false,
