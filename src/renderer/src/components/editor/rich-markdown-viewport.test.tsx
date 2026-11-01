@@ -136,6 +136,11 @@ describe('rich Markdown live viewport', () => {
       expect(f.container.scrollTop).toBe(top)
       expect(f.editor.state.selection.from).not.toBe(selection.from)
       expect(f.editor.state.doc.textContent).toBe('betabeta')
+
+      // A wheel over the editor's own scroller is user movement, so the reset is not undone.
+      f.container.scrollTop = 1985
+      f.nativeReturn(() => f.container.dispatchEvent(new WheelEvent('wheel', { bubbles: true })))
+      expect(f.container.scrollTop).toBe(0)
     }
   )
 

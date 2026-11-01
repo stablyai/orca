@@ -107,8 +107,9 @@ class RichMarkdownViewport {
     this.window.addEventListener('focus', this.onFocus, true)
     this.window.addEventListener('keydown', this.keydown, true)
     this.window.addEventListener('pointerdown', this.userInput, true)
-    this.window.addEventListener('wheel', this.userInput, { capture: true, passive: true })
-    this.window.addEventListener('touchstart', this.userInput, { capture: true, passive: true })
+    // Only wheel or touch over this scroller can move it; window listeners would run per editor.
+    container.addEventListener('wheel', this.userInput, { passive: true })
+    container.addEventListener('touchstart', this.userInput, { passive: true })
     editor.on('transaction', this.transaction)
   }
 
@@ -169,10 +170,7 @@ class RichMarkdownViewport {
   private onFocus = (event: FocusEvent): void => {
     const pending = this.pending
     this.pending = null
-    if (!this.current()) {
-      return
-    }
-    if (event.target !== this.dom) {
+    if (event.target !== this.dom || !this.current()) {
       return
     }
     if (this.methodDepth || !pending) {
@@ -235,8 +233,8 @@ class RichMarkdownViewport {
     this.window.removeEventListener('focus', this.onFocus, true)
     this.window.removeEventListener('keydown', this.keydown, true)
     this.window.removeEventListener('pointerdown', this.userInput, true)
-    this.window.removeEventListener('wheel', this.userInput, true)
-    this.window.removeEventListener('touchstart', this.userInput, true)
+    this.container.removeEventListener('wheel', this.userInput)
+    this.container.removeEventListener('touchstart', this.userInput)
     this.editor.off('transaction', this.transaction)
     for (const id of this.frames) {
       this.window.cancelAnimationFrame(id)
