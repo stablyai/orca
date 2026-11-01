@@ -85,6 +85,8 @@ vi.mock('../ui/select', async () => {
     SelectContent: ({ children }: { children: React.ReactNode }) => (
       <div data-slot="select-content">{children}</div>
     ),
+    SelectGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    SelectLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
       const { onValueChange } = React.useContext(SelectContext)
       return (

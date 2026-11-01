@@ -83,7 +83,7 @@ export function IpynbCellSource(props: IpynbCellSourceProps): React.JSX.Element 
   }
 
   return (
-    <div className="ipynb-code-surface overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
+    <div className="ipynb-code-surface code-editor-colors overflow-hidden rounded-md border border-border bg-muted/60 focus-within:border-ring">
       {active ? (
         <IpynbSourceEditor {...props} pressedAt={pressedAt} />
       ) : (

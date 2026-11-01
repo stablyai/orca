@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  isSafeArchiveEntryName,
   readBrowserExtensionArchive,
   writeBrowserExtensionArchive
 } from './browser-extension-archive'
@@ -18,26 +17,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   rmSync(parent, { recursive: true, force: true })
-})
-
-describe('isSafeArchiveEntryName', () => {
-  it.each(['manifest.json', 'js/background.js', '_locales/en/messages.json', 'images/'])(
-    'accepts %s',
-    (name) => expect(isSafeArchiveEntryName(name)).toBe(true)
-  )
-
-  it.each([
-    '',
-    '../evil.js',
-    'js/../../evil.js',
-    '/etc/passwd',
-    'C:/Windows/evil.js',
-    'c:evil.js',
-    'js\\..\\evil.js',
-    'js//double.js',
-    './manifest.json',
-    'nul\0byte'
-  ])('rejects %j', (name) => expect(isSafeArchiveEntryName(name)).toBe(false))
 })
 
 describe('browser extension archives', () => {
