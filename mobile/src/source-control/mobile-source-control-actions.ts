@@ -145,7 +145,9 @@ export function buildMobileSourceControlActions(
       label: t('sourceControl.actions.switchBranch', 'Switch branch'),
       iconKey: 'branch',
       disabled: busy,
-      skipAutoClose: true,
+      // Why: the branch picker is its own native Modal, which iOS drops if it is presented
+      // before the action sheet's Modal has finished unmounting (react/react-native#50152).
+      closeBeforePress: true,
       onPress: handlers.checkout
     },
     {
