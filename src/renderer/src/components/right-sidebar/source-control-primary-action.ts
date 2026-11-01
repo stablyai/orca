@@ -41,6 +41,23 @@ function toRendererPrimaryAction(
   decision: SourceControlPrimaryActionDecision,
   inputs: PrimaryActionInputs
 ): PrimaryAction {
+  if (
+    inputs.isRemoteOperationActive &&
+    inputs.isRemoteOperationInAnotherWorktree &&
+    !inputs.isCommitting &&
+    !inputs.isPrIntentInFlight
+  ) {
+    return {
+      kind: decision.kind,
+      label: translate('settings.sourceControl.gitBusyInAnotherWorkspace', 'Git busy elsewhere'),
+      title: translate(
+        'settings.sourceControl.remoteOperationInAnotherWorkspace',
+        'This action is temporarily disabled to avoid overlapping Git operations. Wait for the Git operation in the other workspace to finish.'
+      ),
+      disabled: true,
+      isWaitingForRemoteOperation: true
+    }
+  }
   return {
     kind: decision.kind,
     label: resolvePrimaryActionLabel(decision, inputs),
