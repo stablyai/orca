@@ -1,3 +1,4 @@
+import { detectImageFileSignature } from './image-file-signature'
 import { IMAGE_FILE_MIME_TYPES } from './image-file-extensions'
 import { MEDIA_FILE_MIME_TYPES } from './media-file-extensions'
 import { isKnownRasterImageMimeType } from './raster-image-preview-limits'
@@ -47,4 +48,16 @@ export function streamsPreviewByRange(preview: FilePreview | null): boolean {
 /** Images and PDFs read a URL when their viewer asks, and base64 elsewhere (diffs, the web client). */
 export function isDocumentPreview(preview: FilePreview | null): boolean {
   return preview?.kind === 'image' || preview?.kind === 'pdf'
+}
+
+/** Known image/PDF extensions take precedence; only extensionless files need a byte probe. */
+export function previewableBinaryMimeType(
+  filePath: string,
+  header?: Uint8Array
+): string | undefined {
+  const extension = filePreviewExtension(filePath)
+  return (
+    IMAGE_AND_PDF_PREVIEW_MIME_TYPES[extension] ??
+    (!extension && header ? detectImageFileSignature(header)?.mimeType : undefined)
+  )
 }

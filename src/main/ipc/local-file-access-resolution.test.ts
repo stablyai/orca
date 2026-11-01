@@ -1,3 +1,7 @@
+import { registerFilesystemReadHandlers } from './filesystem/filesystem-read-handlers'
+import { createFilesystemHandlerContext } from './filesystem/filesystem-handler-context'
+import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,9 +26,23 @@ import {
 } from './filesystem/local-regular-file-read'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 
-const { userData } = vi.hoisted(() => ({ userData: { path: '' } }))
+const { userData, ipcHandlers, openMock } = vi.hoisted(() => ({
+  userData: { path: '' },
+  ipcHandlers: new Map<string, (event: unknown, args: unknown) => Promise<unknown>>(),
+  openMock: vi.fn<typeof NodeFsPromises.open>()
+}))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return { ...actual, open: openMock.mockImplementation(actual.open) }
+})
 
-vi.mock('electron', () => ({ app: { getPath: () => userData.path } }))
+vi.mock('electron', () => ({
+  app: { getPath: () => userData.path },
+  ipcMain: {
+    handle: (name: string, handler: (event: unknown, args: unknown) => Promise<unknown>) =>
+      ipcHandlers.set(name, handler)
+  }
+}))
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
@@ -400,6 +418,67 @@ describe('document-resource requests', () => {
 
 describe('chat-image requests', () => {
   const CHAT_IMAGE = { kind: 'chat-image' } as const
+  const pngImage = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    'base64'
+  )
+
+  it('authorizes and serves an extensionless image by its bytes', async () => {
+    const shot = join(outside, 'downloaded-image')
+    await writeFile(shot, pngImage)
+
+    const filePath = await resolveLocalFileRequestPath(shot, CHAT_IMAGE, makeStore({}))
+
+    await expect(readLocalFileContent(filePath)).resolves.toMatchObject({
+      content: pngImage.toString('base64'),
+      isBinary: true,
+      mimeType: 'image/png'
+    })
+  })
+
+  it.each([false, true])(
+    'refuses a replacement after desktop authorization (log metadata: %s)',
+    async (includeLocalLogMetadata) => {
+      const filePath = join(outside, 'downloaded-image')
+      const replacement = join(outside, 'replacement')
+      await writeFile(filePath, pngImage)
+      await writeFile(replacement, 'secret text')
+      const actual = await vi.importActual<typeof NodeFsPromises>('node:fs/promises')
+      openMock.mockImplementationOnce(async (...args) => {
+        const handle = await actual.open(...args)
+        const close = handle.close.bind(handle)
+        vi.spyOn(handle, 'close').mockImplementationOnce(async () => {
+          await close()
+          await actual.rename(replacement, filePath)
+        })
+        return handle
+      })
+      registerFilesystemReadHandlers(
+        createFilesystemHandlerContext(
+          makeStore({}),
+          undefined,
+          createSenderScopedRequestCancellations(),
+          createSenderScopedRequestCancellations()
+        )
+      )
+      const read = ipcHandlers.get('fs:readFile')!
+      await expect(
+        read({}, { filePath, access: CHAT_IMAGE, includeLocalLogMetadata })
+      ).rejects.toThrow('only show local image files')
+    }
+  )
+
+  it.each(['image.pdf', 'image.mp4', 'image.txt'])(
+    'does not authorize %s as an image despite its bytes',
+    async (name) => {
+      const filePath = join(outside, name)
+      await writeFile(filePath, pngImage)
+
+      await expect(
+        resolveLocalFileRequestPath(filePath, CHAT_IMAGE, makeStore({}))
+      ).rejects.toThrow('only show local image files')
+    }
+  )
 
   it('read any local image file in place, whatever turn named it', async () => {
     const shot = join(outside, 'shot.png')
@@ -437,7 +516,10 @@ describe('chat-image requests', () => {
     }
   )
 
-  it.each(['notes.txt', 'missing.png'])('refuse %s', async (name) => {
+  it.each(['notes.txt', 'missing.png', 'not-an-image'])('refuse %s', async (name) => {
+    if (name === 'not-an-image') {
+      await writeFile(join(outside, name), 'secret text')
+    }
     expect(
       await settles(resolveLocalFileRequestPath(join(outside, name), CHAT_IMAGE, makeStore({})))
     ).toBe('denied')

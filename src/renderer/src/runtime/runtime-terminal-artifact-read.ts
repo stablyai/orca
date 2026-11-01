@@ -1,4 +1,5 @@
 import type { RuntimeFilePreviewResult, RuntimeFileReadResult } from '../../../shared/runtime-types'
+import { filePreviewExtension } from '../../../shared/file-preview-kind'
 import type { RuntimeReadableFileContent } from './runtime-file-client-types'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
@@ -12,6 +13,9 @@ import {
   renewTerminalArtifactGrant,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
+
+const EXTENSIONLESS_HOST_PREVIEW_MESSAGE =
+  'Cannot preview this extensionless binary file. If it is an image, update Orca on this host and retry.'
 
 export async function readHostFilePreview(
   unpinned: TerminalArtifactGrantTarget
@@ -85,9 +89,8 @@ async function readThroughGrant(
     grantId: args.grantId,
     absolutePath: args.absolutePath
   }
-  let result: RuntimeFileReadResult
   try {
-    result = await callRuntimeRpc<RuntimeFileReadResult>(
+    const result = await callRuntimeRpc<RuntimeFileReadResult>(
       args.target,
       'files.readTerminalArtifact',
       params,
@@ -96,23 +99,43 @@ async function readThroughGrant(
         expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
       }
     )
-  } catch (err) {
-    // Why: the host refuses binary artifacts with this exact typed error; images use the preview.
-    if (err instanceof RuntimeRpcCallError && err.message === 'binary_file') {
-      return callRuntimeRpc<RuntimeFilePreviewResult>(
-        args.target,
-        'files.readTerminalArtifactPreview',
-        params,
-        {
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
-        }
-      )
+    if (result.truncated) {
+      throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
     }
-    throw err
+    return { content: result.content, isBinary: false }
+  } catch (error) {
+    // Only the host's typed binary refusal permits a preview read through this grant.
+    if (!(error instanceof RuntimeRpcCallError && error.message === 'binary_file')) {
+      throw error
+    }
   }
-  if (result.truncated) {
-    throw new Error(`Remote file is too large to open in the editor (${result.byteLength} bytes)`)
+  try {
+    const preview = await callRuntimeRpc<RuntimeFilePreviewResult>(
+      args.target,
+      'files.readTerminalArtifactPreview',
+      params,
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+      }
+    )
+    if (
+      !filePreviewExtension(args.absolutePath) &&
+      preview.isBinary &&
+      !preview.isImage &&
+      !preview.content
+    ) {
+      throw new Error(EXTENSIONLESS_HOST_PREVIEW_MESSAGE)
+    }
+    return preview
+  } catch (error) {
+    if (
+      !filePreviewExtension(args.absolutePath) &&
+      error instanceof RuntimeRpcCallError &&
+      error.message === 'binary_file'
+    ) {
+      throw new Error(EXTENSIONLESS_HOST_PREVIEW_MESSAGE)
+    }
+    throw error
   }
-  return { content: result.content, isBinary: false }
 }

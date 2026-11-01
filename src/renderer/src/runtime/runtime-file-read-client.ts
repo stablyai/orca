@@ -135,7 +135,7 @@ async function readRuntimeFileContentAsStored({
   }
   // Hosts before content sniffing send an unlisted binary as text; NUL is git's binary signal.
   if (result.content.slice(0, BINARY_PROBE_BYTES).includes('\0')) {
-    return { content: '', isBinary: true }
+    return readRemoteBinaryFile(remote, { pageOversized: pageOversizedBinary === true })
   }
   if (result.truncated) {
     // files.read caps replies at 512KiB; page the whole file or later editable saves truncate it.

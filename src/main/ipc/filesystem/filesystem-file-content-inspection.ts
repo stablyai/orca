@@ -1,9 +1,6 @@
-import {
-  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
-  filePreviewExtension
-} from '../../../shared/file-preview-kind'
 import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
+import { readLocalPreviewMimeType } from './local-file-preview-type'
 import {
   fileTooLargeError,
   openLocalRegularFile,
@@ -27,10 +24,16 @@ export type LocalFileContent = {
 }
 
 /** One open, one handle: the size check, binary probe and read all see the same regular file. */
-export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
+export async function readLocalFileContent(
+  filePath: string,
+  options: { requireImage?: boolean } = {}
+): Promise<LocalFileContent> {
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const mimeType = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePreviewExtension(filePath)]
+    const mimeType = await readLocalPreviewMimeType(filePath, handle)
+    if (options.requireImage && !mimeType?.startsWith('image/')) {
+      throw new Error('Access denied: a chat can only show local image files.')
+    }
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)
