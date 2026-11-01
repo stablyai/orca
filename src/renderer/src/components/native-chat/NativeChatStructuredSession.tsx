@@ -8,6 +8,7 @@ import { agentSessionPromptQuestions } from '../../../../shared/agent-session-qu
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './use-structured-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
+import { NativeChatPromptContextUsage } from './NativeChatPromptContextUsage'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
@@ -360,6 +361,7 @@ export function NativeChatStructuredSession(
             />
           )}
           {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
+          {prompt && !composerShown ? <NativeChatPromptContextUsage transport={transport} /> : null}
           {prompt && approval ? (
             <NativeChatApprovalCard
               key={`${prompt.itemId}:${prompt.revision}`}

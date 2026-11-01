@@ -5,6 +5,7 @@ import {
 import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentContextUsage } from '../../../../shared/structured-agent-session-context-usage'
 import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
@@ -108,6 +109,7 @@ export function createStructuredSessionMocks() {
     approvalCardProps: initialApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
+    contextUsage: nullable<StructuredAgentContextUsage>(),
     journalItems: new Array<AgentJournalRenderItem>(),
     respond: vi.fn<(...args: never[]) => unknown>(),
     cancel: vi.fn<(...args: never[]) => unknown>(),
@@ -187,6 +189,7 @@ export function createStructuredSessionMocks() {
             olderHistoryGeneration: mocks.olderHistoryGeneration,
             loadOlder: mocks.loadOlder,
             prompts: mocks.promptItems,
+            contextUsage: mocks.contextUsage,
             pending: [],
             submissions: mocks.submissions,
             send: mocks.send,
@@ -350,6 +353,7 @@ export function createStructuredSessionMocks() {
     mocks.approvalCardProps = null
     mocks.questionCardProps = null
     mocks.promptItems = []
+    mocks.contextUsage = null
     mocks.journalItems = []
     mocks.respond.mockReset()
     mocks.cancel.mockReset()

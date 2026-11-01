@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
+import { NativeChatPromptContextUsage } from './NativeChatPromptContextUsage'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
@@ -22,13 +22,15 @@ function QuestionControls({
           : {})
       }}
     >
-      <NativeChatContextUsageRing
-        usage={{
-          usedTokens: 42_000,
-          windowTokens: 200_000,
-          percentage: 21,
-          estimated: false,
-          rows: []
+      <NativeChatPromptContextUsage
+        transport={{
+          contextUsage: {
+            usedTokens: 42_000,
+            windowTokens: 200_000,
+            percentage: 21,
+            estimated: false,
+            categories: []
+          }
         }}
       />
       <NativeChatQuestionCard

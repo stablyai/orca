@@ -7,7 +7,7 @@ import {
 
 /** The ring's input. A terminal-backed chat has no structured journal, so it shows no ring. */
 export function useNativeChatContextUsageSummary(
-  structuredTransport: NativeChatStructuredComposerTransport | undefined
+  structuredTransport: Pick<NativeChatStructuredComposerTransport, 'contextUsage'> | undefined
 ): NativeChatContextUsageSummary | null {
   const usage = structuredTransport?.contextUsage ?? null
   return useMemo(() => (usage ? summarizeContextUsage(usage) : null), [usage])
