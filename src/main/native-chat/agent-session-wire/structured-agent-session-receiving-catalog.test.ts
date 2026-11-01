@@ -16,16 +16,14 @@ import {
 import { structuredAgentModelCatalogAccountReads } from '../../runtime/structured-agent-model-catalog-wiring'
 import {
   createReceivingCallerFixture,
-  HOME_A,
-  HOME_B,
   PARENT
 } from './structured-agent-session-receiving-callers.test-support'
 
 function catalog(f: Awaited<ReturnType<typeof createReceivingCallerFixture>>) {
   const store = new AgentModelCatalogStore()
   for (const [home, id] of [
-    [HOME_A, 'claude-sonnet-5'],
-    [HOME_B, 'claude-opus-5-5[1m]']
+    [f.homeA, 'claude-sonnet-5'],
+    [f.homeB, 'claude-opus-5-5[1m]']
   ] as const) {
     store.recordSuccess(
       agentModelCatalogScopeFingerprint(
@@ -56,7 +54,7 @@ function catalog(f: Awaited<ReturnType<typeof createReceivingCallerFixture>>) {
     getRecord: (id) => f.rig.store.getRecord(id) ?? undefined,
     recordWorkspacePath: async () => f.rig.root,
     drivesRecord: () => true,
-    resolveAccountHome: async () => HOME_B,
+    resolveAccountHome: async () => f.homeB,
     ...structuredAgentModelCatalogAccountReads(() => f.rig.host),
     probes: { claude: Object.assign(probe, { resolve }) },
     agentReadsProjectModelConfig: () => false
@@ -140,7 +138,7 @@ it('keeps newer public intent while discovery waits and reports a failed listing
     expect(
       c.store.failureDetail(
         agentModelCatalogScopeFingerprint(
-          agentModelCatalogFingerprint({ agent: 'claude', accountHome: HOME_B, wslDistro: null }),
+          agentModelCatalogFingerprint({ agent: 'claude', accountHome: f.homeB, wslDistro: null }),
           f.rig.root
         )
       )
@@ -179,7 +177,7 @@ it.each(['deadline', 'retirement', 'stop', 'workspace'] as const)(
   async (end) => {
     const f = await createReceivingCallerFixture()
     let service: ReturnType<typeof createAgentModelCatalogService> | undefined
-    const home = Promise.withResolvers<typeof HOME_B>()
+    const home = Promise.withResolvers<typeof f.homeB>()
     try {
       await f.found()
       await f.rig.host.close(PARENT, 'evict')
@@ -218,14 +216,14 @@ it.each(['deadline', 'retirement', 'stop', 'workspace'] as const)(
         await vi.advanceTimersByTimeAsync(500)
         expect(await settled(pending, 'original scope deadline')).toEqual({ origin: 'unknown' })
       }
-      home.resolve(HOME_B)
+      home.resolve(f.homeB)
       expect(await settled(pending, 'retired scope completion')).toEqual({ origin: 'unknown' })
       expect(c.demands).not.toHaveBeenCalled()
       expect(c.resolve).not.toHaveBeenCalled()
       expect(c.probe).not.toHaveBeenCalled()
       expect(f.rig.adapter.acquire).not.toHaveBeenCalled()
     } finally {
-      home.resolve(HOME_B)
+      home.resolve(f.homeB)
       service?.stop()
       vi.useRealTimers()
       await f.dispose()

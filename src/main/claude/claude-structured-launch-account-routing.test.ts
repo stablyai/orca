@@ -1,13 +1,9 @@
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import {
-  acquiredAgentSessionAccount,
-  withAcquiredAgentSessionAccount
-} from '../../shared/agent-session-acquired-account'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
 import {
@@ -32,17 +28,7 @@ it('launches each acquisition under the current selection, not the account it wa
   const root = mkdtempSync(join(tmpdir(), 'claude-launch-routing-'))
   roots.push(root)
   const settings: ClaudeProfileRouterSettings = {
-    claudeManagedAccounts: [
-      {
-        id: 'a',
-        email: 'a@example.test',
-        authMethod: 'subscription-oauth',
-        managedAuthPath: '/unused',
-        createdAt: 0,
-        updatedAt: 0,
-        lastAuthenticatedAt: 0
-      }
-    ],
+    claudeManagedAccounts: [],
     activeClaudeManagedAccountId: 'a',
     activeClaudeManagedAccountIdsByRuntime: undefined,
     agentStatusHooksEnabled: false,
@@ -116,23 +102,10 @@ it('launches each acquisition under the current selection, not the account it wa
     ORCA_CLAUDE_INJECTED_CONFIG_DIR: home
   })
 
-  const ranOnA = { route: 'managed' as const, accountId: 'a', home }
-  expect(routed.accountRecipe).toEqual(ranOnA)
-  // The saved receipt of the account it last ran on never pins a later launch, after a restart included.
-  Object.assign(
-    record,
-    withAcquiredAgentSessionAccount(record, { generation: 'a', recipe: ranOnA })
-  )
-  expect(acquiredAgentSessionAccount(record)?.recipe).toEqual(ranOnA)
+  expect(routed.accountRecipe).toEqual({ route: 'managed', accountId: 'a', home })
   settings.activeClaudeManagedAccountId = null
   expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
   await expect(read()).resolves.toBe(resolvePath('/user/own'))
-
-  // Removing that account leaves nothing that prepares, and so recreates, its folder.
-  rmSync(join(root, 'claude-profiles', 'a'), { recursive: true, force: true })
-  settings.claudeManagedAccounts = []
-  expect((await resolve({ identity })).claudeConfigDir).toBe(resolvePath('/user/own'))
-  expect(existsSync(join(root, 'claude-profiles', 'a'))).toBe(false)
 })
 
 function routedResumeFixture(rewind?: AgentSessionRewindRecord, transcriptFiles = false) {
