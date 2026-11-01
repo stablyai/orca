@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "pools": {
+    "codex-subscription": {
+      "provider": "codex",
+      "reported_group": "unknown",
+      "observed_at": null,
+      "source": null,
+      "five_hour_used_pct": null,
+      "weekly_used_pct": null,
+      "five_hour_resets_at": null,
+      "weekly_resets_at": null,
+      "cooldown_until": null
+    },
+    "claude-subscription": {
+      "provider": "claude",
+      "reported_group": "unknown",
+      "observed_at": null,
+      "source": null,
+      "five_hour_used_pct": null,
+      "weekly_used_pct": null,
+      "five_hour_resets_at": null,
+      "weekly_resets_at": null,
+      "cooldown_until": null
+    },
+    "agy-argon": {
+      "provider": "agy",
+      "reported_group": "unknown",
+      "observed_at": null,
+      "source": null,
+      "five_hour_used_pct": null,
+      "weekly_used_pct": null,
+      "five_hour_resets_at": null,
+      "weekly_resets_at": null,
+      "cooldown_until": null
+    }
+  }
+}
