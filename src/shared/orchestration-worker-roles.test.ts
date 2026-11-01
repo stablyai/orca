@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkerRoleProfiles, resolveWorkerRoleParams } from './orchestration-worker-roles'
 import { checkAgentLaunchModelPreferences } from './agent-launch-model-preferences'
-import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from './agent-session/options/agent-session-option-launch'
 import { resolveAgentStartupPlanInputs } from './agent-startup-plan-inputs'
 import { resolveAgentLaunchCommand } from './tui-agent-launch-command'
 import { resolveStartupShell } from './tui-agent-startup-shell'

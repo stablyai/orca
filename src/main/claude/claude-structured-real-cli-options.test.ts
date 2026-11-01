@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import {
   claudeProviderHandle,

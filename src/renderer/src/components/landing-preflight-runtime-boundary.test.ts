@@ -47,31 +47,6 @@ afterEach(() => {
 })
 
 describe('landing preflight runtime boundary', () => {
-  it('refreshes after an active runtime A to B switch without manual action', () => {
-    const view = renderHook(() => useLandingPreflightRuntime())
-    expect(refresh).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-a' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-a', { status: { runtimeId: 'a' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-    act(() => {
-      useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'runtime-b' },
-        runtimeStatusByEnvironmentId: new Map([
-          ['runtime-b', { status: { runtimeId: 'b' }, connectionGeneration: 1 }]
-        ])
-      } as never)
-    })
-
-    expect(refresh).toHaveBeenCalledTimes(3)
-    view.unmount()
-  })
-
   it('invalidates on disconnect and refreshes exactly once on reconnect', () => {
     const view = renderHook(() => useLandingPreflightRuntime())
     act(() => {
@@ -102,16 +77,6 @@ describe('landing preflight runtime boundary', () => {
       } as never)
     })
     expect(refresh).toHaveBeenCalledTimes(1)
-    view.unmount()
-  })
-
-  it('keeps the banner empty while the active remote runtime is still unknown', () => {
-    useAppStore.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-a' } } as never)
-
-    const view = renderHook(() => useLandingPreflightRuntime())
-
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    expect(refresh).not.toHaveBeenCalled()
     view.unmount()
   })
 

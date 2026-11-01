@@ -19,6 +19,24 @@ const route = vi.hoisted(() => {
   return state
 })
 
+vi.mock('../pairing/pairing-visuals', async () => {
+  const { createElement } = await import('react')
+  return {
+    SCAN_DECODE_BEAT_MS: 0,
+    PAIRING_SUCCESS_HOLD_MS: 0,
+    waitForBeat: () => Promise.resolve(),
+    ScanReticle: () => null,
+    Step: ({ text }: { text: string }) => createElement('Text', null, text),
+    PairingProgress: ({
+      succeeded,
+      connectingLabel
+    }: {
+      succeeded: boolean
+      connectingLabel: string
+    }) => createElement('Text', null, succeeded ? 'Connected' : connectingLabel)
+  }
+})
+vi.mock('../platform/haptics', () => ({ triggerSuccess: () => {} }))
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',

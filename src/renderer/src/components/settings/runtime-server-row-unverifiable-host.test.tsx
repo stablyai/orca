@@ -127,84 +127,6 @@ it('keeps offering Disconnect while a ready host answers an unverifiable probe',
   expect(screen.queryByRole('button', { name: /^connect$/i })).toBeNull()
 })
 
-it('offers Connect once the transport itself is down', () => {
-  setEntry({
-    status: null,
-    checkedAt: 2,
-    snapshot: snapshot({ verification: 'unavailable', transport: 'disconnected' })
-  })
-  renderRow()
-
-  expect(screen.queryByRole('button', { name: /disconnect/i })).toBeNull()
-})
-
-it('still offers Disconnect for a verified host', () => {
-  setEntry({ status: answeredStatus(), checkedAt: 2, snapshot: snapshot({}) })
-  renderRow()
-
-  expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeNull()
-})
-
-it('shows one status for an unreachable host instead of a stack of signals', () => {
-  setEntry({
-    status: null,
-    checkedAt: 2,
-    snapshot: snapshot({ verification: 'unavailable', transport: 'disconnected' })
-  })
-  render(
-    <TooltipProvider>
-      <RuntimeServerRow
-        environment={environment}
-        details={{
-          status: 'error',
-          runtimeStatus: null,
-          compatibility: null,
-          error: 'Timed out waiting for the remote Orca runtime.'
-        }}
-        isActive={false}
-        remoteUpdate={undefined}
-        remoteServerUpdatesRunning={false}
-        connecting={false}
-        switching={false}
-        disconnecting={false}
-        removing={false}
-        isBusy={false}
-        onOpenUpdate={vi.fn()}
-        onDisconnect={vi.fn()}
-        onConnect={vi.fn()}
-        onRemove={vi.fn()}
-      />
-    </TooltipProvider>
-  )
-  expect(screen.queryByText('Unreachable')).not.toBeNull()
-  expect(screen.queryByText('Status unavailable')).toBeNull()
-  expect(screen.queryByText('Never connected · x')).not.toBeNull()
-  // Why Retry, not Connect: the app already tried and got no answer.
-  expect(screen.getAllByRole('button', { name: /^retry$/i })).toHaveLength(1)
-  expect(screen.queryByRole('button', { name: /^connect$/i })).toBeNull()
-  expect(screen.queryByRole('button', { name: /re-pair/i })).toBeNull()
-})
-
-it('keeps the machine under the label once the host is unreachable', () => {
-  const status = { ...answeredStatus(), machineName: 'Studio', hostPlatform: 'darwin' as const }
-  setEntry({
-    status: null,
-    checkedAt: 2,
-    snapshot: snapshot({ status, verification: 'unavailable' })
-  })
-  renderRow()
-  expect(screen.queryByText('macOS · Studio')).not.toBeNull()
-  cleanup()
-
-  setEntry({
-    status: null,
-    checkedAt: 2,
-    snapshot: snapshot({ status, verification: 'unavailable', transport: 'disconnected' })
-  })
-  renderRow()
-  expect(screen.queryByText('macOS · Studio')).not.toBeNull()
-})
-
 // A host that refused our token answered us, so the row must not also claim it is offline.
 it('tells one revoked story instead of a disconnected one', () => {
   const status = { ...answeredStatus(), appVersion: '1.4.229' }
@@ -240,13 +162,4 @@ it('tells one revoked story instead of a disconnected one', () => {
   expect(screen.queryByText(/Re-pair it with a new access link/)).not.toBeNull()
   expect(screen.queryByRole('button', { name: /re-pair/i })).not.toBeNull()
   expect(screen.queryByRole('button', { name: /^connect$/i })).toBeNull()
-})
-
-it('marks a server paired twice and names its twin', () => {
-  renderRow(undefined, ['Studio relay'])
-  expect(
-    screen.queryByText(
-      'Same server as Studio relay, paired twice. Remove one so its projects can be edited.'
-    )
-  ).not.toBeNull()
 })

@@ -1,6 +1,7 @@
 /**
  * Invariant: the Try it on a plugin's install toast does the thing itself instead of opening
- * the plugin's page — a grammar opens a highlighted sample, an editor a new file of its own.
+ * the plugin's page — a grammar opens a blank file it highlights as you type, an editor a new
+ * file of its own.
  */
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -38,7 +39,7 @@ async function tryFromToast(page: Page, name: string): Promise<void> {
 }
 
 // oxlint-disable-next-line no-empty-pattern -- Playwright passes fixtures before testInfo.
-test('Try it opens a highlighted sample and a new drawing', async ({}, testInfo) => {
+test('Try it opens a blank highlighted file and a new drawing', async ({}, testInfo) => {
   // Why: one Electron launch, a Git catalog fetch and two installs; slower than the 30s default.
   test.setTimeout(180_000)
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-try-it-e2e-'))
@@ -68,7 +69,11 @@ test('Try it opens a highlighted sample and a new drawing', async ({}, testInfo)
     await page.getByRole('article').getByRole('button', { name: 'Install Gleam' }).click()
     await tryFromToast(page, 'Gleam')
     await expect(page.locator('[data-tab-id]').filter({ hasText: 'untitled.gleam' })).toBeVisible()
-    // The plugin grammar paints the sample in more than one token class.
+    // Blank until the user types; nothing but the empty placeholder reaches disk.
+    expect(await readFile(join(fixture.workspace, 'untitled.gleam'), 'utf8')).toBe('')
+    await page.locator('.monaco-editor:visible .view-lines').first().click()
+    await page.keyboard.type('pub fn main() { 1 }')
+    // The plugin grammar paints what was typed in more than one token class.
     await expect
       .poll(async () => (await editorTokenClasses(page, 'pub fn main')).length, {
         timeout: 15_000

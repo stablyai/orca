@@ -115,7 +115,7 @@ export function TaskPageLinearIssueDialog({
             }}
             placeholder={translate('auto.components.TaskPage.d9151fd4e9', 'Issue title')}
             disabled={newLinearIssueSubmitting}
-            className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40 text-foreground w-full"
+            className="text-lg font-semibold bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground text-foreground w-full"
           />
 
           <textarea
@@ -124,7 +124,7 @@ export function TaskPageLinearIssueDialog({
             placeholder={translate('auto.components.TaskPage.9bc8aea407', 'Add description...')}
             rows={5}
             disabled={newLinearIssueSubmitting}
-            className="w-full min-w-0 text-sm bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground/45 text-foreground resize-none max-h-60 overflow-y-auto scrollbar-sleek py-1"
+            className="w-full min-w-0 text-sm bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 p-0 placeholder:text-muted-foreground text-foreground resize-none max-h-60 overflow-y-auto scrollbar-sleek py-1"
           />
 
           <TaskPageLinearIssueAttributes model={model} />

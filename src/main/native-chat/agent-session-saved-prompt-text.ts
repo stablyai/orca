@@ -8,8 +8,8 @@ import {
   agentSessionPromptQuestions,
   legacyAgentSessionQuestionAnswers
 } from '../../shared/agent-session-question-answer'
-import { nativeChatReceiptAnswers } from '../../shared/native-chat-resolution-receipt'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { nativeChatReceiptAnswers } from '../../shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../shared/structured-agent-session-projection'
 
 function questionInterpretation(body: AgentJournalQuestionItem): string[] {

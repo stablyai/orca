@@ -37,14 +37,15 @@ export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
   'agent-session.send-answers-proof.v1' as const
 // Older hosts reject delivery; older clients cannot render queued replies. Gate queue-if-active,
-// its setting and chord, but never kept-draft lists/actions. DARK until the shipped host passes
-// the integrated Codex steer matrix (#21062); keep out of AGENT_SESSION_RUNTIME_CAPABILITIES.
-// v1 links hand-offs via submission.queuedMessageId, never equal draft/submission IDs. queuePause
+// its setting and chords, but never kept-draft lists/actions. v2, not v1: released clients that
+// read v1 (desktop 1.4.219+, native phone builds) carry an unfinished queue UI, so they never see
+// this and keep sending immediately. The Codex steer paths it hands cards to are pinned in
+// codex-structured-turn-steer.test.ts.
+// Hand-offs link via submission.queuedMessageId, never equal draft/submission IDs. queuePause
 // holds every card until queuedMessagesResume or a later turn starts. nextQueuedMessageId names
 // the next eligible card; null/missing means none. Per-card holds: send_failed conversion or kept.
-// Host mechanisms land first; this capability gates rollout.
 export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
-  'agent-session.queued-messages.v1' as const
+  'agent-session.queued-messages.v2' as const
 // Advertise in-place update/edit holds separately from mid-turn queueing: kept/mail cards remain editable while queueing is off. Never fall back to copy/delete.
 export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
   'agent-session.queued-message-edit.v1' as const
@@ -60,7 +61,7 @@ export const AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY =
 // Publish image cards only to capable readers that preserve images on edit; older copy/delete editing would lose them.
 export const AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY =
   'agent-session.queued-image-cards.v1' as const
-// Strict conversationCommand rejects unknown delivery. Offer queued /compact only with this and queued-messages.v1; its card is the sole waiting surface.
+// Strict conversationCommand rejects unknown delivery. Offer queued /compact only with this and queued-messages.v2; its card is the sole waiting surface.
 export const AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY =
   'agent-session.queued-commands.v1' as const
 // Gate Claude journal/lifecycle independently of Codex for paired clients.
@@ -112,6 +113,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = [
   // turn starts, so a client may gate on either.
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_REORDER_RUNTIME_CAPABILITY,

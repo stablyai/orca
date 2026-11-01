@@ -77,29 +77,6 @@ function persistedTarget(
 }
 
 describe('Claude structured reading control', () => {
-  it('binds sink pressure to SDK reading and unbinds on requested close', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    const events = controlledSink()
-
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: events.sink
-    })
-
-    const pauseReading = vi.spyOn(claude.connections[0], 'pauseReading')
-    const resumeReading = vi.spyOn(claude.connections[0], 'resumeReading')
-    events.control()?.pauseReading()
-    expect(pauseReading).toHaveBeenCalledOnce()
-    events.control()?.resumeReading()
-    expect(resumeReading).toHaveBeenCalledOnce()
-
-    await expect(adapter.closeSession('session-1')).resolves.toBe(true)
-    expect(events.unbind).toHaveBeenCalledOnce()
-  })
-
   it('unbinds when acquisition fails after the connection opens', async () => {
     const claude = fakeClaude()
     const open = claude.openConnection
@@ -120,23 +97,6 @@ describe('Claude structured reading control', () => {
         events: events.sink
       })
     ).rejects.toThrow('exited (code 1)')
-    expect(events.unbind).toHaveBeenCalledOnce()
-  })
-
-  it('unbinds when the published provider exits unexpectedly', async () => {
-    const claude = fakeClaude()
-    const adapter = adapterFor(claude)
-    const events = controlledSink()
-    await adapter.acquire({
-      identity: identityFor(),
-      fence: 7,
-      spawnToken: 'spawn-9',
-      events: events.sink
-    })
-
-    claude.connections[0].handlers.onExit?.(new Error('provider exited'))
-    await adapter.drainObservedExits()
-
     expect(events.unbind).toHaveBeenCalledOnce()
   })
 

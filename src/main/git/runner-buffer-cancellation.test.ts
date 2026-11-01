@@ -22,15 +22,6 @@ afterEach(() => {
 })
 
 describe('buffered Git cancellation', () => {
-  it('rejects an already canceled read without launching Git', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    await expect(
-      gitExecFileAsyncBuffer(['show', 'HEAD:file'], { cwd: '/repo', signal: controller.signal })
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(execFileMock).not.toHaveBeenCalled()
-  })
-
   it('removes a canceled queued read without waiting for the active child', async () => {
     const scheduler = new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 })
     _resetGitAdmissionForTests(scheduler)

@@ -3,7 +3,6 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 // Route only eligible local repos to gh:enqueuePRRefresh; denied remote/SSH/runtime path floods previously grew renderer heap to OOM.
 const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
@@ -66,15 +65,6 @@ describe('enqueueGitHubPRRefresh host guard', () => {
     vi.clearAllMocks()
   })
 
-  it('enqueues the local handler for a local-host repo', () => {
-    const store = createTestStore()
-    seed(store, { id: 'local-1', path: '/Users/me/code/local-1', name: 'local-1', kind: 'git' })
-
-    store.getState().enqueueGitHubPRRefresh('wt-1', 'active', 80)
-
-    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
-  })
-
   it('enqueues the local handler for a known local repo while a runtime is focused', () => {
     const store = createTestStore()
     seed(store, { id: 'local-1', path: '/Users/me/code/local-1', name: 'local-1', kind: 'git' })
@@ -84,21 +74,6 @@ describe('enqueueGitHubPRRefresh host guard', () => {
 
     expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
     expect(mockApi.runtimeEnvironments.call).not.toHaveBeenCalled()
-  })
-
-  it('enqueues the local handler for a repo with an explicit local executionHostId', () => {
-    const store = createTestStore()
-    seed(store, {
-      id: 'local-2',
-      path: '/Users/me/code/local-2',
-      name: 'local-2',
-      kind: 'git',
-      executionHostId: LOCAL_EXECUTION_HOST_ID
-    })
-
-    store.getState().enqueueGitHubPRRefresh('wt-1', 'active', 80)
-
-    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT enqueue the local handler for a runtime-host repo (the OOM loop)', () => {

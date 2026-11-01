@@ -58,6 +58,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     setItems,
     setLoading,
     setRefreshing,
+    setTaskListSettled,
     taskStateHydrated,
     tasksSupported
   } = model
@@ -276,6 +277,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (isCurrent()) {
           setLoading(false)
           setRefreshing(false)
+          setTaskListSettled(true)
         }
       }
     },

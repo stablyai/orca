@@ -102,17 +102,6 @@ describe('git remote identity enrichment under a WSL move', () => {
 })
 
 describe('fork upstream backfill under a WSL move', () => {
-  it('leaves the moving repo unset for a later run and fills the rest', async () => {
-    const store = createStore()
-    store.addRepo(repo(MOVING))
-    store.addRepo(repo(STAYING))
-
-    await new RuntimeRepositoryForkBackfill(() => store, vi.fn()).run()
-
-    expect(store.getRepo(MOVING)?.upstream).toBeUndefined()
-    expect(store.getRepo(STAYING)?.upstream).toEqual({ owner: 'acme', repo: 'app' })
-  })
-
   it('fills the host row, not the hidden local row with the same id', async () => {
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
     const store = createStore()

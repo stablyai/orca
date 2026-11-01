@@ -4,7 +4,7 @@
   "family": "settings.repo-metadata",
   "namedDeltas": [],
   "values": {
-    "12e70439f294": {
+    "1006746b8523": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -15,7 +15,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -30,16 +32,28 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "connectionId": {
+                  "$rpc": "null"
+                },
+                "displayName": "Local",
+                "id": "repo-1"
+              },
+              {
+                "connectionId": "ssh-1",
+                "displayName": "Remote",
+                "id": "repo-2"
+              }
+            ]
+          }
         }
       }
     },
-    "1321b4c8c0b8": {
+    "16aba513f7bd": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -50,7 +64,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -66,7 +82,7 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "",
+          "message": "transport failure",
           "isRpcDeliveryUnknown": true
         }
       }
@@ -111,45 +127,6 @@
         }
       }
     },
-    "19b2979d7fc2": {
-      "name": "repo.list#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "1b23dab83fcf": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
     "299d571abf13": {
       "name": "ssh.listTargetSummaries#1",
       "ordinal": 5,
@@ -189,8 +166,7 @@
         }
       }
     },
-    "44136fa355b3": {},
-    "4526bff18b74": {
+    "3098c2a08cce": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -201,7 +177,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -219,25 +197,14 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "repos": [
-              {
-                "connectionId": {
-                  "$rpc": "null"
-                },
-                "displayName": "Local",
-                "id": "repo-1"
-              },
-              {
-                "connectionId": "ssh-1",
-                "displayName": "Remote",
-                "id": "repo-2"
-              }
-            ]
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "48c68906a98a": {
+    "44136fa355b3": {},
+    "4af78d78976a": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -248,7 +215,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -266,8 +235,45 @@
           "id": "frame-1",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "error": "refused"
           }
+        }
+      }
+    },
+    "4f67c9a33bf8": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
         }
       }
     },
@@ -305,7 +311,7 @@
         }
       }
     },
-    "624ec4e5082c": {
+    "5c83b2773579": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -316,7 +322,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -357,6 +365,40 @@
           "path": "repo-2"
         }
       ]
+    },
+    "67771dfc5117": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
     "68916f125c3c": {
       "desktopRepos": [
@@ -401,7 +443,7 @@
         ["repo-2", "ssh:ssh-1"]
       ]
     },
-    "747c556da67a": {
+    "757770a25ff1": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -412,7 +454,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -428,7 +472,10 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
@@ -456,41 +503,6 @@
       "settlement": {
         "status": "pending",
         "startedAt": 0
-      }
-    },
-    "8a72d3d14d44": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
       }
     },
     "8b618db22116": {
@@ -533,17 +545,7 @@
       "status": "pending",
       "startedAt": 0
     },
-    "c1246f5792ee": {
-      "name": "ssh.listTargetSummaries#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
-    },
-    "c1d6fc758acc": {
-      "name": "host.platform#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
-    },
-    "d68475063b62": {
+    "be8cc68f6bd6": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -554,7 +556,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -580,12 +584,17 @@
         }
       }
     },
-    "d9c464d0dc78": {
-      "name": "hostLabelById",
-      "ordinal": 12,
-      "value": [["ssh:ssh-1", "SSH"]]
+    "c1246f5792ee": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
     },
-    "dae756300589": {
+    "c1d6fc758acc": {
+      "name": "host.platform#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
+    },
+    "c52741b88a9d": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -596,60 +605,9 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "e2881f748a46": {
-      "name": "hostHealthById",
-      "ordinal": 11,
-      "value": []
-    },
-    "e49da3e1abca": {
-      "name": "repoHostIdByRepoId",
-      "ordinal": 4,
-      "value": [
-        ["repo-1", "local"],
-        ["repo-2", "ssh:ssh-1"]
-      ]
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f1d579dd459c": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
           }
         },
         {
@@ -672,6 +630,70 @@
           "ok": false
         }
       }
+    },
+    "d9c464d0dc78": {
+      "name": "hostLabelById",
+      "ordinal": 12,
+      "value": [["ssh:ssh-1", "SSH"]]
+    },
+    "e2881f748a46": {
+      "name": "hostHealthById",
+      "ordinal": 11,
+      "value": []
+    },
+    "e49da3e1abca": {
+      "name": "repoHostIdByRepoId",
+      "ordinal": 4,
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ]
+    },
+    "eac2a2d805d8": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f2274efe8aa6": {
+      "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\",\"params\":{\"afterSnapshotId\":null}}"
     }
   },
   "recording": {
@@ -680,8 +702,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.normal:settings-pending",
         "observation": {
-          "sender": ["4526bff18b74", "299d571abf13", "902c0b2ed3ce", "7c508088602c"],
-          "payloads": ["19b2979d7fc2", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
+          "sender": ["1006746b8523", "299d571abf13", "902c0b2ed3ce", "7c508088602c"],
+          "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "9270aeb7d9c6"
@@ -693,8 +715,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.normal:settled",
         "observation": {
-          "sender": ["4526bff18b74", "299d571abf13", "18762ff064ed", "5248b37ec085"],
-          "payloads": ["19b2979d7fc2", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
+          "sender": ["1006746b8523", "299d571abf13", "18762ff064ed", "5248b37ec085"],
+          "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -712,8 +734,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.result-absent:settings-pending",
         "observation": {
-          "sender": ["747c556da67a"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["eac2a2d805d8"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -725,8 +747,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.result-absent:settled",
         "observation": {
-          "sender": ["747c556da67a"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["eac2a2d805d8"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -738,8 +760,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.result-null:settings-pending",
         "observation": {
-          "sender": ["48c68906a98a"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["757770a25ff1"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -751,8 +773,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.result-null:settled",
         "observation": {
-          "sender": ["48c68906a98a"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["757770a25ff1"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -764,8 +786,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settings-pending",
         "observation": {
-          "sender": ["1b23dab83fcf"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["4af78d78976a"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -777,8 +799,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-ok-missing:settled",
         "observation": {
-          "sender": ["1b23dab83fcf"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["4af78d78976a"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -790,8 +812,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settings-pending",
         "observation": {
-          "sender": ["8a72d3d14d44"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["3098c2a08cce"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -803,8 +825,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-false-string-error:settled",
         "observation": {
-          "sender": ["8a72d3d14d44"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["3098c2a08cce"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -816,8 +838,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settings-pending",
         "observation": {
-          "sender": ["d68475063b62"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["be8cc68f6bd6"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -829,8 +851,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.inner-false-object-error:settled",
         "observation": {
-          "sender": ["d68475063b62"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["be8cc68f6bd6"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -842,8 +864,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.outer-refused:settings-pending",
         "observation": {
-          "sender": ["624ec4e5082c"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["5c83b2773579"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -855,8 +877,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.outer-refused:settled",
         "observation": {
-          "sender": ["624ec4e5082c"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["5c83b2773579"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -868,8 +890,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settings-pending",
         "observation": {
-          "sender": ["f1d579dd459c"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["c52741b88a9d"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -881,8 +903,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["f1d579dd459c"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["c52741b88a9d"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -894,8 +916,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.method-not-found:settings-pending",
         "observation": {
-          "sender": ["12e70439f294"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["4f67c9a33bf8"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -907,8 +929,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.method-not-found:settled",
         "observation": {
-          "sender": ["12e70439f294"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["4f67c9a33bf8"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -920,8 +942,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settings-pending",
         "observation": {
-          "sender": ["dae756300589"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["16aba513f7bd"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -933,8 +955,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.transport-rejection:settled",
         "observation": {
-          "sender": ["dae756300589"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["16aba513f7bd"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -946,8 +968,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settings-pending",
         "observation": {
-          "sender": ["1321b4c8c0b8"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["67771dfc5117"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"
@@ -959,8 +981,8 @@
       {
         "id": "settings-repo-metadata-fulfilled.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["1321b4c8c0b8"],
-          "payloads": ["19b2979d7fc2"],
+          "sender": ["67771dfc5117"],
+          "payloads": ["f2274efe8aa6"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "load": "eb79a9b3682a"

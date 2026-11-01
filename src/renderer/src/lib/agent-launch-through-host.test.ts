@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
-import { resolveAgentSessionOptionLaunch } from '../../../shared/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../../../shared/agent-session/options/agent-session-option-launch'
 import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

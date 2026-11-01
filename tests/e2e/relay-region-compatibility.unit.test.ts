@@ -41,7 +41,7 @@ function request(fetch: typeof globalThis.fetch) {
 describe('relay correction mixed-version wire contracts', () => {
   it('new desktop falls back against the actual pinned old director parser', async () => {
     const bodies: unknown[] = []
-    const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body: unknown = JSON.parse(String(init?.body))
       bodies.push(body)
       return BaselineRequest.safeParse(body).success

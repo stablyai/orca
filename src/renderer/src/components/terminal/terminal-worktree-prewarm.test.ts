@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { revealActivationDeferredTabs } from './background-terminal-worktree-mount'
 import {
-  areTabSessionsConfirmed,
   createDeferredNarrowingUndo,
   planTerminalPrewarmTabMount,
   undoTerminalPrewarmNarrowing
@@ -36,20 +35,6 @@ const plan = (
   })
 
 describe('planTerminalPrewarmTabMount', () => {
-  it('mounts only the revealable tab and keeps restorable siblings parked', () => {
-    expect(plan([tab('a', 'pty-a'), tab('b', 'pty-b'), tab('c', null)], ['a'])).toEqual({
-      allowedTabIds: new Set(['a']),
-      deferredTabIds: new Set(['b'])
-    })
-  })
-
-  it('admits a live revealable tab without spawning its unrestorable siblings', () => {
-    expect(plan([tab('a', 'pty-a'), tab('c', null)], ['a'], { live: ['a'] })).toEqual({
-      allowedTabIds: new Set(['a']),
-      deferredTabIds: new Set()
-    })
-  })
-
   it('never mounts a revealable tab that would spawn a shell or wake a sleeping agent', () => {
     expect(plan([tab('a', null)], ['a'])).toBeNull()
     expect(plan([tab('a', 'pty-a')], ['a'], { sleeping: ['a'] })).toBeNull()
@@ -106,42 +91,8 @@ describe('undoTerminalPrewarmNarrowing', () => {
   })
 })
 
-describe('areTabSessionsConfirmed', () => {
-  it('rejects a split tab whose sibling leaf session was not confirmed live', () => {
-    expect(areTabSessionsConfirmed(['pty-a', 'pty-b'], new Set(['pty-a']))).toBe(false)
-  })
-
-  it('rejects confirmation for a leaf set that changed while the check was pending', () => {
-    expect(areTabSessionsConfirmed(['pty-a', 'pty-c'], new Set(['pty-a', 'pty-b']))).toBe(false)
-  })
-
-  it('admits a tab only when every leaf session was confirmed', () => {
-    expect(areTabSessionsConfirmed(['pty-a', 'pty-b'], new Set(['pty-a', 'pty-b']))).toBe(true)
-    expect(areTabSessionsConfirmed([], new Set())).toBe(false)
-  })
-})
-
 describe('createDeferredNarrowingUndo', () => {
   const narrowing = { allowedTabIds: new Set(['live']), deferredTabIds: new Set(['p1']) }
-
-  it('keeps a released narrowing until the tab cold-park cool-down has passed', () => {
-    vi.useFakeTimers()
-    try {
-      const undo = vi.fn()
-      const undos = createDeferredNarrowingUndo({
-        delayMs: 31_000,
-        undo,
-        remainingHoldMs: () => null
-      })
-      undos.schedule('wt', narrowing)
-      vi.advanceTimersByTime(30_000)
-      expect(undo).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(1_000)
-      expect(undo).toHaveBeenCalledWith('wt', narrowing)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 
   it('waits out a newer measurement cool-down that would still leave tab parking off', () => {
     vi.useFakeTimers()

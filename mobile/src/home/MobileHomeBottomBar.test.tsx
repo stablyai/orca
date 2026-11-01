@@ -49,6 +49,7 @@ describe('Home bottom-bar Automations entry', () => {
           contentMaxWidth: 600,
           isWideLayout: false,
           connectedHosts,
+          hostsConnecting: false,
           ...callbacks
         })
       )

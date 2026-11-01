@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, Pressable } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useAnimatedRef,
@@ -8,15 +7,16 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
+import { Smartphone, Type } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { loadHosts } from '../src/transport/host-store'
+import { loadHosts, peekHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
+import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import {
@@ -24,7 +24,6 @@ import {
   saveTerminalAutoRestoreFitMs,
   setTerminalAutoRestoreFitMsForHost
 } from '../src/terminal/terminal-auto-restore-fit-state'
-import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
 import {
@@ -32,6 +31,12 @@ import {
   saveTerminalAutocompleteEnabled
 } from '../src/storage/preferences'
 import { MobileSwitch } from '../src/components/MobileSwitch'
+import {
+  SettingsEmptyRow,
+  SettingsNavBar,
+  SettingsSection,
+  settingsScreenStyles
+} from '../src/settings/settings-screen-frame'
 
 type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
@@ -143,18 +148,14 @@ function HostFitRow({
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={onPress}
+    <ListRow
+      title={hostName}
+      subtitle={autoRestoreSummary(ms, t)}
+      leading={<Smartphone size={18} color={colors.textSecondary} />}
+      navigates
       disabled={!client}
-    >
-      <Smartphone size={16} color={colors.textSecondary} />
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{hostName}</Text>
-        <Text style={styles.rowSublabel}>{autoRestoreSummary(ms, t)}</Text>
-      </View>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
+      onPress={onPress}
+    />
   )
 }
 
@@ -163,7 +164,7 @@ export default function TerminalSettingsScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [hosts, setHosts] = useState<HostProfile[]>([])
+  const [hosts, setHosts] = useState<HostProfile[]>(() => peekHosts() ?? [])
   useEffect(() => {
     void loadHosts().then(setHosts)
   }, [])
@@ -275,130 +276,108 @@ export default function TerminalSettingsScreen() {
   )
 
   return (
-    <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>{t('app.terminalSettings.title', 'Terminal')}</Text>
-      </View>
-
-      <Animated.ScrollView
-        ref={scrollRef}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        onContentSizeChange={(_width, height) => {
-          scrollContentHeight.value = height
-        }}
-      >
-        <Text style={styles.groupHeading}>
-          {t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
-        </Text>
-        <Text style={styles.groupDescription}>
-          {t(
-            'app.terminalSettings.leaveAppDescription',
-            "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
-          )}
-        </Text>
-
-        {hosts.length === 0 ? (
-          <View style={[styles.section, styles.sectionTopGap]}>
-            <Text style={styles.emptyText}>
-              {t(
-                'app.terminalSettings.noPairedDesktops',
-                'No paired desktops yet. Pair one to control terminal behavior.'
-              )}
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.section, styles.sectionTopGap]}>
-            {hosts.map((host, idx) => {
-              const client = hostClientsById.get(host.id) ?? null
-              return (
-                <View key={host.id}>
-                  {idx > 0 && <View style={styles.separator} />}
-                  <HostFitRow
-                    client={client}
-                    hostName={host.name}
-                    ms={hostMs[host.id]}
-                    onPress={() => setPickerHostId(host.id)}
-                  />
-                </View>
-              )
-            })}
-          </View>
-        )}
-
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>
-          {t('app.terminalSettings.textSizeHeading', 'TEXT SIZE')}
-        </Text>
-        <Text style={styles.groupDescription}>
-          {t(
-            'app.terminalSettings.textSizeDescription',
-            "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal."
-          )}
-        </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setTextSizePickerOpen(true)}
-          >
-            <Type size={16} color={colors.textSecondary} />
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>{t('app.terminalSettings.textSize', 'Text size')}</Text>
-              <Text style={styles.rowSublabel}>{textSizeSummary(textScale, t)}</Text>
-            </View>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>
-          {t('app.terminalSettings.keyboardInputHeading', 'KEYBOARD INPUT')}
-        </Text>
-        <Text style={styles.groupDescription}>
-          {t(
-            'app.terminalSettings.keyboardInputDescription',
-            'Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.'
-          )}
-        </Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>
-                {t('app.terminalSettings.autocomplete', 'Autocomplete & autocorrect')}
-              </Text>
-              <Text style={styles.rowSublabel}>
-                {autocompleteEnabled
-                  ? t('app.terminalSettings.autocompleteOn', 'On')
-                  : t('app.terminalSettings.autocompleteOff', 'Off')}
-              </Text>
-            </View>
-            <MobileSwitch
-              accessibilityLabel={t(
-                'app.terminalSettings.autocomplete',
-                'Autocomplete & autocorrect'
-              )}
-              value={autocompleteEnabled}
-              onValueChange={toggleAutocomplete}
-            />
-          </View>
-        </View>
-
-        <TerminalShortcutSettings
-          scrollRef={scrollRef}
-          scrollOffsetY={scrollOffsetY}
-          scrollContentHeight={scrollContentHeight}
-          onDragActiveChange={handleDragActiveChange}
+    <GestureHandlerRootView style={settingsScreenStyles.container}>
+      <SafeAreaView style={settingsScreenStyles.container} edges={['top']}>
+        <SettingsNavBar
+          title={t('app.terminalSettings.title', 'Terminal')}
+          onBack={() => router.back()}
         />
-      </Animated.ScrollView>
+
+        <Animated.ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[
+            settingsScreenStyles.scrollContent,
+            { paddingBottom: insets.bottom + spacing.xl }
+          ]}
+          showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          onContentSizeChange={(_width, height) => {
+            scrollContentHeight.value = height
+          }}
+        >
+          <SettingsSection
+            first
+            title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
+            separatorInset={LIST_LEADING_INSET}
+            footer={t(
+              'app.terminalSettings.leaveAppDescription',
+              "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually."
+            )}
+          >
+            {hosts.length === 0 ? (
+              <SettingsEmptyRow key="empty">
+                {t(
+                  'app.terminalSettings.noPairedDesktops',
+                  'No paired desktops yet. Pair one to control terminal behavior.'
+                )}
+              </SettingsEmptyRow>
+            ) : (
+              hosts.map((host) => (
+                <HostFitRow
+                  key={host.id}
+                  client={hostClientsById.get(host.id) ?? null}
+                  hostName={host.name}
+                  ms={hostMs[host.id]}
+                  onPress={() => setPickerHostId(host.id)}
+                />
+              ))
+            )}
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('app.terminalSettings.textSizeHeading', 'TEXT SIZE')}
+            footer={t(
+              'app.terminalSettings.textSizeDescription',
+              "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal."
+            )}
+          >
+            <ListRow
+              key="textSize"
+              title={t('app.terminalSettings.textSize', 'Text size')}
+              subtitle={textSizeSummary(textScale, t)}
+              leading={<Type size={18} color={colors.textSecondary} />}
+              navigates
+              onPress={() => setTextSizePickerOpen(true)}
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title={t('app.terminalSettings.keyboardInputHeading', 'KEYBOARD INPUT')}
+            footer={t(
+              'app.terminalSettings.keyboardInputDescription',
+              'Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.'
+            )}
+          >
+            <ListRow
+              key="autocomplete"
+              title={t('app.terminalSettings.autocomplete', 'Autocomplete & autocorrect')}
+              subtitle={
+                autocompleteEnabled
+                  ? t('app.terminalSettings.autocompleteOn', 'On')
+                  : t('app.terminalSettings.autocompleteOff', 'Off')
+              }
+              accessory={
+                <MobileSwitch
+                  accessibilityLabel={t(
+                    'app.terminalSettings.autocomplete',
+                    'Autocomplete & autocorrect'
+                  )}
+                  value={autocompleteEnabled}
+                  onValueChange={toggleAutocomplete}
+                />
+              }
+            />
+          </SettingsSection>
+
+          <TerminalShortcutSettings
+            scrollRef={scrollRef}
+            scrollOffsetY={scrollOffsetY}
+            scrollContentHeight={scrollContentHeight}
+            onDragActiveChange={handleDragActiveChange}
+          />
+        </Animated.ScrollView>
+      </SafeAreaView>
 
       <PickerModal<RestoreValue>
         visible={pickerHost != null}

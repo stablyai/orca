@@ -1,7 +1,7 @@
 import {
   findCatalogModel,
   getAgentSessionOptionCatalog
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { SourceControlActionLaunchPreferences } from '../../../../shared/source-control-ai-actions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {

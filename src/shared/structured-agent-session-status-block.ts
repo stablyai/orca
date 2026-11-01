@@ -1,11 +1,11 @@
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalStatusItem, AgentJournalTurnScope } from './agent-session-journal-types'
 import { readAgentSessionOrcaStop } from './agent-session-orca-stop'
-import type { NativeChatTextBlock } from './native-chat-types'
+import type { NativeChatTextBlock } from './native-chat/native-chat-types'
 import {
   AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION,
   isAgentSessionLegacyCompactionResult
-} from './agent-session-compaction'
+} from './agent-session/agent-session-compaction'
 
 /** A status row as the line a chat paints: named fields only, so a host-only key never leaks. */
 export function structuredAgentSessionStatusBlock(

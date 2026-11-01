@@ -6,7 +6,7 @@ import {
 import { applyClaudeMessageOptions } from '../claude/claude-structured-message-options'
 import { sessionFor } from '../claude/claude-structured-dispatch-test-support'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
-import { readAgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { resolveAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
 import { quoteStartupArg, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import type { GlobalSettings } from '../../shared/global-settings-types'

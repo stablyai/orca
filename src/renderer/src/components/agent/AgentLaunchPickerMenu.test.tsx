@@ -433,6 +433,14 @@ it('opens setup with a clicked chevron without launching, then dispatches its se
     entry
   ])
 })
+it('opens the setup panel on the menu layer so it stacks above the new tab menu', () => {
+  act(() => getByRole(document.body, 'button', { name: 'Configure Codex' }).click())
+  // happy-dom computes no stacking, so compare the z-index utilities the layers come from.
+  const layer = (element: HTMLElement) => element.className.match(/\bz-\[\d+\]/)?.[0]
+  const panel = layer(getByRole(document.body, 'dialog', { name: 'Configure Codex' }))
+  expect(panel).toBe(layer(getByRole(document.body, 'menu')))
+  expect(panel).not.toBe('z-[60]')
+})
 it('keeps setup open while the pointer expands and collapses Arguments', async () => {
   const user = userEvent.setup()
   await user.click(
