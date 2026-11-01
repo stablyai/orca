@@ -5,8 +5,7 @@ import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../sha
 import { defineMethod } from '../core'
 import {
   requireInstalledStructuredHost,
-  requireStructuredAgentAudience,
-  requireStructuredHost
+  requireStructuredAgentAudience
 } from './structured-agent-session-gate'
 import {
   HandoffStatusParams,
@@ -79,16 +78,18 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       requireStructuredAgentAudience(ctx, params.agent)
       const host =
         params.sessionId === undefined
-          ? requireStructuredHost(ctx)
+          ? null
           : await requireInstalledStructuredHost(ctx, params.sessionId)
       const record =
-        params.sessionId === undefined ? null : host.deps.store.getConversation(params.sessionId)
+        params.sessionId === undefined ? null : host?.deps.store.getConversation(params.sessionId)
       const coherent =
         ctx.clientKind === undefined ||
         ctx.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
       const scope = coherent ? {} : { legacy: true }
       const read = async (): Promise<AgentSessionModelCatalogResult> => {
-        const catalog = host.deps.modelCatalog
+        const catalog = host
+          ? host.deps.modelCatalog
+          : await ctx.runtime.structuredAgentModelCatalog()
         if (!catalog) {
           return { origin: 'unknown' }
         }
@@ -110,7 +111,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
                   }
                 })
         }
-        if (params.sessionId !== undefined) {
+        if (host) {
           return host.readModelCatalog(request)
         }
         if (!params.savedOnly) {

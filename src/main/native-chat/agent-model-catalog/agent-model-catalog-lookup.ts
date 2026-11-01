@@ -43,7 +43,8 @@ export function createAgentModelCatalogLookup(
   claims: Map<string, AgentModelCatalogClaim>,
   requestKey: (params: AgentModelCatalogReadParams) => string,
   capture: (params: AgentModelCatalogReadParams) => string,
-  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation
+  captureRead: (params: AgentModelCatalogReadParams) => AgentModelCatalogReadOperation,
+  tasks: Set<Promise<unknown>>
 ) {
   return (params: AgentModelCatalogReadParams): Promise<void> => {
     const operation = params.operation ?? captureRead(params)
@@ -210,7 +211,18 @@ export function createAgentModelCatalogLookup(
         workspacePath: cwd ?? folder
       })
       if (probe && probeHome && deps.store.probeDue(fingerprint)) {
-        void deps.store.refresh(fingerprint, params.agent, list, current, signal)
+        void deps.store.refresh(
+          fingerprint,
+          params.agent,
+          () => {
+            const task = list()
+            tasks.add(task)
+            void task.finally(() => tasks.delete(task)).catch(() => {})
+            return task
+          },
+          current,
+          signal
+        )
       }
       // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
       ready.resolve()
@@ -228,6 +240,8 @@ export function createAgentModelCatalogLookup(
         claims.delete(key)
       }
     })
+    tasks.add(promise)
+    void promise.finally(() => tasks.delete(promise)).catch(() => {})
     claims.set(key, { identity, controller, promise, ready: ready.promise, params, current })
     return promise
   }

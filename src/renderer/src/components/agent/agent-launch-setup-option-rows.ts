@@ -99,3 +99,60 @@ export function agentLaunchSetupOptionRows({
     }
   })
 }
+
+export function agentLaunchSetupCatalogState(
+  entry: AgentPickerEntry,
+  models: readonly { hidden?: true }[]
+) {
+  const hasModels = models.some((model) => !model.hidden)
+  const catalogPending =
+    !hasModels &&
+    ((entry.catalogRead === undefined && entry.catalog.origin === 'unknown') ||
+      entry.catalogRead === 'pending')
+  const catalogMessage = catalogPending
+    ? null
+    : entry.catalogRead === 'unsupported'
+      ? translate(
+          'agentPicker.catalogUnsupported',
+          '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
+          { agent: entry.label }
+        )
+      : entry.catalogRead === 'failed'
+        ? translate(
+            'agentPicker.catalogFailed',
+            'Could not load {{agent}} models. Close and reopen the agent picker to try again.',
+            { agent: entry.label }
+          )
+        : entry.catalog.unavailable?.reason === 'notSignedIn'
+          ? translate(
+              'agentPicker.catalogSignIn',
+              'Sign in to {{agent}} to load its models, then close and reopen the agent picker.',
+              { agent: entry.label }
+            )
+          : entry.catalog.unavailable?.reason === 'cliMissing'
+            ? translate(
+                'agentPicker.catalogInstall',
+                'Install {{agent}} on this host to load its models, then close and reopen the agent picker.',
+                { agent: entry.label }
+              )
+            : entry.catalog.unavailable
+              ? translate(
+                  'agentPicker.catalogUnresolved',
+                  '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
+                  { agent: entry.label }
+                )
+              : entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
+                ? !hasModels
+                  ? translate(
+                      'agentPicker.catalogUnresolved',
+                      '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
+                      { agent: entry.label }
+                    )
+                  : null
+                : !hasModels
+                  ? translate('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
+                      agent: entry.label
+                    })
+                  : null
+  return { hasModels, catalogPending, catalogMessage }
+}

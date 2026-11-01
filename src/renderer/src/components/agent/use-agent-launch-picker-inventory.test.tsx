@@ -720,3 +720,99 @@ it('keeps the active accepted and pending envelope through real same-authority s
     session: mocks.session
   })
 })
+
+it.each([3, 30])(
+  'requeues a failed catalog on real parent reopen across %i joins while sibling I/O retains the owner',
+  async (count) => {
+    const reads: {
+      host: string
+      method: string
+      agent: string
+      resolve: (value: unknown) => void
+      reject: (error: Error) => void
+    }[] = []
+    mocks.session.mockImplementation((target, method, params) => {
+      const read = Promise.withResolvers<unknown>()
+      reads.push({
+        host: target.environmentId,
+        method,
+        agent: params.agent,
+        resolve: read.resolve,
+        reject: read.reject
+      })
+      return read.promise
+    })
+    const menu = model(`failed-${count}`, ['pi', 'claude', 'codex'])
+    const otherMenu = model(`other-failed-${count}`, ['pi'])
+    let renders = 0,
+      otherRenders = 0
+    const view = renderHook(
+      ({ open }) => {
+        renders++
+        return useAgentLaunchPickerInventory('wt', menu, open, 'pi')
+      },
+      { initialProps: { open: true } }
+    )
+    const other = renderHook(() => {
+      otherRenders++
+      return useAgentLaunchPickerInventory('wt', otherMenu, true, 'pi')
+    })
+    try {
+      await act(async () => {})
+      const catalogs = () =>
+        reads.filter(
+          (r) =>
+            r.host === `failed-${count}` &&
+            r.method === 'agentSession.modelCatalog' &&
+            r.agent === 'pi'
+        )
+      const failed = catalogs()[0]
+      expect(failed).toBeDefined()
+      for (let i = 0; i < count; i++) {
+        view.rerender({ open: false })
+        view.rerender({ open: true })
+      }
+      expect(catalogs()).toHaveLength(1)
+      const beforeFailure = renders,
+        beforeOther = otherRenders
+      await act(async () => failed.reject(new Error('transport failed')))
+      expect(view.result.current[0].catalogRead).toBe('failed')
+      expect(renders - beforeFailure).toBe(1)
+      expect(otherRenders).toBe(beforeOther)
+      view.rerender({ open: false })
+      view.rerender({ open: true })
+      expect(catalogs()).toHaveLength(1) // both physical slots still belong to outstanding sibling reads
+      expect(view.result.current[0].catalogRead).toBe('pending')
+      const sibling = reads.find(
+        (r) =>
+          r.host === `failed-${count}` &&
+          r.method === 'agentSession.modelCatalog' &&
+          r.agent === 'claude'
+      )!
+      await act(async () => sibling.resolve(catalog))
+      expect(catalogs()).toHaveLength(2) // released slot admits the selected failed agent before dormant work
+      const pendingRenders = renders
+      await act(async () => {}) // unrelated turn: no new acquisition or publication
+      expect(renders).toBe(pendingRenders)
+      expect(otherRenders).toBe(beforeOther)
+      const beforeSuccess = renders
+      await act(async () => catalogs()[1].resolve(catalog))
+      expect(view.result.current[0]).toMatchObject({ catalogRead: 'settled', catalog })
+      expect(renders - beforeSuccess).toBe(1)
+      expect(otherRenders).toBe(beforeOther)
+    } finally {
+      view.unmount()
+      other.unmount()
+      await act(async () => {
+        for (const read of reads) {
+          read.resolve(read.method === 'agentSession.modelCatalog' ? catalog : { seedOptions: {} })
+        }
+      })
+    }
+    expect(
+      agentPickerAcquisitionDiagnostics().filter((resource) =>
+        resource.key.includes(`failed-${count}`)
+      )
+    ).toEqual([])
+  }
+)

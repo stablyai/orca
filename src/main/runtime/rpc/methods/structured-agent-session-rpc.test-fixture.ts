@@ -5,7 +5,10 @@ import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  getStructuredAgentSessionHost,
+  setStructuredAgentSessionHost
+} from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusSubscriber
@@ -253,6 +256,7 @@ export function dispatcher(
     publishStructuredAgentSessionTab: vi.fn()
   })
   const runtime = {
+    structuredAgentModelCatalog: async () => getStructuredAgentSessionHost()?.deps.modelCatalog,
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     // The host reads saved settings privately; follow the client settings each test chose.

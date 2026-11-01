@@ -22261,6 +22261,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
+    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
+    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
+    "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索智能体和配置…",
     "configure": "配置 {{agent}}",
     "arguments": "参数",

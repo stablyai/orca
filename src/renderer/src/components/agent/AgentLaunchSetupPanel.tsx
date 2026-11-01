@@ -1,4 +1,7 @@
-import { agentLaunchSetupOptionRows } from './agent-launch-setup-option-rows'
+import {
+  agentLaunchSetupOptionRows,
+  agentLaunchSetupCatalogState
+} from './agent-launch-setup-option-rows'
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
@@ -79,7 +82,8 @@ export function AgentLaunchSetupPanel({
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const modelDisabled = disabled || defaultsPending
+  const { hasModels, catalogPending, catalogMessage } = agentLaunchSetupCatalogState(entry, models)
+  const modelDisabled = disabled || defaultsPending || catalogPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -199,6 +203,7 @@ export function AgentLaunchSetupPanel({
       >
         <CommandInput
           disabled={modelDisabled}
+          aria-busy={catalogPending}
           value={modelQuery}
           onValueChange={setModelQuery}
           aria-label={translate('agentPicker.searchModels', 'Search models')}
@@ -207,9 +212,22 @@ export function AgentLaunchSetupPanel({
           })}
         />
         <CommandList className="max-h-56">
-          <CommandEmpty>
-            {translate('agentPicker.noModels', 'No models match your search.')}
-          </CommandEmpty>
+          {catalogMessage ? (
+            <div className="px-2 py-1.5 text-xs text-muted-foreground" role="status">
+              {catalogMessage}
+            </div>
+          ) : null}
+          {hasModels &&
+          modelQuery &&
+          entry.catalog.origin !== 'unknown' &&
+          !entry.catalog.listingInProgress &&
+          entry.catalogRead !== 'pending' &&
+          entry.catalogRead !== 'failed' &&
+          entry.catalogRead !== 'unsupported' ? (
+            <CommandEmpty>
+              {translate('agentPicker.noModels', 'No models match your search.')}
+            </CommandEmpty>
+          ) : null}
           <CommandGroup>
             {legacy && !modelQuery ? (
               <CommandItem value="__back__" disabled={disabled} onSelect={() => setLegacy(false)}>

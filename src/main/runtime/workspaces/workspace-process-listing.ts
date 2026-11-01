@@ -3,7 +3,6 @@ import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
-import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { collectRuntimeWorktreeAgentSources } from '../runtime-worktree-agent-sources'
 import { OrcaRuntimeWithWorktreePsDependencies } from './workspace-process-listing-dependencies'
@@ -47,10 +46,6 @@ import { buildWorktreeListingPage } from '../worktree-listing-host-scope'
 import { structuredWorkerOpenTaskTitle } from '../structured-worker-custody'
 import { preModeChatGetsFullAccess } from '../../../shared/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
-import { claudeStructuredAuthPolicyForSettings } from '../../claude-accounts/claude-structured-auth-policy'
-import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
-import { structuredAgentConfiguredArgs } from '../../native-chat/structured-agent-configured-args'
 import { claudeCliFlagSupport } from '../../claude/claude-cli-flag-support'
 import {
   runtimeHiddenHostIds,
@@ -247,40 +242,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       hostId: LOCAL_EXECUTION_HOST_ID,
       claimKeyId: this.agentSessionClaimSigner.keyId,
       logger,
-      // Resolve plain folder workspaces as well as git worktrees.
-      resolveWorkspacePath: async (workspaceId) =>
-        (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveClaudeCommand: (options) =>
-        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
-      resolveCodexCommand: (options) =>
-        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
-      resolveLaunchArgs: (agent) =>
-        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
-      // Production-only wiring prevents test runtimes from probing a real Claude CLI.
+      ...this.structuredAgentCatalogDependencies(),
       claudeCliFlags: claudeCliFlagSupport,
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      resolveShellEnvironmentPolicy: () =>
-        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
-      resolveClaudeAuthPolicy: () =>
-        claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       resolveAgentFullAccess: (agent) =>
         isTuiAgent(agent) &&
         preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
-      resolveAgentLaunchEnv: (agent) =>
-        isTuiAgent(agent)
-          ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
-          : {},
-      resolveAgentCommandSettings: () => this.requireStore().getSettings(),
-      resolveCodexAccountKind: (home) =>
-        resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
-      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
       launchAccountHome: (record, purpose) =>
         this.resolveStructuredAgentLaunchAccountHome(record, purpose),
-      ...(this.prepareCodexCatalogProbeHomeFn
-        ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
-        : {}),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {

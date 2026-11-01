@@ -250,7 +250,7 @@ export function useAgentLaunchPickerInventory(
               agent: entry.agent,
               waitForListing: true
             }
-          ).catch(() => undefined),
+          ),
         support: async (entry) => {
           if (!selector) {
             return undefined

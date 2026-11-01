@@ -1,3 +1,4 @@
+import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { claudePromptUuidForSubmission } from '../claude/structured/claude-structured-session-id'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
@@ -15,9 +16,18 @@ import {
   writeNativeNamingConversation
 } from './structured-claude-naming-test-support'
 
-vi.mock('./structured-agent-model-catalog-wiring', () => ({
-  modelCatalogHostDeps: async () => ({})
-}))
+vi.mock('./structured-agent-model-catalog-wiring', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelCatalogWiring>()
+  return {
+    ...actual,
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => ({
+      ...(await actual.ensureStructuredAgentModelCatalogOwner(...args)),
+      modelCatalog: undefined
+    })
+  }
+})
 
 it.each([10, 100])(
   'coalesces %i applied commits while joining real append, then honors a fresh equal-text occurrence',

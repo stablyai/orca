@@ -1,3 +1,12 @@
+import { ensureStructuredAgentModelCatalogOwner } from '../structured-agent-model-catalog-wiring'
+import type { StructuredAgentModelCatalogDeps } from '../structured-agent-runtime-registration-types'
+import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
+import { nativeChatShellEnvironmentPolicy } from '../../../shared/native-chat/native-chat-shell-environment'
+import { claudeStructuredAuthPolicyForSettings } from '../../claude-accounts/claude-structured-auth-policy'
+import { resolveStructuredAgentCommand } from '../../native-chat/structured-agent-command-resolution'
+import { structuredAgentConfiguredArgs } from '../../native-chat/structured-agent-configured-args'
+import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/tui-agent-launch-defaults'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
@@ -23,6 +32,41 @@ export abstract class OrcaRuntimeWithWorktreePsDependencies extends OrcaRuntimeW
       ...resolveTuiAgentLaunchEnv(agent, settings),
       ...this.accounts.hostLaunchEnvFor(agent)
     }
+  }
+
+  protected structuredAgentCatalogDependencies(): StructuredAgentModelCatalogDeps {
+    return {
+      stateDirectory: getProfileUserDataPath(),
+      // Resolve plain folder workspaces as well as git worktrees.
+      resolveWorkspacePath: async (workspaceId) =>
+        (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
+      resolveClaudeCommand: (options) =>
+        resolveStructuredAgentCommand('claude', this.requireStore().getSettings(), options),
+      resolveCodexCommand: (options) =>
+        resolveStructuredAgentCommand('codex', this.requireStore().getSettings(), options),
+      resolveLaunchArgs: (agent) =>
+        structuredAgentConfiguredArgs(agent, this.requireStore().getSettings()),
+      resolveShellEnvironmentPolicy: () =>
+        nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
+      resolveClaudeAuthPolicy: () =>
+        claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
+      resolveAgentLaunchEnv: (agent) =>
+        isTuiAgent(agent)
+          ? this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
+          : {},
+      resolveAgentCommandSettings: () => this.requireStore().getSettings(),
+      resolveCodexAccountKind: (home) =>
+        resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
+      resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
+      ...(this.prepareCodexCatalogProbeHomeFn
+        ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
+        : {})
+    }
+  }
+
+  async structuredAgentModelCatalog() {
+    return (await ensureStructuredAgentModelCatalogOwner(this.structuredAgentCatalogDependencies()))
+      .modelCatalog
   }
 
   protected abstract listResolvedWorktreeSnapshot(

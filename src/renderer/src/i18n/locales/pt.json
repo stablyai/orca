@@ -22941,6 +22941,12 @@
     }
   },
   "agentPicker": {
+    "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
+    "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
+    "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
+    "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
+    "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
+    "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Buscar agentes e configurações…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",

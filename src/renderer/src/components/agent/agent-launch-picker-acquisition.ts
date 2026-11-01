@@ -31,7 +31,7 @@ class AgentPickerAcquisition {
     private initial: AgentPickerEntry[],
     private reads: Reads
   ) {
-    this.entries = initial
+    this.entries = initial.map((entry) => ({ ...entry, catalogRead: 'pending' }))
     this.defaults = initial
     for (const [i, entry] of initial.entries()) {
       if (entry.structuredDefaultsPending) {
@@ -48,6 +48,19 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
+      for (const [i, entry] of this.entries.entries()) {
+        if (
+          entry.catalogRead !== 'pending' &&
+          (entry.catalog.origin === 'unknown' ||
+            entry.catalogRead === 'failed' ||
+            entry.catalogRead === 'unsupported' ||
+            entry.catalog.unavailable !== undefined ||
+            entry.catalog.listingInProgress)
+        ) {
+          this.queued.catalog.add(i)
+          this.entries[i] = { ...entry, catalogRead: 'pending' }
+        }
+      }
       for (const [i, read] of this.supports) {
         if (read.state === 'settled') {
           this.supports.set(i, { state: 'queued' })
@@ -84,6 +97,7 @@ class AgentPickerAcquisition {
       return {
         ...entry,
         catalog: this.entries[i].catalog,
+        catalogRead: this.entries[i].catalogRead,
         ...(read
           ? {
               structured: (current && read.value) || entry.structured,
@@ -135,11 +149,36 @@ class AgentPickerAcquisition {
       }
       const read =
         kind === 'catalog'
-          ? this.reads.catalog(entry).then((catalog) => {
-              if (catalog) {
-                this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog } : e))
-              }
-            })
+          ? this.reads
+              .catalog(entry)
+              .then((catalog) => {
+                this.entries = this.entries.map((e, i) =>
+                  i === index
+                    ? {
+                        ...e,
+                        ...(catalog ? { catalog } : {}),
+                        catalogRead: 'settled'
+                      }
+                    : e
+                )
+              })
+              .catch((error: unknown) => {
+                const unsupported =
+                  typeof error === 'object' &&
+                  error !== null &&
+                  'code' in error &&
+                  (error.code === 'method_not_found' ||
+                    error.code === 'structured_agent_session_unsupported' ||
+                    error.code === 'forbidden')
+                this.entries = this.entries.map((e, i) =>
+                  i === index
+                    ? {
+                        ...e,
+                        catalogRead: unsupported ? 'unsupported' : 'failed'
+                      }
+                    : e
+                )
+              })
           : this.reads
               .support(entry)
               .catch(() => undefined)

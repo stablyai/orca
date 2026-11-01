@@ -1,3 +1,4 @@
+import type * as ModelCatalogWiring from './structured-agent-model-catalog-wiring'
 import { ChildProcess } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,9 +17,18 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 
-vi.mock('./structured-agent-model-catalog-wiring', () => ({
-  modelCatalogHostDeps: async () => ({})
-}))
+vi.mock('./structured-agent-model-catalog-wiring', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelCatalogWiring>()
+  return {
+    ...actual,
+    ensureStructuredAgentModelCatalogOwner: async (
+      ...args: Parameters<typeof actual.ensureStructuredAgentModelCatalogOwner>
+    ) => ({
+      ...(await actual.ensureStructuredAgentModelCatalogOwner(...args)),
+      modelCatalog: undefined
+    })
+  }
+})
 
 it('stops naming admission and joins native helper finalization before runtime close', async ({
   onTestFinished

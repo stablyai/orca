@@ -26,6 +26,11 @@ export { hasPersistedStructuredAgentSessionStore } from './agent-session-record-
 export type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 
+import {
+  ensureStructuredAgentModelCatalogOwner,
+  stopStructuredAgentModelCatalogOwner
+} from './structured-agent-model-catalog-wiring'
+
 let installing: Promise<InstalledRuntime> | null = null
 
 export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
@@ -44,10 +49,15 @@ export function ensureStructuredAgentSessionHost(
   deps: StructuredAgentSessionRuntimeDeps
 ): Promise<StructuredAgentSessionHost> {
   // A failed open must not poison the slot forever — the next call retries.
-  installing ??= install(deps).catch((error) => {
-    installing = null
-    throw error
-  })
+  if (!installing) {
+    const pending = install(deps).catch((error) => {
+      if (installing === pending) {
+        installing = null
+      }
+      throw error
+    })
+    installing = pending
+  }
   return installing.then((installed) => installed.host)
 }
 
@@ -62,6 +72,7 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   trigger?: AgentSessionResumeTrigger
 }): Promise<void> {
   const trigger = options?.trigger ?? structuredAgentSessionTeardownTrigger()
+  const catalogStopped = stopStructuredAgentModelCatalogOwner()
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
@@ -92,6 +103,7 @@ export async function stopStructuredAgentSessionRuntime(options?: {
       failures.push(error)
     }
   }
+  await catalogStopped
   await agentModelCatalogStore.flushPersistence()
   if (failures.length === 1) {
     throw failures[0]
@@ -114,6 +126,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     throw new Error(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
   }
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
+  const catalogOwner = await ensureStructuredAgentModelCatalogOwner(deps)
   // The store launch admission may already have opened; a failed install leaves it to that slot.
   const recordStore = await openAgentSessionRecordStoreOnce({
     stateDirectory: deps.stateDirectory,
@@ -136,5 +149,5 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   // Before the host serves reads: a chat opened right after an update finds its visuals in place.
   await migrateLegacyNativeChatVisualsFolders(deps.stateDirectory, logger)
   const { installOnJournal } = await import('./structured-agent-session-host-assembly')
-  return await installOnJournal({ ...deps, logger }, recordStore)
+  return await installOnJournal({ ...deps, logger }, recordStore, catalogOwner)
 }
