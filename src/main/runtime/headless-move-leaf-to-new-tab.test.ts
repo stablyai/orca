@@ -109,6 +109,11 @@ describe('moveMobileSessionLeafToNewTab on a headless host', () => {
       'host-new-tab'
     )
   })
+  it('commits the move when an authoritative desktop window is open on the host', async () => {
+    const { runtime, move } = await setup()
+    Object.assign(runtime, { getAvailableAuthoritativeWindow: () => ({ webContents: {} }) })
+    await expect(move()).resolves.toEqual({ status: 'moved', ptyId: 'sibling-pty' })
+  })
   it('places the new tab where it was dropped in its group, selected', async () => {
     const { runtime, move } = await setup()
     const [group] = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabGroups ?? []
