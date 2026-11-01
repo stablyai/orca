@@ -916,8 +916,8 @@
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
-      "gitBusyInAnotherWorkspace": "Git busy elsewhere",
-      "remoteOperationInAnotherWorkspace": "This action is temporarily disabled to avoid overlapping Git operations. Wait for the Git operation in the other workspace to finish.",
+      "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
+      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {
         "on": "On",
         "off": "Off",

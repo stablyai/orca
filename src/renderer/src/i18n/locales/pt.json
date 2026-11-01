@@ -1596,8 +1596,8 @@
       "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
     },
     "sourceControl": {
-      "gitBusyInAnotherWorkspace": "Git ocupado em outro lugar",
-      "remoteOperationInAnotherWorkspace": "Esta ação está desativada temporariamente para evitar operações do Git sobrepostas. Aguarde a conclusão da operação do Git no outro espaço de trabalho.",
+      "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
+      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",

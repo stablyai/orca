@@ -844,8 +844,8 @@
       "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
     },
     "sourceControl": {
-      "gitBusyInAnotherWorkspace": "Git anderswo aktiv",
-      "remoteOperationInAnotherWorkspace": "Diese Aktion ist vorübergehend deaktiviert, um überlappende Git-Vorgänge zu vermeiden. Warte, bis der Git-Vorgang im anderen Arbeitsbereich abgeschlossen ist.",
+      "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
+      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
       "actionModel": {
         "on": "Ein",
         "off": "Aus",

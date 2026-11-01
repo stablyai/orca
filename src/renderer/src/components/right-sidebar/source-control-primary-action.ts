@@ -49,10 +49,13 @@ function toRendererPrimaryAction(
   ) {
     return {
       kind: decision.kind,
-      label: translate('settings.sourceControl.gitBusyInAnotherWorkspace', 'Git busy elsewhere'),
+      label: translate(
+        'settings.sourceControl.gitOperationInAnotherWorkspace',
+        'Git operation running elsewhere'
+      ),
       title: translate(
         'settings.sourceControl.remoteOperationInAnotherWorkspace',
-        'This action is temporarily disabled to avoid overlapping Git operations. Wait for the Git operation in the other workspace to finish.'
+        "Another workspace is running a Git operation. Wait for it to finish before using this action, so the two operations don't overlap."
       ),
       disabled: true,
       isWaitingForRemoteOperation: true
