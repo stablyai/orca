@@ -25,9 +25,10 @@ const { mountedEditors, renderedOptions, syncWordWrap, cleanupShiftWheel, create
       }
     }
     const mountedEditors: ReturnType<typeof createEditor>[] = []
+    const renderedOptions: Record<string, unknown>[] = []
     return {
       mountedEditors,
-      renderedOptions: [] as Record<string, unknown>[],
+      renderedOptions,
       syncWordWrap: vi.fn(() => ({ dispose: vi.fn() })),
       cleanupShiftWheel: vi.fn(),
       createEditor
