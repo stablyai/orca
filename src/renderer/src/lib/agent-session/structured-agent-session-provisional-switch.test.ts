@@ -160,15 +160,9 @@ async function mainLoadsStoreLayout(): Promise<void> {
   main = await drawTabsFromMain(useAppStore)
 }
 
-it.each([
-  [false, 'kept'],
-  [true, 'kept'],
-  [false, 'before-pick'],
-  [true, 'before-pick'],
-  [true, 'after-pick']
-] as const)(
-  'opens the chat through real host admission and provisional/layout writers, newer navigation=%s, source %s',
-  async (navigate, sourceRemoval) => {
+it.each(['none', 'source closed', 'pick during create'] as const)(
+  'opens the chat through real host admission and provisional/layout writers (%s)',
+  async (during) => {
     // A pane with no terminal to capture (its shell exited) stops nothing and opens the chat.
     mocks.captured.current = false
     const source = useAppStore
@@ -202,10 +196,14 @@ it.each([
     }
     const admission = Promise.withResolvers<{ supported: true }>()
     mocks.support.mockReturnValue(admission.promise)
+    const created = Promise.withResolvers<void>()
     mocks.create.mockImplementation(
       async (
         params: StructuredAgentSessionCreateParams
       ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> => {
+        if (during === 'pick during create') {
+          await created.promise
+        }
         const sessionId = params.envelope.sessionId
         const cursor = { epoch: 'fixture-epoch', sequence: 0 }
         return {
@@ -248,24 +246,21 @@ it.each([
     expect(mocks.stopped).not.toHaveBeenCalled()
     expect(mocks.create).not.toHaveBeenCalled()
     await main.settle()
-    // The shown tab can leave while the host decides (removing it selects a neighbour on its own),
-    // before or after the user picks another tab. This pins the admission wait only.
-    const removeSource = async () => {
+    // Continue in Chat UI closes its terminal before the chat opens; closing it selects a
+    // neighbour on its own, and the chat still takes the selection, as on main.
+    if (during === 'source closed') {
       useAppStore.getState().closeUnifiedTab(source.id)
       await main.settle()
     }
-    if (sourceRemoval === 'before-pick') {
-      await removeSource()
-    }
+    admission.resolve({ supported: true })
+    // Main's own guard: a tab the user picks once the chat's create is under way keeps the selection.
+    const navigate = during === 'pick during create'
     if (navigate) {
+      await vi.waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
       noteUserWorkspaceSwitch('wt-1')
       useAppStore.getState().activateTab(other.id)
+      created.resolve()
     }
-    if (sourceRemoval === 'after-pick') {
-      await main.settle()
-      await removeSource()
-    }
-    admission.resolve({ supported: true })
     await running
     await main.settle()
     const chats = useAppStore

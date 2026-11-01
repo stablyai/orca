@@ -5,10 +5,6 @@ import {
 import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
-import { watchUserTabPick } from './user-tab-pick-watch'
-import { replacedTabHoldsSelection } from '@/lib/replaced-tab-selection'
-import { findUnifiedTab } from '@/lib/unified-tab-anchor-insertion'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -153,11 +149,6 @@ export function beginStructuredAgentSessionProvisionalLaunch(
         )
       }
     }
-    // A deferred launch's slot and its claim on the selection are both the user's at the action.
-    const visibleAtAction = args.deferPublication
-      ? resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
-      : undefined
-    let pickWatch: ReturnType<typeof watchUserTabPick> | null = null
     if (args.deferPublication && !args.target?.surfaceAddress) {
       args = {
         ...args,
@@ -173,21 +164,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       worktreeId,
       executionHostId: owner.executionHostId,
       target: owner.target,
-      openAdmitted: (seedOptions) => {
-        pickWatch?.stop()
-        // The host can answer after the user picked another tab; their newer selection wins, by the
-        // same rule as a same-slot replace: the tab shown at the action must still hold its group.
-        // A shown tab that closed went with the action (Continue in Chat UI closes its terminal);
-        // then only a tab the user picked after that keeps the selection.
-        const shownAtAction = visibleAtAction ? findUnifiedTab(worktreeId, visibleAtAction) : null
-        const userPickedSince = shownAtAction
-          ? !replacedTabHoldsSelection(useAppStore.getState(), worktreeId, shownAtAction)
-          : (pickWatch?.picked() ?? false)
-        if (args.deferPublication && userPickedSince) {
-          focusIntent?.cancel()
-          args = { ...args, activate: false }
-        }
-        return open(
+      openAdmitted: (seedOptions) =>
+        open(
           beginLocalProvisionalLaunch({
             ...args,
             target: {
@@ -198,18 +176,11 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             },
             beforeOpen: undefined
           })
-        )
-      },
+        ),
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })
     void launch.settlement.then(settleWithoutTab, settleWithoutTab)
-    // Started once the launch exists, so it always has a settlement to end it.
-    if (visibleAtAction) {
-      const watch = watchUserTabPick(worktreeId, visibleAtAction)
-      pickWatch = watch
-      void launch.settlement.then(watch.stop, watch.stop)
-    }
     return launch
   } catch (error) {
     settleWithoutTab()

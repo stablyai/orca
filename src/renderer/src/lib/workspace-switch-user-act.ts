@@ -25,11 +25,6 @@ export function noteUserWorkspaceSwitch(workspaceKey: string | null | undefined)
   switchCounts.set(workspaceKey, (switchCounts.get(workspaceKey) ?? 0) + 1)
 }
 
-/** How many times the user has switched to the workspace or picked one of its tabs. */
-export function userWorkspaceSwitchCount(workspaceKey: string): number {
-  return switchCounts.get(workspaceKey) ?? 0
-}
-
 /** Wall-clock time of the user's last switch to the workspace, if any. */
 export function lastUserWorkspaceSwitchAt(workspaceKey: string): number | undefined {
   return lastSwitchAt.get(workspaceKey)
