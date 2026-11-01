@@ -87,6 +87,8 @@ export type BridgeRpcClient = RpcClient &
     notifyPagePainted: () => void
     // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
     claimBack: (consumer: PageBackConsumer) => () => void
+    // The page's own Back control. True when a claim took it or the shell accepted the pop; false leaves the caller its header path.
+    pressBack: () => boolean
     notifyStorageWrite: (key: string, value: string | null) => boolean
     notifyHaptics: (kind: BridgeHapticsKind) => boolean
     // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
@@ -339,6 +341,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
     claimBack: back.claim,
+    pressBack: () => back.dispatch() || notifications.notifyNavigateBack(),
     close,
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,
