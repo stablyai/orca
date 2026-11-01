@@ -10,6 +10,7 @@ export const NETWORK_HEADROOM = 1
 export const ROUTE_CAP = 2
 export const ROUTE_HEADROOM = 1
 export const GIT_ADMISSION_AGING_MS = 15_000
+export const NATIVE_STATUS_BUDGET = 'native-status'
 // General 4+2 and network 3+1 are disjoint, so at most ten admitted git children run globally;
 // worktree deletes bypass admission under their own limit (WORKTREE_DELETE_CONCURRENCY).
 export const MAX_GIT_CHILDREN = 10
@@ -80,6 +81,37 @@ export type AdmissionBudget = {
   headroomCapacity: number
   baseUsed: number
   headroomUsed: number
+}
+
+export function createAdmissionBudget(
+  key: string,
+  config: AdmissionSchedulerConfig
+): AdmissionBudget {
+  const nativeStatus = key === NATIVE_STATUS_BUDGET
+  const directoryStatus = key.startsWith('route:general:status:')
+  const route = key.startsWith('route:')
+  const network = key === 'network'
+  return {
+    baseCapacity: nativeStatus
+      ? Math.max(1, config.generalCap - 1)
+      : directoryStatus
+        ? 1
+        : route
+          ? config.routeCap
+          : network
+            ? config.networkCap
+            : config.generalCap,
+    headroomCapacity:
+      nativeStatus || directoryStatus
+        ? 0
+        : route
+          ? config.routeHeadroom
+          : network
+            ? config.networkHeadroom
+            : config.generalHeadroom,
+    baseUsed: 0,
+    headroomUsed: 0
+  }
 }
 
 export type AdmissionWaiter = {

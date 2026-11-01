@@ -1,10 +1,12 @@
-import { uncRouteKey } from './wsl-paths'
+import { gitAdmissionRoute } from './git-admission-route'
 import { classifyGitCommand } from './git-command-classification'
 import { GitAdmissionWaiterQueue } from './git-admission-waiter-queue'
 import {
   ADMISSION_TIER_VALUE,
   AdmissionEventPublisher,
   DEFAULT_ADMISSION_SCHEDULER_CONFIG,
+  NATIVE_STATUS_BUDGET,
+  createAdmissionBudget,
   type AdmissionBudget,
   type AdmissionClass,
   type AdmissionSchedulerConfig,
@@ -29,11 +31,6 @@ export {
   ROUTE_CAP,
   ROUTE_HEADROOM
 } from './git-admission-state'
-
-function routeKey(request: GitAdmissionRequest): string | null {
-  const distro = request.wslDistro?.trim().toLowerCase()
-  return distro ? `wsl:${distro}` : uncRouteKey(request.cwd)
-}
 
 export class GitAdmissionScheduler {
   private readonly config: AdmissionSchedulerConfig
@@ -108,10 +105,13 @@ export class GitAdmissionScheduler {
     budgetKeys: readonly string[]
   } {
     const admissionClass = classifyGitCommand(request.args) === 'network' ? 'network' : 'general'
-    const route = routeKey(request)
+    const route = gitAdmissionRoute(request)
     const keys: string[] = [admissionClass]
     if (route) {
       keys.push(`route:${admissionClass}:${route}`)
+    }
+    if (route?.startsWith('status:')) {
+      keys.push(NATIVE_STATUS_BUDGET)
     }
     for (const key of keys) {
       this.ensureBudget(key)
@@ -124,22 +124,7 @@ export class GitAdmissionScheduler {
     if (budget) {
       return budget
     }
-    const isRoute = key.startsWith('route:')
-    const isNetwork = key === 'network'
-    budget = {
-      baseCapacity: isRoute
-        ? this.config.routeCap
-        : isNetwork
-          ? this.config.networkCap
-          : this.config.generalCap,
-      headroomCapacity: isRoute
-        ? this.config.routeHeadroom
-        : isNetwork
-          ? this.config.networkHeadroom
-          : this.config.generalHeadroom,
-      baseUsed: 0,
-      headroomUsed: 0
-    }
+    budget = createAdmissionBudget(key, this.config)
     this.budgets.set(key, budget)
     return budget
   }
@@ -170,11 +155,13 @@ export class GitAdmissionScheduler {
     while (true) {
       const now = this.config.now()
       const globalBudget = this.ensureBudget(admissionClass)
+      const statusBudget = this.budgets.get(NATIVE_STATUS_BUDGET)
       const selected = this.waiters.nextFitting(
         admissionClass,
         (waiter) => this.effectiveTier(waiter, now),
         globalBudget.baseUsed < globalBudget.baseCapacity,
         globalBudget.headroomUsed < globalBudget.headroomCapacity,
+        !statusBudget || statusBudget.baseUsed < statusBudget.baseCapacity,
         (waiter) => this.abort(waiter)
       )
       if (!selected) {
