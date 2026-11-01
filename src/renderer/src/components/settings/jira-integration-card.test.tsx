@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
 
 const skillMocks = vi.hoisted(() => ({
   skillTarget: ((): BundledSkillTarget => ({ kind: 'local' }))(),
+  useInstalledAgentSkill: vi.fn(),
   plan: vi.fn(),
   execute: vi.fn()
 }))
@@ -49,6 +50,7 @@ vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     bundledSkillTarget: skillMocks.skillTarget,
+    discoveryRuntimeTarget: skillMocks.skillTarget,
     installDisabledReason: null,
     canUseSkillFreshness: false
   })
@@ -56,16 +58,19 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 
 vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
   ...(await importOriginal()),
-  useInstalledAgentSkill: () => ({
-    installed: false,
-    loading: false,
-    settled: true,
-    installedUnverifiable: false,
-    error: null,
-    skills: [],
-    sources: [],
-    refresh: async () => true
-  })
+  useInstalledAgentSkill: (...args: unknown[]) => {
+    skillMocks.useInstalledAgentSkill(...args)
+    return {
+      installed: false,
+      loading: false,
+      settled: true,
+      installedUnverifiable: false,
+      error: null,
+      skills: [],
+      sources: [],
+      refresh: async () => true
+    }
+  }
 }))
 
 vi.mock('@/hooks/installed-agent-skill-discovery', () => ({
@@ -137,6 +142,7 @@ async function renderCard(): Promise<HTMLDivElement> {
 describe('JiraIntegrationCard account scope', () => {
   beforeEach(() => {
     skillMocks.skillTarget = { kind: 'local' }
+    skillMocks.useInstalledAgentSkill.mockReset()
     skillMocks.plan.mockReset()
     skillMocks.plan.mockResolvedValue({ kind: 'plan', plan: WRITE_PLAN })
     skillMocks.execute.mockReset()
@@ -223,6 +229,12 @@ describe('JiraIntegrationCard account scope', () => {
     const rendered = await renderCard()
     await act(async () => {})
     expect(rendered.textContent).toContain('Agent skill: orca-jira')
+    expect(skillMocks.useInstalledAgentSkill).toHaveBeenCalledWith(
+      'orca-jira',
+      expect.objectContaining({
+        runtimeTarget: { kind: 'environment', environmentId: 'runtime-1' }
+      })
+    )
 
     await act(async () => {
       Array.from(rendered.querySelectorAll('button'))

@@ -23,6 +23,7 @@ export function useJiraAgentSkillSetup(): {
     error: skillError,
     refresh: refreshSkill
   } = useInstalledAgentSkill(ORCA_JIRA_SKILL_NAME, {
+    runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
