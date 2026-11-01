@@ -54,7 +54,8 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../transport/host-store', () => ({
-  loadHosts: async () => [{ id: 'host-1', name: 'Desk' }]
+  loadHosts: async () => [{ id: 'host-1', name: 'Desk' }],
+  peekHosts: () => null
 }))
 
 vi.mock('../transport/host-client-hooks', () => {
@@ -65,7 +66,7 @@ vi.mock('../transport/host-client-hooks', () => {
       return () => {}
     }
   }
-  return { useHostClient: () => ({ client, state: 'connected' }) }
+  return { useHostClient: () => ({ client, state: 'connected' }), useForceReconnect: () => null }
 })
 
 vi.mock('../components/AgentIcons', () => ({
