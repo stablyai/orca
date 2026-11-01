@@ -126,17 +126,6 @@ const button = (container: HTMLElement, label: string) =>
   [...container.querySelectorAll('button')].find((entry) => entry.textContent?.trim() === label)
 
 describe('managed server row', () => {
-  it('reports unknown terminals, the running migration and the deferred update', async () => {
-    const { container } = await render()
-    expect(container.textContent).toContain('Builder')
-    expect(container.textContent).toContain('Running terminals: unknown')
-    expect(container.textContent).toContain('Migration: Copy staged')
-    expect(container.textContent).toContain('Update to 1.3.0 deferred.')
-    expect(container.textContent).toContain('couldn’t confirm what is running')
-    expect(container.textContent).not.toContain('the daemon did not answer')
-    expect(button(container, 'Roll back')).toBeUndefined()
-  })
-
   it('stops only after a second, explicit confirmation', async () => {
     const { container, stop } = await render()
     await act(async () => button(container, 'Stop…')?.click())

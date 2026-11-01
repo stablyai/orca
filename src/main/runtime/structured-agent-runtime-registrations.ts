@@ -2,16 +2,16 @@ import { AcpAtRestCommandCatalog } from '../acp/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../native-chat/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../codex/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../codex/codex-structured-launch-resolution'
-import { claudeStructuredLaunchPart } from '../claude/claude-structured-launch-resolution'
+import { claudeStructuredLaunchPart } from '../claude/structured/launch/claude-structured-launch-resolution'
 import { claudeNamingInvocation } from '../claude/claude-naming-invocation'
 import { createClaudeCommandCatalogProbe } from '../claude/claude-command-catalog-probe'
 import { CodexStructuredSessionAdapter } from '../codex/codex-structured-session-adapter'
 import { createCodexAtRestSkillCatalog } from '../codex/codex-at-rest-skills-probe'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { replayJournal } from '../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../native-chat/agent-session-journal/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
@@ -151,7 +151,7 @@ function createAcpAdapter(
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
   return (context) => {
     const { deps, followUps } = context
-    const readJournal = (sessionId: string) => replayJournal(context.journalDatabase.db, sessionId)
+    const readJournal = (sessionId: string) => restoreJournal(context.journalDatabase.db, sessionId)
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {

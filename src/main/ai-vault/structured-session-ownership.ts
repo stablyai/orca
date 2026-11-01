@@ -1,10 +1,16 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import {
+  agentSessionAccountHome,
+  isLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { acquiredAgentSessionAccount } from '../../shared/agent-session-acquired-account'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
-import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session-lease-adjudication'
+import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
@@ -21,7 +27,7 @@ import {
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
 } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
-import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,
@@ -129,7 +135,7 @@ function ownedRow(rowAgent: string, ownership: StructuredProviderSessionOwnershi
 }
 
 function projectedAccountHome(ownership: StructuredProviderSessionOwnership) {
-  const home = ownership.key.home
+  const home = acquiredAccountHome(ownership.sessionId) ?? ownership.key.home
   if (!home) {
     return undefined
   }
@@ -157,6 +163,16 @@ function projectedAccountHome(ownership: StructuredProviderSessionOwnership) {
       normalizeRuntimePathForComparison(join(homedir(), directory))
     ? null
     : home
+}
+
+/** The account the host last launched this chat under, when it observed one; the founding home otherwise. */
+function acquiredAccountHome(sessionId: string): AgentSessionAccountHome | undefined {
+  const store = getStructuredAgentSessionHost()?.deps.store
+  const record = store?.getRecord(sessionId)
+  const acquired = store && record ? acquiredAgentSessionAccount(record, store.hostId) : null
+  return acquired
+    ? agentSessionAccountHome(CLAUDE_STRUCTURED_AGENT, acquired.recipe.home)
+    : undefined
 }
 
 // Build one lookup per projection to avoid scanning all chat records for every row.

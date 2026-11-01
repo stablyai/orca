@@ -50,10 +50,15 @@ const CALLOUT_PRESENTATIONS: Record<
 // Why: a <div>, not a <blockquote> — quote styles mute the body, and a callout's body is ordinary text.
 export function MarkdownGitHubCallout({
   kind,
+  title,
+  icon,
   className,
   children
 }: {
   kind: GitHubCalloutKind
+  /** Replaces the kind's own label (Note, Tip, ...). */
+  title?: React.ReactNode
+  icon?: React.ReactNode
   className?: string
   children?: React.ReactNode
 }): React.JSX.Element {
@@ -61,8 +66,8 @@ export function MarkdownGitHubCallout({
   return (
     <div role="note" data-callout={kind} className={cn(borderClassName, className)}>
       <div className={cn('flex items-center gap-1.5 font-medium', titleClassName)}>
-        <Icon aria-hidden className="size-[1em] shrink-0" />
-        {label()}
+        {icon ?? <Icon aria-hidden className="size-[1em] shrink-0" />}
+        {title ?? label()}
       </div>
       {children}
     </div>

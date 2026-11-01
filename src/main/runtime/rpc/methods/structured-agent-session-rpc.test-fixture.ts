@@ -1,8 +1,8 @@
+import { availableRevealWorkspace } from '../../session-tabs/structured-workspace-authority.test-fixture'
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -72,7 +72,7 @@ function reset(record: Record<string, ReturnType<typeof vi.fn>>): void {
 }
 
 export const STATUS_SESSION = 'session-status'
-export const STATUS_ITEMS: AgentJournalRenderItem[] = [
+export const STATUS_ITEMS: ReturnType<AgentSessionJournal['snapshot']>['items'] = [
   {
     itemId: 'user-1',
     sequence: 1,
@@ -186,6 +186,7 @@ export function hostStub(): StructuredAgentSessionHost {
       agent: 'codex' as const,
       readable: true
     })),
+    getSessionTabId: vi.fn(() => null),
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -250,7 +251,13 @@ export function dispatcher(
           : { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
-    publishStructuredAgentSessionTab: vi.fn()
+    prepareStructuredAgentSessionRevealWorkspace: vi.fn(availableRevealWorkspace),
+    currentLocalStructuredSessionPresentation: vi.fn(() => null),
+    captureStructuredAgentSessionPresentation: vi.fn(() => ({ raw: null, saved: [] })),
+    removeCapturedStructuredSessionSavedTabs: vi.fn(),
+    publishStructuredAgentSessionTab: vi.fn<OrcaRuntimeService['publishStructuredAgentSessionTab']>(
+      async (input) => input.capture?.({ tableId: null, presentation: { raw: null, saved: [] } })
+    )
   })
   const runtime = {
     getRuntimeId: () => 'runtime-1',
@@ -280,12 +287,7 @@ export async function call(
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse> {
-  const replies: RpcResponse[] = []
-  await dispatcher(runtimeOverrides, methods).dispatchStreaming(
-    request(method, params),
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
-    client
-  )
+  const replies = await openStream(method, params, client, runtimeOverrides, methods)
   const first = replies[0]
   if (!first) {
     throw new Error(`no reply for ${method}`)
@@ -297,10 +299,12 @@ export async function call(
 export async function openStream(
   method: string,
   params: unknown,
-  client: Parameters<typeof call>[2]
+  client: Parameters<typeof call>[2],
+  runtimeOverrides: Record<string, unknown> = {},
+  methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse[]> {
   const replies: RpcResponse[] = []
-  await dispatcher().dispatchStreaming(
+  await dispatcher(runtimeOverrides, methods).dispatchStreaming(
     request(method, params),
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client

@@ -2,7 +2,7 @@ import type { CodexModelCatalogProbeDeps } from '../codex/codex-model-catalog-pr
 import type { AcpStructuredSessionAdapterDeps } from '../acp/acp-structured-session-adapter-deps'
 import type { AcpStructuredLaunchPartDeps } from '../acp/acp-structured-launch-resolution'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/structured/claude-structured-session-state'
-import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
+import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-state'
 import type { AgentCliVersionReader } from '../agent-cli-version-probe'
 import type { StructuredAgentSessionStartupLimits } from '../native-chat/agent-session-wire/structured-agent-session-startup-attempt-contract'
 import type { PiRpcSessionDeps } from '../pi/rpc-session'

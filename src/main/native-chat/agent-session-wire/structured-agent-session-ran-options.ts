@@ -1,7 +1,7 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
-import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,

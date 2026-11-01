@@ -5,13 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import {
   nativeChatRowTurnKeys,
@@ -21,14 +21,14 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from '../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
-import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
-import { selectStructuredAgentTurnBars } from '../../../shared/structured-agent-session-turn-timing'
+import { nativeChatTurnMembership } from '../../../shared/native-chat/transcript/native-chat-turn-membership'
+import { projectStructuredItemsToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
+import { selectStructuredAgentTurnBars } from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { GROK_ACP_DIALECT } from '../../acp/acp-dialects/grok-dialect'
 import { readAcpFixture } from '../../acp/acp-timeline-fixture.test-support'
 import { AcpTimelineTranslator } from '../../acp/acp-timeline-translator'
 import { PromptResponseSchema } from '../../acp/generated/acp-protocol.generated'
-import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from '../../claude/structured/journal/claude-structured-journal-translation'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createCodexDispatchEchoes } from '../../codex/codex-structured-dispatch-echo'
 import { readCodexTurnId } from '../../codex/codex-structured-thread-facts'
@@ -61,7 +61,7 @@ async function captured<T>(agent: 'codex' | 'claude', scenario: string): Promise
   return lines.map((line) => JSON.parse(line)).filter((line) => line.case === scenario)
 }
 
-function settledRows(items: readonly AgentJournalRenderItem[]) {
+function visibleRows(items: readonly AgentJournalRenderItem[]) {
   expect(withNativeChatCutTurnNotices(items, { agentName: 'Agent' })).toBe(items)
   const messages = projectStructuredItemsToNativeChat(items)
   const turnKeys = nativeChatRowTurnKeys(messages)
@@ -70,9 +70,11 @@ function settledRows(items: readonly AgentJournalRenderItem[]) {
     settledTurnKeys: new Set(turnKeys.flatMap((key) => (key ? [key] : []))),
     expandedTurnKeys: new Set()
   })
-  return messages.flatMap((message, index) =>
-    message.role === 'system' && !foldedRows.has(index) ? message.blocks : []
-  )
+  return messages.filter((_, index) => !foldedRows.has(index))
+}
+
+function settledRows(items: readonly AgentJournalRenderItem[]) {
+  return visibleRows(items).flatMap((message) => (message.role === 'system' ? message.blocks : []))
 }
 
 async function blockedChat(
@@ -209,5 +211,29 @@ describe('a prompt hook that blocked the message', () => {
     const turns = items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
     expect(turns).toEqual([expect.objectContaining({ state: 'completed', outcome: 'success' })])
     expect(settledRows(items)).toEqual([row(`Blocked by hook: ${QA_POLICY}`)])
+  })
+})
+
+describe('a Stop hook that sent Claude back', () => {
+  it('keeps the reply before the hook row once the turn settles', async () => {
+    const frames = await captured<Captured>('claude', 'stop-hook-sent-back')
+    const { items } = await blockedChat(CLAUDE_CHAT, (rig) => {
+      const lane = createClaudeJournalTranslator({ sink: rig.eventSink, fallbackIdPrefix: '1' })
+      for (const { frame } of frames) {
+        lane.handle({ type: 'message', sessionId: 's', message: frame })
+      }
+    })
+    expect(visibleRows(items).map((message) => [message.role, message.blocks[0]])).toEqual([
+      ['user', GO[0]],
+      ['assistant', { type: 'text', text: 'Grass is green.' }],
+      [
+        'system',
+        expect.objectContaining({
+          tone: 'warning',
+          text: 'Stop hook feedback: Verify your statement with evidence before finishing.'
+        })
+      ],
+      ['assistant', { type: 'text', text: 'I checked: grass is green.' }]
+    ])
   })
 })

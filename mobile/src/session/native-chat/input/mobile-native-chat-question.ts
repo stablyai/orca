@@ -1,7 +1,7 @@
 import type {
   AgentJournalFreeTextInput,
   AgentJournalQuestion
-} from '../../../../../src/shared/agent-session-journal-types'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export type MobileChatQuestion = {
   question: string

@@ -132,6 +132,25 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
 
   /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
   protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
+    const pty = this.getPaneAliasPty(handle)
+    // Once no pane shows it, the alias only answers exit waits (getExitWaitPtyForHandle).
+    return pty && this.getLeavesForPty(pty.ptyId).length > 0 ? pty : undefined
+  }
+
+  /** An exit wait may name a closed pane's process: the owner's record answers until it is pruned or replaced. */
+  protected getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord } {
+    try {
+      return this.getTerminalPtyForHandle(handle)
+    } catch (error) {
+      const pty = this.getPaneAliasPty(handle)
+      if (!pty) {
+        throw error
+      }
+      return { pty }
+    }
+  }
+
+  private getPaneAliasPty(handle: string): RuntimePtyWorktreeRecord | undefined {
     const [ptyId, retained] =
       [...this.handleByPtyIncarnation].find(([, r]) => r.handle === handle) ?? []
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined

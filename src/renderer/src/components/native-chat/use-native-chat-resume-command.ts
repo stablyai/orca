@@ -43,6 +43,7 @@ export function parseNativeChatResumeDraft(draft: string): string | null {
 }
 
 export type NativeChatResumeCommand = {
+  matchesDraft: (draft: string) => boolean
   /** Opens Session History for a `/resume` draft; false means the draft is not Orca's. */
   consume: (draft: string) => boolean
   /** Choosing the draft-leading Orca row runs it; mid-prompt it stays an ordinary completion. */
@@ -122,15 +123,20 @@ export function useNativeChatResumeCommand(args: {
     ]
   )
 
+  const matchesDraft = useCallback(
+    (draft: string): boolean =>
+      structured && !isPickedSkill(draft) && parseNativeChatResumeDraft(draft) !== null,
+    [isPickedSkill, structured]
+  )
   const consume = useCallback(
     (draft: string): boolean => {
-      const search = structured && !isPickedSkill(draft) ? parseNativeChatResumeDraft(draft) : null
-      if (search !== null) {
-        open(search)
+      if (!matchesDraft(draft)) {
+        return false
       }
-      return search !== null
+      open(parseNativeChatResumeDraft(draft) ?? '')
+      return true
     },
-    [isPickedSkill, open, structured]
+    [matchesDraft, open]
   )
 
   const interceptPick = useCallback(
@@ -149,5 +155,5 @@ export function useNativeChatResumeCommand(args: {
     [autocomplete, clearSkillOrigin, open, textareaRef]
   )
 
-  return { consume, interceptPick }
+  return { consume, interceptPick, matchesDraft }
 }

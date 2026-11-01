@@ -9,8 +9,8 @@ import {
   AgentSessionRecoveryCapsule
 } from '../../agent-session-recovery-capsule'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/desktop-renderer-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/claude-structured-agent-definition'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/codex-structured-agent-definition'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'

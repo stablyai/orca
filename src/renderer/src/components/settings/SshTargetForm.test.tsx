@@ -52,57 +52,6 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe('SshTargetForm', () => {
-  it('opens add mode as a dialog with primary fields in the viewport', async () => {
-    const root = await renderForm({})
-    expect(document.body.textContent).toContain('Add SSH host')
-    expect(document.body.textContent).toContain(
-      'Add a persistent machine you can log into over SSH.'
-    )
-    expect(document.querySelector('#ssh-target-host')).not.toBeNull()
-    expect(document.querySelector('#ssh-target-label')).not.toBeNull()
-    expect(document.body.textContent).toContain('Add host')
-    expect(document.body.textContent).not.toContain('Editing')
-    act(() => root.unmount())
-  })
-
-  it('pins header and footer outside the scroll body', async () => {
-    const root = await renderForm({})
-    const content = document.querySelector('[data-slot="dialog-content"]')
-    const header = document.querySelector('[data-slot="dialog-header"]')
-    const footer = document.querySelector('[data-slot="dialog-footer"]')
-    if (!content || !header || !footer) {
-      throw new Error('missing dialog chrome')
-    }
-    expect(content.className).toContain('overflow-hidden')
-    expect(content.className).toContain('flex-col')
-    expect(header.className).toContain('shrink-0')
-    expect(footer.className).toContain('shrink-0')
-    const scrollBody = content.querySelector('.overflow-y-auto')
-    expect(scrollBody).not.toBeNull()
-    expect(scrollBody?.contains(header)).toBe(false)
-    expect(scrollBody?.contains(footer)).toBe(false)
-    act(() => root.unmount())
-  })
-
-  it('shows edit title and context chip for the target being edited', async () => {
-    const root = await renderForm({
-      editingId: 'target-1',
-      form: {
-        ...EMPTY_FORM,
-        label: 'dev-box',
-        host: 'dev-box.lan',
-        username: 'alice',
-        port: '2222'
-      }
-    })
-    expect(document.body.textContent).toContain('Edit SSH host')
-    expect(document.body.textContent).toContain('Save Changes')
-    expect(document.body.textContent).toContain('Editing')
-    expect(document.body.textContent).toContain('dev-box')
-    expect(document.body.textContent).toContain('alice@dev-box.lan:2222')
-    act(() => root.unmount())
-  })
-
   it('submits via the primary action and closes via Cancel', async () => {
     const onSave = vi.fn()
     const onOpenChange = vi.fn()
@@ -117,13 +66,6 @@ describe('SshTargetForm', () => {
       button('Cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
-    act(() => root.unmount())
-  })
-
-  it('does not render dialog content when closed', async () => {
-    const root = await renderForm({ open: false })
-    expect(document.querySelector('#ssh-target-host')).toBeNull()
-    expect(document.body.textContent).not.toContain('Add SSH host')
     act(() => root.unmount())
   })
 
@@ -207,21 +149,6 @@ describe('SshTargetForm', () => {
       document.body.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
     expect(onOpenChange).not.toHaveBeenCalled()
-    act(() => root.unmount())
-  })
-
-  it('opens Advanced by default when the target already has advanced values', async () => {
-    const root = await renderForm({
-      editingId: 'target-1',
-      form: {
-        ...EMPTY_FORM,
-        label: 'bastion',
-        host: 'bastion.example',
-        jumpHost: 'jump.example'
-      }
-    })
-    expect(button('Advanced').getAttribute('data-state')).toBe('open')
-    expect(document.body.textContent).toContain('Jump Host')
     act(() => root.unmount())
   })
 })

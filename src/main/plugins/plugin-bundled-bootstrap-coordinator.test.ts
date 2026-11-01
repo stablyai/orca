@@ -81,4 +81,24 @@ describe('PluginBundledBootstrapCoordinator', () => {
     expect(bootstrap).toHaveBeenCalledTimes(2)
     expect(maximumActive).toBe(1)
   })
+
+  it('forwards retirement cleanup hooks to the bootstrap', async () => {
+    const bootstrap = vi.fn().mockResolvedValue(unchanged)
+    const beforeRetire = vi.fn()
+    const afterRetire = vi.fn()
+    const coordinator = new PluginBundledBootstrapCoordinator({
+      root: 'resources',
+      userDataPath: 'user-data',
+      hostVersion: '1.4.0',
+      isEnabled: () => true,
+      refreshPlugins: vi.fn().mockResolvedValue(undefined),
+      beforeRetire,
+      afterRetire,
+      bootstrap
+    })
+
+    await coordinator.request()
+
+    expect(bootstrap).toHaveBeenCalledWith(expect.objectContaining({ beforeRetire, afterRetire }))
+  })
 })

@@ -1,6 +1,7 @@
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { BoundedMap } from '../../shared/bounded-map'
 import { record, taskAliasId } from './claude-background-task-frames'
 import {
   claudeBackgroundTaskPatchChange,
@@ -79,11 +80,29 @@ export class ClaudeBackgroundTaskRows {
     return { ...this.ledgers.sizes, overflowTerminalRows: this.overflowTerminalRows.size }
   }
 
+  /** Notification frames that already opened a wake turn; a redelivered one must not open another. */
+  private readonly wakeFrames = new BoundedMap<string, true>({ maxEntries: 64 })
+
   /** Null outside observe so teardown writes cannot reopen a turn. */
   private journaling: { frame: Record<string, unknown>; observedAt: number } | null = null
 
   observe(message: Record<string, unknown>, observedAt: number = this.now()): boolean {
     this.journaling = { frame: message, observedAt }
+    // Claude wakes the lead for any task the lead launched, rowless subagents included; open that turn at the notification, once per frame.
+    const toolUseId =
+      message.subtype === 'task_notification' ? taskAliasId(message.tool_use_id) : undefined
+    const frameId = typeof message.uuid === 'string' ? message.uuid : undefined
+    if (
+      message.type === 'system' &&
+      toolUseId &&
+      this.deps.isForwardedParentTool(toolUseId) &&
+      !(frameId && this.wakeFrames.has(frameId))
+    ) {
+      if (frameId) {
+        this.wakeFrames.set(frameId, true)
+      }
+      this.deps.openOutputTurn?.(message, observedAt)
+    }
     try {
       return this.observeFrame(message)
     } finally {

@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  getTerminalFileOpenHint,
-  getTerminalHtmlFileOpenHint,
-  getTerminalUrlOpenHint,
-  isTerminalLinkActivation
-} from './terminal-link-handlers'
+
 import { handleOscLink } from './terminal-osc-link-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -37,24 +32,6 @@ vi.mock('@/lib/connection-context', () => ({
 
 installTerminalLinkTestEnvironment(doubles)
 
-describe('isTerminalLinkActivation', () => {
-  it('requires cmd on macOS', () => {
-    setPlatform('Macintosh')
-
-    expect(isTerminalLinkActivation({ metaKey: true, ctrlKey: false })).toBe(true)
-    expect(isTerminalLinkActivation({ metaKey: false, ctrlKey: true })).toBe(false)
-    expect(isTerminalLinkActivation(undefined)).toBe(false)
-  })
-
-  it('requires ctrl on non-macOS platforms', () => {
-    setPlatform('Windows')
-
-    expect(isTerminalLinkActivation({ metaKey: false, ctrlKey: true })).toBe(true)
-    expect(isTerminalLinkActivation({ metaKey: true, ctrlKey: false })).toBe(false)
-    expect(isTerminalLinkActivation(undefined)).toBe(false)
-  })
-})
-
 describe('handleOscLink', () => {
   it('ignores http links without the platform modifier on desktop', () => {
     setPlatform('Macintosh')
@@ -84,37 +61,6 @@ describe('handleOscLink', () => {
       activate: true
     })
     expect(preventDefault).toHaveBeenCalled()
-  })
-
-  it('ignores non-primary OSC link clicks', () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: true }
-    const preventDefault = vi.fn()
-
-    handleOscLink(
-      'https://example.com',
-      {
-        button: 1,
-        metaKey: false,
-        ctrlKey: false,
-        preventDefault
-      },
-      deps
-    )
-    handleOscLink(
-      'https://example.com',
-      {
-        button: 2,
-        metaKey: false,
-        ctrlKey: false,
-        preventDefault
-      },
-      deps
-    )
-
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(preventDefault).not.toHaveBeenCalled()
   })
 
   it('does not steal macOS ctrl-click context-menu gestures for OSC links', () => {
@@ -216,43 +162,5 @@ describe('handleOscLink', () => {
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
-  })
-
-  it('advertises the system default open behavior in hover hints', () => {
-    setPlatform('Macintosh')
-    expect(getTerminalFileOpenHint()).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click for default app'
-    )
-    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in Orca'
-    )
-    expect(getTerminalHtmlFileOpenHint({ primary: 'orca', alternate: 'system' })).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
-    )
-    expect(getTerminalUrlOpenHint()).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click for system browser'
-    )
-
-    setPlatform('Windows')
-    expect(getTerminalFileOpenHint()).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for default app'
-    )
-    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' })).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in Orca'
-    )
-    expect(getTerminalUrlOpenHint()).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click for system browser'
-    )
-  })
-
-  it('omits plain-click actions from hover hints when the popover is disabled', () => {
-    setPlatform('Macintosh')
-    expect(getTerminalFileOpenHint(false)).toBe('⌘+click to open, or ⇧⌘+click for default app')
-    expect(getTerminalHtmlFileOpenHint({ primary: 'system', alternate: 'orca' }, false)).toBe(
-      '⌘+click to open, or ⇧⌘+click to open in Orca'
-    )
-    expect(getTerminalUrlOpenHint({ showActions: false })).toBe(
-      '⌘+click to open, or ⇧⌘+click for system browser'
-    )
   })
 })

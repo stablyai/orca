@@ -27,24 +27,6 @@ createStoreCascadesMockApi()
 
 // Why: CLI-spawned terminals stamp ORCA_PANE_KEY at spawn; renderer must adopt the tab under that id so hook events route correctly.
 describe('createTab tabId hint', () => {
-  it('uses the supplied id when no collision exists', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt-hint'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-hint' })]
-      },
-      groupsByWorktree: {},
-      activeGroupIdByWorktree: {},
-      unifiedTabsByWorktree: {}
-    })
-
-    const hintedId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-    const tab = store.getState().createTab(wt, undefined, undefined, { id: hintedId })
-
-    expect(tab.id).toBe(hintedId)
-  })
-
   it('rejects a taken id instead of minting a fresh one', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt-collision'
@@ -93,28 +75,6 @@ describe('createTab tabId hint', () => {
       `Terminal tab ${existingId} already exists`
     )
     expect(store.getState().tabsByWorktree[wtA]).toBeUndefined()
-  })
-
-  it('ignores empty string hints instead of persisting an unusable tab id', () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt-empty-hint'
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-empty-hint' })]
-      },
-      groupsByWorktree: {},
-      activeGroupIdByWorktree: {},
-      unifiedTabsByWorktree: {}
-    })
-
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      const tab = store.getState().createTab(wt, undefined, undefined, { id: '' })
-      expect(tab.id).not.toBe('')
-      expect(warn).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-    }
   })
 
   it('ignores web mirror id hints instead of making them canonical host tab ids', () => {

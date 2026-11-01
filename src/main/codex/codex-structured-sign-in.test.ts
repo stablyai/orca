@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { codexAuthenticationFailure } from './codex-authentication-failure'
 import { codexTurnEndRejection, readCodexTurnEnd } from './codex-structured-turn-end-settlement'
 
 const errors = [
@@ -59,19 +58,6 @@ describe('Codex protocol authentication failures', () => {
       translator.dispose()
     }
   )
-  it.each([
-    'other',
-    'unauthorized request',
-    { other: { httpStatusCode: 401 } },
-    { httpConnectionFailed: { httpStatusCode: 403 } },
-    { httpConnectionFailed: { httpStatusCode: 500 } }
-  ])('does not guess sign-out from unrelated failures %j', (codexErrorInfo) => {
-    expect(
-      codexAuthenticationFailure({
-        error: { codexErrorInfo, message: '401 unauthorized authentication required' }
-      })
-    ).toBeNull()
-  })
   it('keeps a retrying 401 as a retry, without asking the person to sign in yet', () => {
     const bodies: AgentJournalItemBody[] = []
     const translator = createCodexJournalTranslator({

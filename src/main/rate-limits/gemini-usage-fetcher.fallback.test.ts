@@ -44,27 +44,6 @@ describe('fetchGeminiRateLimits fallback oauth creds', () => {
     })
   })
 
-  it('falls back to oauth_creds.json when auth.json has no google key', async () => {
-    readFileMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('auth.json')) {
-        return JSON.stringify({ 'opencode-go': { type: 'api', key: 'k' } })
-      }
-      if (filePath.includes('oauth_creds.json')) {
-        return JSON.stringify(validCreds)
-      }
-      throw { code: 'ENOENT' }
-    })
-    fetchMock
-      .mockResolvedValueOnce(makeResponse({ cloudaicompanionProject: 'proj-123' }))
-      .mockResolvedValueOnce(makeResponse(quotaResponse))
-
-    const result = await fetchGeminiRateLimits(true)
-
-    expect(result.status).toBe('ok')
-    expect(result.error).toBeNull()
-    expect(result.session).not.toBeNull()
-  })
-
   it('falls back to oauth_creds.json and resolves project via loadCodeAssist', async () => {
     readFileMock.mockImplementation(async (filePath: string) => {
       if (filePath.includes('auth.json')) {

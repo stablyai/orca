@@ -27,6 +27,9 @@ type MobileNativeChatSendArgs = {
 // Unknown delivery must not be called definite failure; structured queued drafts render as cards, not transcript echoes.
 export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown' | 'queued'
 
+/** How one send goes: `alternate` does the other thing than the host's follow-up setting. */
+export type MobileNativeChatSendIntent = { alternate?: true }
+
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>
 
 // Bound reconnect wait so an interactive send cannot keep the composer locked indefinitely.

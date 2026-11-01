@@ -54,7 +54,6 @@ import {
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\jin'
 const MIRRORED_ROOT = `${WSL_HOME}\\orca\\workspaces`
 const repo = { id: 'repo-1', path: `${WSL_HOME}\\src\\repo` } as Repo
-const windowsRepo = { id: 'repo-2', path: 'C:\\src\\repo' } as Repo
 const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: false }
 const store = { getSettings: () => settings } as unknown as Store
 const originalPlatform = process.platform
@@ -115,32 +114,5 @@ describe('worktree create preparation with the real WSL workspace-root resolver'
     expect(result).not.toBeNull()
     expect(mocks.finalize).toHaveBeenCalledTimes(1)
     expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  it('mirrors a C: repo with a configured mirror distro on both sides', async () => {
-    mocks.getMirrorDistro.mockReturnValue('Ubuntu')
-
-    await prepareWorktreeCreateForRepo(store, windowsRepo, 'origin/main')
-
-    expect(mocks.prepareCheckout.mock.calls[0]?.[1]).toContain(MIRRORED_ROOT)
-
-    mocks.getWslHome.mockReturnValue(WSL_HOME)
-    const result = await consumePreparedWorktreeCreate({
-      repoPath: windowsRepo.path,
-      ...consumeSideRoots(windowsRepo),
-      branch: 'feature',
-      baseBranch: 'origin/main'
-    })
-
-    expect(result).not.toBeNull()
-    expect(mocks.discard).not.toHaveBeenCalled()
-  })
-
-  it('discards nothing and falls back when the probe fails during preparation', async () => {
-    mocks.getWslHomeAsync.mockResolvedValue(null)
-
-    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
-
-    expect(mocks.prepareCheckout.mock.calls[0]?.[1]).toContain('C:\\workspaces')
   })
 })

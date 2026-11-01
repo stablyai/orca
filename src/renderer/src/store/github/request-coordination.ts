@@ -14,6 +14,8 @@ export type InflightPR = {
 }
 export type InflightChecks = {
   promise: Promise<PRCheckDetail[]>
+  /** The provider reply alone, so a failed successor can land it without waiting on this request. */
+  reply?: Promise<PRCheckDetail[]>
   requestId: number
   force: boolean
   noCache: boolean
@@ -22,6 +24,8 @@ export type InflightChecks = {
 }
 export type InflightComments = {
   promise: Promise<PRComment[]>
+  reply?: Promise<PRComment[]>
+  requestId: number
   postedComments: PRComment[]
 }
 export type InflightWorkItems = {

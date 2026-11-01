@@ -1,14 +1,14 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
-} from '../../../src/shared/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams
-} from '../../../src/shared/structured-agent-session-create'
+} from '../../../src/shared/agent-session/structured-agent-session-create'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'

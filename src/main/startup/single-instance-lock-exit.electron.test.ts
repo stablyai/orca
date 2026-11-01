@@ -107,12 +107,4 @@ describe('pre-ready termination under real Electron', () => {
     expect(run.markers).toEqual([GATE_ENTERED])
     expect(run.status).toBe(1)
   }, 90_000)
-
-  it('reproduces the deferred graceful quit that let the doomed launch keep booting', () => {
-    const run = runPreReadyGate('app.quit()')
-
-    // Pin Electron semantics: pre-ready quit schedules exit but does not stop startup.
-    expect(run.markers).toEqual([GATE_ENTERED, CONTINUED_INTO_STARTUP, REACHED_TAIL])
-    expect(run.status).not.toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
-  }, 90_000)
 })

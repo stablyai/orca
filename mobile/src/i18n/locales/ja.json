@@ -21,7 +21,6 @@
     "panel": {
       "all": "全て",
       "emptyScope": "この範囲には過去の Agent セッションがありません。",
-      "loadFailed": "読み込めません",
       "missingResumeId": "このセッションには再開用の ID がありません。",
       "noSearchResults": "検索に一致するセッションはありません。",
       "noSessions": "Agent セッションはありません",
@@ -186,7 +185,11 @@
       "cancelEditing": "編集をキャンセル",
       "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "saveEditedMessage": "編集したメッセージを保存",
-      "sendMessage": "メッセージを送信"
+      "sendMessage": "メッセージを送信",
+      "sendQueue": "キューに入れる",
+      "sendSteer": "今すぐ送信",
+      "sendQueueHint": "現在のターンの後に実行します",
+      "sendSteerHint": "Agent が今行っている作業に加えます"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -650,7 +653,6 @@
       "loadingDiff": "差分を読み込み中…",
       "loadingReview": "レビューを読み込み中…",
       "noReviewableChanges": "レビュー可能な変更がありません",
-      "retryLabel": "レビューの読み込みを再試行",
       "reviewUnavailable": "レビューを利用できません",
       "selectFile": "レビューするファイルを選択してください。",
       "tooLargeMessage": "この差分は大きすぎるため、モバイルではプレビューできません。",
@@ -844,10 +846,8 @@
       "selectRunTarget": "実行先を選択"
     },
     "prSidebar": {
-      "loadFailed": "問題が発生しました。",
       "loading": "PR を読み込み中…",
-      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。",
-      "retryLoading": "PR の読み込みを再試行"
+      "notPermitted": "GitHub アカウントが接続されていないため、アクセスできません。"
     },
     "protocolBlockScreen": {
       "backToHosts": "ホストに戻る",
@@ -996,6 +996,16 @@
       "title": "問題が発生しました",
       "tryAgain": "再試行",
       "home": "ホーム"
+    },
+    "svgPreview": {
+      "drawFailed": "この SVG を描画できません",
+      "label": "{{title}} の図",
+      "previewDrawing": "図をプレビュー",
+      "viewSource": "SVG ソースを表示"
+    },
+    "mermaidDiagram": {
+      "expand": "図を拡大",
+      "label": "Mermaid 図"
     }
   },
   "connection": {
@@ -3061,7 +3071,6 @@
       "waitingForDesktop": "デスクトップへの接続を待機中…"
     },
     "panel": {
-      "loadFailedTitle": "読み込めません",
       "unavailableTitle": "ソース管理を利用できません"
     },
     "prChip": {
@@ -3889,8 +3898,7 @@
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
       "noMatches": "一致するワークスペースがありません",
       "reopen": "開き直して更新",
-      "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。",
-      "retrying": "worktree.ps に失敗しました（{{error}}）。自動で再試行中です。"
+      "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
     "workspaceListSections": {
       "all": "全て",

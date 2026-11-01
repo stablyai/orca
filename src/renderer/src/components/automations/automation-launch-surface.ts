@@ -1,12 +1,12 @@
 import type { Automation, AutomationUpdateInput } from '../../../../shared/automations-types'
 import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
-  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
+} from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import {
   buildAgentLaunchRouteInput,

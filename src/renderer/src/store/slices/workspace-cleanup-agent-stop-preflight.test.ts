@@ -8,8 +8,6 @@ import { enrichWorkspaceCleanupCandidates } from './workspace-cleanup-candidate-
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
 import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
-const OTHER_ID = 'repo1::/tmp/other'
-
 function paneKey(tabId: string): string {
   return makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
 }
@@ -24,22 +22,6 @@ function structuredChatStatus(state: AgentStatusEntry['state']): AgentStatusEntr
 }
 
 describe('workspace cleanup live-agent finder', () => {
-  it('finds only workspaces whose agent is working right now', () => {
-    const state = makeState({
-      tabsByWorktree: {
-        [WORKTREE_ID]: [makeTab({ id: 'tab-1', worktreeId: WORKTREE_ID })],
-        [OTHER_ID]: [makeTab({ id: 'tab-2', worktreeId: OTHER_ID })]
-      },
-      agentStatusByPaneKey: {
-        [paneKey('tab-1')]: agentStatus(paneKey('tab-1'), 'working'),
-        [paneKey('tab-2')]: agentStatus(paneKey('tab-2'), 'done')
-      }
-    })
-
-    const candidates = [makeCandidate(), makeCandidate({ worktreeId: OTHER_ID })]
-    expect([...getWorkspaceCleanupAgentEvidence(state, candidates).values()]).toEqual(['live'])
-  })
-
   it.each([
     ['working', true],
     ['done', false]

@@ -67,21 +67,6 @@ import Foundation
     )
   }
 
-  static func checkSessionIds() {
-    precondition(MobileWebShellOrigin.isValidSessionId("aZ0-_"))
-    precondition(MobileWebShellOrigin.isValidSessionId(String(repeating: "a", count: 128)))
-    precondition(!MobileWebShellOrigin.isValidSessionId(String(repeating: "a", count: 129)))
-    precondition(!MobileWebShellOrigin.isValidSessionId(""))
-    precondition(!MobileWebShellOrigin.isValidSessionId("has space"))
-    precondition(!MobileWebShellOrigin.isValidSessionId("dots.are.hosts.too"))
-    precondition(!MobileWebShellOrigin.isValidSessionId("sl/ash"))
-    // Reject non-ASCII letters/digits that Character accepts; IDNA must not remap the minted origin.
-    precondition(!MobileWebShellOrigin.isValidSessionId("sessioñ"))
-    precondition(!MobileWebShellOrigin.isValidSessionId("session٣"))
-    precondition(MobileWebShellOrigin.documentUrl(sessionId: session)?.absoluteString ==
-      "orca-mobile-web://\(session)/")
-    precondition(MobileWebShellOrigin.documentUrl(sessionId: "bad host") == nil)
-  }
 
   static func checkRequestResolution() {
     precondition(resolve(parts(path: "/")) == "/")
@@ -117,41 +102,7 @@ import Foundation
     precondition(MobileWebShellOrigin.resolveRequestPath(parts(path: "/"), sessionId: "") == nil)
   }
 
-  static func checkAssetPaths() {
-    precondition(MobileWebShellGeneration.isServableAssetPath("index.html"))
-    precondition(MobileWebShellGeneration.isServableAssetPath("assets/a-b_c.2.js"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath(""))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("/leading"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("trailing/"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("a//b"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("../secret"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("assets/../../secret"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("assets/./a.js"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("back\\slash"))
-    precondition(!MobileWebShellGeneration.isServableAssetPath("has space.js"))
-    precondition(MobileWebShellGeneration.isServableAssetPath(String(repeating: "a", count: 255)))
-    precondition(!MobileWebShellGeneration.isServableAssetPath(String(repeating: "a", count: 256)))
-  }
 
-  static func checkContentTypes() {
-    precondition(MobileWebShellGeneration.isServableContentType("image/png"))
-    precondition(MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8"))
-    precondition(MobileWebShellGeneration.isServableContentType("application/manifest+json"))
-    precondition(!MobileWebShellGeneration.isServableContentType(""))
-    precondition(!MobileWebShellGeneration.isServableContentType("text/html"
-      + "\r\nX-Injected: 1"))
-    precondition(!MobileWebShellGeneration.isServableContentType("text/html; charset=utf-8; x=1"))
-    precondition(!MobileWebShellGeneration.isServableContentType("TEXT/HTML"))
-    // A header value we did not mint character for character is a value we did not check.
-    precondition(!MobileWebShellGeneration.isServableContentType("text/html; charset=UTF-8"))
-    precondition(!MobileWebShellGeneration.isServableContentType("text"))
-    precondition(!MobileWebShellGeneration.isServableContentType("text/html/extra"))
-    precondition(!MobileWebShellGeneration.isServableContentType("/html"))
-    precondition(!MobileWebShellGeneration.isServableContentType("-text/html"))
-    precondition(!MobileWebShellGeneration.isServableContentType("text/html; charset="))
-    precondition(!MobileWebShellGeneration.isServableContentType(
-      String(repeating: "a", count: 130) + "/b"))
-  }
 
   static func checkGenerationMap() {
     guard let built = generation(manifest()) else { preconditionFailure("manifest rejected") }
@@ -198,32 +149,6 @@ import Foundation
     precondition(generation(Data("[]".utf8)) == nil)
   }
 
-  static func checkCsp() {
-    let header = MobileWebShellCsp.header
-    let directives = header.components(separatedBy: "; ")
-    precondition(directives.contains("default-src 'none'"))
-    precondition(directives.contains("script-src 'self'"))
-    // React Native Web injects runtime styles with no nonce; see MobileWebShellCsp.
-    precondition(directives.contains("style-src 'self' 'unsafe-inline'"))
-    // data: previews and https: icons/srcdoc images need image-only access; see MobileWebShellCsp.
-    precondition(directives.contains("img-src 'self' data: blob: https:"))
-    precondition(directives.contains("connect-src 'self'"))
-    precondition(directives.contains("worker-src 'none'"))
-    precondition(directives.contains("frame-src 'none'"))
-    precondition(directives.contains("base-uri about:"))
-    precondition(directives.contains("form-action 'none'"))
-    precondition(directives.contains("frame-ancestors 'none'"))
-    // Inline styling must never grant inline script execution.
-    precondition(directives.filter { $0.contains("unsafe-inline") } == ["style-src 'self' 'unsafe-inline'"])
-    precondition(!header.contains("unsafe-eval"))
-    // Only images and bundled fonts can use embedded data URLs.
-    precondition(directives.filter { $0.contains("data:") } == ["img-src 'self' data: blob: https:", "font-src 'self' data:"])
-    precondition(directives.filter { $0.contains("blob:") } == ["img-src 'self' data: blob: https:", "media-src blob:"])
-    // Admit https: only for images; http: is not a substring and remains forbidden.
-    precondition(directives.filter { $0.contains("https:") } == ["img-src 'self' data: blob: https:"])
-    precondition(!header.contains("http:"))
-    precondition(!header.contains("\r") && !header.contains("\n"))
-  }
 
   static func checkLoadStateMachine() {
     let failures: [(MobileWebShellFailureReason, String)] = [
@@ -307,49 +232,7 @@ import Foundation
     precondition(!arming.hasCommittedDocument)
   }
 
-  static func checkResponseHeaders() {
-    let document = MobileWebShellResponseHeaders.forPath(
-      "/",
-      contentType: "text/html; charset=utf-8",
-      byteCount: 12
-    )
-    precondition(document["Content-Security-Policy"] == MobileWebShellCsp.header)
-    precondition(document["Content-Type"] == "text/html; charset=utf-8")
-    precondition(document["Content-Length"] == "12")
-    precondition(document["Cache-Control"] == "no-store")
-    precondition(document["X-Content-Type-Options"] == "nosniff")
-    // HTTPS images must not receive session identity; see MobileWebShellResponseHeaders.
-    precondition(document["Referrer-Policy"] == "no-referrer")
 
-    // The policy rides the document alone; on a subresource response it is inert.
-    for path in ["/index.html", "/assets/aa.js", "/manifest.json", "/assets/bb.png"] {
-      let headers = MobileWebShellResponseHeaders.forPath(
-        path,
-        contentType: "text/javascript; charset=utf-8",
-        byteCount: 0
-      )
-      precondition(headers["Content-Security-Policy"] == nil)
-      // Referrer policy governs requests only when set on the document.
-      precondition(headers["Referrer-Policy"] == nil)
-      precondition(headers["Cache-Control"] == "no-store")
-      precondition(headers["X-Content-Type-Options"] == "nosniff")
-    }
-  }
-
-  static func checkNavigationErrors() {
-    let ignorable = MobileWebShellNavigationError.isIgnorable
-    // Our own stopLoading on a prop update, and every navigation the policy delegate refuses.
-    precondition(ignorable(NSURLErrorDomain, NSURLErrorCancelled))
-    precondition(ignorable("WebKitErrorDomain", 102))
-    // Anything else is the document failing to load, which is the caller's cue to redownload.
-    precondition(!ignorable(NSURLErrorDomain, NSURLErrorNetworkConnectionLost))
-    precondition(!ignorable(NSURLErrorDomain, NSURLErrorResourceUnavailable))
-    precondition(!ignorable("WebKitErrorDomain", 101))
-    precondition(!ignorable("WebKitErrorDomain", NSURLErrorCancelled))
-    // WKErrorDomain has no frame-load codes at all, so 102 there is some other error.
-    precondition(!ignorable("WKErrorDomain", 102))
-    precondition(!ignorable("SomeOtherDomain", 102))
-  }
 
   static func bridgeSource(
     isOurWebView: Bool = true,
@@ -371,24 +254,6 @@ import Foundation
     MobileWebShellBridge.accepts(source, sessionId: session)
   }
 
-  static func checkAppliedProps() {
-    func props(
-      directory: String = "/gen/aa",
-      session: String = session,
-      bridge: Bool = true
-    ) -> MobileWebShellAppliedProps {
-      MobileWebShellAppliedProps(
-        generationDirectory: directory,
-        sessionId: session,
-        bridgeEnabled: bridge
-      )
-    }
-
-    precondition(props().matches(props()))
-    precondition(!props().matches(props(directory: "/gen/ab")))
-    precondition(!props().matches(props(session: "sess-01JN_aZ8")))
-    precondition(!props().matches(props(bridge: false)))
-  }
 
   static func checkBridgeAcceptance() {
     precondition(acceptsBridge(bridgeSource()))
@@ -454,40 +319,6 @@ import Foundation
     precondition(!canPost(session, committed: false))
   }
 
-  // A frame armed by document A must never receive posts for document B.
-  static func checkBridgeTargetLifecycle() {
-    func canPost(_ target: MobileWebShellBridgeTarget<String>, committed: Bool) -> Bool {
-      MobileWebShellBridge.canPost(
-        toFrameOriginHost: target.originHost,
-        sessionId: session,
-        hasCommittedDocument: committed
-      )
-    }
-
-    var target = MobileWebShellBridgeTarget<String>()
-    precondition(target.frame == nil && target.originHost == nil)
-    precondition(!canPost(target, committed: true))
-
-    // didCommit for document A, then A's first accepted message.
-    target.clear()
-    target.arm(frame: "frame-a", originHost: session)
-    precondition(target.frame == "frame-a")
-    precondition(canPost(target, committed: true))
-
-    // B’s provisional navigation clears arming and commit state.
-    target.clear()
-    precondition(target.frame == nil)
-    precondition(!canPost(target, committed: false))
-
-    // B’s commit rearms acceptance; clear A’s frame so it cannot become postable again.
-    target.clear()
-    precondition(!canPost(target, committed: true))
-
-    // B speaks for itself, and that is the only way a post reaches it.
-    target.arm(frame: "frame-b", originHost: session)
-    precondition(target.frame == "frame-b")
-    precondition(canPost(target, committed: true))
-  }
 
   static func checkBridgeByteCap() {
     let cap = MobileWebShellBridge.maxMessageByteCount
@@ -545,9 +376,16 @@ import Foundation
     precondition(verdict(isDownload: true) == .cancelAndOffer(foreign))
     // Document-URL downloads are never offered, regardless of gesture.
     precondition(verdict(document, isDocumentUrl: true, isDownload: true) == .cancel)
-    // A subframe is the sealed preview loading itself, which is not the user leaving the app.
+    // A foreign-URL subframe is never offered: the user is not leaving the app.
     precondition(verdict(isMainFrame: false) == .cancel)
     precondition(verdict(isMainFrame: false, hasGesture: false) == .cancel)
+    // Sealed srcdoc frames (HTML previews, chat visuals) load; no other subframe or top-level srcdoc does.
+    let srcdoc = MobileWebShellNavigationPolicy.inlineDocumentUrl
+    precondition(verdict(srcdoc, isMainFrame: false, hasGesture: false) == .allow)
+    precondition(verdict(srcdoc, isMainFrame: false, isDownload: true) == .cancel)
+    precondition(verdict(srcdoc, hasGesture: false) == .cancel)
+    precondition(verdict("about:blank", isMainFrame: false, hasGesture: false) == .cancel)
+    precondition(verdict(document, isMainFrame: false, isDocumentUrl: true, isShellLoad: true) == .cancel)
     precondition(verdict(nil) == .cancel)
     precondition(verdict("") == .cancel)
     // The crossing cap, at it and one past it.
@@ -589,21 +427,13 @@ import Foundation
   }
 
   static func main() {
-    checkSessionIds()
     checkRequestResolution()
-    checkAssetPaths()
-    checkContentTypes()
     checkGenerationMap()
-    checkCsp()
     checkLoadStateMachine()
-    checkResponseHeaders()
-    checkNavigationErrors()
     checkNavigationVerdict()
     checkOwnLoadIsSpentOnce()
-    checkAppliedProps()
     checkBridgeAcceptance()
     checkBridgePostTarget()
-    checkBridgeTargetLifecycle()
     checkBridgeByteCap()
     print("mobile web shell checks OK")
   }

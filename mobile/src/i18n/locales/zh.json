@@ -21,7 +21,6 @@
     "panel": {
       "all": "全部",
       "emptyScope": "此范围内暂无历史智能体会话。",
-      "loadFailed": "无法加载",
       "missingResumeId": "此会话缺少恢复 ID。",
       "noSearchResults": "没有符合搜索条件的会话。",
       "noSessions": "暂无智能体会话",
@@ -186,7 +185,11 @@
       "cancelEditing": "取消编辑",
       "placeholder": "随心输入，@ 引用文件，/ 使用命令",
       "saveEditedMessage": "保存编辑后的消息",
-      "sendMessage": "发送消息"
+      "sendMessage": "发送消息",
+      "sendQueue": "加入队列",
+      "sendSteer": "立即发送",
+      "sendQueueHint": "在当前回合结束后运行",
+      "sendSteerHint": "加入智能体当前正在进行的工作"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -650,7 +653,6 @@
       "loadingDiff": "加载差异…",
       "loadingReview": "正在加载评审…",
       "noReviewableChanges": "没有可评审的更改",
-      "retryLabel": "重试加载评审内容",
       "reviewUnavailable": "评审不可用",
       "selectFile": "请选择要评审的文件。",
       "tooLargeMessage": "此差异过大，无法在移动端预览。",
@@ -844,10 +846,8 @@
       "selectRunTarget": "选择运行目标"
     },
     "prSidebar": {
-      "loadFailed": "发生错误。",
       "loading": "正在加载 PR…",
-      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。",
-      "retryLoading": "重试加载 PR"
+      "notPermitted": "无权访问：您的 GitHub 账户尚未连接。"
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
@@ -996,6 +996,16 @@
       "title": "出了点问题",
       "tryAgain": "重试",
       "home": "首页"
+    },
+    "svgPreview": {
+      "drawFailed": "无法绘制此 SVG",
+      "label": "{{title}} 图形",
+      "previewDrawing": "预览图形",
+      "viewSource": "查看 SVG 源代码"
+    },
+    "mermaidDiagram": {
+      "expand": "展开图表",
+      "label": "Mermaid 图表"
     }
   },
   "connection": {
@@ -3061,7 +3071,6 @@
       "waitingForDesktop": "正在等待桌面…"
     },
     "panel": {
-      "loadFailedTitle": "无法加载",
       "unavailableTitle": "源代码控制不可用"
     },
     "prChip": {
@@ -3889,8 +3898,7 @@
       "noFilterMatches": "没有符合筛选条件的工作区",
       "noMatches": "没有匹配的工作区",
       "reopen": "重新打开以更新",
-      "reopenDetail": "此页面尚无法识别此主机的工作区列表格式。",
-      "retrying": "worktree.ps 失败（{{error}}），正在自动重试"
+      "reopenDetail": "此页面尚无法识别此主机的工作区列表格式。"
     },
     "workspaceListSections": {
       "all": "全部",

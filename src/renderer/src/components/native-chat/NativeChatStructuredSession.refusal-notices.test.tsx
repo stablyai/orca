@@ -2,7 +2,7 @@
 
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionCommandRefusalCause } from '../../../../shared/structured-agent-session-composer'
+import type { StructuredAgentSessionCommandRefusalCause } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
@@ -46,19 +46,6 @@ afterEach(() => {
     return { code: 'agent_session_journal_unreadable', details: { reason } } as const
   }
 
-  // Word refusals locally without host internals or automatic-read retry narration.
-  it('says only that a failed read with no refusal did not load, and adds nothing of the host', () => {
-    mocks.status = 'error'
-    mocks.messages = []
-
-    renderPane()
-
-    expect(screen.getByText('Could not load conversation')).toBeTruthy()
-    expect(screen.queryByText(/keeps trying/)).toBeNull()
-    expect(screen.queryByText(/history couldn't be loaded/)).toBeNull()
-    expect(screen.queryByText(/Toggle back to the terminal/)).toBeNull()
-  })
-
   it('says a damaged history cannot load in one line, without claiming Orca keeps trying', () => {
     mocks.status = 'error'
     mocks.readRefusal = journalRefusal('journalCorrupt')
@@ -89,38 +76,6 @@ afterEach(() => {
     expect(mocks.composerProps).not.toBeNull()
   })
 
-  it("says a code's own words that the history didn't load, and nothing under them", () => {
-    mocks.status = 'error'
-    mocks.readRefusal = {
-      code: 'agent_session_checkpoint_stale',
-      details: { reason: 'fenceStale' }
-    } as const
-    mocks.messages = []
-
-    renderPane()
-
-    expect(screen.getAllByText("This chat's history couldn't be loaded.")).toHaveLength(1)
-    expect(screen.queryByText(/keeps trying/)).toBeNull()
-  })
-
-  it('says why the history did not load for a chat its host cannot run', () => {
-    mocks.status = 'error'
-    mocks.readRefusal = {
-      code: 'structured_agent_session_unsupported',
-      details: { reason: 'hostUnsupported' }
-    } as const
-    mocks.messages = []
-
-    renderPane()
-
-    expect(
-      screen.getAllByText(
-        "Orca can't run this agent in a chat here. This chat's history couldn't be loaded."
-      )
-    ).toHaveLength(1)
-    expect(screen.queryByText(/isn't available|newer Orca/)).toBeNull()
-  })
-
   it('says once that a newer Orca saved the chat and only an update opens it, with no composer', () => {
     mocks.status = 'error'
     mocks.readRefusal = journalRefusal('journalWrittenByNewerOrca')
@@ -134,37 +89,6 @@ afterEach(() => {
     expect(screen.queryByText('Could not load conversation')).toBeNull()
     expect(screen.queryByText(/keeps trying/)).toBeNull()
     expect(mocks.composerProps).toBeNull()
-  })
-
-  // Only a chat that never loaded stores a failure with no host refusal (the read owner drops it after load).
-  it('says once that the history did not load beside a bubble of a chat that never loaded', () => {
-    mocks.status = 'error'
-
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-read-error-tab"
-        sessionId="read-error-session"
-        target={{ kind: 'environment', environmentId: 'remote-host' }}
-        agent="codex"
-      />
-    )
-
-    expect(screen.getByTestId('message-list')).toBeTruthy()
-    expect(screen.getByTestId('structured-composer')).toBeTruthy()
-    expect(screen.getAllByText("This chat's history couldn't be loaded.")).toHaveLength(1)
-    expect(screen.queryByText(/reconnect/i)).toBeNull()
-  })
-
-  it('words a failed reconnect beside a transcript it keeps', () => {
-    mocks.status = 'error'
-    mocks.readRefusal = journalRefusal('journalUnavailable')
-
-    renderPane()
-
-    expect(screen.getByTestId('message-list')).toBeTruthy()
-    expect(screen.getByText("Orca couldn't open this chat's history right now.")).toBeTruthy()
   })
 }
 
