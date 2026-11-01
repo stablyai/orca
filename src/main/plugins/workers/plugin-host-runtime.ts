@@ -32,9 +32,12 @@ import {
   createPluginWorkerApiTables,
   createPluginWorkerOrcaApi,
   type PluginWorkerOrcaApi
-} from './plugin-worker-orca-api'
+} from '../../../shared/plugins/workers/plugin-worker-orca-api'
 
-export type { PluginDisposable, PluginWorkerOrcaApi } from './plugin-worker-orca-api'
+export type {
+  PluginDisposable,
+  PluginWorkerOrcaApi
+} from '../../../shared/plugins/workers/plugin-worker-orca-api'
 
 export type PluginHostCallError = Error & {
   code: PluginErrorCode

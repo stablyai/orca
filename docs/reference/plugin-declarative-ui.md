@@ -238,10 +238,54 @@ test('adds a task', async () => {
   `onDidChange` as in Orca. `requests` stands in for the worker: each `plugin.request` name maps to
   its answer or a function of the input (which may throw `hostError(code)`); an unlisted name is
   `unknown_method`. Both follow your `PluginRequests` types.
+- `refusals` (on the mounted panel and on the host) lists every call Orca would refuse, as
+  `{ method, code, message }`, even when the panel caught the error: a `.catch()` around a call
+  that is missing its capability passes every other assertion, so assert `refusals` is empty.
+
+### Testing a worker
+
+`mountWorker(module, { host, events, commands })` runs a worker's `main` the way Orca does: it calls
+the module's default-exported `activate(orca)` with a worker `orca` object backed by `mockHost`
+(worker methods and the manifest's capabilities). `.ts` and `.mts` mains, their relative imports
+and `node:` or package imports load as Orca's worker host loads them, and importing `orca` at run
+time fails with Orca's message (`orca/worker` is types only).
+
+```ts
+import { assert, mountWorker, test } from 'orca/testing'
+import * as main from './worker'
+
+test('notifies when an agent is blocked', async () => {
+  const worker = await mountWorker(main)
+  await worker.emit('agent.status.changed', {
+    workspaceId: null,
+    paneKey: 'tab-1:pane-1',
+    state: 'blocked',
+    receivedAt: Date.now()
+  })
+  assert.equal(worker.host.callsOf('notifications.show').length, 1)
+  assert.deepEqual(worker.refusals, [])
+  await worker.deactivate()
+})
+```
+
+- `emit(event, payload)` delivers an event only if `contributes.events` lists it (events default to
+  the manifest's), checks the payload against Orca's schema, and resolves once every handler and
+  host call has finished.
+- `command(id, args)` runs a registered command. Registering an id the manifest does not list fails
+  activation, as it stops the worker in Orca.
+- `logs` holds what the worker passed to `orca.log`; `refusals` and `host.calls` record host calls.
+- `deactivate()` runs the module's `deactivate` export and drops its handlers.
+- `request(name, input, { panel })` calls the handler the worker registered with
+  `orca.panels.handle(name, ...)`, as a panel's `plugin.request` reaches it (an unhandled name is
+  `unknown_method`); `posts` records `orca.panels.post` calls.
+- `orca.storage`, `settings` and `secrets` use the mock host's in-memory store, so seed them with
+  `mockHost({ storage, settings, secrets })` and read them back with `host.data()`; a panel mounted
+  on the same host sees the same data.
 
 `orca plugin check [dir]` validates the plugin like `orca plugin validate`, then renders every
 components panel once against `mockHost()` and reports what the panel threw (with `file:line`),
-layouts Orca would refuse, and props it would drop. Both commands run the plugin's code on your
+layouts Orca would refuse, props it would drop, and host calls Orca would refuse (a warning even
+when the panel caught the error). Repeated identical issues are reported once. Both commands run the plugin's code on your
 machine with your full access, outside Orca's sandbox, so run them only on code you trust. They use
 the `node` on PATH when it is 20.6 or newer (the first with `module.register`), else the Node built
 into Orca, so authors need no Node install.

@@ -235,6 +235,10 @@ export async function mountPanel(
     errors,
     /** Props and components Orca would drop, as it would warn about them. */
     warnings,
+    /** Host calls Orca would refuse (missing capability, no press, ...), even ones the panel caught. */
+    get refusals() {
+      return host.refusals
+    },
     find: (query: TestQuery): TestElement | null => findAll(query)[0] ?? null,
     findAll,
     tree: (): TreeSnapshot | string | null => (shown.tree ? snapshotTree(shown.tree) : null),

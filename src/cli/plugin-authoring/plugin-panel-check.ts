@@ -54,6 +54,10 @@ for (const { panel, entry, url } of panels) {
     result.elements = mounted.findAll({}).length
     result.issues.push(...mounted.errors)
     result.warnings.push(...mounted.warnings)
+    // Refused even when the panel caught it: in Orca the call fails the same way.
+    for (const { method, code, message } of mounted.refusals) {
+      result.warnings.push('host refused ' + method + ' (' + code + '): ' + message)
+    }
     await mounted.unmount()
   } catch (error) {
     stray.push(error)
@@ -162,7 +166,8 @@ export async function checkPluginPanels(
   const realDir = realpathSync(dir)
   return reported.map((check) => ({
     ...check,
-    issues: pluginPanelCheckIssues(realDir, check.issues)
+    issues: pluginPanelCheckIssues(realDir, check.issues),
+    warnings: [...new Set(check.warnings)]
   }))
 }
 

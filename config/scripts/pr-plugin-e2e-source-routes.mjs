@@ -135,12 +135,23 @@ const SPECIFIC_PLUGIN_ROUTES = [
   ),
   pluginRoute(
     'plugins.declarative-panels',
-    ['plugin-declarative-panel', 'plugin-components-gallery'],
+    ['plugin-declarative-panel'],
     [
       `${UI}declarative\\/`,
       'src\\/shared\\/plugins\\/(?:declarative\\/|frames\\/plugin-declarative-)',
       'src\\/renderer\\/src\\/components\\/right-sidebar\\/(?:PluginDeclarativePanel|use-plugin-declarative-|plugin-declarative-)',
-      'resources\\/plugins\\/declarative\\/',
+      'resources\\/plugins\\/declarative\\/'
+    ].join('|'),
+    'plugin-frame-guest|plugin-smoke'
+  ),
+  // The component catalog: Orca draws each component, so the gallery exercises every one.
+  pluginRoute(
+    'plugins.components-catalog',
+    ['plugin-components-gallery'],
+    [
+      `${UI}declarative\\/`,
+      'src\\/shared\\/plugins\\/declarative\\/plugin-declarative-(?:catalog|[a-z]+-props|prop-schemas|tree)',
+      'resources\\/plugins\\/declarative\\/orca-components',
       'src\\/main\\/plugins\\/panels\\/plugin-panel-image',
       'examples\\/plugins\\/components-gallery\\/'
     ].join('|'),

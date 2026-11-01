@@ -1,16 +1,14 @@
-import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PLUGIN_V1_EVENT_ALIASES } from '../../../shared/plugins/contributions/plugin-event-contribution'
-import {
-  PLUGIN_HOST_API_MINOR,
-  pluginHostMethodsFor
-} from '../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_HOST_API_MAJOR } from '../../../shared/plugins/workers/plugin-host-api-major'
+/** The `orca` object a worker's `activate(orca)` receives; shared so orca/testing hands tests the same one. */
+import type { PluginEventName } from '../manifest/plugin-manifest'
+import { PLUGIN_V1_EVENT_ALIASES } from '../contributions/plugin-event-contribution'
+import { PLUGIN_HOST_API_MINOR, pluginHostMethodsFor } from './plugin-host-api'
+import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import {
   pluginBridgeNameSchema,
   type PluginDataChanged,
   type PluginPanelCaller,
   type PluginWorkerPanelPost
-} from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+} from './plugin-panel-bridge-protocol'
 
 export type PluginDisposable = { dispose(): void }
 

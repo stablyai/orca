@@ -4,13 +4,20 @@
  * transpiled and resolved exactly as Orca's build-less loader does, so a test runs the code Orca
  * runs. Bundled to resources/plugins/declarative/orca-test-hooks.mjs (see orca-test-register.mjs).
  */
-import { existsSync, realpathSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { posix, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { isPluginWorkerSourcePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
 import { resolvePluginModuleSpecifier } from '../panels/plugin-frame-module-resolution'
 import { formatPluginTranspileFailure } from '../panels/plugin-source-transpile-failure'
 import { transpilePluginSource } from '../panels/plugin-source-transpiler'
+import { pluginModuleCandidatePaths } from '../plugin-module-candidate-paths'
+import { transformPluginSource } from '../plugin-source-sucrase-transform'
+import {
+  isOrcaSpecifier,
+  pluginWorkerOrcaImportMessage
+} from '../workers/plugin-worker-orca-import'
 
 type ResolveResult = { url: string; shortCircuit?: boolean; format?: string }
 type NextResolve = (specifier: string, context: ResolveContext) => Promise<ResolveResult>
@@ -49,6 +56,60 @@ function pluginRelativePath(url: string): string | null {
 
 const isFile = (path: string): boolean => existsSync(path) && statSync(path).isFile()
 
+/** The manifest's worker `main`, as a file URL; null when the plugin has none. */
+function workerEntryUrl(): string | null {
+  try {
+    const manifest: unknown = JSON.parse(
+      readFileSync(`${pluginRoot}${sep}orca-plugin.json`, 'utf8')
+    )
+    const main =
+      typeof manifest === 'object' && manifest !== null && 'main' in manifest ? manifest.main : null
+    return typeof main === 'string'
+      ? pathToFileURL(`${pluginRoot}${sep}${main.split(/[\\/]/).join(sep)}`).href
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** The worker's module graph: its files load and resolve as Orca's worker host does, not as
+ *  frame modules (Node resolution, packages allowed, `.ts`/`.mts` only, no `orca` at run time). */
+const workerModules = new Set<string>()
+const workerEntry = workerEntryUrl()
+if (workerEntry) {
+  workerModules.add(workerEntry)
+}
+
+async function resolveWorkerImport(
+  specifier: string,
+  context: ResolveContext,
+  nextResolve: NextResolve
+): Promise<ResolveResult> {
+  if (isOrcaSpecifier(specifier)) {
+    throw new Error(pluginWorkerOrcaImportMessage(specifier))
+  }
+  let result: ResolveResult
+  try {
+    result = await nextResolve(specifier, context)
+  } catch (error) {
+    if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+      throw error
+    }
+    const target = new URL(specifier, context.parentURL)
+    const found = pluginModuleCandidatePaths(target.pathname.replace(/\/$/, ''))
+      .map((candidate) => Object.assign(new URL(target.href), { pathname: candidate }))
+      .find((url) => pluginRelativePath(url.href) !== null && isFile(fileURLToPath(url)))
+    if (!found) {
+      throw error
+    }
+    result = { url: found.href, shortCircuit: true }
+  }
+  if (pluginRelativePath(result.url) !== null) {
+    workerModules.add(result.url)
+  }
+  return result
+}
+
 export async function resolve(
   specifier: string,
   context: ResolveContext,
@@ -57,6 +118,9 @@ export async function resolve(
   const orcaFile = ORCA_FILES[specifier]
   if (orcaFile) {
     return { url: new URL(orcaFile, import.meta.url).href, shortCircuit: true }
+  }
+  if (context.parentURL && workerModules.has(context.parentURL)) {
+    return resolveWorkerImport(specifier, context, nextResolve)
   }
   const parent = context.parentURL ? pluginRelativePath(context.parentURL) : null
   // Only a plugin's own module imports by Orca's rules; the entry point's parent is a folder.
@@ -85,6 +149,16 @@ export async function resolve(
 
 export async function load(url: string, context: unknown, nextLoad: NextLoad): Promise<LoadResult> {
   const path = pluginRelativePath(url)
+  if (path !== null && workerModules.has(url)) {
+    // Why ESM: Orca's worker host loads `.ts` as a module whatever package.json says.
+    return isPluginWorkerSourcePath(path)
+      ? {
+          format: 'module',
+          source: transformPluginSource(path, await readFile(fileURLToPath(url), 'utf8')),
+          shortCircuit: true
+        }
+      : nextLoad(url, context)
+  }
   if (path === null || !SOURCE_EXTENSION.test(path)) {
     return nextLoad(url, context)
   }

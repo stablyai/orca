@@ -159,7 +159,9 @@ Both run the plugin's code on this machine, outside Orca's sandbox: only on code
   exit code is the runner's (`plugin_tests_failed` on failure).
 - `ORCA plugin check [dir] --json` validates, then renders each components panel once against a
   stand-in host with the manifest's capabilities: what it threw (with `file:line:col`), layouts
-  Orca would refuse, props it would drop. Exit `0` ok, `1` `plugin_check_failed`, `2` invalid.
+  Orca would refuse, props it would drop, and host calls Orca would refuse (`host refused …`
+  warnings, even when the panel caught the error). Exit `0` ok, `1` `plugin_check_failed`, `2`
+  invalid.
 - `ORCA plugin dev watch <dir> --check` runs the check after the load and each reload and
   prints it inline (a `check` event with `--json`). Its `ok` is false unless Orca also runs the
   plugin: `checkOk` is the check alone, `pluginStatus` (and `pluginError`) what Orca reports.
@@ -197,8 +199,40 @@ test('adds a task', async () => {
   them with `host.data()`), so `persist: 'storage'` atoms and `onDidChange` work under `mount`.
   `requests: { name: answer | (input) => answer }` fakes the worker for `plugin.request`;
   `panel.post(event, payload)` is a worker post (`plugin.on`); `panel.emit` is an Orca event.
+- `panel.refusals` (and `host.refusals`) lists calls Orca would refuse, with their `code`, even
+  ones the code caught: assert it is `[]`.
 - Mount the module, never call its default export: without `mount` there is no runtime. A
   control with `value` but no `onChange` is read-only, so `type`/`toggle` throw on it.
+
+Test a worker (`main`, `.ts` or `.js`) the same way. Its `activate(orca)` is the module's default
+export; `mountWorker` passes it the `orca` object Orca does, backed by `mockHost`:
+
+```ts
+import { assert, mountWorker, test } from 'orca/testing'
+import * as main from './worker'
+
+test('notifies when an agent is blocked', async () => {
+  const worker = await mountWorker(main)
+  await worker.emit('agent.status.changed', {
+    workspaceId: null,
+    paneKey: 'tab-1:pane-1',
+    state: 'blocked',
+    receivedAt: Date.now()
+  })
+  assert.equal(worker.host.callsOf('notifications.show').length, 1)
+  assert.deepEqual(worker.refusals, [])
+  await worker.deactivate()
+})
+```
+
+- `emit(event, payload)` delivers only events in `contributes.events`, checks the payload against
+  Orca's schema and waits for every handler; `command(id, args)` runs a registered command;
+  `logs` holds `orca.log` lines; `deactivate()` runs the module's `deactivate`. Events and
+  commands default to the manifest's; capabilities to its `capabilities`.
+- `request(name, input)` calls the worker's `orca.panels.handle(name, ...)` handler, as a panel's
+  `plugin.request` would; `posts` records `orca.panels.post` calls. Storage, settings and secrets
+  share the mock host's in-memory store with any panel mounted on the same host.
+- The full kit API is in `references/testing.md`.
 
 ## Ship
 
@@ -262,3 +296,4 @@ from this Orca's source, so they match the CLI you are running.
 | Subscribing to worker, frame or panel events and their payloads  | `references/events.md`     |
 | Writing or fixing `orca-plugin.json`, choosing `engines.orca`    | `references/manifest.md`   |
 | Running any `ORCA plugin` command you have not used in this task | `references/cli.md`        |
+| Writing tests: `mount`, `mountWorker`, `mockHost`, every act     | `references/testing.md`    |

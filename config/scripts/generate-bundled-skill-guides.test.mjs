@@ -42,7 +42,14 @@ const GUIDE_REFERENCES = {
     'ssh-host.md',
     'windows-scripts.md'
   ],
-  'orca-plugin-authoring': ['cli.md', 'components.md', 'events.md', 'host-api.md', 'manifest.md']
+  'orca-plugin-authoring': [
+    'cli.md',
+    'components.md',
+    'events.md',
+    'host-api.md',
+    'manifest.md',
+    'testing.md'
+  ]
 }
 const GUIDE_REFERENCE_PATHS = Object.entries(GUIDE_REFERENCES).flatMap(([guide, references]) =>
   references.map((reference) => [guide, reference])

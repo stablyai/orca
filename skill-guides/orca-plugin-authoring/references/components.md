@@ -20,8 +20,8 @@ Everything a components panel (`"ui": "components"`) imports comes from `orca`. 
 - `Row` (children: any): `gap?: Gap; align?: Align; justify?: 'start' | 'center' | 'end' | 'between'; wrap?: boolean`
 - `Text` (children: text, Text, Link, Code, Badge): `tone?: Tone; muted?: boolean; size?: Size; weight?: 'regular' | 'medium' | 'semibold'; truncate?: boolean`
 - `Heading` (children: text, Text, Link, Code, Badge): `level?: 1 | 2 | 3`
-- `Button` (children: text): `variant?: Variant; tone?: Tone; size?: Size; icon?: IconName; disabled?: boolean; onPress?: Press`
-- `IconButton` (children: none): `icon: IconName; label: string; variant?: Variant; tone?: Tone; size?: Size; disabled?: boolean; onPress?: Press`
+- `Button` (children: text): `variant?: Variant; tone?: Tone; size?: Size; icon?: IconName; tooltip?: string; disabled?: boolean; onPress?: Press`
+- `IconButton` (children: none): `icon: IconName; label: string; tooltip?: string; variant?: Variant; tone?: Tone; size?: Size; disabled?: boolean; onPress?: Press`
 - `Badge` (children: text): `tone?: Tone`
 - `Card` (children: any): `title?: string; description?: string`
 - `List` (children: ListItem only): `label?: string`
@@ -35,6 +35,24 @@ Everything a components panel (`"ui": "components"`) imports comes from `orca`. 
 - `EmptyState` (children: any): `title: string; description?: string; icon?: IconName`
 - `Link` (children: text): `href?: string; onPress?: Press`
 - `Code` (children: text): `block?: boolean`
+- `Textarea` (children: none): `label: string; labelHidden?: boolean; value?: string; defaultValue?: string; placeholder?: string; rows?: number; maxLength?: number; invalid?: boolean; disabled?: boolean; onChange?: (value: string) => void; onSubmit?: (value: string) => void`
+- `Checkbox` (children: none): `label: string; description?: string; checked?: boolean; defaultChecked?: boolean; disabled?: boolean; onChange?: (checked: boolean) => void`
+- `RadioGroup` (children: none): `label: string; labelHidden?: boolean; value?: string; defaultValue?: string; options: readonly RadioOption[]; orientation?: 'vertical' | 'horizontal'; disabled?: boolean; onChange?: (value: string) => void`
+- `Slider` (children: none): `label: string; labelHidden?: boolean; value?: number; defaultValue?: number; min?: number; max?: number; step?: number; showValue?: boolean; disabled?: boolean; onChange?: (value: number) => void`
+- `Field` (children: any): `label: string; description?: string; error?: string; required?: boolean`
+- `Tabs` (children: Tab only): `label: string; value?: string; defaultValue?: string; onChange?: (value: string) => void`
+- `Tab` (children: any): `value: string; label: string; icon?: IconName; disabled?: boolean`
+- `Collapsible` (children: any): `title: string; description?: string; open?: boolean; defaultOpen?: boolean; disabled?: boolean; onChange?: (open: boolean) => void`
+- `Toolbar` (children: any): `label: string; gap?: Gap`
+- `Grid` (children: any): `columns?: 1 | 2 | 3 | 4 | 5 | 6; minItemWidth?: 'xs' | 'sm' | 'md' | 'lg'; gap?: Gap`
+- `Table` (children: none): `label: string; columns: readonly TableColumn[]; rows: readonly TableRow[]; sort?: TableSort; selectionMode?: 'none' | 'single' | 'multiple'; selected?: readonly string[]; defaultSelected?: readonly string[]; hasMore?: boolean; loading?: boolean; emptyText?: string; maxHeight?: MaxHeight; onSortChange?: (sort: TableSort) => void; onSelectionChange?: (selection: { keys: string[] }) => void; onRowAction?: (row: { key: string }) => void; onLoadMore?: () => void`
+- `Tree` (children: none): `label: string; items: readonly TreeItem[]; selected?: string; defaultSelected?: string; expanded?: readonly string[]; defaultExpanded?: readonly string[]; maxHeight?: MaxHeight; onSelect?: (item: { key: string }) => void; onToggle?: (item: { key: string; expanded: boolean }) => void; onAction?: (item: { key: string }) => void`
+- `Markdown` (children: none): `content: string`
+- `CodeView` (children: none): `code: string; language?: string; label?: string; lineNumbers?: boolean; wrap?: boolean; maxHeight?: MaxHeight`
+- `Image` (children: none): `src: string; alt: string; size?: 'xs' | 'sm' | 'md' | 'lg' | 'full'; fit?: 'contain' | 'cover'; rounded?: boolean`
+- `KeyValue` (children: none): `label?: string; items: readonly KeyValueItem[]`
+- `Callout` (children: any): `tone?: Tone; title?: string; icon?: IconName`
+- `Skeleton` (children: none): `shape?: 'text' | 'block' | 'circle'; lines?: number; label?: string`
 
 ## Runtime
 
