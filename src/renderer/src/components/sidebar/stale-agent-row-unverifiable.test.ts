@@ -1,6 +1,6 @@
 /** Silence with a live PTY is unverifiable, never proof of completion or current work; no-PTY rows may idle. */
 import { describe, expect, it } from 'vitest'
-import { type AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 import { makeTab } from '../../store/slices/store-session-test-harness'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'

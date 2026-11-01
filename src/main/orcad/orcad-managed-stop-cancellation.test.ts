@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
-import { type OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
+import type { OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
 
 import { acquireOrcadInstanceLock } from './orcad-instance-lock'
 import { orcadManagedStopRequestPath } from './orcad-managed-stop-request'

@@ -835,7 +835,7 @@
 2 test-no-wall-clock:src/main/git/repo-ref-maintenance-real-git.test.ts
 2 test-no-wall-clock:src/main/git/runner-gh-account-binding.test.ts
 6 test-no-wall-clock:src/main/git/runner-gh-rate-limit-breaker.test.ts
-4 test-no-wall-clock:src/main/git/settled-diff-cache-bounds.test.ts
+2 test-no-wall-clock:src/main/git/settled-diff-cache-bounds.test.ts
 1 test-no-wall-clock:src/main/git/source-control/blob-absence-real-git.test.ts
 2 test-no-wall-clock:src/main/git/status-diff-settled-cache.test.ts
 1 test-no-wall-clock:src/main/git/status-upstream-negative-cache.test.ts
