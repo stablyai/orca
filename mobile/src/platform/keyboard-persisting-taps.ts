@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react'
 
 export type KeyboardPersistingTaps = 'always' | 'handled'
 
-function isTextField(element: Element | null): boolean {
+export function isTextField(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
   }

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { DetailCardScopeOptions } from './use-detail-card-scope'
+import { isTextField } from '../platform/keyboard-persisting-taps'
 
 function element(value: unknown): HTMLElement | null {
   return value instanceof HTMLElement ? value : null
@@ -125,7 +126,10 @@ export function useDetailCardScope({
     document.addEventListener('keydown', isolate, { signal: listeners.signal })
     document.addEventListener('keyup', isolate, { signal: listeners.signal })
     document.addEventListener('focusin', focusin, capture)
-    content.focus()
+    // Why: tab taps keep a focused text field focused; taking focus here would close the soft keyboard.
+    if (!isTextField(document.activeElement)) {
+      content.focus()
+    }
     return () => listeners.abort()
   }, [active, obscured, openerRef, backRef, boundaryRefs, contentRef, dismiss])
 }
