@@ -20,6 +20,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
+import type { FileExplorerRowClick } from './useFileExplorerHandlers'
 import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 type UseFileExplorerNodeCommandsParams = {
@@ -42,7 +43,11 @@ type UseFileExplorerNodeCommandsParams = {
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
-  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming, openInChosenApp?: boolean) => void
+  handleClick: (
+    node: TreeNode,
+    dirToggle?: DirToggleTiming,
+    rowClick?: FileExplorerRowClick
+  ) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
   pathOwner: LocalPathOpenOwner
@@ -134,9 +139,8 @@ export function useFileExplorerNodeCommands({
         fromRenameHotspot: isRenameHotspotTarget(event.target),
         clickCount: event.detail
       })
-      // The second click of a double-click must not launch the app again.
       selectRowWithModifiers(node, event, (target) =>
-        handleClick(target, dirToggle, event.detail < 2)
+        handleClick(target, dirToggle, { repeated: event.detail >= 2 })
       )
     },
     [handleClick, selectRowWithModifiers]

@@ -33,7 +33,7 @@ type UseFileExplorerHandlersParams = {
     }
   ) => void
   makePreviewFilePermanent: (filePath: string) => void
-  openFileInChosenApp?: (filePath: string) => boolean
+  openFileInChosenApp?: (filePath: string, repeatedClick?: boolean) => boolean
   toggleDir: (worktreeId: string, dirPath: string) => void
   canToggleDirectories?: boolean
   loadDir: (
@@ -47,8 +47,15 @@ type UseFileExplorerHandlersParams = {
   scrollRef: RefObject<HTMLDivElement | null>
 }
 
+/** Set only for a mouse click on a row, the one activation that may hand a file to the chosen app. */
+export type FileExplorerRowClick = { repeated: boolean }
+
 type UseFileExplorerHandlersReturn = {
-  handleClick: (node: TreeNode, dirToggle?: DirToggleTiming, openInChosenApp?: boolean) => void
+  handleClick: (
+    node: TreeNode,
+    dirToggle?: DirToggleTiming,
+    rowClick?: FileExplorerRowClick
+  ) => void
   handleDoubleClick: (node: TreeNode) => void
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
@@ -171,7 +178,7 @@ export function useFileExplorerHandlers({
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
   const handleClick = useCallback(
-    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate', openInChosenApp = false) => {
+    (node: TreeNode, dirToggle: DirToggleTiming = 'immediate', rowClick?: FileExplorerRowClick) => {
       if (dirToggle === 'skip' && (node.isDirectory || node.isSymlink)) {
         // Rename owns this click; symlinks remain file-shaped until activation, so isDirectory alone would retoggle.
         setSelectedPath(node.path)
@@ -183,7 +190,10 @@ export function useFileExplorerHandlers({
         runtimeEnvironmentId,
         openFile,
         // Only a row click opens in the chosen app; "View File" and the keyboard keep the Orca editor.
-        openFileInChosenApp: openInChosenApp ? openFileInChosenApp : undefined,
+        openFileInChosenApp:
+          rowClick && openFileInChosenApp
+            ? (filePath: string) => openFileInChosenApp(filePath, rowClick.repeated)
+            : undefined,
         toggleDir,
         canToggleDirectories,
         loadDir,
