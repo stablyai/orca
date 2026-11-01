@@ -79,7 +79,7 @@ describe('deferred PostHog client start', () => {
     (eligible) => {
       vi.mocked(store.getChatUiLaunchTipVariant).mockReturnValue('chat-ui-off')
       vi.mocked(crypto.randomInt)
-        .mockImplementationOnce(() => 0)
+        .mockImplementationOnce(() => 8)
         .mockImplementationOnce(() => 1)
       const resolveEligibility = vi.fn(() => eligible)
       scheduleClientStart.mockClear()
