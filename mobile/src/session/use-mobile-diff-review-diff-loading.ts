@@ -100,5 +100,9 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     worktreeId
   ])
 
-  return diffState
+  // The effect reads after paint; until then the selected file is loading, not "Diff Unavailable" or the previous file.
+  const settledForItem = diffState.kind !== 'idle' && diffState.itemKey === currentItem?.key
+  return currentItem && screenReady && !settledForItem
+    ? { kind: 'loading', itemKey: currentItem.key }
+    : diffState
 }

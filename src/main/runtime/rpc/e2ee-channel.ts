@@ -1,5 +1,6 @@
 // Keep E2EE framing outside transport-independent plaintext RPC handlers.
 import type { WebSocket } from 'ws'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../shared/paired-e2ee-handshake-deadline'
 import { deriveSharedKey, encrypt, decrypt, decryptBytes } from '../../../shared/e2ee-crypto'
 import {
   DesktopMobileE2EEV2Session,
@@ -30,7 +31,6 @@ import type {
 } from './rpc-binary-sender'
 import type { DevicePrincipal } from '../device-principal'
 
-const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
 
 export type E2EEChannelOptions = {
@@ -104,7 +104,7 @@ export class E2EEChannel {
 
     this.handshakeTimer = setTimeout(() => {
       this.onError(4002, 'E2EE handshake timeout')
-    }, HANDSHAKE_TIMEOUT_MS)
+    }, PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   onMessage(

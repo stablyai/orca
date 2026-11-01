@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
+import { applyThemeBackground } from '../lib/theme-background'
+import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
 import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
 import { usePluginMonacoThemeStore } from '../store/plugin-monaco-theme'
@@ -17,6 +19,7 @@ import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useMediaQuery } from '@/hooks/use-media-query'
 
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
@@ -36,6 +39,15 @@ export function useDocumentAppearance(): void {
   const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
+  const reduceEffects = useMediaQuery('(prefers-reduced-transparency: reduce)')
+  const terminalTranslucent = useAppStore((s) => (s.settings?.terminalBackgroundOpacity ?? 1) < 1)
+  // Why re-parse: the theme list keeps the registration as received, and a newer host may send
+  // a background this build cannot paint; it must drop to no image, never reach CSS.
+  const registeredBackground = pluginTheme?.background
+  const themeBackground = useMemo(
+    () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
+    [registeredBackground]
+  )
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
@@ -68,6 +80,14 @@ export function useDocumentAppearance(): void {
       })
     }
   }, [pluginTheme, pluginThemesLoaded, theme, dark])
+
+  // Why gated: the image only shows through translucent terminals, so otherwise it would cost decode
+  // and switch terminals to transparent rendering for nothing.
+  useEffect(() => {
+    if (pluginThemesLoaded) {
+      applyThemeBackground(terminalTranslucent && !reduceEffects ? themeBackground : null)
+    }
+  }, [pluginThemesLoaded, terminalTranslucent, reduceEffects, themeBackground])
 
   useEffect(() => {
     document.documentElement.style.setProperty(

@@ -4,7 +4,7 @@ import type {
   AgentJournalApprovalSubject,
   AgentJournalItemBody,
   AgentJournalPlanApprovalSubject
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 
 /** Schema-independent readers share this supported-kind set; a test keeps it aligned with the schema. */
 export const DRAWN_APPROVAL_SUBJECT_KINDS: ReadonlySet<string> = new Set(['plan'])

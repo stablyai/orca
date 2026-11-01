@@ -73,13 +73,12 @@ Never:
 - Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
-Finished workers close on their own; `send` reopens one when you need it again.
+Finished workers close on their own unless `worker-list` gives one a `next`; follow
+it. `send` reopens a closed worker when you need it again.
 Start a worker in your workspace with `--keep-open` when the user will keep using
 its chat after it reports: they want to watch it or talk to it. To keep one already
 started, run
 `ORCA orchestration worker-keep-open --dispatch <dispatch_id>`.
-If a finished worker you did not keep open shows no `autoReleaseAt` in `worker-list`,
-release it yourself.
 
 ## Task spec
 
@@ -106,7 +105,7 @@ assignment does not prove its agent stopped.
 | ---------------------------------------------- | ----------------------------------------- |
 | Task DAGs, several Runs                        | `references/coordinator-loop.md`          |
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md`      |
-| Group messages, inbox scripts                  | `references/messaging-and-gates.md`       |
+| Group messages                                 | `references/messaging-and-gates.md`       |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md`      |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`        |
 | Legacy labels, adopted Runs, takeover          | `references/legacy-contract-migration.md` |

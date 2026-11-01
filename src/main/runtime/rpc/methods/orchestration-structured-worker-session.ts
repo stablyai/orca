@@ -6,17 +6,17 @@ import {
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
 import { randomUUID } from 'node:crypto'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   agentSessionFailureDetailText,
   readAgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import { quotedProviderDetail } from '../../../../shared/agent-session-failure-quoted-detail'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../shared/tui-agent'

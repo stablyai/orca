@@ -14,8 +14,8 @@ import { afterEach, expect, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult
-} from '../../../src/shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -51,7 +51,8 @@ export function readOrHoldReply(method: string, params: unknown): RpcResponse {
     : ok({ models: [], current: {} })
 }
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   Text: 'Text',
   View: 'View',
   Pressable: 'Pressable',

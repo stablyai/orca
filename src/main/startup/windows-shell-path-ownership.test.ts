@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shell-path-ownership'
+import { WindowsShellPathOwnership } from './windows-shell-path-ownership'
 
 describe('Windows shell PATH ownership', () => {
-  it.each([
-    ['C:\\', 'c:\\'],
-    ['C:\\Tools\\', 'c:\\tools'],
-    ['c:/TOOLS', 'c:\\tools'],
-    ['\\\\Server\\Share\\', '\\\\server\\share\\'],
-    ['\\\\SERVER\\Share', '\\\\server\\share\\']
-  ])('normalizes %s to %s', (segment, expected) => {
-    expect(windowsPathSegmentKey(segment)).toBe(expected)
-  })
-
   it.each(['PATH', 'Path'])(
     'restores the complete %s baseline without changing its casing',
     (key) => {

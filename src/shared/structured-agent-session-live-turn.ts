@@ -5,14 +5,14 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
-  type AgentJournalTurnLifecycle,
-  type AgentJournalTurnScope
-} from './agent-session-journal-types'
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
+  type AgentJournalTurnLifecycle
+} from './agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from './agent-session-wire'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import { isAgentSessionContextClear } from './agent-session-context-clear'
-import type { NativeChatToolCallBlock } from './native-chat-types'
+import type { NativeChatToolCallBlock } from './native-chat/native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
   isStructuredAgentSessionToolAction,

@@ -533,6 +533,7 @@ import {
   RepoCreate,
   RepoHooksCheck,
   RepoIssueCommandWrite,
+  RepoList,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -579,6 +580,7 @@ import {
   SshTargetAdd,
   SshTargetUpdate
 } from './ssh-params'
+import { StatusGetParams } from './status-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
@@ -1348,7 +1350,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.hooksCheck': RepoHooksCheck,
   'repo.issueCommandRead': RepoIssueCommandRead,
   'repo.issueCommandWrite': RepoIssueCommandWrite,
-  'repo.list': null,
+  'repo.list': RepoList,
   'repo.reorder': RepoReorder,
   'repo.rm': RepoSelector,
   'repo.saveSparsePreset': RepoSparsePresetSave,
@@ -1436,7 +1438,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.removeTarget': SshTarget,
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
-  'status.get': null,
+  'status.get': StatusGetParams,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,

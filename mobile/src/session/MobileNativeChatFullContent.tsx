@@ -9,8 +9,8 @@ import {
 import type {
   NativeChatMessage,
   NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
-import type { AgentJournalBoundedPayload } from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/native-chat/native-chat-types'
+import type { AgentJournalBoundedPayload } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { styles } from './native-chat/transcript/mobile-native-chat-message-styles'
 import { toolStyles } from './native-chat/transcript/mobile-native-chat-tool-styles'
@@ -21,6 +21,7 @@ import {
   MobileNativeChatItemSourceContext,
   readMobileNativeChatItem
 } from './mobile-native-chat-item-read'
+import { pressedStyle } from '../theme/mobile-theme'
 
 // Keep full-content state per row so live transcript revisions cannot overwrite the reader’s requested expansion.
 
@@ -40,7 +41,7 @@ function ShowFull({
   useMobileColorScheme()
   return (
     <Pressable
-      style={styles.showFull}
+      style={({ pressed }) => [styles.showFull, pressed && pressedStyle]}
       onPress={onPress}
       disabled={load === 'loading'}
       hitSlop={8}

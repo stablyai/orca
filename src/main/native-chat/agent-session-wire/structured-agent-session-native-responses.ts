@@ -1,22 +1,24 @@
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import {
+  isJournalStopOrResumeRow,
+  type JournalRow
+} from '../agent-session-journal/journal-row-schema'
 import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
 import { StructuredQueuedNativeResponses } from './structured-agent-session-queued-native-responses'
 import { StructuredAccountRecovery } from './structured-agent-session-account-recovery'
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
-import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import type {
   JournalOutcomeReadRow,
   JournalReadRow

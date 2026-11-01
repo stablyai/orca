@@ -915,6 +915,32 @@ body[data-modal-overlay-open]
   overflow: hidden;
 }
 
+/* An app theme's image (lib/theme-background.ts): one static layer, veiled toward --background by its opacity. */
+:root[data-theme-background] body {
+  --orca-theme-background-veil: color-mix(
+    in srgb,
+    var(--background) calc(100% - var(--orca-theme-background-opacity) * 100%),
+    transparent
+  );
+  background-image:
+    linear-gradient(var(--orca-theme-background-veil) 0 0), var(--orca-theme-background-image);
+  background-size: auto, var(--orca-theme-background-size);
+  background-repeat: no-repeat, var(--orca-theme-background-repeat);
+  background-position: center, var(--orca-theme-background-position);
+}
+
+/* Only terminal bodies are translucent; other tabs, empty groups and split gutters keep the old base. */
+:root[data-theme-background] [data-tab-group-body-id]:not([data-translucent-tab-body]),
+:root[data-theme-background] .tab-group-split-resize-handle {
+  background-color: var(--background);
+}
+
+/* The seam's translucent border blended over the opaque body; keep that base so no image slit shows. */
+:root[data-theme-background] .workspace-sidebar-seam {
+  background: linear-gradient(var(--background), var(--background)) left / 1px 100% no-repeat
+    border-box;
+}
+
 /* Blur source regions independently so status-bar animation cannot re-filter the workspace. */
 body:is([data-modal-overlay-open], [data-onboarding-overlay-open])
   .app-layout

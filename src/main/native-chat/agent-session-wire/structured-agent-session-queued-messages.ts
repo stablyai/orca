@@ -1,12 +1,10 @@
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { structuredAgentSessionSendBlock } from './structured-agent-session-send-preparation'
@@ -17,12 +15,14 @@ import {
   contextStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWork
 } from './structured-agent-session-current-work'
-import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { agentSessionAttachmentExpiredRefusal } from './structured-agent-session-turns'
+import {
+  type AgentSessionTurnContext,
+  agentSessionAttachmentExpiredRefusal
+} from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from './structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'

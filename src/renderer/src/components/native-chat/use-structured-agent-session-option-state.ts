@@ -3,17 +3,17 @@ import {
   structuredSessionSelectionController
 } from '@/lib/structured-agent-session-selection-controller'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
-import { projectRuntimePermission } from '../../../../shared/structured-agent-session-permission-option'
+import { projectRuntimePermission } from '../../../../shared/agent-session/options/structured-agent-session-permission-option'
 import { useStructuredAgentSessionStatusSummary } from './StructuredAgentSessionStatusBridge'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../../shared/agent-model-catalog-ownership'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
-import type { StructuredAgentSessionOptionState } from '../../../../shared/structured-agent-session-options'
+import type { StructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionOptionView } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY

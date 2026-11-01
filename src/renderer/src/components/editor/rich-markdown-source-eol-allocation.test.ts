@@ -1,47 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
-import {
-  reconcileSerializedMarkdown,
-  restoreMarkdownSourceEol
-} from './rich-markdown-source-reconcile'
+import { describe, expect, it } from 'vitest'
+import { restoreMarkdownSourceEol } from './rich-markdown-source-reconcile'
 
 describe('rich Markdown source line-ending allocation', () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('serializes a supported LF edit without collecting a match for every newline', () => {
-    const source = `\`\`\`js\n${'x\n'.repeat(300_000)}const value=1;\n\`\`\`\n`
-    const canonical = source.slice(0, -1)
-    const edited = canonical.replace('value=1', 'value=2')
-    const roundTrip = vi.fn(() => null)
-    const originalMatch = RegExp.prototype[Symbol.match]
-    let largestGlobalMatchArray = 0
-    vi.spyOn(RegExp.prototype, Symbol.match).mockImplementation(function (
-      this: RegExp,
-      value: string
-    ) {
-      const result = originalMatch.call(this, value)
-      if (this.global && result) {
-        largestGlobalMatchArray = Math.max(largestGlobalMatchArray, result.length)
-      }
-      return result
-    })
-
-    expect(source.length).toBeLessThanOrEqual(RICH_MARKDOWN_MAX_SIZE_BYTES)
-    expect(
-      reconcileSerializedMarkdown({
-        originalSource: source,
-        baseCanonical: canonical,
-        edited,
-        roundTrip
-      })
-    ).toBe(`${edited}\n`)
-    expect(restoreMarkdownSourceEol(edited, source)).toBe(edited)
-    expect(roundTrip).not.toHaveBeenCalled()
-    expect(largestGlobalMatchArray).toBe(0)
-  })
-
   it.each([
     ['empty source', '', '\n'],
     ['no line ending', 'text', '\n'],

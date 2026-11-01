@@ -2,7 +2,7 @@ import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
   AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
@@ -10,7 +10,7 @@ import {
   RUNTIME_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { AcpStructuredOptions } from '../../../acp/acp-structured-options'
 import { NewSessionResponseSchema } from '../../../acp/generated/acp-protocol.generated'

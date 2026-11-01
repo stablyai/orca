@@ -2,14 +2,14 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
-} from '../../../../shared/structured-agent-session-options'
+} from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/structured-agent-session-options-write-owner'
-import { structuredAgentSessionShownSnapshot } from '../../../../shared/structured-agent-session-option-view'
+import { structuredAgentSessionShownSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'

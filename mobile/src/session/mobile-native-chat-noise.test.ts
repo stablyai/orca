@@ -3,7 +3,7 @@ import {
   isNoiseMessage,
   stripNoiseMessages
 } from '../../../src/shared/native-chat/native-chat-noise'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 
 function msg(
   role: NativeChatMessage['role'],

@@ -1,4 +1,4 @@
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { setBoundedScopeCacheEntry } from '../../../../shared/native-chat/native-chat-scope-cache'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,

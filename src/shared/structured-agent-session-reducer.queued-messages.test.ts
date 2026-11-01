@@ -1,12 +1,11 @@
 // Live lists own queue state: omission means unchanged, stale history cannot overwrite them, and older-host absence stays absent.
 
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionHistoryPage, AgentSessionSubscribeEvent } from './agent-session-wire'
 import type {
-  AgentSessionHistoryPage,
   AgentSessionQueuedMessage,
-  AgentSessionQueuePause,
-  AgentSessionSubscribeEvent
-} from './agent-session-wire'
+  AgentSessionQueuePause
+} from './agent-session/requests/agent-session-queued-message-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,

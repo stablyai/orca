@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyStructuredAgentSessionOptions,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionSnapshot
-} from '../../shared/structured-agent-session-options'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
-import type { AgentSessionOptionsResult } from '../../shared/agent-session-wire'
+  createStructuredAgentSessionOptionState
+} from '../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionOptionSnapshot } from '../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../shared/native-chat/input/native-chat-session-options'
 import { setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from './structured/claude-structured-session-state'

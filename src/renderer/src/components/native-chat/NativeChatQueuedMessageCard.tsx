@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { isMacPlatform } from './native-chat-shortcut'
 import {
   queuedMessageCardLine,
@@ -36,9 +36,11 @@ import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
-import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  NativeChatQueuedMessageComposer,
+  type QueuedEditAttachTarget
+} from './NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import { nativeChatImageLabelCopy } from './native-chat-image-label'
 import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'

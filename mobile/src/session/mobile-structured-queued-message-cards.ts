@@ -1,13 +1,13 @@
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
 // The shared projection decides each card's hold; this layer words it for the phone.
 
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { AgentJournalSubmission } from '../../../src/shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import {
   projectQueuedMessageCards,
   queuedMessageCardLine,

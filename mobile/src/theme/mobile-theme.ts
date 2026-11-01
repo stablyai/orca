@@ -201,3 +201,12 @@ export const typography = {
   metaSize: 12,
   monoFamily: 'monospace' as const
 } as const
+
+// One press and one disabled look for every control; fills on press use colors.translucentFill.
+export const feedback = {
+  pressedOpacity: 0.7,
+  disabledOpacity: 0.4
+} as const
+
+/** The pressed look for a button: `style={({ pressed }) => [styles.button, pressed && pressedStyle]}`. */
+export const pressedStyle = { opacity: feedback.pressedOpacity } as const

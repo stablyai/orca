@@ -21,6 +21,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
+import { useWindowBackdropActive } from '@/lib/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
@@ -117,6 +118,7 @@ export default function TabGroupPanel({
     [groupId, setBodyDropRef]
   )
   const attachEditorFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
+  const backdropActive = useWindowBackdropActive()
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
@@ -261,7 +263,12 @@ export default function TabGroupPanel({
             }`
           : ''
       }`}
-      style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
+      // Why not over a theme image: group opacity would let it bleed through opaque chrome.
+      style={
+        hasSplitGroups && !isFocused && !backdropActive
+          ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
+          : undefined
+      }
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
@@ -322,6 +329,8 @@ export default function TabGroupPanel({
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
         data-worktree-id={worktreeId}
+        // Why: the pane overlay paints terminals above this body; only they show the theme image.
+        data-translucent-tab-body={activeTab?.contentType === 'terminal' ? '' : undefined}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >

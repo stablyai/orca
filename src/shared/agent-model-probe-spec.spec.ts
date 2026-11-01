@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentModelProbeSpec } from './agent-model-probe-spec'
-import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session/options/agent-session-option-catalog-grok'
 import { getCommitMessageAgentSpec, listCommitMessageAgentIds } from './commit-message-agent-spec'
 
 describe('getAgentModelProbeSpec', () => {

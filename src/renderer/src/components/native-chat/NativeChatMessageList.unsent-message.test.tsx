@@ -30,12 +30,12 @@ afterEach(() => {
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
-import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/structured-agent-session-dispatch-rejection'
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session-journal-turn-scope'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'

@@ -62,3 +62,23 @@ it.each(defaults)(
     )
   }
 )
+
+it('translates proven terminal loss without changing ordinary gone-chat feedback', async () => {
+  expect(mobileStructuredSessionOpenMessage('gone', 'codex', 'terminal')).toBe(
+    "Agent's pane is no longer available."
+  )
+  mobileI18n.addResourceBundle('fr', 'translation', {
+    'session.structuredOpen.paneUnavailable': 'Le panneau de l’agent n’est plus disponible.'
+  })
+  await activateMobileUiLocale('fr')
+  expect(mobileStructuredSessionOpenMessage('gone', 'Worker custom', 'terminal')).toBe(
+    'Le panneau de l’agent n’est plus disponible.'
+  )
+  expect(mobileStructuredSessionOpenMessage('gone', 'codex')).toBe(
+    "Codex's chat is no longer on this host, so it cannot be reopened here."
+  )
+  setMobilePseudoLocalization(true)
+  expect(mobileStructuredSessionOpenMessage('gone', undefined, 'terminal')).toBe(
+    pseudoLocalizeString('Le panneau de l’agent n’est plus disponible.', { expand: true })
+  )
+})

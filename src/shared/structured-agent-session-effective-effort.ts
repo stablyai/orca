@@ -1,4 +1,4 @@
-import type { CatalogOption } from './agent-session-option-catalog'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
 
 export const PI_THINKING_LEVELS: readonly string[] = [
   'off',

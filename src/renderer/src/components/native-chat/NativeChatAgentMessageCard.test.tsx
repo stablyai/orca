@@ -15,7 +15,7 @@ import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
 import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
@@ -33,12 +33,12 @@ import {
 } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
 import { projectStructuredItemToNativeChat } from '../../../../shared/structured-agent-session-projection'
-import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session-journal-schemas'
+import { isAdmissibleAgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
 import { agentMessageHeading } from '../../../../shared/agent-session/agent-message-presentation'
 import { nativeChatTurnFoldRow } from '../../../../shared/native-chat/transcript/native-chat-turn-fold'
 import { isNoiseMessage } from '../../../../shared/native-chat/native-chat-noise'
 import { nativeChatRowSpeaksOrActs } from '../../../../shared/native-chat/native-chat-trailing-run'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 it('reloads a positioned worker start into the shared card with full task, Copy and navigation', async () => {
   const task = `  Task with [a link][target].\n\n${'More task text.\n'.repeat(20)}END  \n\n[target]: https://example.com\n`
@@ -173,6 +173,41 @@ it('renders unreadable worker metadata with the existing unnamed fallback and no
   expect(screen.getByText('an agent')).toBeInTheDocument()
   expect(screen.getByText('Keep the complete task')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'an agent' })).toBeNull()
+})
+
+it.each([
+  { agent: 'codex', unknown: false },
+  { agent: undefined, unknown: true }
+])('draws a worker no live row names by its saved agent=$agent', ({ agent, unknown }) => {
+  const raw: unknown = {
+    itemId: 'start:gone',
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'gone',
+      task: 'Port the parser',
+      worker: {
+        party: { address: 'term_gone', terminalHandle: 'term_gone', orcaSessionId: null },
+        name: 'Parser port',
+        ...(agent ? { agent } : {})
+      }
+    }
+  }
+  if (!isAdmissibleAgentJournalRenderItem(raw)) {
+    throw new Error('start item was refused')
+  }
+  render(
+    <MessageRow
+      message={projectStructuredAgentStartItem(raw)!}
+      expandSignal={false}
+      onScrollMessageToTop={() => {}}
+      runtimeContext={context}
+    />
+  )
+  expect(screen.getByText('Parser port')).toBeInTheDocument()
+  expect(screen.queryByText('?') !== null).toBe(unknown)
 })
 
 it.each([false, true])(

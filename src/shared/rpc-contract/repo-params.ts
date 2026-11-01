@@ -1,4 +1,9 @@
 import { z } from 'zod'
+
+// Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
+export const RepoList = z.object({
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional()
+})
 import {
   OptionalBoolean,
   OptionalFiniteNumber,

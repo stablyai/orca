@@ -21,7 +21,6 @@
     "panel": {
       "all": "Todo",
       "emptyScope": "No hay sesiones anteriores de agentes en este ámbito.",
-      "loadFailed": "No se pudo cargar",
       "missingResumeId": "Esta sesión no tiene un identificador de reanudación.",
       "noSearchResults": "No hay sesiones que coincidan con tu búsqueda.",
       "noSessions": "No hay sesiones de agentes",
@@ -694,7 +693,6 @@
       "loadingDiff": "Cargando diff…",
       "loadingReview": "Cargando revisión…",
       "noReviewableChanges": "No hay cambios para revisar",
-      "retryLabel": "Reintentar cargar la revisión",
       "reviewUnavailable": "Revisión no disponible",
       "selectFile": "Selecciona un archivo para revisar.",
       "tooLargeMessage": "Este diff es demasiado grande para la vista previa del móvil.",
@@ -894,10 +892,8 @@
       "selectRunTarget": "Elige dónde ejecutar"
     },
     "prSidebar": {
-      "loadFailed": "Algo salió mal.",
       "loading": "Cargando pull request…",
-      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada.",
-      "retryLoading": "Reintentar cargar la pull request"
+      "notPermitted": "Acceso no permitido: tu cuenta de GitHub no está conectada."
     },
     "protocolBlockScreen": {
       "backToHosts": "Volver a hosts",
@@ -3174,7 +3170,6 @@
       "waitingForDesktop": "Esperando al escritorio…"
     },
     "panel": {
-      "loadFailedTitle": "No se pudo cargar",
       "unavailableTitle": "Control de código fuente no disponible"
     },
     "prChip": {
@@ -4015,8 +4010,7 @@
       "noFilterMatches": "Ningún espacio de trabajo coincide con los filtros",
       "noMatches": "No hay espacios de trabajo coincidentes",
       "reopen": "Vuelve a abrir para actualizar",
-      "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce.",
-      "retrying": "worktree.ps falló ({{error}}) — reintentando automáticamente"
+      "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce."
     },
     "workspaceListSections": {
       "all": "Todos",

@@ -1,7 +1,7 @@
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
-import { ActivityIndicator, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { Text, View } from 'react-native'
+import { FileText } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
@@ -10,9 +10,13 @@ import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSour
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
-import { MobileLoadErrorState } from '../components/MobileLoadErrorState'
 import { MobilePanZoomImage } from '../components/MobilePanZoomImage'
 import { MobileSvgPreview } from '../components/MobileSvgPreview'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 type Props = {
@@ -38,23 +42,19 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   if (preview.status === 'loading') {
-    return (
-      <View style={styles.state}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.stateText}>{preview.message}</Text>
-      </View>
-    )
+    return <MobileStateView loading title={preview.message} />
   }
-  if (preview.status === 'error' || preview.status === 'waiting') {
-    return <MobileLoadErrorState message={preview.message} onRetry={options.onRetry} />
+  if (preview.status === 'waiting') {
+    return <MobileOfflineState onReconnect={options.onRetry} />
+  }
+  if (preview.status === 'error') {
+    return <MobileLoadErrorState error={preview.message} onRetry={options.onRetry} />
   }
   if (preview.status === 'empty') {
     return options.editable ? (
       <EditablePreviewSource {...options} />
     ) : (
-      <View style={styles.state}>
-        <Text style={styles.stateText}>{t('files.filePreviewBody.emptyFile', 'Empty file')}</Text>
-      </View>
+      <MobileStateView icon={FileText} title={t('files.filePreviewBody.emptyFile', 'Empty file')} />
     )
   }
   if (preview.kind === 'media') {

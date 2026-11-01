@@ -1,10 +1,10 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
   type AgentJournalTurnLifecycle,
   type AgentJournalTurnLifecycleState
-} from '../../shared/agent-session-journal-types'
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput

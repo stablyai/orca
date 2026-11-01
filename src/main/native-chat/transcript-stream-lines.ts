@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-file-order'
 

@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { parseStructuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

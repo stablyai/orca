@@ -17,7 +17,7 @@ import type { StructuredChatNamingDeps } from '../native-chat/structured-chat-na
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { firstStructuredChatNamingPrompt } from '../../shared/structured-chat-naming-eligibility'
-import { firstStructuredAgentSessionPrompt } from '../../shared/structured-agent-session-first-prompt'
+import { firstStructuredAgentSessionPrompt } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../shared/commit-message-host-key'
 import {
   generateConversationNameFromContext,

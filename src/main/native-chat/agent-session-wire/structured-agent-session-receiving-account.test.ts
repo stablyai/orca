@@ -1,7 +1,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createReceivingAccountFixture,
@@ -9,9 +9,9 @@ import {
   SELECTED_B
 } from './structured-agent-session-receiving-account.test-support'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 const ordinary: AgentJournalMessageItem = {
   kind: 'message',

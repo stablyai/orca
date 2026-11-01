@@ -1,5 +1,5 @@
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import type { NativeChatBlock } from '../../shared/native-chat-types'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { buildImageDataUri } from '../../shared/image-data-uri'
 import { readString } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'

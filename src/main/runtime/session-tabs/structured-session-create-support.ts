@@ -3,7 +3,7 @@ import {
   structuredAgentCliSourceFromEvidence
 } from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
-import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {

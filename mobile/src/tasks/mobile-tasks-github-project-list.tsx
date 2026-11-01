@@ -2,17 +2,22 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import { translate } from '../i18n/mobile-i18n'
 import {
   View,
-  ActivityIndicator,
   colors,
   Text,
   Pressable,
   FlatList,
   spacing,
   ChevronDown,
-  triggerMediumImpact,
   TaskProviderLogo,
   type MobileColorScheme
 } from './mobile-tasks-dependencies'
+import { Inbox } from 'lucide-react-native'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { clearMobileTasksSearch } from './mobile-tasks-search-control'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   projectGroupMeta,
@@ -22,6 +27,7 @@ import {
   projectRowStatusLabel
 } from './mobile-tasks-legacy-foundation'
 import type { GitHubProjectField, GitHubProjectRow } from './mobile-tasks-view-state-types'
+import { pressedStyle } from '../theme/mobile-theme'
 
 function isProjectFieldEmpty(row: GitHubProjectRow, field: GitHubProjectField): boolean {
   switch (field.dataType) {
@@ -71,6 +77,7 @@ export function renderMobileTasksGitHubProjectList(
     githubProjectRepoSlugReady,
     githubProjectSummaryFields,
     githubProjectTable,
+    hasSearch,
     insets,
     refreshGitHubProject,
     setCollapsedGitHubProjectGroups,
@@ -81,16 +88,22 @@ export function renderMobileTasksGitHubProjectList(
   } = model
   const count = githubProjectSummaryFields.length - 4
   return githubProjectLoading ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView
+      loading
+      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      bottomInset={bottomBarHeight}
+    />
   ) : !activeGitHubProject ? (
     <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>
         {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
       </Text>
       <Pressable
-        style={[styles.targetButton, styles.centerActionButton]}
+        style={({ pressed }) => [
+          styles.targetButton,
+          styles.centerActionButton,
+          pressed && pressedStyle
+        ]}
         disabled={!taskUiReady}
         onPress={() => {
           if (!taskUiReady) {
@@ -105,19 +118,29 @@ export function renderMobileTasksGitHubProjectList(
       </Pressable>
     </View>
   ) : githubProjectError ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <Text style={styles.emptyText}>{githubProjectError}</Text>
-    </View>
+    <MobileLoadErrorState
+      error={githubProjectError}
+      onRetry={() => void refreshGitHubProject()}
+      bottomInset={bottomBarHeight}
+    />
   ) : githubProjectTable && !githubProjectRepoSlugReady ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+    <MobileStateView
+      loading
+      title={translate('tasks.githubProjectList.loading', 'Loading project…')}
+      bottomInset={bottomBarHeight}
+    />
+  ) : (!githubProjectTable || visibleGitHubProjectRows.length === 0) && hasSearch ? (
+    <MobileNoMatchState
+      message={translate('tasks.githubProjectList.noMatches', 'No project items match.')}
+      onClear={() => clearMobileTasksSearch(model)}
+      bottomInset={bottomBarHeight}
+    />
   ) : !githubProjectTable || visibleGitHubProjectRows.length === 0 ? (
-    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
-      <Text style={styles.emptyText}>
-        {translate('tasks.githubProjectList.noItems', 'No project items')}
-      </Text>
-    </View>
+    <MobileStateView
+      icon={Inbox}
+      title={translate('tasks.githubProjectList.noItems', 'No project items')}
+      bottomInset={bottomBarHeight}
+    />
   ) : (
     <FlatList
       data={githubProjectListEntries}
@@ -134,7 +157,7 @@ export function renderMobileTasksGitHubProjectList(
         if (entry.type === 'group') {
           return (
             <Pressable
-              style={styles.projectGroupHeader}
+              style={({ pressed }) => [styles.projectGroupHeader, pressed && pressedStyle]}
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
                   const next = new Set(current)
@@ -165,7 +188,6 @@ export function renderMobileTasksGitHubProjectList(
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
-              triggerMediumImpact()
               setProjectRowItem(row)
             }}
           >

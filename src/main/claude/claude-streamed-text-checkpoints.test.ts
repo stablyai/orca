@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalProducerLinkage
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type {

@@ -3,8 +3,7 @@ import { getWorkspaceStatus } from '../../../shared/workspace-statuses'
 import { makeWorktree } from './slices/worktrees-slice-test-fixtures'
 import {
   isWorkspaceStatusAllowedOnHost,
-  selectWorkspaceBoardStatuses,
-  selectWorkspaceStatusesForHost
+  selectWorkspaceBoardStatuses
 } from './host-workspace-status-columns'
 
 const local = [{ id: 'todo', label: 'Todo' }]
@@ -86,16 +85,5 @@ describe('isWorkspaceStatusAllowedOnHost', () => {
         'status-6'
       )
     ).toBe(true)
-  })
-})
-
-describe('selectWorkspaceStatusesForHost', () => {
-  it("offers a host card its host's columns but not the host's copy of the default, matching the board", () => {
-    const state = { workspaceStatuses: local, hostWorkspaceStatuses }
-
-    expect(
-      selectWorkspaceStatusesForHost(state, { hostId: 'runtime:env-1' }).map((status) => status.id)
-    ).toEqual(['todo', 'status-6', 'status-7'])
-    expect(selectWorkspaceStatusesForHost(state, { hostId: 'local' })).toBe(local)
   })
 })

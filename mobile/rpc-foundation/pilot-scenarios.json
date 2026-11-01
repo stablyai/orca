@@ -944,7 +944,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1037,7 +1037,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1148,7 +1148,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -1236,7 +1236,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2105,7 +2105,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2428,7 +2428,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2859,7 +2859,7 @@
         {
           "complete": "repo.list#1",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -2945,7 +2945,7 @@
         {
           "complete": "repo.list#2",
           "params": {
-            "$undefined": true
+            "afterSnapshotId": null
           },
           "reply": {
             "ok": true,
@@ -7665,8 +7665,8 @@
           "params": {
             "limit": 10000,
             "supportsWorktreeVisibilitySourceDefaults": true,
-            "acceptRowDelta": true,
-            "exactActivity": true
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
           },
           "reply": {
             "ok": true,
@@ -7855,13 +7855,30 @@
           "id": "delete"
         },
         {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null,
+              "setupConfig": null
+            }
+          }
+        },
+        {
           "checkpoint": "delete-optimistic"
         },
         {
           "complete": "worktree.rm#1",
           "params": {
             "worktree": "id:wt-1",
-            "force": true
+            "force": true,
+            "runHooks": false
           },
           "reply": {
             "ok": true,
@@ -7891,13 +7908,31 @@
           "id": "delete"
         },
         {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null,
+              "setupConfig": null,
+              "archiveTrust": null
+            }
+          }
+        },
+        {
           "checkpoint": "delete-optimistic"
         },
         {
           "complete": "worktree.rm#1",
           "params": {
             "worktree": "id:wt-1",
-            "force": true
+            "force": true,
+            "runHooks": true
           },
           "reply": {
             "ok": false,
@@ -7909,6 +7944,181 @@
         },
         {
           "checkpoint": "restored"
+        }
+      ]
+    },
+    {
+      "id": "host-worktree-delete-archive-hook-failed",
+      "operation": "host.worktree-actions",
+      "family": "host.worktree-actions",
+      "sites": ["mobile/src/host-screen/use-host-worktree-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "delete",
+          "id": "delete"
+        },
+        {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": true,
+              "hooks": {
+                "scripts": {
+                  "archive": "make clean"
+                }
+              },
+              "setupRunPolicy": "run-by-default",
+              "source": "orca.yaml",
+              "setupConfig": null,
+              "archiveTrust": {
+                "contentHash": "archive-hash-1",
+                "scriptContent": "make clean"
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {
+                "trustedOrcaHooks": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "trust-prompt"
+        },
+        {
+          "action": "approve-archive-trust",
+          "id": "approve-archive-trust"
+        },
+        {
+          "complete": "ui.set#1",
+          "params": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "archive": {
+                  "contentHash": "archive-hash-1",
+                  "approvedAt": 1767225600000
+                }
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "delete-optimistic"
+        },
+        {
+          "complete": "worktree.rm#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "force": true,
+            "runHooks": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_archive_hook_failed",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
+              "data": {
+                "worktreePath": "/repos/marlin/wt-1",
+                "outcome": "exited",
+                "exitCode": 1,
+                "output": ""
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "archive-hook-failed"
+        },
+        {
+          "action": "delete-anyway",
+          "id": "delete-anyway"
+        },
+        {
+          "complete": "repo.hooks#2",
+          "params": {
+            "repo": "id:repo-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": true,
+              "hooks": {
+                "scripts": {
+                  "archive": "make clean"
+                }
+              },
+              "setupRunPolicy": "run-by-default",
+              "source": "orca.yaml",
+              "setupConfig": null,
+              "archiveTrust": {
+                "contentHash": "archive-hash-1",
+                "scriptContent": "make clean"
+              }
+            }
+          }
+        },
+        {
+          "complete": "ui.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ui": {
+                "trustedOrcaHooks": {
+                  "repo-1": {
+                    "archive": {
+                      "contentHash": "archive-hash-1",
+                      "approvedAt": 1767225600000
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "complete": "worktree.rm#2",
+          "params": {
+            "worktree": "id:wt-1",
+            "force": true,
+            "runHooks": true,
+            "allowFailedArchiveHook": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
         }
       ]
     },
@@ -17151,6 +17361,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17189,6 +17400,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17227,6 +17439,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -17257,6 +17470,7 @@
           "complete": "terminal.list#1",
           "params": {
             "includeVisualLayouts": false,
+            "includePreview": false,
             "worktree": "id:workspace-1"
           },
           "reply": {
@@ -19429,8 +19643,14 @@
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
       },
       "deviceState": {
-        "notificationPermissions": { "status": "granted", "canAskAgain": true },
-        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -19473,8 +19693,14 @@
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
       },
       "deviceState": {
-        "notificationPermissions": { "status": "granted", "canAskAgain": true },
-        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -19518,8 +19744,14 @@
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
       },
       "deviceState": {
-        "notificationPermissions": { "status": "granted", "canAskAgain": true },
-        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -19563,8 +19795,14 @@
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
       },
       "deviceState": {
-        "notificationPermissions": { "status": "granted", "canAskAgain": true },
-        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
+        "notificationPermissions": {
+          "status": "granted",
+          "canAskAgain": true
+        },
+        "pushToken": {
+          "type": "ios",
+          "data": "fixture-apns-token"
+        }
       },
       "steps": [
         {
@@ -20863,7 +21101,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "clear": { "handle": "terminal-1", "cleared": true }
+              "clear": {
+                "handle": "terminal-1",
+                "cleared": true
+              }
             }
           }
         },

@@ -1,5 +1,9 @@
 import type { ConnectionState } from '../../transport/types'
-import type { BridgeConnectionSnapshot } from './bridge-envelope'
+import { BridgeClientNotReadyError } from './bridge-client-errors'
+import type {
+  BridgeConnectionPathSource,
+  BridgeConnectionSnapshot
+} from './bridge-connection-snapshot'
 
 export type BridgeSnapshotOutcome = 'applied' | 'stale' | 'unprimed'
 
@@ -7,9 +11,28 @@ export type BridgeSnapshotOutcome = 'applied' | 'stale' | 'unprimed'
 export class BridgeConnectionCache {
   private held: BridgeConnectionSnapshot | null = null
   private readonly listeners = new Set<(state: ConnectionState) => void>()
+  private readonly pathListeners = new Set<() => void>()
 
   read(): BridgeConnectionSnapshot | null {
     return this.held
+  }
+
+  // Getters run only after init primed the cache; reading earlier is a page bug, not a disconnect.
+  require(): BridgeConnectionSnapshot {
+    if (this.held === null) {
+      throw new BridgeClientNotReadyError()
+    }
+    return this.held
+  }
+
+  // Older shells send no path; relay with nothing pending is what pages assumed before they did.
+  pathSource(): BridgeConnectionPathSource {
+    return {
+      getActivePath: () => this.require().activePath ?? 'relay',
+      getPendingPath: () => this.require().pendingPath ?? null,
+      getRelayHostReachability: () => this.require().relayHostReachability ?? 'connecting',
+      onConnectionPathChange: (listener) => this.onPathChange(listener)
+    }
   }
 
   // Repriming identical state is not a transition and must notify nobody.
@@ -23,6 +46,32 @@ export class BridgeConnectionCache {
 
   // Reject backward generations: a client rebuild may publish older state before its init arrives, which would otherwise roll getters back to a dead client.
   apply(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
+    const outcome = this.hold(snapshot)
+    if (outcome === 'applied') {
+      this.fanOut(snapshot.state)
+    }
+    return outcome
+  }
+
+  // A path-only change is not a transition: state listeners would read it as one and re-run.
+  applyPath(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
+    const outcome = this.hold(snapshot)
+    if (outcome === 'applied') {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+    return outcome
+  }
+
+  onPathChange(listener: () => void): () => void {
+    this.pathListeners.add(listener)
+    return () => {
+      this.pathListeners.delete(listener)
+    }
+  }
+
+  private hold(snapshot: BridgeConnectionSnapshot): BridgeSnapshotOutcome {
     const previous = this.held
     if (previous === null) {
       return 'unprimed'
@@ -35,7 +84,6 @@ export class BridgeConnectionCache {
       return 'stale'
     }
     this.held = snapshot
-    this.fanOut(snapshot.state)
     return 'applied'
   }
 
@@ -54,6 +102,7 @@ export class BridgeConnectionCache {
       this.fanOut('disconnected')
     }
     this.listeners.clear()
+    this.pathListeners.clear()
   }
 
   // Set iteration tolerates listeners removing siblings during fan-out; avoid a copy.

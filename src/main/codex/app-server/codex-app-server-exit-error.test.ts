@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { providerDiagnosticOf } from '../../../shared/agent-session-failure'
+import { providerDiagnosticOf } from '../../../shared/agent-session/failures/agent-session-failure'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../../provider-process/provider-spawn-failure-report'
 

@@ -1,5 +1,5 @@
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'
 import { codexInputFinalizationFixture } from './structured-agent-session-codex-input-host.test'
@@ -13,8 +13,8 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 it.each(CODEX_INPUT_FINALIZATION_ADMISSION_CASES)(
   'keeps input unwritten across %s at final admission with %i earlier cards',
