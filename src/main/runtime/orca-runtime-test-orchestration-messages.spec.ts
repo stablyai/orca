@@ -1,7 +1,10 @@
+import { CrewChanges } from './orchestration/crew/crew-changes'
 import type { MessagePriority, MessageRow, MessageType } from './orca-runtime-test-mocks.spec'
 
 // Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {
+  readonly crewChanges = new CrewChanges()
+
   private sequence = 0
 
   private activeCoordinatorRun: { coordinator_handle: string } | null = null
