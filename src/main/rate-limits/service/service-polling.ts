@@ -23,6 +23,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
 
   protected startTimer(): void {
     this.stopTimer()
+    this.staleClaudeTokenRetryTimer = setInterval(() => {
+      void this.retryStaleClaudeTokenIfWindowActive()
+    }, ACTIVE_FAILURE_REFETCH_MS)
     this.timer = setInterval(() => {
       if (!this.shouldBackgroundPoll()) {
         return
@@ -35,6 +38,10 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
+    }
+    if (this.staleClaudeTokenRetryTimer) {
+      clearInterval(this.staleClaudeTokenRetryTimer)
+      this.staleClaudeTokenRetryTimer = null
     }
   }
 
@@ -101,22 +108,8 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
         continue
       }
       // Failed startup reads remain eligible for provider-throttled activation recovery.
-      if (limits.status === 'error') {
-        // Respect server Retry-After rather than spending budget and prolonging 429s.
-        if (this.isRetryAfterActive(limits)) {
-          continue
-        }
-        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
-        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-          ? Math.min(
-              ACTIVE_FAILURE_REFETCH_MS *
-                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
-              MAX_ACTIVE_FAILURE_REFETCH_MS
-            )
-          : MIN_REFETCH_MS
-        if (now - lastRetryAt >= throttleMs) {
-          retryableFailures.push(provider)
-        }
+      if (this.isActiveFailureRetryDue(provider, limits, now)) {
+        retryableFailures.push(provider)
       }
     }
 
@@ -124,6 +117,38 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       return { kind: 'none' }
     }
     return { kind: 'providers', providers: retryableFailures }
+  }
+
+  private isActiveFailureRetryDue(
+    provider: ActiveRateLimitProvider,
+    limits: ProviderRateLimits,
+    now: number
+  ): boolean {
+    // Respect server Retry-After rather than spending budget and prolonging 429s.
+    if (limits.status !== 'error' || this.isRetryAfterActive(limits)) {
+      return false
+    }
+    const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+      ? Math.min(
+          ACTIVE_FAILURE_REFETCH_MS *
+            2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+          MAX_ACTIVE_FAILURE_REFETCH_MS
+        )
+      : MIN_REFETCH_MS
+    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
+  }
+
+  // Why: a focused window fires no focus event, so a Claude token its CLI renewed would wait for the next poll.
+  protected async retryStaleClaudeTokenIfWindowActive(): Promise<void> {
+    const claude = this.state.claude
+    if (
+      !this.shouldBackgroundPoll() ||
+      claude?.usageMetadata?.failureKind !== 'stale-token' ||
+      !this.isActiveFailureRetryDue('claude', claude, Date.now())
+    ) {
+      return
+    }
+    await this.runActiveWindowRefreshPlan({ kind: 'providers', providers: ['claude'] })
   }
 
   protected async runActiveWindowRefreshPlan(plan: ActiveWindowRefreshPlan): Promise<void> {
