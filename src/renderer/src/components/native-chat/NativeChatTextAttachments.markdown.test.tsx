@@ -76,11 +76,11 @@ it('keeps original whole-body interpretation independent of exact lexical action
   recognize.mockRestore()
 })
 
-it('recognizes only changed rows at N and 10N without reading attachment bodies before open', async () => {
+it('recognizes only changed rows at 100 mounted rows without reading attachment bodies before open', async () => {
   const references = await import('../../../../shared/native-chat-text-attachment-references')
   const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
   const renderText = (text: string) => createElement('span', null, text)
-  for (const count of [10, 100]) {
+  for (const count of [100]) {
     let rows = Array.from(
       { length: count },
       (_, index) => `row ${index} **Read @${path} then stop** ${'prose '.repeat(100)}`

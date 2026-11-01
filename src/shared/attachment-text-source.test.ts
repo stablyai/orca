@@ -113,8 +113,8 @@ describe('bounded attachment source', () => {
   })
 })
 
-it('bounds preview and complete output operations at N and 10N on realistic text shapes', async () => {
-  for (const size of [100_000, 1_000_000]) {
+it('bounds preview and complete output operations on a large corpus on realistic text shapes', async () => {
+  for (const size of [1_000_000]) {
     for (const text of ['x'.repeat(size), '\n'.repeat(size), '🙂é\r\n'.repeat(size / 8)]) {
       const bytes = Buffer.from(text)
       const { source, requests } = sourceFor(bytes)

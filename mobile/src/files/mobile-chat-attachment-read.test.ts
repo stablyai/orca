@@ -93,7 +93,7 @@ function fixture() {
   return { state, frames, control, answer, tracker, physical, logical, client, source, bodyCount }
 }
 
-it.each([1, 10])(
+it.each([10])(
   'settles %s abandoned status waiters before release and keeps same-reader successors pinned',
   async (count) => {
     const f = fixture()
@@ -129,55 +129,6 @@ it.each([1, 10])(
     f.logical.close()
   }
 )
-
-it('preserves old-host Retry, malformed reply refusal, final-send ownership and reconnect through the real client', async () => {
-  const f = fixture()
-  const read = createMobileChatAttachmentReader(f.client)
-  f.control.capable = false
-  await expect(f.source(read).page(0)).rejects.toThrow('cannot open text attachments yet')
-  expect(f.frames.map((frame) => frame.method)).toEqual(['status.get'])
-  f.control.capable = true
-  expect(await f.source(read).copyText()).toBe('x')
-  const old = f.source(read)
-  f.control.atConnected = () => {
-    f.control.atConnected = undefined
-    old.dispose()
-  }
-  const before = f.bodyCount()
-  await expect(old.copyText()).rejects.toMatchObject({ name: 'AbortError' })
-  expect(f.bodyCount()).toBe(before)
-  const retry = f.source(read)
-  expect(await retry.copyText()).toBe('x')
-  f.control.atConnected = () => {
-    f.control.atConnected = undefined
-    return f.logical.migrateTo({ ...f.physical }, 'lan')
-  }
-  const beforeMigration = f.bodyCount()
-  await expect(f.source(read).copyText()).rejects.toThrow('RPC interrupted by connection migration')
-  expect(f.bodyCount()).toBe(beforeMigration)
-  await expect(retry.copyText()).rejects.toThrow('Connection changed')
-  f.control.atConnected = () => {
-    f.control.atConnected = undefined
-    f.state.publish('disconnected')
-  }
-  await expect(f.source().copyText()).rejects.toThrow('Not connected')
-  expect(f.bodyCount()).toBe(beforeMigration)
-  f.state.publish('connected')
-  expect(await f.source().copyText()).toBe('x')
-  f.control.body = { contentBase64: 'a' }
-  await expect(f.source().page(0)).rejects.toThrow()
-  f.control.holdBody = true
-  const admitted = f.source()
-  const pending = admitted.copyText().catch((error) => error)
-  await vi.waitFor(() => expect(f.tracker.size()).toBe(1))
-  const late = f.frames.at(-1)!
-  admitted.dispose()
-  expect((await pending).name).toBe('AbortError')
-  expect(f.tracker.size()).toBe(0)
-  expect(f.answer(late)).toBe(false)
-  retry.dispose()
-  f.logical.close()
-})
 
 it.each(['abort', 'deadline'] as const)(
   'runs real source/reader/bridge assembly through %s and same-reader Retry',

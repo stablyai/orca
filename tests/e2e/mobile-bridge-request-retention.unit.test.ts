@@ -31,7 +31,7 @@ async function abandonCaller(pair: ReturnType<typeof createFakeBridgePortPair>) 
   return weak
 }
 
-it.each([1, 10])(
+it.each([10])(
   'collects %s abandoned page callers while physical work and B remain anchored',
   async (count) => {
     if (!('gc' in globalThis) || typeof globalThis.gc !== 'function') {

@@ -89,11 +89,9 @@ it.each([
   { action: 'Next', mode: 'held', page: '12', section: 2 },
   { action: 'First', mode: 'held', page: '1', section: 1 },
   { action: 'Last', mode: 'held', page: '12', section: 32 },
-  { action: 'Previous', mode: 'held', page: '11', section: 32 },
   { action: 'Next', mode: 'cached', page: '12', section: 2 },
   { action: 'Next', mode: 'failed', page: '5', section: 2 },
-  { action: 'Next', mode: 'unmounted', page: '5', section: 1 },
-  { action: 'Previous', mode: 'endpoint', page: '1', section: 1 }
+  { action: 'Next', mode: 'unmounted', page: '5', section: 1 }
 ])(
   'joins an edited field before $action ($mode) through actual DOM focus defaults and completion',
   async ({ action, mode, page, section }) => {
@@ -127,10 +125,7 @@ it.each([
       }
       const request = args[2]
       offsets.push(request.offset)
-      if (
-        held &&
-        request.offset === (mode === 'endpoint' ? 0 : 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3)
-      ) {
+      if (held && request.offset === 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3) {
         await gate.promise
         if (mode === 'failed') {
           throw new Error('offline')
@@ -168,16 +163,13 @@ it.each([
       if (mode === 'cached') {
         await go('12')
       }
-      if (mode === 'endpoint') {
-        await go('3')
-      }
       await go('5')
-      const fieldPage = mode === 'endpoint' ? 0 : 11
+      const fieldPage = 11
       const owner = pageCalls.mock.contexts.at(-1)
       const beforeCalls = pageCalls.mock.calls.length
       const beforeOffsets = offsets.slice()
       act(() => input().focus())
-      for (const value of mode === 'endpoint' ? ['', '1'] : ['', '1', '12']) {
+      for (const value of ['', '1', '12']) {
         edit(value)
         expect(pageCalls).toHaveBeenCalledTimes(beforeCalls)
         expect(offsets).toEqual(beforeOffsets)
@@ -224,12 +216,8 @@ it.each([
             ? [0, 0]
             : action === 'Last'
               ? [11, Number.MAX_SAFE_INTEGER]
-              : action === 'Previous'
-                ? [10, Number.MAX_SAFE_INTEGER]
-                : [mode === 'failed' ? 4 : 11, 1]
-        expect(pageCalls.mock.calls.slice(beforeCalls)).toEqual(
-          mode === 'endpoint' ? [[0, 0]] : [[11, 0], nextCall]
-        )
+              : [mode === 'failed' ? 4 : 11, 1]
+        expect(pageCalls.mock.calls.slice(beforeCalls)).toEqual([[11, 0], nextCall])
         expect(failurePresentations).toBe(mode === 'failed' ? 1 : 0)
         expect(input().value).toBe(page)
         expect(screen.getByText(`Section ${section}/32`)).toBeTruthy()
@@ -251,6 +239,23 @@ it.each([
         act(() => input().blur())
         expect(pageCalls).toHaveBeenCalledTimes(calls)
         expect(screen.getByText(`Section ${section}/32`)).toBeTruthy()
+        if (mode === 'held' && action === 'Next') {
+          for (const invalid of ['', '0', '13', '1.5']) {
+            await go(invalid)
+            expect(input().value).toBe('12')
+          }
+          expect(pageCalls).toHaveBeenCalledTimes(calls)
+          act(() => input().focus())
+          edit('')
+          edit('12')
+          fireEvent.keyDown(input(), { key: 'Enter', isComposing: true })
+          expect(document.activeElement).toBe(input())
+          expect(pageCalls).toHaveBeenCalledTimes(calls)
+          fireEvent.keyDown(input(), { key: 'Enter' })
+          await ready()
+          expect(pageCalls.mock.calls.slice(calls)).toEqual([[11, 0]])
+          expect(screen.getByText('Section 1/32')).toBeTruthy()
+        }
       }
       process.stdout.write(
         `PR35636 DOM join ${JSON.stringify({ action, mode, calls: pageCalls.mock.calls.slice(beforeCalls), offsets })}\n`

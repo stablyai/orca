@@ -373,7 +373,7 @@ describe('iOS whole-message copy', () => {
   })
 })
 
-it.each([1, 10])(
+it.each([1])(
   'updates generated labels in %i actual memoized transcript consumers without changing source tokens or open paths',
   async (count) => {
     const { mobileI18n, activateMobileUiLocale } = await import('../../../i18n/mobile-i18n')

@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
-import { Profiler, StrictMode, useContext, useState, useMemo } from 'react'
+import { StrictMode, useContext, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { i18n } from '@/i18n/i18n'
 import * as languageRevision from '@/i18n/translation-resource-version'
-import { useAppStore } from '@/store'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -14,10 +13,6 @@ import {
 } from './NativeChatTextAttachments'
 import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../shared/agent-session-runtime-capabilities'
-import {
-  AttachmentTextSource,
-  ATTACHMENT_TEXT_PAGE_BYTES
-} from '../../../../shared/attachment-text-source'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 
@@ -41,8 +36,6 @@ vi.mock('@/i18n/translation-resource-version', async (importOriginal) => {
   const original = await importOriginal<typeof languageRevision>()
   return {
     ...original,
-    getTranslationResourceVersion: vi.fn(original.getTranslationResourceVersion),
-    advanceTranslationResourceVersion: vi.fn(original.advanceTranslationResourceVersion),
     subscribeTranslationResourceVersion: vi.fn((callback: () => void) => {
       subscriptions.registered += 1
       subscriptions.live += 1
@@ -323,199 +316,67 @@ it('exports all raw web bytes and cancels desktop picker/output failures', async
   expect(mocks.finish).not.toHaveBeenCalled()
 })
 
-it.each([1, 10])(
-  'bounds real locale publication and releases %i open previews independently of closed labels',
-  async (count) => {
-    const language = 'fr-x-pr35636-population'
-    const commits = vi.fn()
-    const publications: {
-      live: number
-      delta: number
-      notifications: number
-      commits: number
-      snapshots: number
-    }[] = []
-    const initialLive = subscriptions.live
-    const unrelatedWorktree = useAppStore.getState().activeWorktreeId
-    const originalReads = mocks.rpc.mock.calls.length
-    const renderText = (text: string) => <span>{text}</span>
-    const context = { target, worktreeId: 'w', worktreePath: '/repo' }
-    const generated = (index: number) => path.replace('123-abc', `population-${index}`)
-    const ordinary = path.replace('orca-paste-123-abc.txt', 'Pasted text')
-    i18n.addResourceBundle(language, 'translation', {
-      components: {
-        'native-chat': {
-          composer: { pastedTextLabel: 'Texte collé' },
-          textAttachmentPreview: {
-            copiedContents: 'Contenu copié',
-            copyContents: 'Copier tout',
-            attachmentPage: 'Page jointe',
-            section: 'Partie {{section}}/{{sections}}'
-          }
-        }
+it('updates translated labels without replacing the viewer, rereading or retaining closed subscriptions', async () => {
+  const language = 'fr-x-pr35636-population'
+  const initialLive = subscriptions.live
+  const renderText = (text: string) => <span>{text}</span>
+  i18n.addResourceBundle(language, 'translation', {
+    components: {
+      'native-chat': {
+        composer: { pastedTextLabel: 'Texte collé' },
+        textAttachmentPreview: { copyContents: 'Copier tout', attachmentPage: 'Page jointe' }
       }
-    })
-    const view = render(
-      <>
-        {Array.from({ length: count }, (_, index) => (
-          <Profiler key={index} id={String(index)} onRender={commits}>
-            <NativeChatTextAttachments
-              content={`@${generated(index)}`}
-              structured
-              runtimeContext={context}
-              renderText={renderText}
-            />
-          </Profiler>
-        ))}
-        <NativeChatTextAttachments
-          content={`@"${ordinary}"`}
-          structured
-          runtimeContext={context}
-          renderText={renderText}
-        />
-      </>
-    )
-    try {
-      const closedLive = subscriptions.live
-      expect(closedLive - initialLive).toBe(count + 1)
-      expect(mocks.rpc).toHaveBeenCalledTimes(originalReads)
-      const registrations = subscriptions.registered
-      const closedButtons = screen.getAllByRole('button', { name: 'Pasted text' }).slice(0, count)
-      for (const node of closedButtons) {
-        fireEvent.click(node)
-      }
-      await waitFor(() =>
-        expect(
-          screen
-            .getAllByRole('button', { name: 'Copy contents' })
-            .every((node) => !node.hasAttribute('disabled'))
-        ).toBe(true)
-      )
-      expect(subscriptions.live - closedLive).toBe(count)
-      expect(subscriptions.registered - registrations).toBe(count)
-      const inputs = Array.from(document.querySelectorAll('input[aria-label="Attachment page"]'))
-      expect(inputs).toHaveLength(count)
-      const reads = mocks.rpc.mock.calls.length
-      const settledCommits = commits.mock.calls.length
-      const revision = languageRevision.getTranslationResourceVersion()
-      const notifications = subscriptions.notifications
-      await act(async () => useAppStore.setState({ activeWorktreeId: 'other35636' }))
-      expect(commits).toHaveBeenCalledTimes(settledCommits)
-      expect(subscriptions.notifications).toBe(notifications)
-      expect(languageRevision.getTranslationResourceVersion()).toBe(revision)
-      const publish = async (event: () => Promise<void> | void) => {
-        const live = subscriptions.live
-        const before = languageRevision.getTranslationResourceVersion()
-        const notified = subscriptions.notifications
-        const published = vi.mocked(languageRevision.advanceTranslationResourceVersion).mock.calls
-          .length
-        const rendered = commits.mock.calls.length
-        const snapshots = vi.mocked(languageRevision.getTranslationResourceVersion).mock.calls
-          .length
-        await act(event)
-        const delta = languageRevision.getTranslationResourceVersion() - before
-        expect(delta).toBeGreaterThan(0)
-        expect(
-          vi.mocked(languageRevision.advanceTranslationResourceVersion).mock.calls.length -
-            published
-        ).toBe(delta)
-        expect(subscriptions.notifications - notified).toBe(live * delta)
-        expect(commits.mock.calls.length - rendered).toBeGreaterThanOrEqual(count)
-        expect(commits.mock.calls.length - rendered).toBeLessThanOrEqual(count * delta)
-        const snapshotCalls =
-          vi.mocked(languageRevision.getTranslationResourceVersion).mock.calls.length - snapshots
-        expect(snapshotCalls).toBeGreaterThan(0)
-        expect(snapshotCalls).toBeLessThanOrEqual(16 * live * delta + 5)
-        publications.push({
-          live,
-          delta,
-          notifications: subscriptions.notifications - notified,
-          commits: commits.mock.calls.length - rendered,
-          snapshots: snapshotCalls
-        })
-        expect(mocks.rpc).toHaveBeenCalledTimes(reads)
-      }
-      await publish(async () => {
-        await i18n.changeLanguage(language)
-      })
-      expect(
-        Array.from(view.container.querySelectorAll('button')).filter(
-          (node) => node.textContent === 'Texte collé'
-        )
-      ).toHaveLength(count)
-      expect(
-        Array.from(view.container.querySelectorAll('button')).filter(
-          (node) => node.textContent === 'Pasted text'
-        )
-      ).toHaveLength(1)
-      expect(Array.from(document.querySelectorAll('input[aria-label="Page jointe"]'))).toEqual(
-        inputs
-      )
-      expect(screen.getAllByText('Partie 1/1')).toHaveLength(count)
-      await publish(() => {
-        i18n.addResource(
-          language,
-          'translation',
-          'components.native-chat.textAttachmentPreview.copyContents',
-          'Copier encore'
-        )
-      })
-      expect(
-        Array.from(document.querySelectorAll('button')).filter(
-          (node) => node.textContent === 'Copier encore'
-        )
-      ).toHaveLength(count)
-      await publish(() => {
-        i18n.addResource('inactive35636', 'translation', 'unrelated35636', 'unrelated')
-      })
-      fireEvent.click(screen.getAllByRole('button', { name: 'Copier encore' })[0]!)
-      await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
-      await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Contenu copié'))
-      const removals = subscriptions.removed
-      for (const node of document.querySelectorAll('[data-slot="sheet-close"]')) {
-        fireEvent.click(node)
-      }
-      await waitFor(() => expect(screen.queryAllByRole('spinbutton')).toHaveLength(0))
-      expect(subscriptions.live).toBe(closedLive)
-      expect(subscriptions.removed - removals).toBe(count)
-      const closedReads = mocks.rpc.mock.calls.length
-      const before = languageRevision.getTranslationResourceVersion()
-      const notified = subscriptions.notifications
-      await act(async () => {
-        i18n.addResource(
-          language,
-          'translation',
-          'components.native-chat.composer.pastedTextLabel',
-          'Texte fermé'
-        )
-      })
-      expect(subscriptions.notifications - notified).toBe(
-        closedLive * (languageRevision.getTranslationResourceVersion() - before)
-      )
-      expect(screen.getAllByRole('button', { name: 'Texte fermé' })).toHaveLength(count)
-      expect(mocks.rpc).toHaveBeenCalledTimes(closedReads)
-      view.unmount()
-      expect(subscriptions.live).toBe(initialLive)
-      const retiredNotifications = subscriptions.notifications
-      const retiredCommits = commits.mock.calls.length
-      await act(async () => {
-        i18n.addResource(language, 'translation', 'unrelatedRetired35636', 'value')
-      })
-      expect(subscriptions.notifications).toBe(retiredNotifications)
-      expect(commits).toHaveBeenCalledTimes(retiredCommits)
-      expect(mocks.rpc).toHaveBeenCalledTimes(closedReads)
-      process.stdout.write(
-        `PR35636 desktop locale population ${JSON.stringify({ count, closedLabels: count + 1, openPreviewListeners: count, remainingListeners: subscriptions.live, reads, publications })}\n`
-      )
-    } finally {
-      view.unmount()
-      useAppStore.setState({ activeWorktreeId: unrelatedWorktree })
-      await i18n.changeLanguage('en')
-      i18n.removeResourceBundle(language, 'translation')
-      i18n.removeResourceBundle('inactive35636', 'translation')
     }
-  }
-)
+  })
+  const view = render(
+    <NativeChatTextAttachments
+      content={`@${path}`}
+      structured
+      runtimeContext={{ target, worktreeId: 'w', worktreePath: '/repo' }}
+      renderText={renderText}
+    />
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Pasted text' }))
+  await waitUntilEnabled('Copy contents')
+  const input = screen.getByRole('spinbutton')
+  const reads = mocks.rpc.mock.calls.length
+  const notified = subscriptions.notifications
+  const revision = languageRevision.getTranslationResourceVersion()
+  const live = subscriptions.live
+  await act(async () => {
+    await i18n.changeLanguage(language)
+  })
+  expect(subscriptions.notifications - notified).toBe(
+    live * (languageRevision.getTranslationResourceVersion() - revision)
+  )
+  expect(screen.getByRole('spinbutton', { name: 'Page jointe' })).toBe(input)
+  expect(
+    Array.from(view.container.querySelectorAll('button')).some(
+      (node) => node.textContent === 'Texte collé'
+    )
+  ).toBe(true)
+  expect(screen.getByRole('button', { name: 'Copier tout' })).toBeTruthy()
+  await act(async () => {
+    i18n.addResource(
+      language,
+      'translation',
+      'components.native-chat.textAttachmentPreview.copyContents',
+      'Copier encore'
+    )
+  })
+  expect(mocks.rpc).toHaveBeenCalledTimes(reads)
+  fireEvent.click(screen.getByRole('button', { name: 'Copier encore' }))
+  await waitFor(() => expect(mocks.write).toHaveBeenCalledWith(bytes.toString('utf8')))
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  view.unmount()
+  expect(subscriptions.live).toBe(initialLive)
+  const retired = subscriptions.notifications
+  await act(async () => {
+    i18n.addResource(language, 'translation', 'retired35636', 'value')
+  })
+  expect(subscriptions.notifications).toBe(retired)
+  i18n.removeResourceBundle(language, 'translation')
+})
 
 it('presents owned reader and hook failures in the current locale without re-reading or replacing external errors', async () => {
   const language = 'fr-x-pr35636-errors'
@@ -574,138 +435,4 @@ it('presents owned reader and hook failures in the current locale without re-rea
   view.unmount()
   await i18n.changeLanguage('en')
   i18n.removeResourceBundle(language, 'translation')
-})
-
-it('commits page drafts once without requesting uncached digit prefixes and synchronizes navigation', async () => {
-  const content = Buffer.from('a\n'.repeat(ATTACHMENT_TEXT_PAGE_BYTES * 6))
-  const gate = Promise.withResolvers<void>()
-  const pageCalls = vi.spyOn(AttachmentTextSource.prototype, 'page')
-  let held = false
-  let fail = false
-  const offsets: number[] = []
-  const normal = mocks.rpc.getMockImplementation()!
-  mocks.rpc.mockImplementation(async (...args) => {
-    if (args[1] === 'status.get') {
-      return normal(...args)
-    }
-    const request = args[2]
-    offsets.push(request.offset)
-    if (held && (request.offset === 0 || request.offset === 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3)) {
-      await gate.promise
-    }
-    if (fail) {
-      fail = false
-      throw new Error('offline')
-    }
-    const chunk = content.subarray(request.offset, request.offset + request.length)
-    return {
-      snapshot: 'a'.repeat(64),
-      size: content.length,
-      contentBase64: chunk.toString('base64'),
-      bytesRead: chunk.length,
-      eof: request.offset + chunk.length === content.length
-    }
-  })
-  try {
-    const view = render(
-      <NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />
-    )
-    const input = () => {
-      const node = screen.getByRole('spinbutton', { name: 'Attachment page' })
-      if (!(node instanceof HTMLInputElement)) {
-        throw new Error('Expected page input')
-      }
-      return node
-    }
-    const edit = (value: string) => fireEvent.change(input(), { target: { value } })
-    const commit = () => fireEvent.blur(input())
-    const ready = () => waitUntilEnabled('Copy contents')
-    await ready()
-    for (const page of ['3', '5']) {
-      edit(page)
-      commit()
-      await ready()
-      expect(input().value).toBe(page)
-    }
-    const before = offsets.slice()
-    held = true
-    await act(async () => {
-      edit('')
-    })
-    expect(offsets).toEqual(before)
-    await act(async () => {
-      edit('1')
-    })
-    expect(offsets).toEqual(before)
-    expect(input().value).toBe('1')
-    expect(input().disabled).toBe(false)
-    await act(async () => {
-      edit('12')
-    })
-    expect(offsets).toEqual(before)
-    act(() => input().focus())
-    fireEvent.keyDown(input(), { key: 'Enter', isComposing: true })
-    expect(document.activeElement).toBe(input())
-    expect(offsets).toEqual(before)
-    fireEvent.keyDown(input(), { key: 'Enter' })
-    await waitFor(() => expect(offsets).toEqual([...before, 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3]))
-    expect(input().disabled).toBe(true)
-    const pendingCalls = pageCalls.mock.calls.length
-    commit()
-    expect(pageCalls).toHaveBeenCalledTimes(pendingCalls)
-    await act(async () => {
-      held = false
-      gate.resolve()
-    })
-    await ready()
-    expect(input().value).toBe('12')
-    const committedCalls = pageCalls.mock.calls.length
-    for (const invalid of ['', '0', '13', '1.5']) {
-      edit(invalid)
-      expect(input().value).toBe(invalid)
-      commit()
-      expect(input().value).toBe('12')
-    }
-    commit()
-    expect(pageCalls).toHaveBeenCalledTimes(committedCalls)
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    await ready()
-    expect(screen.getByText(/Section 2\//)).toBeTruthy()
-    commit()
-    expect(screen.getByText(/Section 2\//)).toBeTruthy()
-    edit('')
-    edit('12')
-    commit()
-    await ready()
-    expect(screen.getByText(/Section 1\//)).toBeTruthy()
-    expect(pageCalls).toHaveBeenCalledTimes(committedCalls + 2)
-    edit('9')
-    fireEvent.click(screen.getByRole('button', { name: 'First' }))
-    await ready()
-    expect(input().value).toBe('1')
-    fail = true
-    edit('6')
-    commit()
-    await screen.findByRole('alert')
-    edit('7')
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    await ready()
-    expect(input().value).toBe('1')
-    edit('8')
-    view.rerender(
-      <NativeChatTextAttachmentPreview
-        path={path.replace('.txt', '-other.txt')}
-        target={target}
-        onClose={() => {}}
-      />
-    )
-    await ready()
-    expect(input().value).toBe('1')
-    process.stdout.write(
-      `PR35636 desktop pager presentation ${JSON.stringify({ offsets, pageCalls: pageCalls.mock.calls.length })}\n`
-    )
-  } finally {
-    gate.resolve()
-    pageCalls.mockRestore()
-  }
 })

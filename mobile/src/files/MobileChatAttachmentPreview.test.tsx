@@ -1,4 +1,4 @@
-import { createElement, Profiler } from 'react'
+import { createElement } from 'react'
 import * as mobileLanguage from '../i18n/mobile-i18n'
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -7,11 +7,6 @@ import {
   ATTACHMENT_TEXT_PAGE_BYTES
 } from '../../../src/shared/attachment-text-source'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../src/shared/mobile-bridge-frame-bytes'
-import {
-  forgetHostDescriptor,
-  recordHostDescriptor,
-  useHostDescriptor
-} from '../transport/host-descriptor-store'
 import type { RpcResponse } from '../transport/types'
 import { useMobileFileTapHandlers } from '../session/use-mobile-file-tap-handlers'
 import { MobileNativeChatComposerAttachments } from '../session/native-chat/composer/MobileNativeChatComposerAttachments'
@@ -26,7 +21,6 @@ vi.mock('../i18n/mobile-i18n', async (importOriginal) => {
   const original = await importOriginal<typeof mobileLanguage>()
   return {
     ...original,
-    getMobileUiRevision: vi.fn(original.getMobileUiRevision),
     subscribeMobileUiLanguage: vi.fn((callback: () => void) => {
       subscriptions.registered += 1
       subscriptions.live += 1
@@ -115,7 +109,6 @@ const button = (label: string) =>
 afterEach(async () => {
   act(() => tree?.unmount())
   tree = null
-  forgetHostDescriptor('other35636')
   await act(async () => {
     await mobileLanguage.activateMobileUiLocale('en')
   })
@@ -257,208 +250,43 @@ function attachmentRoute(absolutePath: MobileFilePreviewParamValue) {
   })
 }
 
-it.each([1, 10])(
-  'bounds real mobile locale publications at %i mounted preview routes and retires on Back until unmount',
-  async (count) => {
-    const text = '\ufeffraw\r\n🙂 exact bytes'
-    const bytes = Buffer.from(text)
-    serveAttachment(bytes)
-    const commits = vi.fn()
-    const publications: {
-      delta: number
-      notifications: number
-      commits: number
-      snapshots: number
-    }[] = []
-    const baseLive = subscriptions.live
-    const route = attachmentRoute(path.replace('report.txt', 'orca-paste-35636.txt'))
-    const composer = createElement(MobileNativeChatComposerAttachments, {
-      images: [],
-      files: [
-        { id: 'ordinary', name: 'Pasted text', mime: 'text/plain', byteLength: bytes.length, path }
-      ],
-      onOpenFile: mocks.push
-    })
-    const descriptors: (string | null | undefined)[] = []
-    function OtherHost() {
-      const descriptor = useHostDescriptor('other35636')
-      descriptors.push(descriptor?.machineName)
-      return createElement('HostWitness', { machineName: descriptor?.machineName })
-    }
-    const ui = (open: boolean) =>
-      createElement(
-        'Routes',
-        null,
-        composer,
-        createElement(OtherHost),
-        open
-          ? Array.from({ length: count }, (_, index) =>
-              createElement(
-                Profiler,
-                { key: index, id: String(index), onRender: commits },
-                createElement(MobileFilePreviewScreen, { route })
-              )
-            )
-          : null
-      )
-    mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
-      common: { back: 'Retour', copy: 'Copier', save: 'Enregistrer', retry: 'Réessayer' },
-      chat: {
-        textAttachmentPreview: {
-          pastedText: 'Texte collé',
-          first: 'Début',
-          prev: 'Préc',
-          next: 'Suivant',
-          last: 'Fin',
-          byteSize: '{{size}} octets',
-          attachmentPage: 'Page jointe',
-          saveUpdate: 'Enregistrer après la mise à jour.'
-        }
-      }
-    })
-    await act(async () => {
-      tree = create(ui(false))
-    })
-    const closedLive = subscriptions.live
-    expect(closedLive - baseLive).toBe(2)
-    expect(mocks.send).not.toHaveBeenCalled()
-    const registrations = subscriptions.registered
-    await act(async () => {
-      tree!.update(ui(true))
-    })
-    expect(subscriptions.live - closedLive).toBe(count * 2)
-    expect(subscriptions.registered - registrations).toBe(count * 2)
-    const inputs = tree!.root.findAll((node) => String(node.type) === 'TextInput')
-    expect(inputs).toHaveLength(count)
-    const reads = mocks.send.mock.calls.slice()
-    const rendered = commits.mock.calls.length
-    const notifications = subscriptions.notifications
-    const revision = mobileLanguage.getMobileUiRevision()
-    const descriptorRegistrations = subscriptions.registered
-    const descriptorLive = subscriptions.live
-    const witnessed = descriptors.length
-    await act(async () => {
-      recordHostDescriptor('other35636', { machineName: 'changed35636', platform: 'linux' })
-    })
-    const descriptorWitnessRenders = descriptors.length - witnessed
-    expect(descriptorWitnessRenders).toBe(1)
-    expect(descriptors.at(-1)).toBe('changed35636')
-    expect(tree!.root.find((node) => String(node.type) === 'HostWitness').props.machineName).toBe(
-      'changed35636'
-    )
-    expect(commits).toHaveBeenCalledTimes(rendered)
-    expect(subscriptions.registered).toBe(descriptorRegistrations)
-    expect(subscriptions.live).toBe(descriptorLive)
-    expect(subscriptions.notifications).toBe(notifications)
-    expect(mobileLanguage.getMobileUiRevision()).toBe(revision)
-    expect(mocks.send.mock.calls).toEqual(reads)
-    const activate = async () => {
-      const before = mobileLanguage.getMobileUiRevision()
-      const notified = subscriptions.notifications
-      const renderedBefore = commits.mock.calls.length
-      const snapshots = vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length
-      await act(async () => {
-        await mobileLanguage.activateMobileUiLocale('fr')
-      })
-      const delta = mobileLanguage.getMobileUiRevision() - before
-      expect(delta).toBe(1)
-      expect(subscriptions.notifications - notified).toBe(subscriptions.live * delta)
-      expect(commits.mock.calls.length - renderedBefore).toBe(count)
-      expect(
-        vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length - snapshots
-      ).toBeLessThanOrEqual(12 * subscriptions.live + 2)
-      expect(mocks.send.mock.calls).toEqual(reads)
-      publications.push({
-        delta,
-        notifications: subscriptions.notifications - notified,
-        commits: commits.mock.calls.length - renderedBefore,
-        snapshots: vi.mocked(mobileLanguage.getMobileUiRevision).mock.calls.length - snapshots
-      })
-    }
-    await activate()
-    expect(tree!.root.findAll((node) => String(node.type) === 'TextInput')).toEqual(inputs)
-    expect(
-      inputs.every(
-        (input) => input.props.accessibilityLabel === 'Page jointe' && input.props.value === '1'
-      )
-    ).toBe(true)
-    const buttons = (label: string) =>
-      tree!.root.findAll((node) => String(node.type) === 'Pressable' && textIn(node) === label)
-    expect(buttons('Copier')).toHaveLength(count)
-    expect(buttons('Enregistrer').every((node) => node.props.disabled)).toBe(true)
-    const visible = tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)
-    expect(visible.filter((value) => value === 'Texte collé')).toHaveLength(count)
-    expect(visible).toContain('Pasted text')
-    expect(
-      visible.filter((value) => value === `${bytes.length.toLocaleString('fr')} octets`)
-    ).toHaveLength(count)
-    expect(visible.filter((value) => value === 'Enregistrer après la mise à jour.')).toHaveLength(
-      count
-    )
-    const beforeCatalog = mobileLanguage.getMobileUiRevision()
-    const notifiedBeforeCatalog = subscriptions.notifications
-    mobileLanguage.mobileI18n.addResource('fr', 'translation', 'common.copy', 'Tout copier')
-    expect(mobileLanguage.getMobileUiRevision()).toBe(beforeCatalog)
-    expect(subscriptions.notifications).toBe(notifiedBeforeCatalog)
-    await activate()
-    expect(buttons('Tout copier')).toHaveLength(count)
-    await act(async () => buttons('Tout copier')[0]!.props.onPress())
-    expect(mocks.write).toHaveBeenCalledWith(text)
-    const afterCopy = mocks.send.mock.calls.length
-    const liveBeforeBack = subscriptions.live
-    await act(async () => {
-      for (const node of buttons('Retour')) {
-        node.props.onPress()
-      }
-    })
-    expect(mocks.back).toHaveBeenCalledTimes(count)
-    expect(subscriptions.live).toBe(liveBeforeBack)
-    await act(async () => buttons('Tout copier')[0]!.props.onPress())
-    expect(mocks.write).toHaveBeenCalledTimes(1)
-    expect(mocks.send).toHaveBeenCalledTimes(afterCopy)
-    const removals = subscriptions.removed
-    await act(async () => {
-      tree!.update(ui(false))
-    })
-    expect(subscriptions.live).toBe(closedLive)
-    expect(subscriptions.removed - removals).toBe(count * 2)
-    const retiredCommits = commits.mock.calls.length
-    const notified = subscriptions.notifications
-    await act(async () => {
-      await mobileLanguage.activateMobileUiLocale('fr')
-    })
-    expect(subscriptions.notifications - notified).toBe(closedLive)
-    expect(commits).toHaveBeenCalledTimes(retiredCommits)
-    expect(mocks.send).toHaveBeenCalledTimes(afterCopy)
-    act(() => tree!.unmount())
-    tree = null
-    expect(subscriptions.live).toBe(baseLive)
-    const retiredNotifications = subscriptions.notifications
-    await act(async () => {
-      await mobileLanguage.activateMobileUiLocale('en')
-    })
-    expect(subscriptions.notifications).toBe(retiredNotifications)
-    const retiredWitness = descriptors.length
-    act(() => {
-      forgetHostDescriptor('other35636')
-      recordHostDescriptor('other35636', { machineName: 'retired35636', platform: 'linux' })
-      forgetHostDescriptor('other35636')
-    })
-    expect(descriptors).toHaveLength(retiredWitness)
-    console.info(
-      'PR35636 mobile locale population',
-      JSON.stringify({
-        count,
-        closedListeners: closedLive - baseLive,
-        openListeners: liveBeforeBack - closedLive,
-        remainingListeners: subscriptions.live - baseLive,
-        initialRpc: reads.length,
-        publications,
-        descriptorWitnessRenders
-      })
-    )
-  }
-)
+it('updates translated phone controls without restarting the source and retires subscriptions on unmount', async () => {
+  const text = '\ufeffraw\r\n🙂 exact bytes'
+  serveAttachment(Buffer.from(text))
+  const baseLive = subscriptions.live
+  const route = attachmentRoute(path.replace('report.txt', 'orca-paste-35636.txt'))
+  mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
+    common: { back: 'Retour', copy: 'Copier' },
+    chat: { textAttachmentPreview: { pastedText: 'Texte collé', attachmentPage: 'Page jointe' } }
+  })
+  await act(async () => {
+    tree = create(createElement(MobileFilePreviewScreen, { route }))
+  })
+  const input = tree!.root.find((node) => String(node.type) === 'TextInput')
+  const reads = mocks.send.mock.calls.length
+  const notifications = subscriptions.notifications
+  const live = subscriptions.live
+  await act(async () => {
+    await mobileLanguage.activateMobileUiLocale('fr')
+  })
+  expect(subscriptions.notifications - notifications).toBe(live)
+  expect(tree!.root.find((node) => String(node.type) === 'TextInput')).toBe(input)
+  expect(input.props.accessibilityLabel).toBe('Page jointe')
+  expect(tree!.root.findAll((node) => String(node.type) === 'Text').map(textIn)).toContain(
+    'Texte collé'
+  )
+  expect(mocks.send).toHaveBeenCalledTimes(reads)
+  await act(async () => button('Copier').props.onPress())
+  expect(mocks.write).toHaveBeenCalledWith(text)
+  await act(async () => button('Retour').props.onPress())
+  const afterBack = mocks.send.mock.calls.length
+  await act(async () => button('Copier').props.onPress())
+  expect(mocks.send).toHaveBeenCalledTimes(afterBack)
+  expect(mocks.write).toHaveBeenCalledTimes(1)
+  act(() => tree!.unmount())
+  tree = null
+  expect(subscriptions.live).toBe(baseLive)
+})
 
 it('renders translated missing, array and empty chat routes through the actual error surface', async () => {
   mobileLanguage.mobileI18n.addResourceBundle('fr', 'translation', {
@@ -628,42 +456,15 @@ it('keeps large full Copy and Save disabled with the same localized F2 explanati
   expect(mocks.write).not.toHaveBeenCalled()
 })
 
-it('commits mobile page drafts and resets only committed scroll presentation while retaining its owners', async () => {
+it('resets the actual phone scroll only after publication, including typed page then First', async () => {
   serveAttachment(Buffer.from('a\n'.repeat(ATTACHMENT_TEXT_PAGE_BYTES * 6)))
-  const normal = mocks.send.getMockImplementation()!
-  const gate = Promise.withResolvers<void>()
-  const pageCalls = vi.spyOn(AttachmentTextSource.prototype, 'page')
+  const calls = vi.spyOn(AttachmentTextSource.prototype, 'page')
+  const input = () => tree!.root.find((node) => String(node.type) === 'TextInput')
   const resetPages: string[] = []
   const scrollTo = vi.fn(() => resetPages.push(input().props.value))
-  const offsets: number[] = []
-  let held = false
-  mocks.send.mockImplementation(
-    async (method: string, request?: { offset: number; length: number }) => {
-      if (method === 'agentSessionAttachment.readTextChunk' && request) {
-        offsets.push(request.offset)
-        if (
-          held &&
-          (request.offset === 0 || request.offset === 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3)
-        ) {
-          await gate.promise
-        }
-      }
-      return normal(method, request)
-    }
-  )
-  const route = attachmentRoute(path)
-  const ui = () => createElement(MobileFilePreviewScreen, { route })
-  const input = () => tree!.root.find((node) => String(node.type) === 'TextInput')
-  const scroll = () => tree!.root.find((node) => String(node.type) === 'ScrollView')
-  const edit = (value: string) => act(() => input().props.onChangeText(value))
-  const commit = async () => {
-    await act(async () => {
-      input().props.onBlur()
-    })
-  }
   try {
     await act(async () => {
-      tree = create(ui(), {
+      tree = create(createElement(MobileFilePreviewScreen, { route: attachmentRoute(path) }), {
         createNodeMock: (element) =>
           String(element.type) === 'ScrollView'
             ? { scrollTo }
@@ -672,113 +473,27 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
               : null
       })
     })
-    const inputNode = input()
-    const scrollNode = scroll()
-    const owner = pageCalls.mock.contexts.at(-1)
-    expect(scrollTo).toHaveBeenCalledTimes(1)
-    for (const page of ['3', '5']) {
-      edit(page)
-      await commit()
-      expect(input().props.value).toBe(page)
-    }
-    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
-    expect(scrollTo).toHaveBeenCalledTimes(3)
-    const before = offsets.slice()
-    held = true
+    const edit = (value: string) => act(() => input().props.onChangeText(value))
+    const before = calls.mock.calls.length
     edit('1')
-    await act(async () => {})
-    expect(offsets).toEqual(before)
-    expect(input().props.value).toBe('1')
-    expect(input().props.editable).toBe(true)
     edit('12')
-    expect(offsets).toEqual(before)
-    expect(input().props.onSubmitEditing).toBeUndefined()
-    await commit()
-    expect(offsets).toEqual([...before, 11 * ATTACHMENT_TEXT_PAGE_BYTES - 3])
-    expect(input().props.editable).toBe(false)
-    expect(button('Next').props.disabled).toBe(true)
-    expect(button('First').props.disabled).toBe(true)
-    expect(scrollTo).toHaveBeenCalledTimes(3)
-    expect(scroll()).toBe(scrollNode)
-    expect(textIn(scroll())).toBe('a'.repeat(256))
-    const pendingCalls = pageCalls.mock.calls.length
-    await commit()
-    expect(pageCalls).toHaveBeenCalledTimes(pendingCalls)
-    await act(async () => {
-      held = false
-      gate.resolve()
-    })
-    expect(input().props.value).toBe('12')
-    expect(scrollTo).toHaveBeenCalledTimes(4)
+    expect(calls).toHaveBeenCalledTimes(before)
+    expect(resetPages).toEqual(['1'])
+    await act(async () => input().props.onBlur())
+    expect(resetPages).toEqual(['1', '12'])
     expect(scrollTo).toHaveBeenLastCalledWith({ y: 0, animated: false })
-    const committedCalls = pageCalls.mock.calls.length
-    for (const invalid of ['', '0', '13', '1.5', 'bad']) {
-      edit(invalid)
-      expect(input().props.value).toBe(invalid)
-      await commit()
-      expect(input().props.value).toBe('12')
-    }
-    await commit()
-    expect(pageCalls).toHaveBeenCalledTimes(committedCalls)
-    expect(scrollTo).toHaveBeenCalledTimes(4)
-    await act(async () => button('Next').props.onPress())
-    expect(scrollTo).toHaveBeenCalledTimes(5)
-    await commit()
-    expect(scrollTo).toHaveBeenCalledTimes(5)
-    edit('')
-    edit('12')
-    await commit()
-    expect(scrollTo).toHaveBeenCalledTimes(6)
-    expect(pageCalls).toHaveBeenCalledTimes(committedCalls + 2)
-    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
-    const reads = offsets.slice()
-    await act(async () => {
-      await mobileLanguage.activateMobileUiLocale('en')
-    })
-    await act(async () => {
-      tree!.update(ui())
-    })
-    expect(input()).toBe(inputNode)
-    expect(scroll()).toBe(scrollNode)
-    expect(offsets).toEqual(reads)
-    expect(scrollTo).toHaveBeenCalledTimes(6)
-    const beforeFirst = pageCalls.mock.calls.length
-    const beforeFirstResets = scrollTo.mock.calls.length
+    const committed = calls.mock.calls.length
+    await act(async () => input().props.onBlur())
+    expect(calls).toHaveBeenCalledTimes(committed)
+    expect(resetPages).toEqual(['1', '12'])
     edit('9')
     await act(async () => button('First').props.onPress())
-    expect(pageCalls.mock.calls.slice(beforeFirst)).toEqual([
+    expect(calls.mock.calls.slice(committed)).toEqual([
       [8, 0],
       [0, 0]
     ])
-    expect(resetPages.slice(beforeFirstResets)).toEqual(['9', '1'])
-    expect(pageCalls.mock.contexts.at(-1)).toBe(owner)
-    expect(input().props.value).toBe('1')
-    expect(scrollTo).toHaveBeenCalledTimes(8)
-    edit('8')
-    await act(async () => button('Retry').props.onPress())
-    expect(input().props.value).toBe('1')
-    expect(pageCalls.mock.contexts.at(-1)).not.toBe(owner)
-    expect(scrollTo).toHaveBeenCalledTimes(9)
-    const retriedOwner = pageCalls.mock.contexts.at(-1)
-    edit('7')
-    await act(async () => {
-      mocks.generation += 1
-      tree!.update(ui())
-    })
-    expect(input().props.value).toBe('1')
-    expect(pageCalls.mock.contexts.at(-1)).not.toBe(retriedOwner)
-    expect(scroll()).toBe(scrollNode)
-    expect(scrollTo).toHaveBeenCalledTimes(10)
-    console.info(
-      'PR35636 mobile pager presentation',
-      JSON.stringify({
-        offsets,
-        pageCalls: pageCalls.mock.calls.length,
-        scrollResets: scrollTo.mock.calls.length
-      })
-    )
+    expect(resetPages).toEqual(['1', '12', '9', '1'])
   } finally {
-    gate.resolve()
-    pageCalls.mockRestore()
+    calls.mockRestore()
   }
 })

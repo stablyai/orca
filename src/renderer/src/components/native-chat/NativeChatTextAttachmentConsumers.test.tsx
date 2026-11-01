@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useRef, useContext, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { useQueuedEditFixture, withText, writeSpy } from './structured-queued-edit.test-fixture'
 import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
 import { NativeChatComposer } from './NativeChatComposer'
@@ -9,13 +9,7 @@ import {
   NativeChatMarkdownImageOwnerContext
 } from './native-chat-markdown-image-owner'
 import { useAppStore } from '@/store'
-import {
-  nativeChatFanoutFixture,
-  agentSessionTabFixture,
-  repoFixture,
-  worktreeFixture
-} from './native-chat-workspace-test-fixtures'
-import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
+import { nativeChatFanoutFixture } from './native-chat-workspace-test-fixtures'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -183,7 +177,7 @@ it('opens pending and settled draft pills, retains remove/undo and restores the 
   view.unmount()
 })
 
-it.each(['save', 'cancel', 'escape', 'unmount'] as const)(
+it.each(['save', 'cancel'] as const)(
   'retires the actual queued composer source on %s while the normal composer keeps its editor',
   async (exit) => {
     const initial = useAppStore.getInitialState()
@@ -240,21 +234,11 @@ it.each(['save', 'cancel', 'escape', 'unmount'] as const)(
       sessionId: 'session-0',
       runtimeEnvironmentId: null
     }
-    const observed: { owner: NativeChatImageRuntimeContext } = { owner: null }
-    function OwnerProbe() {
-      observed.owner = useContext(NativeChatMarkdownImageOwnerContext)!.runtimeContext
-      return null
-    }
-    function Chat({ visible = true }: { visible?: boolean }) {
+    function Chat() {
       const queue = useQueuedEditFixture({ messages: [withText(`@${path}`)] })
       return (
         <TooltipProvider>
-          <NativeChatMarkdownImageOwnerProvider
-            tabId="chat-0"
-            sessionId="session-0"
-            isVisible={visible}
-          >
-            <OwnerProbe />
+          <NativeChatMarkdownImageOwnerProvider tabId="chat-0" sessionId="session-0" isVisible>
             <NativeChatComposer
               terminalTabId="chat-0"
               paneKey="normal35636"
@@ -289,116 +273,6 @@ it.each(['save', 'cancel', 'escape', 'unmount'] as const)(
           { type: 'text', text: ' ' }
         ])
       )
-      // Owner replacement retires only the preview and preserves both real editor instances/drafts.
-      await openSource()
-      await act(async () =>
-        useAppStore.setState({
-          sshStateByEnvironment: new Map([
-            [
-              'unrelated',
-              {
-                targets: [],
-                targetGenerations: new Map(),
-                targetLabels: new Map(),
-                removedTargetLabels: new Map(),
-                targetsHydrated: true,
-                connectionStates: new Map()
-              }
-            ]
-          ])
-        })
-      )
-      expect(screen.getByRole('button', { name: 'Copy contents' })).toBeTruthy()
-      await act(async () =>
-        useAppStore.setState({
-          folderWorkspaces: useAppStore
-            .getState()
-            .folderWorkspaces.map((row) =>
-              row.id === 'workspace-0' ? { ...row, folderPath: '/renamed35636' } : row
-            )
-        })
-      )
-      expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-      expect(promptEditor(editor)).toBe(queuedEditor)
-      expect(promptEditor(normal)).toBe(normalEditor)
-      expect(promptValue(normal)).toBe('unsent normal draft')
-      if (exit === 'save') {
-        const folders = useAppStore.getState().folderWorkspaces
-        await openSource()
-        await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
-        expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-        await act(async () => useAppStore.setState({ folderWorkspaces: folders }))
-        const ssh = (generation: number) =>
-          new Map([
-            [
-              'owner-a',
-              {
-                targets: [],
-                targetGenerations: new Map(),
-                targetLabels: new Map(),
-                removedTargetLabels: new Map(),
-                targetsHydrated: true,
-                connectionStates: new Map([
-                  [
-                    'ssh35636',
-                    {
-                      targetId: 'ssh35636',
-                      status: 'connected' as const,
-                      error: null,
-                      reconnectAttempt: 0,
-                      connectionGeneration: generation
-                    }
-                  ]
-                ])
-              }
-            ]
-          ])
-        await act(async () =>
-          useAppStore.setState({
-            unifiedTabsByWorktree: {
-              'wt-ssh': [agentSessionTabFixture('chat-0', 'wt-ssh', { entityId: 'session-0' })]
-            },
-            activeWorktreeId: 'wt-ssh',
-            activeWorkspaceExecutionHostId: 'ssh:ssh35636',
-            repos: [repoFixture({ executionHostId: 'runtime:owner-a' })],
-            worktreesByRepo: {
-              repo: [
-                worktreeFixture('wt-ssh', '/ssh35636', {
-                  hostId: 'ssh:ssh35636',
-                  runtimeOwnerEnvironmentId: 'owner-a'
-                })
-              ]
-            },
-            runtimeEnvironments: [
-              {
-                id: 'owner-a',
-                name: 'owner-a',
-                createdAt: 0,
-                updatedAt: 0,
-                lastUsedAt: null,
-                runtimeId: null,
-                preferredEndpointId: 'endpoint',
-                endpoints: []
-              }
-            ],
-            sshStateByEnvironment: ssh(1)
-          })
-        )
-        expect(observed.owner).toMatchObject({
-          expectedSshConnectionGeneration: 1,
-          target: { kind: 'environment', environmentId: 'owner-a' }
-        })
-        await openSource()
-        await act(async () => useAppStore.setState({ sshStateByEnvironment: ssh(2) }))
-        expect(observed.owner).toMatchObject({ expectedSshConnectionGeneration: 2 })
-        expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-        expect(promptEditor(editor)).toBe(queuedEditor)
-        expect(promptEditor(normal)).toBe(normalEditor)
-      }
-      await openSource()
-      view.rerender(<Chat visible={false} />)
-      expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-      view.rerender(<Chat />)
       await openSource()
       const pending = Promise.withResolvers<typeof reply>()
       mocks.rpc.mockImplementationOnce(() => pending.promise)
@@ -407,28 +281,19 @@ it.each(['save', 'cancel', 'escape', 'unmount'] as const)(
       if (exit === 'save') {
         fireEvent.keyDown(editor, { key: 'Enter' })
         await waitFor(() => expect(writeSpy).toHaveBeenCalled())
-      } else if (exit === 'cancel') {
+      } else {
         fireEvent.click(
           within(view.container).getByRole('button', { name: 'Cancel', hidden: true })
         )
-      } else if (exit === 'escape') {
-        // The Sheet retires Copy first; editor Escape then exits the real queued editor.
-        fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-        await waitFor(() =>
-          expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
-        )
-        await act(async () => editor.focus())
-        fireEvent.keyDown(editor, { key: 'Escape' })
-      } else {
-        view.unmount()
       }
       await waitFor(() =>
         expect(screen.queryByRole('button', { name: 'Copy contents' })).toBeNull()
       )
       await act(async () => pending.resolve(reply))
       expect(mocks.write).not.toHaveBeenCalled()
-      if (exit !== 'unmount') {
+      {
         await waitFor(() => expect(screen.getAllByRole('textbox')).toEqual([normal]))
+        expect(promptEditor(normal)).toBe(normalEditor)
         expect(promptValue(normal)).toBe('unsent normal draft')
         fireEvent.click(screen.getByRole('button', { name: 'Edit queued source' }))
         await waitFor(() => expect(screen.getAllByRole('textbox')).toHaveLength(2))

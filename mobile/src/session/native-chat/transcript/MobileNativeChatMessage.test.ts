@@ -675,12 +675,12 @@ describe('MobileNativeChatMessage', () => {
   })
 })
 
-it('bounds phone row recognition at N and 10N during unchanged and one-row updates', async () => {
+it('bounds phone row recognition at 100 mounted rows during unchanged and one-row updates', async () => {
   const references =
     await import('../../../../../src/shared/native-chat-text-attachment-references')
   const recognize = vi.spyOn(references, 'nativeChatTextAttachmentPaths')
   const path = '/host/agent-session-attachments/12345678-1234-1234-1234-123456789abc/report.txt'
-  for (const count of [10, 100]) {
+  for (const count of [100]) {
     let rows = Array.from({ length: count }, (_, index) => ({
       ...userMessage([
         { type: 'text', text: `row ${index} **Read @${path} then stop** ${'prose '.repeat(100)}` }

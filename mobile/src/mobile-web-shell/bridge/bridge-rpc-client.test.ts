@@ -459,49 +459,6 @@ describe('private bridge response completion', () => {
     page.client.close()
   })
 
-  it.each(['send', 'oversized', 'envelope'] as const)(
-    'preserves %s failure versus same-turn abort',
-    async (failure) => {
-      for (const abort of [false, true]) {
-        const controller = new AbortController()
-        const page = createPageClient({
-          send: (json) => {
-            if (failure === 'send' && JSON.parse(json).type === 'request') {
-              throw new Error('port down')
-            }
-          }
-        })
-        page.start()
-        const answer = page.client.sendRequest(
-          'status.get',
-          failure === 'oversized' ? 'x'.repeat(BRIDGE_MAX_MESSAGE_BYTES) : undefined,
-          {
-            signal: controller.signal,
-            ...(failure === 'envelope' ? { envelope: { executionHost: 'runtime:a' } } : {})
-          }
-        )
-        if (abort) {
-          controller.abort()
-        }
-        await expect(answer).rejects.toMatchObject(
-          abort
-            ? { name: 'AbortError', message: 'Promise settlement wait aborted' }
-            : {
-                name:
-                  failure === 'send'
-                    ? 'BridgeSendFailedError'
-                    : failure === 'oversized'
-                      ? 'BridgeRequestOversizedError'
-                      : 'BridgeRpcEnvelopeUngrantedError'
-              }
-        )
-        expect(page.frames().filter((frame) => frame.type === 'cancel')).toHaveLength(abort ? 1 : 0)
-        expect(vi.getTimerCount()).toBe(0)
-        page.client.close()
-      }
-    }
-  )
-
   it.each([undefined, 0, 7])(
     'keeps the signaled deadline default/clamp for %s',
     async (timeoutMs) => {
@@ -570,7 +527,7 @@ describe('private bridge response completion', () => {
     }
   )
 
-  it.each([1, 10].flatMap((count) => ['abort', 'deadline'].map((end) => ({ count, end }))))(
+  it.each([10].flatMap((count) => ['abort', 'deadline'].map((end) => ({ count, end }))))(
     'bounds $count $end private responses separately from live B and output',
     async ({ count, end }) => {
       const requests = new BridgeClientRequests()

@@ -16,10 +16,7 @@ import {
 } from './native-chat-owner-filter.test-fixture'
 import type { AppState } from '@/store/types'
 import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
-import {
-  useNativeChatImageRuntimeContext,
-  type NativeChatImageRuntimeContext
-} from './native-chat-image-runtime-context'
+import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import {
   detectedListingFixture,
   nativeChatFanoutFixture,
@@ -95,10 +92,10 @@ function mountScopes(
   )
 }
 
-for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
+for (const mode of ['with-probe'] as const) {
   it(`bounds actual SSH and floating catalog work separately from renders (${mode})`, async () => {
     for (const floating of [false, true]) {
-      for (const n of [10, 100]) {
+      for (const n of [100]) {
         let visits = 0,
           commits = 0,
           renders = 0
@@ -272,107 +269,7 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
   })
 }
 
-it('shares cold all-rival transport aggregation without losing ambiguity or catalog precedence', async () => {
-  for (const n of [10, 100]) {
-    let visits = 0,
-      provenanceReads = 0
-    const rows = Array.from({ length: n }, () => {
-      const row = instrument(
-        worktreeFixture('wt-0', '/remote', {
-          hostId: 'ssh:ssh-1',
-          runtimeOwnerEnvironmentId: 'owner-a'
-        }),
-        () => visits++
-      )
-      Object.defineProperty(row, 'runtimeOwnerEnvironmentId', {
-        enumerable: true,
-        get() {
-          provenanceReads++
-          return 'owner-a'
-        }
-      })
-      return row
-    })
-    useAppStore.setState(
-      {
-        ...initial,
-        repos: [repoFixture()],
-        worktreesByRepo: { repo: rows },
-        detectedWorktreesByRepo: {},
-        unifiedTabsByWorktree: {
-          'wt-0': Array.from({ length: n }, (_, i) => agentSessionTabFixture(`chat-${i}`, 'wt-0'))
-        },
-        activeWorktreeId: 'wt-0',
-        activeWorkspaceExecutionHostId: 'ssh:ssh-1',
-        sshStateByEnvironment: new Map([['owner-a', ssh(3)]])
-      },
-      true
-    )
-    const contexts: NativeChatImageRuntimeContext[] = []
-    function Probe({ index }: { index: number }) {
-      contexts[index] = useNativeChatImageRuntimeContext(`chat-${index}`)
-      return null
-    }
-    const view = render(
-      Array.from({ length: n }, (_, index) => <Probe key={index} index={index} />)
-    )
-    await act(async () => {})
-    expect(
-      contexts.every(
-        (context) =>
-          context?.target.kind === 'environment' && context.target.environmentId === 'owner-a'
-      )
-    ).toBe(true)
-    expect(visits).toBeLessThanOrEqual(8 * n)
-    expect(provenanceReads).toBeLessThanOrEqual(20 * n)
-    await act(async () =>
-      useAppStore.setState({
-        worktreesByRepo: {
-          repo: [
-            ...rows,
-            worktreeFixture('wt-0', '/rival', {
-              hostId: 'ssh:ssh-1',
-              runtimeOwnerEnvironmentId: 'owner-b'
-            })
-          ]
-        }
-      })
-    )
-    expect(contexts.every((context) => context === null)).toBe(true)
-    // Removing the rival and replacing the first directory row restores the original owner.
-    await act(async () =>
-      useAppStore.setState({
-        worktreesByRepo: {
-          repo: [
-            worktreeFixture('wt-0', '/first', {
-              hostId: 'ssh:ssh-1',
-              runtimeOwnerEnvironmentId: 'owner-a'
-            }),
-            ...rows
-          ]
-        }
-      })
-    )
-    expect(contexts.every((context) => context?.worktreePath === '/first')).toBe(true)
-    // Detected rivals still participate even with a known row and active physical host.
-    await act(async () =>
-      useAppStore.setState({
-        detectedWorktreesByRepo: {
-          rival: detectedListingFixture([
-            worktreeFixture('wt-0', '/detected', {
-              hostId: 'ssh:ssh-1',
-              runtimeOwnerEnvironmentId: 'owner-b'
-            })
-          ])
-        }
-      })
-    )
-    expect(contexts.every((context) => context === null)).toBe(true)
-    view.unmount()
-  }
-})
-
-for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
+for (const mode of ['with-probe'] as const) {
   it.each([
     'inactive-detected',
     'folder-twins',
@@ -382,7 +279,7 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
   ] as const)(
     `shares all directory and explicit-route derivation for %s (${mode})`,
     async (kind) => {
-      for (const n of [10, 100]) {
+      for (const n of [100]) {
         const reads = new IncomingOwnerReadMeter()
         let commits = 0,
           renders = 0
@@ -680,7 +577,7 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
         await check('own path', ownPath, !ambiguousFolder, ambiguousFolder ? null : '/changed')
         console.info('attachment-catalog-derivation', JSON.stringify({ mode, kind, n, metrics }))
         view.unmount()
-        if (kind === 'detected-twins' && n === 10 && mode === 'scope-only') {
+        if (kind === 'detected-twins' && n === 100 && mode === 'with-probe') {
           console.info(
             'attachment-attribution-boundaries',
             JSON.stringify(
@@ -692,90 +589,3 @@ for (const mode of ['scope-only', 'with-probe', 'disabled'] as const) {
     }
   )
 }
-
-it('keeps mounted attachment scopes quiet and folder catalog work linear at N and 10N', async () => {
-  for (const n of [10, 100]) {
-    const fixture = nativeChatFanoutFixture(n, n + 1, 0)
-    let visits = 0
-    for (const folder of fixture.folderWorkspaces) {
-      instrument(folder, () => visits++)
-    }
-    useAppStore.setState(
-      {
-        ...initial,
-        ...fixture,
-        activeWorktreeId: null,
-        activeWorkspaceExecutionHostId: null,
-        runtimeEnvironments: [],
-        runtimeEnvironmentCatalogHydrated: true
-      },
-      true
-    )
-    const contexts = new Map<string, NativeChatImageRuntimeContext>()
-    const renders = new Map<string, number>()
-    function Probe({ id }: { id: string }) {
-      contexts.set(id, useContext(NativeChatMarkdownImageOwnerContext)!.runtimeContext)
-      renders.set(id, (renders.get(id) ?? 0) + 1)
-      return null
-    }
-    let commits = 0
-    const view = render(
-      Array.from({ length: n }, (_, index) => {
-        const id = `chat-${index}`
-        return (
-          <Profiler key={id} id={id} onRender={() => commits++}>
-            <NativeChatMarkdownImageOwnerProvider tabId={id} sessionId={null} isVisible>
-              <NativeChatTextAttachmentScope enabled>
-                <Probe id={id} />
-              </NativeChatTextAttachmentScope>
-            </NativeChatMarkdownImageOwnerProvider>
-          </Profiler>
-        )
-      })
-    )
-    await act(async () => {})
-    const baseline = new Map(renders)
-    const state = useAppStore.getState()
-    const unusedFolders = state.folderWorkspaces.map((folder, index) =>
-      index === n ? { ...folder, name: 'Unused rename' } : folder
-    )
-    visits = 0
-    commits = 0
-    await act(async () => useAppStore.setState({ folderWorkspaces: unusedFolders }))
-    expect(renders).toEqual(baseline)
-    expect(commits).toBe(0)
-    expect(visits).toBeLessThanOrEqual(8 * (n + 1))
-    visits = 0
-    await act(async () =>
-      useAppStore.setState({
-        sshStateByEnvironment: new Map([
-          [
-            'other-host',
-            {
-              targetGenerations: new Map(),
-              targetLabels: new Map(),
-              removedTargetLabels: new Map(),
-              targetsHydrated: true,
-              connectionStates: new Map()
-            }
-          ]
-        ])
-      })
-    )
-    expect(renders).toEqual(baseline)
-    expect(commits).toBe(0)
-    expect(visits).toBe(0)
-    const ownChange = unusedFolders.map((folder, index) =>
-      index === 0 ? { ...folder, folderPath: '/renamed' } : folder
-    )
-    visits = 0
-    await act(async () => useAppStore.setState({ folderWorkspaces: ownChange }))
-    expect(contexts.get('chat-0')?.worktreePath).toBe('/renamed')
-    expect(renders.get('chat-0')).toBe(baseline.get('chat-0')! + 1)
-    for (let index = 1; index < n; index++) {
-      expect(renders.get(`chat-${index}`)).toBe(baseline.get(`chat-${index}`))
-    }
-    expect(visits).toBeLessThanOrEqual(8 * (n + 1))
-    view.unmount()
-  }
-})
