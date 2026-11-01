@@ -24,9 +24,10 @@ import {
   type RichMarkdownWebDocument
 } from './rich-markdown/rich-markdown-web-document-mount'
 import { useMobileRichMarkdownEditorController } from './use-mobile-rich-markdown-editor-controller'
-import type {
-  RichMarkdownEditorApi,
-  RichMarkdownUrlPromptKind
+import {
+  noWorkspaceImage,
+  type RichMarkdownEditorApi,
+  type RichMarkdownUrlPromptKind
 } from './rich-markdown/document-host-seams'
 import type {
   MobileRichMarkdownEditorMessage,
@@ -177,8 +178,7 @@ function MobileRichMarkdownEditorWebInner(
     const live = mountRichMarkdownWebDocument(host, {
       postToHost: (message) => receiveRef.current?.(message),
       promptForUrl,
-      loadImageSource: (path) =>
-        loadImageSourceRef.current?.(path) ?? Promise.reject(new Error('No workspace'))
+      loadImageSource: (path) => (loadImageSourceRef.current ?? noWorkspaceImage)(path)
     })
     documentRef.current = live
     for (const call of beforeMountRef.current) {

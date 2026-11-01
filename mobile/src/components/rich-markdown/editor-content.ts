@@ -73,17 +73,13 @@ export function setMarkdown(scope: RichMarkdownEditorScope, markdown: string, ge
 
 // Edits reuse each render's loads (undo and paste bring back images with no source); a failed path waits for the next render.
 function showWorkspaceImages(scope: RichMarkdownEditorScope) {
-  const load = scope.loadImageSource
-  if (!load) {
-    return
-  }
   editorElement(scope)
     .querySelectorAll<HTMLImageElement>(`img[${WORKSPACE_IMAGE_PATH_ATTRIBUTE}]:not([src])`)
     .forEach((image) => {
       const path = image.getAttribute(WORKSPACE_IMAGE_PATH_ATTRIBUTE) ?? ''
       let source = scope.workspaceImageSources.get(path)
       if (!source) {
-        source = load(path)
+        source = scope.loadImageSource(path)
         scope.workspaceImageSources.set(path, source)
       }
       source.then(
