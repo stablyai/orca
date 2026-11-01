@@ -3,6 +3,7 @@ import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -54,6 +55,7 @@ function WorktreeAgentRowComponent({
   trailing
 }: Props) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
   // Visuals render only in transcript; row keeps surrounding prose and treats visual-only reply as empty.
   const reply = agent.lastAssistantMessage
@@ -73,14 +75,21 @@ function WorktreeAgentRowComponent({
         ? agentNoUpdateLabel(agent, now)
         : formatTimeAgo(timeAt, now)
 
-  const content = (
-    <View
-      style={[
-        styles.row,
-        selectable && styles.rowSelectable,
-        { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }
-      ]}
-    >
+  const spokenName = childText
+    ? `${childText.lead}${childText.trail ? ` ${childText.trail}` : ''}`
+    : label
+  const sessionActionsLabel = t(
+    'components.worktreeAgentRow.sessionActions',
+    'Actions for {{name}}',
+    { name: spokenName }
+  )
+  const rowStyle = [
+    styles.row,
+    selectable && styles.rowSelectable,
+    { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }
+  ]
+  const leading = (
+    <>
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
       {!childRow && agent.agentType ? (
@@ -103,18 +112,39 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
-      {trailing}
-      <Text style={styles.time}>{ts}</Text>
-    </View>
+    </>
+  )
+  const time = (
+    <Text accessible={false} importantForAccessibility="no" style={styles.time}>
+      {ts}
+    </Text>
   )
   if (!onPress && !onLongPress && !childRow) {
-    return content
+    return (
+      <View style={rowStyle}>
+        {leading}
+        {trailing}
+        {time}
+      </View>
+    )
+  }
+
+  const interactive = Boolean(onPress || onLongPress)
+  const openSession = () => {
+    if (!isReadOnly && onPress) {
+      onPress(agent.paneKey)
+    }
+  }
+  const openSessionActions = () => {
+    if (!isReadOnly && onLongPress) {
+      onLongPress(agent.paneKey)
+    }
   }
   return (
     <Pressable
-      disabled={isReadOnly || (!onPress && !onLongPress)}
-      accessibilityRole="button"
-      accessibilityState={selected ? { selected: true } : undefined}
+      // Touch stays on the row. The control below is what VoiceOver focuses, so the disclosure stays reachable.
+      accessible={false}
+      disabled={isReadOnly || !interactive}
       delayLongPress={400}
       style={({ pressed }) => [
         pressed && pressedStyle,
@@ -128,7 +158,7 @@ function WorktreeAgentRowComponent({
         onPress
           ? (event) => {
               event.stopPropagation()
-              onPress(agent.paneKey)
+              openSession()
             }
           : undefined
       }
@@ -136,12 +166,48 @@ function WorktreeAgentRowComponent({
         onLongPress
           ? (event) => {
               event.stopPropagation()
-              onLongPress(agent.paneKey)
+              openSessionActions()
             }
           : undefined
       }
     >
-      {content}
+      <View style={rowStyle}>
+        {interactive ? (
+          <View
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={ts ? `${spokenName}, ${ts}` : spokenName}
+            accessibilityState={
+              selected || isReadOnly
+                ? {
+                    ...(selected ? { selected: true } : {}),
+                    ...(isReadOnly ? { disabled: true } : {})
+                  }
+                : undefined
+            }
+            accessibilityActions={[
+              ...(onPress ? [{ name: 'activate' }] : []),
+              ...(onLongPress ? [{ name: 'longpress', label: sessionActionsLabel }] : [])
+            ]}
+            onAccessibilityTap={onPress ? openSession : undefined}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === 'activate') {
+                openSession()
+              }
+              if (event.nativeEvent.actionName === 'longpress') {
+                openSessionActions()
+              }
+            }}
+            style={styles.sessionControl}
+          >
+            {leading}
+          </View>
+        ) : (
+          <View style={styles.sessionControl}>{leading}</View>
+        )}
+        {trailing}
+        {time}
+      </View>
     </Pressable>
   )
 }
@@ -154,6 +220,13 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: 3
+  },
+  sessionControl: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0
   },
   // 44pt is the smallest row a finger can hit without opening the workspace behind it.
   rowSelectable: {

@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import type { AccessibilityActionEvent } from 'react-native'
 import {
   setSelectedSidebarSession,
   useSelectedSidebarSession
@@ -92,6 +93,27 @@ export function useWorktreeRowSession<T extends SessionRowTarget>(
       workspaceCardLongPress(sessionPress.isClaimed, onLongPress, item, impact),
     sessionLongPress: (onSessionLongPress, impact) =>
       sessionRowLongPress(sessionPress.claim, onSessionLongPress, item, impact)
+  }
+}
+
+// The card Pressable is not an accessibility element, so the header is the workspace control.
+export function workspaceCardActivation(disabled: boolean, onActivate: () => void) {
+  const activate = () => {
+    if (!disabled) {
+      onActivate()
+    }
+  }
+  return {
+    accessible: true,
+    accessibilityRole: 'button' as const,
+    accessibilityState: disabled ? { disabled: true } : undefined,
+    accessibilityActions: [{ name: 'activate' }],
+    onAccessibilityTap: activate,
+    onAccessibilityAction: (event: AccessibilityActionEvent) => {
+      if (event.nativeEvent.actionName === 'activate') {
+        activate()
+      }
+    }
   }
 }
 

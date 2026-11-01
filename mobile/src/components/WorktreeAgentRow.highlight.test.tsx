@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { View } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -102,6 +103,41 @@ describe('WorktreeAgentRow selected highlight', () => {
     expect(compact.paddingHorizontal).toBeUndefined()
     expect(compact.marginHorizontal).toBeUndefined()
     expect(compactContent.paddingLeft).toBe(14)
+  })
+
+  it('keeps the session control and its actions outside the card grouping', () => {
+    const onPress = vi.fn()
+    const onLongPress = vi.fn()
+    const disclosure = createElement(View, { accessibilityLabel: 'disclosure' })
+    act(() => {
+      renderer = create(
+        createElement(WorktreeAgentRow, {
+          agent: agent(),
+          depth: 0,
+          now: 2_000,
+          unvisited: false,
+          selectable: true,
+          onPress,
+          onLongPress,
+          trailing: disclosure
+        })
+      )
+    })
+    expect(findByHostType(renderer!.root, 'Pressable').props.accessible).toBe(false)
+    const control = renderer!.root.find((node) => node.props.accessibilityRole === 'button')
+    expect(control.props.accessibilityActions).toEqual([
+      { name: 'activate' },
+      { name: 'longpress', label: expect.stringMatching(/^Actions for /) }
+    ])
+    expect(control.findAll((node) => node.props.accessibilityLabel === 'disclosure')).toHaveLength(
+      0
+    )
+    act(() => {
+      control.props.onAccessibilityAction({ nativeEvent: { actionName: 'longpress' } })
+      control.props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } })
+    })
+    expect(onLongPress).toHaveBeenCalledWith('tab:leaf')
+    expect(onPress).toHaveBeenCalledWith('tab:leaf')
   })
 
   it('leaves an idle Select sessions row unfilled', () => {

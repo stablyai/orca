@@ -603,6 +603,31 @@ describe('memoized worktree rows', () => {
     expect(lastPresence()).toMatchObject({ jira: false, automation: false, cli: false })
   })
 
+  it('opens the workspace from its own accessibility control', async () => {
+    const onPress = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(WorktreeListRow, {
+          item: baseItem,
+          isReadOnly: false,
+          now: 2_000,
+          repoColor: '#000000',
+          cardDetails: ALL_DETAILS,
+          agentActivityDisplayMode: 'compact',
+          status: 'active',
+          onPress
+        })
+      )
+    })
+    const card = findAllByHostType(renderer!.root, 'Pressable')[0]
+    expect(card.props.accessible).toBe(false)
+    const workspace = renderer!.root.find((node) => node.props.accessibilityRole === 'button')
+    await act(async () => {
+      workspace.props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } })
+    })
+    expect(onPress).toHaveBeenCalledWith(baseItem)
+  })
+
   it('fills the open session and leaves the rest of the workspace card clear', async () => {
     const row = (item: TestItem) =>
       createElement(WorktreeListRow, {

@@ -1318,6 +1318,9 @@
       "label": "Mermaid diagram",
       "expand": "Expand diagram"
     },
+    "worktreeAgentRow": {
+      "sessionActions": "Actions for {{name}}"
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",
