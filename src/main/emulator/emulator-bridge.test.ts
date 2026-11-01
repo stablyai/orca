@@ -11,8 +11,10 @@ const {
   listSimulatorDevicesMock,
   listServeSimHelperProcessesForDeviceMock,
   shutdownSimulatorDeviceMock,
-  netFetchMock
+  netFetchMock,
+  assertInputNotShadowedMock
 } = vi.hoisted(() => ({
+  assertInputNotShadowedMock: vi.fn(async (_udid: string) => {}),
   execServeSimCommandMock: vi.fn(async () => ({})),
   hideNativeSimulatorAppMock: vi.fn(async () => {}),
   killServeSimHelperProcessesForDeviceMock: vi.fn(async () => {}),
@@ -44,6 +46,10 @@ vi.mock('./serve-sim-helper-processes', () => ({
   listServeSimHelperProcessesForDevice: listServeSimHelperProcessesForDeviceMock
 }))
 
+vi.mock('./simulator-device-hub-input', () => ({
+  assertSimulatorInputNotShadowedByDeviceHub: assertInputNotShadowedMock
+}))
+
 vi.mock('./simulator-app-visibility', () => ({
   hideNativeSimulatorApp: hideNativeSimulatorAppMock
 }))
@@ -59,6 +65,7 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, platform: () => 'darwin' }
 })
 
+import { EmulatorError } from './emulator-errors'
 import { EmulatorBridge } from './emulator-bridge'
 import { RuntimeEmulatorCommands } from '../runtime/orca-runtime-emulator'
 
@@ -528,7 +535,8 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     const send = vi.fn()
     const waitForEndpointReady = vi.fn(async () => true)
     const bridge = new EmulatorBridge({ waitForEndpointReady })
-    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const active: EmulatorSessionInfo = { ...session('device-1'), backend: 'ios' }
+    bridge.registerActiveEmulator('wt-1', active, { managed: true })
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -542,14 +550,41 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
     const res = await commands.emulatorAttach({ device: 'device-1', worktree: 'wt-1' })
 
-    expect(res).toEqual({ attached: true, info: session('device-1') })
+    expect(res).toEqual({ attached: true, info: active })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
     expect(shutdownSimulatorDeviceMock).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith('ui:emulatorAutoAttach', {
       worktreeId: 'wt-1',
-      info: session('device-1')
+      info: active
     })
+  })
+
+  it('checks pane input against Device Hub only for an active iOS session', async () => {
+    const bridge = new EmulatorBridge()
+    bridge.registerActiveEmulator('wt-ios', session('device-1'), { managed: true })
+    bridge.registerActiveEmulator('wt-android', session('emulator-5554'), {
+      managed: true,
+      backend: 'android'
+    })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async (worktree: string) => worktree),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async (worktree: string) => worktree),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({ mobileEmulatorEnabled: true, mobileEmulatorDefaultDeviceUdid: null })
+    })
+    assertInputNotShadowedMock.mockRejectedValueOnce(
+      new EmulatorError('emulator_input_blocked', 'Device Hub has taken over input')
+    )
+
+    await expect(commands.emulatorCheckInput({ worktree: 'wt-ios' })).rejects.toMatchObject({
+      code: 'emulator_input_blocked'
+    })
+    await expect(commands.emulatorCheckInput({ worktree: 'wt-android' })).resolves.toEqual({
+      ok: true
+    })
+    expect(assertInputNotShadowedMock.mock.calls).toEqual([['device-1']])
   })
 
   it('rejects attach when mobile emulator is disabled', async () => {

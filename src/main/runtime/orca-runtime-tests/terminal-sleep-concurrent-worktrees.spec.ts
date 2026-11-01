@@ -4,9 +4,99 @@ import {
   OrcaRuntimeService,
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import {
+  TEST_REPO_ID,
+  TEST_WORKTREE_ID,
+  store,
+  deferred,
+  makeRuntimeStoreWithWorkspaceSession,
+  makeWorkspaceSessionWithHeadlessTerminal
+} from '../orca-runtime-test-fixtures.spec'
+import type { PtyProcessInfo } from '../../providers/pty-process-info'
+import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 describe('concurrent worktree terminal sleeps', () => {
+  it('verifies sleep without waiting for a pending background poll or reviving its old PTY', async () => {
+    vi.useFakeTimers()
+    const live: PtyProcessInfo[] = [
+      {
+        id: 'persisted-pty',
+        cwd: MOCK_GIT_WORKTREES[0].path,
+        title: 'bash',
+        worktreeId: TEST_WORKTREE_ID
+      }
+    ]
+    const listings: {
+      reply: ReturnType<typeof deferred<PtyProcessInfo[]>>
+      snapshot: PtyProcessInfo[]
+    }[] = []
+    let draining = false
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({ activeWorktreeId: null, activeTabId: null })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    const stopAndWait = vi.fn(async (ptyId: string) => {
+      live.splice(0)
+      runtime.onPtyExit(ptyId, 0)
+      return true
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait,
+      getForegroundProcess: async () => null,
+      listProcesses: () => {
+        if (draining) {
+          return Promise.resolve([...live])
+        }
+        const reply = deferred<PtyProcessInfo[]>()
+        listings.push({ reply, snapshot: [...live] })
+        return reply.promise
+      }
+    })
+    const sleeping = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+    const polling: ReturnType<typeof runtime.listTerminals>[] = []
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(listings).toHaveLength(1)
+      polling.push(runtime.listTerminals())
+      await vi.advanceTimersByTimeAsync(0)
+      expect(listings).toHaveLength(2)
+      listings[0].reply.resolve(listings[0].snapshot)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(stopAndWait).toHaveBeenCalledExactlyOnceWith('persisted-pty', expect.any(Object))
+      expect(listings).toHaveLength(3)
+      polling.push(runtime.listTerminals())
+      await vi.advanceTimersByTimeAsync(0)
+      expect(listings).toHaveLength(4)
+      listings[2].reply.resolve(listings[2].snapshot)
+      await expect(sleeping).resolves.toMatchObject({
+        postStopVerified: true,
+        stoppedPtyIds: ['persisted-pty']
+      })
+    } finally {
+      draining = true
+      for (const { reply, snapshot } of listings) {
+        reply.resolve(snapshot)
+      }
+      await Promise.allSettled([sleeping, ...polling])
+      vi.useRealTimers()
+    }
+    expect((await runtime.listTerminals()).terminals).toEqual([])
+    expect(
+      runtime.shutdownReconnectFactsFor(getSession(), 'local').activeWorktreeIdsOnShutdown
+    ).toEqual([])
+    await expect(
+      runtime.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null), {
+        refuseSleptWorktree: true
+      })
+    ).rejects.toThrow('worktree_terminals_sleeping')
+    const release = await runtime.acquireWorktreeTerminalSpawn(
+      spawnWorktreeTarget(TEST_WORKTREE_ID, null)
+    )
+    release()
+  })
+
   it.each([2, 3])('sleeps %i worktrees at once on one PTY controller', async (count) => {
     const worktrees = Array.from({ length: count }, (_, index) =>
       index === 0

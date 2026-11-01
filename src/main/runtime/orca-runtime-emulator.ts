@@ -9,6 +9,7 @@ import {
 import { resolveDefaultAttachDevice } from '../emulator/emulator-default-attach-device'
 import { setConfiguredAndroidSdkPath } from '../emulator/android/android-sdk-host-discovery'
 import type { EmulatorGesturePoint } from '../emulator/emulator-gesture-sender'
+import { assertWorktreeInputNotShadowedByDeviceHub } from '../emulator/emulator-pane-input-check'
 import type { EmulatorActiveSession, EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
@@ -101,6 +102,13 @@ export class RuntimeEmulatorCommands {
       device: params.device ?? params.emulator,
       worktreeId
     })
+    return RuntimeEmulatorCommands.OK
+  }
+
+  // Pane touches skip main, so the pane asks whether the active simulator still accepts input.
+  async emulatorCheckInput(params: { worktree?: string }): Promise<{ ok: true }> {
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await assertWorktreeInputNotShadowedByDeviceHub(this.requireEmulatorBridge(), worktreeId)
     return RuntimeEmulatorCommands.OK
   }
 
