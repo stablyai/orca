@@ -587,6 +587,31 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     expect(assertInputNotShadowedMock.mock.calls).toEqual([['device-1']])
   })
 
+  it('keeps the live workspace device when reopened without a device', async () => {
+    listSimulatorDevicesMock.mockImplementation(async () => [
+      { udid: 'iphone-1', name: 'iPhone 16', state: 'Shutdown', isAvailable: true }
+    ])
+    const bridge = new EmulatorBridge({ waitForEndpointReady: vi.fn(async () => true) })
+    bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+    const commands = new RuntimeEmulatorCommands({
+      getEmulatorBridge: () => bridge,
+      resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
+      resolveEmulatorCleanupWorkspaceId: vi.fn(async () => 'wt-1'),
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: 'iphone-1'
+      })
+    })
+
+    await expect(commands.emulatorAttach({ worktree: 'wt-1' })).resolves.toEqual({
+      attached: true,
+      info: session('device-1')
+    })
+    expect(execServeSimCommandMock).not.toHaveBeenCalled()
+    expect(bridge.getActiveForWorktree('wt-1')).toEqual(session('device-1'))
+  })
+
   it('rejects attach when mobile emulator is disabled', async () => {
     const bridge = new EmulatorBridge()
     const commands = new RuntimeEmulatorCommands({

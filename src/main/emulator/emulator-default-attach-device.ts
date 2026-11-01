@@ -1,18 +1,16 @@
 import type { EmulatorBridge } from './emulator-bridge'
-import { pickDefaultSimulatorDevice } from './emulator-availability'
+import type { EmulatorDevice } from './backends/emulator-backend'
 
+const isIphone = (device: EmulatorDevice): boolean =>
+  device.backend === 'ios' && /iPhone/i.test(device.name)
+
+// A device already running on either platform beats booting a new one.
 export async function resolveDefaultAttachDevice(
-  bridge: EmulatorBridge
+  bridge: Pick<EmulatorBridge, 'listAllDevices'>
 ): Promise<string | undefined> {
-  let iosDefault: string | undefined
-  try {
-    iosDefault = pickDefaultSimulatorDevice(await bridge.listSimulators())?.udid
-  } catch {
-    iosDefault = undefined
-  }
-  if (iosDefault) {
-    return iosDefault
-  }
   const all = await bridge.listAllDevices()
-  return (all.find((row) => row.state === 'booted') ?? all[0])?.id
+  const available = all.filter((device) => device.isAvailable)
+  const booted = available.filter((device) => device.state === 'booted')
+  return (booted.find(isIphone) ?? booted[0] ?? available.find(isIphone) ?? available[0] ?? all[0])
+    ?.id
 }
