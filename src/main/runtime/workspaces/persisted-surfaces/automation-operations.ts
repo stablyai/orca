@@ -34,6 +34,7 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../../orchestration/orche
 import type { LegacyWorkerTerminalRecoveryResult } from '../../runtime-legacy-worker-terminal-recovery-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { flushWorkspaceSessionOrThrowAsync } from './flush-workspace-session'
 
 export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
@@ -253,17 +254,8 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     }
   }
 
-  protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {
-    const store = this.store
-    if (store?.flushPendingOrThrowAsync) {
-      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      return
-    }
-    if (store?.flushOrThrow) {
-      store.flushOrThrow()
-      return
-    }
-    throw new Error('workspace_session_persistence_unavailable')
+  protected flushWorkspaceSessionOrThrowAsync(): Promise<void> {
+    return flushWorkspaceSessionOrThrowAsync(this.store)
   }
 
   async reconcileLegacyWorkerTerminals(
