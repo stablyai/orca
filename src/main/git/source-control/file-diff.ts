@@ -8,6 +8,7 @@ import { gitDiffReadDedupe, settledDiffCache } from './git-read-cache-invalidati
 import { readWorktreeDiffStamp } from './worktree-diff-stamp'
 import { buildDiffResult } from './diff-result'
 import {
+  type BlobConversion,
   type GitBlobReadResult,
   readGitBlobAtIndexPath,
   readGitBlobAtOidPath,
@@ -15,7 +16,6 @@ import {
   readWorkingTreeFile
 } from './git-blob-read'
 import { readTextconvDriver } from './textconv-driver'
-import { workingTreeMatchesTextconv } from './working-tree-textconv'
 import {
   findContainingSubmodule,
   listSubmodulePaths,
@@ -150,17 +150,19 @@ async function loadDiff(
   let modifiedDeleted = false
   let readFailed = false
   let tooLarge = false
-  const textconvDriver = readTextconvDriver(worktreePath, filePath, options)
+  const hasDriver = readTextconvDriver(worktreePath, filePath, options).then(
+    (driver) => driver !== undefined
+  )
 
   try {
     if (staged) {
-      const textconv = textconvDriver.then((driver) => driver !== undefined)
+      const conversion: BlobConversion = { mode: 'textconv', hasDriver }
       // HEAD and index blobs are independent; read them concurrently.
       const [leftBlob, rightBlob] = await Promise.all([
         options.oldPath === undefined
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
           : readGitBlobAtOidPath(worktreePath, 'HEAD', options.oldPath, options),
-        readGitBlobAtIndexPath(worktreePath, filePath, options, textconv)
+        readGitBlobAtIndexPath(worktreePath, filePath, options, conversion)
       ])
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
@@ -173,19 +175,14 @@ async function loadDiff(
       // The index-to-HEAD fallback is sequential internally, but independent of the working-tree read.
       // WSL Git can use a Linux cwd while Node needs its Win32 spelling.
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
-      const hostFilePath = hostWorktreePath ? path.join(hostWorktreePath, filePath) : undefined
-      const textconv = textconvDriver.then(
-        (driver) =>
-          driver !== undefined &&
-          hostFilePath !== undefined &&
-          workingTreeMatchesTextconv(worktreePath, filePath, hostFilePath, driver, options)
-      )
+      // The working-tree side is editable, so show the Git side as checkout would write it.
+      const conversion: BlobConversion = { mode: 'checkout', hasDriver }
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, textconv)
-          : readUnstagedLeftBlob(worktreePath, filePath, options, textconv),
-        hostFilePath
-          ? readWorkingTreeFile(hostFilePath)
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options, conversion)
+          : readUnstagedLeftBlob(worktreePath, filePath, options, conversion),
+        hostWorktreePath
+          ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)
       ])
       originalContent = leftBlob.content
@@ -208,8 +205,8 @@ async function loadDiff(
     filePath,
     tooLarge
   )
-  // Driver output depends on config, keys and tools the stamp doesn't cover.
-  const reusable = !readFailed && (await textconvDriver) === undefined
+  // Converted output depends on config, keys and tools the stamp doesn't cover.
+  const reusable = !readFailed && !(await hasDriver)
   // Mark proven deletions so previewers can distinguish them from failed empty reads.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { result: { ...result, modifiedDeleted: true }, reusable }

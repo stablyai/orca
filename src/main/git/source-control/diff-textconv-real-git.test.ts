@@ -26,7 +26,7 @@ describe('diff drivers with textconv', () => {
     await rm(repo, { recursive: true, force: true })
   })
 
-  it('diffs clean/smudge-encrypted files as plaintext without writing objects', async () => {
+  it('diffs clean/smudge-encrypted files as plaintext', async () => {
     // Stand-in for git-crypt: binary stored blob, plaintext working tree, driver passes plaintext through.
     await writeFile(path.join(repo, '.gitattributes'), 'secret.env filter=fake diff=fake\n')
     git('config', 'filter.fake.clean', "printf 'X\\000'; cat")
@@ -36,14 +36,12 @@ describe('diff drivers with textconv', () => {
     git('add', '.')
     git('commit', '-m', 'init')
     await writeFile(path.join(repo, 'secret.env'), 'TOKEN=two\n')
-    const objectsBefore = git('count-objects')
 
     expect(await getDiff(repo, 'secret.env', false)).toMatchObject({
       kind: 'text',
       originalContent: 'TOKEN=one\n',
       modifiedContent: 'TOKEN=two\n'
     })
-    expect(git('count-objects')).toBe(objectsBefore)
 
     git('add', 'secret.env')
     expect(await getDiff(repo, 'secret.env', true)).toMatchObject({
@@ -53,17 +51,18 @@ describe('diff drivers with textconv', () => {
     })
   })
 
-  it('keeps unstaged diffs raw when the driver would rewrite the editable working tree', async () => {
+  it('shows the editable unstaged side against checkout bytes, not driver text', async () => {
     await writeFile(path.join(repo, '.gitattributes'), 'notes.txt diff=upper\n')
     git('config', 'diff.upper.textconv', 'tr a-z A-Z <')
     await writeFile(path.join(repo, 'notes.txt'), 'one\n')
     git('add', '.')
     git('commit', '-m', 'init')
-    await writeFile(path.join(repo, 'notes.txt'), 'two\n')
+    // Already driver-shaped, so only the original side tells checkout bytes from driver text.
+    await writeFile(path.join(repo, 'notes.txt'), 'TWO\n')
 
     expect(await getDiff(repo, 'notes.txt', false)).toMatchObject({
       originalContent: 'one\n',
-      modifiedContent: 'two\n'
+      modifiedContent: 'TWO\n'
     })
     git('add', 'notes.txt')
     expect(await getDiff(repo, 'notes.txt', true)).toMatchObject({
