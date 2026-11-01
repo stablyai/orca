@@ -60,7 +60,7 @@ import { MAX_TIMER_DELAY_MS } from '../../src/shared/timer-delay'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages
-} from '../../mobile/src/session/mobile-native-chat-render-data'
+} from '../../mobile/src/session/native-chat/mobile-native-chat-render-data'
 import { NativeChatMessageList } from '../../src/renderer/src/components/native-chat/NativeChatMessageList'
 import { render } from '../../src/renderer/src/components/native-chat/native-chat-tooltip-test-harness'
 import { installNativeChatMessageListTestViewport } from '../../src/renderer/src/components/native-chat/native-chat-message-list-test-viewport'

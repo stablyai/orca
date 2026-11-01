@@ -336,7 +336,7 @@ module.exports = {
     'out/main/persistence/profile-state/**',
     'out/main/plugins/plugin-authoring-checks.js',
     // `orca plugin types` copies the author typings from here in Node mode.
-    'resources/plugins/declarative/orca.d.ts',
+    'resources/plugins/declarative/orca*.d.ts',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
     'resources/plugins/types/*.d.ts',

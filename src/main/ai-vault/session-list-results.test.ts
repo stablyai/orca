@@ -106,6 +106,24 @@ describe('mergeAiVaultListResults', () => {
     vi.useRealTimers()
   })
 
+  it.each([false, true])(
+    'keeps the selected session beyond the merged cap (remote: %s)',
+    (remote) => {
+      const selected = remote
+        ? { ...session(0), executionHostId: 'runtime:server' as const, id: 'remote-selected' }
+        : session(0)
+      const newest = session(2)
+      const results = [
+        { ...listResult([]), sessions: [newest] },
+        { ...listResult([]), sessions: [session(1), selected] }
+      ]
+      expect(
+        mergeAiVaultListResults(results, 1, false, [], selected.id).sessions.map((row) => row.id)
+      ).toEqual([newest.id, selected.id])
+      expect(mergeAiVaultListResults(results, 1).sessions.map((row) => row.id)).toEqual([newest.id])
+    }
+  )
+
   it('keeps the latest input scannedAt instead of restamping the merge', () => {
     const merged = mergeAiVaultListResults(
       [

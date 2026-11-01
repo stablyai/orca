@@ -64,7 +64,8 @@ export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
   rawLimit: number | undefined,
   unlimited = false,
-  scopePaths: readonly string[] = []
+  scopePaths: readonly string[] = [],
+  selectedSessionId?: string
 ): AiVaultListResult {
   const depth = requestedAiVaultSessionDepth({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
@@ -85,7 +86,8 @@ export function mergeAiVaultListResults(
       scannedAt: latestAiVaultScannedAt(results)
     },
     depth,
-    scopePaths
+    scopePaths,
+    selectedSessionId
   )
 }
 

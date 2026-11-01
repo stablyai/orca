@@ -65,17 +65,20 @@ vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
     })
   })
 }))
-vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  beginHostAdmittedStructuredLaunch: (args: {
-    openAdmitted: () => { settlement: Promise<StructuredAgentLaunchSettlement> } | null
-  }) => ({
-    sessionId: null,
-    tab: null,
-    settlement: args.openAdmitted()?.settlement,
-    cancel: vi.fn()
+vi.mock(
+  '@/lib/agent-session/launch/structured-agent-session-launch-admission',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    beginHostAdmittedStructuredLaunch: (args: {
+      openAdmitted: () => { settlement: Promise<StructuredAgentLaunchSettlement> } | null
+    }) => ({
+      sessionId: null,
+      tab: null,
+      settlement: args.openAdmitted()?.settlement,
+      cancel: vi.fn()
+    })
   })
-}))
+)
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 const observation = vi.hoisted(() => ({ value: 'live' }))

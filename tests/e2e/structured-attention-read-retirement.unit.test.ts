@@ -179,12 +179,14 @@ describe('Explicit desktop read acknowledgements', () => {
         ]
       ]),
       readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readChildWork: () => undefined,
       now: () => 42
     })
     const delivery = createStructuredAttentionMobileDelivery({
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
       isWorkspaceMuted: () => false,
+      readOrchestration: () => undefined,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42

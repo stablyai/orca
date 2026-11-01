@@ -1,4 +1,8 @@
 import type { PluginDeclarativeChild, PluginDeclarativeNode } from '../plugin-declarative-catalog'
+import {
+  formatPluginRelativeTime,
+  PLUGIN_RELATIVE_TIME_FORMATS
+} from '../plugin-declarative-relative-time'
 
 /** One element of the drawn tree, as a test sees it. Actions re-find it by `path`. */
 export type TestElement = {
@@ -44,7 +48,70 @@ const ROLES: Record<string, string> = {
   EmptyState: 'group',
   Link: 'link',
   Code: 'code',
+  Textarea: 'textbox',
+  Checkbox: 'checkbox',
+  RadioGroup: 'radiogroup',
+  Slider: 'slider',
+  Field: 'group',
+  Tabs: 'tablist',
+  Tab: 'tab',
+  Collapsible: 'group',
+  Toolbar: 'toolbar',
+  Grid: 'group',
+  Table: 'grid',
+  Tree: 'tree',
+  Markdown: 'document',
+  CodeView: 'code',
+  Image: 'img',
+  KeyValue: 'list',
+  Callout: 'note',
+  Skeleton: 'status',
+  RelativeTime: 'time',
   Unsupported: 'unsupported'
+}
+
+/** What a relative time reads now, in English, as Orca draws it (`short` unless set). */
+function relativeText(at: unknown, format: unknown): string {
+  if (typeof at !== 'number') {
+    return ''
+  }
+  const chosen = PLUGIN_RELATIVE_TIME_FORMATS.find((each) => each === format) ?? 'short'
+  return formatPluginRelativeTime(at, Date.now(), chosen, 'en')
+}
+
+function cellText(cell: unknown): string {
+  if (typeof cell === 'object' && cell !== null && 'at' in cell) {
+    return relativeText(cell.at, 'format' in cell ? cell.format : undefined)
+  }
+  return String(cell ?? '')
+}
+
+const OWN_TEXT_PROPS = ['title', 'description', 'content', 'code', 'error', 'alt']
+
+/** Words a data component shows: Table cells, Tree item labels, KeyValue pairs. */
+function dataText(props: Record<string, unknown>): string[] {
+  const words: string[] = []
+  const pending: unknown[] = [props.rows, props.items].flatMap((list) =>
+    Array.isArray(list) ? list : []
+  )
+  for (let next = pending.shift(); next !== undefined; next = pending.shift()) {
+    if (typeof next !== 'object' || next === null) {
+      continue
+    }
+    const entry: Record<string, unknown> = { ...next }
+    if (typeof entry.cells === 'object' && entry.cells !== null) {
+      words.push(...Object.values(entry.cells).map(cellText))
+    }
+    for (const name of ['label', 'value']) {
+      if (entry[name] !== undefined && entry[name] !== null) {
+        words.push(String(entry[name]))
+      }
+    }
+    if (Array.isArray(entry.children)) {
+      pending.push(...entry.children)
+    }
+  }
+  return words
 }
 
 function textOf(node: PluginDeclarativeChild): string {
@@ -52,10 +119,17 @@ function textOf(node: PluginDeclarativeChild): string {
     return node
   }
   const props: Record<string, unknown> = node.props
-  const own = ['title', 'description']
-    .map((name) => props[name])
-    .filter((value): value is string => typeof value === 'string')
-  return [...own, ...node.children.map(textOf)].join(' ')
+  const own = OWN_TEXT_PROPS.map((name) => props[name]).filter(
+    (value): value is string => typeof value === 'string'
+  )
+  if (node.type === 'RelativeTime') {
+    return relativeText(props.at, props.format)
+  }
+  // A tab's words are its label; its children are the panel it shows.
+  if (node.type === 'Tab') {
+    return typeof props.label === 'string' ? props.label : ''
+  }
+  return [...own, ...dataText(props), ...node.children.map(textOf)].join(' ')
 }
 
 const normalize = (text: string): string => text.replace(/\s+/g, ' ').trim()

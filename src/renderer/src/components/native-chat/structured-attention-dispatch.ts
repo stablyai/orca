@@ -24,6 +24,8 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { isCoordinatorOnlyChatNews } from '../../../../shared/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -80,7 +82,10 @@ function dispatchStructuredAttention(
       // A prompt earns unread like a settled turn, as the hook lane's blocked row does.
       settlesTurn: true,
       // Host journal edges prove fresh activity even without a rendered transcript; still require current tab ownership.
-      hasFreshActivityEvidence: true
+      hasFreshActivityEvidence: true,
+      coordinatorOnlyNews: isCoordinatorOnlyChatNews(edge, news.agentState, () =>
+        canonicalOrchestrationForRow(state, paneKey)
+      )
     },
     createStructuredAttentionSurface(state)
   )

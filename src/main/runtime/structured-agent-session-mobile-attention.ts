@@ -9,6 +9,8 @@ import {
   type AgentSessionAttentionEdge
 } from '../../shared/agent-session/agent-session-attention'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentStatusOrchestrationContext } from '../../shared/agent-status-types'
+import { isCoordinatorOnlyChatNews } from '../../shared/dispatched-worker-attention'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
@@ -18,6 +20,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { isNotificationSourceEnabled } from '../../shared/notification-source-gate'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { buildNotificationOptions } from '../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
@@ -32,6 +35,8 @@ export type StructuredAttentionMobileDeliveryDeps = {
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
   /** In-memory only, like the labels: "Notify About Hidden Workspaces" is off and the Filters hide it. */
   isWorkspaceMuted: (scope: AgentSessionExecutionLocation) => boolean
+  /** The dispatch context the session's chat row carries, by that row's pane key. */
+  readOrchestration: (paneKey: string) => AgentStatusOrchestrationContext | undefined
   dispatch: (event: MobileNotificationDispatchEvent) => void
   /** Withdraws a notification this host delivered; a no-op for one it never sent. */
   reconcile: (state: StructuredAttentionState) => void
@@ -85,7 +90,15 @@ export function createStructuredAttentionMobileDelivery(
         return
       }
       const { scope, sessionId } = edge.type === 'prompt' ? edge.prompt : edge.completion
-      if (deps.isWorkspaceMuted(scope)) {
+      // The host has no window tab id; the phone matches this session-derived key to the chat.
+      const paneKey = structuredAgentSessionPaneKey(
+        structuredAgentSessionTabId(sessionId),
+        sessionId
+      )
+      if (
+        deps.isWorkspaceMuted(scope) ||
+        isCoordinatorOnlyChatNews(edge, news.agentState, () => deps.readOrchestration(paneKey))
+      ) {
         return
       }
       const settings = deps.readNotificationSettings()!
@@ -108,7 +121,11 @@ export function createStructuredAttentionMobileDelivery(
         getRuntimeDesktopSurface().translateNotification
       )
       // Apply the desktop fan-out preferences to phone delivery too.
-      const desktopAllowed = settings.enabled && settings.agentTaskComplete
+      const desktopAllowed = isNotificationSourceEnabled(
+        settings,
+        'agent-task-complete',
+        news.agentState
+      )
       deps.dispatch({
         type: 'notification',
         emittedAt: deps.now(),
@@ -117,8 +134,7 @@ export function createStructuredAttentionMobileDelivery(
         title,
         body,
         worktreeId: scope.workspaceId,
-        // The host has no window tab id; the phone matches this session-derived key to the chat.
-        paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
+        paneKey,
         notificationId: attentionKey,
         attentionKey,
         ...(structuredAttentionOrigin(edge)

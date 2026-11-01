@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../ai-vault/cached-session-list', () => ({
   configureAiVaultSessionSources: vi.fn(),
+  aiVaultSessionListCacheGeneration: () => 0,
   resetAiVaultSessionListCacheForTests: vi.fn(),
   invalidateAiVaultSessionListCache: vi.fn(),
   getAiVaultWslHomeDirs: vi.fn().mockResolvedValue([]),
@@ -29,7 +30,7 @@ vi.mock('./ssh/ssh', () => ({
   getActiveSshAiVaultHostInfos: () =>
     ['one', 'two', 'three', 'four'].map((targetId) => ({ targetId }))
 }))
-const { _internals } = await import('./ai-vault')
+const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
 
 function result(marker: string): AiVaultListResult {
   return {
@@ -120,6 +121,23 @@ afterEach(() => {
 })
 
 describe('host session result cache lifetime', () => {
+  it('retains the selected session through all-host merge and repeated cached reads', async () => {
+    registerAiVaultHandlers({ getActiveRuntimeAiVaultHostInfos: () => [] })
+    const full = result('selected')
+    const selected = full.sessions[3]
+    mocks.local.mockResolvedValue(full)
+    const ordinary = { executionHostScope: 'all' as const, limit: 1 }
+    expect((await _internals.listAiVaultSessions(ordinary)).sessions).toEqual([full.sessions[0]])
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const value = await _internals.listAiVaultSessions({
+        ...ordinary,
+        selectedSessionId: selected.id
+      })
+      expect(value.sessions).toEqual([full.sessions[0], selected])
+    }
+    expect((await _internals.listAiVaultSessions(ordinary)).sessions).toEqual([full.sessions[0]])
+  })
+
   it('uses compact proofs only for an exact query depth and fingerprint until the same idle TTL', async () => {
     const fingerprint = 'a'.repeat(64)
     const compact: AiVaultListResult = {
