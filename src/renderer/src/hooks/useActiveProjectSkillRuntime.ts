@@ -30,6 +30,7 @@ type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   discoveryTarget?: SkillDiscoveryTarget
   discoveryRuntimeTarget: RuntimeClientTarget | null
+  managerRuntimeTarget: RuntimeClientTarget | null
   agentRuntime?: ProjectAgentSkillRuntime
   // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
   terminalShellOverride?: string
@@ -136,6 +137,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     if (!projectRuntime) {
       return {
         discoveryRuntimeTarget,
+        managerRuntimeTarget: runtimeTarget,
         installDisabledReason: null,
         canUseSkillFreshness: shouldUseSkillFreshness(discoveryRuntimeTarget),
         bundledSkillTarget
@@ -146,6 +148,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     return {
       projectRuntime,
       discoveryRuntimeTarget,
+      managerRuntimeTarget: runtimeTarget,
       discoveryTarget: getProjectSkillDiscoveryTarget(projectRuntime),
       agentRuntime,
       // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
