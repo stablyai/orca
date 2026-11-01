@@ -68,6 +68,14 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
     requireLocalRuntimeFileRoute(target)
     return { environmentId: null, target }
   }
+  const isPersistedOpenTab = (worktreeId: string, filePath: string): boolean => {
+    const openFiles =
+      runtime.getWorkspaceSessionForWorktree(worktreeId)?.openFilesByWorktree?.[worktreeId] ?? []
+    return openFiles.some((candidate) => candidate.filePath === filePath)
+  }
+  const isAuthorizedOpenRead = (worktreeId: string, file: MarkdownFileAddress): boolean =>
+    isPersistedOpenTab(worktreeId, file.filePath) || file.readOnly === true
+
   const fileIo = (
     routeFor: (worktreeId: string, file: MarkdownFileAddress) => Promise<MarkdownFileRoute>
   ): MarkdownFileIo => ({
@@ -82,16 +90,11 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           route.pairingRevision
         )
       }
-      const openFiles =
-        runtime.getWorkspaceSessionForWorktree(worktreeId)?.openFilesByWorktree?.[worktreeId] ?? []
-      const isPersistedOpenTab = openFiles.some(
-        (candidate) => candidate.filePath === file.filePath
-      )
       const { bytes, size } = await readLocalRuntimeFilePrefix(
         file.filePath,
         runtime.requireStore(),
         maxBytes,
-        isPersistedOpenTab ? { extraRoots: [file.filePath] } : {}
+        isAuthorizedOpenRead(worktreeId, file) ? { extraRoots: [file.filePath] } : {}
       )
       if (isBinaryBuffer(bytes)) {
         throw new Error('binary_file')
@@ -111,11 +114,12 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           precondition
         )
       }
-      return requireRuntimeFileProvider(route.target, runtime).writeFileWithDiskPrecondition(
-        file.filePath,
-        content,
-        precondition
-      )
+      const extraRoots = isPersistedOpenTab(worktreeId, file.filePath) ? [file.filePath] : undefined
+      return requireRuntimeFileProvider(
+        route.target,
+        runtime,
+        extraRoots
+      ).writeFileWithDiskPrecondition(file.filePath, content, precondition)
     }
   })
   return {
@@ -148,7 +152,10 @@ function pairingRevisionOf(
   }
 }
 
-type MarkdownFileAddress = Pick<PersistedOpenFile, 'relativePath' | 'externalSshTargetId'>
+type MarkdownFileAddress = Pick<
+  PersistedOpenFile,
+  'filePath' | 'relativePath' | 'externalSshTargetId' | 'readOnly'
+>
 
 /** The server's answer passes through; losing it is `remote_runtime_unavailable`, never a disk verdict. */
 async function callEnvironment(
