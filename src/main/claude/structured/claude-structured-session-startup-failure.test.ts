@@ -3,7 +3,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import { claudeStartupAnswerObservation } from '../claude-startup-answer-observation'
 import { runClaudeControl } from '../claude-agent-sdk-control-requests'
-import { retryableStructuredAgentSessionStart } from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
+import {
+  retryableStructuredAgentSessionAcquisition,
+  retryableStructuredAgentSessionStart
+} from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   PROVIDER_SESSION_ID,
@@ -16,7 +19,6 @@ import {
 } from './claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
-import { retryableStructuredAgentSessionAcquisition } from '../../native-chat/agent-session-wire/structured-agent-session-start-retry'
 import { NDJSON_MAX_LINE_BYTES } from '../../../shared/main-process-ndjson-framer'
 
 afterEach(() => vi.useRealTimers())
