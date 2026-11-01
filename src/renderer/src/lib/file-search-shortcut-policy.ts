@@ -86,5 +86,13 @@ export function textFieldClaimsActionKey(
   ) {
     return true
   }
+  // The chat auto-focuses its prompt on reveal; workspace cycling must still let users leave it.
+  if (
+    (actionId === 'worktree.navigateUp' || actionId === 'worktree.navigateDown') &&
+    event.target instanceof HTMLElement &&
+    event.target.closest('[data-native-chat-prompt]') !== null
+  ) {
+    return false
+  }
   return !keybindingRunsInTextField(actionId, event, platform)
 }
