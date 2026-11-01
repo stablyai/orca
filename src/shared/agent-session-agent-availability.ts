@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { openEnum } from './zod-salvage'
 
 export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailability'

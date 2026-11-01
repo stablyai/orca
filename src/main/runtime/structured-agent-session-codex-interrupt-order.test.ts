@@ -11,7 +11,7 @@ import type {
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { readCodexTurnId } from '../codex/codex-structured-thread-facts'
 import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentJournalTurnItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'

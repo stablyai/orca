@@ -4,7 +4,7 @@ import { activeProviderContext } from '../../../shared/agent-session-provider-co
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'

@@ -10,7 +10,7 @@ import {
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import { isRootAgentJournalItem } from './agent-session/journal/agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from './agent-session-wire'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn } from './agent-session/lifecycle/agent-session-turn-record'
 import { isAgentSessionContextClear } from './agent-session-context-clear'
 import type { NativeChatToolCallBlock } from './native-chat/native-chat-types'
 import {

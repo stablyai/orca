@@ -563,7 +563,7 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "What the panel runs: an HTML page for `ui: \"html\"`, a `.js`/`.mjs` module for `ui: \"components\"`. It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "What the panel runs: an HTML page for `ui: \"html\"`, a `.js`/`.mjs` module for `ui: \"components\"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.160",
           "examples": [
             "dist/panel.html"
@@ -1028,7 +1028,7 @@
           "minLength": 1,
           "maxLength": 1024,
           "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
-          "description": "HTML file rendered inside an editor frame, like a panel. It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "description": "HTML file rendered inside an editor frame, like a panel, or a `.ts`/`.tsx` module that Orca transpiles and loads in a generated page (needs `engines.orca` `>=1.4.246`). It receives the open document and posts edits back; it never gets a file path or file system. It is trusted code: install editors you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
           "x-orca-since": "1.4.245",
           "examples": [
             "editor/index.html"

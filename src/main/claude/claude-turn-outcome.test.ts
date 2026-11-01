@@ -8,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'

@@ -7,7 +7,7 @@ import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/nativ
 import { isAgentSessionContextClear } from '../../../shared/agent-session-context-clear'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandTurn } from '../../../shared/agent-session/structured-agent-session-command-entry'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 /** Index only the current request window; the canonical cut reader still decides recovery. */

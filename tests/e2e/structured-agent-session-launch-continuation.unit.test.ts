@@ -33,7 +33,7 @@ import { structuredAgentSessionMessageSelection } from '../../src/shared/agent-s
 import { structuredAgentSessionModelId } from '../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
 import { CreateIntentParams } from '../../src/shared/rpc-contract/structured-agent-session-params'
-import { structuredAgentSessionCreateFingerprint } from '../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
 import {
   retryStructuredAgentSessionLaunchIntent,
   restoreStructuredAgentSessionLaunchIntent

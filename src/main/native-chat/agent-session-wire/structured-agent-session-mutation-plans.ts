@@ -9,7 +9,7 @@ import {
   USER_MESSAGE_SOURCE,
   type AgentSessionMessageSource
 } from '../../../shared/agent-session/agent-session-message-source'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,

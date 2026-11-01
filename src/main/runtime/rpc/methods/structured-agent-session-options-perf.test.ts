@@ -2,7 +2,7 @@ import { hostTestCatalogReadOperation } from '../../../native-chat/agent-session
 import { performance } from 'node:perf_hooks'
 import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session-wire'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session/options/agent-session-optional-model-capability'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'

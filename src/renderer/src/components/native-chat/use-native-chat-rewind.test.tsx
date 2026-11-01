@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
-import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session-rewind'
+import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../shared/structured-agent-session-reducer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'

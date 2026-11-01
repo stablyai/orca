@@ -1,7 +1,7 @@
 import { readWholeAgentSessionFailureFact } from './agent-session/failures/agent-session-failure'
 import type { AgentJournalStatusItem } from './agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import { readAgentSessionOrcaStop } from './agent-session-orca-stop'
+import { readAgentSessionOrcaStop } from './agent-session/lifecycle/agent-session-orca-stop'
 import type { NativeChatTextBlock } from './native-chat/native-chat-types'
 import {
   AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION,

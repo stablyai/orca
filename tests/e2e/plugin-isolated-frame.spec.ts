@@ -236,7 +236,7 @@ test('a multi-file plugin panel runs as an isolated guest with assets by URL', a
   }
 })
 
-test.describe('with isolated frames off (the default)', () => {
+test.describe('with isolated frames turned off', () => {
   test.use({ orcaAppExtraEnv: { ORCA_PLUGIN_ISOLATED_FRAMES: '0' } })
 
   test('a plugin panel keeps the srcdoc iframe and is offered no gesture methods', async ({

@@ -21,16 +21,16 @@ import {
   type AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../../shared/agent-session-restart-continuation'
+} from '../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
-import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 /** Envelope acceptance proves only host ownership; preserve provider pending/unknown/rejected outcomes. */

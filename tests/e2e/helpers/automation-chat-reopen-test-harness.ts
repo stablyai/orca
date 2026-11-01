@@ -10,7 +10,7 @@ import { editPersistedTestAgentSessionStore } from '../../../src/main/runtime/ag
 import {
   codexProviderHandle,
   encodePersistedAgentSessionProviderHandle
-} from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTestStore,
   makeUnifiedTab,

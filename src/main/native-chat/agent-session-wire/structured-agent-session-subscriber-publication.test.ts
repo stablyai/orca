@@ -12,7 +12,7 @@ import { createStructuredAgentSessionLogger } from './structured-agent-session-l
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 import {
   fixture,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
@@ -7,12 +7,12 @@ import {
 } from '../../shared/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
 import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
-import { isResumableTuiAgent } from '../../shared/agent-session-resume'
+import { isResumableTuiAgent } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,

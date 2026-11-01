@@ -2,7 +2,7 @@ import {
   agentChildWorkViewOffersStop,
   type AgentSessionBackgroundTaskStops
 } from '../../../shared/agent-child-work-stop-targets'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'

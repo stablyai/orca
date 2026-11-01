@@ -15,7 +15,7 @@ import type {
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,

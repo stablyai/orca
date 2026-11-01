@@ -1,4 +1,4 @@
-import type { AgentSessionHandoffStage } from './agent-session-record'
+import type { AgentSessionHandoffStage } from './agent-session/lifecycle/agent-session-record'
 
 /** Released clients still read owner under the old handoffStatus name; parse as unknown because older hosts sent additional fields. */
 export type AgentSessionHandoffStatus = {

@@ -15,7 +15,6 @@ import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
@@ -24,6 +23,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
@@ -63,7 +63,7 @@ import {
 } from './versioned-agent-session-wire'
 import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { claudeProfileMarkerPath } from '../claude-accounts/claude-profile-paths'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 
 const roots: string[] = []

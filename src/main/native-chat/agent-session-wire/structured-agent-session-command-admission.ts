@@ -2,12 +2,12 @@ import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-sessi
 import {
   agentSessionLedgerRefusal,
   refuseUnlessWriterAdmitted
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   agentSessionRefusalFromReference,
   isAgentSessionRefusalError
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
 import {
   commandReceiptScope,

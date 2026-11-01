@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 
 export type PaneAgentSessionIdState = {

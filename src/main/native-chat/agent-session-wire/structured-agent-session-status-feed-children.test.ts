@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -21,7 +21,7 @@ import {
   statusFeedChildView as childView
 } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const USER_IDENTITY = {

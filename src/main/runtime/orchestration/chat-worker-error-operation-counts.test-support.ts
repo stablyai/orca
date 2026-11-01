@@ -12,7 +12,7 @@ import {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 // Per-instance array reads count the actual find/iteration work without replacing the algorithms.
 function countedEntries<T>(entries: T[], visit: () => void): T[] {

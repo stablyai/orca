@@ -17,7 +17,7 @@ import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/ag
 import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 const IDENTITY: AgentSessionJournalIdentity = {

@@ -12,7 +12,7 @@ import {
 import {
   structuredAgentSessionCreateFingerprint,
   structuredAgentSessionPayloadFingerprint
-} from './structured-agent-session-mutation'
+} from './agent-session/lifecycle/structured-agent-session-mutation'
 
 const SESSION_ID = 'codex_11111111_2222_3333_4444_555555555555'
 const RESUME = { providerSessionId: 'thread-abc' }

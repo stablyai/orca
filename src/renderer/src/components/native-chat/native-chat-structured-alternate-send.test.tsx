@@ -67,10 +67,8 @@ vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
 }))
 
-import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
-} from '../../../../shared/protocol-version'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
+import { AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { i18n } from '@/i18n/i18n'
 import de from '@/i18n/locales/de.json'

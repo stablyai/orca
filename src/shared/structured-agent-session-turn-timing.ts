@@ -6,7 +6,10 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
+import {
+  readAgentJournalTurn,
+  readAgentJournalTurnOutcome
+} from './agent-session/lifecycle/agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentTurnAnchors } from './native-chat/transcript/native-chat-turn-membership'
 import type {

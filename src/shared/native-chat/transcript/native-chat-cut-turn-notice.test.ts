@@ -20,7 +20,7 @@ import {
   AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
   AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
-} from '../../agent-session-restart-continuation'
+} from '../../agent-session/lifecycle/agent-session-restart-continuation'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../agent-session/failures/structured-agent-session-start-failure-row-key'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }

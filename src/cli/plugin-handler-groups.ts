@@ -4,7 +4,13 @@ import type { HandlerGroup } from './handler-group-manifest'
 export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'plugin-authoring',
-    keys: ['plugin create', 'plugin validate', 'plugin inspect'],
+    keys: [
+      'plugin create',
+      'plugin types',
+      'plugin validate',
+      'plugin inspect',
+      'plugin release-entry'
+    ],
     load: async () => (await import('./handlers/plugin-authoring.js')).PLUGIN_AUTHORING_HANDLERS
   },
   {
@@ -16,8 +22,10 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
       'plugin disable',
       'plugin system on',
       'plugin system off',
+      'plugin restart',
       'plugin dev load',
       'plugin dev reload',
+      'plugin dev inspect',
       'plugin dev unload'
     ],
     load: async () => (await import('./handlers/plugin-runtime.js')).PLUGIN_RUNTIME_HANDLERS

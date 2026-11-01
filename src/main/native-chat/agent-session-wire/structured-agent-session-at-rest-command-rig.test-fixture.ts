@@ -40,7 +40,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

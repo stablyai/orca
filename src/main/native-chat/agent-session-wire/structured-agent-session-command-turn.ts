@@ -22,13 +22,13 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionConversationCommand } from '../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {

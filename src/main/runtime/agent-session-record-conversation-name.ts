@@ -1,5 +1,5 @@
 import { normalizeAgentSessionConversationName } from '../../shared/agent-session/agent-session-conversation-name'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 
 /** Names are durable metadata, not ownership; normalize without contending on the writer fence. */
 export function setAgentSessionRecordConversationName(

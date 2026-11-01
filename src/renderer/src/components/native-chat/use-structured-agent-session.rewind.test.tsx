@@ -160,7 +160,7 @@ describe('useStructuredAgentSession rewind RPC', () => {
     await waitFor(() => expect(view.result.current.rewind.disabledReason).toBeNull())
     await act(() => view.result.current.rewind.request('user-1', async () => true))
     const { structuredAgentSessionPayloadFingerprint } =
-      await import('../../../../shared/structured-agent-session-mutation')
+      await import('../../../../shared/agent-session/lifecycle/structured-agent-session-mutation')
     expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.rewind', {
       envelope: {
         sessionId: 'session-1',

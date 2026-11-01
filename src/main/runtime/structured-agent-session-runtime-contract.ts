@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAttentionMobileDelivery } from './structured-agent-session-mobile-attention'
 import type {
   StructuredAgentCommand,

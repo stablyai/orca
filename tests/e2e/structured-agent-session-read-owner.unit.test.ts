@@ -33,7 +33,7 @@ import {
   resetStructuredAgentSessionReadOwnersForTests
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'cursor-body-regression'
 const target = { kind: 'local' } as const

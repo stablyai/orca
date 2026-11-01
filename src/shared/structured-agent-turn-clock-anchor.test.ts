@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
 } from './agent-session/journal/agent-session-journal-types'
-import { agentJournalTurnBody } from './agent-session-turn-record'
+import { agentJournalTurnBody } from './agent-session/lifecycle/agent-session-turn-record'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch

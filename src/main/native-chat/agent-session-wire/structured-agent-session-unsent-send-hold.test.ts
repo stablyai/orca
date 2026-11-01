@@ -2,7 +2,7 @@ import { openTestChats } from './structured-agent-session-open-test-chats.test-s
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { structuredAgentSessionSendBody } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'

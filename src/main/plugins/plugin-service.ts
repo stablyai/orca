@@ -198,6 +198,9 @@ export class PluginService {
     return this.installed.logs.get(pluginKey)
   }
 
+  /** A log writer for one plugin that goes inert once the plugin is removed. */
+  readonly captureLog = (pluginKey: string) => this.installed.logs.capture(pluginKey)
+
   findValidPlugin(pluginKey: string): ValidDiscoveredPlugin | null {
     return this.installed.findValid(pluginKey)
   }

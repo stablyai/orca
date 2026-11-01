@@ -1,8 +1,8 @@
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
@@ -21,8 +21,10 @@ import {
   withLiveCatalogListing,
   type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
-import type { StructuredAgentModelCatalogContext } from './structured-agent-runtime-registrations'
+import {
+  STRUCTURED_AGENT_RUNTIME_REGISTRATIONS,
+  type StructuredAgentModelCatalogContext
+} from './structured-agent-runtime-registrations'
 import { registeredModelCatalogDiscovery } from './structured-agent-model-catalog-wiring'
 
 // Exercise registration, host catalog and shared picker together; never hand-feed the names-its-default answer.

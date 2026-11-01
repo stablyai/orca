@@ -6,7 +6,7 @@ import type {
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'
-import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { chatTabId } from '../agent-session/agent-session-tab-layout'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {

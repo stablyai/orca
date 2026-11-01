@@ -256,7 +256,6 @@ export type {
   RuntimeTerminalCreate
 } from '../../shared/runtime-types'
 export type { RuntimeTerminalAgentStatusEvent } from './orca-runtime'
-export type { SleepingAgentSessionRecord } from '../../shared/agent-session-resume'
 export type { Tab } from '../../shared/tab-types'
 export type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 export type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'

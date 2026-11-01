@@ -1,10 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -25,7 +27,7 @@ import {
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const BODY: AgentJournalItemBody = {
   kind: 'message',

@@ -5,15 +5,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   completedStructuredAgentTurnSeconds,
@@ -30,7 +30,7 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   type StructuredAgentSessionAdapter
@@ -49,7 +49,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'

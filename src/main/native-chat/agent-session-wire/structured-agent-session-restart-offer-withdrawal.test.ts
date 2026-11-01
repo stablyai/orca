@@ -9,7 +9,7 @@ import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
 } from '../../runtime/agent-session-recovery-capsule'
-import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
+import { parseAgentSessionResumeMarker } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {

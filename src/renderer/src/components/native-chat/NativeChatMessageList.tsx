@@ -347,7 +347,7 @@ export function NativeChatMessageList({
 
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <div className="relative flex min-h-0 flex-1 flex-col bg-chat-canvas">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-chat-pane">
         <div className="relative min-h-0 flex-1">
           <div
             ref={scrollRef}

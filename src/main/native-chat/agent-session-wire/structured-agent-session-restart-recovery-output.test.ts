@@ -6,7 +6,7 @@ import { AcpBackgroundTaskTimeline } from '../../acp/acp-background-task-timelin
 import { createProviderTimelineAssembler } from '../agent-session-timeline/provider-timeline-assembler'
 import { providerTimelineSink } from '../agent-session-timeline/provider-timeline-plan'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings

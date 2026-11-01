@@ -2,12 +2,12 @@ import { isAgentSessionRefusalError } from '../../../shared/agent-session/failur
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
-} from '../../../shared/agent-session-mutation-envelope'
+} from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-mutation-context'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from './structured-agent-session-send-settlement'

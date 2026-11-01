@@ -3,7 +3,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
