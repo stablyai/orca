@@ -18,6 +18,7 @@ vi.mock('../git/worktree', () => {
 
 function createRuntime(attach: 'headless' | 'window') {
   const setWorktreeMeta = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime reads only the repo and worktree-meta members this fixture provides.
   const runtime = new OrcaRuntimeService({ ...makeStore(), setWorktreeMeta } as never)
   let spawned = 0
   runtime.setPtyController({
