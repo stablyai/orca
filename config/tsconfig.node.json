@@ -3,6 +3,7 @@
   "include": [
     "../electron.vite.config.*",
     "./vitest.config.ts",
+    "./scripts/renderer-test-assets.ts",
     "./build-plugins/**/*",
     "./scripts/vitest-host-ports-setup.ts",
     "./scripts/vitest-caller-identity-env-setup.ts",
@@ -16,7 +17,6 @@
     "./scripts/vitest-node-runtime-pool.ts",
     "./scripts/vitest-module-cache-resolution-key.ts",
     "../src/main/**/*",
-    "../mobile/src/worktree/project-sections-owner-recovery.test.ts",
     "../src/cli/runtime/transport.ts",
     "../src/cli/runtime/envelope-schema.ts",
     "../src/cli/runtime/types.ts",
@@ -39,5 +39,6 @@
   "compilerOptions": {
     "composite": true,
     "types": ["electron-vite/node"]
-  }
+  },
+  "exclude": ["../src/main/persistence/applying-settings/project-grouping-peer-roundtrip.test.ts"]
 }

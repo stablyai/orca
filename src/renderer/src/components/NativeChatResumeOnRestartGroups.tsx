@@ -8,6 +8,7 @@ import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxR
 import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
 import {
@@ -220,6 +221,7 @@ const MachineContents = memo(function MachineContents({
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
+  useUiLanguageRevision()
   const lookup = resumeWorkspaceLookup(workspaces)
   const repoIdFor = useMemo(
     () => resumeWorkspaceLookup(workspaces)(tree.repoIdOf, null),

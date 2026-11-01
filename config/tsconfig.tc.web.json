@@ -5,7 +5,19 @@
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",
-    "../src/shared/**/*.spec.tsx"
+    "../src/shared/**/*.spec.tsx",
+    "../src/renderer/src/app-shell/project-grouping-authored-peer-writes.test.tsx",
+    "../src/renderer/src/components/sidebar/SidebarRepositoryFilterSection.test.tsx",
+    "../src/renderer/src/components/sidebar/project-group-actions-test-fixtures.ts",
+    "../src/renderer/src/components/sidebar/qualified-group-actions-lifetime.test.tsx",
+    "../src/renderer/src/components/sidebar/qualified-group-actions-scaling.test.tsx",
+    "../src/renderer/src/components/sidebar/qualified-group-actions.test.tsx",
+    "../src/renderer/src/components/sidebar/qualified-notice-shipping-boundaries.test.tsx",
+    "../src/renderer/src/components/task-page/task-page-concrete-source-controls.test.tsx",
+    "../src/renderer/src/runtime/project-grouping-owner-publication.test-fixture.tsx",
+    "../src/renderer/src/runtime/project-grouping-owner-publication.test.tsx",
+    "../src/renderer/src/store/repos/repo-removal.test.ts",
+    "../src/renderer/src/web/project-grouping-authenticated-peers.test.ts"
   ],
   "include": [
     "../src/renderer/src/env.d.ts",

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism, totalmem } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { readPinnedBunVersion, resolvePinnedBunExecutable } from './pinned-bun-executable.mjs'
 import { resolveTsrsTypecheckCommand, supportsTsrs } from './tsrs-typecheck-compiler.mjs'
@@ -324,14 +324,23 @@ export async function runTypecheckProjects({
 
 export const MOBILE_JOINED_PROJECT = 'config/tsconfig.test.mobile-project-controls.json'
 const MOBILE_HOST_DECLARATIONS_PROJECT = 'config/tsconfig.test.mobile-host-declarations.json'
-const MOBILE_HOST_DECLARATION_ROOTS = [
-  'src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture.d.ts',
-  'src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture.d.ts',
-  'src/main/persistence/persistence-test-harness.d.ts',
-  'src/main/runtime/mobile-project-sections-snapshot.d.ts',
-  'src/renderer/src/runtime/project-grouping-owner-publication.test-fixture.d.ts',
-  'src/preload/api-types.d.ts'
-]
+function mobileHostDeclarationRoots(root) {
+  const configPath = join(root, MOBILE_HOST_DECLARATIONS_PROJECT)
+  const { files, compilerOptions } = JSON.parse(readFileSync(configPath, 'utf8'))
+  const sourceRoot = resolve(dirname(configPath), compilerOptions.rootDir)
+  const sources = files.filter((file) => !file.endsWith('.d.ts'))
+  const outputs = sources.map((file) => {
+    const source = relative(sourceRoot, resolve(dirname(configPath), file))
+    if (source.startsWith('..') || isAbsolute(source) || !/\.tsx?$/.test(source)) {
+      throw new Error(`Invalid Mobile host declaration source: ${file}`)
+    }
+    return source.replace(/\.tsx?$/, '.d.ts').replaceAll('\\', '/')
+  })
+  if (outputs.length !== 6 || new Set(outputs).size !== outputs.length) {
+    throw new Error('Mobile host declarations require six distinct implementation roots')
+  }
+  return outputs
+}
 
 // This job-owned output must outlive every consumer, including interrupted compiler children.
 export async function runMobileHostTypecheck(options) {
@@ -417,7 +426,8 @@ export async function runMobileHostTypecheck(options) {
         cwd: root
       })
       receipt('emit-end', { status: 'success' })
-      for (const declaration of MOBILE_HOST_DECLARATION_ROOTS) {
+      const declarationRoots = mobileHostDeclarationRoots(root)
+      for (const declaration of declarationRoots) {
         if (!statSync(join(output, declaration)).isFile()) {
           throw new Error(`Missing emitted Mobile host declaration: ${declaration}`)
         }
@@ -426,7 +436,7 @@ export async function runMobileHostTypecheck(options) {
       mkdirSync(dirname(join(output, ambient)), { recursive: true })
       copyFileSync(join(root, ambient), join(output, ambient))
       receipt('copy-complete', {
-        outputs: [...MOBILE_HOST_DECLARATION_ROOTS, ambient].map((file) => ({
+        outputs: [...declarationRoots, ambient].map((file) => ({
           file,
           sha256: createHash('sha256')
             .update(readFileSync(join(output, file)))

@@ -8,7 +8,7 @@ import { showLocalBaseRefUpdateSuggestionToast } from '../sidebar/local-base-ref
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../shared/constants'
+import type { AppState } from '@/store/types'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
@@ -74,7 +74,8 @@ function showNativeActionToast(): void {
 }
 
 function showBehindBaseRefToast(): void {
-  let settings = { ...getDefaultSettings('/tmp'), refreshLocalBaseRefOnWorktreeCreate: false }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This disposable toast reads only refreshLocalBaseRefOnWorktreeCreate; patches stay local.
+  let settings = { refreshLocalBaseRefOnWorktreeCreate: false } as NonNullable<AppState['settings']>
   showLocalBaseRefUpdateSuggestionToast(
     {
       baseRef: 'origin/canary',

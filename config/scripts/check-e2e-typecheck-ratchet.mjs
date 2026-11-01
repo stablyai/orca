@@ -33,6 +33,23 @@ export function countTestTypeErrors(tscOutput) {
   return counts
 }
 
+export function grownTestDiagnosticLines(tscOutput, files) {
+  const lines = []
+  let selected = false
+  for (const line of tscOutput.split(/\r?\n/)) {
+    const match = TEST_ERROR_ROW.exec(line)
+    if (match) {
+      selected = files.has(match[1])
+    } else if (!/^\s+\S/.test(line)) {
+      selected = false
+    }
+    if (selected) {
+      lines.push(line)
+    }
+  }
+  return lines
+}
+
 export function main(
   root = process.cwd(),
   arg = undefined,
@@ -53,6 +70,12 @@ export function main(
     console.error(`${file}: ${now} type error(s), baseline allows ${allowed}.`)
   }
   if (grown.length > 0) {
+    for (const line of grownTestDiagnosticLines(
+      tscOutput,
+      new Set(grown.map(({ file }) => file))
+    )) {
+      console.error(line)
+    }
     console.error(`See the errors with: pnpm typecheck:e2e`)
   }
   for (const { file, now, allowed } of shrunk) {

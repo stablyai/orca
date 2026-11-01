@@ -985,6 +985,14 @@
         "checkout": "checkout",
         "host": "host",
         "folder": "folder"
+      },
+      "removeAddress": "Remove these checkouts from Orca.",
+      "upgrade": {
+        "body_one": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
+        "body_other": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
+        "gotIt": "Got it",
+        "link": "To keep them separate, change <settings>Group checkouts in Settings</settings>.",
+        "title": "{{project}} is now one project"
       }
     },
     "network": {
@@ -23278,5 +23286,15 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "projectFilter": {
+    "partial": "Partial"
+  },
+  "projects": {
+    "partiallySelected": "Partially selected",
+    "savedSelection": "Saved project selection",
+    "savedUnavailable": "Saved project selection · Unavailable projects",
+    "unavailable": "Unavailable projects",
+    "unavailableSource": "Unavailable"
   }
 }

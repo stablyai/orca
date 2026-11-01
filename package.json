@@ -103,7 +103,7 @@
     "typecheck:tsc:node": "pnpm run build:packages && node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.node.json --composite false",
     "typecheck:tsc:cli": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.cli.json --composite false",
     "typecheck:tsc:web": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.web.json --composite false",
-    "typecheck:tsc": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
+    "typecheck:tsc": "pnpm run build:packages && tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false && tsc --noEmit -p config/tsconfig.test.pane-launch.json",
     "ensure:electron-runtime": "node config/scripts/ensure-native-runtime.mjs --runtime=electron",
     "start": "pnpm run build:packages && pnpm run ensure:electron-runtime && electron-vite preview",
     "dev": "node config/scripts/build-workspace-packages.mjs && node config/scripts/ensure-native-runtime.mjs --runtime=electron && node config/scripts/run-electron-vite-dev.mjs",

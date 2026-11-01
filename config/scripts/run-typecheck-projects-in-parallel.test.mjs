@@ -121,9 +121,11 @@ describe('Mobile declaration consumer lifetime', () => {
     )
     mkdirSync(join(root, 'src/renderer/src'), { recursive: true })
     writeFileSync(join(root, 'src/renderer/src/env.d.ts'), '// ambient lifetime sentinel\n')
-    const inputs = JSON.parse(
-      readFileSync(join(repoRoot, 'config/tsconfig.test.mobile-host-declarations.json'), 'utf8')
-    ).files
+    const declarationConfig = 'config/tsconfig.test.mobile-host-declarations.json'
+    mkdirSync(join(root, 'config'), { recursive: true })
+    const configSource = readFileSync(join(repoRoot, declarationConfig), 'utf8')
+    writeFileSync(join(root, declarationConfig), configSource)
+    const inputs = JSON.parse(configSource).files
     const calls = []
     vi.spyOn(processHost, 'runProcess').mockImplementation(async (spec) => {
       calls.push(spec)
