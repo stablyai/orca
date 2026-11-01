@@ -5,7 +5,7 @@ import { analyzeChoiceArgs, type ChoiceOccurrence } from './agent-choice-args-an
 import {
   composeAgentLaunchModel,
   type ResolvedSessionOptionLaunch
-} from './agent-session-option-launch'
+} from './agent-session/options/agent-session-option-launch'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
 
 export type AgentChoicePublicationContext = {

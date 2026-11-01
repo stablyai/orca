@@ -1,11 +1,20 @@
 import { selectWorktreesByRepo, selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import {
+  memo,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ComponentProps,
+  type PointerEvent
+} from 'react'
 import { useAppStore } from '@/store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   AgentLaunchSetupButton,
   retireAgentPickerDrafts,
@@ -15,6 +24,10 @@ import { applyAgentPickerEdit } from '../../../../shared/agent-launch-picker-edi
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch-picker-rows'
+import {
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './use-agent-launch-picker-inventory'
 import {
   searchAgentPickerSetups,
   agentPickerDraft,
@@ -171,7 +184,8 @@ export function AgentLaunchPickerMenu({
             key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
             draftScope={draftScope}
             draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-            preset={{ model: setup.model.id, effort: setup.choices.options?.effort }}
+            initialModel={setup.model.id}
+            initialEffort={setup.choices.options?.effort}
             entry={setup.entry}
             mode={mode}
             setupDisabled={setupDisabled}
@@ -180,12 +194,6 @@ export function AgentLaunchPickerMenu({
             label={setup.label}
             source={source}
             selected={value?.agent === setup.entry.agent ? value : undefined}
-            initial={applyAgentPickerEdit(
-              setup.entry,
-              (value?.agent === setup.entry.agent ? value : source) ??
-                agentPickerDraft(setup.entry),
-              { kind: 'choice', patch: setup.choices }
-            )}
             onSelectAgent={onSelectAgent}
             disabled={disabled}
             runLaunch={runLaunch}
@@ -224,15 +232,27 @@ export function AgentLaunchPickerMenu({
   )
 }
 
-function AgentPickerMenuRow({
+// Subscribe here so inventory updates do not re-render the tab bar.
+export function SubscribedAgentLaunchPickerMenu({
+  inventory,
+  ...props
+}: Omit<ComponentProps<typeof AgentLaunchPickerMenu>, 'entries'> & {
+  inventory: AgentPickerInventorySource
+}) {
+  const entries = useAgentPickerInventoryEntries(inventory)
+  return <AgentLaunchPickerMenu {...props} entries={entries} />
+}
+
+// Why: catalog and seed reads land one agent at a time after the menu opens; only that row re-renders.
+const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   entry,
   draftScope,
   draftId,
-  preset,
+  initialModel,
+  initialEffort,
   openSetup,
   onSetupOpenChange,
   label = entry.label,
-  initial,
   source,
   selected,
   mode,
@@ -245,7 +265,8 @@ function AgentPickerMenuRow({
   entry: AgentPickerEntry
   draftScope?: object
   draftId?: string
-  preset?: AgentPickerSetupIdentity
+  initialModel?: string
+  initialEffort?: string
   openSetup: string | null
   onSetupOpenChange: (
     setup: {
@@ -256,7 +277,6 @@ function AgentPickerMenuRow({
     } | null
   ) => void
   label?: string
-  initial?: AgentPickerDraft
   source?: AgentPickerDraft
   selected?: AgentPickerDraft
   mode?: 'launch' | 'select'
@@ -266,7 +286,18 @@ function AgentPickerMenuRow({
   shortcut?: string
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
 }) {
-  const setupId = JSON.stringify([entry.agent, draftId])
+  useUiLanguageRevision()
+  const setupId = useId()
+  const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
+  const initial = preset
+    ? applyAgentPickerEdit(entry, selected ?? source ?? agentPickerDraft(entry), {
+        kind: 'choice',
+        patch: {
+          model: preset.model,
+          ...(preset.effort ? { options: { effort: preset.effort } } : {})
+        }
+      })
+    : undefined
   const item = useRef<HTMLDivElement>(null)
   const configured = useRef<AgentPickerDraft | undefined>(undefined)
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
@@ -337,4 +368,4 @@ function AgentPickerMenuRow({
       )}
     />
   )
-}
+})

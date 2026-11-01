@@ -1,9 +1,9 @@
 import { parse as parseToml } from 'smol-toml'
 import type { AgentType } from './agent-status-types'
 import type { AgentChoiceCliForm } from './agent-launch-choices'
-import type { CatalogOptionApply } from './agent-session-option-catalog-types'
+import type { CatalogOptionApply } from './agent-session/options/agent-session-option-catalog-types'
 import { mergeAgentChoiceSettings, withoutInlineAgentChoiceSettings } from './agent-choice-settings'
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { removeAgentArgOption } from './agent-session/options/agent-session-option-agent-args'
 
 type ChoiceCliArgumentForm = Exclude<AgentChoiceCliForm, { kind: 'recipe' }>
 

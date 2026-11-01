@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createBrowserExtensionWorkerShimPlugin } from './config/build-plugins/browser-extension-worker-shim'
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
+import { createSucraseUnusedTransformersPlugin } from './config/build-plugins/sucrase-unused-transformers'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createProcessHostDevRebuildPlugin } from './config/build-plugins/process-host-dev-rebuild'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
@@ -200,6 +201,8 @@ const MAIN_MINIFY: 'oxc' | false = process.env.ORCA_UNMINIFIED_MAIN === '1' ? fa
 
 export const electronViteConfig: UserConfig = {
   main: {
+    // A Vite `pre` plugin: Rollup-level plugins only see ids Vite's resolver leaves unresolved.
+    plugins: [createSucraseUnusedTransformersPlugin()],
     build: {
       // Use Rolldown’s in-process oxc minifier; esbuild mode depends on an undeclared hoisted package.
       minify: MAIN_MINIFY,

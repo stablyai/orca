@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
@@ -26,8 +26,8 @@ import {
   nativeChatTranscriptOuterClass
 } from '@/components/native-chat/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
@@ -100,6 +100,7 @@ export default function PendingNativeChatCreation({
         if (
           !current ||
           current.status !== 'creating' ||
+          current.chatInputHandedOff ||
           pendingCreationHeldChatMessage(current) !== null
         ) {
           return false
@@ -195,6 +196,14 @@ export default function PendingNativeChatCreation({
           terminalTabId={tabId}
           paneKey={`${tabId}:composer`}
           draftScopeKey={pendingCreationChatDraftScopeKey(creationId)}
+          unavailableHint={
+            entry.chatInputHandedOff
+              ? translate(
+                  'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
+                  'Opening chat…'
+                )
+              : undefined
+          }
           targetPtyId={null}
           agent={agent}
           structuredTransport={transport}

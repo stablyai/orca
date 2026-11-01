@@ -412,6 +412,8 @@
       "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
     },
     "sourceControl": {
+      "gitOperationInAnotherWorkspace": "Operación de Git en otro lugar",
+      "remoteOperationInAnotherWorkspace": "Otro espacio de trabajo está ejecutando una operación de Git, como push, pull o force push. Espera a que termine antes de usar esta acción para que las operaciones no se solapen.",
       "actionModel": {
         "on": "Activado",
         "off": "Desactivado",
@@ -1345,7 +1347,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Los archivos fuera del espacio de trabajo aún no se pueden previsualizar en un servidor emparejado.",
           "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web."
         }
       },
@@ -6152,7 +6153,9 @@
           "9a5381eb09": "No se pudo abrir la carpeta del espacio de trabajo.",
           "0bed8727db": "Puede que se haya movido o eliminado. Actualiza los espacios de trabajo o quítalo de Orca.",
           "3921d3d9a5": "No se encontró la carpeta del espacio de trabajo.",
+          "pathNotFound": "No se encontró el archivo o la carpeta. Puede que se haya movido o eliminado.",
           "f387af445b": "La ruta del espacio de trabajo no es una ruta local válida.",
+          "pathInvalid": "La ruta no es una ruta local válida.",
           "localOnly": "Solo local",
           "remoteSsh": "Remote SSH",
           "remoteRuntimeUnsupported": "Abrir esta ruta en una aplicación local no está disponible.",
@@ -6167,8 +6170,8 @@
           "remoteEditorUnsupportedDetail": "Elige VS Code, Cursor o Zed, o usa la aplicación localmente.",
           "remotePathInvalid": "La ruta no es válida para el host SSH.",
           "remotePathInvalidDetail": "Actualice el espacio de trabajo antes de volver a intentarlo.",
-          "remoteLaunchFailed": "No se pudo abrir la ruta en el editor.",
-          "remoteLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina.",
+          "pathLaunchFailed": "No se pudo abrir la ruta en el editor.",
+          "pathLaunchFailedDetail": "Comprueba el comando del editor configurado en esta máquina.",
           "wsl": "WSL",
           "remoteEditorHint": "Sólo VS Code, Cursor y Zed pueden abrir carpetas en un host SSH.",
           "remoteRuntimeEditorHint": "Las aplicaciones de este equipo solo pueden abrir los archivos del servidor cuando Orca se conecta a él por SSH."
@@ -7225,14 +7228,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Apariencia de la barra lateral izquierda",
-            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
             "default": "Predeterminado",
-            "matchTerminal": "Coincidir con el terminal",
             "tinted": "Con tinte",
             "tintColor": "Tinte de la barra lateral",
             "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
             "tintOpacity": "Intensidad del tinte",
-            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
+            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral.",
+            "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro."
           },
           "2edf606c46": "Minimizar a la bandeja al cerrar",
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
@@ -8940,10 +8942,7 @@
           "1afcc1d973": "Relleno vertical",
           "25e2f8e8e1": "Relleno horizontal alrededor de la cuadrícula de la terminal, en píxeles.",
           "36b8402015": "Relleno horizontal",
-          "53ce336e15": "Reinicie Orca para aplicar el cambio de desenfoque de ventana.",
           "c65bb9ce63": "Reinicio requerido",
-          "97950bb087": "Aplica desenfoque de fondo a la ventana de la terminal. Requiere reiniciar.",
-          "2b82242f43": "Desenfoque de ventana",
           "809f37738d": "Controla la transparencia del fondo del terminal. 1 es completamente opaco, 0 es completamente transparente.",
           "ea7b1a158e": "Opacidad del fondo",
           "03acb60aa0": "Controla la transparencia del fondo del terminal.",
@@ -9370,11 +9369,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
               "project": "proyecto",
-              "terminal": "Terminal",
               "background": "fondo",
-              "tint": "tinte"
+              "tint": "tinte",
+              "tintDescription": "Mantén la barra lateral izquierda predeterminada o aplícale un tinte. Para seguir el terminal, elige Coincidir con el terminal como tema claro u oscuro."
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",
@@ -9429,7 +9427,8 @@
               "close": "cerca",
               "notification": "área de notificaciones",
               "background": "fondo"
-            }
+            },
+            "matchTerminal": "Coincidir con el terminal"
           }
         },
         "auto": {
@@ -10605,8 +10604,6 @@
             "f6dd9ff606": "fondo",
             "71eb45e293": "difuminar",
             "0838b3717b": "ventana",
-            "bc2054657a": "Aplica desenfoque de fondo a la ventana del terminal. Requiere reiniciar.",
-            "72d0482137": "Desenfoque de ventana",
             "7db59c4738": "alfa",
             "46d99ef4bb": "opacidad",
             "4c643695aa": "Controla la transparencia del fondo del terminal.",
@@ -12686,7 +12683,9 @@
           "searchPlaceholder": "Buscar compilaciones…"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Usar sus colores de terminal"
+          "useTerminalTheme": "Usar sus colores de terminal",
+          "matchTerminal": "Coincidir con el terminal",
+          "dynamic": "dinámico"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -19617,6 +19616,8 @@
         "unnamedSender": "un agente",
         "messageFromCoordinator": "Mensaje del coordinador",
         "startedWorker": "Trabajador iniciado",
+        "handedOffToAgent": "Entregado a un agente",
+        "startedAgent": "Agente iniciado",
         "taskFromCoordinator": "Tarea del coordinador",
         "updateFromWorker": "Actualización del trabajador"
       },
@@ -21144,8 +21145,7 @@
       "quitDuringMoveConfirm": "Salir de todos modos"
     },
     "startupWorktreeRefresh": {
-      "loading": "Buscando espacios de trabajo…",
-      "description": "Pueden aparecer más espacios de trabajo mientras se cargan los proyectos locales y remotos."
+      "loading": "Buscando espacios de trabajo…"
     },
     "createProject": {
       "errors": {
@@ -21281,7 +21281,8 @@
     "wslHostOffer": {
       "title": "Ejecutar {{distro}} como host (recomendado)",
       "why": "Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
-      "accept": "Ejecutar como host"
+      "accept": "Ejecutar como host",
+      "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral."
     }
   },
   "rendererRecovery": {
@@ -23395,6 +23396,7 @@
       "androidDeviceNotRunning": "El dispositivo Android \"{{device}}\" no está en ejecución. Inícialo primero.",
       "unknownDeviceOrAvd": "\"{{device}}\" no es un dispositivo en ejecución ni un AVD conocido.",
       "avdBootTimeout": "El AVD \"{{avdName}}\" no terminó de iniciarse a tiempo.",
+      "avdExitedBeforeBoot": "El AVD \"{{avdName}}\" se detuvo antes de terminar de iniciarse: {{detail}}",
       "scrcpyDownloadFailed": "No se pudo descargar el servidor de scrcpy: {{detail}}",
       "scrcpyServerInvalid": "El servidor de scrcpy descargado no era válido o estaba incompleto."
     },

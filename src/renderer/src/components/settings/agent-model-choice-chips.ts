@@ -3,7 +3,7 @@ import { projectAgentLaunchProfile } from '../../../../shared/agent-launch-profi
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
-} from '../../../../shared/agent-session-option-catalog'
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices

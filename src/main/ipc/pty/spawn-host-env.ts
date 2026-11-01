@@ -1,5 +1,5 @@
-import { getClaudeAgentViewService } from '../../claude/agent-view-service'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'

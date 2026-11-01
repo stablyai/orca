@@ -30,3 +30,4 @@ patchedDependencies:
   node-forge@1.4.0: patches/node-forge@1.4.0.patch
   '@expo/cli@55.0.36': patches/@expo__cli@55.0.36.patch
   expo-router@55.0.18: patches/expo-router@55.0.18.patch
+  expo-constants@55.0.17: patches/expo-constants@55.0.17.patch

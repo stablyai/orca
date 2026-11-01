@@ -41,7 +41,7 @@ vi.mock('@/lib/agent-session/structured-agent-session-provisional-tab', () => ({
       : null
   }
 }))
-vi.mock('@/lib/structured-agent-session-host-admission', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-host-admission', () => ({
   admitStructuredLaunchOnHost: mocks.admitStructuredLaunchOnHost
 }))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({

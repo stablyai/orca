@@ -3,6 +3,7 @@
  * Add/Connect, or when the user switches to one of its workspaces. After a confirmed stop the host is
  * parked: polls and visible work keep it down until the user acts or the distro runs again.
  */
+import { assertWslHostRunAllowed } from './wsl-host-gate'
 import { focusReachability } from './wsl-host-focus-reachability'
 import { ensureWslHostForRuntimeCall } from './wsl-host-runtime-call'
 import type { WslHostDeploymentRecord } from '../../shared/wsl-host-deployment-store'
@@ -20,11 +21,7 @@ import {
   readWslHostRecordsQuietly,
   toWslHostStatus
 } from './wsl-host-connection-record'
-import {
-  sameWslDistro,
-  WSL_HOST_REMOVING_MESSAGE,
-  wslHostRunRefusal
-} from './wsl-host-add-admission'
+import { sameWslDistro, wslHostRunRefusal } from './wsl-host-add-admission'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import { registerWslHost } from './wsl-host-registration'
 import { WslHostStatusBoard } from './wsl-host-status-board'
@@ -158,21 +155,13 @@ export class WslHostService {
     return removal.serverStop
   }
 
-  /** Disable closes connections/watches and releases holders; reenable resumes only hosts needed by visible work. */
+  /**
+   * The setting governs new work only (Stage 1): turning it off refuses an add still in flight,
+   * but saved hosts keep serving their projects, as in serve-only. Turning it on boots nothing.
+   */
   async enabledChanged(enabled: boolean): Promise<void> {
-    const connector = this.connector
-    if (!connector) {
-      return
-    }
-    if (enabled) {
-      // Nothing boots here: the window re-reports its focused host, which connects only if running (E9).
-      return
-    }
-    this.disableGeneration += 1
-    for (const record of this.records()) {
-      await connector.disconnect(record.distro)
-      await connector.releaseHolder(record.distro)
-      this.setStatus(record, { state: 'closed' })
+    if (!enabled) {
+      this.disableGeneration += 1
     }
   }
 
@@ -191,10 +180,7 @@ export class WslHostService {
     if (!record) {
       throw new Error('This server is not a WSL host.')
     }
-    const refusal = wslHostRunRefusal(this.deps)
-    if (refusal || this.removing.has(environmentId)) {
-      throw new Error(refusal?.message ?? WSL_HOST_REMOVING_MESSAGE)
-    }
+    assertWslHostRunAllowed(this.deps, this.removing, environmentId)
     admitConnectToPendingHost(this.deps.userDataPath(), record, withdrawPendingRemoval)
     this.wsl.forgetPairingFailures?.(environmentId)
     this.parked.delete(environmentId)

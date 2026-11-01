@@ -11,7 +11,7 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './rpc/methods/structured-agent-session-options-read'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../ipc/desktop-renderer-runtime-capabilities'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from './structured-agent-runtime-registrations'
-import * as recordStore from './agent-session-record-store-slot'
+import * as recordStore from './agent-session/records/agent-session-record-store-slot'
 import * as registry from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import * as catalogService from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import * as environment from './structured-agent-shell-environment'
@@ -24,7 +24,7 @@ import {
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+} from './agent-session/structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
 const profile = vi.hoisted(() => ({ root: '' }))

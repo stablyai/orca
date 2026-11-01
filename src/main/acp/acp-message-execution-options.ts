@@ -1,5 +1,8 @@
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../shared/agent-session-execution-options'
+import {
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import { AcpAgentError } from './acp-errors'
 import type { AcpStructuredSession } from './acp-structured-session'

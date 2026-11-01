@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { claudePipedFixture, SESSION } from './structured-claude-piped-test-support'
 import { CLAUDE_READER_DRAIN_AFTER_EXIT_MS } from '../claude/claude-stream-json-connection'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../claude/claude-child-exit-proof-ladder'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
 import { AgentSessionAcquisitionRootExitObservedError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 

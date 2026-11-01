@@ -2,7 +2,7 @@
 
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionCommandRefusalCause } from '../../../../shared/structured-agent-session-composer'
+import type { StructuredAgentSessionCommandRefusalCause } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>

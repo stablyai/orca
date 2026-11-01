@@ -44,8 +44,8 @@ vi.mock('./use-structured-agent-session-read', () => ({
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import {
   readNativeChatComposerDraft,

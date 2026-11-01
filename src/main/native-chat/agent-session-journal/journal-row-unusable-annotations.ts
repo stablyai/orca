@@ -1,5 +1,5 @@
 import { isInputContext, isInputLineage } from './journal-input-lineage'
-import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage-schema'
 
 export function dropUnusableRowAnnotations(record: Record<string, unknown>): void {
   if (record.inputOrderContext !== undefined && !isInputContext(record.inputOrderContext)) {

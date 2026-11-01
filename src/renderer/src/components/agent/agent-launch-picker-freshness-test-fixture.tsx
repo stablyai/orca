@@ -11,7 +11,11 @@ import { expect, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { useAgentPickerSetup, useAgentPickerDraftScope } from './agent-launch-picker-drafts'
-import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventory,
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
 import * as picker from '../../../../shared/agent-launch-picker'
@@ -56,7 +60,9 @@ export async function exerciseAgentPickerFreshness({
   const snapshots: picker.AgentPickerEntry[] = []
   const current: { entry?: picker.AgentPickerEntry } = {}
   function Setup({ value }: { value: typeof menu }) {
-    const [entry] = useAgentLaunchPickerInventory('wt', value, true)
+    const [entry] = useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('wt', value, true)
+    )
     current.entry = entry
     snapshots.push(entry)
     const draftScope = useAgentPickerDraftScope()

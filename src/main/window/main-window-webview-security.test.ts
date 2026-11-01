@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
   installJavaScriptDialogs: vi.fn(),
-  registerPluginGuard: vi.fn()
+  registerPluginGuard: vi.fn(),
+  admitPluginFrame: vi.fn(),
+  installPluginFramePolicies: vi.fn()
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -35,6 +37,19 @@ vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
 }))
 vi.mock('../browser/browser-javascript-dialogs', () => ({
   installBrowserJavaScriptDialogs: mocks.installJavaScriptDialogs
+}))
+vi.mock(import('../plugins/panels/plugin-frame-guest-registry'), async (importOriginal) => ({
+  PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS: (await importOriginal())
+    .PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS,
+  admitPluginFrameAttach: mocks.admitPluginFrame,
+  isPluginFramePartition: (partition: string) => partition.startsWith('persist:orca-plugin-'),
+  attachPluginFrameGuest: (guest: { session?: unknown }, host: unknown) => {
+    if (guest.session !== 'plugin-session') {
+      return false
+    }
+    mocks.installPluginFramePolicies(guest, host)
+    return true
+  }
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
@@ -335,5 +350,95 @@ describe('orca-preview scheme admission', () => {
     handlers['did-start-navigation']?.({ isMainFrame: false, isSameDocument: false } as never)
 
     expect(getDocPreviewGrant(grant.id)).not.toBeNull()
+  })
+})
+
+describe('plugin frame guests', () => {
+  const partition = 'persist:orca-plugin-0123456789abcdef'
+  const src = 'orca-plugin-frame://0123456789abcdef/panel.html'
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it('refuses a plugin partition main did not prepare for that origin', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.admitPluginFrame.mockReturnValue(false)
+    const preventDefault = vi.fn()
+    const preferences: Record<string, unknown> = { partition, preload: 'attacker.js' }
+
+    handlers['will-attach-webview']?.(
+      { preventDefault } as never,
+      preferences as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only params.src.
+      { src } as never
+    )
+
+    expect(mocks.admitPluginFrame).toHaveBeenCalledWith(partition, src)
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(preferences.preload).toBe('attacker.js')
+  })
+
+  it('pins the guest preload and every secure preference, whatever the markup asked', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.admitPluginFrame.mockReturnValue(true)
+    const params: Record<string, unknown> = { src, preload: 'attacker.js', allowpopups: 'true' }
+    const preferences: Record<string, unknown> = {
+      partition,
+      preload: 'attacker.js',
+      preloadURL: 'attacker.js',
+      additionalArguments: ['--x'],
+      sandbox: false,
+      contextIsolation: false,
+      nodeIntegration: true,
+      webSecurity: false,
+      webviewTag: true,
+      disablePopups: false,
+      experimentalFeatures: true,
+      enableWebSQL: true,
+      zoomFactor: 1.25
+    }
+
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      params as never
+    )
+
+    expect(params).not.toHaveProperty('preload')
+    expect(params).not.toHaveProperty('allowpopups')
+    expect(preferences).not.toHaveProperty('preloadURL')
+    // Anything main did not pin is dropped; zoom still follows the host window.
+    expect(preferences).not.toHaveProperty('experimentalFeatures')
+    expect(preferences).not.toHaveProperty('enableWebSQL')
+    expect(preferences.zoomFactor).toBe(1.25)
+    // Markup's arguments are replaced by main's renderer pins, never merged.
+    expect(preferences.additionalArguments).toEqual([
+      '--blink-settings=dnsPrefetchingEnabled=false'
+    ])
+    expect(String(preferences.preload)).toMatch(/plugin-frame-guest-preload\.js$/)
+    expect(preferences).toMatchObject({
+      partition,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+      disablePopups: true,
+      disableDialogs: true
+    })
+    expect(mocks.isAllowedPartition).not.toHaveBeenCalled()
+  })
+
+  it('gives attached plugin guests their own policy, never the browser guest one', () => {
+    const { handlers } = installOnFakeWindow()
+    const guest = { session: 'plugin-session' }
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only guest.session.
+    handlers['did-attach-webview']?.({} as never, guest as never)
+
+    expect(mocks.installPluginFramePolicies).toHaveBeenCalledWith(guest, expect.anything())
+    expect(mocks.attachGuestPolicies).not.toHaveBeenCalled()
+    expect(mocks.installJavaScriptDialogs).not.toHaveBeenCalled()
   })
 })

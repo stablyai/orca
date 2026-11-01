@@ -8,10 +8,10 @@ import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../ipc/deskt
 import { createAgentModelCatalogService } from '../../../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexModelCatalogProbe } from '../../../codex/codex-model-catalog-probe'
-import type { runCodexAppServerSession } from '../../../codex/codex-app-server-session'
-import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import type { runCodexAppServerSession } from '../../../codex/app-server/codex-app-server-session'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   agentModelCatalogFingerprintForRecord,

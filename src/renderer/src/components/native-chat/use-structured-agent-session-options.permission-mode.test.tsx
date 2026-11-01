@@ -2,12 +2,12 @@ import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-permission-modes-capability'
+} from '../../../../shared/agent-session/agent-session-permission-modes-capability'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 // @vitest-environment happy-dom
 

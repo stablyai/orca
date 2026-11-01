@@ -1,5 +1,5 @@
 import type { JSONContent } from '@tiptap/react'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { withoutImageReference } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
@@ -10,7 +10,7 @@ import {
   queuedMessageEditableText,
   type QueuedMessageEdit
 } from '../../../../shared/queued-message-edit'
-import { pickedSkillsInText } from '../../../../shared/structured-agent-session-send-mutation'
+import { pickedSkillsInText } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createUuidV4 } from '../../../../shared/uuid-v4'
 import { promptSkillRefs } from './native-chat-prompt-document'
 import { promptTextContent, withoutImageReferenceNodes } from './native-chat-prompt-document-text'

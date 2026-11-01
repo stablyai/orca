@@ -5,7 +5,7 @@ import {
   type AutomationRendererChannel
 } from './automation-dispatch-request'
 export type { AutomationRendererChannel } from './automation-dispatch-request'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
   type Automation,

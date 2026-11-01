@@ -1,7 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import type { analyzeAgentChoiceArgs } from './agent-choice-args'
 import { reconcileAgentChoiceArgsDetailed } from './agent-choice-reconciliation'
-import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import {
   agentPickerArgumentPermission,
   agentPickerPermissionValue

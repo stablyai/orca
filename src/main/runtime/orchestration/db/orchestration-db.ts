@@ -1,3 +1,4 @@
+import { CrewChanges } from '../crew/crew-changes'
 import Database from '../../../sqlite/sync-database'
 import { attachOrchestrationDbMethods } from './attach-orchestration-db-methods'
 import type { MailHandBack } from './messages/helper-mailbox-hand-back'
@@ -19,6 +20,7 @@ import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-work
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 
 class OrchestrationDbCore {
+  readonly crewChanges = new CrewChanges()
   db: Database.Database
 
   // Cache Dispatch emptiness to skip per-terminal queries on 16ms graph ticks for users without orchestration.

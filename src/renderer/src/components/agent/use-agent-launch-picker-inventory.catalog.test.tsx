@@ -17,7 +17,7 @@ import {
   loadHostStructuredAgents,
   resetHostStructuredAgentsForTests
 } from '@/runtime/host-structured-agents'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 const mocks = vi.hoisted(() => ({

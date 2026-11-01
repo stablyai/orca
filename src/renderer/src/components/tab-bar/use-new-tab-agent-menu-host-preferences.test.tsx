@@ -26,7 +26,11 @@ import {
   readAgentLaunchPreferencesForWorktree,
   readAgentLaunchPreferencesForWorkspace
 } from '../settings/use-host-agent-launch-preferences'
-import { useAgentLaunchPickerInventory } from '../agent/use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventory,
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from '../agent/use-agent-launch-picker-inventory'
 import { agentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import { useNewTabAgentMenuRows } from './use-new-tab-agent-menu-rows'
 
@@ -386,7 +390,9 @@ it.each(['pairing', 'runtime'] as const)(
 it('updates actual inventory for native presentation and local permission changes', async () => {
   const hook = renderHook(() => {
     const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
-    const entries = useAgentLaunchPickerInventory('wt', menu, true)
+    const entries = useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('wt', menu, true)
+    )
     return { menu, entries }
   })
   await act(async () => {})
@@ -407,7 +413,9 @@ it('updates actual inventory for native presentation and local permission change
   })
   const local = renderHook(() => {
     const menu = useNewTabAgentMenuRows('folder:local', true, { kind: 'local' })
-    return useAgentLaunchPickerInventory('folder:local', menu, true)
+    return useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('folder:local', menu, true)
+    )
   })
   await act(async () => {})
   await act(async () => {
@@ -562,12 +570,14 @@ it('invalidates mounted picker seeds only for their effective authored-default s
   const local = renderHook(() => {
     const menu = useNewTabAgentMenuRows('folder:local', true, { kind: 'local' })
     localRenders++
-    return useAgentLaunchPickerInventory('folder:local', menu, true)
+    return useAgentPickerInventoryEntries(
+      useAgentLaunchPickerInventorySource('folder:local', menu, true)
+    )
   })
   const host = renderHook(() => {
     const menu = useNewTabAgentMenuRows('wt', true, { kind: 'runtime', environmentId: 'alpha' })
     hostRenders++
-    return useAgentLaunchPickerInventory('wt', menu, true)
+    return useAgentPickerInventoryEntries(useAgentLaunchPickerInventorySource('wt', menu, true))
   })
   await act(async () => {})
   const settled = { local: localRenders, host: hostRenders }

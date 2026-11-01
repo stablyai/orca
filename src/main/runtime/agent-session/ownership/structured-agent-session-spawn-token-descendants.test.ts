@@ -6,17 +6,17 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session-caller-env'
-import type { AgentSessionRecordStore } from '../../agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../agent-session-record-store-test-harness'
+import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
-import { createStructuredAgentSessionOwnerProbe } from '../../structured-agent-session-owner-probe'
+import { createStructuredAgentSessionOwnerProbe } from '../structured-agent-session-owner-probe'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from '../../structured-agent-session-runtime'
+} from '../structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 /** pid -> the NUL-separated environment block `/proc/<pid>/environ` serves. */
 const fakeProc = vi.hoisted(() => ({ environs: new Map<number, string>() }))

@@ -30,9 +30,7 @@ export function wslHostNotConnectedMessage(distro: string): string {
   return `The WSL host ${distro} isn’t connected. If it’s stopped, click Start; otherwise open one of its projects or connect it in Settings → Remote Orca Servers.`
 }
 
-export function wslHostStoppedMessage(distro: string): string {
-  return `${distro} is stopped. To start it, click Start or open a new terminal in one of its projects.`
-}
+export { wslHostStoppedMessage } from '../../shared/wsl-host-stopped-message'
 
 /** Shown on a paired phone once a stop is confirmed: only the desktop starts a distro. */
 export function wslHostStoppedForPhoneMessage(distro: string): string {
@@ -53,18 +51,25 @@ export function wslHostRemovalPendingMessage(distro: string): string {
   return `Orca didn’t finish removing the WSL host ${distro}. Remove it again in Settings → Remote Orca Servers, or connect it to keep it.`
 }
 
-/** Why no WSL host may run at all right now; null when they may. */
+/**
+ * Why a saved host can't run now. The WSL hosts setting governs new work only (Stage 1): with it
+ * off, saved hosts keep serving their projects, as in serve-only.
+ */
 export function wslHostRunRefusal(gate: {
-  isEnabled: () => boolean
   hasServerFiles: () => boolean
 }): WslHostAddRefusal | null {
-  if (!gate.isEnabled()) {
-    return wslHostAddRefusal('disabled', 'turnedOff')
-  }
   // Reject missing packaged templates before C4 deploy emits an opaque deep failure.
   return gate.hasServerFiles()
     ? null
     : wslHostAddRefusal('server-files-missing', 'serverFilesMissing')
+}
+
+/** Why a new host can't be added now: the setting is off, or no saved host could run either. */
+export function wslHostNewWorkRefusal(gate: {
+  isEnabled: () => boolean
+  hasServerFiles: () => boolean
+}): WslHostAddRefusal | null {
+  return gate.isEnabled() ? wslHostRunRefusal(gate) : wslHostAddRefusal('disabled', 'turnedOff')
 }
 
 export function sameWslDistro(left: string, right: string): boolean {

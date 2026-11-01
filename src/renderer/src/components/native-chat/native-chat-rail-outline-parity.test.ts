@@ -9,18 +9,18 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {
   buildNativeChatRailItems,
   nativeChatRailReplyPreview
 } from './native-chat-message-rail-items'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
-import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { projectNativeChatTaskListFrames } from '../../../../shared/native-chat/input/native-chat-task-list-frames'
 import { omitNativeChatThreadGoalRows } from './native-chat-thread-goal-rows'

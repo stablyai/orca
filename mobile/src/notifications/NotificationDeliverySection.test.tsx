@@ -6,6 +6,14 @@ import { DEFAULT_NOTIFICATION_DELIVERY } from './notification-delivery-preferenc
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
+vi.mock(
+  '../settings/settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listRowDouble
+)
 vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value },
   View: 'View',
@@ -24,6 +32,7 @@ it('shows only phone-specific controls while desktop owns category eligibility',
   const switches = () => findAllByHostType(renderer.root, 'Switch')
   expect(switches().map((node) => node.props.accessibilityLabel)).toEqual([
     'Only when away from desktop',
+    'Only when an agent needs me',
     'Notification sound',
     'Suppress while focused'
   ])

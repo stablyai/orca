@@ -1,16 +1,16 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalResetReason
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/agent-session/structured-agent-session-coalescer'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionHistoryPage
-} from '../../../src/shared/agent-session-wire'
+} from '../../../src/shared/agent-session/agent-session-wire'
 import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'

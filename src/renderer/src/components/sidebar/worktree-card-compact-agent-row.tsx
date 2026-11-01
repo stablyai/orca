@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
@@ -99,6 +99,8 @@ type CompactAgentRowProps = {
   onSendTargetClick?: (paneKey: string) => void
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden sub-agent work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
@@ -117,6 +119,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onSendTargetClick,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   isFocusedPane = false,
   hideIdentityIcon = false,
@@ -266,10 +269,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
           className={cn(
-            'shrink-0 text-[10px] tabular-nums',
+            'inline-flex shrink-0 items-center gap-0.5 text-[10px] tabular-nums',
             highlighted ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
         >
+          {collapsedChildAgentsState && (
+            <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+          )}
           +{childAgentCount}
         </span>
       )}

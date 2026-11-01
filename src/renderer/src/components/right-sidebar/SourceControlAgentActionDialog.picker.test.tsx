@@ -644,7 +644,8 @@ it.each([true, false] as const)(
         await import('../../../../shared/native-chat/every-agent-chat.test-fixture')
       const { RUNTIME_CAPABILITIES } = await import('../../../../shared/protocol-version')
       const { planAgentSessionLaunch } = await import('@/lib/agent-session-launch-plan')
-      const { openDeclinedTerminal } = await import('@/lib/structured-agent-session-action-launch')
+      const { openDeclinedTerminal } =
+        await import('@/lib/agent-session/launch/structured-agent-session-action-launch')
       setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
       act(() =>
         useAppStore.setState(({ settings }) => ({

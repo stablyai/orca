@@ -9,7 +9,7 @@ import {
 import { agentPickerArgumentPermission } from './agent-launch-picker-permission'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import { structuredAgentConfiguredArgs } from '../main/native-chat/structured-agent-configured-args'
-import { claudeStructuredLaunchArgs } from '../main/claude/claude-structured-launch-args'
+import { claudeStructuredLaunchArgs } from '../main/claude/structured/launch/claude-structured-launch-args'
 import { codexStructuredLaunchArgs } from '../main/codex/codex-structured-launch-args'
 
 const settings = Object.freeze({

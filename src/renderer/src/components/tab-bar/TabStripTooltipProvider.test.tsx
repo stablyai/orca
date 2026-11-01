@@ -10,10 +10,14 @@ function renderTabs(): void {
     <StrictMode>
       <TabStripTooltipProvider>
         <TabHoverCard title="Build" icon={<span />} programName="Terminal">
-          <button>first tab</button>
+          <button>
+            <span className="tab-label">first tab</span>
+          </button>
         </TabHoverCard>
         <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex">
-          <button>second tab</button>
+          <button>
+            <span className="tab-label">second tab</span>
+          </button>
         </TabHoverCard>
       </TabStripTooltipProvider>
     </StrictMode>
@@ -32,11 +36,39 @@ describe('TabStripTooltipProvider', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     renderTabs()
+    for (const label of document.querySelectorAll('.tab-label')) {
+      Object.defineProperties(label, {
+        clientWidth: { configurable: true, value: 60 },
+        scrollWidth: { configurable: true, value: 100 }
+      })
+    }
   })
 
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+  })
+
+  it('keeps previews hidden when the full title fits, including keyboard focus', () => {
+    Object.defineProperty(screen.getByText('first tab'), 'clientWidth', { value: 100 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.queryByText('Build')).toBeNull()
+    act(() => screen.getByRole('button', { name: 'first tab' }).focus())
+    expect(screen.queryByText('Build')).toBeNull()
+  })
+
+  it('remeasures the title when a tab shrinks before the next hover', () => {
+    const label = screen.getByText('first tab')
+    Object.defineProperty(label, 'clientWidth', { configurable: true, value: 120 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.queryByText('Build')).toBeNull()
+    fireEvent.pointerLeave(screen.getByRole('button', { name: 'first tab' }))
+    Object.defineProperty(label, 'clientWidth', { value: 60 })
+    hover('first tab')
+    advance(TAB_TOOLTIP_DELAY_MS)
+    expect(screen.getAllByText('Build').length).toBeGreaterThan(0)
   })
 
   it('holds the first preview until a 500 ms hover', () => {

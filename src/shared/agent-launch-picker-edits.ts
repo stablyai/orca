@@ -19,7 +19,7 @@ import { editAgentPickerSpeed, removeAgentPickerSpeed } from './agent-launch-pic
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
-} from './agent-session-option-catalog'
+} from './agent-session/options/agent-session-option-catalog'
 
 export type AgentPickerEdit =
   | { kind: 'choice'; patch: AgentChoicePatch }

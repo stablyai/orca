@@ -4,7 +4,7 @@ import * as Catalog from '../native-chat/agent-session-wire/at-rest-command-cata
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
-import type { CodexAppServerInvocation } from './codex-app-server-session'
+import type { CodexAppServerInvocation } from './app-server/codex-app-server-session'
 import type { CodexAtRestSkillsDeps } from './codex-at-rest-skills-probe'
 import { createCodexAtRestSkillCatalog } from './codex-at-rest-skills-probe'
 

@@ -1,7 +1,7 @@
 import { structuredAgentSessionCapabilityView } from './structured-agent-session-option-models'
-import { savedEffectiveServiceTier } from '../../../shared/structured-agent-session-effective-tier'
+import { savedEffectiveServiceTier } from '../../../shared/agent-session/options/structured-agent-session-effective-tier'
 import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
-import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 
 /** Read saved folder-scoped models without discovery; use workspacePath before record creation. */
 export async function savedAgentSessionCatalogModels(

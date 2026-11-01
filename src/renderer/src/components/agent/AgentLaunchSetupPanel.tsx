@@ -4,7 +4,7 @@ import {
 } from './agent-launch-setup-option-rows'
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { Button } from '@/components/ui/button'
 import {
   Command,

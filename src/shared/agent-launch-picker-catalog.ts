@@ -1,9 +1,7 @@
-import { discoveredModel } from './structured-agent-session-discovered-model'
-import {
-  createClaudeCatalogOptions,
-  type CatalogOption,
-  getAgentSessionOptionLaunchCatalog
-} from './agent-session-option-catalog'
+import { discoveredModel } from './agent-session/options/structured-agent-session-discovered-model'
+import { createClaudeCatalogOptions } from './agent-session/options/agent-session-option-catalog-claude-codex'
+import type { CatalogOption } from './agent-session/options/agent-session-option-catalog-types'
+import { getAgentSessionOptionLaunchCatalog } from './agent-session/options/agent-session-option-catalog'
 import { sourceControlActionOptions } from './source-control-action-launch-preferences'
 import {
   agentPermissionChoices,

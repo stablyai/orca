@@ -231,7 +231,8 @@ it('bounds whole current-snapshot work on rendered replacement, acceptance and c
   const args = await import('../../../../shared/agent-choice-args')
   const reconcile = await import('../../../../shared/agent-choice-reconciliation')
   const profile = await import('../../../../shared/agent-launch-profile')
-  const catalog = await import('../../../../shared/agent-session-option-catalog')
+  const catalog =
+    await import('../../../../shared/agent-session/options/agent-session-option-catalog')
   const reconciliation = vi.spyOn(reconcile, 'reconcileAgentChoiceArgsDetailed')
   const spies = [
     vi.spyOn(args, 'analyzeAgentChoiceArgs'),

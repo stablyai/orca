@@ -9,7 +9,7 @@ import { shouldShowSourceControlActionArguments } from './source-control-action-
 import { useState } from 'react'
 import * as sourceProjection from './source-control-agent-launch-picker'
 import * as choiceAnalysis from '../../../../shared/agent-choice-args'
-import * as pickerCatalog from '../../../../shared/agent-session-option-catalog'
+import * as pickerCatalog from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import * as reconciliation from '../../../../shared/agent-choice-reconciliation'
 import * as launchProfile from '../../../../shared/agent-launch-profile'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
@@ -24,7 +24,7 @@ import type {
   AiActionId,
   SourceControlActionLaunchPreferences
 } from '../../../../shared/source-control-ai-actions'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   loadHostStructuredAgents,
   retainHostStructuredAgents,

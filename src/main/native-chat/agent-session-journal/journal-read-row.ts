@@ -13,6 +13,8 @@ export type JournalOutcomeReadRow = JournalOutcomeKeys & {
   deleted: JournalOutcomeKeys
 }
 export type JournalReadRow = JournalRow | JournalOutcomeReadRow
+/** `through` is the highest sequence the read covered, which may store no record of its own. */
+export type JournalRowsRead = { rows: JournalReadRow[]; through: number }
 
 /** LIMIT counts logical sequences, never the independently compactable physical contributions. */
 export function readJournalOutcomeGroups(

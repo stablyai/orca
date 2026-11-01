@@ -1,6 +1,6 @@
 import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
 import {

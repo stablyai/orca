@@ -9,18 +9,14 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): Settings
     'Left Sidebar Appearance'
   ),
   description: translate(
-    'auto.components.settings.appearance.search.leftSidebarAppearance.description',
-    'Make the left sidebar match your terminal, stay default, or use a tint.'
+    'auto.components.settings.appearance.search.leftSidebarAppearance.tintDescription',
+    'Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme.'
   ),
   keywords: [
     ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
     ...translateSearchKeyword(
       'auto.components.settings.appearance.search.leftSidebarAppearance.project',
       'project'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.appearance.search.leftSidebarAppearance.terminal',
-      'terminal'
     ),
     ...translateSearchKeyword(
       'auto.components.settings.appearance.search.leftSidebarAppearance.background',
