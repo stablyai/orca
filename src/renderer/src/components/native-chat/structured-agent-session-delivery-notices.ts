@@ -4,9 +4,9 @@ import {
   type AgentSessionFailureFact
 } from '../../../../shared/agent-session-failure'
 import { agentSessionFailureStatedByRow } from '../../../../shared/agent-session-visible-failures'
-import { classifyDispatchRejection } from '../../../../shared/structured-agent-session-dispatch-rejection'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import { classifyDispatchRejection } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionRecordedRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../shared/structured-agent-session-message-projection'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'

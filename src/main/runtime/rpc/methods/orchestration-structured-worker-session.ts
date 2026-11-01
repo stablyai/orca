@@ -16,7 +16,7 @@ import { quotedProviderDetail } from '../../../../shared/agent-session-failure-q
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -25,7 +25,6 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
 import { structuredPointerCallerKey } from '../../orchestration/structured-mailbox-pointer-host'
 import { sendAgentTurn, type StructuredAgentTurnHost } from '../../orchestration/send-agent-turn'
-import { retireSettledStructuredWorkerTab } from '../../agent-session/structured-agent-session-tab-retirement'
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession
@@ -202,9 +201,7 @@ export async function discardStructuredWorkerSession(
       sessionId,
       outcome.reason
     )
-    return
   }
-  retireSettledStructuredWorkerTab(sessionId, runtime)
 }
 
 /** A submission reason as a clause: host sentences end in a period, legacy markers do not. */

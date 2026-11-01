@@ -1,4 +1,4 @@
-import type { AgentJournalCursor } from '../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../shared/agent-session-journal-identity'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { settleAgentSessionOperationInto } from './agent-session/ownership/agent-session-operation-admission'

@@ -7,7 +7,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
+} from './agent-session/journal/agent-session-journal-types'
 import { MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-message-params'
 import {
   agentSessionStoppedHistoryOwed,

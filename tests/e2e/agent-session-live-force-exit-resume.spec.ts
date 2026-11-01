@@ -72,7 +72,7 @@ function waitForExit(proc: ChildProcess, timeoutMs = 5000): Promise<void> {
     return Promise.resolve()
   }
   return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, timeoutMs)
+    const timeout = setTimeout<[]>(resolve, timeoutMs)
     timeout.unref?.()
     proc.once('exit', () => {
       clearTimeout(timeout)

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { assistantText } from './wsl-orcad-chat-assistant-text'
 import type {
   AgentSessionHistoryResult,

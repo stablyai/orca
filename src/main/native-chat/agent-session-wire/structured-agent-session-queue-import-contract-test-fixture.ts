@@ -5,9 +5,9 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalAnsweredTurnIdentity,
   type AgentJournalMessageItem
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { activeProviderContext } from '../../../shared/agent-session-provider-context'
-import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
+import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   openTestJournalHostDatabase,
   readTestQueueChanges

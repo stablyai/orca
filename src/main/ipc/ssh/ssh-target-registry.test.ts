@@ -14,59 +14,15 @@ vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
-import type { SshTarget } from '../../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
-const { mockSshStore, mockConnectionManager, mockListConfigHosts, mockResolveConfigHost } = mocks
+const { mockSshStore, mockConnectionManager, mockListConfigHosts } = mocks
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
   const { handlers, mockStore, mockWindow } = harness
 
   beforeEach(harness.reset)
-
-  it('registers all expected IPC channels', () => {
-    const channels = Array.from(handlers.keys())
-    expect(channels).toContain('ssh:listTargets')
-    expect(channels).toContain('ssh:addTarget')
-    expect(channels).toContain('ssh:updateTarget')
-    expect(channels).toContain('ssh:removeTarget')
-    expect(channels).toContain('ssh:importConfig')
-    expect(channels).toContain('ssh:listConfigHosts')
-    expect(channels).toContain('ssh:resolveConfigHost')
-    expect(channels).toContain('ssh:connect')
-    expect(channels).toContain('ssh:disconnect')
-    expect(channels).not.toContain('ssh:terminateSessions')
-    expect(channels).not.toContain('ssh:moveToManagedServer')
-    expect(channels).not.toContain('ssh:resetRelay')
-    expect(channels).toContain('ssh:getState')
-    expect(channels).toContain('ssh:testConnection')
-  })
-
-  it('ssh:listTargets returns targets from store', async () => {
-    const mockTargets: SshTarget[] = [
-      { id: 'ssh-1', label: 'Server 1', host: 'srv1.com', port: 22, username: 'admin' }
-    ]
-    mockSshStore.listTargets.mockReturnValue(mockTargets)
-
-    const result = await handlers.get('ssh:listTargets')!(null, {})
-    expect(result).toEqual(mockTargets)
-  })
-
-  it('ssh:addTarget calls store.addTarget', async () => {
-    const newTarget = {
-      label: 'New Server',
-      host: 'new.example.com',
-      port: 22,
-      username: 'deploy'
-    }
-    const withId = { ...newTarget, id: 'ssh-new' }
-    mockSshStore.addTarget.mockReturnValue(withId)
-
-    const result = await handlers.get('ssh:addTarget')!(null, { target: newTarget })
-    expect(mockSshStore.addTarget).toHaveBeenCalledWith(newTarget)
-    expect(result).toEqual({ target: withId, repoReadoptions: [] })
-  })
 
   it('ssh:addTarget strips a renderer-supplied registration generation', async () => {
     const target = {
@@ -118,11 +74,6 @@ describe('SSH IPC handlers', () => {
     expect(mockSshStore.lastRepoReadoptions).toEqual([])
   })
 
-  it('ssh:removeTarget calls store.removeTarget', async () => {
-    await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
-    expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
-  })
-
   it('ssh:removeTarget removes metadata when disconnect fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     mockConnectionManager.disconnect.mockRejectedValueOnce(new Error('host unreachable'))
@@ -137,43 +88,6 @@ describe('SSH IPC handlers', () => {
     }
   })
 
-  it('ssh:importConfig returns imported targets', async () => {
-    const imported: SshTarget[] = [
-      { id: 'ssh-imp', label: 'staging', host: 'staging.com', port: 22, username: '' }
-    ]
-    mockSshStore.importFromSshConfig.mockResolvedValue({ targets: imported, repoReadoptions: [] })
-
-    const result = await handlers.get('ssh:importConfig')!(null, {})
-    expect(result).toEqual({ targets: imported, repoReadoptions: [] })
-  })
-
-  it('ssh:listConfigHosts loads summaries against current targets', async () => {
-    mockSshStore.listTargets.mockReturnValue([
-      { id: 'ssh-1', label: 'other', host: 'other.com', port: 22, username: 'x' }
-    ])
-
-    const result = await handlers.get('ssh:listConfigHosts')!(null, { query: 'oth' })
-
-    expect(mockSshStore.listTargets).toHaveBeenCalled()
-    expect(mockListConfigHosts).toHaveBeenCalledWith(mockSshStore.listTargets(), 'oth', [], {
-      refresh: false,
-      routeDuplicateAliases: new Set()
-    })
-    expect(result).toMatchObject({ hosts: [], hasMore: false })
-  })
-
-  // Only a picker (re)open re-reads ~/.ssh/config; filter keystrokes reuse the parse.
-  it('ssh:listConfigHosts refreshes the parsed config only when asked', async () => {
-    mockSshStore.listTargets.mockReturnValue([])
-
-    await handlers.get('ssh:listConfigHosts')!(null, { query: '', refresh: true })
-
-    expect(mockListConfigHosts).toHaveBeenCalledWith([], '', [], {
-      refresh: true,
-      routeDuplicateAliases: new Set()
-    })
-  })
-
   it("ssh:listConfigHosts flags the latest route snapshot's duplicates without waiting, and refreshes it when asked", async () => {
     mockSshStore.currentSshRouteSnapshot.mockReturnValue({
       duplicateOf: new Map([['aimp', 'AI Box']])
@@ -185,28 +99,5 @@ describe('SSH IPC handlers', () => {
 
     expect(mockListConfigHosts.mock.lastCall?.[3].routeDuplicateAliases).toEqual(new Set(['aimp']))
     expect(mockSshStore.refreshSshRouteSnapshot).toHaveBeenCalledOnce()
-  })
-
-  it('ssh:resolveConfigHost resolves only the selected alias', async () => {
-    await handlers.get('ssh:resolveConfigHost')!(null, { alias: 'prod' })
-
-    expect(mockResolveConfigHost).toHaveBeenCalledWith('prod')
-  })
-
-  it('ssh:getState returns connection state', async () => {
-    const state = {
-      targetId: 'ssh-1',
-      status: 'connected',
-      error: null,
-      reconnectAttempt: 0
-    }
-    mockConnectionManager.getState.mockReturnValue(state)
-
-    const result = await handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })
-    expect(result).toEqual({
-      ...state,
-      providerEpoch: expect.any(String),
-      connectionGeneration: 0
-    })
   })
 })

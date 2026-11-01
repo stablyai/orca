@@ -1,5 +1,5 @@
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
 
 /** Claim attachments atomically; required rejects missing uploads except references retained from previous. */

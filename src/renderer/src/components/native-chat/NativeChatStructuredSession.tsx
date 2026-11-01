@@ -1,3 +1,4 @@
+import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
@@ -36,7 +37,6 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 import { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
-import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
 import { NativeChatPromptSlotNotices } from './NativeChatComposerNotices'
 import { NativeChatInstallSlot, useNativeChatInstallSlot } from './NativeChatInstallSlot'
@@ -55,7 +55,7 @@ import { NativeChatStructuredComposerTabStrips } from './NativeChatStructuredCom
 import { nativeChatPaneHeader } from './NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
-import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
+import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from './use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from './use-native-chat-host-outage-notice'
 import { useNativeChatHostSendGate } from './use-native-chat-host-send-gate'
@@ -293,7 +293,13 @@ export function NativeChatStructuredSession(
           <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
-            <NativeChatOrcaStopContext.Provider value={continuation.view}>
+            <NativeChatUsageLimitActionsProvider
+              recovery={controller}
+              pane={props}
+              directory={fileLinkContext}
+              messages={controller.messages}
+              view={continuation.view}
+            >
               <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
                 <NativeChatMessageList
                   // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
@@ -319,7 +325,7 @@ export function NativeChatStructuredSession(
                   deliveryNotices={deliveryNotices}
                 />
               </NativeChatClaudeSignInContext.Provider>
-            </NativeChatOrcaStopContext.Provider>
+            </NativeChatUsageLimitActionsProvider>
           </NativeChatRewindContext.Provider>
         )}
       </NativeChatContextClearFade>

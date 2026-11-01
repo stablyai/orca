@@ -22,7 +22,9 @@ const terminal = vi.hoisted(() => ({ recover: vi.fn() }))
 vi.mock('./use-mobile-session-tabs-reconciliation', () => ({
   useMobileSessionTabsReconciliation: () => ({ requestTerminalInventoryRecovery: terminal.recover })
 }))
-vi.mock('react-native', () => ({ Animated: { Value: class {} } }))
+vi.mock('react-native', async () =>
+  (await import('../test-support/react-native-motion-stub')).reactNativeMotionStub()
+)
 const { createMobileCommandMenuHostFixture } =
   await vi.importActual<MobileCommandMenuHostFixtureModule>(
     '../../../src/main/native-chat/agent-session-wire/mobile-queued-edit-host.test-fixture'

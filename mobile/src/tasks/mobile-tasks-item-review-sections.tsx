@@ -21,7 +21,8 @@ import {
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { SectionHeader } from '../components/list/ListGroup'
+import { pressedStyle } from '../theme/mobile-theme'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {
@@ -171,7 +172,11 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
               return (
                 <Pressable
                   key={user.login}
-                  style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                  style={({ pressed }) => [
+                    styles.detailChip,
+                    selected ? styles.detailChipSelected : undefined,
+                    pressed && pressedStyle
+                  ]}
                   disabled={mutatingStatus || selected}
                   onPress={() => void requestGitHubReviewers(actionItem, [user.login])}
                 >
@@ -194,7 +199,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
           autoCapitalize="none"
         />
         <Pressable
-          style={styles.inlineSaveButton}
+          style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
           disabled={mutatingStatus || splitReviewerList(itemReviewersDraft).length === 0}
           onPress={() => void requestGitHubReviewers(actionItem)}
         >
@@ -236,7 +241,10 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
           actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
             <View key={file.path} style={styles.fileCard}>
               <Pressable
-                style={styles.fileActionRow}
+                style={({ pressed }) => [
+                  styles.fileActionRow,
+                  pressed && { backgroundColor: colors.translucentFill }
+                ]}
                 disabled={mutatingStatus}
                 onPress={() => void toggleGitHubFileExpansion(actionItem, file)}
               >
@@ -253,7 +261,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
                 </Text>
               </Pressable>
               <Pressable
-                style={styles.inlineSaveButtonCompact}
+                style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
                 disabled={mutatingStatus || !detailPayload.pullRequestId}
                 onPress={() => void toggleGitHubFileViewed(actionItem, file)}
               >

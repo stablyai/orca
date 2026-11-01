@@ -4,12 +4,12 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from './native-chat/input/native-chat-session-options'
-import { encodeStructuredAgentSessionOptionValue } from './structured-agent-session-option-codec'
+import { encodeStructuredAgentSessionOptionValue } from './agent-session/options/structured-agent-session-option-codec'
+import { canSetStructuredAgentSessionOption } from './agent-session/options/structured-agent-session-option-snapshot'
 import {
-  canSetStructuredAgentSessionOption,
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState
-} from './structured-agent-session-options'
+} from './agent-session/options/structured-agent-session-options'
 import type {
   SelectionOperation,
   SelectionOutcome,

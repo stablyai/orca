@@ -3,7 +3,7 @@ import { journalInputOrder } from './journal-input-order'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
 
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDispatchRowApplies, queuedHandOffOutcome } from './journal-dispatch-settlement'
 import { journalQueueRowBuilder, type JournalQueuedChange } from './journal-queue-events'
 import { queuedCardFromChange } from './journal-queue-fold'

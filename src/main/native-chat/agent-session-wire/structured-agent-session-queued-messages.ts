@@ -1,11 +1,11 @@
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import {
-  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
-  type AgentSessionSendResult,
-  type AgentSessionWireRefusal
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type {
+  AgentSessionSendResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'

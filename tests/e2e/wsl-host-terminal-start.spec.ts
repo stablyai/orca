@@ -99,7 +99,7 @@ test('a stopped WSL distro boots only for Start or New Terminal, never for a ter
             ),
           { timeout: 30_000 }
         )
-        .toContain('Ubuntu was stopped')
+        .toContain('Ubuntu is stopped')
       return connects
     }
     // The shown tab's card; a background tab's stays in the DOM, hidden.

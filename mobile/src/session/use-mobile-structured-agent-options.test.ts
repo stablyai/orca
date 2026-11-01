@@ -2,9 +2,9 @@ import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult
+  AgentSessionOptionResult
 } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import type { AcpThinkingOptionsFixtureModule } from '../../../src/shared/acp-thinking-options.test-fixture-contract'

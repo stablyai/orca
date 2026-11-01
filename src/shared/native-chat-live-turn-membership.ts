@@ -1,5 +1,5 @@
-import type { NativeChatRole } from './native-chat-types'
-import type { AgentJournalTurnScope } from './agent-session-journal-types'
+import type { NativeChatRole } from './native-chat/native-chat-types'
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 
 export function unresolvedNativeChatRowIds(
   messages: readonly { id: string }[],

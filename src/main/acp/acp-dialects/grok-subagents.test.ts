@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { grokToolBackgroundTasks } from './grok-background-tasks'
 import { GROK_ACP_DIALECT } from './grok-dialect'

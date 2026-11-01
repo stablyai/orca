@@ -6,8 +6,13 @@ describe('buildAutomationPromptEditorOptions', () => {
   it('enables wrap and the shared find widget without code-editor chrome', () => {
     const options = buildAutomationPromptEditorOptions({
       ariaLabel: 'Prompt',
-      fontFamily: 'Geist',
-      fontSize: 14,
+      typography: {
+        fontFamily: 'Geist',
+        fontSize: 14,
+        fontWeight: '500',
+        lineHeight: 21,
+        fontLigatures: true
+      },
       placeholder: 'Run the weekly dependency audit'
     })
 
@@ -19,6 +24,9 @@ describe('buildAutomationPromptEditorOptions', () => {
     expect(options.ariaLabel).toBe('Prompt')
     expect(options.fontFamily).toBe('Geist')
     expect(options.fontSize).toBe(14)
+    expect(options.fontWeight).toBe('500')
+    expect(options.lineHeight).toBe(21)
+    expect(options.fontLigatures).toBe(true)
     expect(options.placeholder).toBe('Run the weekly dependency audit')
   })
 })

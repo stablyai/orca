@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Trotzdem beenden"
     },
     "startupWorktreeRefresh": {
-      "loading": "Arbeitsbereiche werden gesucht…",
-      "description": "Während lokale und entfernte Projekte geladen werden, können weitere Arbeitsbereiche erscheinen."
+      "loading": "Arbeitsbereiche werden gesucht…"
     },
     "createProject": {
       "errors": {
@@ -126,6 +125,7 @@
       "addErrors": {
         "alreadyAdded": "{{distro}} ist bereits ein Host.",
         "distroStopped": "{{distro}} wurde nach dem Einlesen der Liste gestoppt. Zum Starten „Starten und hinzufügen“ auswählen.",
+        "distroUnverifiable": "WSL hat nicht beantwortet, ob {{distro}} läuft. Aktualisiere die Liste oder füge sie über den Dialog hinzu; sie wird dann bei Bedarf gestartet.",
         "wsl1": "{{distro}} läuft unter WSL 1, das Orca nicht mehr unterstützt. In einem Terminal unter Windows mit folgendem Befehl auf WSL 2 umstellen: {{command}}",
         "notRegistered": "{{distro}} ist keine installierte WSL-Distribution. In einem Terminal unter Windows {{command}} ausführen, um die installierten Distributionen anzuzeigen, oder die Distribution neu installieren und erneut versuchen.",
         "sshManaged": "In {{distro}} läuft bereits der Orca-Server für „{{server}}“, den dieser Computer über SSH erreicht. Diesen Server zuerst entfernen; der Wechsel zu einem WSL-Host wird noch nicht unterstützt."
@@ -7136,12 +7136,14 @@
           "added": "Bereits als Host hinzugefügt",
           "running": "Läuft",
           "stopped": "Gestoppt",
+          "unverifiable": "Unbekannt",
           "title": "WSL-Distribution hinzufügen",
           "description": "Orca führt seinen Server innerhalb der Distribution aus, sodass git, Dateien und Terminals nativ unter Linux laufen. Projekte in dieser Distribution, die über \\\\wsl.localhost geöffnet wurden, werden automatisch auf diesen Host verschoben, sobald ihre Terminals inaktiv sind; Projekte auf einem Windows-Laufwerk (/mnt/…) bleiben auf diesem Computer. Ein verschobenes Projekt lässt sich über die Seitenleiste auf diesen Computer zurückholen.",
           "distro": "Distribution",
           "loading": "WSL-Distributionen werden gesucht…",
           "placeholder": "Distribution auswählen",
           "stoppedHint": "{{value0}} ist gestoppt. Das Hinzufügen startet die Distribution.",
+          "unverifiableHint": "WSL hat nicht gemeldet, ob {{value0}} läuft. Beim Hinzufügen wird sie bei Bedarf gestartet.",
           "addingHint": "Der Orca-Server wird in der Distribution installiert und gestartet. Beim ersten Mal kann dies eine Minute dauern.",
           "adding": "Wird eingerichtet…",
           "startAndAdd": "Starten und hinzufügen",
@@ -9324,7 +9326,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI-Farbe Magenta",
-          "03c855d15f": "Alle Farbanpassungen zurücksetzen",
           "63f8d9336e": "Farbanpassungen",
           "e86e09b5c7": "Einzelne Terminalfarben anpassen.",
           "1d1920dc8a": "Den Mauszeiger beim Tippen im Terminal ausblenden.",
@@ -9391,7 +9392,11 @@
           "cf37ff69f6": "Basis",
           "8abdab9f7c": "Jetzt neu starten",
           "907131d741": "Wird neu gestartet…",
-          "605a35d600": "Wird vom Terminal-Renderer noch nicht angewendet — xterm.js hat keine Farboption für fetten Text. Ein gespeicherter Wert bleibt erhalten."
+          "605a35d600": "Wird vom Terminal-Renderer noch nicht angewendet — xterm.js hat keine Farboption für fetten Text. Ein gespeicherter Wert bleibt erhalten.",
+          "color_overrides_dark_description": "Einzelne Farben des dunklen Terminal-Themes anpassen.",
+          "color_overrides_light_description": "Einzelne Farben des hellen Terminal-Themes anpassen.",
+          "reset_dark_color_overrides": "Farbanpassungen des dunklen Themes zurücksetzen",
+          "reset_light_color_overrides": "Farbanpassungen des hellen Themes zurücksetzen"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Zurücksetzen"
@@ -12750,7 +12755,7 @@
         "wslHosts": {
           "title": "WSL-Hosts",
           "experimental": "Experimentell",
-          "description": "Orca führt in jeder Distribution einen Server aus. Eine gestoppte Distribution startet erst, wenn eines ihrer Projekte geöffnet oder hier eine Verbindung zu ihr hergestellt wird.",
+          "description": "Orca führt in jeder Distribution einen Server aus. Das Öffnen eines Projekts startet eine gestoppte Distribution nie: Klicke auf „Starten“, öffne ein neues Terminal oder verbinde sie hier.",
           "add": "WSL-Distribution hinzufügen",
           "connect": "Verbinden",
           "forceUpdate": "Update erzwingen",
@@ -13297,7 +13302,9 @@
           "light": "Hell",
           "languageIncomplete": "{{value0}} % übersetzt, zu unvollständig, um als Orca-Sprache verwendet zu werden",
           "languageCoverage": "Oberflächensprache · {{value0}} % übersetzt",
-          "newFileMenu": "Ergänzt das +-Menü"
+          "newFileMenu": "Ergänzt das +-Menü",
+          "editorReplacesViewer": "Öffnet {{value0}} anstelle des Orca-Viewers",
+          "editorMayReplaceViewer": "Öffnet möglicherweise {{value0}} anstelle des Orca-Viewers"
         },
         "PluginPageAction": {
           "failedTitle": "{{value0}} konnte nicht installiert werden",
@@ -16153,16 +16160,12 @@
         },
         "ImageViewer": {
           "3c9217f5a6": "Vergrößern",
-          "6c89c73d9f": "Zoom zurücksetzen",
           "be27304574": "Verkleinern",
-          "77bfc9b35a": "Bild in separatem Fenster öffnen",
           "3ef9551ba2": "Vorschau wird geladen…",
-          "d9d2944855": "Dateivorschau konnte nicht geladen werden"
-        },
-        "ImageViewerPopup": {
-          "0ef78475e7": "Zum Schließen Esc drücken",
-          "535f4e2b56": "Schließen",
-          "9e27b2ecaf": "Bildvorschau in Originalgröße"
+          "d9d2944855": "Dateivorschau konnte nicht geladen werden",
+          "fitToView": "An Ansicht anpassen",
+          "actualSize": "Originalgröße",
+          "expand": "Bild vergrößert anzeigen"
         },
         "IpynbViewer": {
           "859bf9fc21": "Zelle ausführen",
@@ -16284,7 +16287,10 @@
           "zoomOut": "Verkleinern",
           "zoomIn": "Vergrößern",
           "fit": "An Bildschirm anpassen",
-          "close": "Schließen"
+          "close": "Schließen",
+          "copyPng": "Als PNG kopieren",
+          "copiedPng": "Als PNG kopiert",
+          "copyPngFailed": "Bild konnte nicht kopiert werden"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagrammfehler:",
@@ -19602,8 +19608,6 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um in der Chat-Oberfläche fortzufahren.",
-        "exitUnconfirmedFromTerminal": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
-        "exitUnconfirmed": "{{agent}} führt diese Unterhaltung bereits in einem anderen Terminal aus. Dort {{agent}} beenden oder das Terminal schließen und anschließend diese Unterhaltung über den Sitzungsverlauf öffnen.",
         "notSavedYet": "{{agent}} hat diese Unterhaltung noch nicht gespeichert. Nach der Antwort erneut versuchen."
       },
       "state": {
@@ -19846,7 +19850,8 @@
         "stopped": "{{distro}} ist gestoppt",
         "start": "Starten",
         "unverifiable": "Orca konnte nicht prüfen, ob {{distro}} läuft",
-        "startToSend": "Starte {{distro}}, um zu senden."
+        "startToSend": "Starte {{distro}}, um zu senden.",
+        "startDistro": "{{distro}} starten"
       },
       "interruptedContinue": {
         "continue": "Fortfahren",
@@ -22186,12 +22191,8 @@
       "refreshBeforeEnd": "Beenden ist erst nach dem Aktualisieren der PTYs verfügbar.",
       "endUnsupported": "Beenden ist für dieses Terminal nicht verfügbar. Sein Host unterstützt die erforderlichen Sicherheitsprüfungen nicht. Das Terminal über seinen Tab oder auf seinem Host schließen.",
       "checkingTabs": "Tabs werden geprüft…",
-      "endTitle": "{{terminal}} beenden?",
-      "endDescription": "Dadurch werden das Terminal und seine untergeordneten Prozesse beendet. Nicht gespeicherte Arbeit kann verloren gehen.",
       "lastProcess": "Zuletzt beobachteter Prozess: {{process}}",
-      "cancel": "Abbrechen",
       "ending": "Wird beendet…",
-      "end": "Terminal beenden",
       "unassigned": "Nicht zugewiesen",
       "thisComputer": "Dieser Computer",
       "localOwnedCount_one": "{{count}} Orca-PTY auf diesem Computer",

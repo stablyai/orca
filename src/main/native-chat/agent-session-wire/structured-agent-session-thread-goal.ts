@@ -5,13 +5,11 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentJournalCursor,
-  AgentJournalItemIdentity,
-  AgentJournalThreadGoal
-} from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionOptionsResult
-} from '../../../shared/agent-session-wire'
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalThreadGoal } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
