@@ -6,8 +6,30 @@ import {
 } from './worktree-card-idle-child-agents'
 
 function row(paneKey: string, state: DashboardAgentRow['state']): DashboardAgentRow {
-  // SAFETY: dot-state derivation reads only `state` and the entry's verdict fields.
-  return { paneKey, state, entry: { state: 'working' } } as unknown as DashboardAgentRow
+  return {
+    paneKey,
+    state,
+    agentType: 'claude',
+    startedAt: 1,
+    entry: {
+      paneKey,
+      state: 'working',
+      prompt: '',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: []
+    },
+    tab: {
+      id: 'tab',
+      ptyId: null,
+      worktreeId: 'wt',
+      title: 'Claude',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+  }
 }
 
 describe('partitionIdleChildAgents', () => {
