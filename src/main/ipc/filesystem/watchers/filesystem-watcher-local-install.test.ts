@@ -76,6 +76,16 @@ describe('installLocalWatcher failure caching', () => {
 
     expect(watcherLifecycleState.unwatchableRoots.has('/repo')).toBe(true)
   })
+
+  it.each(['/', 'C:\\', 'c:/', 'D:', '\\\\?\\C:\\'])(
+    'refuses drive root %s without stat or crawl',
+    async (driveRoot) => {
+      await expect(install(driveRoot)).resolves.toBe('unavailable')
+      expect(watcherLifecycleState.unwatchableRoots.has(driveRoot)).toBe(true)
+      expect(statMock).not.toHaveBeenCalled()
+      expect(createLocalWatcherMock).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('installLocalWatcher on a stopped WSL distro', () => {

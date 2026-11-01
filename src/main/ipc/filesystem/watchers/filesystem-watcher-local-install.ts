@@ -35,6 +35,11 @@ function isCrashFuseFailure(error: unknown): boolean {
   )
 }
 
+export function isFilesystemDriveRoot(targetPath: string): boolean {
+  const trimmed = targetPath.trim().replace(/^\\\\\?\\/, '')
+  return trimmed === '/' || /^[a-zA-Z]:[\\/]?$/.test(trimmed)
+}
+
 export async function installLocalWatcher(
   rootKey: string,
   rootPath: string,
@@ -56,6 +61,11 @@ export async function installLocalWatcher(
     if (blocked) {
       scheduleRetry(cancelToken.listeners, waitForDistro(blocked.distro))
       return 'capacity'
+    }
+    if (isFilesystemDriveRoot(rootPath)) {
+      console.warn(`[filesystem-watcher] refusing to watch drive root: ${rootKey}`)
+      rememberUnwatchableRoot(rootKey)
+      return 'unavailable'
     }
     try {
       const s = await stat(rootPath)

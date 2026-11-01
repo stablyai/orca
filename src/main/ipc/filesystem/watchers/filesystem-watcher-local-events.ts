@@ -3,6 +3,7 @@ import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../../../shared/runtime-file-watch-limits'
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
@@ -270,6 +271,7 @@ export async function createLocalWatcher(
       watcherOptions,
       {
         delivery: { maxEventsPerBatch: MAX_BATCHED_WATCHER_EVENTS },
+        subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
         // A child restart or bounded-queue overflow loses path precision; both need the same conservative renderer refresh.
         onInterruption: markWatcherInterrupted,
         onOverflow: markWatcherInterrupted,

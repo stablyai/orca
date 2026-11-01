@@ -44,6 +44,33 @@ describe('prepareWatcherProcessEvents', () => {
     expect(statMock).toHaveBeenCalledTimes(128)
     expect(maxActiveStats).toBe(8)
   })
+
+  it('coalesces duplicate per-path stats within a batch and skips stat if final event is delete', async () => {
+    statMock.mockResolvedValue({ isDirectory: () => false })
+    const events = [
+      { type: 'update' as const, path: '/repo/churn.ts' },
+      { type: 'update' as const, path: '/repo/churn.ts' },
+      { type: 'update' as const, path: '/repo/churn.ts' },
+      { type: 'create' as const, path: '/repo/temp.ts' },
+      { type: 'delete' as const, path: '/repo/temp.ts' }
+    ]
+
+    const prepared = await prepareWatcherProcessEvents(events, {
+      includeDirectoryMetadata: true,
+      maxEventsPerBatch: 200
+    })
+
+    expect(prepared).toEqual([
+      { type: 'update', path: '/repo/churn.ts', isDirectory: false },
+      { type: 'update', path: '/repo/churn.ts', isDirectory: false },
+      { type: 'update', path: '/repo/churn.ts', isDirectory: false },
+      { type: 'create', path: '/repo/temp.ts', isDirectory: false },
+      { type: 'delete', path: '/repo/temp.ts' }
+    ])
+    // Only /repo/churn.ts was stated, exactly once! /repo/temp.ts ended in delete so it was never stated.
+    expect(statMock).toHaveBeenCalledTimes(1)
+    expect(statMock).toHaveBeenCalledWith('/repo/churn.ts')
+  })
 })
 
 describe('watcher event queue flush', () => {
