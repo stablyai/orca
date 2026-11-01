@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { Eye, EyeOff } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { maskTerminalLiveInputText } from '../terminal/terminal-password-prompt'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -20,6 +21,7 @@ export function MobileTerminalPasswordMaskOverlay({
   showToggle = true
 }: MobileTerminalPasswordMaskOverlayProps) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const maskedText = masked && value.length > 0 ? maskTerminalLiveInputText(value) : ''
   const shouldRenderToggle = showToggle
 
@@ -42,6 +44,11 @@ export function MobileTerminalPasswordMaskOverlay({
           onPress={onToggleMask}
           hitSlop={6}
           accessibilityRole="button"
+          accessibilityLabel={
+            masked
+              ? t('session.terminalPasswordMask.showInput', 'Show input')
+              : t('session.terminalPasswordMask.hideInput', 'Hide input')
+          }
           accessibilityState={{ selected: masked }}
         >
           {masked ? (

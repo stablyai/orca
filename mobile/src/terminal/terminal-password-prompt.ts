@@ -1,7 +1,7 @@
 // Detect terminal password/secret prompts and format asterisk ('*') masks for mobile input fields.
 
 const PASSWORD_PROMPT_LINE_PATTERN =
-  /(?:^|[\s[\]()>-])(?:sudo\s+password(?:\s+for\s+[^\r\n:]+)?|password(?:\s+for\s+[^\r\n:]+)?|enter\s+passphrase(?:\s+for\s+[^\r\n:]+)?|passphrase(?:\s+for\s+[^\r\n:]+)?|enter\s+pin(?:\s+for\s+[^\r\n:]+)?|pin\s+code|verification\s+code|one-time\s+password)\s*:\s*$/i
+  /(?:^|[\s[\]()>-])(?:sudo\s+password(?:\s+for\s+[^\r\n]+?)?|password(?:\s+for\s+[^\r\n]+?)?|(?:enter\s+)?passphrase(?:\s+for\s+[^\r\n]+?)?|(?:enter\s+)?pin(?:\s+code|\s+for\s+[^\r\n]+?)?|verification\s+code|one-time\s+password)\s*:\s*$/i
 
 const MAX_PROMPT_TAIL_CHARS = 512
 
@@ -85,9 +85,20 @@ export function maskTerminalLiveInputText(text: string): string {
   return '*'.repeat(Array.from(text).length)
 }
 
+export function reconcileTerminalManualMaskOverride(options: {
+  readonly autoDetectedPrompt: boolean
+  readonly manualOverride: boolean | undefined
+}): boolean | undefined {
+  if (!options.autoDetectedPrompt && options.manualOverride === false) {
+    return undefined
+  }
+  return options.manualOverride
+}
+
 export function resolveTerminalInputMaskedState(options: {
   readonly autoDetectedPrompt: boolean
   readonly manualOverride: boolean | undefined
 }): boolean {
-  return options.manualOverride ?? options.autoDetectedPrompt
+  const manualOverride = reconcileTerminalManualMaskOverride(options)
+  return manualOverride ?? options.autoDetectedPrompt
 }
