@@ -6,6 +6,7 @@ import type { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import type { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import {
   claudeRecord,
+  claudeText,
   claudeMessageBody,
   claudeMessageIdentity,
   claudeOutputEnvelope,
@@ -14,8 +15,10 @@ import {
   claudeToolResults,
   claudeToolUses,
   readClaudeMessageEnvelope,
+  type ClaudeMessageEnvelope,
   type ClaudeToolUse
 } from './structured/journal/claude-structured-item-translation'
+import { claudeStopHookFeedbackRow } from './claude-stop-hook-feedback'
 import {
   appendUnmodeledContent,
   type ClaudeProviderFrameFallback
@@ -125,6 +128,15 @@ export function journalClaudeMessage(
     }
     changed = true
   }
+  const stopHookFeedback = rootStopHookFeedbackRow(envelope)
+  if (stopHookFeedback) {
+    ctx.turn.ensureOpen(message, source, observedAt)
+    ctx.sink.appendItem(identity, stopHookFeedback, {
+      ...stamp(identity, stopHookFeedback),
+      lifecycle: true
+    })
+    changed = true
+  }
   for (const tool of claudeToolUses(outputEnvelope)) {
     ctx.turn.ensureOpen(message, source, observedAt)
     ctx.tools.set(tool.id, tool)
@@ -194,4 +206,16 @@ export function journalClaudeMessage(
     ctx.sink.publish()
   }
   return true
+}
+
+// Submitted-message filtering drops injected text, so read the hook's reason from the raw envelope.
+function rootStopHookFeedbackRow(envelope: ClaudeMessageEnvelope) {
+  const [part] = envelope.content
+  const text = claudeText(claudeRecord(part)?.text)
+  return envelope.isInjectedUserTurn &&
+    envelope.parentToolUseId === null &&
+    envelope.content.length === 1 &&
+    text
+    ? claudeStopHookFeedbackRow(text)
+    : null
 }
