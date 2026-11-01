@@ -39,6 +39,7 @@ export type FleetAgentActivity = {
   worktreeId: string | null
   restoredUnconfirmed: boolean
   providerSessionOnly: boolean
+  lastAssistantMessage?: string | null
 }
 
 export type FleetAgentStatusEvidence = {
@@ -92,7 +93,8 @@ export function mintFleetAgentStatusEvidence(
       model: status.model ?? null,
       worktreeId: status.worktreeId ?? null,
       restoredUnconfirmed: status.restoredUnconfirmed === true,
-      providerSessionOnly: status.providerSessionOnly === true
+      providerSessionOnly: status.providerSessionOnly === true,
+      lastAssistantMessage: status.lastAssistantMessage ?? null
     }
   }
 }

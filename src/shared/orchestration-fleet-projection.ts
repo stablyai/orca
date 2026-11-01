@@ -86,7 +86,7 @@ export type FleetResourceProjection =
 
 export type FleetNextAction = {
   /** `recover` = proven exit with no worker outcome; read the transcript, then stop or abandon. */
-  kind: 'inspect' | 'release' | 'recover' | 'none'
+  kind: 'inspect' | 'release' | 'recover' | 'read' | 'none'
   argv: string[]
 }
 
@@ -118,6 +118,7 @@ export type OrchestrationFleetWorker = {
   autoReleaseAt?: string
   nextAction: FleetNextAction
   attention: OrchestrationFleetAttention
+  lastAssistantMessage?: string | null
 }
 
 export type OrchestrationFleetPage = {
@@ -141,6 +142,8 @@ export function refreshOrchestrationFleetLivenessAttention(worker: Orchestration
     pendingGuidance: had('guidance'),
     pendingApproval: had('approval'),
     interrupted: had('interruption'),
+    stoppedWithoutWorkerDone: had('stopped_without_worker_done'),
+    lastAssistantMessage: worker.attention.lastAssistantMessage ?? worker.lastAssistantMessage,
     liveness: worker.liveness
   })
 }

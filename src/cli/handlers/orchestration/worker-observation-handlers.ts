@@ -39,6 +39,9 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
         // `input` is a question the worker asked that awaits an answer, as worker-list shows.
         if (value.projection.attention) {
           lines.push(`Attention: ${value.projection.attention.categories.join(',') || 'none'}`)
+          if (value.projection.attention.lastAssistantMessage) {
+            lines.push(`Last assistant message: ${value.projection.attention.lastAssistantMessage}`)
+          }
         }
       }
       // Older runtimes omit agentWait; absence is unknown, distinct from an evaluated null.
