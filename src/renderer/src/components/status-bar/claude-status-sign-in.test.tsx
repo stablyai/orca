@@ -1,3 +1,4 @@
+import type * as ProviderAccountsClient from '@/runtime/runtime-provider-accounts-client'
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
@@ -39,7 +40,8 @@ function snapshot(): ClaudeRateLimitAccountsState {
 }
 
 vi.mock('sonner', () => ({ toast: { error: toastError, info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProviderAccountsClient>()),
   fetchProviderAccountsSnapshot: vi.fn(async () => ({
     claude: snapshot(),
     codex: { accounts: [], activeAccountId: null },

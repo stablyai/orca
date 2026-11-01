@@ -1,4 +1,5 @@
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
@@ -25,10 +26,14 @@ export function rewriteRelayedPhoneRequest(
 }
 
 // Servers expose client-placed tabs only with this capability; mobile scope still cannot host them.
+// Withhold compressed frames: they would hide relayed replies and stream ids from the rewriting below.
 export function relayedPhoneCapabilities(capabilities: readonly string[]): readonly string[] {
-  return capabilities.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
-    ? capabilities
-    : [...capabilities, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
+  const forwarded = capabilities.filter(
+    (capability) => capability !== COMPRESSED_FRAMES_CLIENT_CAPABILITY
+  )
+  return forwarded.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)
+    ? forwarded
+    : [...forwarded, BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY]
 }
 
 export function declareRelayedPhoneCapabilities(frame: string): string {
