@@ -11,6 +11,9 @@ const EMOJI_PRESENTATION_SELECTOR = '\ufe0f'
 // Use a literal to keep module evaluation inert; replace does not retain lastIndex across document calls.
 const CLAUDE_STATUS_DOT_PATTERN = /\u23fa[\ufe0e\ufe0f]*/g
 
+// Bound each parse job so input and painting can run between large output slices.
+export const TERMINAL_WRITE_SLICE_UNITS = 4 * 1024
+
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
 
 export function resetWriteQueue(scope: TerminalDocumentScope) {
@@ -30,7 +33,10 @@ export function endsWithStatusDotPresentationSequence(data: string) {
   return i >= 0 && data.charAt(i) === CLAUDE_STATUS_DOT
 }
 
-export function normalizeStatusDotPresentation(scope: TerminalDocumentScope, data: string) {
+export function normalizeStatusDotPresentation(
+  scope: TerminalDocumentScope,
+  data: string | undefined
+) {
   if (typeof data !== 'string' || data.length === 0) {
     return data
   }
@@ -54,8 +60,24 @@ export function normalizeStatusDotPresentation(scope: TerminalDocumentScope, dat
   return normalized
 }
 
-export function enqueueWrite(scope: TerminalDocumentScope, data: string) {
-  scope.writeQueue.push(normalizeStatusDotPresentation(scope, data))
+export function enqueueWrite(scope: TerminalDocumentScope, data: string | undefined) {
+  const normalized = normalizeStatusDotPresentation(scope, data)
+  // Why: a bridge frame can arrive without text; queue it as before, as the scans above tolerate it.
+  if (typeof normalized !== 'string' || normalized.length <= TERMINAL_WRITE_SLICE_UNITS) {
+    scope.writeQueue.push(normalized)
+    return
+  }
+  let offset = 0
+  while (offset < normalized.length) {
+    let end = Math.min(normalized.length, offset + TERMINAL_WRITE_SLICE_UNITS)
+    // Why: a slice ending on a high surrogate would hand xterm half of an astral character.
+    const last = normalized.charCodeAt(end - 1)
+    if (end < normalized.length && last >= 0xd800 && last <= 0xdbff) {
+      end--
+    }
+    scope.writeQueue.push(normalized.slice(offset, end))
+    offset = end
+  }
 }
 
 export function enqueueWriteBoundary(scope: TerminalDocumentScope, callback: () => void) {
