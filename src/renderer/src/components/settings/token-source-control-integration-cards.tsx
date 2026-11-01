@@ -1,6 +1,7 @@
 import { ExternalLink, GitPullRequestArrow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import type { GhStatus } from './integrations-pane-status'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
 import { tokenProviderStatusLabel } from './token-source-control-status'
@@ -130,6 +131,27 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
   )
 }
 
+function giteaTeaStatusLabel(status: GhStatus): string {
+  switch (status) {
+    case 'connected':
+      return translate(
+        'auto.components.settings.token.source.control.integration.cards.giteaTeaConnected',
+        'tea CLI: signed in'
+      )
+    case 'not-authenticated':
+      return translate(
+        'auto.components.settings.token.source.control.integration.cards.giteaTeaNotAuthenticated',
+        'tea CLI: installed, not signed in. Run tea login add.'
+      )
+    case 'checking':
+    case 'not-installed':
+      return translate(
+        'auto.components.settings.token.source.control.integration.cards.giteaTeaNotInstalled',
+        'tea CLI: not installed'
+      )
+  }
+}
+
 export function GiteaIntegrationCard(): React.JSX.Element {
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('gitea')
   const status = unavailable ? 'unavailable' : statuses.giteaStatus
@@ -171,69 +193,87 @@ export function GiteaIntegrationCard(): React.JSX.Element {
         optional: true
       })}
     >
-      {status !== 'checking' && !configured ? (
+      {status !== 'checking' ? (
         <IntegrationCardDetails>
-          <p className="text-xs text-muted-foreground">
-            {status === 'unavailable' ? (
-              translate(
-                'auto.components.settings.token.source.control.integration.cards.0613928cb3',
-                'Gitea status is not available in this runtime yet.'
-              )
-            ) : status === 'not-configured' ? (
-              <>
+          {status === 'unavailable' ? null : (
+            <p className="text-xs text-muted-foreground">
+              {giteaTeaStatusLabel(statuses.giteaTeaStatus)}
+            </p>
+          )}
+          {configured ? (
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={refresh}>
                 {translate(
-                  'auto.components.settings.token.source.control.integration.cards.fcbe0469fd',
-                  'Public repositories are detected from their git remote. Set'
-                )}{' '}
-                <span className="font-mono text-[11px]">
-                  {translate(
-                    'auto.components.settings.token.source.control.integration.cards.6d5c2a3005',
-                    'ORCA_GITEA_TOKEN'
-                  )}
-                </span>{' '}
-                {translate(
-                  'auto.components.settings.token.source.control.integration.cards.6da9dfa5de',
-                  'for private repositories, and set'
-                )}{' '}
-                <span className="font-mono text-[11px]">
-                  {translate(
-                    'auto.components.settings.token.source.control.integration.cards.709057ad91',
-                    'ORCA_GITEA_API_BASE_URL'
-                  )}
-                </span>{' '}
-                {translate(
-                  'auto.components.settings.token.source.control.integration.cards.60708f23da',
-                  'only when Orca cannot derive the API URL from the remote.'
+                  'auto.components.settings.token.source.control.integration.cards.793a06e899',
+                  'Re-check'
                 )}
-              </>
-            ) : (
-              translate(
-                'auto.components.settings.token.source.control.integration.cards.19fb419c12',
-                'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
-              )
-            )}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(event) =>
-                openAppHttpLink('https://docs.gitea.com/next/development/api-usage', { event })
-              }
-            >
-              <ExternalLink className="size-3.5 mr-1.5" />
-              {translate(
-                'auto.components.settings.token.source.control.integration.cards.1a9475dace',
-                'Learn more'
-              )}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={refresh}>
-              {translate(
-                'auto.components.settings.token.source.control.integration.cards.793a06e899',
-                'Re-check'
-              )}
-            </Button>
-          </div>
+              </Button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {status === 'unavailable' ? (
+                  translate(
+                    'auto.components.settings.token.source.control.integration.cards.0613928cb3',
+                    'Gitea status is not available in this runtime yet.'
+                  )
+                ) : status === 'not-configured' ? (
+                  <>
+                    {translate(
+                      'auto.components.settings.token.source.control.integration.cards.fcbe0469fd',
+                      'Public repositories are detected from their git remote. Set'
+                    )}{' '}
+                    <span className="font-mono text-[11px]">
+                      {translate(
+                        'auto.components.settings.token.source.control.integration.cards.6d5c2a3005',
+                        'ORCA_GITEA_TOKEN'
+                      )}
+                    </span>{' '}
+                    {translate(
+                      'auto.components.settings.token.source.control.integration.cards.6da9dfa5de',
+                      'for private repositories, and set'
+                    )}{' '}
+                    <span className="font-mono text-[11px]">
+                      {translate(
+                        'auto.components.settings.token.source.control.integration.cards.709057ad91',
+                        'ORCA_GITEA_API_BASE_URL'
+                      )}
+                    </span>{' '}
+                    {translate(
+                      'auto.components.settings.token.source.control.integration.cards.60708f23da',
+                      'only when Orca cannot derive the API URL from the remote.'
+                    )}
+                  </>
+                ) : (
+                  translate(
+                    'auto.components.settings.token.source.control.integration.cards.19fb419c12',
+                    'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
+                  )
+                )}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(event) =>
+                    openAppHttpLink('https://docs.gitea.com/next/development/api-usage', { event })
+                  }
+                >
+                  <ExternalLink className="size-3.5 mr-1.5" />
+                  {translate(
+                    'auto.components.settings.token.source.control.integration.cards.1a9475dace',
+                    'Learn more'
+                  )}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={refresh}>
+                  {translate(
+                    'auto.components.settings.token.source.control.integration.cards.793a06e899',
+                    'Re-check'
+                  )}
+                </Button>
+              </div>
+            </>
+          )}
         </IntegrationCardDetails>
       ) : null}
     </IntegrationCardShell>

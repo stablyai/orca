@@ -21,6 +21,7 @@ type ProjectTargetActionsInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -68,6 +69,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -102,6 +104,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
       if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
         setLinkedWorkItem(null)
         setLinkedTaskSourceContext(null)
@@ -128,6 +131,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       setLinkedPR,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedWorkItem,
       setLinkedTaskSourceContext,
       setSparseEnabled,

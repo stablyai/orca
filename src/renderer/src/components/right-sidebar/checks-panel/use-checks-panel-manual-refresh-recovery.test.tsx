@@ -624,6 +624,7 @@ it.each([false, true])(
     }
     const panel = {
       ...input,
+      activeGiteaReview: null,
       activeWorktree: null,
       isPanelVisible: false,
       gitLabProjectRefRef: { current: null },

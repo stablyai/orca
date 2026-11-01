@@ -10,7 +10,8 @@ export function useChecksDetailTimer({
   policyRef,
   requestIdentity,
   fetchChecks,
-  fetchGitLabDetails
+  fetchGitLabDetails,
+  fetchGiteaDetails
 }: {
   model: ChecksPanelPollingInput
   modelRef: RefObject<ChecksPanelPollingInput>
@@ -18,9 +19,11 @@ export function useChecksDetailTimer({
   requestIdentity: string
   fetchChecks: ChecksPanelPollingState['fetchChecks']
   fetchGitLabDetails: ChecksPanelPollingState['fetchGitLabDetails']
+  fetchGiteaDetails: ChecksPanelPollingState['fetchGiteaDetails']
 }): void {
   const {
     activeGitLabReview,
+    activeGiteaReview,
     pr,
     prNumber,
     isPanelVisible,
@@ -32,6 +35,7 @@ export function useChecksDetailTimer({
   const refreshRef = useRef<(() => void) | null>(null)
   const forceNextFetchRef = useRef(false)
   const isGitLabReview = activeGitLabReview !== null
+  const isGiteaReview = activeGiteaReview !== null
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
@@ -51,15 +55,16 @@ export function useChecksDetailTimer({
       setChecks([])
       setComments([])
     }
-    if (!isPanelVisible || (!isGitLabReview && !prNumber)) {
+    if (!isPanelVisible || (!isGitLabReview && !isGiteaReview && !prNumber)) {
       wakeNextReadRef.current = true
       return
     }
     const policyDelay = (): number | null => {
       const current = modelRef.current
       return policyRef.current.delayMs(
-        current.activeGitLabReview?.state ?? current.pr?.state,
-        current.activeGitLabReview?.status ?? current.pr?.checksStatus,
+        (current.activeGitLabReview ?? current.activeGiteaReview)?.state ?? current.pr?.state,
+        (current.activeGitLabReview ?? current.activeGiteaReview)?.status ??
+          current.pr?.checksStatus,
         current.pollIntervalRef.current
       )
     }
@@ -91,7 +96,9 @@ export function useChecksDetailTimer({
         try {
           await (isGitLabReview
             ? fetchGitLabDetails(shown ? {} : { background: true })
-            : fetchChecks({ force, ...(shown ? { wakeWslDistro: true } : {}) }))
+            : isGiteaReview
+              ? fetchGiteaDetails(shown ? {} : { background: true })
+              : fetchChecks({ force, ...(shown ? { wakeWslDistro: true } : {}) }))
         } finally {
           if (inFlightRef.current?.token === token) {
             inFlightRef.current = null
@@ -129,8 +136,10 @@ export function useChecksDetailTimer({
     policyRef,
     fetchChecks,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     isPanelVisible,
     isGitLabReview,
+    isGiteaReview,
     prNumber,
     pollIntervalRef,
     prevChecksRef,

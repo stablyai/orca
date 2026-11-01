@@ -761,3 +761,65 @@ describe('Jira issue search', () => {
     expect(rows).toEqual([{ kind: 'jira', value: 'jira-site-1-ORCA-123', issue: jiraIssue }])
   })
 })
+
+describe('Gitea source rows', () => {
+  const giteaItem = {
+    id: 'gitea-pr-7',
+    type: 'pr' as const,
+    number: 7,
+    title: 'Fix login',
+    state: 'open' as const,
+    url: 'https://git.example.com/acme/app/pulls/7',
+    labels: [],
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    author: null,
+    repoId: 'repo-1'
+  }
+  const base = {
+    branches: [],
+    githubItems: [],
+    gitlabAvailable: false,
+    gitlabItems: [],
+    linearAvailable: false,
+    linearIssues: [],
+    resultLimit: 12
+  }
+
+  it('lists Gitea items in the Gitea mode only when the source is available', () => {
+    expect(
+      buildSmartWorkspaceSourceRows({
+        ...base,
+        giteaAvailable: true,
+        giteaItems: [giteaItem],
+        mode: 'gitea',
+        value: 'login'
+      })
+    ).toEqual([{ kind: 'gitea', value: 'gitea-repo-1-pr-7', item: giteaItem }])
+    expect(
+      buildSmartWorkspaceSourceRows({
+        ...base,
+        giteaAvailable: false,
+        giteaItems: [giteaItem],
+        mode: 'gitea',
+        value: 'login'
+      })
+    ).toEqual([])
+  })
+
+  it('narrows to the URL-matched item when a Gitea URL is pasted', () => {
+    const other = { ...giteaItem, number: 8, url: 'https://git.example.com/acme/app/pulls/8' }
+    const rows = buildSmartWorkspaceSourceRows({
+      ...base,
+      giteaAvailable: true,
+      giteaItems: [other, giteaItem],
+      giteaUrlIntent: {
+        slug: { host: 'git.example.com', path: 'acme/app' },
+        type: 'pr',
+        number: 7
+      },
+      mode: 'gitea',
+      value: 'https://git.example.com/acme/app/pulls/7'
+    })
+    expect(rows.map((row) => row.value)).toEqual(['gitea-repo-1-pr-7'])
+  })
+})

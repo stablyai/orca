@@ -11,12 +11,12 @@ import {
 } from './wsl-command-resolution'
 
 /**
- * The default distro's gh/glab for a cwd-less call whose host CLI is missing. Background work must
+ * The default distro's gh/glab/tea for a cwd-less call whose host CLI is missing. Background work must
  * not boot a stopped distro (E9), so a stopped or unverifiable one refuses with its own error rather
  * than "not installed"; inside a user act for that distro it may still start it.
  */
 export async function resolveDefaultWslCliFallback(
-  command: 'gh' | 'glab',
+  command: 'gh' | 'glab' | 'tea',
   args: string[]
 ): Promise<ResolvedCommand | null> {
   const resolved = resolveDefaultWslCli(command, args)

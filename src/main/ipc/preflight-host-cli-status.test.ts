@@ -322,8 +322,8 @@ describe('preflight', () => {
       })
 
       const stalePending = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
-      // The running-distro gate resolves first; hold the stale git/gh/glab probes before refreshing.
-      await expect.poll(() => runWslProcessMock.mock.calls.length).toBe(3)
+      // The running-distro gate resolves first; hold the stale git/gh/glab/tea probes before refreshing.
+      await expect.poll(() => runWslProcessMock.mock.calls.length).toBe(4)
       phase = 'fresh'
       const fresh = await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
       expect(fresh.git).toEqual({ installed: true })

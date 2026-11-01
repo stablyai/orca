@@ -8,6 +8,7 @@ import {
 } from '../../../../../shared/task-providers'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
+import { isGiteaTaskSourceConfigured } from '../../../lib/gitea-review-configured'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
@@ -113,6 +114,7 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: state.preflightStatus?.glab?.installed === true,
+          giteaConfigured: isGiteaTaskSourceConfigured(state.preflightStatus),
           linearConnected: state.linearStatus?.connected === true
         },
         state.settings?.defaultTaskSource

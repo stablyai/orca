@@ -7,6 +7,9 @@ import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-pa
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
+import { parseTeaLoginStatus } from '../gitea/gitea-known-host-probe'
+import { _resetTeaKnownHostsCache } from '../gitea/gitea-known-host-probe'
+import { _resetGiteaRepoRefCache } from '../gitea/repository-ref'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
 import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
@@ -46,6 +49,8 @@ export type PreflightStatus = {
   gh: { installed: boolean; authenticated: boolean }
   // Optional for older git/gh-only clients; GitLab consumers gate on authenticated.
   glab?: { installed: boolean; authenticated: boolean }
+  // Optional for older clients; tea is the Gitea CLI beside the token-backed gitea status.
+  tea?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean
@@ -172,6 +177,35 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
+function teaStatusAuthenticated(stdout: string): boolean {
+  try {
+    return parseTeaLoginStatus(stdout).length > 0
+  } catch {
+    return false
+  }
+}
+
+// `tea login status -o json` stays non-interactive; version probes never wake a stopped distro.
+async function isTeaAuthenticated(probe: CommandRuntime): Promise<boolean> {
+  try {
+    const result = probe.wslTarget
+      ? await execCommandInWslOrThrow(
+          probe.wslTarget,
+          `${quotePosixShell('tea')} login status -o json`
+        )
+      : await execLocalPreflightCommandOrThrow(probe.binary ?? 'tea', [
+          'login',
+          'status',
+          '-o',
+          'json'
+        ])
+    return teaStatusAuthenticated(result.stdout)
+  } catch (error) {
+    const stdout = (error as { stdout?: string }).stdout ?? ''
+    return teaStatusAuthenticated(stdout)
+  }
+}
+
 // glab versions split auth status across stdout/stderr; inspect both.
 async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
@@ -269,26 +303,32 @@ async function executePreflightCheck(
   if (force) {
     // Refresh GitLab host discovery too, or self-hosted login stays invisible until relaunch.
     _resetKnownHostsCache()
+    _resetTeaKnownHostsCache()
+    _resetGiteaRepoRefCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const [gitProbe, ghProbe, glabProbe, teaProbe] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    detectCommandRuntime('tea', context)
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe) : Promise.resolve(false),
-    getBitbucketAuthStatus(),
-    getAzureDevOpsAuthStatus(),
-    getGiteaAuthStatus()
-  ])
+  const [ghAuthenticated, glabAuthenticated, teaAuthenticated, bitbucket, azureDevOps, gitea] =
+    await Promise.all([
+      ghProbe.installed ? isGhAuthenticated(ghProbe) : Promise.resolve(false),
+      glabProbe.installed ? isGlabAuthenticated(glabProbe) : Promise.resolve(false),
+      teaProbe.installed ? isTeaAuthenticated(teaProbe) : Promise.resolve(false),
+      getBitbucketAuthStatus(),
+      getAzureDevOpsAuthStatus(),
+      getGiteaAuthStatus()
+    ])
 
   return {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    tea: { installed: teaProbe.installed, authenticated: teaAuthenticated },
     bitbucket,
     azureDevOps,
     gitea

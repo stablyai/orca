@@ -35,6 +35,10 @@ export function selectChecksPanelReview({
   if (gitLabHostedReview) {
     return gitLabHostedReview
   }
+  const giteaHostedReview = hostedReview?.provider === 'gitea' ? hostedReview : null
+  if (giteaHostedReview) {
+    return giteaHostedReview
+  }
   const hasNonGitHubLinkedReview =
     linkedGitLabMR !== null ||
     linkedBitbucketPR !== null ||

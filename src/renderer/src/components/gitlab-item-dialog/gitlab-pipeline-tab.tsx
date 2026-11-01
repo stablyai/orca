@@ -67,6 +67,7 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
                   retrying={retryingJobId === job.id}
                   onToggleTrace={(row) => void pipelineActions.handleToggleJobTrace(row)}
                   onRetry={(row) => void pipelineActions.handleRetryJob(row)}
+                  canRetryJobs={state.forge.canRetryJobs}
                 />
               ))}
             </div>

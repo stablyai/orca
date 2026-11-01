@@ -35,6 +35,12 @@ describe('workspace attachments', () => {
     ])
   })
 
+  it('reads a legacy linkedGiteaIssue slot as a Gitea issue attachment', () => {
+    expect(getWorkspaceAttachments({ linkedGiteaIssue: 9 })).toEqual([
+      { provider: 'gitea', type: 'issue', number: 9 }
+    ])
+  })
+
   it('retains previous attachments when replacing an active scalar and removes only the explicitly unlinked review', () => {
     const first = normalizeWorkspaceAttachmentUpdate({ linkedPR: 7 }, { linkedPR: 8 })
     expect(first.linkedItems).toEqual([pr(7), pr(8)])

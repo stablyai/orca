@@ -3230,7 +3230,28 @@
           "linearViewNotFound": "Saved Linear view was not found.",
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
-        "shownCount_one": "{{count}} shown"
+        "shownCount_one": "{{count}} shown",
+        "giteaViewIssues": "Issues",
+        "giteaViewPrs": "PRs",
+        "giteaViewNotifications": "Notifications",
+        "giteaRefreshNotifications": "Refresh notifications",
+        "giteaRefreshWorkItems": "Refresh Gitea work items",
+        "giteaNewIssue": "New issue",
+        "giteaNewIssueTitle": "New Gitea issue",
+        "giteaTypePr": "PR",
+        "startWorkspaceFromPr": "Start workspace from PR {{number}}",
+        "giteaOpenIn": "Open in Gitea",
+        "giteaNotificationType": "Type",
+        "giteaNoNotifications": "No notifications. You’re all caught up!",
+        "giteaSelectProject": "Select a project so we can authenticate to Gitea.",
+        "giteaSource": "Gitea",
+        "giteaFilterSearch": "Search title or #number",
+        "giteaFilterSearchLabel": "Search Gitea work items",
+        "giteaFilterAuthor": "Author",
+        "giteaFilterAssignee": "Assignee",
+        "giteaFilterLabel": "Label",
+        "giteaFilterAny": "Any {{filter}}",
+        "giteaMarkNotificationRead": "Mark as read"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8320,7 +8341,8 @@
           "jiraIssueKeyCasingTitle": "Jira Key Casing",
           "jiraIssueKeyCasingDescription": "Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.",
           "jiraIssueKeyCasingLowercase": "Lowercase",
-          "jiraIssueKeyCasingPreserve": "Uppercase key"
+          "jiraIssueKeyCasingPreserve": "Uppercase key",
+          "giteaBudgetDescription": "Current Gitea CLI REST rate-limit headers and tea login status."
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -9305,7 +9327,9 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "giteaLabel": "Gitea",
+          "giteaDescription": "Browse Gitea issues and pull requests and start workspaces from them."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -11570,7 +11594,10 @@
                   "statusNotConfigured": "Not configured",
                   "statusAuthFailed": "Auth failed",
                   "statusConfigured": "Configured",
-                  "statusOptionalSetup": "Optional setup"
+                  "statusOptionalSetup": "Optional setup",
+                  "giteaTeaConnected": "tea CLI: signed in",
+                  "giteaTeaNotAuthenticated": "tea CLI: installed, not signed in. Run tea login add.",
+                  "giteaTeaNotInstalled": "tea CLI: not installed"
                 }
               }
             }
@@ -15415,7 +15442,9 @@
             "crossRepoDifferentTaskSource": "The GitHub URL points to {{repo}}, which is different from the selected task source.",
             "crossRepoDifferentProject": "The GitHub URL points to {{repo}}, which is different from the selected project.",
             "useAsWorkspaceName": "Use <name>\"{{name}}\"</name> as workspace name",
-            "createNewBranchNamed": "Create new branch <name>{{name}}</name>"
+            "createNewBranchNamed": "Create new branch <name>{{name}}</name>",
+            "giteaMode": "Gitea",
+            "searchGitea": "Search Gitea PRs and issues"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -18548,7 +18577,13 @@
         "noGitLabMrsTitle": "No GitLab merge requests",
         "noGitLabMrsDescription": "No GitLab MRs match this filter.",
         "noGitLabWorkTitle": "No GitLab work",
-        "noGitLabWorkDescription": "No GitLab work matches this filter."
+        "noGitLabWorkDescription": "No GitLab work matches this filter.",
+        "noGiteaIssuesTitle": "No Gitea issues",
+        "noGiteaIssuesDescription": "No Gitea issues match this filter.",
+        "noGiteaPrsTitle": "No Gitea pull requests",
+        "noGiteaPrsDescription": "No Gitea pull requests match this filter.",
+        "noGiteaWorkTitle": "No Gitea work",
+        "noGiteaWorkDescription": "No Gitea work matches this filter."
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
@@ -19183,6 +19218,39 @@
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
         }
+      },
+      "GiteaItemDialog": {
+        "retryUnsupported": "Gitea does not support retrying a single job.",
+        "workItemDetail": "Gitea work item detail",
+        "openInGitea": "Open in Gitea",
+        "titleRequired": "Title is required.",
+        "closedPr": "Closed PR #{{value0}}",
+        "reopenedPr": "Reopened PR #{{value0}}",
+        "mergedPr": "Merged PR #{{value0}}"
+      },
+      "gitea": {
+        "gitea": {
+          "rate": {
+            "limit": {
+              "display": {
+                "budgetScopePrefix": "Budget scope",
+                "description": "Orca uses REST through the Gitea CLI (tea).",
+                "envTokenOnly": "tea CLI not installed; using {{value0}}.",
+                "loading": "Loading Gitea API budget...",
+                "noHeaders": "This Gitea host did not return rate-limit headers.",
+                "refresh": "Refresh Gitea API budget",
+                "remainingOfLimit": "{{remaining}} of {{limit}} left, resets in {{reset}}",
+                "rest": "REST API",
+                "teaMissing": "tea CLI is not installed.",
+                "teaSignedIn": "tea CLI is signed in.",
+                "teaSignedInHost": "tea CLI signed in to {{value0}}.",
+                "teaSignedOut": "tea CLI is not signed in. Run tea login add.",
+                "title": "Gitea API Budget",
+                "unavailable": "Gitea API budget is unavailable."
+              }
+            }
+          }
+        }
       }
     },
     "i18n": {
@@ -19236,6 +19304,11 @@
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
+      },
+      "giteaJobTraceClient": {
+        "loadFailed": "Failed to load the Gitea job log.",
+        "timedOut": "Timed out loading the Gitea job log.",
+        "emptyTrace": "No log is available for this Gitea job."
       }
     },
     "ssh": {
@@ -21168,6 +21241,8 @@
       "authRequiredCommand": "{{providerName}} is not authenticated. Next step: run {{command}} in this environment.",
       "authRequiredVariable": "{{providerName}} is not authenticated. Next step: set {{variable}} in this environment.",
       "authRequiredBitbucket": "Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.",
+      "authRequiredGitea": "{{providerName}} is not authenticated. Next step: run {{command}} or set {{variable}} in this environment.",
+      "signInHintGitea": "Run {{command}} or set {{variable}} in this environment",
       "signInHintCommand": "Run {{command}} in this environment",
       "signInHintVariable": "Set {{variable}} in this environment",
       "signInHintBitbucket": "Connect Bitbucket in Settings > Integrations",
@@ -22087,7 +22162,8 @@
         "jira_task_url": "Jira task (URL)",
         "bitbucket_pr": "Bitbucket PR",
         "azure_devops_pr": "Azure DevOps PR",
-        "gitea_pr": "Gitea PR"
+        "gitea_pr": "Gitea PR",
+        "gitea_issue": "Gitea issue"
       },
       "mrReference": "MR !{{number}}",
       "prReference": "PR #{{number}}",
@@ -23281,6 +23357,13 @@
         "rerunRejected": "Could not rerun checks — {{detail}}",
         "rerunFailed": "Failed to rerun checks: {{detail}}"
       },
+      "gitea": {
+        "projectUnresolved": "Could not resolve Gitea repository for this checkout",
+        "unexpectedResponse": "Unexpected response from Gitea",
+        "rateLimited": "Gitea rate limit hit. Try again in a few minutes.",
+        "issuePermissionDenied": "You don't have permission to edit this issue. Check your Gitea token scopes.",
+        "jobLogFailed": "Failed to load the job log: {{detail}}"
+      },
       "gitlab": {
         "projectUnresolved": "Could not resolve GitLab project for this repository",
         "unexpectedResponse": "Unexpected response from GitLab",
@@ -23305,6 +23388,11 @@
         "prHeadBranchMissing": "PR #{{number}} has no head branch.",
         "forkHeadUnresolved": "Could not resolve fork PR #{{number}} head after fetch.",
         "headShaEmpty": "Empty SHA resolving PR #{{number}} head."
+      },
+      "gitea": {
+        "prNotFound": "PR #{{number}} not found.",
+        "prHeadBranchMissing": "PR #{{number}} has no head branch.",
+        "forkHeadUnresolved": "Could not resolve fork PR #{{number}} head after fetch."
       },
       "gitlab": {
         "projectNotFound": "No GitLab project found for this repository.",

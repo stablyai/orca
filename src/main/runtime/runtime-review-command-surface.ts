@@ -2,9 +2,13 @@ import type { RuntimeGitHubIssueCommentCommands } from './runtime-github-issue-c
 import type { RuntimeGitHubProjectCommands } from './runtime-github-project-commands'
 import type { RuntimeGitHubReviewMutationCommands } from './runtime-github-review-mutation-commands'
 import type { RuntimeGitHubReviewQueryCommands } from './runtime-github-review-query-commands'
+import type { RuntimeGiteaMutationCommands } from './runtime-gitea-mutation-commands'
+import type { RuntimeGiteaQueryCommands } from './runtime-gitea-query-commands'
 import type { RuntimeGitLabMutationCommands } from './runtime-gitlab-mutation-commands'
 import type { RuntimeGitLabQueryCommands } from './runtime-gitlab-query-commands'
 
+type GiteaQueryName = Exclude<keyof RuntimeGiteaQueryCommands, 'constructor'>
+type GiteaMutationName = Exclude<keyof RuntimeGiteaMutationCommands, 'constructor'>
 type GitLabQueryName = Exclude<keyof RuntimeGitLabQueryCommands, 'constructor'>
 type GitLabMutationName = Exclude<keyof RuntimeGitLabMutationCommands, 'constructor'>
 type GitHubProjectName = Exclude<keyof RuntimeGitHubProjectCommands, 'constructor'>
@@ -35,7 +39,9 @@ type GitHubIssueCommentName =
   | 'addRepoPRReviewComment'
   | 'addRepoPRReviewCommentReply'
 
-export type RuntimeReviewCommandSurface = {} & Pick<RuntimeGitLabQueryCommands, GitLabQueryName> &
+export type RuntimeReviewCommandSurface = {} & Pick<RuntimeGiteaQueryCommands, GiteaQueryName> &
+  Pick<RuntimeGiteaMutationCommands, GiteaMutationName> &
+  Pick<RuntimeGitLabQueryCommands, GitLabQueryName> &
   Pick<RuntimeGitLabMutationCommands, GitLabMutationName> &
   Pick<RuntimeGitHubReviewQueryCommands, GitHubReviewQueryName> &
   Pick<RuntimeGitHubReviewMutationCommands, GitHubReviewMutationName> &
@@ -43,6 +49,8 @@ export type RuntimeReviewCommandSurface = {} & Pick<RuntimeGitLabQueryCommands, 
   Pick<RuntimeGitHubProjectCommands, GitHubProjectName>
 
 type RuntimeReviewCommandOwners = {
+  giteaQueries: RuntimeGiteaQueryCommands
+  giteaMutations: RuntimeGiteaMutationCommands
   gitLabQueries: RuntimeGitLabQueryCommands
   gitLabMutations: RuntimeGitLabMutationCommands
   gitHubReviewQueries: RuntimeGitHubReviewQueryCommands
@@ -55,6 +63,8 @@ export function installRuntimeReviewCommandSurface(
   target: RuntimeReviewCommandSurface,
   owners: RuntimeReviewCommandOwners
 ): void {
+  const giteaQueries = owners.giteaQueries
+  const giteaMutations = owners.giteaMutations
   const glq = owners.gitLabQueries
   const glm = owners.gitLabMutations
   const ghq = owners.gitHubReviewQueries
@@ -62,6 +72,34 @@ export function installRuntimeReviewCommandSurface(
   const comments = owners.gitHubIssueComments
   const projects = owners.gitHubProjects
   Object.assign(target, {
+    diagnoseGiteaAuth: giteaQueries.diagnoseGiteaAuth.bind(giteaQueries),
+    getGiteaViewer: giteaQueries.getGiteaViewer.bind(giteaQueries),
+    getGiteaRateLimit: giteaQueries.getGiteaRateLimit.bind(giteaQueries),
+    getGiteaProjectRef: giteaQueries.getGiteaProjectRef.bind(giteaQueries),
+    getGiteaPullRequestForBranch: giteaQueries.getGiteaPullRequestForBranch.bind(giteaQueries),
+    getGiteaPullRequestByNumber: giteaQueries.getGiteaPullRequestByNumber.bind(giteaQueries),
+    listGiteaRepoPRs: giteaQueries.listGiteaRepoPRs.bind(giteaQueries),
+    listGiteaRepoWorkItems: giteaQueries.listGiteaRepoWorkItems.bind(giteaQueries),
+    getGiteaRepoIssue: giteaQueries.getGiteaRepoIssue.bind(giteaQueries),
+    listGiteaRepoIssues: giteaQueries.listGiteaRepoIssues.bind(giteaQueries),
+    listGiteaRepoLabels: giteaQueries.listGiteaRepoLabels.bind(giteaQueries),
+    listGiteaRepoAssignableUsers: giteaQueries.listGiteaRepoAssignableUsers.bind(giteaQueries),
+    listGiteaRepoNotifications: giteaQueries.listGiteaRepoNotifications.bind(giteaQueries),
+    markGiteaRepoNotificationRead: giteaQueries.markGiteaRepoNotificationRead.bind(giteaQueries),
+    getGiteaRepoWorkItemDetails: giteaQueries.getGiteaRepoWorkItemDetails.bind(giteaQueries),
+    createGiteaRepoIssue: giteaMutations.createGiteaRepoIssue.bind(giteaMutations),
+    updateGiteaRepoIssue: giteaMutations.updateGiteaRepoIssue.bind(giteaMutations),
+    addGiteaRepoIssueComment: giteaMutations.addGiteaRepoIssueComment.bind(giteaMutations),
+    updateGiteaRepoPRState: giteaMutations.updateGiteaRepoPRState.bind(giteaMutations),
+    mergeGiteaRepoPR: giteaMutations.mergeGiteaRepoPR.bind(giteaMutations),
+    updateGiteaRepoPR: giteaMutations.updateGiteaRepoPR.bind(giteaMutations),
+    updateGiteaRepoPRReviewers: giteaMutations.updateGiteaRepoPRReviewers.bind(giteaMutations),
+    addGiteaRepoPRComment: giteaMutations.addGiteaRepoPRComment.bind(giteaMutations),
+    addGiteaRepoPRInlineComment: giteaMutations.addGiteaRepoPRInlineComment.bind(giteaMutations),
+    resolveGiteaRepoPRDiscussion: giteaMutations.resolveGiteaRepoPRDiscussion.bind(giteaMutations),
+    submitGiteaRepoPRReview: giteaMutations.submitGiteaRepoPRReview.bind(giteaMutations),
+    getGiteaRepoJobTrace: giteaMutations.getGiteaRepoJobTrace.bind(giteaMutations),
+    getGiteaRepoWorkItemByPath: giteaMutations.getGiteaRepoWorkItemByPath.bind(giteaMutations),
     listGitLabRepoWorkItems: glq.listGitLabRepoWorkItems.bind(glq),
     listGitLabRepoMRs: glq.listGitLabRepoMRs.bind(glq),
     listGitLabRepoIssues: glq.listGitLabRepoIssues.bind(glq),

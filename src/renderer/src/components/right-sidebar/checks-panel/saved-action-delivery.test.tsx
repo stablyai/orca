@@ -205,6 +205,7 @@ function fixture(saved = true, paired = false, conflictingOwner = false) {
       })
       const resolution = useChecksPanelCommentResolution({
         activeGitLabReview: null,
+        activeGiteaReview: null,
         activeReview: review,
         activeWorktree: worktree,
         activeWorktreeId: worktree.id,

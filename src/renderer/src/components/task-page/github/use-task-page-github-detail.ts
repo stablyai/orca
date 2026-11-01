@@ -9,6 +9,7 @@ import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-c
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { useTaskPageGiteaDetail } from '../gitea/use-task-page-gitea-detail'
 import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
@@ -28,6 +29,8 @@ type TaskPageGitHubDetailInput = Pick<
   | 'setGithubMode'
   | 'gitlabDialogItem'
   | 'setGitlabDialogItem'
+  | 'giteaDialogItem'
+  | 'setGiteaDialogItem'
   | 'appliedTaskSearch'
   | 'githubPerRepoPageLimit'
   | 'githubResumeContextKey'
@@ -238,25 +241,27 @@ export function useTaskPageGitHubDetail<Model extends TaskPageGitHubDetailInput>
     },
     [openTaskPage, repos]
   )
-  return Object.assign(model, {
-    githubTaskDrawerWorkItem,
-    setGithubTaskDrawerWorkItem,
-    dialogInitialTab,
-    setDialogInitialTab,
-    dialogWorkItemKey,
-    appliedWorkItemsCacheQuery,
-    selectedWorkItemsCacheEntries,
-    sourceDisplayWorkItemsCacheEntries,
-    cachedDialogWorkItem,
-    dialogWorkItem,
-    dialogRepoPath,
-    dialogSourceContext,
-    gitlabDialogRepo,
-    gitlabDialogSourceContext,
-    setDialogWorkItem,
-    openGitHubDetailPage,
-    openGitLabDetailPage
-  })
+  return useTaskPageGiteaDetail(
+    Object.assign(model, {
+      githubTaskDrawerWorkItem,
+      setGithubTaskDrawerWorkItem,
+      dialogInitialTab,
+      setDialogInitialTab,
+      dialogWorkItemKey,
+      appliedWorkItemsCacheQuery,
+      selectedWorkItemsCacheEntries,
+      sourceDisplayWorkItemsCacheEntries,
+      cachedDialogWorkItem,
+      dialogWorkItem,
+      dialogRepoPath,
+      dialogSourceContext,
+      gitlabDialogRepo,
+      gitlabDialogSourceContext,
+      setDialogWorkItem,
+      openGitHubDetailPage,
+      openGitLabDetailPage
+    })
+  )
 }
 export type TaskPageGitHubDetailModel = ReturnType<
   typeof useTaskPageGitHubDetail<TaskPageGitHubListStateModel>

@@ -14891,7 +14891,9 @@
             "crossRepoDifferentTaskSource": "La URL de GitHub apunta a {{repo}}, que es diferente de la fuente de tareas seleccionada.",
             "crossRepoDifferentProject": "La URL de GitHub apunta a {{repo}}, que es diferente del proyecto seleccionado.",
             "useAsWorkspaceName": "Usar <name>«{{name}}»</name> como nombre del espacio de trabajo",
-            "createNewBranchNamed": "Crear una nueva rama <name>{{name}}</name>"
+            "createNewBranchNamed": "Crear una nueva rama <name>{{name}}</name>",
+            "giteaMode": "Gitea",
+            "searchGitea": "Buscar PR e issues de Gitea"
           },
           "ProjectCombobox": {
             "empty": "Ningún proyecto coincide con tu búsqueda.",
@@ -22149,7 +22151,8 @@
         "jira_task_url": "Tarea de Jira (URL)",
         "bitbucket_pr": "PR de Bitbucket",
         "azure_devops_pr": "PR de Azure DevOps",
-        "gitea_pr": "PR de Gitea"
+        "gitea_pr": "PR de Gitea",
+        "gitea_issue": "Issue de Gitea"
       },
       "mrReference": "MR !{{number}}",
       "prReference": "PR #{{number}}",

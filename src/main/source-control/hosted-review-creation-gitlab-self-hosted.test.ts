@@ -85,6 +85,8 @@ function mockNonGitLabProviders(): void {
 
 describe('GitLab self-hosted hosted review creation eligibility', () => {
   beforeEach(() => {
+    vi.stubEnv('ORCA_GITEA_TOKEN', '')
+    vi.stubEnv('ORCA_GITEA_API_BASE_URL', '')
     resetMocks()
     mockNonGitLabProviders()
     getHostedReviewForBranchMock.mockResolvedValue(null)

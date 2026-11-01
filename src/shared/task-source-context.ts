@@ -19,6 +19,7 @@ import type { Repo } from './repo-types'
 
 export type {
   GitHubTaskProviderIdentity,
+  GiteaTaskProviderIdentity,
   GitLabTaskProviderIdentity,
   JiraTaskProviderIdentity,
   LinearTaskProviderIdentity,

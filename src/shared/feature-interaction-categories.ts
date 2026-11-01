@@ -35,6 +35,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   tasks: 'task_management',
   'github-tasks': 'task_management',
   'gitlab-tasks': 'task_management',
+  'gitea-tasks': 'task_management',
   'linear-tasks': 'task_management',
   'jira-tasks': 'task_management',
   automations: 'automation',

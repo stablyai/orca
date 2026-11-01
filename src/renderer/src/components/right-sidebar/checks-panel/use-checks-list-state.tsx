@@ -135,7 +135,8 @@ export function useChecksListState({
         !row.check.checkRunId &&
         !row.check.workflowRunId &&
         !row.check.url &&
-        !row.check.gitlabJobId
+        !row.check.gitlabJobId &&
+        !row.check.giteaJobId
       ) {
         setDetailsByCheckKey((current) => ({
           ...current,

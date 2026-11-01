@@ -1,4 +1,3 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -22,7 +21,8 @@ export function useGitLabPipelineActions(
     setDetails,
     setExpandedJobId,
     setJobTraceById,
-    setRetryingJobId
+    setRetryingJobId,
+    forge
   } = state
   const handleToggleJobTrace = useCallback(
     async (job: GitLabPipelineJob): Promise<void> => {
@@ -39,7 +39,7 @@ export function useGitLabPipelineActions(
         [job.id]: { loading: true }
       }))
       try {
-        const result = await gitLabApiFor(repoSelector).jobTrace({
+        const result = await forge.apiFor(repoSelector).jobTrace({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -71,6 +71,7 @@ export function useGitLabPipelineActions(
       item,
       jobTraceById,
       mountedRef,
+      forge,
       repoSelector,
       setExpandedJobId,
       setJobTraceById
@@ -84,7 +85,7 @@ export function useGitLabPipelineActions(
       }
       setRetryingJobId(job.id)
       try {
-        const result = await gitLabApiFor(repoSelector).retryJob({
+        const result = await forge.apiFor(repoSelector).retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -129,6 +130,7 @@ export function useGitLabPipelineActions(
       handleRefresh,
       item,
       mountedRef,
+      forge,
       repoSelector,
       setDetails,
       setRetryingJobId

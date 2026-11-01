@@ -10,6 +10,7 @@ import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-k
 import type { HostedReviewInfo } from '../../../../../shared/hosted-review'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
+import { isGiteaChecksPanelReview } from './gitea-review-client'
 import { useChecksPanelEntryRefreshAndTitleActions } from './use-checks-panel-entry-refresh-and-title-actions'
 
 type EntryRefreshInput = Parameters<typeof useChecksPanelEntryRefreshAndTitleActions>[0]
@@ -46,6 +47,7 @@ const original = useAppStore.getState()
 function makeInput(review: HostedReviewInfo): EntryRefreshInput {
   return {
     activeGitLabReview: isGitLabChecksPanelReview(review) ? review : null,
+    activeGiteaReview: isGiteaChecksPanelReview(review) ? review : null,
     activeReview: review,
     activeWorktree: makeWorktree({ id: 'worktree-1', repoId: repo.id }),
     activeWorktreeId: 'worktree-1',
@@ -58,11 +60,13 @@ function makeInput(review: HostedReviewInfo): EntryRefreshInput {
     fetchChecks: vi.fn(),
     fetchComments: vi.fn(),
     fetchGitLabDetails: vi.fn(async () => {}),
+    fetchGiteaDetails: vi.fn(async () => {}),
     fetchHostedReviewForBranch: useAppStore.getState().fetchHostedReviewForBranch,
     fetchPRForBranch: vi.fn(async () => null),
     hostedReviewCacheKey: 'hosted-review-key',
     isFolder: false,
     isGitLabReviewContext: review.provider === 'gitlab',
+    isGiteaReviewContext: review.provider === 'gitea',
     // Hidden, so the tab-entry refresh stays out of the way.
     isPanelVisible: false,
     linkedAzureDevOpsPR: null,

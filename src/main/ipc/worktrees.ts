@@ -39,6 +39,7 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:prefetchCreateBase',
   'worktrees:resolvePrBase',
   'worktrees:resolveMrBase',
+  'worktrees:resolveGiteaPrBase',
   'worktrees:remove',
   'worktrees:sleep',
   'worktrees:sleepReopened',

@@ -20,6 +20,7 @@ type GitHubProviderSelectionInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -67,6 +68,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -92,6 +94,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
         setLinkedPR(identity.type === 'pr' ? identity.number : null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+        clearLinkedGiteaItems()
         setLinkedWorkItem(linkedItem)
         setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
         const nextName = getLinkedItemDisplayName(linkedItem)
@@ -193,6 +196,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

@@ -11,6 +11,7 @@ type GitHubSourceApplicationInput = Pick<
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -35,6 +36,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
     setBranchNameOverridePreservesNameEdits,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -59,6 +61,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
       }
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
       setLinkedWorkItem({
         type: identity.type,
         provider: 'github',
@@ -98,6 +101,7 @@ export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) 
       setBranchNameOverridePreservesNameEdits,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

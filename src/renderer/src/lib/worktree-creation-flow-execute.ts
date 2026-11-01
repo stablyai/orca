@@ -109,12 +109,10 @@ export async function executeWorktreeCreation(
           ...(preparedRequest.displayNameKind
             ? { displayNameKind: preparedRequest.displayNameKind }
             : {}),
-          ...(preparedRequest.linkedWorkItem !== undefined
-            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
-            : {}),
-          ...(preparedRequest.linkedTaskSourceContext !== undefined
-            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
-            : {}),
+          // Why: the create payload omits unset link fields, so they pass through as-is.
+          linkedGiteaIssue: preparedRequest.linkedGiteaIssue,
+          linkedWorkItem: preparedRequest.linkedWorkItem,
+          linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext,
           // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
           ...(!structuredLaunch &&
           !backendStartup &&

@@ -95,6 +95,7 @@ export type WorktreeCreationRequest = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedGiteaIssue?: number | null
   // Backend startup payload exists only for self-contained launch; otherwise startupPlan drives it in renderer.
   startup?: WorktreeStartupLaunch
   // Trust-gated repo issue command runs in a split after the first terminal, matching the composer.

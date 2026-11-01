@@ -27,6 +27,7 @@ export const WORKTREE_SET_METHOD = defineMethod({
       linkedBitbucketPR: params.linkedBitbucketPR,
       linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
       linkedGiteaPR: params.linkedGiteaPR,
+      linkedGiteaIssue: params.linkedGiteaIssue,
       linkedWorkItem: params.linkedWorkItem,
       linkedItems: params.linkedItems,
       ...(params.linkedItemsBase !== undefined ? { linkedItemsBase: params.linkedItemsBase } : {}),

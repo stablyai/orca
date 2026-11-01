@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { isGiteaTaskSourceConfigured } from '@/lib/gitea-review-configured'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
@@ -9,7 +10,11 @@ export function deriveIntegrationStepStates(input: {
   reviewConnected: boolean
   trackerConnected: boolean
   codeHostTaskConnected: boolean
-}): { review: IntegrationStepState; task: IntegrationStepState; complete: boolean } {
+}): {
+  review: IntegrationStepState
+  task: IntegrationStepState
+  complete: boolean
+} {
   const review: IntegrationStepState = input.reviewConnected ? 'done' : 'active'
   const taskResolved =
     input.trackerConnected || (input.reviewConnected && input.codeHostTaskConnected)
@@ -70,6 +75,7 @@ type ProviderStatusFacts = {
     bitbucket?: BitbucketStatus
     azureDevOps?: TokenReviewStatus
     gitea?: TokenReviewStatus
+    tea?: CliStatus & { installed: boolean; authenticated: boolean }
   } | null
   preflightStatusChecked: boolean
   preflightStatusContextKey: string | null
@@ -117,16 +123,6 @@ function isAzureDevOpsReviewConfigured(status: TokenReviewStatus | undefined): b
   return true
 }
 
-function isGiteaReviewConfigured(status: TokenReviewStatus | undefined): boolean {
-  if (status?.configured !== true) {
-    return false
-  }
-  if (status.tokenConfigured === true && status.authenticated !== true) {
-    return false
-  }
-  return true
-}
-
 export function deriveIntegrationConnectionStatus(
   facts: ProviderStatusFacts
 ): IntegrationConnectionStatus {
@@ -147,7 +143,7 @@ export function deriveIntegrationConnectionStatus(
   const azureDevOpsConnected =
     reviewReadyForConnection && isAzureDevOpsReviewConfigured(facts.preflightStatus?.azureDevOps)
   const giteaConnected =
-    reviewReadyForConnection && isGiteaReviewConfigured(facts.preflightStatus?.gitea)
+    reviewReadyForConnection && isGiteaTaskSourceConfigured(facts.preflightStatus)
 
   const linearStatusCurrent = facts.linearStatusContextKey === facts.providerRuntimeContextKey
   const jiraStatusCurrent = facts.jiraStatusContextKey === facts.providerRuntimeContextKey

@@ -39,6 +39,20 @@ describe('task providers', () => {
     ).toEqual(['github', 'linear'])
   })
 
+  it('shows Gitea only once a tea login or REST token is configured', () => {
+    const visible = ['github', 'gitea'] as const
+    expect(
+      filterAvailableTaskProviders(visible, { gitlabInstalled: false, linearConnected: false })
+    ).toEqual(['github'])
+    expect(
+      filterAvailableTaskProviders(visible, {
+        gitlabInstalled: false,
+        giteaConfigured: true,
+        linearConnected: false
+      })
+    ).toEqual(['github', 'gitea'])
+  })
+
   it('keeps an available saved default visible when provider visibility drifted', () => {
     expect(
       restoreAvailableDefaultTaskProvider(

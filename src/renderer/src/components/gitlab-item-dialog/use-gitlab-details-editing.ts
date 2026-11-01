@@ -1,5 +1,5 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { useCallback } from 'react'
+import { dialogFeatureInteractionId } from './gitlab-dialog-forge'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -34,7 +34,8 @@ export function useGitLabDetailsEditing(
     setLabelOptions,
     setLabelOptionsLoading,
     setTitleDraft,
-    titleDraft
+    titleDraft,
+    forge
   } = state
   const loadGitLabLabelOptions = useCallback(async (): Promise<void> => {
     if (!repoSelector || labelOptions !== null || labelOptionsLoading) {
@@ -42,7 +43,7 @@ export function useGitLabDetailsEditing(
     }
     setLabelOptionsLoading(true)
     try {
-      const labels = await gitLabApiFor(repoSelector).listLabels(repoSelector)
+      const labels = await forge.apiFor(repoSelector).listLabels(repoSelector)
       if (mountedRef.current) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
@@ -59,13 +60,14 @@ export function useGitLabDetailsEditing(
     labelOptions,
     labelOptionsLoading,
     mountedRef,
+    forge,
     repoSelector,
     setLabelOptions,
     setLabelOptionsLoading
   ])
 
   const handleStartDetailsEdit = useCallback((): void => {
-    if (!item || !details || item.type !== 'mr') {
+    if (!item || !details || (item.type !== 'mr' && !forge.canEditIssues)) {
       return
     }
     setTitleDraft(details.item.title || item.title)
@@ -75,6 +77,7 @@ export function useGitLabDetailsEditing(
     void loadGitLabLabelOptions()
   }, [
     details,
+    forge,
     item,
     loadGitLabLabelOptions,
     setBodyDraft,
@@ -91,7 +94,7 @@ export function useGitLabDetailsEditing(
   }, [setBodyDraft, setEditingDetails, setLabelDraft, setTitleDraft])
 
   const handleSaveDetails = useCallback(async (): Promise<void> => {
-    if (!item || !details || !repoSelector || item.type !== 'mr') {
+    if (!item || !details || !repoSelector || (item.type !== 'mr' && !forge.canEditIssues)) {
       return
     }
     const currentTitle = details.item.title || item.title
@@ -101,7 +104,11 @@ export function useGitLabDetailsEditing(
     const nextBody = bodyDraft
     const nextLabels = parseGitLabLabelDraft(labelDraft)
     if (!nextTitle) {
-      toast.error(translate('auto.components.GitLabItemDialog.98718490e4', 'MR title is required.'))
+      toast.error(
+        forge.kind === 'gitea'
+          ? translate('auto.components.GiteaItemDialog.titleRequired', 'Title is required.')
+          : translate('auto.components.GitLabItemDialog.98718490e4', 'MR title is required.')
+      )
       return
     }
 
@@ -129,7 +136,7 @@ export function useGitLabDetailsEditing(
 
     setDetailsSaving(true)
     try {
-      const res = await gitLabApiFor(repoSelector).updateMR({
+      const res = await forge.apiFor(repoSelector).updateMR({
         ...repoSelector,
         iid: item.number,
         updates
@@ -152,7 +159,7 @@ export function useGitLabDetailsEditing(
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
         }
       } else if (mountedRef.current) {
         toast.error(codeHostErrorText(res))
@@ -173,6 +180,7 @@ export function useGitLabDetailsEditing(
     item,
     labelDraft,
     mountedRef,
+    forge,
     repoSelector,
     setBodyDraft,
     setDetails,

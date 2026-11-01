@@ -104,6 +104,7 @@ function createInput(): Parameters<typeof useTargetChangeActions>[0] {
     setForkPushWarning: vi.fn(),
     setLinkedGitLabIssue: vi.fn(),
     setLinkedGitLabMR: vi.fn(),
+    clearLinkedGiteaItems: vi.fn(),
     setLinkedIssue: vi.fn(),
     setLinkedPR: vi.fn(),
     setLinkedTaskSourceContext: vi.fn(),

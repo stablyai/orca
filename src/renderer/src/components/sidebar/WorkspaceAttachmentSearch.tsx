@@ -76,6 +76,8 @@ export function WorkspaceAttachmentSearch({
         onKindChange('jira-issue')
       } else if (mode === 'gitlab') {
         onKindChange(kind === 'gitlab-issue' ? 'gitlab-issue' : 'gitlab-mr')
+      } else if (mode === 'gitea') {
+        onKindChange(kind === 'gitea-issue' ? 'gitea-issue' : 'gitea-pr')
       } else if (mode === 'github' && kind !== 'github-pr' && kind !== 'github-issue') {
         onKindChange('github-issue')
       }
@@ -93,6 +95,7 @@ export function WorkspaceAttachmentSearch({
     githubSourceContext: contexts.github,
     linearSourceContext: contexts.linear,
     gitlabSourceContext: contexts.gitlab,
+    giteaEnabled: true,
     jiraSourceContext: contexts.jira
   })
   const toAttachment = controller.resolveRow

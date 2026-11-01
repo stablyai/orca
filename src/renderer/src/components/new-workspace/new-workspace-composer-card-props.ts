@@ -13,6 +13,7 @@ import type SmartWorkspaceNameField from './SmartWorkspaceNameField'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
@@ -87,6 +88,7 @@ export type NewWorkspaceComposerCardProps = {
   activeFolderWorkspaceId?: string | null
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
+  onSmartGiteaItemSelect: (item: GiteaWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   smartNameMode?: SmartNameMode

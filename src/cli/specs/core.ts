@@ -68,7 +68,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     repeatableFlags: ['reference'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--gitea-pr <number>] [--gitea-issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -91,6 +91,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'linear-issue',
       'gitlab-issue',
       'gitlab-mr',
+      'gitea-pr',
+      'gitea-issue',
       'comment',
       'setup',
       'parent-worktree',
@@ -117,7 +119,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
       'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
-      'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
+      'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links; --gitea-pr and --gitea-issue write separate Gitea links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
     ],
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
