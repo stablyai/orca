@@ -1,4 +1,7 @@
-import type { AgentSessionOwnerVerdict, AgentSessionWireRefusalCode } from './agent-session-wire'
+import type {
+  AgentSessionOwnerVerdict,
+  AgentSessionWireRefusalCode
+} from './agent-session-wire-refusals'
 
 export type AgentSessionRefusalOperationState = 'settled-rejected' | 'pending-admission' | 'unknown'
 

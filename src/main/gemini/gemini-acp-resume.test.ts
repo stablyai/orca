@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
-import { agentSessionRefusalNotice } from '../../shared/agent-session-refusal-notice'
+import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   closeProviderTimelineRigs,
   messageText

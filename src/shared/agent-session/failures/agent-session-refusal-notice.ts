@@ -20,13 +20,7 @@ import {
   type AgentSessionWriteRefusal
 } from './agent-session-write-failure'
 import { agentSessionRefusalReasonWords } from './agent-session-refusal-reason-words'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
-
-export {
-  agentSessionRefusalReasonWords,
-  type AgentSessionRefusalAction,
-  type AgentSessionRefusalReasonWords
-} from './agent-session-refusal-reason-words'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 
 const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
   'read-history': 'notDoneReadHistory',

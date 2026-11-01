@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session-acquired-account'
-import { agentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import {
+  agentSessionAccountHome,
+  type LegacyAgentSessionAccountHome
+} from '../../../shared/agent-session-account-home'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
 import {
@@ -17,8 +20,8 @@ import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured
 import { createReceivingAccountFixture } from './structured-agent-session-receiving-account.test-support'
 import { structuredAgentSessionReceivingAccount } from './structured-agent-session-receiving-account'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   acceptedDispatch,
   createRestTestRig,
@@ -44,7 +47,6 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { JournalItemLinkageVisitor } from '../agent-session-journal/journal-store-contracts'
-import type { LegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
 const accountHome = (path: string): LegacyAgentSessionAccountHome => ({
   variable: 'CODEX_HOME',

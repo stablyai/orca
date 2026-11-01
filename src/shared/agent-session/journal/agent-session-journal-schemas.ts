@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import { AgentSessionContextUsageSchema } from '../../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
-import { AgentSessionFailureFactSchema } from '../../agent-session-failure-fact-schema'
+import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
 import type {
   AgentJournalItemBody,

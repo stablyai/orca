@@ -4,7 +4,7 @@ import {
   agentSessionRpcErrorFailure,
   readAgentSessionErrorRefusal,
   type AgentSessionWriteFailure
-} from '../../agent-session-write-failure'
+} from '../failures/agent-session-write-failure'
 
 /** Synthetic unknown row: ledger holds the ID but journal lost it, so recording is unproved. */
 export const STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING = 'durable_send_submission_missing'

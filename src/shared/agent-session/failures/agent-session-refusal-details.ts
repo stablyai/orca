@@ -1,23 +1,26 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
-import type { AgentSessionAccountKind } from './agent-session-availability'
-import type { AgentJournalResolution } from './agent-session/journal/agent-session-journal-types'
+import type { AgentSessionAccountKind } from '../../agent-session-availability'
+import type { AgentJournalResolution } from '../journal/agent-session-journal-types'
 import {
   readAgentCliInstallationProblem,
   type AgentCliInstallationProblem
-} from './agent-cli-installation-problem'
+} from '../../agent-cli-installation-problem'
 import {
   readCodexInstallationProblem,
   type CodexInstallationProblem
-} from './codex-cli-installation'
+} from '../../codex-cli-installation'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from './agent-session/agent-session-argument-problem'
-import { isAgentJournalResolution } from './agent-session/journal/agent-session-journal-schemas'
-import { AGENT_SESSION_REWIND_REASONS, type AgentSessionRewindReason } from './agent-session-rewind'
-import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
+} from '../agent-session-argument-problem'
+import { isAgentJournalResolution } from '../journal/agent-session-journal-schemas'
+import {
+  AGENT_SESSION_REWIND_REASONS,
+  type AgentSessionRewindReason
+} from '../../agent-session-rewind'
+import type { TuiAgent } from '../../tui-agent'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../tui-agent-display-names'
 import type {
   AgentSessionOwnerVerdict,
   AgentSessionWireRefusalCode

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_WIRE_REFUSAL_CODES } from './agent-session-wire'
+import { AGENT_SESSION_WIRE_REFUSAL_CODES } from './agent-session-wire-refusals'
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
 import { isDefinitiveAgentSessionCreateRefusal } from './agent-session-definitive-refusal'
 

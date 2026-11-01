@@ -1,6 +1,6 @@
 // Replace an outgrown child only when its provider needs acquisition to apply the current choice.
 
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'

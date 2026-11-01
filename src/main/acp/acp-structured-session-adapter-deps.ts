@@ -10,7 +10,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-identity'
-import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
+import type { AgentJournalDispatchRejection } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { ConnectAcpAgent } from './acp-structured-connection'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'

@@ -7,8 +7,8 @@ import type { AgentSessionProviderContextBoundary } from '../../agent-session-pr
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
-import type { UnreadAgentSessionFailureFact } from '../../agent-session-failure'
-import type { AgentSessionFailureRowWords } from '../../agent-session-failure-words'
+import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
+import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
 import type { AgentSessionQuestionAnswer } from '../../agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'

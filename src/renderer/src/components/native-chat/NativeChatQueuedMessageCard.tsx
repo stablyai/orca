@@ -36,9 +36,11 @@ import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
-import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
-import { NativeChatQueuedMessageComposer } from './NativeChatQueuedMessageComposer'
-import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
+import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  NativeChatQueuedMessageComposer,
+  type QueuedEditAttachTarget
+} from './NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import { nativeChatImageLabelCopy } from './native-chat-image-label'
 import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'

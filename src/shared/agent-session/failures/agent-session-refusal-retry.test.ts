@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerVerdict } from './agent-session-wire'
+import type { AgentSessionOwnerVerdict } from './agent-session-wire-refusals'
 import { agentSessionOwnerVerdictAllowsFreshOperationId } from './agent-session-refusal-retry'
 
 describe("the owner's verdict decides a retry's operation id only as a floor", () => {

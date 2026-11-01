@@ -4,11 +4,11 @@ import type * as I18nModule from '@/i18n/i18n'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
-} from '../../../../shared/agent-session-failure'
-import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
-import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
-import { agentSessionRefusalFailure } from '../../../../shared/agent-session-write-failure'
-import { structuredAgentSessionRejectionParts } from '../../../../shared/structured-agent-session-rejection-words'
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { agentSessionRefusalFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { structuredAgentSessionRejectionParts } from '../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 

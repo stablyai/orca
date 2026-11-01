@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agentSessionFailureFact } from '../../agent-session-failure'
-import { agentSessionFailureWords } from '../../agent-session-failure-words'
+import { agentSessionFailureFact } from '../failures/agent-session-failure'
+import { agentSessionFailureWords } from '../failures/agent-session-failure-words'
 import {
   classifyDispatchRejection,
   DISPATCH_REJECTED_CANCELLED,

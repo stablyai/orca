@@ -1,7 +1,7 @@
 // Trust stop-time witnesses, not post-attach journal rewrites. Delete superseded/forked offers;
 // structural refusal preserves them for a compatible build or later ownership resolution.
 
-import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionAnyRefusalDetails } from '../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionProviderHandleChainHead,
