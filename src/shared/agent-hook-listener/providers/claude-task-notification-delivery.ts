@@ -13,7 +13,7 @@ import {
 import { readClaudeTaskNotification } from '../../claude-task-notification-text'
 import type { HookListenerState } from '../listener-state'
 import {
-  forgetClaudeNonAgentTaskIds,
+  recordClaudeLaunchedNonAgentTask,
   retireClaudeNonAgentTask
 } from './claude-running-non-agent-tasks'
 import { readString } from '../tool-input-preview'
@@ -36,7 +36,7 @@ export function trackClaudeTaskNotificationDelivery(
       state.claudeLaunchedBackgroundTasksByPaneKey.set(paneKey, launched)
       recordClaudeBackgroundTaskLaunch(launched, launch)
       if (launch.kind === 'shell') {
-        forgetClaudeNonAgentTaskIds(state, paneKey)
+        recordClaudeLaunchedNonAgentTask(state, paneKey, launch.id)
       }
     } else if (toolName === 'TaskStop' && typeof response === 'object' && response) {
       const stoppedId = readString({ ...response }, 'task_id')

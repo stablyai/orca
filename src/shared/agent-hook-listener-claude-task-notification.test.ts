@@ -337,14 +337,6 @@ describe('Claude owed task notifications outside the captures', () => {
       ],
       'working'
     ],
-    [
-      'a listed shell is stopped',
-      [
-        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
-        { hook_event_name: 'PostToolUse', tool_name: 'TaskStop', tool_response: { task_id: 'b1' } }
-      ],
-      'done'
-    ],
     // Async hooks can deliver a launch after its own end.
     [
       'a launch hook arrives after its notification',
@@ -353,6 +345,23 @@ describe('Claude owed task notifications outside the captures', () => {
         notify('b1', 'completed'),
         { hook_event_name: 'Stop', background_tasks: [] },
         launch('b1')
+      ],
+      'done'
+    ],
+    [
+      'a new shell starts after a listed one ends',
+      [
+        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
+        notify('b1', 'completed'),
+        launch('b2')
+      ],
+      'working'
+    ],
+    [
+      'a listed shell is stopped',
+      [
+        { hook_event_name: 'Stop', background_tasks: [shell('b1')] },
+        { hook_event_name: 'PostToolUse', tool_name: 'TaskStop', tool_response: { task_id: 'b1' } }
       ],
       'done'
     ]
