@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Ban, ListChecks, Users } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useMemo, useRef, useState } from 'react'
+import { Ban, ChevronLeft, ListChecks, Users } from 'lucide-react'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
@@ -40,6 +40,9 @@ function pillClass(open: boolean): string {
   )
 }
 
+// Radix shifts popovers on the main axis only, so a pill-anchored sheet runs past a short composer.
+const sheetClass = 'w-80 max-w-(--radix-popper-anchor-width) p-0'
+
 export function NativeChatActivityBar({
   messages,
   subagentRows,
@@ -65,6 +68,7 @@ export function NativeChatActivityBar({
   )
   const [tasksOpen, setTasksOpen] = useState(false)
   const [subagentsOpen, setSubagentsOpen] = useState(false)
+  const columnRef = useRef<{ getBoundingClientRect(): DOMRect } | null>(null)
   const focused = subagents.find((agent) => agent.id === focusedSubagentId) ?? null
   const showTasks = list != null && list.tasks.length > 0
   if (!showTasks && subagents.length === 0 && !focused) {
@@ -75,7 +79,12 @@ export function NativeChatActivityBar({
   const working = subagents.some((agent) => agent.state === 'working')
   return (
     <div className="shrink-0 px-3 pb-2 sm:px-4">
-      <div className="mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-1.5">
+      <div
+        ref={(node) => {
+          columnRef.current = node
+        }}
+        className="mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-1.5"
+      >
         {focused ? (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -86,9 +95,10 @@ export function NativeChatActivityBar({
               </span>
               <button
                 type="button"
-                className="shrink-0 rounded-md px-1.5 py-0.5 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => onFocusSubagent(null)}
               >
+                <ChevronLeft aria-hidden className="size-3.5 shrink-0" />
                 {translate('components.native-chat.activity.mainAgent', 'Main agent')}
               </button>
             </div>
@@ -111,6 +121,7 @@ export function NativeChatActivityBar({
         <div className="flex flex-wrap items-center gap-1.5">
           {showTasks && list ? (
             <Popover open={tasksOpen} onOpenChange={setTasksOpen}>
+              <PopoverAnchor virtualRef={columnRef} />
               <PopoverTrigger className={pillClass(tasksOpen)}>
                 <ListChecks aria-hidden className="size-3.5 shrink-0" />
                 <span>
@@ -135,11 +146,11 @@ export function NativeChatActivityBar({
                 </span>
               </PopoverTrigger>
               <PopoverContent
-                align="start"
+                align="end"
                 side="top"
                 collisionPadding={8}
                 wheelScroll
-                className="w-80 p-0"
+                className={sheetClass}
               >
                 <p className="border-b border-border px-3 py-2 text-xs font-medium text-foreground">
                   {translate('components.native-chat.taskList.title', 'Tasks')}
@@ -150,6 +161,7 @@ export function NativeChatActivityBar({
           ) : null}
           {subagents.length > 0 ? (
             <Popover open={subagentsOpen} onOpenChange={setSubagentsOpen}>
+              <PopoverAnchor virtualRef={columnRef} />
               <PopoverTrigger
                 className={pillClass(subagentsOpen)}
                 aria-label={translate(
@@ -181,11 +193,11 @@ export function NativeChatActivityBar({
                 ) : null}
               </PopoverTrigger>
               <PopoverContent
-                align="start"
+                align="end"
                 side="top"
                 collisionPadding={8}
                 wheelScroll
-                className="w-80 p-0"
+                className={sheetClass}
               >
                 <p className="border-b border-border px-3 py-2 text-xs font-medium text-foreground">
                   {translate('components.native-chat.activity.subagentsTitle', 'Subagents')}
