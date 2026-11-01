@@ -5,7 +5,7 @@ import type {
   StagedStructuredLaunchPrompt,
   StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'

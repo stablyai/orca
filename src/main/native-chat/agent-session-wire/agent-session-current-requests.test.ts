@@ -10,7 +10,7 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../shared/structured-agent-session-reducer'
+} from '../../../shared/agent-session/structured-agent-session-reducer'
 import { readCurrentRequestsPiece } from './agent-session-current-requests'
 
 const marker: AgentSessionCurrentRequestsMarker = {

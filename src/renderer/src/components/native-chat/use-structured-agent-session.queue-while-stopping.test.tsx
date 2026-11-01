@@ -27,7 +27,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
   })
 }))
 
-import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 import { useStructuredAgentSession } from './use-structured-agent-session'

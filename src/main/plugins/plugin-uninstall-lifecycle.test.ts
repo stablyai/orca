@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getUserPluginsDir } from './plugin-discovery'
 import { installPluginFromLocalPath } from './installation/plugin-install'
@@ -35,7 +36,7 @@ it('blocks fresh work while removal is pending and restores admission after fail
   try {
     await entered.promise
     const workers = uninstallWorkerPorts.length
-    expect(service.getGrantedCapabilities(key)).toEqual(['workspace:read', 'agent:read'])
+    expect(service.getGrantedCapabilities(key)).toBeNull()
     expect(service.getLogs(key)).toHaveLength(200)
     await expect(service.invokeCommand(key, 'run')).rejects.toThrow('not enabled')
     await expect(service.panels.readEntry(key, 'panel')).resolves.toBeNull()
@@ -168,4 +169,26 @@ it('waits for removal during service disposal and preserves history until succes
     await disposal
   }
   expect(service.getLogs(key)).toHaveLength(0)
+})
+
+it('revokes consent and enablement state before deleting the plugin files', async () => {
+  const { root, store, install } = await createUninstallFixture()
+  const key = await install('atomic')
+  store.updateSettings({ disabledPlugins: ['other.plugin', key] })
+  const pluginDir = join(getUserPluginsDir(root), key)
+  const original = store.updateSettings.bind(store)
+  const filesPresentAtRevoke: boolean[] = []
+  vi.spyOn(store, 'updateSettings').mockImplementation((patch) => {
+    if (patch.pluginConsents && !(key in patch.pluginConsents)) {
+      filesPresentAtRevoke.push(existsSync(pluginDir))
+    }
+    original(patch)
+  })
+
+  await removeThroughPluginIpc(key)
+
+  expect(filesPresentAtRevoke).toEqual([true])
+  expect(store.getSettings().pluginConsents).not.toHaveProperty(key)
+  expect(store.getSettings().disabledPlugins).toEqual(['other.plugin'])
+  expect(existsSync(pluginDir)).toBe(false)
 })

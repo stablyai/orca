@@ -26,7 +26,7 @@ import { structuredSendResultFixture } from '../../structured-agent-send-result.
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { structuredAgentSessionHostSupport } from '../../mobile-structured-agent-session-host-support'
-import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_RUNTIME_CAPABILITIES } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })

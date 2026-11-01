@@ -5,7 +5,7 @@ import type { JournalItemEcho } from './journal-item-echo'
 // New kinds need reader-first rollout or a version bump because older builds may delete them.
 // Unknown body kinds remain readable; malformed annotations are dropped, malformed content fails load.
 
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,

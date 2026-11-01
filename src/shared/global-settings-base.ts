@@ -13,6 +13,7 @@ import type { WorktreeDeletionPreferences } from './worktree-deletion-preference
 import type { HoldQuitSettings } from './mac-hold-quit'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
+import type { WindowMaterialSettings } from './window-material'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = ClaudeAgentViewSettings &
@@ -29,4 +30,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
-  TerminalColorOverrideGlobalSettings
+  TerminalColorOverrideGlobalSettings &
+  WindowMaterialSettings

@@ -7,7 +7,7 @@ import {
   type AgentStatusEntry,
   type AgentStatusIpcPayload
 } from '../../shared/agent-status-types'
-import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { terminalTitleBlocksExplicitAgentStatus } from './runtime-worktree-status-projection'
 import type { HookLiveAgentRow } from './runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'

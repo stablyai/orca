@@ -12,6 +12,7 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { resolvePaintedTheme } from './lib/terminal-app-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -24,6 +25,7 @@ import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellat
 import { HoldQuitNotice } from './components/HoldQuitNotice'
 import { Toaster } from './components/ui/sonner'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -35,7 +37,7 @@ installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
@@ -63,6 +65,7 @@ if (!rootElement) {
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
+  useReduceVisualEffects(settings?.reduceVisualEffects)
 
   useEffect(() => {
     let disposed = false
@@ -95,7 +98,7 @@ function PopoutSettingsSync(): null {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [settings])

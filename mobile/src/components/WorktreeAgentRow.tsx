@@ -1,5 +1,5 @@
 import { agentNoUpdateLabel } from '../../../src/shared/agent-row-decay-state'
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
@@ -17,7 +17,7 @@ import { MobileAgentIcon } from './MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../src/shared/agent-child-row-model'
 import { mobileAgentChildRowText } from '../session/mobile-agent-child-row-text'
 
-const INDENT_PER_DEPTH = 14
+export const AGENT_ROW_INDENT_PER_DEPTH = 14
 
 type Props = {
   agent: RuntimeWorktreeAgentRow
@@ -28,6 +28,7 @@ type Props = {
   childRow?: AgentChildRowModel
   isReadOnly?: boolean
   onPress?: (paneKey: string) => void
+  trailing?: ReactNode
 }
 
 // Match compact desktop DashboardAgentRow: state→identity→message/prompt→age.
@@ -38,7 +39,8 @@ function WorktreeAgentRowComponent({
   unvisited,
   childRow,
   isReadOnly,
-  onPress
+  onPress,
+  trailing
 }: Props) {
   useMobileColorScheme()
   const dotState = childRow?.displayState ?? agentDotState(agent, now)
@@ -61,7 +63,7 @@ function WorktreeAgentRowComponent({
         : formatTimeAgo(timeAt, now)
 
   const content = (
-    <View style={[styles.row, { paddingLeft: depth * INDENT_PER_DEPTH }]}>
+    <View style={[styles.row, { paddingLeft: depth * AGENT_ROW_INDENT_PER_DEPTH }]}>
       <AgentStateDot state={dotState} />
       {/* Use desktop-style agent identity logo instead of two-letter code. */}
       {!childRow && agent.agentType ? (
@@ -77,6 +79,7 @@ function WorktreeAgentRowComponent({
           label
         )}
       </Text>
+      {trailing}
       <Text style={styles.time}>{ts}</Text>
     </View>
   )

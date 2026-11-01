@@ -67,6 +67,14 @@ export class PluginPanelSessions {
     }
   }
 
+  /** One token, e.g. when the frame it was issued for could not be set up. */
+  revoke(ownerKey: string, token: string): void {
+    const session = this.sessions.get(token)
+    if (session?.ownerKey === ownerKey) {
+      this.delete(token, session)
+    }
+  }
+
   revokeOwner(ownerKey: string): void {
     for (const [token, session] of this.sessions) {
       if (session.ownerKey === ownerKey) {
