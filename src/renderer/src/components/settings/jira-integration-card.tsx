@@ -6,16 +6,19 @@ import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { ORCA_JIRA_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   getProviderRuntimeContextKey,
   hasRemoteProviderRuntime
 } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
+import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { JIRA_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
+import { useJiraAgentSkillSetup } from './use-jira-agent-skill-setup'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -256,6 +259,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
             </Button>
           </>
         ) : null}
+        <JiraAgentSkillRow />
       </IntegrationCardDetails>
 
       <JiraConnectDialog
@@ -266,5 +270,42 @@ export function JiraIntegrationCard(): React.JSX.Element {
         contentClassName="z-[120]"
       />
     </IntegrationCardShell>
+  )
+}
+
+function JiraAgentSkillRow(): React.JSX.Element {
+  const skillSetup = useJiraAgentSkillSetup()
+  const subordinateRowClass = useIntegrationSubordinateRowClass('space-y-1.5')
+
+  return (
+    <div className={subordinateRowClass}>
+      <p className="text-xs font-medium text-foreground">
+        {translate(
+          'auto.components.settings.linear.agent.skill.install.cta.skillLabel',
+          'Agent skill:'
+        )}{' '}
+        <span className="font-mono text-[11px]">{ORCA_JIRA_SKILL_NAME}</span>
+      </p>
+      <AgentSkillSetupPanel
+        variant="inline"
+        hideHeader
+        title={translate('auto.components.settings.TasksPane.jiraSkillPanelTitle', 'Jira skill')}
+        description={
+          skillSetup.skillInstalled
+            ? null
+            : translate(
+                'auto.components.settings.jira.integration.card.skillDescription',
+                'Let agents read and update Jira issues. Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
+              )
+        }
+        skillNames={[ORCA_JIRA_SKILL_NAME]}
+        installed={skillSetup.skillInstalled}
+        loading={skillSetup.skillLoading}
+        error={skillSetup.error}
+        installDisabled={skillSetup.installDisabled}
+        onRecheck={skillSetup.refreshSkill}
+        freshnessSkillName={skillSetup.freshnessSkillName}
+      />
+    </div>
   )
 }

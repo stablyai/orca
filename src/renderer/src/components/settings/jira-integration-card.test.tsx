@@ -2,10 +2,15 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
+import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { doneResult, planOf, sharedEntry } from '../skills/bundled-skill-plan-fixtures.test-support'
+import { TooltipProvider } from '../ui/tooltip'
 import { JiraIntegrationCard } from './jira-integration-card'
+
+const WRITE_PLAN = planOf([sharedEntry('orca-jira', 'write')])
 
 type StoreState = {
   jiraStatus: {
@@ -20,10 +25,56 @@ type StoreState = {
   settings: { activeRuntimeEnvironmentId: string | null }
   openSettingsPage: () => void
   openSettingsTarget: (target: { pane: string; repoId: string | null }) => void
+  runtimeStatusByEnvironmentId: Map<string, unknown>
+  runtimeEnvironments: { id: string }[]
 }
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const mocks = vi.hoisted(() => ({
   store: { current: null as StoreState | null }
+}))
+
+const skillMocks = vi.hoisted(() => ({
+  skillTarget: ((): BundledSkillTarget => ({ kind: 'local' }))(),
+  useInstalledAgentSkill: vi.fn(),
+  plan: vi.fn(),
+  execute: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+  planBundledSkillsOnTarget: skillMocks.plan,
+  executeBundledSkillsOnTarget: skillMocks.execute
+}))
+
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    bundledSkillTarget: skillMocks.skillTarget,
+    discoveryRuntimeTarget: skillMocks.skillTarget,
+    installDisabledReason: null,
+    canUseSkillFreshness: false
+  })
+}))
+
+vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useInstalledAgentSkill: (...args: unknown[]) => {
+    skillMocks.useInstalledAgentSkill(...args)
+    return {
+      installed: false,
+      loading: false,
+      settled: true,
+      installedUnverifiable: false,
+      error: null,
+      skills: [],
+      sources: [],
+      refresh: async () => true
+    }
+  }
+}))
+
+vi.mock('@/hooks/installed-agent-skill-discovery', () => ({
+  notifyInstalledAgentSkillsChanged: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -66,7 +117,9 @@ function installStore(settings: StoreState['settings']): StoreState {
     testJiraConnection: vi.fn(async () => ({ ok: true })),
     settings,
     openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn()
+    openSettingsTarget: vi.fn(),
+    runtimeStatusByEnvironmentId: new Map(),
+    runtimeEnvironments: []
   }
   mocks.store.current = state
   return state
@@ -77,12 +130,25 @@ async function renderCard(): Promise<HTMLDivElement> {
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<JiraIntegrationCard />)
+    root?.render(
+      <TooltipProvider>
+        <JiraIntegrationCard />
+      </TooltipProvider>
+    )
   })
   return container
 }
 
 describe('JiraIntegrationCard account scope', () => {
+  beforeEach(() => {
+    skillMocks.skillTarget = { kind: 'local' }
+    skillMocks.useInstalledAgentSkill.mockReset()
+    skillMocks.plan.mockReset()
+    skillMocks.plan.mockResolvedValue({ kind: 'plan', plan: WRITE_PLAN })
+    skillMocks.execute.mockReset()
+    skillMocks.execute.mockResolvedValue(doneResult(WRITE_PLAN))
+  })
+
   afterEach(async () => {
     if (root) {
       await act(async () => {
@@ -154,5 +220,36 @@ describe('JiraIntegrationCard account scope', () => {
       repoId: null,
       sectionId: 'default-runtime'
     })
+  })
+
+  it('installs orca-jira on the paired host that owns the Jira connection', async () => {
+    skillMocks.skillTarget = { kind: 'environment', environmentId: 'runtime-1' }
+    installStore({ activeRuntimeEnvironmentId: 'runtime-1' })
+
+    const rendered = await renderCard()
+    await act(async () => {})
+    expect(rendered.textContent).toContain('Agent skill: orca-jira')
+    expect(skillMocks.useInstalledAgentSkill).toHaveBeenCalledWith(
+      'orca-jira',
+      expect.objectContaining({
+        runtimeTarget: { kind: 'environment', environmentId: 'runtime-1' }
+      })
+    )
+
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Install')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(skillMocks.plan).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'runtime-1' },
+      { names: ['orca-jira'] }
+    )
+    expect(skillMocks.execute).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'runtime-1' },
+      WRITE_PLAN.planDigest,
+      { names: ['orca-jira'] }
+    )
   })
 })
