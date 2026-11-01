@@ -45,6 +45,7 @@ export type SubscriberDeliveryPort = {
   ) => void
   isActive: (subscriber: Subscriber) => boolean
   activity: (sessionId: string) => AgentSessionTurnActivity | null
+  promptSuggestion: (sessionId: string) => string | null
 }
 
 export function deliverToSubscriber(
@@ -55,14 +56,32 @@ export function deliverToSubscriber(
     hostNow: number
     emitCheckpoint: boolean
     activity?: AgentSessionTurnActivity | null | undefined
+    promptSuggestion?: string | null | undefined
   }
 ): void {
-  const { subscriber, journal, hostNow, emitCheckpoint, activity } = input
+  const { subscriber, journal, hostNow, emitCheckpoint, activity, promptSuggestion } = input
   const checkpointActivity = emitCheckpoint ? port.activity(subscriber.sessionId) : undefined
   const publishedActivity = activity !== undefined ? activity : checkpointActivity
-  const shared = {
+  const retainedSuggestion = port.promptSuggestion(subscriber.sessionId)
+  // A resuming subscriber may hold a suggestion the host cleared while it was away.
+  const publishedSuggestion =
+    promptSuggestion !== undefined
+      ? promptSuggestion
+      : emitCheckpoint
+        ? retainedSuggestion
+        : undefined
+  const unsuggested = {
     hostNow,
     ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
+  }
+  const shared = {
+    ...unsuggested,
+    ...(publishedSuggestion !== undefined ? { promptSuggestion: publishedSuggestion } : {})
+  }
+  // Snapshots replace the client's state, so they carry the retained suggestion and omit a null.
+  const snapshotFields = {
+    ...unsuggested,
+    ...(retainedSuggestion ? { promptSuggestion: retainedSuggestion } : {})
   }
   const work = port.hooks.readCurrentWork?.(subscriber.sessionId, journal)
   const emit: SubscriberDeliveryPort['emit'] = (target, event, options) =>
@@ -92,7 +111,7 @@ export function deliverToSubscriber(
         sessionId: subscriber.sessionId,
         page,
         fence: subscriber.fence,
-        ...shared
+        ...snapshotFields
       },
       { historyView: view.normalizationKey }
     )
@@ -132,7 +151,7 @@ export function deliverToSubscriber(
           reset: result.reset,
           page,
           fence: subscriber.fence,
-          ...shared
+          ...snapshotFields
         },
         { historyView: view.normalizationKey }
       )
@@ -163,7 +182,8 @@ export function deliverToSubscriber(
           page: tail,
           fence: subscriber.fence,
           hostNow,
-          activity: port.activity(subscriber.sessionId)
+          activity: port.activity(subscriber.sessionId),
+          ...(retainedSuggestion ? { promptSuggestion: retainedSuggestion } : {})
         },
         { historyView: view.normalizationKey }
       )
@@ -212,6 +232,7 @@ function emitCaughtUp(
   shared: {
     hostNow: number
     activity?: AgentSessionTurnActivity | null
+    promptSuggestion?: string | null
   },
   current: {
     journal: AgentSessionJournal
@@ -227,7 +248,13 @@ function emitCaughtUp(
     refreshPublishedWork(port, subscriber, current.journal, work, shared)
     return
   }
-  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
+  if (
+    emitCheckpoint ||
+    shared.activity !== undefined ||
+    shared.promptSuggestion !== undefined ||
+    commandsChanged ||
+    queuedChanged
+  ) {
     port.emit(
       subscriber,
       {

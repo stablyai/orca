@@ -3,6 +3,12 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 
+export type NativeChatPromptSuggestion = {
+  text: string
+  /** Fills the draft with it, caret at the end, as Tab does. */
+  accept: () => void
+}
+
 export type NativeChatComposerSendState = {
   /** Why Send is disabled, when the user can do something about it. */
   sendBlockedReason: string | null
@@ -13,6 +19,8 @@ export type NativeChatComposerSendState = {
   sendButtonDisabled: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
   alternateSend: NativeChatFollowUpBehavior | undefined
+  /** The provider's predicted next prompt, while the draft is empty and a plain message could take it. */
+  promptSuggestion: NativeChatPromptSuggestion | null
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
@@ -26,6 +34,8 @@ export function nativeChatComposerSendState(input: {
   editSession: { canSave: boolean } | undefined
   isWorking: boolean
   canStop: boolean
+  setDraft: (draft: string) => void
+  setCaret: (caret: number) => void
 }): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments)
@@ -44,6 +54,14 @@ export function nativeChatComposerSendState(input: {
       : sendHeld || !hasDraft
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
+  const suggestion =
+    input.messageDelivery &&
+    !input.editSession &&
+    !sendHeld &&
+    input.draft === '' &&
+    input.imageAttachments.length === 0
+      ? transport?.promptSuggestion
+      : null
   return {
     sendBlockedReason: imageBlock.reason ?? transport?.sendBlockedReason ?? null,
     sendHeld,
@@ -54,6 +72,15 @@ export function nativeChatComposerSendState(input: {
         ? followUp.action === 'queue'
           ? 'steer'
           : 'queue'
-        : undefined
+        : undefined,
+    promptSuggestion: suggestion
+      ? {
+          text: suggestion,
+          accept: () => {
+            input.setDraft(suggestion)
+            input.setCaret(suggestion.length)
+          }
+        }
+      : null
   }
 }

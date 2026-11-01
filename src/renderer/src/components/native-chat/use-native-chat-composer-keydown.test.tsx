@@ -44,8 +44,14 @@ function setup(
   {
     files = [],
     activeSuggestion = 0,
-    loading = false
-  }: { files?: readonly string[]; activeSuggestion?: number; loading?: boolean } = {}
+    loading = false,
+    acceptPromptSuggestion
+  }: {
+    files?: readonly string[]
+    activeSuggestion?: number
+    loading?: boolean
+    acceptPromptSuggestion?: () => void
+  } = {}
 ) {
   const callbacks = {
     completeMention: vi.fn(),
@@ -64,6 +70,7 @@ function setup(
       mentionFiles: { files, loading, failed: false },
       activeSuggestion,
       draft,
+      acceptPromptSuggestion,
       isComposing: () => composing,
       ...callbacks
     })
@@ -182,6 +189,18 @@ describe('useNativeChatComposerKeyDown', () => {
       })
     }
   )
+
+  it('takes a shown prompt suggestion on Tab or Right Arrow, as Claude Code does', () => {
+    const none: ComposerAutocomplete = { mode: 'none' }
+    for (const key of ['Tab', 'ArrowRight']) {
+      const acceptPromptSuggestion = vi.fn()
+      press(setup(none, false, '', { acceptPromptSuggestion }).handler, key)
+      expect(acceptPromptSuggestion).toHaveBeenCalledOnce()
+    }
+    const acceptPromptSuggestion = vi.fn()
+    press(setup(none, false, '', { acceptPromptSuggestion }).handler, 'Tab', true)
+    expect(acceptPromptSuggestion).not.toHaveBeenCalled()
+  })
 
   it('dismisses Escape without interrupting the agent', () => {
     const { handler, callbacks } = setup()

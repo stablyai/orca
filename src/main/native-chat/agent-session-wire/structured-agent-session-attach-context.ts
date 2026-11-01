@@ -28,7 +28,8 @@ export type StructuredAgentSessionAttachContext = {
     publish: (
       sessionId: string,
       journal: AgentSessionJournal,
-      activity?: AgentSessionTurnActivity | null
+      activity?: AgentSessionTurnActivity | null,
+      promptSuggestion?: string | null
     ) => void
   }
   tasks: StructuredAgentSessionTaskQueue

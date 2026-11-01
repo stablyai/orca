@@ -85,6 +85,8 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   nextQueuedMessageId?: string | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** The provider's predicted next prompt; absent or null when it has none. */
+  promptSuggestion?: string | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
   /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
@@ -169,6 +171,7 @@ export function reduceStructuredAgentSession(
       ...replacePage(action.page, action.page.fence ?? null, state.backgroundTasks, state.activity),
       ...currentRequestsState(state),
       commands: state.commands,
+      ...(state.promptSuggestion ? { promptSuggestion: state.promptSuggestion } : {}),
       // Live subscription state stays authoritative over a possibly stale history answer.
       ...queuePublicationField(state, action.page),
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
@@ -212,6 +215,7 @@ export function reduceStructuredAgentSession(
       ...requests,
       status: 'ready',
       commands: event.commands,
+      ...(event.promptSuggestion ? { promptSuggestion: event.promptSuggestion } : {}),
       // A snapshot omits the list when unchanged since the last frame sent to this subscriber.
       ...queuePublicationField(event, event.page, state),
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
@@ -256,6 +260,7 @@ export function reduceStructuredAgentSession(
     restatesStructuredAgentSessionHostWork(event, state) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
+    (event.promptSuggestion === undefined || event.promptSuggestion === state.promptSuggestion) &&
     state.status === 'ready' &&
     state.error === undefined &&
     requests.currentRequests === state.currentRequests &&
@@ -301,6 +306,7 @@ export function reduceStructuredAgentSession(
     ...queuePublicationField(event, state),
     backgroundTasks,
     ...(activity !== undefined ? { activity } : {}),
+    ...(event.promptSuggestion !== undefined ? { promptSuggestion: event.promptSuggestion } : {}),
     ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {}),
     ...hostClockField(event.hostNow, receivedAt, state.hostClock)
   }

@@ -6,6 +6,7 @@ import {
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
   CLAUDE_PLUGIN_DIR_FLAG,
+  CLAUDE_PROMPT_SUGGESTIONS_FLAG,
   CLAUDE_THINKING_DISPLAY_FLAG,
   type ClaudeCliFlag,
   type ClaudeCliFlagFact,
@@ -14,10 +15,13 @@ import {
 } from '../../claude-cli-flag-support'
 
 const THINKING_DISPLAY_ARGS: Readonly<Record<string, string>> = { 'thinking-display': 'summarized' }
+const PROMPT_SUGGESTION_ARGS: Readonly<Record<string, null>> = { 'prompt-suggestions': null }
 
 export type ClaudeLaunchFlags = {
   /** Show thinking text without enabling thinking for users who disabled it. */
   thinkingDisplayArgs: Readonly<Record<string, string>>
+  /** Claude still honors a user's promptSuggestionEnabled: false. */
+  promptSuggestionArgs: Readonly<Record<string, null>>
   visuals: { visuals: NativeChatVisualsLaunch; pluginDir: string | null } | null
 }
 
@@ -50,8 +54,12 @@ export async function resolveClaudeLaunchFlags(
   // Reuse any version learned by the plugin check without starting a new probe.
   const thinks =
     thinksFirst || (visuals ? await thinking(CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS, false) : false)
+  const suggests =
+    (await check(CLAUDE_PROMPT_SUGGESTIONS_FLAG, CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS, false)) ===
+    'supported'
   return {
     thinkingDisplayArgs: thinks ? THINKING_DISPLAY_ARGS : {},
+    promptSuggestionArgs: suggests ? PROMPT_SUGGESTION_ARGS : {},
     visuals: visuals ? { visuals, pluginDir: loadsPlugins ? visuals.skill.pluginDir : null } : null
   }
 }

@@ -17,6 +17,7 @@ import {
   createStructuredAgentSessionTransitionMembers,
   type StructuredAgentSessionTransitionSink
 } from './structured-agent-session-transition'
+import { createStructuredAgentSessionTransientMembers } from './structured-agent-session-transient-sink'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type {
   StructuredAgentSessionIdentityResolver,
@@ -89,6 +90,8 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   /** Not ok if any admitted write failed or close dropped it unwritten. */
   written?(): Promise<StructuredAgentSessionSinkBarrier>
   setActivity?(activity: AgentSessionTurnActivity | null): void
+  /** Like activity, but outlives its turn: it predicts the next one. */
+  setPromptSuggestion?(suggestion: string | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -147,7 +150,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
-  publish: (activity?: AgentSessionTurnActivity | null) => void
+  publish: (activity?: AgentSessionTurnActivity | null, promptSuggestion?: string | null) => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -274,6 +277,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       tryAppendItem: appendItem,
       ...resolvedAppend,
       ...createStructuredAgentSessionTransitionMembers(queue),
+      ...createStructuredAgentSessionTransientMembers(queue),
       journalEpoch: queue.journalEpoch,
       journalLinkage: queue.journalLinkage,
       journalHistory: queue.journalHistory,
@@ -310,13 +314,6 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
         ),
       publish: (options = {}) => void publish(options),
       written: queue.written,
-      setActivity: (activity) => {
-        queue.submit({
-          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
-          publicationKey: 'turn-activity',
-          run: (bound) => bound.publish(activity)
-        })
-      },
       tryPublish: publish
     },
     bind: (next) => queue.bind(next),

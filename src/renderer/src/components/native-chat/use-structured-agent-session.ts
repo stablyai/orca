@@ -299,6 +299,11 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     optionSnapshot,
     optionSurface,
     sessionCommands: transportEnabled ? (state.commands ?? undefined) : undefined,
+    /** The provider's predicted next prompt, offered only while nothing is sending or running. */
+    promptSuggestion:
+      transportEnabled && !isWorking && pending.length === 0
+        ? (state.promptSuggestion ?? null)
+        : null,
     refreshCommands: commandMenu.refresh,
     setCommandsMenuOpen: commandMenu.setOpen,
     setStructuredOption,
