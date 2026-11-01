@@ -5,6 +5,7 @@ import {
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
+import { sliceAtCodeUnitLimit } from '../../surrogate-safe-text-slice'
 
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
@@ -34,7 +35,7 @@ export type ToolInputDisplay = {
 
 export function summarizeToolInput(input: unknown): string {
   // Strip shell wrappers before clipping because their closing quote proves the match.
-  const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(toRawPreview(input)))
+  const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(formatToolInputPreview(input)))
   return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
     : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
@@ -280,7 +281,7 @@ export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
   return count
 }
 
-function toRawPreview(input: unknown): string {
+export function formatToolInputPreview(input: unknown): string {
   if (input === null || input === undefined) {
     return ''
   }
@@ -298,9 +299,12 @@ function toRawPreview(input: unknown): string {
 }
 
 function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+  if (typeof value === 'function') {
+    return undefined
+  }
   if (typeof value === 'string') {
     return value.length > MAX_PREVIEW_STRING_INPUT
-      ? `${value.slice(0, MAX_PREVIEW_STRING_INPUT)}…`
+      ? `${sliceAtCodeUnitLimit(value, MAX_PREVIEW_STRING_INPUT)}…`
       : value
   }
   if (!value || typeof value !== 'object') {
@@ -332,7 +336,11 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
       result['…'] = '…'
       break
     }
-    result[key] = boundedPreviewValue((value as Record<string, unknown>)[key], depth + 1, seen)
+    result[sliceAtCodeUnitLimit(key, MAX_PREVIEW_STRING_INPUT)] = boundedPreviewValue(
+      Reflect.get(value, key),
+      depth + 1,
+      seen
+    )
     count += 1
   }
   return result
