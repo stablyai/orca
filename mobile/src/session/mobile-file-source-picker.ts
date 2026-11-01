@@ -29,20 +29,32 @@ export async function* pickMobileFiles(
     return
   }
   for (const asset of result.assets) {
-    if (!asset.uri) {
-      continue
+    if (asset.uri) {
+      yield await readMobileFile(asset.uri, asset, createFile)
     }
-    const name = asset.name.trim() || 'attachment'
-    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile, (byteLength) => {
-      if (!Number.isFinite(byteLength) || byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
-        throw new MobileFileTooLargeError(name)
-      }
-    })
-    yield {
-      name,
-      mime: asset.mimeType ?? UNKNOWN_FILE_MIME,
-      byteLength: base64DecodedByteLength(base64),
-      base64
+  }
+}
+
+// Shared by the picker and Android share intake so both refuse the same file sizes.
+export async function readMobileFile(
+  uri: string,
+  asset: {
+    readonly name: string
+    readonly mimeType?: string | null
+    readonly size?: number | null
+  },
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): Promise<PickedMobileFile> {
+  const name = asset.name.trim() || 'attachment'
+  const base64 = await readUriAsBase64(uri, asset.size, createFile, (byteLength) => {
+    if (!Number.isFinite(byteLength) || byteLength > MOBILE_PICKED_FILE_MAX_BYTES) {
+      throw new MobileFileTooLargeError(name)
     }
+  })
+  return {
+    name,
+    mime: asset.mimeType ?? UNKNOWN_FILE_MIME,
+    byteLength: base64DecodedByteLength(base64),
+    base64
   }
 }

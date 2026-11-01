@@ -1,4 +1,4 @@
-type LaunchSource = 'pairing-link' | 'notification'
+type LaunchSource = 'pairing-link' | 'notification' | 'share'
 
 const launchIntent = { discarded: false, consumedSources: new Set<LaunchSource>() }
 

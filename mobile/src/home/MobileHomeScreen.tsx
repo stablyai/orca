@@ -34,6 +34,8 @@ import { MobileHomeBottomBar, MobileHomePairBar } from './MobileHomeBottomBar'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeJumpBackIn } from './MobileHomeJumpBackIn'
+import { MobileHomeShareCard } from './MobileHomeShareCard'
+import { usePendingIncomingShare } from '../share/incoming-share'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
@@ -48,6 +50,7 @@ export function MobileHomeScreen() {
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
   const openMobileSession = useOpenMobileSession()
+  const pendingShare = usePendingIncomingShare()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
@@ -127,6 +130,7 @@ export function MobileHomeScreen() {
         <View style={styles.fill} />
       ) : data.hostCatalog.length === 0 ? (
         <>
+          {pendingShare ? <MobileHomeShareCard share={pendingShare} /> : null}
           <MobileHomeEmptyState contentMaxWidth={contentMaxWidth} isWideLayout={isWideLayout} />
           <MobileHomePairBar
             bottomInset={insets.bottom}
@@ -142,12 +146,15 @@ export function MobileHomeScreen() {
             bottomInset={0}
             contentMaxWidth={contentMaxWidth}
             header={
-              data.jumpBackInRows.length > 0 ? (
-                <MobileHomeJumpBackIn
-                  rows={data.jumpBackInRows}
-                  hosts={data.sortedHostCatalog}
-                  onOpen={openWorktree}
-                />
+              pendingShare || data.jumpBackInRows.length > 0 ? (
+                <>
+                  {pendingShare ? <MobileHomeShareCard share={pendingShare} /> : null}
+                  <MobileHomeJumpBackIn
+                    rows={data.jumpBackInRows}
+                    hosts={data.sortedHostCatalog}
+                    onOpen={openWorktree}
+                  />
+                </>
               ) : null
             }
             footer={<MobileHomeAppUpdateCard />}

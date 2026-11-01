@@ -40,6 +40,8 @@ export type MobileNativeChatController = {
   reportQueuedEditError?: (message: string) => void
   chatDraftKey: string | null
   setChatComposerText: Dispatch<SetStateAction<string>>
+  // Adds a line below any draft; false when no chat draft is active.
+  appendChatComposerText: (text: string) => boolean
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   chatImagePreviewsByMessageId: Record<string, string[]>

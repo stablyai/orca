@@ -48,6 +48,13 @@ export function presentPdf(uri: string): Promise<void> {
   ).presentPdf(uri)
 }
 
+// Resolves a local PDF's first page as base64 JPEG, `width` pixels wide.
+export function renderPdfThumbnail(uri: string, width: number): Promise<string> {
+  return requireNativeModule<{
+    renderPdfThumbnail: (uri: string, width: number) => Promise<string>
+  }>('OrcaMobileWebShell').renderPdfThumbnail(uri, width)
+}
+
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,
   parseMobileWebShellLoadState,

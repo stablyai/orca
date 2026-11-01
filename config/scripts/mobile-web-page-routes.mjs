@@ -81,10 +81,13 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.stop'
     ],
     // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row.
+    // Without share.take a share stays on the shell's Home card; without pdf.thumbnail document tiles show an icon.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
+      'native.pdf.thumbnail',
       'native.pdf.view',
+      'native.share.take',
       'terminalKeyRail'
     ]
   }

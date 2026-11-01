@@ -76,3 +76,22 @@ export const mediaNameParamsSchema = z.strictObject({ handle: handleSchema })
 export const mediaNameResultSchema = z.strictObject({
   name: z.string().min(1).max(BRIDGE_MEDIA_NAME_MAX_CHARS).nullable()
 })
+
+// ponytail: longer shared text is cut here; an article this long belongs in a shared file.
+export const BRIDGE_SHARE_TEXT_MAX_CHARS = 64 * 1024
+
+// One take empties the shell's pending share; files arrive staged like a pick and leave through media.read/release.
+export const shareTakeParamsSchema = z.strictObject({})
+
+export const shareTakeResultSchema = z.strictObject({
+  share: z
+    .strictObject({
+      text: z.string().max(BRIDGE_SHARE_TEXT_MAX_CHARS),
+      items: z.array(mediaItemSchema).max(BRIDGE_MEDIA_MAX_LIVE_HANDLES),
+      // Shared files the shell could not stage (no free handle, too big, unreadable); the share is gone once taken.
+      skipped: z.number().int().min(0)
+    })
+    .nullable()
+})
+
+export type BridgeShare = NonNullable<z.infer<typeof shareTakeResultSchema>['share']>

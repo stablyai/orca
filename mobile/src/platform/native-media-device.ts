@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker'
 import { File as FsFile, Paths } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import type { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
+import { takeIncomingShare } from '../share/incoming-share'
 import type { NativeMediaDeps } from './native-media'
 
 // Isolate native imports so handlers can be tested with injected device calls.
@@ -74,6 +75,19 @@ export function nativeMediaDeviceDeps(registry: MediaHandleRegistry): NativeMedi
     openFile: (uri) => new FsFile(uri),
     ownsStagedUri: ownsStagedMediaUri,
     copyIntoCache: copyPickedMediaIntoCache,
-    discard: discardStagedMedia
+    discard: discardStagedMedia,
+    takeShare: () => {
+      const share = takeIncomingShare()
+      return share
+        ? {
+            text: share.text,
+            files: share.files.map((file) => ({
+              uri: file.uri,
+              mimeType: file.mimeType,
+              name: file.name
+            }))
+          }
+        : null
+    }
   }
 }

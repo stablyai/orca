@@ -109,6 +109,17 @@
         }
       ],
       "expo-notifications",
+      [
+        "expo-sharing",
+        {
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": ["text/*", "image/*", "application/*"],
+            "multipleShareMimeTypes": ["text/*", "image/*", "application/*"]
+          }
+        }
+      ],
+      "./plugins/android-share-intent-replay-guard.js",
       "./plugins/android-respect-rotation-lock.js",
       "./plugins/android-window-density.js",
       "./plugins/ios-pod-deployment-target-floor.js",
