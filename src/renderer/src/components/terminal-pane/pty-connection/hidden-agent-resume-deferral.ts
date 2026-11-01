@@ -46,7 +46,11 @@ export function deferHiddenAgentResume(
             session.transport.getPtyId() === null &&
             (session.transportConnectInFlightSince !== null ||
               pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
-              mainPaneStartInFlight(paneKey))
+              // Why the request flag and cacheKey: the dispatch window before main publishes a
+              // status has no other in-flight signal, and a legacy record paneKey is not the key
+              // main publishes under — the session's stable pane key is.
+              session.mainPaneStartRequestInFlight ||
+              mainPaneStartInFlight(session.cacheKey))
           if (!inFlight) {
             releasePaneResumeHold(paneKey, visibleHold)
           }

@@ -6,9 +6,9 @@ const wakeRequests = vi.hoisted(() => ({ take: vi.fn(() => false) }))
 vi.mock('@/lib/sleeping-agent-wake-requests', () => ({
   takeSleepingAgentWakeRequest: wakeRequests.take
 }))
-const paneStarts = vi.hoisted(
-  (): { byPaneKey: Record<string, { status: string }> } => ({ byPaneKey: {} })
-)
+const paneStarts = vi.hoisted((): { byPaneKey: Record<string, { status: string }> } => ({
+  byPaneKey: {}
+}))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({ terminalPaneStartsByPaneKey: paneStarts.byPaneKey })
@@ -132,5 +132,37 @@ describe('deferHiddenAgentResume', () => {
 
     expect(isPaneSpawnDeferred('tab-1:2')).toBe(false)
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(true)
+  })
+
+  it('covers the start-request dispatch window and reads status by the session pane key', async () => {
+    const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.
+    const visible = {
+      ...hiddenPaneSession(),
+      deps: { isVisibleRef: { current: true } },
+      pendingSpawnKey: 'tab-1:leaf-1',
+      transportConnectInFlightSince: null
+    } as unknown as ConnectPanePtySession
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only the record entry.
+    const legacyStartup = {
+      sleepingRecordEntry: { paneKey: 'tab-1:2', record: { paneKey: 'tab-1:2' } }
+    } as unknown as ColdRestoreAgentResumeStartup
+
+    expect(deferHiddenAgentResume(visible, legacyStartup)).toBe(false)
+    // From the startPane dispatch until main publishes a status, no connect, spawn, or status
+    // exists yet — the sweep must still see the pane owning its restore across that window.
+    visible.mainPaneStartRequestInFlight = true
+    expect(isPaneSpawnDeferred('tab-1:2')).toBe(true)
+    // A legacy record's numeric pane key is not the key main publishes its start status under;
+    // only the session's stable pane key is, so this status must read as settled (and release).
+    visible.mainPaneStartRequestInFlight = false
+    paneStarts.byPaneKey = { 'tab-1:2': { status: 'starting' } }
+    expect(isPaneSpawnDeferred('tab-1:2')).toBe(false)
+    // Re-armed attempt: the same status under the session's stable pane key keeps the hold.
+    expect(deferHiddenAgentResume(visible, legacyStartup)).toBe(false)
+    paneStarts.byPaneKey = { 'tab-1:leaf-1': { status: 'resuming' } }
+    expect(isPaneSpawnDeferred('tab-1:2')).toBe(true)
+    paneStarts.byPaneKey = {}
+    expect(isPaneSpawnDeferred('tab-1:2')).toBe(false)
   })
 })
