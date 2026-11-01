@@ -42,5 +42,6 @@ export function useMobileWebShellGates(args: {
     statusPending,
     statusReadable
   ])
-  return provenHostStatus(gates)
+  // Proven gates outlive a drop; the page must not be seeded from a connection that is gone.
+  return connState === 'connected' && client !== null ? provenHostStatus(gates) : null
 }

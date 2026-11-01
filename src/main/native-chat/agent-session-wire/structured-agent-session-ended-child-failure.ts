@@ -1,4 +1,4 @@
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionStartFailureCause } from './structured-agent-session-failure-text'
 import type {
   StructuredAgentSessionChildEndCause,

@@ -102,8 +102,7 @@
       "quitDuringMoveConfirm": "Quit anyway"
     },
     "startupWorktreeRefresh": {
-      "loading": "Discovering workspaces…",
-      "description": "More workspaces may appear while local and remote projects load."
+      "loading": "Loading workspaces…"
     },
     "createProject": {
       "errors": {
@@ -215,7 +214,8 @@
     "wslHostOffer": {
       "title": "Run {{distro}} as a host (recommended)",
       "why": "Git, files and terminals then run natively in Linux instead of across the Windows file share.",
-      "accept": "Run as host"
+      "accept": "Run as host",
+      "projectNotFound": "Could not find the added project to move. Use \"Move to {{distro}} host…\" on the project in the sidebar."
     }
   },
   "app": {
@@ -672,6 +672,21 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "editorTheme": {
+        "light": "Light editor theme",
+        "lightDescription": "Code editor, diff and notebook colors while the app is light.",
+        "dark": "Dark editor theme",
+        "darkDescription": "Code editor, diff and notebook colors while the app is dark.",
+        "followApp": "Same as app theme",
+        "title": "Editor theme",
+        "description": "Code editor, diff and notebook colors, apart from the app theme.",
+        "keyword": {
+          "editor": "editor",
+          "code": "code",
+          "monaco": "monaco",
+          "syntax": "syntax"
+        }
       }
     },
     "browser": {
@@ -5848,6 +5863,14 @@
           "removed": "{{removed}} removed.",
           "removedPreserved_one": "{{removed}} removed · {{count}} modified skill preserved.",
           "removedPreserved_other": "{{removed}} removed · {{count}} modified skills preserved."
+        },
+        "skillFreshnessAutoUpdate": {
+          "strandedTitle": "Orca couldn't back up your edits to {{value0}}",
+          "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
+          "preservedTitle": "Your edits to {{value0}} were saved separately",
+          "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
+          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
         }
       },
       "sidebar": {
@@ -7638,14 +7661,13 @@
           "932ff1fbff": "Theme",
           "leftSidebarAppearance": {
             "title": "Left Sidebar Appearance",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
             "default": "Default",
-            "matchTerminal": "Match Terminal",
             "tinted": "Tinted",
             "tintColor": "Sidebar Tint",
             "tintColorDescription": "The color mixed into the left sidebar surface.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar.",
+            "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
           },
           "interfaceDefaultFont": "Default font",
           "terminalDefaultFont": "Default font",
@@ -9828,11 +9850,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint.",
               "project": "project",
-              "terminal": "terminal",
               "background": "background",
-              "tint": "tint"
+              "tint": "tint",
+              "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",
@@ -9885,7 +9906,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "match terminal"
           }
         },
         "auto": {
@@ -13063,7 +13085,9 @@
           }
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Use its terminal colors"
+          "useTerminalTheme": "Use its terminal colors",
+          "matchTerminal": "Match Terminal",
+          "dynamic": "dynamic"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -23411,5 +23435,17 @@
   "wslDistroHold": {
     "terminalStopped": "The WSL distro {{distro}} is stopped, so Orca didn't start this terminal. Start the distro, then try again.",
     "terminalUnverifiable": "Orca couldn't check whether the WSL distro {{distro}} is running, so it didn't start this terminal. Start the distro, then try again."
+  },
+  "plugins": {
+    "frameSaveAs": {
+      "title": "Save File",
+      "allFiles": "All Files"
+    },
+    "frameOpenExternal": {
+      "open": "Open",
+      "cancel": "Cancel",
+      "message": "{{plugin}} wants to open {{host}}",
+      "alwaysAllow": "Always allow {{host}} for this plugin"
+    }
   }
 }

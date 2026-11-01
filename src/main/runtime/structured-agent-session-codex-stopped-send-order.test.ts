@@ -13,9 +13,9 @@ import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_TEXT } from '../../shared/native-chat/native-chat-stopped-before-start'
@@ -25,7 +25,7 @@ import {
   nativeChatTurnMembership,
   structuredAgentTurnAnchors
 } from '../../shared/native-chat/transcript/native-chat-turn-membership'
-import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
+import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../shared/structured-agent-session-message-projection'
 import {
   HOST_TEST_SESSION as SESSION,

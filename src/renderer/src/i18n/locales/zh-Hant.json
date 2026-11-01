@@ -77,8 +77,7 @@
       "cancel": "保留篩選條件"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在尋找工作區…",
-      "description": "載入本機與遠端專案時，可能會顯示更多工作區。"
+      "loading": "正在尋找工作區…"
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",
@@ -191,7 +190,8 @@
     "wslHostOffer": {
       "title": "將 {{distro}} 作為主機執行（建議）",
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
-      "accept": "作為主機執行"
+      "accept": "作為主機執行",
+      "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。"
     }
   },
   "app": {
@@ -7382,14 +7382,13 @@
           "932ff1fbff": "主題",
           "leftSidebarAppearance": {
             "title": "左側邊欄外觀",
-            "rowDescription": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
             "default": "預設",
-            "matchTerminal": "與終端機一致",
             "tinted": "色調",
             "tintColor": "側邊欄色調",
             "tintColorDescription": "混入左側邊欄表面的顏色。",
             "tintOpacity": "色調強度",
-            "tintOpacityDescription": "控制色調混入側邊欄的強度。"
+            "tintOpacityDescription": "控制色調混入側邊欄的強度。",
+            "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
           },
           "interfaceDefaultFont": "預設字型",
           "terminalDefaultFont": "預設字型",
@@ -9572,11 +9571,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左側邊欄外觀",
-              "description": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
               "project": "專案",
-              "terminal": "終端機",
               "background": "背景",
-              "tint": "著色"
+              "tint": "著色",
+              "tintDescription": "讓左側邊欄保持預設或套用色調。若要跟隨終端機，請將淺色或深色主題設為「與終端機一致」。"
             },
             "workspaceCardLayout": {
               "title": "工作區卡片版面配置",
@@ -9629,7 +9627,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "與終端機一致"
           }
         },
         "auto": {
@@ -13165,6 +13164,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "建立"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "與終端機一致",
+          "dynamic": "動態"
         }
       },
       "right": {

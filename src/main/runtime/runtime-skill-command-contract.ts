@@ -37,6 +37,7 @@ import type {
 } from '../../shared/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../skills/skill-provider-destinations'
 import type {
+  BundledSkillAutoUpdateRequest,
   BundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
@@ -101,6 +102,9 @@ export type RuntimeSkillCommandSurface = {
   ): Promise<SkillBundleInstallResult>
   planLocalBundledSkills(request: BundledSkillPlanRequest): Promise<BundledSkillPlan>
   executeLocalBundledSkills(request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult>
+  autoUpdateLocalBundledSkills(
+    request: BundledSkillAutoUpdateRequest
+  ): Promise<BundledSkillInstallResult>
   getSharedSkillInstallProgress(operationId: string): SkillBundleInstallProgress | null
   cancelSharedSkillInstall(operationId: string): boolean
   previewSharedSkillInstallRequest(

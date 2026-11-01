@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
 import type Database from '../../sqlite/sync-database'
-import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import { readAgentSessionRefusalReference } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 
 export const commandReceiptScopeSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('global') }),

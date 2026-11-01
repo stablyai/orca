@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { foldToolMessages } from '../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat-tool-pairs'

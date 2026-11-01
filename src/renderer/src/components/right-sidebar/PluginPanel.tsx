@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { fillPluginPanelShell } from './plugin-panel-design-token-css'
+import {
+  PluginFrameView,
+  usablePluginFrameGuest,
+  type PluginFrameElement
+} from './plugin-frame-element'
 import { usePluginFrameHost } from './use-plugin-frame-host'
 import { usePluginFrameEntry } from './use-plugin-frame-entry'
 import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
@@ -25,13 +30,14 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
-  const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const { entry, markUnresponsive } = usePluginFrameEntry(
+  const frameRef = useRef<PluginFrameElement | null>(null)
+  const { entry, markUnresponsive, remountGone } = usePluginFrameEntry(
     'panel',
     panel?.pluginKey ?? null,
     panel?.id ?? null
   )
-  const panelShell = entry.status === 'ready' ? entry.html : null
+  const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
+  const panelShell = entry.status === 'ready' && !guest ? entry.html : null
   // Why memoized: a new srcdoc reloads the frame; theme changes arrive as messages instead.
   const panelDocument = useMemo(
     () => (panelShell ? fillPluginPanelShell(panelShell) : null),
@@ -40,10 +46,11 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panelFrameKey = entry.status === 'ready' ? `${tabKey}:${entry.revision}` : null
   const { onFrameLoad } = usePluginFrameHost({
     surface: 'panel',
-    iframeRef,
+    frameRef,
     frameKey: panelFrameKey,
     sessionToken: entry.status === 'ready' ? entry.sessionToken : null,
-    onUnresponsive: markUnresponsive
+    onUnresponsive: markUnresponsive,
+    onGuestGone: remountGone
   })
 
   useEffect(() => {
@@ -97,18 +104,14 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   }
 
   return (
-    <iframe
+    <PluginFrameView
       key={panelFrameKey}
-      ref={iframeRef}
-      // SECURITY: never add allow-same-origin — the srcdoc frame must stay an
-      // opaque origin so plugin UI cannot reach the app DOM, storage, or IPC.
-      // The srcdoc itself is the host CSP shell wrapped around plugin HTML.
-      sandbox="allow-scripts"
+      frameRef={frameRef}
+      guest={guest}
       name={`${PLUGIN_PANEL_FRAME_NAME_PREFIX}${tabKey}`}
       srcDoc={panelDocument ?? ''}
       onLoad={onFrameLoad}
       title={panel.title}
-      className="min-h-0 w-full flex-1 border-0 bg-background"
     />
   )
 }

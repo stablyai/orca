@@ -8,6 +8,7 @@ import {
   PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER,
   PANEL_SHELL_TOKENS_PLACEHOLDER
 } from '../../../../shared/plugins/frames/plugin-panel-shell'
+import type { PluginFrameWindow } from './plugin-frame-host'
 
 /** Snapshot trusted computed tokens for isolated panels; strip structural CSS characters before inserting into the shell style block. */
 export function buildPanelDesignTokenCss(): string {
@@ -39,6 +40,6 @@ export function currentPluginFrameTheme(): PluginFrameTheme {
 }
 
 /** Restyles a loaded frame in place; remounting would discard the plugin's state. */
-export function postPluginFrameTheme(frameWindow: Window | null | undefined): void {
+export function postPluginFrameTheme(frameWindow: PluginFrameWindow | null | undefined): void {
   frameWindow?.postMessage(pluginEvent(FRAME_EVENTS.theme, currentPluginFrameTheme()), '*')
 }

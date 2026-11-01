@@ -39,7 +39,8 @@ function hex([r, g, b, a]: Rgba): string {
   return `#${byte(r)}${byte(g)}${byte(b)}${a < 1 ? byte(a * 255) : ''}`
 }
 
-function hashName(text: string): string {
+/** A short stable hash, so a theme's name or revision changes with its content. */
+export function hashThemeContent(text: string): string {
   let hash = 0
   for (let index = 0; index < text.length; index += 1) {
     hash = (hash * 31 + text.charCodeAt(index)) | 0
@@ -132,5 +133,5 @@ export function derivePluginMonacoTheme(input: {
     }),
     colors
   }
-  return { name: `orca-plugin-${hashName(JSON.stringify(data))}`, data }
+  return { name: `orca-plugin-${hashThemeContent(JSON.stringify(data))}`, data }
 }

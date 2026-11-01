@@ -61,7 +61,8 @@ async function collectFiles(
 
 async function hashFileBounded(
   hash: ReturnType<typeof createHash>,
-  file: PluginFile
+  file: PluginFile,
+  fileHash: ReturnType<typeof createHash> | null
 ): Promise<number> {
   let bytesRead = 0
   for await (const chunk of createReadStream(file.path)) {
@@ -71,6 +72,7 @@ async function hashFileBounded(
       throw new Error(`plugin file changed while hashing: ${file.path}`)
     }
     hash.update(bytes)
+    fileHash?.update(bytes)
   }
   if (bytesRead !== file.size) {
     throw new Error(`plugin file changed while hashing: ${file.path}`)
@@ -78,7 +80,12 @@ async function hashFileBounded(
   return bytesRead
 }
 
-export async function hashPluginTree(root: string): Promise<PluginTreeHashResult> {
+/** `fileDigests` (optional) receives each file's own sha256, keyed by its `/`-separated path, from
+ *  the same read that hashes the tree, so a later serve can prove it sends exactly those bytes. */
+export async function hashPluginTree(
+  root: string,
+  options: { fileDigests?: Map<string, string> } = {}
+): Promise<PluginTreeHashResult> {
   const files: PluginFile[] = []
   try {
     const counters = { entries: 0, bytes: 0 }
@@ -100,7 +107,11 @@ export async function hashPluginTree(root: string): Promise<PluginTreeHashResult
       hashLength(hash, Buffer.byteLength(rel, 'utf8'))
       hash.update(rel, 'utf8')
       hashLength(hash, file.size)
-      await hashFileBounded(hash, file)
+      const fileHash = options.fileDigests ? createHash('sha256') : null
+      await hashFileBounded(hash, file, fileHash)
+      if (fileHash) {
+        options.fileDigests?.set(rel, fileHash.digest('hex'))
+      }
     }
     // Hex (not base64) because the hash becomes a directory name.
     return {

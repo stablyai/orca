@@ -21,8 +21,8 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session-queued-message-wire'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 it.each([10, 100])(
   'bounds actual edit/growth, replay, replacement and complete recovery N=%i',

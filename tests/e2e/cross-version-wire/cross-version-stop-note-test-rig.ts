@@ -13,17 +13,17 @@ import {
   openTestJournalHostDatabase
 } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor,
   type AgentJournalItemBody,
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
-} from '../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-identity'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,

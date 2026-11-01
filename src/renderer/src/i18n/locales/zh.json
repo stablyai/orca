@@ -6914,14 +6914,13 @@
           "932ff1fbff": "主题",
           "leftSidebarAppearance": {
             "title": "左侧边栏外观",
-            "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "default": "默认",
-            "matchTerminal": "匹配终端",
             "tinted": "色调",
             "tintColor": "边栏色调",
             "tintColorDescription": "混入左侧边栏表面的颜色。",
             "tintOpacity": "色调强度",
-            "tintOpacityDescription": "控制色调混入边栏的强度。"
+            "tintOpacityDescription": "控制色调混入边栏的强度。",
+            "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
           },
           "2edf606c46": "关闭时最小化到托盘",
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
@@ -9057,11 +9056,10 @@
             },
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
               "project": "项目",
-              "terminal": "终端",
               "background": "背景",
-              "tint": "着色"
+              "tint": "着色",
+              "tintDescription": "保持左侧边栏默认或为其着色。要跟随终端，请将浅色或深色主题设为“匹配终端”。"
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",
@@ -9116,7 +9114,8 @@
             "zcodeUsageDescription": "在状态栏中显示 ZCode 编码计划配额使用情况。",
             "zcode": "零码",
             "zai": "在",
-            "glm": "格鲁姆"
+            "glm": "格鲁姆",
+            "matchTerminal": "匹配终端"
           }
         },
         "auto": {
@@ -12413,7 +12412,9 @@
           "searchLabel": "搜索构建"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "使用其终端配色"
+          "useTerminalTheme": "使用其终端配色",
+          "matchTerminal": "匹配终端",
+          "dynamic": "动态"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -20199,8 +20200,7 @@
       "quitDuringMoveConfirm": "仍要退出"
     },
     "startupWorktreeRefresh": {
-      "loading": "正在发现工作区…",
-      "description": "本地和远程项目加载期间，可能会显示更多工作区。"
+      "loading": "正在发现工作区…"
     },
     "createProject": {
       "errors": {
@@ -20288,7 +20288,8 @@
     "wslHostOffer": {
       "title": "将 {{distro}} 作为主机运行（推荐）",
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
-      "accept": "作为主机运行"
+      "accept": "作为主机运行",
+      "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。"
     }
   },
   "editor": {

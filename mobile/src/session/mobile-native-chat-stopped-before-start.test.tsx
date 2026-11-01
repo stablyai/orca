@@ -2,18 +2,18 @@ import { createElement } from 'react'
 import { AlertTriangle } from 'lucide-react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from '../../../src/shared/agent-session-journal-types'
+  AgentJournalSubmission
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../src/shared/agent-session-journal-turn-scope'
 import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../src/shared/agent-session-goal-control-copy'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { selectStructuredAgentSettledTurns } from '../../../src/shared/structured-agent-session-turn-timing'
 

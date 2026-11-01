@@ -112,15 +112,32 @@ describe('bundled plugin bootstrap', () => {
     const dataDir = join(userDataPath, 'plugins-data', 'stablyai.orca-skills')
     await mkdir(dataDir, { recursive: true })
     await writeFile(join(root, 'bundled-plugins.json'), JSON.stringify({ version: 1, plugins: [] }))
+    const events: string[] = []
+    const pluginDir = join(userDataPath, 'plugins', 'stablyai.orca-skills')
+    const beforeRetire = async (pluginKey: string): Promise<void> => {
+      await access(pluginDir)
+      events.push(`before:${pluginKey}`)
+    }
+    const afterRetire = async (pluginKey: string): Promise<void> => {
+      await expect(access(pluginDir)).rejects.toThrow()
+      events.push(`after:${pluginKey}`)
+    }
 
     await expect(
-      bootstrapBundledPlugins({ root, userDataPath, hostVersion: '1.4.0' })
+      bootstrapBundledPlugins({
+        root,
+        userDataPath,
+        hostVersion: '1.4.0',
+        beforeRetire,
+        afterRetire
+      })
     ).resolves.toEqual({
       installed: [],
       unchanged: [],
       retired: ['stablyai.orca-skills'],
       errors: []
     })
+    expect(events).toEqual(['before:stablyai.orca-skills', 'after:stablyai.orca-skills'])
     expect((await readPluginLockfile(join(userDataPath, 'plugins'))).plugins).toEqual({})
     await expect(access(join(userDataPath, 'plugins', 'stablyai.orca-skills'))).rejects.toThrow()
     await expect(access(dataDir)).rejects.toThrow()

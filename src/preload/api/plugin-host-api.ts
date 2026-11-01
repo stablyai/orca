@@ -14,7 +14,10 @@ import type {
   PluginSyntaxPayload
 } from '../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginFrameTheme
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
@@ -147,11 +150,17 @@ export type PluginsApi = {
   consent: (args: PluginConsentRequest) => Promise<PluginHostListEntry[]>
   setEnabled: (args: { pluginKey: string; enabled: boolean }) => Promise<PluginHostListEntry[]>
   /** CSP-wrapped HTML for a sandboxed iframe; null if missing or disabled. */
-  readPanelEntry: (args: { pluginKey: string; panelId: string }) => Promise<PluginFrameEntry | null>
+  /** `theme`: the host's current one, baked into an isolated guest's first paint. */
+  readPanelEntry: (args: {
+    pluginKey: string
+    panelId: string
+    theme?: PluginFrameTheme
+  }) => Promise<PluginFrameEntry | null>
   /** CSP-wrapped custom editor HTML and its host-call session; null if missing or disabled. */
   readCustomEditorEntry?: (args: {
     pluginKey: string
     editorId: string
+    theme?: PluginFrameTheme
   }) => Promise<PluginFrameEntry | null>
   /** A new file's starting text (its template, or empty); null if the plugin is off or lacks it. */
   readNewFileTemplate?: (args: { pluginKey: string; newFileId: string }) => Promise<string | null>

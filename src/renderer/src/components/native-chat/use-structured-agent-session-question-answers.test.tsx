@@ -46,7 +46,7 @@ vi.mock('./use-structured-agent-session-sends', () => ({
   })
 }))
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import {
   useStructuredAgentSession,

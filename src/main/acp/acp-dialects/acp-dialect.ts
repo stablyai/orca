@@ -1,6 +1,6 @@
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import type { AgentSessionUsageLimit } from '../../../shared/agent-session-usage-limit'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,

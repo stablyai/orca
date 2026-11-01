@@ -1,7 +1,5 @@
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalInputEntry } from './journal-input-lineage'
 import type { JournalRow } from './journal-row-schema'

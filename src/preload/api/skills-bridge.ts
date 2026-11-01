@@ -33,6 +33,7 @@ import type {
   SkillShareResolvedOperation
 } from '../../shared/skill-sharing-contract'
 import type {
+  BundledSkillAutoUpdateRequest,
   BundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
@@ -47,6 +48,8 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:bundledPlan', request ?? {}),
   bundledExecute: (request: BundledSkillExecuteRequest): Promise<BundledSkillInstallResult> =>
     ipcRenderer.invoke('skills:bundledExecute', request),
+  bundledAutoUpdate: (request: BundledSkillAutoUpdateRequest): Promise<BundledSkillInstallResult> =>
+    ipcRenderer.invoke('skills:bundledAutoUpdate', request),
   prepareShare: (input: {
     skillIds: string[]
     skillDirectories?: string[]

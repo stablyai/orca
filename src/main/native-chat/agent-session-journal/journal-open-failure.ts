@@ -1,11 +1,11 @@
-import type { AgentSessionRefusalReason } from '../../../shared/agent-session-refusal-details'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
+import type { AgentSessionRefusalReason } from '../../../shared/agent-session/failures/agent-session-refusal-details'
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   AgentSessionRefusalError,
   isAgentSessionRefusalError,
   refuse,
   type AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import type { JournalLoad } from './journal-open'
 import { AgentSessionJournalError } from './journal-write-guards'

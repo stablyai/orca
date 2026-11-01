@@ -65,15 +65,17 @@ function wrapperForActiveBrowser() {
   )
 }
 
-it('the visible button opens beside its owning chat even while another group has focus', () => {
+it('the visible button reuses the neighbor of its owning chat even while another group has focus', () => {
+  const layout = useAppStore.getState().layoutByWorktree[WORKSPACE]
   showVisual()
   fireEvent.click(screen.getByRole('button', { name: 'Open in new tab' }))
-  const groupId = wrapperForActiveBrowser()?.groupId
-  expect(groupId).toBeTruthy()
-  expect(['a', 'b', 'c']).not.toContain(groupId)
-  expect(useAppStore.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-    first: { type: 'split', first: { groupId: 'a' }, second: { groupId } }
-  })
+  expect(wrapperForActiveBrowser()?.groupId).toBe('b')
+  expect(useAppStore.getState().layoutByWorktree[WORKSPACE]).toEqual(layout)
+  expect(useAppStore.getState().groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual([
+    'a',
+    'b',
+    'c'
+  ])
   expect(
     useAppStore.getState().groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')
       ?.activeTabId

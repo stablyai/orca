@@ -1,11 +1,11 @@
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage, AgentSessionTurnActivity } from './agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from './agent-session/agent-session-background-task-wire'
 import type {
   StructuredAgentHostClock,
   StructuredAgentSessionState
 } from './structured-agent-session-reducer'
-import { compareAgentJournalItems } from './agent-session-journal-position'
+import { compareAgentJournalItems } from './agent-session/journal/agent-session-journal-position'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,

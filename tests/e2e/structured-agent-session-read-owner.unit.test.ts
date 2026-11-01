@@ -9,18 +9,14 @@ import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
 } from '../../src/shared/agent-session-wire'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor
-} from '../../src/shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../src/shared/agent-session-journal-identity'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../src/shared/structured-agent-session-reducer'
-import {
-  hasUnansweredStructuredAgentSessionDispatch,
-  projectStructuredAgentSessionStatus
-} from '../../src/shared/structured-agent-session-projection'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../src/shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
+import { projectStructuredAgentSessionStatus } from '../../src/shared/structured-agent-session-projection'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../src/main/native-chat/agent-session-wire/agent-session-history-page'
 import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-subscribers'

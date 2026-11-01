@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -15,6 +16,7 @@ import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
@@ -155,10 +157,17 @@ export default function FeatureTipsModal(): JSX.Element | null {
           trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
           break
         }
+        const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
         try {
           // Only the default moves; an agent the user set for itself keeps its own choice.
           await updateSettingsOrThrow({ agentDefaultSurface: 'chat' })
           trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'use_chat_ui')
+          trackAgentDefaultSurfaceChanged({
+            from_mode: fromSurface,
+            to_mode: 'chat',
+            source: 'launch_card',
+            launch_tip_shown: true
+          })
         } catch {
           toast.error(
             translate(

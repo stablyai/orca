@@ -147,10 +147,45 @@ export function bundledSkillInstallAgents(
   return [...new Set(agents)].sort()
 }
 
-/** Changes whenever the skills the badge counts, or the bytes they would get, change. */
-export function bundledSkillNudgeKey(hostId: string, plan: BundledSkillPlan): string | null {
-  const counted = plan.skills
-    .filter((entry) => ['update', 'repair'].includes(bundledSkillPlanState(entry)))
+/** Replaces a copy whose hash matches a shipped Orca release; deletes only Orca's own swap leftovers. */
+export function isBundledSkillAutoUpdateOp(op: Pick<BundledSkillOp, 'kind' | 'cleanup'>): boolean {
+  return op.kind === 'update' && op.cleanup.every((item) => item.action === 'delete')
+}
+
+function opNeedsConsent(op: BundledSkillOp, autoUpdating: boolean): boolean {
+  // An old copy holding edits Orca has not yet backed up waits on the user, never on deletion.
+  if (op.cleanup.some((item) => item.action === 'backup')) {
+    return true
+  }
+  if (op.kind === 'leave') {
+    return op.reason === 'edited'
+  }
+  if (autoUpdating && isBundledSkillAutoUpdateOp(op)) {
+    return false
+  }
+  return ['update', 'repair'].includes(opPlanState(op))
+}
+
+/**
+ * Skills the nudge asks about: stale, broken or hand-edited copies.
+ * `autoUpdating` names skills whose hash-verified locations Orca is updating silently.
+ */
+export function bundledSkillNudgeEntries(
+  plan: BundledSkillPlan,
+  autoUpdating: ReadonlySet<string> = new Set()
+): BundledSkillPlanEntry[] {
+  return plan.skills.filter((entry) =>
+    entry.ops.some((op) => opNeedsConsent(op, autoUpdating.has(entry.name)))
+  )
+}
+
+/** Changes whenever the skills the nudge counts, or the bytes they would get, change. */
+export function bundledSkillNudgeKey(
+  hostId: string,
+  plan: BundledSkillPlan,
+  autoUpdating?: ReadonlySet<string>
+): string | null {
+  const counted = bundledSkillNudgeEntries(plan, autoUpdating)
     .map((entry) => `${entry.name}@${entry.digest}`)
     .sort()
   return plan.scope === 'global' && counted.length > 0

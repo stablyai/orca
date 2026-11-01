@@ -1,7 +1,7 @@
 // Fit phone bridge limits by splitting queue/roster lists into side batches.
 // Omit slash commands because phones read them through agentSession.options.
 
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'

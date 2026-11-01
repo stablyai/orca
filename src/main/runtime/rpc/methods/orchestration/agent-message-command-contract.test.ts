@@ -37,7 +37,7 @@ import {
   projectStructuredAgentSessionStatusSummary,
   projectStructuredItemToNativeChat
 } from '../../../../../shared/structured-agent-session-projection'
-import { latestStructuredAgentSessionPrompt } from '../../../../../shared/structured-agent-session-latest-request'
+import { latestStructuredAgentSessionPrompt } from '../../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
@@ -49,7 +49,7 @@ import {
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
-} from '../../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   agentMessageHeading,
   agentMessageSenderCanOpen

@@ -1,8 +1,6 @@
-import type { ProviderDiagnostic } from '../../shared/agent-session-failure'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnJoin
-} from '../../shared/agent-session-journal-types'
+import type { ProviderDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnJoin } from '../../shared/agent-session/journal/agent-session-journal-types'
 
 export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
 // Retain turn outcomes for late answers and turns left unopened by a wait.

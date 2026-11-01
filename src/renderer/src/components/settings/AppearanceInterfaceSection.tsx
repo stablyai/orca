@@ -11,6 +11,7 @@ import { ShortcutHintList } from './AppearanceShortcutHintList'
 import { FontAutocomplete, SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import {
+  getCodeEditorThemeEntries,
   getLanguageEntries,
   getMenuBarIconEntries,
   getSystemTrayEntries,
@@ -27,9 +28,13 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
-import { AppearanceThemeControl, AppearanceThemeSlotSelect } from './AppearanceThemeControl'
-import { usePluginThemes } from '@/store/plugin-themes'
+import {
+  AppearanceThemeControl,
+  AppearanceThemeSlotSelect,
+  CodeEditorThemeSelect
+} from './AppearanceThemeControl'
 import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type AppearanceInterfaceSectionProps = {
@@ -56,7 +61,6 @@ export function AppearanceInterfaceSection({
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const pluginLanguagePacks = usePluginLanguagePacks()
   const pluginIconThemes = usePluginIconThemes()
-  const hasPluginThemes = usePluginThemes().length > 0
   const themeSlots = [
     {
       base: 'light' as const,
@@ -70,6 +74,25 @@ export function AppearanceInterfaceSection({
       title: translate(
         'auto.components.settings.AppearanceInterfaceSection.darkTheme',
         'Dark theme'
+      )
+    }
+  ]
+  const editorThemeEntry = getCodeEditorThemeEntries()[0]
+  const editorThemeSlots = [
+    {
+      base: 'light' as const,
+      title: translate('settings.appearance.editorTheme.light', 'Light editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.lightDescription',
+        'Code editor, diff and notebook colors while the app is light.'
+      )
+    },
+    {
+      base: 'dark' as const,
+      title: translate('settings.appearance.editorTheme.dark', 'Dark editor theme'),
+      description: translate(
+        'settings.appearance.editorTheme.darkDescription',
+        'Code editor, diff and notebook colors while the app is dark.'
       )
     }
   ]
@@ -117,32 +140,62 @@ export function AppearanceInterfaceSection({
         />
       </SearchableSetting>
 
-      {hasPluginThemes
-        ? themeSlots.map((slot) => (
-            <SearchableSetting
-              key={slot.base}
-              title={slot.title}
-              description={translate(
-                'auto.components.settings.AppearanceInterfaceSection.themeSlot.description',
-                'App colors for this mode.'
-              )}
-              keywords={['plugin', 'theme', slot.base]}
-              forceVisible={forceVisiblePrimary}
-            >
-              <SettingsRow
+      {themeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={translate(
+            'auto.components.settings.AppearanceInterfaceSection.themeSlot.description',
+            'App colors for this mode.'
+          )}
+          keywords={[
+            'plugin',
+            'theme',
+            'terminal',
+            slot.base,
+            ...translateSearchKeyword(
+              'auto.components.settings.appearance.search.matchTerminal',
+              'match terminal'
+            )
+          ]}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            control={
+              <AppearanceThemeSlotSelect
+                base={slot.base}
                 label={slot.title}
-                control={
-                  <AppearanceThemeSlotSelect
-                    base={slot.base}
-                    label={slot.title}
-                    settings={settings}
-                    updateSettings={updateSettings}
-                  />
-                }
+                settings={settings}
+                updateSettings={updateSettings}
               />
-            </SearchableSetting>
-          ))
-        : null}
+            }
+          />
+        </SearchableSetting>
+      ))}
+
+      {editorThemeSlots.map((slot) => (
+        <SearchableSetting
+          key={slot.base}
+          title={slot.title}
+          description={editorThemeEntry?.description}
+          keywords={editorThemeEntry?.keywords ?? []}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={slot.title}
+            description={slot.description}
+            control={
+              <CodeEditorThemeSelect
+                base={slot.base}
+                label={slot.title}
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            }
+          />
+        </SearchableSetting>
+      ))}
 
       {pluginIconThemes.length > 0 ? (
         <SearchableSetting

@@ -19,16 +19,16 @@ import type {
   StructuredAgentSessionContinueInput
 } from './structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from './structured-agent-session-status-observation'
-import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
+import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type {
   AgentSessionNamingError,
-  AgentSessionStatusSummary,
-  AgentSessionWireRefusal
+  AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../runtime/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'

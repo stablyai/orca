@@ -1,14 +1,15 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Exercise durable acceptance before provider delivery through the real host/store/journal.
 
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnCompletionEvent
@@ -16,7 +17,7 @@ import type {
 import {
   classifyDispatchRejection,
   DISPATCH_REJECTED_CANCELLED
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+} from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -41,8 +42,11 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import {
+  type AgentSessionFailureFact,
+  agentSessionFailureFact
+} from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

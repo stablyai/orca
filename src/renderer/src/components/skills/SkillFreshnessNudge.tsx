@@ -7,10 +7,11 @@ import { bundledSkillTargetKey } from '@/lib/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
-  bundledSkillNudgeKey,
-  summarizeBundledSkillPlan
+  bundledSkillNudgeEntries,
+  bundledSkillNudgeKey
 } from '../../../../shared/bundled-skill-summary'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
+import { autoUpdateUnmodifiedSkills } from './skill-freshness-auto-update'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
 const NO_DISMISSED_FRESHNESS_NUDGES: string[] = []
@@ -35,12 +36,17 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
-    if (!targetKey) {
+    // Programmatic retraction is not a user dismissal, so the same nudge may return this session.
+    const retract = (active: ActiveFreshnessNudge): void => {
+      active.persistDismissal = false
+      activeNudgeRef.current = null
+      shownFingerprints.current.delete(active.fingerprint)
+      toast.dismiss(active.id)
+    }
+    if (!target || !targetKey) {
       const active = activeNudgeRef.current
       if (active) {
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
@@ -52,21 +58,19 @@ export function SkillFreshnessNudge(): null {
       const active = activeNudgeRef.current
       if (state.error && active) {
         // Retract authority based on old bytes after a failed recheck without persisting a user dismissal.
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
+    // Unedited Orca copies update without consent; the nudge names only edited, unknown or broken ones.
+    const autoUpdating = autoUpdateUnmodifiedSkills(target, plan)
     // Fingerprint host, counted skills and offered bytes so changed bundles can prompt again.
-    const fingerprint = bundledSkillNudgeKey(targetKey, plan)
+    const fingerprint = bundledSkillNudgeKey(targetKey, plan, autoUpdating)
     if (!fingerprint || dismissed.includes(fingerprint)) {
       const active = activeNudgeRef.current
       if (active) {
         // Retracting a resolved/replaced nudge is not an explicit user dismissal.
-        active.persistDismissal = false
-        activeNudgeRef.current = null
-        toast.dismiss(active.id)
+        retract(active)
       }
       return
     }
@@ -75,9 +79,7 @@ export function SkillFreshnessNudge(): null {
       return
     }
     if (active) {
-      active.persistDismissal = false
-      activeNudgeRef.current = null
-      toast.dismiss(active.id)
+      retract(active)
     }
     if (shownFingerprints.current.has(fingerprint)) {
       return
@@ -95,11 +97,7 @@ export function SkillFreshnessNudge(): null {
         persistedFingerprints.current.delete(fingerprint)
       })
     }
-    const names = new Set(
-      summarizeBundledSkillPlan(plan)
-        .skills.filter((skill) => skill.state === 'update' || skill.state === 'repair')
-        .map((skill) => skill.name)
-    )
+    const names = new Set(bundledSkillNudgeEntries(plan, autoUpdating).map((entry) => entry.name))
     // Name outdated skills directly; translate the sentence while interpolating identifiers unchanged.
     const outdatedNames = [...names]
       .sort((left, right) => left.localeCompare(right, 'en'))
@@ -161,7 +159,7 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
+  }, [target, targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
 
   return null
 }

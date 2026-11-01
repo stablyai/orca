@@ -1,11 +1,9 @@
 import {
   FRAME_EVENTS,
   PANEL_CONTROL_MESSAGE_MAX_BYTES,
-  readPanelPongId,
-  type PluginFrameHello
+  readPanelPongId
 } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import {
-  PLUGIN_PROTOCOL_VERSION,
   pluginError,
   pluginEvent,
   pluginFailure,
@@ -19,18 +17,27 @@ import {
   type PluginResponse
 } from '../../../../shared/plugins/frames/plugin-protocol'
 import {
-  PLUGIN_HOST_API_MINOR,
-  pluginHostMethodsFor
-} from '../../../../shared/plugins/workers/plugin-host-api'
-import { PLUGIN_HOST_API_MAJOR } from '../../../../shared/plugins/workers/plugin-host-api-major'
-import {
   createPanelControlMessageBudget,
   createPanelMessageBudget,
   structuredCloneMessageBytes,
   type PanelMessageBudget
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
 import { translate } from '@/i18n/i18n'
-import { currentPluginFrameTheme } from './plugin-panel-design-token-css'
+import {
+  createPluginFrameGestureGate,
+  createPluginFrameLanes,
+  pluginFrameHello,
+  pluginFrameLaneFor,
+  type PluginFrameMessageContext,
+  type PluginFrameWindow
+} from './plugin-frame-host-lanes'
+
+export {
+  pluginFrameHello,
+  pluginWebviewFrameWindow,
+  type PluginFrameMessageContext,
+  type PluginFrameWindow
+} from './plugin-frame-host-lanes'
 
 /** Main binds opaque frame sessions; frames never supply plugin identity. */
 
@@ -45,13 +52,13 @@ export type PluginFrameEditorChannel = {
   /** Claims a message before the shared budget (edits have their own); true when handled. */
   claim: (data: unknown) => boolean
   onReady: () => void
-  onEvent: (event: PluginEvent) => void
+  onEvent: (event: PluginEvent, context: PluginFrameMessageContext) => void
   onResponse: (response: PluginResponse) => void
 }
 
 export type PluginFrameHostOptions = {
   surface: 'panel' | 'editor'
-  getFrameWindow: () => Window | null
+  getFrameWindow: () => PluginFrameWindow | null
   /** Null until main issues one; host calls answer `unavailable` meanwhile. */
   getSessionToken: () => string | null
   callHostMethod?: (call: PanelActionCall) => Promise<PluginHostCallOutcome>
@@ -63,6 +70,8 @@ export type PluginFrameHostOptions = {
   budget?: PanelMessageBudget
   /** Reserved liveness budget; defaults to the shared control-frame budget. */
   controlBudget?: PanelMessageBudget
+  /** `files.saveAs` lane; defaults to 64 MiB, a few per window. */
+  saveBudget?: PanelMessageBudget
   now?: () => number
 }
 
@@ -82,30 +91,42 @@ export function callPanelActionViaPreload(call: PanelActionCall): Promise<Plugin
   return panelAction(call)
 }
 
-export function pluginFrameHello(surface: 'panel' | 'editor'): PluginFrameHello {
-  return {
-    protocol: PLUGIN_PROTOCOL_VERSION,
-    surface,
-    api: { major: PLUGIN_HOST_API_MAJOR, minor: PLUGIN_HOST_API_MINOR },
-    methods: pluginHostMethodsFor(surface),
-    theme: currentPluginFrameTheme()
-  }
-}
-
-/** One listener for panel and editor frames: liveness, hello, host calls with cancel, editor traffic. */
+/** The srcdoc iframe path: a window `message` listener that only trusts the frame's own Window. */
 export function createPluginFrameMessageHandler(
   options: PluginFrameHostOptions
 ): (event: MessageEvent) => void {
+  const handle = createPluginFrameEnvelopeHandler(options)
+  return (event: MessageEvent): void => {
+    // Sandboxed srcdoc has null origin; validate the sending Window identity instead of event.origin.
+    if (!event.source || event.source !== options.getFrameWindow()) {
+      return
+    }
+    // Activation in a child frame also activates this window, so the host can read it directly.
+    // Activation in a child frame also activates this window; good enough for save chords, but
+    // typing anywhere in Orca sets it too, so user-gesture methods never trust it.
+    handle(event.data, {
+      userActivation: navigator.userActivation?.isActive === true,
+      transport: 'iframe'
+    })
+  }
+}
+
+/** One handler for panel and editor frames on either transport: liveness, hello, host calls with
+ *  cancel, editor traffic. Callers have already verified the message came from this frame. */
+export function createPluginFrameEnvelopeHandler(
+  options: PluginFrameHostOptions
+): (data: unknown, context: PluginFrameMessageContext) => void {
   const budget = options.budget ?? createPanelMessageBudget()
   const controlBudget = options.controlBudget ?? createPanelControlMessageBudget()
+  const lanes = createPluginFrameLanes({ save: options.saveBudget })
   const now = options.now ?? (() => Date.now())
   const callHostMethod = options.callHostMethod ?? callPanelActionViaPreload
   // Ids the frame cancelled while main was still running the call; their answers are dropped.
   const inFlight = new Set<number>()
-  return (event: MessageEvent): void => {
+  const admitsGesture = createPluginFrameGestureGate()
+  return (data: unknown, context: PluginFrameMessageContext): void => {
     const frameWindow = options.getFrameWindow()
-    // Sandboxed srcdoc has null origin; validate the sending Window identity instead of event.origin.
-    if (!frameWindow || event.source !== frameWindow) {
+    if (!frameWindow) {
       return
     }
     const post = (message: PluginEnvelope): void => {
@@ -116,12 +137,12 @@ export function createPluginFrameMessageHandler(
       frameWindow.postMessage(message, '*')
     }
     // Reserve liveness for schema-valid pongs so saturated data traffic or malformed near-pongs cannot silence the watchdog.
-    const pongId = readPanelPongId(event.data)
+    const pongId = readPanelPongId(data)
     if (pongId !== null) {
       const timestamp = now()
       // One size walk at the smaller lane cap serves both budgets; larger pongs are refused.
       const pongBytes = structuredCloneMessageBytes(
-        event.data,
+        data,
         controlBudget.maxBytes ?? PANEL_CONTROL_MESSAGE_MAX_BYTES
       )
       // Meter data traffic too, but data refusal alone must not silence liveness.
@@ -131,17 +152,15 @@ export function createPluginFrameMessageHandler(
       }
       return
     }
-    if (options.editor?.claim(event.data)) {
+    if (options.editor?.claim(data)) {
       return
     }
     // Budget before schema parsing so malformed floods cannot consume unmetered validation CPU.
     const timestamp = now()
-    const refusal = budget.admit(
-      timestamp,
-      structuredCloneMessageBytes(event.data, budget.maxBytes)
-    )
+    const lane = pluginFrameLaneFor(data, lanes, budget)
+    const refusal = lane.admit(timestamp, structuredCloneMessageBytes(data, lane.maxBytes))
     if (refusal) {
-      const id = pluginRequestId(event.data)
+      const id = pluginRequestId(data)
       if (id !== null) {
         post(
           pluginFailure(
@@ -160,16 +179,16 @@ export function createPluginFrameMessageHandler(
                     'auto.components.rightSidebar.pluginPanelBridgeHost.tooManyRequests',
                     'Too many requests.'
                   ),
-                  budget.retryAfterMs?.(timestamp)
+                  lane.retryAfterMs?.(timestamp)
                 )
           )
         )
       }
       return
     }
-    const message = readPluginEnvelope(event.data)
+    const message = readPluginEnvelope(data)
     if (!message) {
-      const id = pluginRequestId(event.data)
+      const id = pluginRequestId(data)
       if (id !== null) {
         post(pluginFailure(id, pluginError('invalid_request', 'malformed request envelope')))
       }
@@ -178,10 +197,15 @@ export function createPluginFrameMessageHandler(
     switch (message.kind) {
       case 'evt':
         if (message.event === FRAME_EVENTS.ready) {
-          post(pluginEvent(FRAME_EVENTS.hello, pluginFrameHello(options.surface)))
+          post(
+            pluginEvent(FRAME_EVENTS.hello, pluginFrameHello(options.surface, context.transport))
+          )
           options.editor?.onReady()
         } else {
-          options.editor?.onEvent(message)
+          // A guest's shell-posted chords are page-forgeable; only the preload's count there.
+          if (context.transport !== 'guest' || context.trustedChord === true) {
+            options.editor?.onEvent(message, context)
+          }
         }
         return
       case 'res':
@@ -191,11 +215,15 @@ export function createPluginFrameMessageHandler(
         inFlight.delete(message.id)
         return
       case 'req':
-        relayHostCall(message, post)
+        relayHostCall(message, post, context)
     }
   }
 
-  function relayHostCall(request: PluginRequest, post: (message: PluginEnvelope) => void): void {
+  function relayHostCall(
+    request: PluginRequest,
+    post: (message: PluginEnvelope) => void,
+    context: PluginFrameMessageContext
+  ): void {
     const respond = (response: PluginResponse): void => {
       if (inFlight.delete(request.id)) {
         post(response)
@@ -203,6 +231,16 @@ export function createPluginFrameMessageHandler(
     }
     const sessionToken = options.getSessionToken()
     inFlight.add(request.id)
+    // Why here: frame code can post raw envelopes, so the shell's own check is only a fast path.
+    if (!admitsGesture(request.method, context)) {
+      respond(
+        pluginFailure(
+          request.id,
+          pluginError('not_permitted', `${request.method} needs a click or key press in the frame`)
+        )
+      )
+      return
+    }
     if (!sessionToken) {
       respond(pluginFailure(request.id, pluginError('unavailable', 'plugin session is not ready')))
       return

@@ -1,10 +1,10 @@
-import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
+import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
 
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { structuredSessionBackgroundTasksView } from '../../../src/shared/structured-session-background-tasks-view'
-import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
+import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
 import { pendingPromptsAllUnanswerableHere } from '../../../src/shared/agent-session-approval-subject'
 import {
@@ -12,8 +12,8 @@ import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment,
   type StructuredAgentSessionSendControl
-} from '../../../src/shared/structured-agent-session-send-mutation'
-import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_SKILL_REFS } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
 import type { StructuredAgentSessionComposerOptions } from '../../../src/shared/structured-agent-session-composer'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'

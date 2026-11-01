@@ -1,7 +1,7 @@
 import type {
   AgentSessionAnyRefusalDetails,
   AgentSessionRefusalDetailsByCode
-} from './agent-session-refusal-details'
+} from './agent-session/failures/agent-session-refusal-details'
 import {
   isAgentSessionRewindResult,
   type AgentSessionRewindReason,

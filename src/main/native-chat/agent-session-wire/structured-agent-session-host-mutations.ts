@@ -2,18 +2,18 @@
 // provider-only effects start their child before admission, sends start through delivery.
 
 import { latestNativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
-import {
-  refuse,
-  type AgentSessionCancelResult,
-  type AgentSessionMutationEnvelope,
-  type AgentSessionMutationResult,
-  type AgentSessionOptionResult,
-  type AgentSessionPromptResult,
-  type AgentSessionSendResult
+import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type {
+  AgentSessionCancelResult,
+  AgentSessionMutationEnvelope,
+  AgentSessionMutationResult,
+  AgentSessionOptionResult,
+  AgentSessionPromptResult,
+  AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult

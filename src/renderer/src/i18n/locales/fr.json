@@ -7431,14 +7431,13 @@
           "932ff1fbff": "Thème",
           "leftSidebarAppearance": {
             "title": "Apparence de la barre latérale gauche",
-            "rowDescription": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
             "default": "Par défaut",
-            "matchTerminal": "Comme le terminal",
             "tinted": "Teintée",
             "tintColor": "Teinte de la barre latérale",
             "tintColorDescription": "Couleur mélangée à la surface de la barre latérale gauche.",
             "tintOpacity": "Intensité de la teinte",
-            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale."
+            "tintOpacityDescription": "Contrôle l'intensité avec laquelle la teinte est mélangée à la barre latérale.",
+            "tintDescription": "Gardez la barre latérale gauche par défaut ou teintez-la. Pour suivre le terminal, choisissez Comme le terminal comme thème clair ou sombre."
           },
           "interfaceDefaultFont": "Police par défaut",
           "terminalDefaultFont": "Police par défaut",
@@ -9622,11 +9621,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Apparence de la barre latérale gauche",
-              "description": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
               "project": "projet",
-              "terminal": "Terminal",
               "background": "arrière-plan",
-              "tint": "teinte"
+              "tint": "teinte",
+              "tintDescription": "Gardez la barre latérale gauche par défaut ou teintez-la. Pour suivre le terminal, choisissez Comme le terminal comme thème clair ou sombre."
             },
             "workspaceCardLayout": {
               "title": "Disposition des cartes d'espace de travail",
@@ -9679,7 +9677,8 @@
             "zcodeUsageDescription": "Afficher l'utilisation du quota du plan de codage ZCode dans la barre d'état.",
             "zcode": "code z",
             "zai": "zaï",
-            "glm": "GLM"
+            "glm": "GLM",
+            "matchTerminal": "Comme le terminal"
           }
         },
         "auto": {
@@ -12890,7 +12889,9 @@
           "noMatches": "Aucune version correspondante."
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Utiliser ses couleurs de terminal"
+          "useTerminalTheme": "Utiliser ses couleurs de terminal",
+          "matchTerminal": "Comme le terminal",
+          "dynamic": "dynamique"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -20881,8 +20882,7 @@
       "quitDuringMoveConfirm": "Quitter quand même"
     },
     "startupWorktreeRefresh": {
-      "loading": "Recherche des espaces de travail…",
-      "description": "D'autres espaces de travail peuvent apparaître pendant le chargement des projets locaux et distants."
+      "loading": "Recherche des espaces de travail…"
     },
     "createProject": {
       "errors": {
@@ -21018,7 +21018,8 @@
     "wslHostOffer": {
       "title": "Exécuter {{distro}} comme hôte (recommandé)",
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
-      "accept": "Exécuter comme hôte"
+      "accept": "Exécuter comme hôte",
+      "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale."
     }
   },
   "editor": {

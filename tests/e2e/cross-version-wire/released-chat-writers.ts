@@ -5,15 +5,15 @@ import { z } from 'zod'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalMessageItem,
-  type AgentJournalSnapshot,
-  type AgentSessionJournalIdentity
-} from '../../../src/shared/agent-session-journal-types'
+  type AgentJournalSnapshot
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../../src/shared/agent-session-journal-identity'
 import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../../src/shared/agent-session-provider-handle-encoding'
-import type { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import type { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import type { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import type { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/claude-structured-journal-translation'
 import type { createCodexJournalTranslator } from '../../../src/main/codex/codex-structured-journal-translation'
 import type { createDeferredStructuredAgentSessionEventSink } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'

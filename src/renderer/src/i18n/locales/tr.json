@@ -77,8 +77,7 @@
       "cancel": "Filtreleri koru"
     },
     "startupWorktreeRefresh": {
-      "loading": "Çalışma alanları bulunuyor…",
-      "description": "Yerel ve uzak projeler yüklenirken daha fazla çalışma alanı görünebilir."
+      "loading": "Çalışma alanları bulunuyor…"
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ana makinesine taşındı",
@@ -215,7 +214,8 @@
     "wslHostOffer": {
       "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
-      "accept": "Ana makine olarak çalıştır"
+      "accept": "Ana makine olarak çalıştır",
+      "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın."
     }
   },
   "app": {
@@ -7544,14 +7544,13 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Sol Kenar Çubuğu Görünümü",
-            "rowDescription": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılanda bırakın veya bir renk tonu kullanın.",
             "default": "Varsayılan",
-            "matchTerminal": "Terminalle Eşleştir",
             "tinted": "Renk Tonlu",
             "tintColor": "Kenar Çubuğu Rengi",
             "tintColorDescription": "Sol kenar çubuğu yüzeyine karıştırılan renk.",
             "tintOpacity": "Renk Yoğunluğu",
-            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder."
+            "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder.",
+            "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
           },
           "interfaceDefaultFont": "Varsayılan yazı tipi",
           "terminalDefaultFont": "Varsayılan yazı tipi",
@@ -9734,11 +9733,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Sol Kenar Çubuğu Görünümü",
-              "description": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılan bırakın veya bir renk tonu kullanın.",
               "project": "proje",
-              "terminal": "terminal",
               "background": "arka plan",
-              "tint": "renk tonu"
+              "tint": "renk tonu",
+              "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin."
             },
             "workspaceCardLayout": {
               "title": "Çalışma Alanı Kartı Düzeni",
@@ -9791,7 +9789,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "Terminalle Eşleştir"
           }
         },
         "auto": {
@@ -13327,6 +13326,10 @@
         },
         "PluginContributionActionNewFile": {
           "create": "Oluştur"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Terminalle Eşleştir",
+          "dynamic": "dinamik"
         }
       },
       "right": {

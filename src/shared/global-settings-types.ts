@@ -462,6 +462,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentHibernationIdleMs?: number
   /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
   experimentalNewWorktreeCardStyle?: boolean
+  /** Plugin frames as isolated guests (default on); main-only kill switch, see plugin-frame-isolation.ts. */
+  experimentalPluginIsolatedFrames?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
   /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */

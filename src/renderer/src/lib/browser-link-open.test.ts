@@ -65,6 +65,61 @@ function browser(groupId: string, url = URL_TO_OPEN) {
 }
 
 describe('browser link placement and exact page activation', () => {
+  it.each([
+    ['a', 'b'],
+    ['b', 'a']
+  ])('opens from %s in %s without adding a third group', async (sourceGroupId, targetGroupId) => {
+    store.setState((state) => ({
+      groupsByWorktree: {
+        [WORKSPACE]: state.groupsByWorktree[WORKSPACE]!.filter((group) => group.id !== 'c')
+      },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.groupId !== 'c')
+      },
+      layoutByWorktree: {
+        [WORKSPACE]: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'a' },
+          second: { type: 'leaf', groupId: 'b' }
+        }
+      },
+      activeGroupIdByWorktree: { [WORKSPACE]: sourceGroupId }
+    }))
+    const before = store.getState()
+    const sourceTabId = sourceGroupId === 'a' ? 'source' : 'terminal-b'
+    const result = await open({
+      linkIntent: captureLinkOpenIntent(before, WORKSPACE, sourceTabId),
+      isCurrentRequest: beginLinkOpenRequest()
+    })
+    expect(result).toMatchObject({ status: 'opened', result: { groupId: targetGroupId } })
+    const state = store.getState()
+    expect(state.groupsByWorktree[WORKSPACE]).toHaveLength(2)
+    expect(state.layoutByWorktree[WORKSPACE]).toEqual(before.layoutByWorktree[WORKSPACE])
+    expect(
+      state.groupsByWorktree[WORKSPACE]?.find((g) => g.id === sourceGroupId)?.activeTabId
+    ).toBe(sourceTabId)
+    expect(
+      state.groupsByWorktree[WORKSPACE]?.find((g) => g.id === targetGroupId)?.tabOrder
+    ).toContain(targetGroupId === 'a' ? 'source' : 'terminal-b')
+  })
+
+  it('creates a second group for a new URL when the source is alone', async () => {
+    store.setState((state) => ({
+      groupsByWorktree: { [WORKSPACE]: [state.groupsByWorktree[WORKSPACE]![0]!] },
+      unifiedTabsByWorktree: {
+        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.groupId === 'a')
+      },
+      layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } },
+      activeGroupIdByWorktree: { [WORKSPACE]: 'a' }
+    }))
+    expect(await open()).toMatchObject({ status: 'opened' })
+    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(2)
+    expect(
+      store.getState().groupsByWorktree[WORKSPACE]?.find((g) => g.id === 'a')?.activeTabId
+    ).toBe('source')
+  })
+
   it('opens beside the source despite focus in a nonadjacent group, returning the real identities', async () => {
     const result = await open()
     expect(result.status).toBe('opened')
@@ -72,7 +127,7 @@ describe('browser link placement and exact page activation', () => {
       throw new Error('Expected open')
     }
     const state = store.getState()
-    expect(['a', 'b', 'c']).not.toContain(result.result.groupId)
+    expect(result.result.groupId).toBe('b')
     expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
       'source'
     )
@@ -88,18 +143,14 @@ describe('browser link placement and exact page activation', () => {
       pageId: result.result.browserPageId,
       target: 'webview'
     })
-    expect(state.groupsByWorktree[WORKSPACE]).toHaveLength(4)
+    expect(state.groupsByWorktree[WORKSPACE]).toHaveLength(3)
     expect(state.layoutByWorktree[WORKSPACE]).toMatchObject({
-      first: {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', groupId: 'a' },
-        second: { type: 'leaf', groupId: result.result.groupId }
-      }
+      first: { type: 'leaf', groupId: 'a' },
+      second: { first: { type: 'leaf', groupId: 'b' } }
     })
-    expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'b')?.activeTabId).toBe(
-      'terminal-b'
-    )
+    expect(
+      state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'b')?.tabOrder
+    ).toContain('terminal-b')
   })
 
   it('uses a distant visible browser and preserves the neighboring terminal', async () => {
@@ -316,11 +367,8 @@ describe('browser link placement and exact page activation', () => {
     if (moved.status !== 'opened') {
       throw new Error('Expected open')
     }
-    expect(store.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-      second: {
-        first: { type: 'split', first: { groupId: 'b' }, second: { groupId: moved.result.groupId } }
-      }
-    })
+    expect(moved.result.groupId).toBe('c')
+    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(3)
     const explicit = context(true)
     store.setState({
       unifiedTabsByWorktree: {
@@ -348,15 +396,8 @@ describe('browser link placement and exact page activation', () => {
     if (opened.status !== 'opened') {
       throw new Error('Expected open')
     }
-    expect(store.getState().layoutByWorktree[WORKSPACE]).toMatchObject({
-      second: {
-        second: {
-          type: 'split',
-          first: { groupId: 'c' },
-          second: { groupId: opened.result.groupId }
-        }
-      }
-    })
+    expect(opened.result.groupId).toBe('b')
+    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(3)
   })
 
   it('refuses an expired explicit group before creating records or activating a destination', async () => {

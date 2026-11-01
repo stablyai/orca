@@ -8,7 +8,7 @@ import type {
 } from '../agent-session/agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from '../agent-session-context-usage'
 import type { AgentSessionOrcaStop } from '../agent-session-orca-stop'
-import type { AgentSessionFailureFact } from '../agent-session-failure'
+import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
   AgentJournalMessageState,
@@ -16,7 +16,7 @@ import type {
   AgentJournalProducerLinkage,
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
-} from '../agent-session-journal-types'
+} from '../agent-session/journal/agent-session-journal-types'
 import type { AgentType } from '../agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type { AgentMessageSource } from '../agent-session/agent-session-message-source'

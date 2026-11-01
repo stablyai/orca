@@ -1,14 +1,14 @@
 // Stopped-before-start sends keep their original place plus one notice; the journal already holds the send and refusal.
 
 import { describe, expect, it } from 'vitest'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalAnsweredTurn,
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnScope
-} from './agent-session-journal-types'
+  AgentJournalSubmission
+} from './agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import {
   NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
   NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
@@ -16,7 +16,7 @@ import {
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
-} from './structured-agent-session-dispatch-rejection'
+} from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import {
   projectNativeChatTranscript,

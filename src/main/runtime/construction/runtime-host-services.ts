@@ -254,7 +254,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected ptyControllerInventoryGenerationByProvider = new Map<string, number>()
 
-  protected readonly accounts = new RuntimeAccountController()
+  protected readonly accounts = new RuntimeAccountController(() => this.notifier)
   readonly usageHistory = new UsageProviderFacade()
 
   protected readonly mobileSpeech = new RuntimeMobileSpeechCatalog(() => this.store)

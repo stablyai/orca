@@ -621,7 +621,7 @@ describe('OrcaRuntimeRpcServer', () => {
         error: expect.objectContaining({ code: 'forbidden' })
       })
     )
-    expect(mocks.selectClaudeAccount).toHaveBeenCalledWith('claude-account')
+    expect(mocks.selectClaudeAccount).toHaveBeenCalledWith('claude-account', {})
     expect(mocks.selectCodexAccount).toHaveBeenCalledWith(null)
     expect(mocks.consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',

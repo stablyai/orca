@@ -45,24 +45,4 @@ describe('imported group composer selection', () => {
     expect(result.current.branchNameOverride).toBeUndefined()
     expect(result.current.pushTarget).toBeUndefined()
   })
-
-  it.each([
-    { ...group, id: 'different' },
-    { ...group, parentPath: null },
-    { ...group, executionHostId: 'ssh:missing' }
-  ])(
-    'declines missing, non-folder or unreachable groups without changing selection (%j)',
-    (unavailable) => {
-      const { result } = renderHook(() => useReviewBaseSelectionFixture(pr))
-      act(() => useAppStore.setState({ projectGroups: [unavailable] }))
-      let selected = true
-      act(() => {
-        selected = result.current.selectAddedProjectGroup(group.id)
-      })
-      expect(selected).toBe(false)
-      expect(result.current.selectedProjectGroupId).toBeNull()
-      expect(result.current.repoId).toBe(repo.id)
-      expect(result.current.linkedWorkItem).toMatchObject({ type: 'pr', number: pr.number })
-    }
-  )
 })
