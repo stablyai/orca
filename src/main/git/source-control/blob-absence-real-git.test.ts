@@ -157,4 +157,21 @@ describe('real Git missing paths and failed blob reads', () => {
     }
     expect(await readFile(path.join(repo, 'seed.txt'), 'utf8')).toBe('seed\n')
   })
+
+  it('applies configured textconv driver for files that have diff textconv filters', async () => {
+    await writeFile(path.join(repo, '.gitattributes'), 'secret.csv diff=catfilter\n')
+    await git(['config', 'diff.catfilter.textconv', 'cat'])
+    await writeFile(path.join(repo, 'secret.csv'), 'decrypted-text\n')
+    gitCommit(repo, 'add secret')
+
+    const blob = await readGitBlobAtOidPath(repo, 'HEAD', 'secret.csv')
+    expect(blob.exists).toBe(true)
+    expect(blob.isBinary).toBe(false)
+    expect(blob.content).toBe('decrypted-text\n')
+
+    const indexBlob = await readGitBlobAtIndexPath(repo, 'secret.csv')
+    expect(indexBlob.exists).toBe(true)
+    expect(indexBlob.isBinary).toBe(false)
+    expect(indexBlob.content).toBe('decrypted-text\n')
+  })
 })
