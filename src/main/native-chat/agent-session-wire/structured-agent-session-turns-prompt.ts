@@ -1,6 +1,6 @@
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   agentSessionPromptQuestions,
   isValidAgentSessionQuestionAnswers,
@@ -13,7 +13,7 @@ import type {
   AgentJournalApprovalItem,
   AgentJournalQuestionItem,
   AgentJournalResolution
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   refuse,
   type AgentSessionPromptResult,

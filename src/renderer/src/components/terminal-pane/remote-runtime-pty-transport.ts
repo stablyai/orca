@@ -3930,6 +3930,14 @@ export function createRemoteRuntimePtyTransport(
       surfacedErrorMessages.clear()
     },
 
+    reopenAfterHostReturned() {
+      // Why only an idle pane: one already retrying or connected owns its own path back.
+      if (connecting || recovery.currentPhase !== 'idle') {
+        return false
+      }
+      return replayLastTransportEntryPoint()
+    },
+
     retryRecovery() {
       if (recovery.hasOwnerRefresh || surfacedErrorMessages.has(ownerChanged)) {
         return recovery.retryNow()

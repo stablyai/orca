@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { CodexBackgroundCommandTracker } from './codex-background-command-tracker'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-state'

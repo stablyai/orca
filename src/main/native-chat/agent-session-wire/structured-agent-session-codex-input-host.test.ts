@@ -7,16 +7,16 @@ import {
 } from './structured-agent-session-handing-over'
 import { measureCodexInputWork } from './structured-agent-session-codex-input-perf-test-support'
 import { registerCodexInputFinalization } from './structured-agent-session-codex-input-finalization.spec'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { codexStructuredPermissionPolicy } from '../../../shared/codex-permission-policy'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { agentSessionSendSubmission as submission } from '../../../shared/agent-session-wire'
-import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import {
   closeTestJournalHostDatabase,
@@ -783,6 +783,13 @@ export function codexInputFinalizationFixture() {
     adapter,
     codex,
     config,
+    database: () => openTestJournalHostDatabase(root).db,
+    rewindTo: (itemId: string, expectedEpoch: string) =>
+      host.rewind(CALLER, {
+        envelope: envelope('agentSession.rewind', { itemId, expectedEpoch }),
+        itemId,
+        expectedEpoch
+      }),
     turns,
     permissionSend,
     began,

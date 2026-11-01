@@ -3,7 +3,7 @@ import type { ClaudeCliFlagCheck, ClaudeCliFlagFact } from '../claude-cli-flag-s
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type {
@@ -15,7 +15,6 @@ import type { StructuredLaunchRequest } from '../../runtime/structured-agent-lau
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from '../claude-prompt-registry'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
-import { randomUUID } from 'node:crypto'
 import type { AgentSessionFastModeState } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
@@ -227,6 +226,7 @@ export type ClaudeSession = {
     facts?: Promise<ClaudeInitializeFacts>
     proof: ClaudeInitProof
     account: ClaudeStructuredLaunch['account']
+    accountRecipe?: ClaudeStructuredLaunch['accountRecipe']
     resumesTranscript: boolean
     /** The account home the child writes its transcript in, pinned at launch. */
     claudeConfigDir: string
@@ -235,9 +235,6 @@ export type ClaudeSession = {
     onLateRefusal: (error: Error) => void
   }
 }
-
-export const mintClaudeAcquisitionGeneration = (deps: ClaudeStructuredSessionAdapterDeps) =>
-  deps.mintAcquisitionGeneration?.() ?? randomUUID()
 
 /** Retain observed exits until settlement so delayed acquisition cleanup can find their proof. */
 export type ClaudeSessionExit = {

@@ -1,4 +1,4 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 // Observe existing subscribers: fresh subscribe could hide missed live delivery by rereading the journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -9,7 +9,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -256,7 +256,9 @@ describe('an open chat receives each row once', () => {
               epoch: row.epoch,
               sequence: row.seq,
               kind: row.kind,
-              itemId: 'itemId' in row ? row.itemId : null
+              // A new chat saves outcomes, whose change index names the items each sequence wrote.
+              itemId:
+                row.kind === 'outcome' ? row.itemIds.join() : 'itemId' in row ? row.itemId : null
             }))
           : []
       })
@@ -285,7 +287,7 @@ describe('an open chat receives each row once', () => {
         {
           epoch: committedCursor.epoch,
           sequence: committedCursor.sequence,
-          kind: 'item',
+          kind: 'outcome',
           itemId: 'orca:streamed'
         }
       ]

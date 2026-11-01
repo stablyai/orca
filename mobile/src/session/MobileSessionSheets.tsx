@@ -347,7 +347,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         submitLabel={t('common.open', 'Open')}
         allowEmpty
         selectTextOnFocus
-        keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+        // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
+        keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
           void handleCreateBrowser(value).then((created) => {
             if (created) {

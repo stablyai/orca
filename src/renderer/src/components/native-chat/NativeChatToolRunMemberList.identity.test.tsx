@@ -5,7 +5,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../shared/native-chat-types'
+} from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatToolRunMemberList } from './NativeChatToolRunMemberList'
 import {
   NativeChatDisclosureContext,

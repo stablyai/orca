@@ -2,7 +2,7 @@ import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact
 } from './agent-session-failure'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from './agent-session/journal/agent-session-journal-types'
 import { isStructuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row-key'
 
 /** Loaded startup causes and authentication explanations already visible in the transcript. */

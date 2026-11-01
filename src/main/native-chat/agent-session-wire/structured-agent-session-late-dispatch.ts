@@ -1,7 +1,5 @@
-import type {
-  AgentJournalAnsweredTurnIdentity,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalAnsweredTurnIdentity } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-identity'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { ResolveDispatchInput } from '../agent-session-journal/journal-store-contracts'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'

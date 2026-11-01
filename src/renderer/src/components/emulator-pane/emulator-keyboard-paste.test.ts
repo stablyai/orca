@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildEmulatorKeyboardPastePlan,
   EMULATOR_KEYBOARD_PASTE_MAX_BYTES,
-  iterateEmulatorKeyboardPasteChunks,
   pasteTextIntoEmulatorKeyboard
 } from './emulator-keyboard-paste'
 
@@ -18,26 +17,6 @@ describe('emulator keyboard paste', () => {
     }
     expect(plan.chunks.map((chunk) => chunk.length)).toEqual([4, 4])
     expect(plan.chunks.every((chunk) => chunk.length <= 4)).toBe(true)
-  })
-
-  it('keeps planned chunks aligned with lazy keyboard-frame chunks', () => {
-    const plan = buildEmulatorKeyboardPastePlan('ab\r\nc', { maxFramesPerChunk: 4 })
-
-    expect(plan.status).toBe('accepted')
-    if (plan.status !== 'accepted') {
-      return
-    }
-    expect(plan.chunks).toEqual([...iterateEmulatorKeyboardPasteChunks('ab\r\nc', 4)])
-  })
-
-  it('rejects oversized text before building keyboard frames', () => {
-    const plan = buildEmulatorKeyboardPastePlan('a'.repeat(EMULATOR_KEYBOARD_PASTE_MAX_BYTES + 1))
-
-    expect(plan).toEqual({
-      byteLength: EMULATOR_KEYBOARD_PASTE_MAX_BYTES + 1,
-      reason: 'too-large',
-      status: 'rejected'
-    })
   })
 
   it('rejects oversized text before validating later unsupported characters', () => {

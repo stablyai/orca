@@ -23,7 +23,7 @@ import { writeNativeChatDraftCache } from './native-chat-draft-cache'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { promptValue } from './native-chat-prompt-editor.test-support'
 import { imageReferenceToken as chip } from '../../../../shared/native-chat/native-chat-image-reference'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests

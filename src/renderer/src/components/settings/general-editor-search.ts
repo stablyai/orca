@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getVisibleEditorTypographySearchEntries } from './editor-typography-search'
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
   {
@@ -36,7 +37,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.general.search.editorFontFamilyDesc',
-      'Font used by file editors and diff views. Leave empty to follow the terminal font.'
+      'Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
@@ -44,6 +45,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
     ]
   },
+  ...getVisibleEditorTypographySearchEntries(),
   {
     title: translate('auto.components.settings.general.search.e61157e926', 'Editor Word Wrap'),
     description: translate(

@@ -4,16 +4,16 @@ import { agentSessionFailureWords } from '../../agent-session-failure-words'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../agent-session-journal-item-key'
+} from '../../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission,
   AgentJournalRenderItem
-} from '../../agent-session-journal-types'
+} from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../../agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../agent-session-journal-turn-scope'
 import { withNativeChatCutTurnNotices } from './native-chat-cut-turn-notice'
-import { hostStatesTurnScopes, nativeChatTurnMembership } from '../../native-chat-turn-membership'
+import { hostStatesTurnScopes, nativeChatTurnMembership } from './native-chat-turn-membership'
 import { projectStructuredAgentSessionMessages } from '../../structured-agent-session-message-projection'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_NOTE,

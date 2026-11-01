@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createLegacyProviderTimelineIdentityScheme,
   providerTimelineKeyPart,

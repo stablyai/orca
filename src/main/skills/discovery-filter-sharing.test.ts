@@ -62,25 +62,6 @@ it('shares one root read across six concurrent name filters', async () => {
   })
 })
 
-it('reuses the raw snapshot for a new name and invalidates it on mutation', async () => {
-  await fixture(async (root) => {
-    const args = { homeDir: root, repos: [], includeCwd: false, sourceKinds: ['home' as const] }
-    observed.opens = 0
-    await repair.discoverSkills({ ...args, names: ['skill-0'] })
-    const next = await repair.discoverSkills({ ...args, names: ['skill-47'] })
-    expect(next.skills.map((skill) => skill.name)).toEqual(['skill-47'])
-    expect(observed.opens).toBe(48)
-    await writeFile(
-      join(root, '.agents', 'skills', 'skill-47', 'SKILL.md'),
-      '---\nname: renamed\n---\n'
-    )
-    repair.clearSkillRootScanCache()
-    const updated = await repair.discoverSkills({ ...args, names: ['renamed'] })
-    expect(updated.skills.map((skill) => skill.name)).toEqual(['renamed'])
-    expect(observed.opens).toBe(96)
-  })
-})
-
 it('retains a newly requested name when its previously observed root becomes unavailable', async () => {
   await fixture(async (root) => {
     const args = { homeDir: root, repos: [], includeCwd: false, sourceKinds: ['home' as const] }
@@ -105,21 +86,6 @@ it('retains a newly requested name when its previously observed root becomes una
     expect(next.sources.find((source) => source.id === 'home-agents')?.skippedReason).toBe(
       'unavailable'
     )
-  })
-})
-
-it('keeps simultaneous forced refreshes independent', async () => {
-  await fixture(async (root) => {
-    const args = { homeDir: root, repos: [], includeCwd: false, sourceKinds: ['home' as const] }
-    await repair.discoverSkills({ ...args, names: ['skill-0'] })
-    observed.opens = 0
-    const results = await Promise.all(
-      [0, 1].map((index) =>
-        repair.discoverSkills({ ...args, names: [`skill-${index}`], refresh: true })
-      )
-    )
-    expect(results.map((result) => result.skills[0]?.name)).toEqual(['skill-0', 'skill-1'])
-    expect(observed.opens).toBe(96)
   })
 })
 

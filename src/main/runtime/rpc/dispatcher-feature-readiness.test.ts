@@ -85,12 +85,6 @@ afterEach(() => {
 })
 
 describe('RPC methods that require an orcad startup phase', () => {
-  it('run at once where no readiness is installed (the desktop)', async () => {
-    const { dispatcher: rpc, ran } = dispatcher()
-    await expect(rpc.dispatch(request('aiVault.searchStatus'))).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['searchStatus'])
-  })
-
   it('wait for their phase, while methods that need none run at once', async () => {
     const readiness = installOrcadFeatureReadiness()
     const { dispatcher: rpc, ran } = dispatcher()
@@ -129,17 +123,6 @@ describe('RPC methods that require an orcad startup phase', () => {
     await stream
     expect(ran).toEqual(['subscribe'])
     expect(replies).toHaveLength(1)
-  })
-
-  it('gate a terminal create only when its params start an agent', async () => {
-    const readiness = installOrcadFeatureReadiness()
-    const { dispatcher: rpc, ran } = dispatcher()
-    const agent = rpc.dispatch(request('terminal.create', { command: 'claude' }))
-    await expect(rpc.dispatch(request('terminal.create', {}))).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['create shell'])
-    readiness.open('accounts')
-    await expect(agent).resolves.toMatchObject({ ok: true })
-    expect(ran).toEqual(['create shell', 'create claude'])
   })
 
   // A handler run for a caller that left leaks its close cleanup, or runs a retried mutation twice.

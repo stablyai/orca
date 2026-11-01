@@ -15,7 +15,7 @@ vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
-    AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
+    ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
@@ -31,6 +31,8 @@ vi.mock('react-native', async () => {
 })
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  ListEnd: 'ListEnd',
+  CornerDownRight: 'CornerDownRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',

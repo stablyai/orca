@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
+import type { AgentJournalMessageItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type {
-  AgentJournalMessageItem,
   AgentSessionJournalIdentity,
   AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-types'
+} from '../../../src/shared/agent-session-journal-identity'
 import { claudeProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { USER_MESSAGE_SOURCE } from '../../../src/shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
@@ -94,7 +94,8 @@ async function acceptPersonSend(
 
 test("an older build reads the send this build's quit left queued, its source included, and settles it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-kept-leftover-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  // A chat this build has not converted keeps input rows, so an older build can still read it.
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   try {
     const quitting = await journals.open({ identity: IDENTITY, stateDirectory: directory })
     await acceptPersonSend(quitting, 'left-queued')

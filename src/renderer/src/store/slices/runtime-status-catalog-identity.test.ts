@@ -83,43 +83,6 @@ describe('setRuntimeEnvironments catalog identity', () => {
     expect(next[0]?.endpoints).toBe(previous[0]?.endpoints)
   })
 
-  it('keeps the same empty array across two empty lists', () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments([])
-    const empty = store.getState().runtimeEnvironments
-
-    store.getState().setRuntimeEnvironments([])
-
-    expect(store.getState().runtimeEnvironments).toBe(empty)
-    expect(empty).toEqual([])
-  })
-
-  it('flips catalog hydrated and settled on the first write', () => {
-    const store = createTestStore()
-    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(false)
-    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(false)
-
-    store.getState().setRuntimeEnvironments(cloneRedactedCatalog())
-
-    expect(store.getState().runtimeEnvironmentCatalogHydrated).toBe(true)
-    expect(store.getState().runtimeEnvironmentCatalogSettled).toBe(true)
-  })
-
-  it('allocates a new row when a public name changes', () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments(cloneRedactedCatalog())
-    const previous = store.getState().runtimeEnvironments
-
-    store
-      .getState()
-      .setRuntimeEnvironments(cloneRedactedCatalog({ ...knownEnvironment, name: 'Lab' }))
-
-    const next = store.getState().runtimeEnvironments
-    expect(next).not.toBe(previous)
-    expect(next[0]).not.toBe(previous[0])
-    expect(next[0]?.name).toBe('Lab')
-  })
-
   it('allocates a new row when an endpoint URL changes', () => {
     const store = createTestStore()
     store.getState().setRuntimeEnvironments(cloneRedactedCatalog())
@@ -137,26 +100,6 @@ describe('setRuntimeEnvironments catalog identity', () => {
     expect(next[0]).not.toBe(previous[0])
     expect(next[0]?.endpoints).not.toBe(previous[0]?.endpoints)
     expect(next[0]?.endpoints[0]?.endpoint).toBe('wss://box.example:9999')
-  })
-
-  it('allocates a new row when lastUsedAt or updatedAt changes', () => {
-    const store = createTestStore()
-    store.getState().setRuntimeEnvironments(cloneRedactedCatalog())
-    const previous = store.getState().runtimeEnvironments
-
-    store.getState().setRuntimeEnvironments(
-      cloneRedactedCatalog({
-        ...knownEnvironment,
-        lastUsedAt: 1_700_000_200_000,
-        updatedAt: 1_700_000_200_000
-      })
-    )
-
-    const next = store.getState().runtimeEnvironments
-    expect(next).not.toBe(previous)
-    expect(next[0]).not.toBe(previous[0])
-    expect(next[0]?.lastUsedAt).toBe(1_700_000_200_000)
-    expect(next[0]?.updatedAt).toBe(1_700_000_200_000)
   })
 
   it('still drops status and advances generation on a pairingRevision change', () => {

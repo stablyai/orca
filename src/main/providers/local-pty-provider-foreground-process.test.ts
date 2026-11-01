@@ -8,10 +8,6 @@ import {
   ptyIncarnations
 } from './local-pty-provider-state'
 import { inspectionShowsShellAlone } from '../runtime/run-terminal-shell-alone'
-import {
-  assertCliConversationWritersExited,
-  type CliWriterHost
-} from '../runtime/structured-agent-cli-writers'
 
 const {
   fullTable,
@@ -300,45 +296,12 @@ describe('LocalPtyProvider', () => {
             identityTable.mockRejectedValue(new Error('denied'))
           }
           consoleMembers.mockResolvedValue(input.consoleFailed ? null : new Set([100]))
-          let alone: boolean | undefined
-          const host: CliWriterHost = {
-            rows: () => [
-              {
-                paneKey: 'source',
-                connectionId: null,
-                worktreeId: 'workspace',
-                agentType: 'claude',
-                state: 'done',
-                prompt: '',
-                receivedAt: 1,
-                stateStartedAt: 1,
-                providerSession: { key: 'session_id', id: 'conversation' }
-              }
-            ],
-            saved: () => [],
-            links: () => [],
-            sleeping: () => false,
-            observation: () => ({
-              current: () => true,
-              topology: 'pane-owned',
-              presence: async () => null
-            }),
-            terminal: () => ({ pane: { ptyId: id, incarnationId, identity: id + incarnationId } }),
-            shellAlone: async () => {
-              const observed = await provider.inspectProcess(id, {
-                expectedIncarnationId: incarnationId,
-                scanChildProcesses: true,
-                ignoreDetached: true
-              })
-              alone = inspectionShowsShellAlone(observed)
-              return alone
-            }
-          }
-          const result = expect(assertCliConversationWritersExited(host, 'claude', 'conversation'))
-          await (admits
-            ? result.resolves.toBeUndefined()
-            : result.rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } }))
-          expect(alone, name).toBe(admits)
+          const observed = await provider.inspectProcess(id, {
+            expectedIncarnationId: incarnationId,
+            scanChildProcesses: true,
+            ignoreDetached: true
+          })
+          expect(inspectionShowsShellAlone(observed), name).toBe(admits)
           expect(fullTable, name).toHaveBeenCalledTimes(1)
           expect(identityTable.mock.calls.length, name).toBe(
             input.jobFailed || rows.length === 1 ? 0 : 1

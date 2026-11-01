@@ -3,7 +3,6 @@ import { Badge } from '@/components/ui/badge'
 import { Activity, Terminal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { ResourcePtyPanel } from './ResourcePtyPanel'
-import { ResourcePtyEndDialog } from './ResourcePtyEndDialog'
 import React from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
 import { DaemonActionDialog } from '../shared/useDaemonActions'
@@ -109,7 +108,7 @@ export function ResourceUsageStatusSegment({
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
-          if (controller.ptyActions.confirmation || killConfirm) {
+          if (killConfirm) {
             event.preventDefault()
           }
         }}
@@ -214,7 +213,6 @@ export function ResourceUsageStatusSegment({
         killing,
         runKillConfirmed
       })}
-      <ResourcePtyEndDialog actions={controller.ptyActions} />
       <DaemonActionDialog
         api={daemonActions}
         extraDescription={translate(

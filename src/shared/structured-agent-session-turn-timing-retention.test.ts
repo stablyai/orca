@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from './agent-session/journal/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from './agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,

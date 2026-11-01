@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
-} from '../../../../../src/shared/agent-session-journal-types'
+} from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../../src/shared/agent-session-journal-turn-scope'
-import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session-journal-item-key'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat-turn-membership'
+import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'

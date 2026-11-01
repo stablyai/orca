@@ -1,4 +1,4 @@
-import type { AgentJournalStatusItem } from '../../shared/agent-session-journal-types'
+import type { AgentJournalStatusItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   unhandledProviderFrameJournalItem,
   type UnhandledProviderFrameJournalItem
@@ -17,7 +17,7 @@ import {
   MAX_CODEX_WORDLESS_ROWS_PER_TURN
 } from './codex-structured-journal-limits'
 import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame

@@ -6,18 +6,18 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from './agent-session-journal-types'
-import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
-import { structuredAgentSessionSendBody } from './structured-agent-session-send-mutation'
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from './agent-session/journal/agent-session-journal-item-key'
+import { structuredAgentSessionSendBody } from './agent-session/requests/structured-agent-session-send-mutation'
 import {
   projectStructuredAgentSessionMessages,
   structuredAgentSessionRejectedShownInPlace
 } from './structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from './native-chat-transcript-projection'
+import { projectNativeChatTranscriptMessages } from './native-chat/transcript/native-chat-transcript-projection'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
-} from './structured-agent-session-dispatch-rejection'
+} from './agent-session/requests/structured-agent-session-dispatch-rejection'
 import { withNativeChatCutTurnNotices } from './native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionFailureFact } from './agent-session-failure'
 import { agentSessionFailureWords } from './agent-session-failure-words'

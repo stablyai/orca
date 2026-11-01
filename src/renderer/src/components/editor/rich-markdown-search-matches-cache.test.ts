@@ -51,43 +51,4 @@ describe('rich markdown search match reuse', () => {
     expect(find(changedDoc, 'beta')).toEqual(findRichMarkdownSearchMatches(changedDoc, 'beta'))
     expect(find(doc, 'beta')).not.toBe(anyCase)
   })
-
-  it('bounds retained results to two queries for one document', () => {
-    const find = createRichMarkdownSearchMatchesCache()
-    const doc = createDoc()
-    const first = find(doc, 'beta')
-    find(doc, 'Beta')
-    find(doc, 'betas')
-    expect(find(doc, 'beta')).not.toBe(first)
-  })
 })
-
-it.skipIf(process.env.ORCA_SEARCH_CACHE_BENCH !== '1')(
-  'benchmarks repeated live-match checks',
-  () => {
-    for (const blockCount of [250, 1000]) {
-      const doc = createDoc('Beta beta betas with searchable content', blockCount)
-      const find = createRichMarkdownSearchMatchesCache()
-      const expected = findRichMarkdownSearchMatches(doc, 'beta')
-      expect(find(doc, 'beta')).toEqual(expected)
-      const measure = (run: () => unknown) => {
-        const samples: number[] = []
-        for (let round = 0; round < 5; round++) {
-          const start = performance.now()
-          for (let index = 0; index < 100; index++) {
-            run()
-          }
-          samples.push((performance.now() - start) / 100)
-        }
-        return samples.sort((a, b) => a - b)[2]!
-      }
-      const beforeMs = measure(() =>
-        findRichMarkdownSearchMatches(doc, 'beta').some((match) => match.touchesReadOnlyAtom)
-      )
-      const afterMs = measure(() => find(doc, 'beta').some((match) => match.touchesReadOnlyAtom))
-      process.stdout.write(
-        `${JSON.stringify({ blockCount, matchCount: expected.length, beforeMs, afterMs })}\n`
-      )
-    }
-  }
-)

@@ -6,8 +6,8 @@ import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session-provider-handle'
-import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-latest-request'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { latestStructuredAgentSessionUserItem } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionResumeMarker,
@@ -17,7 +17,7 @@ import type {
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LENGTH,
   AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS,
@@ -28,12 +28,12 @@ import {
 } from '../../../shared/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandTurn
-} from '../../../shared/structured-agent-session-command-entry'
+} from '../../../shared/agent-session/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn

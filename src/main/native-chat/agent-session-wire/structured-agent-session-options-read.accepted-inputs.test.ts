@@ -1,8 +1,8 @@
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView
-} from '../../../shared/structured-agent-session-option-view'
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
 import { claudeOpened } from '../../claude/claude-structured-startup-settled-test-support'
 
 import type { ClaudeStructuredSessionEvent } from '../../claude/structured/claude-structured-session-state'
@@ -17,10 +17,11 @@ import {
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
+} from '../../../shared/agent-session/options/structured-agent-session-options'
 
 import { expect, it, vi } from 'vitest'
 import {
+  hostTestCatalogReadOperation,
   hostTestRestingOptionsRecord as restingRecord,
   HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
   hostTestRestingOptionsJournal as restingJournal,
@@ -193,7 +194,10 @@ it.each([false, true])(
             current: { model: 'opus[1m]', effort: 'high', confirmed: ['model', 'effort'] }
           })
         },
-        modelCatalog: { read: async () => ({ origin: 'probe', fetchedAt: 1, models }) },
+        modelCatalog: {
+          captureRead: hostTestCatalogReadOperation,
+          read: async () => ({ origin: 'probe', fetchedAt: 1, models })
+        },
         agents: NO_STRUCTURED_AGENTS,
         store: hostTestOptionsReadStore(() => record)
       },

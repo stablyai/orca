@@ -82,6 +82,7 @@ it('lets the split menu override sidebar width and rotation without remounting p
     setKeyboard = setKeyboardState
     const controller = mountFixture<Controller>({
       ...preference,
+      sessionTabs: [],
       terminalSplitActive: split,
       setShowTerminalLayout,
       toggleTerminalSplit: () => setSplit(!split),
