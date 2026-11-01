@@ -2842,7 +2842,6 @@
       "emptyMessage": "ワークツリーに変更はありません。",
       "emptyTitle": "ローカルの変更なし",
       "generateMessage": "AIでコミットメッセージを生成",
-      "noStagedFiles": "ステージ済みのファイルなし",
       "openActions": "ソース管理の操作を開く",
       "reconnecting": "デスクトップに再接続中…",
       "regenerateHint": "再生成するには、メッセージをクリアしてください。",
@@ -2983,9 +2982,7 @@
       "pushBeforeCreateFailed": "プッシュに失敗しました。プッシュのエラーを解決してから、もう一度お試しください。"
     },
     "hubTab": {
-      "changes": "変更点",
-      "commits": "コミット",
-      "pullRequest": "PR"
+      "changes": "変更点"
     },
     "loaders": {
       "connectingToDesktop": "デスクトップに接続中…",
@@ -3045,7 +3042,6 @@
       "publishBranch": "ブランチを公開",
       "pull": "プル",
       "push": "プッシュ",
-      "stageAll": "ステージオール",
       "sync": "同期"
     },
     "remoteDropdown": {

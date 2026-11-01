@@ -2842,7 +2842,6 @@
       "emptyMessage": "工作树无更改。",
       "emptyTitle": "无本地更改",
       "generateMessage": "使用 AI 生成提交信息",
-      "noStagedFiles": "没有已暂存的文件",
       "openActions": "打开源代码控制操作菜单",
       "reconnecting": "正在重新连接桌面…",
       "regenerateHint": "清除消息以重新生成。",
@@ -2983,9 +2982,7 @@
       "pushBeforeCreateFailed": "推送失败。请解决推送错误后重试。"
     },
     "hubTab": {
-      "changes": "更改",
-      "commits": "提交",
-      "pullRequest": "PR"
+      "changes": "更改"
     },
     "loaders": {
       "connectingToDesktop": "正在连接桌面…",
@@ -3045,7 +3042,6 @@
       "publishBranch": "发布分支",
       "pull": "拉",
       "push": "推",
-      "stageAll": "暂存全部",
       "sync": "同步"
     },
     "remoteDropdown": {

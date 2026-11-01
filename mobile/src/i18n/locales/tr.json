@@ -2846,7 +2846,6 @@
       "emptyMessage": "Çalışma ağacı temiz.",
       "emptyTitle": "Yerel değişiklik yok",
       "generateMessage": "Commit mesajını AI ile oluştur",
-      "noStagedFiles": "Stage edilmiş dosya yok",
       "openActions": "Kaynak kontrolü eylemlerini aç",
       "reconnecting": "Masaüstüne yeniden bağlanılıyor…",
       "regenerateHint": "Yeniden oluşturmak için mesajı temizleyin.",
@@ -2987,9 +2986,7 @@
       "pushBeforeCreateFailed": "Push işlemi yapılamadı. Push hatasını giderip tekrar deneyin."
     },
     "hubTab": {
-      "changes": "Değişiklikler",
-      "commits": "Commit'ler",
-      "pullRequest": "Pull Request"
+      "changes": "Değişiklikler"
     },
     "loaders": {
       "connectingToDesktop": "Masaüstüne bağlanılıyor…",
@@ -3049,7 +3046,6 @@
       "publishBranch": "Branch'i Yayınla",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Tümünü Stage Et",
       "sync": "Senkronize Et"
     },
     "remoteDropdown": {

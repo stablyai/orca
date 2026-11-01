@@ -2,6 +2,7 @@ import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import { MobileSourceControlNextStepBar } from './MobileSourceControlNextStepBar'
 import type { MobileSourceControlPrimaryAction } from './mobile-source-control-primary-action'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
@@ -61,6 +62,8 @@ vi.mock('lucide-react-native', () => ({
   CloudUpload: 'CloudUpload',
   FileText: 'FileText',
   GitBranch: 'GitBranch',
+  GitMerge: 'GitMerge',
+  GitPullRequest: 'GitPullRequest',
   GitPullRequestArrow: 'GitPullRequestArrow',
   History: 'History',
   Minus: 'Minus',
@@ -173,6 +176,7 @@ function initialState(): MobileSourceControlContentState {
     createPrAction: {
       visible: false,
       label: 'Create Pull Request',
+      reviewLabel: 'pull request',
       disabled: true,
       loading: false,
       pushFirst: false,
@@ -210,17 +214,29 @@ const controls: { patch: ((patch: Partial<MobileSourceControlContentState>) => v
 function Fixture({ initial }: { initial: MobileSourceControlContentState }) {
   const [state, setState] = useState(initial)
   controls.patch = (patch) => setState((previous) => ({ ...previous, ...patch }))
-  return createElement(MobileSourceControlContent, {
-    primaryAction: state.primaryAction,
-    state: {
-      ...state,
-      setCommitMessage: (next) =>
-        setState((previous) => ({
-          ...previous,
-          commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
-        }))
-    }
-  })
+  const liveState = {
+    ...state,
+    setCommitMessage: (next: string | ((previous: string) => string)) =>
+      setState((previous) => ({
+        ...previous,
+        commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
+      }))
+  }
+  // Laid out as the panel does: the commit box lives in the bar beside the list.
+  return createElement(
+    'View',
+    null,
+    createElement(MobileSourceControlContent, { state: liveState, bottomInset: 0 }),
+    createElement(MobileSourceControlNextStepBar, {
+      view: { kind: 'composer' },
+      notice: null,
+      composer: liveState,
+      primaryAction: state.primaryAction,
+      keyboardLift: state.keyboardLift,
+      bottomInset: 0,
+      onHeightChange: noop
+    })
+  )
 }
 
 function render(initial = initialState()) {

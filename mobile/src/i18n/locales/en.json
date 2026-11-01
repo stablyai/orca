@@ -3163,11 +3163,17 @@
       "forcePushFromDesktop": "Force push this pull request's branch from desktop",
       "forcePush": "Force Push",
       "commit": "Commit",
-      "stageAll": "Stage All",
       "push": "Push",
       "pull": "Pull",
       "sync": "Sync",
-      "publishBranch": "Publish Branch"
+      "publishBranch": "Publish Branch",
+      "commitFiles_one": "Commit {{count}} file",
+      "commitFiles_other": "Commit {{count}} files",
+      "stageAllSentence": "Stage all",
+      "pushCommits_one": "Push {{count}} commit",
+      "pushCommits_other": "Push {{count}} commits",
+      "pullCommits_one": "Pull {{count}} commit",
+      "pullCommits_other": "Pull {{count}} commits"
     },
     "commitFailurePanel": {
       "title": "Commit failed",
@@ -3206,7 +3212,6 @@
       "emptyTitle": "No local changes",
       "emptyMessage": "Working tree is clean.",
       "commitMessageDisabled": "Commit message disabled. No staged files.",
-      "noStagedFiles": "No staged files",
       "commitMessagePlaceholder": "Commit message",
       "regenerateHint": "Clear the message to regenerate.",
       "cancelGeneration": "Cancel commit message generation",
@@ -3350,8 +3355,7 @@
     },
     "hubTab": {
       "changes": "Changes",
-      "pullRequest": "Pull Request",
-      "commits": "Commits"
+      "pullRequestSentence": "Pull request"
     },
     "screenState": {
       "noBranch": "No branch"
@@ -3509,6 +3513,27 @@
       "loadMoreFailed": "Couldn’t load more commits. Retry",
       "notPushed": "Not pushed {{count}}",
       "onOrigin": "On origin {{count}}"
+    },
+    "nextStep": {
+      "willMergeWhenReady": "Will merge when ready",
+      "cancelAutoMerge": "Cancel",
+      "cancelAutoMergeLabel": "Cancel auto-merge",
+      "mergedInto": "Merged into {{base}}",
+      "merged": "Merged",
+      "genericAgent": "AI",
+      "resolveWithAgent": "Resolve with {{agent}}",
+      "fixWithAgent": "Fix with {{agent}}",
+      "cantMergeYet": "Can’t merge yet:",
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "mergeWhenReady": "Merge when ready",
+      "pushAndCreateReview": "Push & create {{review}}",
+      "createReview": "Create {{review}}",
+      "merge": "Merge",
+      "checksRunning_one": "{{count}} check still running",
+      "checksRunning_other": "{{count}} checks still running",
+      "waitingOnReviewer": "Waiting on review from {{login}}",
+      "waitingOnReview": "Waiting on review"
     }
   },
   "newWorkspace": {

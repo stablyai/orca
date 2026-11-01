@@ -321,9 +321,23 @@
       "years_one": "{{count}}y",
       "years_other": "{{count}}y"
     },
+    "nextStep": {
+      "checksFailing_one": "{{count}} check failing",
+      "checksFailing_other": "{{count}} checks failing",
+      "checksRunning_one": "{{count}} check still running",
+      "checksRunning_other": "{{count}} checks still running"
+    },
     "prChip": {
       "openWithComments_one": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request.",
       "openWithComments_other": "Pull request #{{number}}, {{state}}, {{checks}}, {{count}} unresolved comments. Open pull request."
+    },
+    "primaryAction": {
+      "commitFiles_one": "Commit {{count}} file",
+      "commitFiles_other": "Commit {{count}} files",
+      "pullCommits_one": "Pull {{count}} commit",
+      "pullCommits_other": "Pull {{count}} commits",
+      "pushCommits_one": "Push {{count}} commit",
+      "pushCommits_other": "Push {{count}} commits"
     }
   },
   "tasks": {

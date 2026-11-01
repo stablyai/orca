@@ -18,9 +18,7 @@ import {
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
 import { useHostProtocolGates } from './host-protocol-gates-context'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
-import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
-import { fetchPRCheckDetails } from '../session/github-pr-rpc'
-import { hasGitHubCheckHandle } from '../../../src/shared/pr-checks-fix-prompt'
+import { buildPrFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
@@ -48,6 +46,8 @@ type Props = {
   showOpenOnWeb?: boolean
   /** Named when an AI button's agent starts; the branch stands in when absent. */
   workspaceLabel: string | null
+  /** False where a next-step bar already offers Merge and auto-merge. */
+  showMergeActions?: boolean
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -63,6 +63,7 @@ export function MobilePRSidebar({
   headSha,
   bottomInset = 0,
   showOpenOnWeb = true,
+  showMergeActions = true,
   workspaceLabel
 }: Props) {
   useMobileColorScheme()
@@ -139,6 +140,7 @@ export function MobilePRSidebar({
         workspaceLabel={launchWorkspaceLabel}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
+        showMergeActions={showMergeActions}
       />
     </ScrollView>
   )
@@ -160,6 +162,7 @@ function PrSidebarContent({
   triage,
   workspaceLabel,
   showOpenOnWeb,
+  showMergeActions,
   botAuthorOverrides
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
@@ -177,6 +180,7 @@ function PrSidebarContent({
   triage: MobilePrAiTriage
   workspaceLabel: string | null
   showOpenOnWeb: boolean
+  showMergeActions: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
   const t = useMobileTranslation()
@@ -237,6 +241,7 @@ function PrSidebarContent({
         refetch={refetch}
         botAuthorOverrides={botAuthorOverrides}
         showOpenOnWeb={showOpenOnWeb}
+        showMergeActions={showMergeActions}
       />
     )
   }
@@ -253,6 +258,7 @@ function PrSidebarSections({
   triage,
   refetch,
   showOpenOnWeb,
+  showMergeActions,
   botAuthorOverrides
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
@@ -264,6 +270,7 @@ function PrSidebarSections({
   triage: MobilePrAiTriage
   refetch: (options?: PrSidebarLoadOptions) => void
   showOpenOnWeb: boolean
+  showMergeActions: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
   useMobileColorScheme()
@@ -272,25 +279,7 @@ function PrSidebarSections({
   const checksTriage = {
     fixChecks: () =>
       void triage.launch('fix-checks', () =>
-        buildFixChecksPrompt({
-          prNumber: pr.number,
-          prTitle: pr.title,
-          prUrl: pr.url,
-          checks: data.checks,
-          loadCheckDetails: async (check) => {
-            if (!client || !hasGitHubCheckHandle(check)) {
-              return null
-            }
-            const outcome = await fetchPRCheckDetails(client, worktreeId, {
-              checkRunId: check.checkRunId,
-              workflowRunId: check.workflowRunId,
-              checkName: check.name,
-              url: check.url,
-              prRepo: pr.prRepo ?? null
-            })
-            return outcome.ok ? outcome.result : null
-          }
-        })
+        buildPrFixChecksPrompt({ client, worktreeId, pr, checks: data.checks })
       ),
     isBusy: triage.isBusy('fix-checks'),
     availability: triage.availability,
@@ -329,6 +318,7 @@ function PrSidebarSections({
             worktreeId={worktreeId}
             onUnlinked={refetch}
             onRecheck={() => refetch({ includeDetails: false })}
+            showMerge={showMergeActions}
           />
         </View>
       </View>

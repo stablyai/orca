@@ -21,6 +21,8 @@ type Props = {
   branchContextLoaded?: boolean
   controller: MobilePrSidebarController
   workspaceLabel: string | null
+  /** Clears whatever the hub floats over the body's foot; defaults to the safe area. */
+  bottomInset?: number
 }
 
 // Hub owns PR header/segments/load/controller; one fetch feeds branch chip and chromeless sidebar body.
@@ -34,7 +36,8 @@ export function MobilePrViewPanelBody({
   isGithubRepo = true,
   branchContextLoaded = true,
   controller,
-  workspaceLabel
+  workspaceLabel,
+  bottomInset
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -69,9 +72,11 @@ export function MobilePrViewPanelBody({
         gitBranch={branch}
         gitStatus={gitStatus}
         headSha={headSha}
-        bottomInset={insets.bottom}
+        bottomInset={bottomInset ?? insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
+        // The hub's next-step bar owns Merge and auto-merge.
+        showMergeActions={false}
         workspaceLabel={workspaceLabel}
       />
     </View>

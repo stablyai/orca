@@ -14,6 +14,10 @@ export type MobileCreatePrEligibilityState =
 export type MobileCreatePrAction = {
   visible: boolean
   label: string
+  /** "pull request" or "merge request", for labels that name the review. */
+  reviewLabel: string
+  /** The branch can enter Create PR, though it may be briefly disabled while busy or reloading. */
+  eligible?: true
   disabled: boolean
   hint?: string
   loading: boolean
@@ -37,7 +41,7 @@ export type BuildMobileCreatePrActionArgs = {
 
 const BUSY_ACTIONS = new Set(['create-pr', 'push-create-pr'])
 
-function hiddenAction(onPress: () => void): MobileCreatePrAction {
+function hiddenAction(onPress: () => void): Omit<MobileCreatePrAction, 'reviewLabel'> {
   return {
     visible: false,
     label: translate('sourceControl.createPrAction.createPullRequest', 'Create Pull Request'),
@@ -48,13 +52,26 @@ function hiddenAction(onPress: () => void): MobileCreatePrAction {
   }
 }
 
-export function buildMobileCreatePrAction({
+export function buildMobileCreatePrAction(
+  args: BuildMobileCreatePrActionArgs
+): MobileCreatePrAction {
+  const eligibility =
+    args.eligibilityState.kind === 'ready' || args.eligibilityState.kind === 'loading'
+      ? args.eligibilityState.eligibility
+      : null
+  return {
+    ...buildCreatePrActionState(args),
+    reviewLabel: hostedReviewCopy(eligibility?.provider).reviewLabel
+  }
+}
+
+function buildCreatePrActionState({
   branch,
   eligibilityState,
   busyAction,
   prepareInputs,
   onCreatePr
-}: BuildMobileCreatePrActionArgs): MobileCreatePrAction {
+}: BuildMobileCreatePrActionArgs): Omit<MobileCreatePrAction, 'reviewLabel'> {
   const noop = () => {}
   if (!branch || eligibilityState.kind === 'idle') {
     return hiddenAction(noop)
@@ -117,6 +134,7 @@ export function buildMobileCreatePrAction({
     const disabled = busy || stale
     return {
       visible: true,
+      eligible: true,
       label,
       disabled,
       loading,

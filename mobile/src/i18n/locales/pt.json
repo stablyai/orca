@@ -2923,7 +2923,6 @@
       "emptyMessage": "A árvore de trabalho está limpa.",
       "emptyTitle": "Nenhuma alteração local",
       "generateMessage": "Gerar mensagem de commit com IA",
-      "noStagedFiles": "Nenhum arquivo no stage",
       "openActions": "Abrir ações de controle de versão",
       "reconnecting": "Reconectando ao desktop…",
       "regenerateHint": "Limpe a mensagem para gerar novamente.",
@@ -3076,9 +3075,7 @@
       "pushBeforeCreateFailed": "O push falhou. Resolva o erro de push e tente novamente."
     },
     "hubTab": {
-      "changes": "Alterações",
-      "commits": "Commits",
-      "pullRequest": "Pull Request"
+      "changes": "Alterações"
     },
     "loaders": {
       "connectingToDesktop": "Conectando ao desktop…",
@@ -3139,7 +3136,6 @@
       "publishBranch": "Publicar Branch",
       "pull": "Pull",
       "push": "Push",
-      "stageAll": "Colocar Tudo em Stage",
       "sync": "Sincronizar"
     },
     "remoteDropdown": {

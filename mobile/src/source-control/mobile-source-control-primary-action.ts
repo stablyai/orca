@@ -136,8 +136,8 @@ export function buildMobileSourceControlPrimaryAction(
 
   return {
     kind: decision.kind,
-    label: getMobilePrimaryActionLabel(decision),
-    accessibilityLabel: getMobilePrimaryActionLabel(decision),
+    label: getMobilePrimaryActionLabel(decision, args.stagedCount),
+    accessibilityLabel: getMobilePrimaryActionLabel(decision, args.stagedCount),
     accessibilityHint: forcePushBlockedReason ?? getMobilePrimaryActionHint(decision),
     disabled,
     loading: isLoadingDecision(decision, args.busyAction),
@@ -177,7 +177,7 @@ export function buildMobileBranchRemoteAction(
     decision.requiresForceWithLease === true &&
     getMobileForcePushBlockedReason(args.review) !== undefined
   return {
-    label: getMobilePrimaryActionLabel(decision),
+    label: getMobilePrimaryActionLabel(decision, 0),
     disabled: decision.disabled || ioBusy || forcePushBlocked,
     loading: isLoadingDecision(decision, args.busyAction),
     run: () => runMobilePrimaryAction(decision, args.handlers)
@@ -227,24 +227,67 @@ export function getMobileBranchCommitsAhead(
   return upstream?.hasUpstream ? upstream.ahead : undefined
 }
 
-function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionDecision): string {
+function getMobilePrimaryActionLabel(
+  decision: MobileSourceControlPrimaryActionDecision,
+  stagedCount: number
+): string {
   if (decision.requiresForceWithLease) {
     return translate('sourceControl.primaryAction.forcePush', 'Force Push')
   }
   switch (decision.kind) {
     case 'commit':
-      return translate('sourceControl.primaryAction.commit', 'Commit')
+      return countLabel(stagedCount, {
+        none: () => translate('sourceControl.primaryAction.commit', 'Commit'),
+        one: (count) =>
+          translate('sourceControl.primaryAction.commitFiles_one', 'Commit {{count}} file', {
+            count
+          }),
+        other: (count) =>
+          translate('sourceControl.primaryAction.commitFiles_other', 'Commit {{count}} files', {
+            count
+          })
+      })
     case 'stage':
-      return translate('sourceControl.primaryAction.stageAll', 'Stage All')
+      return translate('sourceControl.primaryAction.stageAllSentence', 'Stage all')
     case 'push':
-      return translate('sourceControl.primaryAction.push', 'Push')
+      return countLabel(decision.count, {
+        none: () => translate('sourceControl.primaryAction.push', 'Push'),
+        one: (count) =>
+          translate('sourceControl.primaryAction.pushCommits_one', 'Push {{count}} commit', {
+            count
+          }),
+        other: (count) =>
+          translate('sourceControl.primaryAction.pushCommits_other', 'Push {{count}} commits', {
+            count
+          })
+      })
     case 'pull':
-      return translate('sourceControl.primaryAction.pull', 'Pull')
+      return countLabel(decision.count, {
+        none: () => translate('sourceControl.primaryAction.pull', 'Pull'),
+        one: (count) =>
+          translate('sourceControl.primaryAction.pullCommits_one', 'Pull {{count}} commit', {
+            count
+          }),
+        other: (count) =>
+          translate('sourceControl.primaryAction.pullCommits_other', 'Pull {{count}} commits', {
+            count
+          })
+      })
     case 'sync':
       return translate('sourceControl.primaryAction.sync', 'Sync')
     case 'publish':
       return translate('sourceControl.primaryAction.publishBranch', 'Publish Branch')
   }
+}
+
+function countLabel(
+  count: number | undefined,
+  labels: { none: () => string; one: (count: number) => string; other: (count: number) => string }
+): string {
+  if (!count || count < 1) {
+    return labels.none()
+  }
+  return count === 1 ? labels.one(count) : labels.other(count)
 }
 
 function isLoadingDecision(
