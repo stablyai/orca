@@ -4,6 +4,7 @@ export const REPO_CREATE_FAILURE_COPY = {
   nameInvalid: 'Name cannot contain slashes or be "." / ".."',
   parentRequired: 'Parent directory is required',
   parentNotAbsolute: 'Parent directory must be an absolute path',
+  parentInaccessible: 'Cannot access parent directory: {{detail}}',
   targetInaccessible: 'Cannot access target path: {{detail}}',
   targetNotEmpty: '"{{name}}" already exists at this location and is not empty.',
   targetNotFolder: '"{{name}}" already exists at this location and is not a folder.',
