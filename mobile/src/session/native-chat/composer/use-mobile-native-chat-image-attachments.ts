@@ -11,6 +11,7 @@ import { buildAgentTuiClearInputForText } from '../../../../../src/shared/agent-
 import type { RpcClient } from '../../../transport/rpc-client'
 import type { ConnectionState } from '../../../transport/types'
 import type { MobileImageSource } from '../../../platform/media-picker-contract'
+import type { MobileComposerPastedImage } from './mobile-native-chat-composer-image-paste'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
@@ -90,6 +91,9 @@ export type MobileNativeChatImageAttachments = {
   readonly attachments: PendingNativeChatImage[]
   readonly isAttaching: boolean
   readonly attachImage: (source: MobileImageSource) => Promise<void>
+  readonly attachPickedImages: (
+    images: readonly MobileComposerPastedImage[] | Promise<readonly MobileComposerPastedImage[]>
+  ) => Promise<void>
   readonly removeAttachment: (id: string) => void
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
@@ -125,7 +129,7 @@ export function useMobileNativeChatImageAttachments({
   const images = inputs.images
   const attachments = useMemo(() => [...images], [images])
 
-  const { attachImage, isAttaching } = useMobileNativeChatImageUpload({
+  const { attachImage, attachPickedImages, isAttaching } = useMobileNativeChatImageUpload({
     client,
     activeHandleRef,
     getActiveWorktreeConnectionId,
@@ -328,6 +332,7 @@ export function useMobileNativeChatImageAttachments({
     attachments,
     isAttaching: isAttaching || (inputs.pending ?? 0) > 0,
     attachImage,
+    attachPickedImages,
     removeAttachment,
     sendNativeChat
   }

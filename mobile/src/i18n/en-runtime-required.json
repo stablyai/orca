@@ -56,6 +56,10 @@
     }
   },
   "chat": {
+    "composer": {
+      "skippedUnsupportedPaste_one": "Skipped {{count}} unsupported file",
+      "skippedUnsupportedPaste_other": "Skipped {{count}} unsupported files"
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",

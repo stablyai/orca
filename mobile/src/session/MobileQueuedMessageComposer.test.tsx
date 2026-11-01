@@ -22,7 +22,11 @@ vi.mock('./native-chat/composer/use-mobile-native-chat-file-attachments', () => 
   })
 }))
 vi.mock('./native-chat/composer/use-mobile-native-chat-image-upload', () => ({
-  useMobileNativeChatImageUpload: () => ({ attachImage: vi.fn(async () => {}), isAttaching: false })
+  useMobileNativeChatImageUpload: () => ({
+    attachImage: vi.fn(async () => {}),
+    attachPickedImages: vi.fn(async () => {}),
+    isAttaching: false
+  })
 }))
 
 describe('queued phone composer action boundary', () => {

@@ -136,6 +136,53 @@ describe('mobile clipboard image followed by typing', () => {
   )
 })
 
+describe('claimed image paste', () => {
+  it('sends the clipboard image when the clipboard also has the filename', async () => {
+    clipboard.text = 'photo.png'
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: () => () => {},
+      updateTerminalSubscriptionViewport: vi.fn(),
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {},
+      notifyForeground: vi.fn(),
+      close: vi.fn()
+    }
+    const paste = useMobileTerminalPaste({
+      sendTerminalUserInput: terminalInputSend.request,
+      agent: null,
+      activeHandle: 'term-1',
+      activeHandleRef: { current: 'term-1' },
+      activeSessionTabTypeRef: { current: 'terminal' },
+      canSend: true,
+      client,
+      clientRef: { current: client },
+      connState: 'connected',
+      connStateRef: { current: 'connected' },
+      deviceTokenRef: { current: null },
+      flushPendingLiveInputBeforeExternalSend: async () => true,
+      getActiveWorktreeConnectionId: async () => null,
+      onError: vi.fn(),
+      onSuccess: vi.fn(),
+      ptyModesRef: { current: new Map() },
+      refreshCanPaste: vi.fn(),
+      showToast: vi.fn()
+    })
+    await paste({ preferImage: true })
+    expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term-1',
+      text: '\x1b[200~/tmp/shot.png\x1b[201~ ',
+      enter: false
+    })
+    clipboard.text = ''
+  })
+})
+
 describe('mobile clipboard text paste', () => {
   it('frames a multi-line paste in an alt-screen app the way desktop does', async () => {
     clipboard.text = 'line 1\nline 2 \x1b[201~'

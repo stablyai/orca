@@ -229,6 +229,34 @@ describe('buildMobileNativeChatTransientData', () => {
     ])
   })
 
+  it('renders one bubble when the prompt is followed by its equal-timestamp image companion', () => {
+    const prompt: NativeChatMessage = {
+      ...user('prompt', '[Image #122] Have a sub agent add some padding'),
+      timestamp: 1_736_000_000_000
+    }
+    const companion: NativeChatMessage = {
+      ...user('companion', '[Image: source: /var/folders/orca-paste.png]'),
+      timestamp: 1_736_000_000_000
+    }
+    const result = buildMobileNativeChatTransientData({
+      folded: fold([prompt, companion]),
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
+    })
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0]?.id).toBe('prompt')
+    expect(result.data[0]?.blocks).toEqual([
+      {
+        type: 'image-ref',
+        path: '/var/folders/orca-paste.png',
+        url: 'file:///phone-photo.jpg'
+      },
+      { type: 'text', text: 'Have a sub agent add some padding' }
+    ])
+  })
+
   it('restores the local preview onto a marker-only transcript turn', () => {
     const result = buildMobileNativeChatTransientData({
       folded: fold([user('prompt', '[Image #1]')]),

@@ -55,6 +55,170 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('folds an equal-timestamp source companion that follows the prompt into that prompt', () => {
+    const prompt = userText(
+      'prompt',
+      '[Image #122] Have a sub agent add some padding to the background highlight'
+    )
+    const companion = userText(
+      'companion',
+      '[Image: source: /var/folders/orca-paste-1793567481489.png]'
+    )
+    const out = normalizeImageTranscriptMessages([prompt, companion])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ id: 'prompt' })
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/var/folders/orca-paste-1793567481489.png' },
+      {
+        type: 'text',
+        text: 'Have a sub agent add some padding to the background highlight'
+      }
+    ])
+  })
+
+  it('folds every equal-timestamp source companion that follows one prompt', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('prompt', '[Image #1] [Image #2] compare'),
+      userText('a', '[Image: source: /tmp/a.png]'),
+      userText('b', '[Image: source: /tmp/b.png]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ id: 'prompt' })
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'compare' }
+    ])
+  })
+
+  it('keeps each prompt with only the companion run that follows it', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('p1', '[Image #1] first'),
+      userText('c1', '[Image: source: /tmp/first.png]'),
+      userText('p2', '[Image #1] second'),
+      userText('c2', '[Image: source: /tmp/second.png]')
+    ])
+
+    expect(out.map((message) => message.id)).toEqual(['p1', 'p2'])
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/first.png' },
+      { type: 'text', text: 'first' }
+    ])
+    expect(out[1]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/second.png' },
+      { type: 'text', text: 'second' }
+    ])
+  })
+
+  it('does not fold a later image-source turn onto a prompt with a different timestamp', () => {
+    const prompt = userText('prompt', '[Image #1] caption')
+    const later = { ...userText('later', '[Image: source: /tmp/later.png]'), timestamp: 2 }
+    const out = normalizeImageTranscriptMessages([prompt, later])
+
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'later'])
+    expect(out[0]!.blocks).toEqual([{ type: 'text', text: 'caption' }])
+    expect(out[1]!.blocks).toEqual([{ type: 'image-ref', path: '/tmp/later.png' }])
+  })
+
+  it('does not fold an equal-timestamp companion across another row', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('prompt', '[Image #1] caption'),
+      userText('note', 'unrelated'),
+      userText('companion', '[Image: source: /tmp/a.png]')
+    ])
+
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'note', 'companion'])
+    expect(out[2]!.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
+  })
+
+  it('does not fold a companion recorded under another source', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('prompt', '[Image #1] caption'),
+      { ...userText('companion', '[Image: source: /tmp/a.png]'), source: 'hook' }
+    ])
+
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'companion'])
+  })
+
+  it('does not fold a following source when both timestamps are missing', () => {
+    const prompt = { ...userText('prompt', '[Image #1] caption'), timestamp: null }
+    const companion = {
+      ...userText('companion', '[Image: source: /tmp/a.png]'),
+      timestamp: null
+    }
+    const out = normalizeImageTranscriptMessages([prompt, companion])
+
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'companion'])
+    expect(out[1]!.blocks).toEqual([{ type: 'image-ref', path: '/tmp/a.png' }])
+  })
+
+  it('inserts a new companion after the prompt reference it follows', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', '[Image #1] [Image #2] caption'),
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] [Image #2] caption' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      prompt,
+      userText('kept', '[Image: source: /tmp/a.png]'),
+      userText('added', '[Image: source: /tmp/b.png]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
+  it('does not repeat a source path already on the prompt when the source comes first', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', '[Image #1] [Image #2] caption'),
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] [Image #2] caption' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      userText('kept', '[Image: source: /tmp/a.png]'),
+      userText('added', '[Image: source: /tmp/b.png]'),
+      prompt
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
+  it('does not repeat a source path the prompt already shows', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', '[Image #1] caption'),
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] caption' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      prompt,
+      userText('companion', '[Image: source: /tmp/a.png]')
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.id).toBe('prompt')
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
   it('merges a source turn into a prompt with a trailing image marker', () => {
     const out = normalizeImageTranscriptMessages([
       userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
