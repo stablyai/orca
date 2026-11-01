@@ -5,6 +5,10 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
+import {
+  resolveSystemClaudeHookTarget,
+  type ManagedHookInvocation
+} from '../claude/claude-hook-target'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -23,7 +27,12 @@ import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { zcodeHookService } from '../zcode/hook-service'
 
-export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
+export type ManagedAgentHookInstallOptions = ManagedHookInvocation & {
+  userInitiated?: boolean
+  cliVersion?: string
+  signal?: AbortSignal
+  shouldContinue?: () => boolean
+}
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
   (
@@ -33,16 +42,27 @@ export type ManagedAgentHookInstaller = readonly [
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookRemover = readonly [
   HookInstallAgent,
-  () => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+  (
+    options?: ManagedHookInvocation & { signal?: AbortSignal; shouldContinue?: () => boolean }
+  ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
 export type ManagedAgentHookAsyncRemover = readonly [
   HookInstallAgent,
   () => Promise<AgentHookInstallStatus>
 ]
-export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookStatusReader = ManagedAgentHookRemover
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
-  ['claude', (options) => claudeHookService.install({ claudeVersion: options?.cliVersion })],
+  [
+    'claude',
+    async (options) =>
+      claudeHookService.installSystem({
+        target: await resolveSystemClaudeHookTarget(options),
+        claudeVersion: options?.cliVersion,
+        signal: options?.signal,
+        shouldContinue: options?.shouldContinue
+      })
+  ],
   ['openclaude', () => openClaudeHookService.install()],
   ['codex', () => codexHookService.reconcileHooks()],
   ['gemini', () => geminiHookService.install()],
@@ -93,7 +113,15 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
-  ['claude', () => claudeHookService.remove()],
+  [
+    'claude',
+    async (options) =>
+      claudeHookService.removeSystem({
+        target: await resolveSystemClaudeHookTarget(options),
+        signal: options?.signal,
+        shouldContinue: options?.shouldContinue
+      })
+  ],
   ['openclaude', () => openClaudeHookService.remove()],
   ['codex', () => codexHookService.remove()],
   ['gemini', () => geminiHookService.remove()],
@@ -123,7 +151,11 @@ export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRe
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [
-  ['claude', () => claudeHookService.getStatus()],
+  [
+    'claude',
+    async (options) =>
+      claudeHookService.getStatus({ target: await resolveSystemClaudeHookTarget(options) })
+  ],
   ['openclaude', () => openClaudeHookService.getStatus()],
   ['codex', () => codexHookService.getStatus()],
   ['gemini', () => geminiHookService.getStatus()],

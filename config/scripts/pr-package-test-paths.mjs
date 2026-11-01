@@ -60,6 +60,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/windows-batch-spawn.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
   'src/main/agent-hooks/managed-hook-stdin-lifecycle.test.ts',
+  'src/main/claude/claude-system-statusline-process.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/agent-hooks/windows-native-hook-exe-hosts.test.ts',

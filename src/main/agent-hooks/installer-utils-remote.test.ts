@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
+import { posix } from 'node:path'
 
 import {
   readHooksJsonRemote,
@@ -11,6 +12,7 @@ import {
 type FakeFs = {
   files: Map<string, string>
   dirs: Set<string>
+  links: Map<string, string>
   modes: Map<string, number>
   openSshRenameCount: number
   operations: { kind: string; path: string; destination?: string }[]
@@ -21,6 +23,11 @@ function createFakeSftp(
     plainRenameOverwrites?: boolean
     openSshRename?: boolean
     failDotFileWrites?: boolean
+    fullSftp?: boolean
+    mkdirFailure?: number
+    statFailure?: number
+    resolutionFailure?: number
+    unsupportedRename?: boolean
   } = {}
 ): {
   sftp: SFTPWrapper
@@ -30,6 +37,7 @@ function createFakeSftp(
   const fs: FakeFs = {
     files: new Map(),
     dirs: new Set(['/']),
+    links: new Map(),
     modes: new Map(),
     openSshRenameCount: 0,
     operations: []
@@ -43,7 +51,7 @@ function createFakeSftp(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fake implements every SFTP operation exercised below.
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
-      const v = fs.files.get(path)
+      const v = fs.files.get(fs.links.get(path) ?? path)
       if (v === undefined) {
         cb(noEntryError(path))
         return
@@ -56,6 +64,10 @@ function createFakeSftp(
       options: string | { mode?: number },
       cb: (err: unknown) => void
     ): void => {
+      if (!fs.dirs.has(posix.dirname(path))) {
+        cb(noEntryError(path))
+        return
+      }
       if (opts.failDotFileWrites && path.includes('/.')) {
         cb({ code: 4, message: `write failed ${path}` })
         return
@@ -102,13 +114,18 @@ function createFakeSftp(
       cb(null)
     },
     stat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void): void => {
-      if (!fs.files.has(path)) {
+      if (opts.statFailure && fs.dirs.has(path)) {
+        cb({ code: opts.statFailure, message: 'sparse metadata denied' })
+      } else if (fs.dirs.has(path)) {
+        cb(null, fakeStats(0o040755))
+      } else if (fs.files.has(path)) {
+        cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
+      } else {
         cb(noEntryError(path))
-        return
       }
-      cb(null, fakeStats(fs.modes.get(path) ?? 0o100644))
     },
     readdir: (path: string, cb: (err: unknown, list?: { filename: string }[]) => void): void => {
+      fs.operations.push({ kind: 'readdir', path })
       if (fs.dirs.has(path)) {
         cb(null, [])
         return
@@ -116,13 +133,44 @@ function createFakeSftp(
       cb(noEntryError(path))
     },
     mkdir: (path: string, cb: (err: unknown) => void): void => {
-      fs.dirs.add(path)
-      cb(null)
+      fs.operations.push({ kind: 'mkdir', path })
+      if (fs.dirs.has(path) || fs.files.has(path) || opts.mkdirFailure) {
+        cb({ code: opts.mkdirFailure ?? 4, message: 'mkdir failed' })
+      } else if (!fs.dirs.has(posix.dirname(path))) {
+        cb(noEntryError(path))
+      } else {
+        fs.dirs.add(path)
+        cb(null)
+      }
     },
+    ...(opts.fullSftp
+      ? {
+          lstat: (path: string, cb: (err: unknown, stats?: { mode: number }) => void) => {
+            fs.operations.push({ kind: 'lstat', path })
+            if (fs.files.has(path) || fs.links.has(path)) {
+              cb(null, fakeStats(0o100640))
+            } else {
+              cb(noEntryError(path))
+            }
+          },
+          realpath: (path: string, cb: (err: unknown, target?: string) => void) => {
+            fs.operations.push({ kind: 'realpath', path })
+            if (opts.resolutionFailure) {
+              cb({ code: opts.resolutionFailure, message: 'resolution denied' })
+            } else {
+              cb(null, fs.links.get(path) ?? path)
+            }
+          }
+        }
+      : {}),
     ...(opts.openSshRename
       ? {
           ext_openssh_rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
             fs.openSshRenameCount += 1
+            if (opts.unsupportedRename) {
+              cb({ code: 8, message: 'unsupported extension' })
+              return
+            }
             fs.operations.push({ kind: 'openssh-rename', path: src, destination: dst })
             const v = fs.files.get(src)
             if (v === undefined) {
@@ -216,9 +264,11 @@ describe('installer-utils-remote', () => {
     const tmp = Array.from(fs.files.keys()).find((k) => k.includes('.tmp'))
     expect(tmp).toBeUndefined()
     expect(fs.modes.get('/home/u/.claude/settings.json')).toBe(0o600)
-    const tempPath = fs.operations[0]?.path
+    const tempPath = fs.operations.find(({ kind }) => kind === 'write')?.path
     expect(tempPath).toMatch(/^\/home\/u\/\.claude\/\.[^.]+\.tmp$/)
-    expect(fs.operations).toEqual([
+    expect(
+      fs.operations.filter(({ kind }) => !['mkdir', 'readdir', 'lstat', 'realpath'].includes(kind))
+    ).toEqual([
       { kind: 'write', path: tempPath },
       { kind: 'chmod', path: tempPath },
       { kind: 'rename', path: tempPath, destination: '/home/u/.claude/settings.json' }
@@ -268,35 +318,6 @@ describe('installer-utils-remote', () => {
     expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
   })
 
-  it('writes the managed script and chmods 0o755', async () => {
-    const { sftp, fs } = createFakeSftp()
-    await writeManagedScriptRemote(sftp, '/home/u/.orca/agent-hooks/claude-hook.sh', '#!/bin/sh\n')
-    expect(fs.files.get('/home/u/.orca/agent-hooks/claude-hook.sh')).toBe('#!/bin/sh\n')
-    expect(fs.modes.get('/home/u/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
-  })
-
-  it('replaces an existing managed script atomically via temp file rename', async () => {
-    const { sftp, fs } = createFakeSftp({
-      plainRenameOverwrites: false,
-      openSshRename: true
-    })
-    const path = '/home/u/.orca/agent-hooks/claude-hook.sh'
-    fs.files.set(path, 'old script')
-
-    await writeManagedScriptRemote(sftp, path, 'new script')
-
-    expect(fs.files.get(path)).toBe('new script')
-    expect(fs.modes.get(path)).toBe(0o755)
-    expect([...fs.files.keys()]).toEqual([path])
-    const tempPath = fs.operations[0]?.path
-    expect(tempPath).toMatch(/^\/home\/u\/\.orca\/agent-hooks\/\.[^.]+\.tmp$/)
-    expect(fs.operations).toEqual([
-      { kind: 'write', path: tempPath },
-      { kind: 'chmod', path: tempPath },
-      { kind: 'openssh-rename', path: tempPath, destination: path }
-    ])
-  })
-
   it('leaves the existing managed script intact when temp write fails', async () => {
     const { sftp, fs } = createFakeSftp({ failDotFileWrites: true })
     const path = '/home/u/.orca/agent-hooks/claude-hook.sh'
@@ -307,5 +328,90 @@ describe('installer-utils-remote', () => {
     })
     expect(fs.files.get(path)).toBe('old script')
     expect([...fs.files.keys()]).toEqual([path])
+  })
+
+  it.each([
+    [
+      'JSON',
+      (sftp: SFTPWrapper, path: string) => writeHooksJsonRemote(sftp, path, { foreign: true }),
+      0o2640
+    ],
+    [
+      'script',
+      (sftp: SFTPWrapper, path: string) => writeManagedScriptRemote(sftp, path, 'new'),
+      0o755
+    ],
+    [
+      'text',
+      (sftp: SFTPWrapper, path: string) => writeTextFileRemoteAtomic(sftp, path, 'new'),
+      0o2640
+    ]
+  ] as const)(
+    'uses standard SFTP physical resolution for %s and extension fallback',
+    async (_name, write, mode) => {
+      const { sftp, fs } = createFakeSftp({
+        fullSftp: true,
+        openSshRename: true,
+        unsupportedRename: true
+      })
+      const logical = 'relative/settings.json'
+      const target = '/server/cwd/dotfiles/other-name'
+      fs.links.set(logical, target)
+      fs.files.set(target, 'old')
+      fs.modes.set(target, 0o2640)
+      await write(sftp, logical)
+      expect(fs.links.get(logical)).toBe(target)
+      expect(fs.files.has(logical)).toBe(false)
+      expect(fs.files.get(target)).not.toBe('old')
+      expect(fs.modes.get(target)).toBe(mode)
+      const rename = fs.operations.find(({ kind }) => kind === 'rename')
+      expect(posix.dirname(rename?.path ?? '')).toBe(posix.dirname(target))
+      expect(rename?.destination).toBe(target)
+      expect(fs.operations.filter(({ kind }) => kind === 'readdir')).toEqual([])
+      const publications = fs.operations.filter(({ kind }) => kind === 'write').length
+      if (mode === 0o755) {
+        fs.modes.set(target, 0o600)
+      }
+      await write(sftp, logical)
+      expect(fs.operations.filter(({ kind }) => kind === 'write')).toHaveLength(publications)
+      expect(fs.modes.get(target)).toBe(mode)
+      expect(fs.files.size).toBe(1)
+    }
+  )
+
+  it.each([3, 4, 5])(
+    'never treats SFTP resolution status %s as permission to replace a link',
+    async (resolutionFailure) => {
+      const { sftp, fs } = createFakeSftp({ fullSftp: true, resolutionFailure })
+      fs.links.set('/logical/settings.json', '/physical/target')
+      fs.files.set('/physical/target', 'old')
+      await expect(
+        writeTextFileRemoteAtomic(sftp, '/logical/settings.json', 'new')
+      ).rejects.toMatchObject({ code: resolutionFailure })
+      expect(fs.operations.map(({ kind }) => kind)).toEqual(['lstat', 'realpath'])
+      expect(fs.files.get('/physical/target')).toBe('old')
+    }
+  )
+
+  it.each([2, 3, 4])(
+    'preserves writable sparse servers with mkdir/stat status %s without listing',
+    async (code) => {
+      const { sftp, fs } = createFakeSftp({ mkdirFailure: code, statFailure: code })
+      fs.dirs.add('/existing')
+      await writeTextFileRemoteAtomic(sftp, '/existing/new', 'new')
+      expect(fs.files.get('/existing/new')).toBe('new')
+      expect(fs.operations.filter(({ kind }) => kind === 'readdir')).toEqual([])
+      expect(fs.operations.filter(({ kind }) => kind === 'mkdir')).toHaveLength(code === 2 ? 2 : 1)
+    }
+  )
+
+  it('rejects a non-directory parent and preserves the live file', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.files.set('/file', 'user')
+    await expect(
+      writeTextFileRemoteAtomic(sftp, '/file/settings.json', 'new')
+    ).rejects.toMatchObject({ code: 2 })
+    expect([...fs.files]).toEqual([['/file', 'user']])
+    expect(fs.operations.filter(({ kind }) => kind === 'readdir' || kind === 'write')).toEqual([])
   })
 })

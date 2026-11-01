@@ -9,6 +9,7 @@ import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
 } from '../../shared/agent-status-hooks-setting'
+import type { ManagedHookInvocation } from '../claude/claude-hook-target'
 import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
@@ -31,7 +32,8 @@ type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > | null
 
-type InstallOptions = {
+type InstallOptions = ManagedHookInvocation & {
+  signal?: AbortSignal
   /** Set only for an explicit user action, never for startup reconciliation. */
   userInitiated?: boolean
   shouldHydrateShellPath?: boolean
@@ -45,8 +47,10 @@ type ApplyOptions = InstallOptions & {
   keepSharedEntries?: boolean
 }
 
-type RemoveOptions = {
+type RemoveOptions = ManagedHookInvocation & {
   agents?: readonly AgentHookTarget[]
+  signal?: AbortSignal
+  shouldContinue?: (agent: AgentHookTarget) => boolean
 }
 
 export type StartupManagedHookAction = 'install' | 'skip'
@@ -159,7 +163,7 @@ export async function installManagedAgentHooks(
     )
   }
 
-  const results: AgentHookInstallStatus[] = []
+  const results: (AgentHookInstallStatus | Promise<AgentHookInstallStatus>)[] = []
   for (const entry of installers) {
     const [agent] = entry
     if (disabled.has(agent)) {
@@ -191,14 +195,18 @@ export async function installManagedAgentHooks(
       agent === 'claude' && presence.executablePath
         ? await probeClaudeCliVersion(presence.executablePath)
         : null
-    results.push(
-      await runInstaller(entry, options.onInstallError, {
-        ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
-        ...(cliVersion ? { cliVersion } : {})
-      })
-    )
+    const installing = runInstaller(entry, options.onInstallError, {
+      ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),
+      ...(cliVersion ? { cliVersion } : {}),
+      ...(options.env ? { env: options.env } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.shouldContinue
+        ? { shouldContinue: () => options.shouldContinue?.(agent) !== false }
+        : {})
+    })
+    results.push(agent === 'claude' ? installing : await installing)
   }
-  return results
+  return await Promise.all(results.map((result) => Promise.resolve(result)))
 }
 
 export async function removeManagedAgentHooks(
@@ -211,7 +219,14 @@ export async function removeManagedAgentHooks(
       continue
     }
     try {
-      results.push(await remove())
+      results.push(
+        await remove({
+          ...options,
+          shouldContinue: options.shouldContinue
+            ? () => options.shouldContinue?.(agent) !== false
+            : undefined
+        })
+      )
     } catch (error) {
       results.push(errorStatus(agent, error))
     }
@@ -236,14 +251,18 @@ export async function removeManagedAgentHooksAsync(
   )
 }
 
-export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
-  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
-    try {
-      return getStatus()
-    } catch (error) {
-      return errorStatus(agent, error)
-    }
-  })
+export async function getManagedAgentHookStatuses(
+  options: ManagedHookInvocation = {}
+): Promise<AgentHookInstallStatus[]> {
+  return Promise.all(
+    MANAGED_AGENT_HOOK_STATUS_READERS.map(async ([agent, getStatus]) => {
+      try {
+        return await getStatus(options)
+      } catch (error) {
+        return errorStatus(agent, error)
+      }
+    })
+  )
 }
 
 export async function applyAgentStatusHooksEnabled(
@@ -251,14 +270,20 @@ export async function applyAgentStatusHooksEnabled(
   settings: ManagedHookSettings = null,
   options: ApplyOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  const removalOptions = {
+    ...options,
+    shouldContinue: options.shouldContinue
+      ? (agent: AgentHookTarget) => options.shouldContinue?.(agent) === false
+      : undefined
+  }
   if (!enabled) {
     return options.keepSharedEntries
-      ? getManagedAgentHookStatuses()
-      : await removeManagedAgentHooks()
+      ? getManagedAgentHookStatuses(options)
+      : await removeManagedAgentHooks(removalOptions)
   }
-  const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
-    isManagedAgentHookTarget
-  )
+  const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents)
+    .filter(isManagedAgentHookTarget)
+    .filter((agent) => !options.agents || options.agents.includes(agent))
   const installed = await installManagedAgentHooks(settings, options)
   const disabledToRemove = options.shouldContinue
     ? disabled.filter((agent) => !options.shouldContinue?.(agent))
@@ -267,10 +292,9 @@ export async function applyAgentStatusHooksEnabled(
     return installed
   }
   const removed = new Map(
-    (await removeManagedAgentHooks({ agents: disabledToRemove })).map((status) => [
-      status.agent,
-      status
-    ])
+    (await removeManagedAgentHooks({ ...removalOptions, agents: disabledToRemove })).map(
+      (status) => [status.agent, status]
+    )
   )
   return installed.map((status) => removed.get(status.agent) ?? status)
 }

@@ -55,7 +55,8 @@ console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-r
 
 await bundle(
   'src/main/claude-accounts/claude-profile-wsl-entry.ts',
-  WSL_CLAUDE_PROFILE_HELPER_FILENAME
+  WSL_CLAUDE_PROFILE_HELPER_FILENAME,
+  { alias: JSONC_PARSER_ESM_ALIAS }
 )
 await bundle(
   'src/main/ai-vault/session-scanner-opencode-sqlite-process-entry.ts',

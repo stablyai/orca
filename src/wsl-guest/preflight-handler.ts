@@ -1,3 +1,4 @@
+import { resolveSystemClaudeHookTarget } from '../main/claude/claude-hook-target'
 import { execFile } from 'node:child_process'
 import { userInfo } from 'node:os'
 import { promisify } from 'node:util'
@@ -54,6 +55,7 @@ export class PreflightHandler {
   private async detectAgents(params: Record<string, unknown>): Promise<{
     agents: string[]
     versions?: Record<string, string>
+    claudeConfigDir?: string
   }> {
     const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
@@ -105,7 +107,10 @@ export class PreflightHandler {
 
     return {
       agents: [...new Set(detectedCommands.map(({ id }) => id))],
-      ...(Object.keys(versions).length > 0 ? { versions } : {})
+      ...(Object.keys(versions).length > 0 ? { versions } : {}),
+      ...(detectedCommands.some(({ id }) => id === 'claude')
+        ? { claudeConfigDir: (await resolveSystemClaudeHookTarget()).configDir }
+        : {})
     }
   }
 

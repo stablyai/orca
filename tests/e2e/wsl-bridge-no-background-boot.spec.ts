@@ -123,15 +123,27 @@ async function expectNothingStartsTheStoppedDistro(
   })
   let watched: { seenRunning: boolean; reads: number } | undefined
   try {
-    // The window starts only once a read has seen it stopped, within the grace.
-    await watcher.stopped
-    timeline('confirmed stopped')
-    await window()
-    await page.screenshot({ path: testInfo.outputPath('wsl-bridge-background-window.png') })
-    // ast-grep-ignore: test-no-real-time-wait -- the claim is that nothing boots over a window of real background work
-    await page.waitForTimeout(15_000)
-  } finally {
-    watched = await watcher.stop()
+    try {
+      // The window starts only once a read has seen it stopped, within the grace.
+      await watcher.stopped
+      timeline('confirmed stopped')
+      await window()
+      await page.screenshot({ path: testInfo.outputPath('wsl-bridge-background-window.png') })
+      // ast-grep-ignore: test-no-real-time-wait -- the claim is that nothing boots over a window of real background work
+      await page.waitForTimeout(15_000)
+    } finally {
+      watched = await watcher.stop()
+    }
+  } catch (error) {
+    try {
+      await testInfo.attach('wsl-prerequisite-decision-inputs', {
+        body: JSON.stringify(watcher.diagnostics(), null, 2),
+        contentType: 'application/json'
+      })
+    } catch {
+      // Evidence attachment cannot replace the original action/stop failure.
+    }
+    throw error
   }
   // Authoritative: the distro never ran during the window.
   expect(watched.reads).toBeGreaterThan(10)

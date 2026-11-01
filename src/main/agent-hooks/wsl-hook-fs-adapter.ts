@@ -26,6 +26,7 @@ export async function installWslGuestHooks(options: {
     options
   let agents
   let claudeVersion: string | null = null
+  let claudeConfigDir: string | null = null
   try {
     const detected = readManagedHookDetectionResult(
       await mux.request('preflight.detectAgents', {
@@ -34,6 +35,7 @@ export async function installWslGuestHooks(options: {
     )
     agents = detected.agents
     claudeVersion = detected.claudeVersion
+    claudeConfigDir = detected.claudeConfigDir
   } catch (error) {
     warn(
       `[agent-hooks] WSL agent detection for '${distro}' failed: ${
@@ -61,10 +63,15 @@ export async function installWslGuestHooks(options: {
   }
   // Redirected Codex homes use the canonical runtime writer; the relay adapter handles other agents.
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
-  const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
-    agents: remoteAgents,
-    ...(claudeVersion ? { claudeVersion } : {})
-  })
+  const results = await installHooks(
+    createWslHookSftpAdapter(mux, claudeConfigDir !== null),
+    guestHome,
+    {
+      agents: remoteAgents,
+      ...(claudeVersion ? { claudeVersion } : {}),
+      ...(claudeConfigDir ? { claudeConfigDir } : {})
+    }
+  )
   const failed = results.filter((r) => r.state === 'error').length
   if (failed > 0) {
     warn(
@@ -89,7 +96,12 @@ function toSftpError(failure: { errno?: string; message?: string }): Error {
   return err
 }
 
-export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrapper {
+export function createWslHookSftpAdapter(
+  mux: SshChannelMultiplexer,
+  requirePhysicalWrite = false
+): SFTPWrapper {
+  // Capability belongs to this facade's current mux, never another connection.
+  let homeResponse: Promise<unknown> | undefined
   const call = <Wire extends object, Value>(
     method: string,
     params: Record<string, unknown>,
@@ -117,6 +129,33 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
   }
 
   const adapter = {
+    async publishAtomicFile(path: string, content: string, mode?: number): Promise<boolean> {
+      const home = await (homeResponse ??= mux.request(WSL_HOOK_FS_METHODS.home))
+      if (
+        !home ||
+        typeof home !== 'object' ||
+        !('ok' in home) ||
+        home.ok !== true ||
+        !('home' in home) ||
+        typeof home.home !== 'string'
+      ) {
+        throw new Error('WSL hook file publication received no home handshake')
+      }
+      if (!('physicalAtomicWrite' in home) || home.physicalAtomicWrite !== true) {
+        if (requirePhysicalWrite || 'physicalAtomicWrite' in home) {
+          throw new Error('WSL hook relay does not support physical file publication')
+        }
+        return false
+      }
+      await new Promise<void>((resolve, reject) => {
+        callVoid(
+          WSL_HOOK_FS_METHODS.writeFile,
+          { path, content, ...(mode === undefined ? {} : { mode }), physicalAtomic: true },
+          (error) => (error ? reject(error) : resolve())
+        )
+      })
+      return true
+    },
     readFile(path: string, _encoding: unknown, callback: SftpCallback<string>): void {
       call<{ content: string }, string>(
         WSL_HOOK_FS_METHODS.readFile,

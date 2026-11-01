@@ -1,13 +1,14 @@
 // Share parsing and merge rules with local installation; replace only filesystem operations.
 
 import { randomUUID } from 'node:crypto'
+import { posix } from 'node:path'
+import { sftpOperation } from './sftp-operation'
 import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 
 import type { HooksConfig } from './installer-utils'
 import { parseHooksJsonText } from './hooks-json-read'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
-const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
 
 /** Null means invalid JSON, {} means missing; propagate other I/O failures. */
 export async function readHooksJsonRemote(
@@ -34,32 +35,11 @@ export async function writeHooksJsonRemote(
   // JSONC callers can supply text edited in place.
   options?: { serialized?: string }
 ): Promise<void> {
-  const dir = dirnamePosix(remotePath)
-  await mkdirpRemote(sftp, dir)
-  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
-  // Preserve mtime and inode on repeated installs.
-  try {
-    const existing = await readFile(sftp, remotePath)
-    if (existing === serialized) {
-      return
-    }
-  } catch {
-    // Retry through the write path after a failed read.
-  }
-  // Atomic replacement prevents interrupted writes from truncating live settings.
-  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
-  try {
-    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
-    await writeFile(sftp, tmp, serialized, mode)
-    await chmod(sftp, tmp, mode)
-    await rename(sftp, tmp, remotePath)
-  } finally {
-    try {
-      await unlink(sftp, tmp)
-    } catch {
-      // Cleanup is best effort.
-    }
-  }
+  await publishRemoteFile(
+    sftp,
+    remotePath,
+    options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+  )
 }
 
 /** POSIX SSH targets only: paths and script payloads follow POSIX conventions. */
@@ -68,31 +48,7 @@ export async function writeManagedScriptRemote(
   remotePath: string,
   content: string
 ): Promise<void> {
-  const dir = dirnamePosix(remotePath)
-  await mkdirpRemote(sftp, dir)
-  try {
-    const existing = await readFile(sftp, remotePath)
-    if (existing === content) {
-      await chmod(sftp, remotePath, 0o755)
-      return
-    }
-  } catch {
-    // Retry through the atomic write path after a failed read.
-  }
-
-  // Publish only a complete executable script; existing configs may invoke it during reinstall.
-  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
-  try {
-    await writeFile(sftp, tmp, content, 0o755)
-    await chmod(sftp, tmp, 0o755)
-    await rename(sftp, tmp, remotePath)
-  } finally {
-    try {
-      await unlink(sftp, tmp)
-    } catch {
-      // Cleanup is best effort.
-    }
-  }
+  await publishRemoteFile(sftp, remotePath, content, 0o755)
 }
 
 export async function readTextFileRemote(
@@ -129,69 +85,72 @@ export async function writeTextFileRemoteAtomic(
   remotePath: string,
   content: string
 ): Promise<void> {
-  const dir = dirnamePosix(remotePath)
-  await mkdirpRemote(sftp, dir)
-  try {
-    const existing = await readFile(sftp, remotePath)
-    if (existing === content) {
-      return
-    }
-  } catch {
-    // Retry through the atomic write path after a failed read.
-  }
-
-  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
-  try {
-    const mode = await getRemoteFileModeOrDefault(sftp, remotePath, DEFAULT_REMOTE_CONFIG_MODE)
-    await writeFile(sftp, tmp, content, mode)
-    await chmod(sftp, tmp, mode)
-    await rename(sftp, tmp, remotePath)
-  } finally {
-    try {
-      await unlink(sftp, tmp)
-    } catch {
-      // Cleanup is best effort.
-    }
-  }
+  await publishRemoteFile(sftp, remotePath, content)
 }
 
-function sftpOperation<T>(
-  label: string,
-  run: (callback: (err: unknown, value?: T) => void) => void
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      // A wedged SFTP callback must not block workspace startup indefinitely.
-      reject(new Error(`Timed out waiting for SFTP ${label}`))
-    }, REMOTE_SFTP_OPERATION_TIMEOUT_MS)
-    if (typeof timer === 'object' && 'unref' in timer) {
-      timer.unref()
-    }
+type PublishingSftp = SFTPWrapper & {
+  publishAtomicFile?: (path: string, content: string, mode?: number) => Promise<boolean>
+}
 
-    const finish = (err: unknown, value?: T): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(value as T)
-    }
-
+async function publishRemoteFile(
+  sftp: PublishingSftp,
+  logicalPath: string,
+  content: string,
+  requiredMode?: number
+): Promise<void> {
+  const publish = sftp.publishAtomicFile
+  if (
+    publish &&
+    (await sftpOperation<boolean>(`publish ${logicalPath}`, (callback) => {
+      publish(logicalPath, content, requiredMode).then(
+        (handled) => callback(null, handled),
+        (error) => callback(error)
+      )
+    }))
+  ) {
+    return
+  }
+  let target = logicalPath
+  // Real SFTP resolves remotely; partial legacy facades keep their established path semantics.
+  if (typeof sftp.lstat === 'function' && typeof sftp.realpath === 'function') {
     try {
-      run(finish)
+      await sftpOperation(`lstat ${logicalPath}`, (callback) => sftp.lstat(logicalPath, callback))
+      target = await sftpOperation<string>(`realpath ${logicalPath}`, (callback) =>
+        sftp.realpath(logicalPath, callback)
+      )
     } catch (error) {
-      finish(error)
+      if (
+        !isNoEntryError(error) &&
+        !(error instanceof Error && 'code' in error && error.code === 'ELOOP')
+      ) {
+        throw error
+      }
     }
-  })
+  }
+  let equal = false
+  try {
+    equal = (await readFile(sftp, target)) === content
+  } catch {
+    // Publication still has to pass the target's permissions after a failed read.
+  }
+  if (equal) {
+    if (requiredMode !== undefined) {
+      await chmod(sftp, target, requiredMode)
+    }
+    return
+  }
+  const dir = posix.dirname(target)
+  await mkdirpRemote(sftp, dir)
+  const mode =
+    requiredMode ?? (await getRemoteFileModeOrDefault(sftp, target, DEFAULT_REMOTE_CONFIG_MODE))
+  const tmp = `${dir}/.${Date.now()}-${randomUUID()}.tmp`
+  try {
+    await writeFile(sftp, tmp, content, mode)
+    await chmod(sftp, tmp, mode)
+    await rename(sftp, tmp, target)
+  } finally {
+    await unlink(sftp, tmp).catch(() => {})
+  }
 }
 
 async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {
@@ -208,7 +167,9 @@ async function writeFile(
   mode?: number
 ): Promise<void> {
   const options =
-    mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
+    mode === undefined
+      ? { encoding: 'utf8' as const, flag: 'wx' }
+      : { encoding: 'utf8' as const, flag: 'wx', mode }
   await sftpOperation<void>(`writeFile ${remotePath}`, (callback) => {
     sftp.writeFile(remotePath, content, options, callback)
   })
@@ -229,7 +190,7 @@ async function getRemoteFileModeOrDefault(
   try {
     return await statMode(sftp, remotePath)
   } catch (err) {
-    if (isNoEntryError(err)) {
+    if (isNoEntryError(err) || (err instanceof Error && 'code' in err && err.code === 'ELOOP')) {
       return defaultMode
     }
     throw err
@@ -289,35 +250,41 @@ async function mkdir(sftp: SFTPWrapper, remotePath: string): Promise<void> {
 }
 
 async function mkdirpRemote(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  if (remotePath === '/' || remotePath === '' || remotePath === '.') {
-    return
-  }
-  // Walk POSIX paths top-down to avoid rescanning the full parent chain for each segment.
-  const segments = remotePath.split('/').filter((s) => s.length > 0)
-  let current = remotePath.startsWith('/') ? '' : '.'
-  for (const seg of segments) {
-    current = current === '' ? `/${seg}` : current === '.' ? seg : `${current}/${seg}`
+  let current = posix.normalize(remotePath)
+  const missing: string[] = []
+  const prepare = async (path: string): Promise<boolean> => {
     try {
-      await readdir(sftp, current)
+      await mkdir(sftp, path)
+      return true
     } catch {
+      let mode: number
       try {
-        await mkdir(sftp, current)
-      } catch (err) {
-        // Concurrent mkdir may report SSH_FX_FAILURE; subsequent operations still verify the path.
-        if (!isAlreadyExistsError(err)) {
-          throw err
-        }
+        const stats = await sftpOperation<{ mode: number }>(`stat ${path}`, (callback) =>
+          sftp.stat(path, callback)
+        )
+        mode = stats.mode
+      } catch (error) {
+        // Sparse servers may deny metadata while allowing writes; the actual child/temp write decides.
+        return !isNoEntryError(error)
       }
+      if ((mode & 0o170000) !== 0o040000) {
+        throw Object.assign(new Error(`Not a remote directory: ${path}`), { code: 2 })
+      }
+      return true
     }
   }
-}
-
-function dirnamePosix(p: string): string {
-  const idx = p.lastIndexOf('/')
-  if (idx <= 0) {
-    return idx === 0 ? '/' : '.'
+  // Deepest first preserves old guests that admit HOME but refuse ancestor mkdir/stat.
+  while (current !== '/' && current !== '.' && current !== '') {
+    if (await prepare(current)) {
+      break
+    }
+    missing.push(current)
+    current = posix.dirname(current)
   }
-  return p.slice(0, idx)
+  for (let index = missing.length - 1; index >= 0; index -= 1) {
+    // Sparse metadata can report missing for a writable path; the final write verifies it.
+    await prepare(missing[index])
+  }
 }
 
 function isNoEntryError(err: unknown): boolean {
@@ -325,22 +292,14 @@ function isNoEntryError(err: unknown): boolean {
     return false
   }
   // ssh2 surfaces SFTP errors with `code === 2` (SSH_FX_NO_SUCH_FILE).
-  return (err as { code?: unknown }).code === 2
-}
-
-function isAlreadyExistsError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') {
-    return false
-  }
-  // SSH_FX_FAILURE (4) can mean "exists"; tolerate it here and let later operations expose other failures.
-  return (err as { code?: unknown }).code === 4
+  return 'code' in err && err.code === 2
 }
 
 function isUnsupportedExtensionError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
-  const code = (err as { code?: unknown }).code
-  const message = (err as { message?: unknown }).message
+  const code = 'code' in err ? err.code : undefined
+  const message = 'message' in err ? err.message : undefined
   return code === 8 || (typeof message === 'string' && /unsupported/i.test(message))
 }

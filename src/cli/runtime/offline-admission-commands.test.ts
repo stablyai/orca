@@ -30,7 +30,9 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', async () => {
   const { claudeHookService } = await import('../../main/claude/hook-service.js')
   return {
     applyAgentStatusHooksEnabled: vi.fn(async (enabled: boolean) => [
-      enabled ? claudeHookService.install({ claudeVersion: '2.1.0' }) : claudeHookService.remove()
+      enabled
+        ? await claudeHookService.installSystem({ claudeVersion: '2.1.0' })
+        : await claudeHookService.removeSystem()
     ]),
     getManagedAgentHookStatuses: () => [claudeHookService.getStatus()]
   }
@@ -72,11 +74,11 @@ beforeEach(() => {
     'XDG_CONFIG_HOME',
     'XDG_DATA_HOME',
     'XDG_CACHE_HOME',
-    'CODEX_HOME',
-    'CLAUDE_CONFIG_DIR'
+    'CODEX_HOME'
   ]) {
     vi.stubEnv(key, join(root, key))
   }
+  vi.stubEnv('CLAUDE_CONFIG_DIR', join(root, 'HOME', '.claude'))
   vi.stubEnv('ORCA_USER_DATA_PATH', root)
   setAppEnvironment({
     getPath: () => root,
