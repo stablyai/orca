@@ -41,7 +41,7 @@ export function withMirroredEvidenceReceipt<T extends MirroredEvidenceClocks>(
 
 export function isFreshNonDoneAgentStatus(
   entry:
-    | Pick<
+    | (Pick<
         AgentStatusEntry,
         | 'state'
         | 'updatedAt'
@@ -49,7 +49,8 @@ export function isFreshNonDoneAgentStatus(
         | 'mirroredEvidenceReceivedAt'
         | 'restoredUnconfirmed'
         | 'structuredHostOwned'
-      >
+      > &
+        Partial<Pick<AgentStatusEntry, 'interactivePrompt'>>)
     | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
@@ -67,13 +68,16 @@ export function isAgentStatusFresh(
     | 'mirroredEvidenceReceivedAt'
     | 'restoredUnconfirmed'
     | 'structuredHostOwned'
-  >,
+  > &
+    Partial<Pick<AgentStatusEntry, 'interactivePrompt' | 'state'>>,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
   return (
     entry.restoredUnconfirmed !== true &&
     (entry.structuredHostOwned === true ||
+      ((entry.state === 'waiting' || entry.state === 'blocked') &&
+        entry.interactivePrompt != null) ||
       now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }

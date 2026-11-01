@@ -96,6 +96,21 @@ describe('useMobileNativeChatPrompts terminal cards', () => {
       null
     )
   })
+
+  it('shows an aged approval prompt card past 30 minutes', () => {
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000
+    const prompts = promptsFor({
+      state: 'waiting',
+      interactivePrompt: APPROVAL,
+      updatedAt: twoHoursAgo,
+      stateStartedAt: twoHoursAgo
+    })
+    expect(prompts.permission).toMatchObject({
+      title: 'Allow Bash?',
+      detail: 'pnpm build > build.log 2>&1'
+    })
+    expect(prompts.waitStartedAt).toBe(twoHoursAgo)
+  })
 })
 
 describe('useMobileNativeChatPrompts transcript asks', () => {
