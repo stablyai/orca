@@ -85,7 +85,10 @@ export async function launchStructuredWorktreeSession(
   if (isCancelled()) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
-  // Read at launch, not submit: the user may have written or sent in the chat while git worked.
+  // Lock before capturing: host admission and layout publication can both leave this composer visible.
+  useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+    chatInputHandedOff: true
+  })
   const pending = useAppStore.getState().pendingWorktreeCreations[args.creationId]
   const request = withPendingChatInput(pending, args.request)
   // Reuse composer-fixed route/delivery through retries; later host changes must not re-resolve this create.

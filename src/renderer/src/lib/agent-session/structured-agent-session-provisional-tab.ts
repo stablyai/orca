@@ -228,6 +228,9 @@ function beginLocalProvisionalLaunch(
       if (!shown || !useAppStore.getState().getTab(shown)) {
         retirePosition(tab.id)
       }
+      if (shown === null) {
+        handle.cancel()
+      }
       args.onTabOpenSettled?.(shown)
     })
     return { ...handle, tab }

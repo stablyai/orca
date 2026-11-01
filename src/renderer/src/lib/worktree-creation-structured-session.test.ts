@@ -101,6 +101,7 @@ describe('launchStructuredWorktreeSession', () => {
     mocks.state.pendingWorktreeCreations = Object.fromEntries([['creation-1', {}]])
     mocks.listener = null
     mocks.state.activePendingCreationId = 'creation-1'
+    mocks.state.activeView = 'terminal'
     mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
       args.beforeOpen?.('session-1')
@@ -109,37 +110,42 @@ describe('launchStructuredWorktreeSession', () => {
     })
   })
 
-  it('keeps the pending chat until the layout owner publishes its replacement', async () => {
-    let openTab: BeginArgs['onTabOpenSettled']
+  it('uses the normal workspace surface when no chat tab is published', async () => {
     mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      args.beforeOpen?.('session-1')
-      openTab = args.onTabOpenSettled
+      args.onTabOpenSettled?.(null)
       return launchHandle()
     })
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'fallback-terminal' })
 
-    const completion = launchStructuredWorktreeSession(baseArgs)
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    openTab?.('agent-session:session-1')
-    await completion
+    await expect(launchStructuredWorktreeSession(baseArgs)).resolves.toMatchObject({
+      primaryTabId: 'fallback-terminal'
+    })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
-      providesInitialSurface: true,
+      providesInitialSurface: false,
       worktreeCreationId: 'creation-1'
     })
   })
 
-  it('preserves navigation while waiting for the replacement chat', async () => {
-    let openTab: BeginArgs['onTabOpenSettled']
-    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
-      openTab = args.onTabOpenSettled
-      return launchHandle()
-    })
+  it.each(['workspace', 'view'] as const)(
+    'preserves %s navigation while waiting for the replacement chat',
+    async (navigation) => {
+      let openTab: BeginArgs['onTabOpenSettled']
+      mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+        openTab = args.onTabOpenSettled
+        return launchHandle()
+      })
 
-    const completion = launchStructuredWorktreeSession(baseArgs)
-    mocks.state.activePendingCreationId = null
-    openTab?.('agent-session:session-1')
-    await completion
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
+      const completion = launchStructuredWorktreeSession(baseArgs)
+      if (navigation === 'workspace') {
+        mocks.state.activePendingCreationId = null
+      } else {
+        mocks.state.activeView = 'tasks'
+      }
+      openTab?.('agent-session:session-1')
+      await completion
+      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    }
+  )
 
   it('cancels a launch dismissed while waiting for its chat tab', async () => {
     const launch = launchHandle()
