@@ -245,6 +245,17 @@ describe('captureLastTabAutoDeleteCandidate', () => {
     })
   })
 
+  it('treats the same id on a host other than the selected one as background', () => {
+    const rows = [worktree({ hostId: 'ssh:box', instanceId: 'remote' }), worktree()]
+    const state = makeState({ worktrees: rows, activeWorktreeId: WT, activeHostId: 'local' })
+    expect(
+      captureLastTabAutoDeleteCandidate(state, WT, { trigger: 'exit', hostId: 'ssh:box' })
+    ).toMatchObject({ wasActive: false, hostId: 'ssh:box', instanceId: 'remote' })
+    expect(
+      captureLastTabAutoDeleteCandidate(state, WT, { trigger: 'exit', hostId: 'local' })
+    ).toMatchObject({ wasActive: true, hostId: 'local', instanceId: 'i1' })
+  })
+
   it('refuses to guess the host of an inactive id published by two hosts', () => {
     const rows = [worktree({ hostId: 'ssh:box', instanceId: 'remote' }), worktree()]
     const state = makeState({ worktrees: rows })
