@@ -48,6 +48,7 @@ export function submitOrchestrationMailboxPointer(
   let redriveClearedPointer = true
   let submitted = false
   let releaseWithoutRedrive = false
+  let unconfirmed = false
   let finalizeReservation = true
   let preserveAmbiguousDelivery = false
   let deferredUntilIdle = false
@@ -90,8 +91,11 @@ export function submitOrchestrationMailboxPointer(
         deps.state.deferFlightUntilIdle(input.ptyId)
         input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deferredUntilIdle = true
-      } else if (!queueSafe || !confirmed) {
+      } else if (!queueSafe) {
         releaseWithoutRedrive = true
+      } else if (!confirmed) {
+        // Settle like a refusal, but let mail parked behind this pointer drain.
+        unconfirmed = true
       } else {
         preserveAmbiguousDelivery = true
         const db = deps.getDb()
@@ -133,7 +137,7 @@ export function submitOrchestrationMailboxPointer(
             // Runtime teardown can close the DB while this delayed submit is settling.
             rollbackPersisted = false
           }
-        } else if (submitted || releaseWithoutRedrive) {
+        } else if (submitted || releaseWithoutRedrive || unconfirmed) {
           try {
             deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
           } catch {
@@ -141,7 +145,7 @@ export function submitOrchestrationMailboxPointer(
           }
         }
         released =
-          submitted || clearAndRedrive || releaseWithoutRedrive
+          submitted || clearAndRedrive || releaseWithoutRedrive || unconfirmed
             ? deps.state.clearWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
             : deps.state.deactivateWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
       }
