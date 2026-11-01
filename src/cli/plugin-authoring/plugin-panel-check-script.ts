@@ -5,7 +5,9 @@
  */
 export const PLUGIN_PANEL_CHECK_SCRIPT = `
 const { mount, mockHost, mountWorker } = await import('orca/testing')
-const { panels, main } = JSON.parse(process.env.ORCA_PLUGIN_CHECK_PANELS)
+const { panels, main, scenario: only, drawnTree, listOnly } = JSON.parse(
+  process.env.ORCA_PLUGIN_CHECK_PANELS
+)
 const results = []
 let stray = []
 process.on('unhandledRejection', (error) => stray.push(error))
@@ -31,7 +33,25 @@ for (const { panel, entry, url, fixture } of panels) {
       fixtureIssues.push(issueOf(error))
     }
   }
+  if (listOnly) {
+    // Names only: nothing is mounted, so nothing runs but the fixture module itself.
+    results.push({ panel, entry, scenarios: fixture ? Object.keys(scenarios) : [], issues: fixtureIssues })
+    continue
+  }
+  if (only !== undefined && !Object.hasOwn(scenarios, only)) {
+    results.push({
+      panel,
+      entry,
+      scenario: only,
+      elements: 0,
+      summary: [],
+      issues: [...fixtureIssues, { kind: 'plugin', message: 'no check scenario named ' + JSON.stringify(only) + (fixture ? ' in ' + fixture.path : ': the panel has no .check file') }],
+      warnings: []
+    })
+    continue
+  }
   for (const [scenario, options] of Object.entries(scenarios)) {
+    if (only !== undefined && scenario !== only) continue
     const result = { panel, entry, elements: 0, issues: [...fixtureIssues], warnings: [] }
     if (scenario) result.scenario = scenario
     stray = []
@@ -53,6 +73,7 @@ for (const { panel, entry, url, fixture } of panels) {
       result.elements = mounted.findAll({}).length
       result.summary = mounted.summary()
       result.tree = mounted.tree()
+      if (drawnTree) result.drawnTree = mounted.drawnTree()
       result.issues.push(...mounted.errors)
       result.warnings.push(...mounted.warnings)
       // Refused even when the code caught it: in Orca the call fails the same way.

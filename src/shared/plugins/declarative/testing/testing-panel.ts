@@ -243,6 +243,8 @@ export async function mountPanel(
     find: (query: TestQuery): TestElement | null => findAll(query)[0] ?? null,
     findAll,
     tree: (): TreeSnapshot | string | null => (shown.tree ? snapshotTree(shown.tree) : null),
+    /** The validated tree exactly as Orca draws it (handlers as `{ $callback }`), for replay. */
+    drawnTree: (): PluginDeclarativeNode | null => shown.tree,
     /** One line per thing a person notices first: headings, callouts, empty states, table sizes. */
     summary: (): string[] => {
       const all = listElements(shown.tree)
