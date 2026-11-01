@@ -261,6 +261,7 @@ export default function SortableTab({
       {isEditing ? (
         <Input
           ref={setRenameInputElement}
+          density="compact"
           data-tab-rename-input="true"
           value={renameValue}
           aria-label={translate(
@@ -283,7 +284,7 @@ export default function SortableTab({
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onAuxClick={(event) => event.stopPropagation()}
-          className="mr-1 h-5 min-w-0 flex-1 px-1 py-0 text-xs"
+          className="mr-1 min-w-0 flex-1"
           spellCheck={false}
         />
       ) : (

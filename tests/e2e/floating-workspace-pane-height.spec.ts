@@ -148,7 +148,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })
 
-test('single floating title fills the header and multiple tabs stay bounded before overflowing', async ({
+test('single floating title and multiple tabs fill the header before overflowing', async ({
   orcaPage
 }) => {
   const titles = [
@@ -197,8 +197,18 @@ test('single floating title fills the header and multiple tabs stay bounded befo
 
   const [, second] = await seedFloatingTerminalTabs(2)
   await expect(panel.locator(`[data-tab-strip-slot="${second}"]`)).toContainText('Go')
-  await expect.poll(width).toBeLessThanOrEqual(220)
+  await expect.poll(width).toBeCloseTo((await strip.evaluate((el) => el.clientWidth)) / 2, 0)
   expect(await width()).toBeLessThan(singleWidth)
+  const twoTabWidth = await width()
+  await panel.evaluate((element) => {
+    element.style.maxWidth = '600px'
+  })
+  await expect.poll(width).toBeLessThan(twoTabWidth)
+  expect(await width()).toBeCloseTo((await strip.evaluate((el) => el.clientWidth)) / 2, 0)
+  await panel.evaluate((element) => {
+    element.style.maxWidth = '720px'
+  })
+  await expect.poll(width).toBeCloseTo(twoTabWidth, 0)
 
   const [, , third] = await seedFloatingTerminalTabs(3)
   await expect(panel.locator(`[data-tab-strip-slot="${third}"]`)).toContainText(
@@ -212,7 +222,9 @@ test('single floating title fills the header and multiple tabs stay bounded befo
       .locator('[data-tab-strip-slot]')
       .evaluateAll((slots) => slots.map((element) => element.getBoundingClientRect().width))
   const crowdedWidths = await widths()
-  expect(crowdedWidths.every((value) => value >= 144 && value <= 220)).toBe(true)
+  const stripWidth = await strip.evaluate((element) => element.clientWidth)
+  expect(crowdedWidths.every((value) => value >= 144)).toBe(true)
+  expect(crowdedWidths.reduce((sum, value) => sum + value, 0)).toBeCloseTo(stripWidth, 0)
   expect(crowdedWidths[0]).toBeCloseTo(crowdedWidths[2], 0)
   expect(crowdedWidths[1]).toBeCloseTo(crowdedWidths[0], 0)
 

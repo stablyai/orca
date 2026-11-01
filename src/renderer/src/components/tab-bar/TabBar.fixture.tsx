@@ -71,9 +71,16 @@ function TabWidthFixture({
   )
 }
 
-export const fixedWidth = defineFixture({
+export const availableWidth = defineFixture({
   width: 1280,
   render: () => <TabWidthFixture count={4} />
+})
+
+export const twoTabs = defineFixture({
+  width: 1280,
+  render: () => (
+    <TabWidthFixture count={2} titles={['Council Branch Review: Zero Regressions', 'Terminal 1']} />
+  )
 })
 
 export const single = defineFixture({

@@ -288,6 +288,7 @@ export default function EditorFileTab({
         {isRenaming ? (
           <Input
             ref={setRenameInputElement}
+            density="compact"
             data-tab-rename-input="true"
             aria-label={translate(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
@@ -295,7 +296,7 @@ export default function EditorFileTab({
               { value0: basename(file.filePath) }
             )}
             defaultValue={basename(file.filePath)}
-            className="mr-1 h-5 min-w-0 flex-1 rounded-sm bg-input/40 px-1 py-0 text-xs text-foreground md:text-xs focus-visible:ring-[1px]"
+            className="mr-1 min-w-0 flex-1"
             spellCheck={false}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
