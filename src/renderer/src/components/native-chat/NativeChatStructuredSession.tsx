@@ -296,8 +296,7 @@ export function NativeChatStructuredSession(
             <NativeChatUsageLimitActionsProvider
               recovery={controller}
               pane={props}
-              directory={fileLinkContext}
-              messages={controller.messages}
+              handOffState={handOff}
               view={continuation.view}
             >
               <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>

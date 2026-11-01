@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import React, { createRef, type ReactNode } from 'react'
+import React, { createRef, useContext, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,11 @@ import type { AgentSessionContinuationRequest } from '@/lib/agent-session-contin
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { nativeChatPaneHeader } from './NativeChatPaneHeader'
 import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
+import {
+  NativeChatUsageLimitActions,
+  NativeChatUsageLimitActionsProvider
+} from './NativeChatUsageLimitActions'
+import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 
@@ -122,7 +127,8 @@ function StructuredChatTab({
   visible = true,
   fallback = false,
   terminalPane = false,
-  owner = 'worktree-1'
+  owner = 'worktree-1',
+  usageLimit = false
 }: {
   inWorkspace?: boolean
   epoch?: string
@@ -130,6 +136,7 @@ function StructuredChatTab({
   fallback?: boolean
   terminalPane?: boolean
   owner?: string | null
+  usageLimit?: boolean
 }): ReactNode {
   const pane = {
     tabId: 'chat-tab',
@@ -200,12 +207,32 @@ function StructuredChatTab({
       : {})
   })
   return (
-    <>
+    <NativeChatUsageLimitActionsProvider
+      pane={pane}
+      handOffState={handOffState}
+      recovery={{ readCurrent: true, canSwitchAccount: false, epoch }}
+      view={{
+        hostLabel: null,
+        remoteHost: true,
+        continueAvailable: false,
+        offeredTurnItemId: null,
+        continueNow: () => {},
+        usageLimitTurnItemId: usageLimit ? 'cut' : null,
+        continueUsageLimit: () => {}
+      }}
+    >
       {nativeChatPaneHeader(pane, owner, 'dark', handOffState)}
       {menu}
+      {usageLimit ? <NativeChatUsageLimitActions /> : null}
+      <ContinueCut />
       {handOffState.dialog}
-    </>
+    </NativeChatUsageLimitActionsProvider>
   )
+}
+
+function ContinueCut() {
+  const view = useContext(NativeChatOrcaStopContext)
+  return <button onClick={() => view?.continueUsageLimit()}>Continue cut</button>
 }
 
 describe('a structured chat tab', () => {
@@ -341,6 +368,39 @@ describe('a structured chat tab', () => {
       launchSource: 'native_chat'
     })
     expect(requests[1]).toEqual(requests[0])
+  })
+
+  it('shares usage-limit and menu preparation, resets on Continue and keeps the entry policy', async () => {
+    const saved = Promise.withResolvers<{
+      status: 'current'
+      capturedText: string
+      transcriptPath: string
+    }>()
+    handOff.options.mockReturnValue(saved.promise)
+    render(<StructuredChatTab inWorkspace usageLimit />)
+    const usageAction = () =>
+      screen.getAllByRole('button', { name: 'Hand Off to Another Agent' })[1]
+    await act(async () => {
+      fireEvent.click(usageAction())
+      openMenuHandOff()
+    })
+    expect(handOff.options).toHaveBeenCalledOnce()
+    expect(usageAction().hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByText('Continue cut'))
+    await act(async () =>
+      saved.resolve({
+        status: 'current',
+        capturedText: 'Saved context',
+        transcriptPath: '/work/saved.txt'
+      })
+    )
+    expect(screen.queryByText('Close hand-off')).toBeNull()
+    handOff.options.mockResolvedValue({ status: 'current', capturedText: 'Saved context' })
+    await act(async () => fireEvent.click(usageAction()))
+    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBe(true)
+    fireEvent.click(screen.getByText('Close hand-off'))
+    await act(async () => openMenuHandOff())
+    expect(handOff.dialog.mock.lastCall?.[0].request.avoidSourceAgent).toBeUndefined()
   })
 
   it('keeps exactly the terminal pane hand-off row when chat shares that pane', () => {

@@ -6,6 +6,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
+import { useNativeChatHandOff } from './use-native-chat-hand-off'
 
 const mocks = vi.hoisted(() => ({ renders: vi.fn(), feed: vi.fn() }))
 vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
@@ -27,6 +28,46 @@ vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
 const initial = useAppStore.getState()
 const names = new Map()
 const feed = { subscribe: () => () => {}, activate: () => () => {}, getNamingSnapshot: () => names }
+const directory = { worktreeId: 'folder', worktreePath: '/work', runtimeEnvironmentId: 'a' }
+
+// The notice gets its hand-off state from the shared hook, as NativeChatStructuredSession wires it.
+function Notice({ tab }: { tab: Tab }): React.JSX.Element {
+  const pane = {
+    tabId: tab.id,
+    groupId: tab.groupId,
+    sessionId: tab.entityId,
+    agent: 'claude' as const,
+    target: { kind: 'environment' as const, environmentId: 'a' },
+    isVisible: false,
+    isFocusedGroup: false
+  }
+  const handOffState = useNativeChatHandOff({
+    pane,
+    directory,
+    messages: [],
+    epoch: null,
+    focusComposer: () => {}
+  })
+  return (
+    <NativeChatUsageLimitActionsProvider
+      pane={pane}
+      handOffState={handOffState}
+      recovery={{ readCurrent: true, canSwitchAccount: true }}
+      view={{
+        hostLabel: null,
+        remoteHost: true,
+        continueAvailable: false,
+        offeredTurnItemId: null,
+        continueNow: () => {},
+        usageLimitTurnItemId: null,
+        continueUsageLimit: () => {}
+      }}
+    >
+      {null}
+    </NativeChatUsageLimitActionsProvider>
+  )
+}
+
 afterEach(() => {
   cleanup()
   useAppStore.setState(initial, true)
@@ -71,31 +112,7 @@ it.each([100, 1000])(
     render(
       <>
         {tabs.map((tab) => (
-          <NativeChatUsageLimitActionsProvider
-            key={tab.id}
-            pane={{
-              tabId: tab.id,
-              sessionId: tab.entityId,
-              agent: 'claude',
-              target: { kind: 'environment', environmentId: 'a' },
-              isVisible: false,
-              isFocusedGroup: false
-            }}
-            directory={{ worktreeId: 'folder', worktreePath: '/work', runtimeEnvironmentId: 'a' }}
-            recovery={{ readCurrent: true, canSwitchAccount: true }}
-            messages={[]}
-            view={{
-              hostLabel: null,
-              remoteHost: true,
-              continueAvailable: false,
-              offeredTurnItemId: null,
-              continueNow: () => {},
-              usageLimitTurnItemId: null,
-              continueUsageLimit: () => {}
-            }}
-          >
-            {null}
-          </NativeChatUsageLimitActionsProvider>
+          <Notice key={tab.id} tab={tab} />
         ))}
       </>
     )
