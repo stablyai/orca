@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
+  aiVaultScanIssueIdentity,
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptCount,
@@ -32,7 +33,10 @@ export function AiVaultScanIssueBanners({
           {aiVaultScanIssueDisplayText(blocking)}
         </div>
       ) : null}
-      <AiVaultScanNotices key={JSON.stringify(notices)} issues={notices} />
+      <AiVaultScanNotices
+        key={JSON.stringify(notices.map(aiVaultScanIssueIdentity).toSorted())}
+        issues={notices}
+      />
       {hasNoticeRows ? (
         // Why bounded: one notice per partly-read session can outgrow the panel and hide the list.
         <div

@@ -66,3 +66,15 @@ it('never hides host, scope or whole-transcript failures when notices are dismis
     expect(screen.getByText(message)).toBeTruthy()
   }
 })
+
+it('keeps reordered notices dismissed but reveals changed diagnostic details', async () => {
+  const first = { ...notice, messageParams: { count: 2, limit: 10 }, messageDetail: 'at byte 42' }
+  const second = { ...notice, path: '/sessions/other.jsonl' }
+  const { rerender } = render(view(result([first, second])))
+  await userEvent.click(screen.getByRole('button', { name: 'Dismiss history notices' }))
+  rerender(view(result([second, { ...first, messageParams: { limit: 10, count: 2 } }])))
+  expect(screen.queryByRole('button', { name: 'History notices · 2' })).toBeNull()
+  rerender(view(result([second, { ...first, messageDetail: 'at byte 84' }])))
+  await userEvent.click(screen.getByRole('button', { name: 'History notices · 2' }))
+  expect(screen.getByText('at byte 84')).toBeTruthy()
+})

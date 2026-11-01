@@ -186,7 +186,8 @@ function skippedRecordIssue(
     ...aiVaultScanIssueText('oversizedTranscriptRecords', {
       params: { count: skipped.length, limit: MAX_SESSION_TRANSCRIPT_RECORD_BYTES / (1024 * 1024) },
       detail: message
-    })
+    }),
+    message
   }
 }
 

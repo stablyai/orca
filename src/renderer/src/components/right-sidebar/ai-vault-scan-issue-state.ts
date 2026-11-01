@@ -1,6 +1,21 @@
 import type { AiVaultListResult, AiVaultScanIssue } from '../../../../shared/ai-vault-types'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
 
+export function aiVaultScanIssueIdentity(issue: AiVaultScanIssue): string {
+  return JSON.stringify([
+    issue.executionHostId ?? 'local',
+    issue.kind,
+    issue.agent,
+    issue.path,
+    issue.message,
+    issue.messageCode,
+    Object.entries(issue.messageParams ?? {}).toSorted(([left], [right]) =>
+      left.localeCompare(right)
+    ),
+    issue.messageDetail
+  ])
+}
+
 export function blockingAiVaultScanIssue(
   result: AiVaultListResult | null
 ): AiVaultScanIssue | null {

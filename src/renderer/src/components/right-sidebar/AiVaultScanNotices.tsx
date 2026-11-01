@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { aiVaultAgentLabel, type AiVaultScanIssue } from '../../../../shared/ai-vault-types'
 import { aiVaultScanIssueDisplayText } from './ai-vault-scan-issue-copy'
+import { aiVaultScanIssueIdentity } from './ai-vault-scan-issue-state'
 
 export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
   const [dismissed, setDismissed] = useState(false)
@@ -44,7 +45,7 @@ export function AiVaultScanNotices({ issues }: { issues: AiVaultScanIssue[] }) {
         <div className="scrollbar-sleek max-h-32 overflow-y-auto px-3 pb-2">
           {issues.map((issue) => (
             <div
-              key={JSON.stringify([issue.executionHostId, issue.agent, issue.path, issue.message])}
+              key={aiVaultScanIssueIdentity(issue)}
               className="space-y-1 py-1 break-words [overflow-wrap:anywhere]"
             >
               <div className="font-medium">

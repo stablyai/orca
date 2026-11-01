@@ -1,6 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import { aiVaultScanIssueText } from '../../../../shared/ai-vault-scan-issue-copy'
 
 const scanResult: AiVaultListResult = {
   sessions: [],
@@ -11,8 +12,10 @@ const scanResult: AiVaultListResult = {
       agent: 'codex',
       kind: 'notice',
       path: '/sessions/rollout.jsonl',
-      message:
-        'Skipped 2 oversized transcript records over the 10.0 MiB limit (10.0 MiB at byte 1248001757, 10.0 MiB at byte 1265061030). The rest of the session was read.'
+      ...aiVaultScanIssueText('oversizedTranscriptRecords', {
+        params: { count: 2, limit: 10 },
+        detail: '10.0 MiB at byte 1248001757, 10.0 MiB at byte 1265061030'
+      })
     }
   ]
 }
