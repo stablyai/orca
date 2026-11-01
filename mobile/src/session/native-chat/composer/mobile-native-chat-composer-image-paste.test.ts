@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createMobileComposerPasteImageDelivery,
   mobileComposerImagePasteDecision,
+  mobileComposerImagePasteFileKind,
   mobileComposerImagePastePromptText,
   mobileComposerImagePasteTarget,
   mobileComposerPastedImageFromClipboardData,
@@ -18,6 +19,19 @@ const empty: MobileComposerImagePasteSnapshot = {
   textUriList: '',
   textHtml: ''
 }
+
+describe('mobileComposerImagePasteFileKind', () => {
+  it('keeps only the image types the host can name', () => {
+    expect(mobileComposerImagePasteFileKind('image/png')).toBe('image')
+    expect(mobileComposerImagePasteFileKind('image/jpeg')).toBe('image')
+    expect(mobileComposerImagePasteFileKind('image/jpg')).toBe('image')
+    expect(mobileComposerImagePasteFileKind('image/gif')).toBe('image')
+    expect(mobileComposerImagePasteFileKind('image/webp')).toBe('image')
+    expect(mobileComposerImagePasteFileKind('image/heic')).toBe('other')
+    expect(mobileComposerImagePasteFileKind('image/svg+xml')).toBe('other')
+    expect(mobileComposerImagePasteFileKind('')).toBe('other')
+  })
+})
 
 describe('mobileComposerImagePasteDecision', () => {
   it('keeps typed text, links, html, and non-image files in the field', () => {

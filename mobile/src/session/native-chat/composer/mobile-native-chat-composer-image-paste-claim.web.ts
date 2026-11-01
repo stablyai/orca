@@ -1,9 +1,14 @@
 import {
   mobileComposerImagePasteDecision,
+  mobileComposerImagePasteFileKind,
   mobileComposerImagePastePromptText,
   type MobileComposerImagePasteDecision,
   type MobileComposerPastedImage
 } from './mobile-native-chat-composer-image-paste'
+
+function isSupportedPasteImage(mime: string): boolean {
+  return mobileComposerImagePasteFileKind(mime) === 'image'
+}
 
 export type ClaimedMobileComposerImagePaste =
   | {
@@ -25,7 +30,7 @@ function snapshotFrom(data: DataTransfer | null): {
   const files = data ? Array.from(data.files) : []
   if (files.length > 0) {
     for (const file of files) {
-      if (file.type.startsWith('image/')) {
+      if (isSupportedPasteImage(file.type)) {
         imageFileCount += 1
       } else {
         otherFileCount += 1
@@ -36,7 +41,7 @@ function snapshotFrom(data: DataTransfer | null): {
       if (item.kind !== 'file') {
         continue
       }
-      if (item.type.startsWith('image/')) {
+      if (isSupportedPasteImage(item.type)) {
         imageFileCount += 1
       } else {
         otherFileCount += 1
@@ -56,13 +61,13 @@ function imageFiles(data: DataTransfer | null): File[] {
   if (!data) {
     return []
   }
-  const listed = Array.from(data.files).filter((file) => file.type.startsWith('image/'))
+  const listed = Array.from(data.files).filter((file) => isSupportedPasteImage(file.type))
   if (listed.length > 0) {
     return listed
   }
   const fromItems: File[] = []
   for (const item of Array.from(data.items)) {
-    if (item.kind !== 'file' || !item.type.startsWith('image/')) {
+    if (item.kind !== 'file' || !isSupportedPasteImage(item.type)) {
       continue
     }
     const file = item.getAsFile()

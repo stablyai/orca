@@ -194,6 +194,23 @@ function equalTimestampImageSourceRun(
   return end === start ? null : { end, paths }
 }
 
+// Insert each new companion beside the reference it follows. A path already on the prompt stays once.
+function insertImageRefsInCompanionOrder(
+  blocks: NativeChatBlock[],
+  paths: readonly string[]
+): void {
+  let cursor = 0
+  for (const path of paths) {
+    const existing = blocks.findIndex((block) => isImageRefBlock(block) && block.path === path)
+    if (existing !== -1) {
+      cursor = existing + 1
+      continue
+    }
+    blocks.splice(cursor, 0, { type: 'image-ref', path })
+    cursor += 1
+  }
+}
+
 /** Claude records image paths as source turns around a prompt carrying image
  * markers. Merge that run into the prompt so one paste renders once. */
 export function normalizeImageTranscriptMessages(
@@ -230,14 +247,14 @@ export function normalizeImageTranscriptMessages(
         prompt.source === message.source &&
         hasImagePromptMarker(prompt)
       ) {
+        const blocks = [...stripImagePromptMarkersFromTextBlocks(prompt.blocks)]
+        insertImageRefsInCompanionOrder(
+          blocks,
+          sourceTurns.flatMap(({ paths }) => paths)
+        )
         normalized.push({
           ...prompt,
-          blocks: [
-            ...sourceTurns.flatMap(({ paths }) =>
-              paths.map((path) => ({ type: 'image-ref' as const, path }))
-            ),
-            ...stripImagePromptMarkersFromTextBlocks(prompt.blocks)
-          ]
+          blocks
         })
         index = nextIndex
         continue
@@ -257,16 +274,7 @@ export function normalizeImageTranscriptMessages(
     if (following) {
       normalized ??= messages.slice(0, index)
       const blocks = [...stripImagePromptMarkersFromTextBlocks(message.blocks)]
-      let cursor = 0
-      for (const path of following.paths) {
-        const existing = blocks.findIndex((block) => isImageRefBlock(block) && block.path === path)
-        if (existing !== -1) {
-          cursor = existing + 1
-          continue
-        }
-        blocks.splice(cursor, 0, { type: 'image-ref', path })
-        cursor += 1
-      }
+      insertImageRefsInCompanionOrder(blocks, following.paths)
       normalized.push({ ...message, blocks })
       index = following.end - 1
       continue

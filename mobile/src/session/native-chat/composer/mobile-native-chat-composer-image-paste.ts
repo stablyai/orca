@@ -21,6 +21,13 @@ export type MobileComposerImagePasteSnapshot = {
 
 export type MobileComposerImagePasteDecision = 'files' | 'native'
 
+const SUPPORTED_PASTE_IMAGE_MIME = /^image\/(png|jpe?g|gif|webp)$/i
+
+// The host names a paste from PNG, JPEG, GIF, or WebP bytes and otherwise uses .png.
+export function mobileComposerImagePasteFileKind(mime: string): 'image' | 'other' {
+  return SUPPORTED_PASTE_IMAGE_MIME.test(mime) ? 'image' : 'other'
+}
+
 // Image bytes win. Real text, links, html, and non-image files stay with the field.
 // An empty payload is the iOS case: the pasteboard holds an image the textarea cannot see.
 export function mobileComposerImagePasteDecision(

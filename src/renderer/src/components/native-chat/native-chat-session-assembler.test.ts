@@ -112,6 +112,43 @@ describe('assembleNativeChatSession', () => {
     ])
   })
 
+  it('does not duplicate an image ref the prompt already has when companions follow it', () => {
+    const prompt = msg({
+      id: 'a-prompt',
+      role: 'user',
+      timestamp: 100,
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] [Image #2] caption' }
+      ]
+    })
+    const kept = msg({
+      id: 'm-kept',
+      role: 'user',
+      timestamp: 100,
+      blocks: [{ type: 'text', text: '[Image: source: /tmp/a.png]' }]
+    })
+    const added = msg({
+      id: 'z-added',
+      role: 'user',
+      timestamp: 100,
+      blocks: [{ type: 'text', text: '[Image: source: /tmp/b.png]' }]
+    })
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: [prompt, kept, added] },
+      sessionId: 's1',
+      agent: 'claude'
+    })
+
+    expect(session.messages).toHaveLength(1)
+    expect(session.messages[0]?.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
   it('folds equal-timestamp image companions before UUID ordering can split them', () => {
     const prompt = msg({
       id: 'a-prompt',

@@ -176,6 +176,28 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('does not repeat a source path already on the prompt when the source comes first', () => {
+    const prompt: NativeChatMessage = {
+      ...userText('prompt', '[Image #1] [Image #2] caption'),
+      blocks: [
+        { type: 'image-ref', path: '/tmp/a.png' },
+        { type: 'text', text: '[Image #1] [Image #2] caption' }
+      ]
+    }
+    const out = normalizeImageTranscriptMessages([
+      userText('kept', '[Image: source: /tmp/a.png]'),
+      userText('added', '[Image: source: /tmp/b.png]'),
+      prompt
+    ])
+
+    expect(out).toHaveLength(1)
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      { type: 'text', text: 'caption' }
+    ])
+  })
+
   it('does not repeat a source path the prompt already shows', () => {
     const prompt: NativeChatMessage = {
       ...userText('prompt', '[Image #1] caption'),
