@@ -3,6 +3,7 @@ import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/single-runtime-legac
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 
 /** Null waits for ownership; unsupported is a resolved host that cannot scan skills. */
@@ -53,13 +54,28 @@ function getPairingRevision(
 export function useSkillDiscoveryRuntimeIdentity(
   runtimeTarget: RuntimeClientTarget | null
 ): string | undefined {
-  return useAppStore((state) => {
-    if (runtimeTarget?.kind !== 'environment') {
-      return undefined
+  const environmentId =
+    runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : undefined
+  const selectIdentity = useMemo(() => {
+    let environments: AppState['runtimeEnvironments'] | undefined
+    let connectionGeneration: number | undefined
+    let identity: string | undefined
+    return (state: AppState): string | undefined => {
+      if (environmentId === undefined) {
+        return undefined
+      }
+      // Generation can advance without changing the catalog or status map (pre-status retirement).
+      const nextGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+      if (environments !== state.runtimeEnvironments || connectionGeneration !== nextGeneration) {
+        environments = state.runtimeEnvironments
+        connectionGeneration = nextGeneration
+        identity = JSON.stringify([
+          getPairingRevision(environments, environmentId),
+          connectionGeneration
+        ])
+      }
+      return identity
     }
-    return JSON.stringify([
-      getPairingRevision(state.runtimeEnvironments, runtimeTarget.environmentId),
-      getRuntimeEnvironmentConnectionGeneration(runtimeTarget.environmentId)
-    ])
-  })
+  }, [environmentId])
+  return useAppStore(selectIdentity)
 }

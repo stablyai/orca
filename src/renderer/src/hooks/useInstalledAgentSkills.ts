@@ -127,7 +127,7 @@ export function useInstalledAgentSkillNames(
   const enabled = options.enabled !== false && requestedRuntimeTarget?.kind !== 'unsupported'
   const runtimeTarget =
     requestedRuntimeTarget?.kind === 'unsupported' ? null : requestedRuntimeTarget
-  const runtimeIdentity = useSkillDiscoveryRuntimeIdentity(runtimeTarget)
+  const runtimeIdentity = useSkillDiscoveryRuntimeIdentity(enabled ? runtimeTarget : null)
   const discoveryTargetKey = runtimeTarget
     ? getRuntimeScopedSkillDiscoveryKey(
         runtimeTarget,

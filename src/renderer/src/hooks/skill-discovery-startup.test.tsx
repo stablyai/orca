@@ -36,6 +36,7 @@ const environment: PublicKnownRuntimeEnvironment = {
   endpoints: [],
   preferredEndpointId: ''
 }
+const runtimeTarget = { kind: 'environment', environmentId: environment.id } as const
 const status: RuntimeStatus = {
   runtimeId: 'runtime-a',
   rendererGraphEpoch: 0,
@@ -114,6 +115,69 @@ afterEach(() => {
   rpc.mockReset()
   vi.restoreAllMocks()
   Reflect.deleteProperty(window, 'api')
+})
+
+it('does not repeat identity lookups or serialization on unrelated store publications', () => {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: null }
+  })
+  rpc.mockReturnValue(deferred().promise)
+  const catalogFind = vi.spyOn(useAppStore.getState().runtimeEnvironments, 'find')
+  const stringify = vi.spyOn(JSON, 'stringify')
+  const identitySerializations = () =>
+    stringify.mock.calls.filter(
+      ([value]) => Array.isArray(value) && value.length === 2 && value[0] === 1 && value[1] === 0
+    ).length
+  for (let index = 0; index < 3; index++) {
+    renderHook(() => useInstalledAgentSkill('example', { runtimeTarget }))
+  }
+  const initialLookups = catalogFind.mock.calls.length
+  const initialSerializations = identitySerializations()
+  expect(initialLookups).toBeGreaterThan(0)
+  expect(initialSerializations).toBeGreaterThan(0)
+  expect(rpc).toHaveBeenCalledTimes(1)
+
+  act(() => {
+    for (let width = 300; width < 330; width++) {
+      useAppStore.getState().setSidebarWidth(width)
+    }
+  })
+
+  expect(catalogFind).toHaveBeenCalledTimes(initialLookups)
+  expect(identitySerializations()).toBe(initialSerializations)
+  expect(rpc).toHaveBeenCalledTimes(1)
+})
+
+it('skips disabled identity lookups and reads the latest generation when enabled', async () => {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: null }
+  })
+  rpc.mockResolvedValueOnce(installed)
+  const cached = renderHook(() => useInstalledAgentSkill('example', { runtimeTarget }))
+  await act(async () => {
+    await Promise.resolve()
+  })
+  expect(cached.result.current.installed).toBe(true)
+  cached.unmount()
+  rpc.mockClear()
+  const catalogFind = vi.spyOn(useAppStore.getState().runtimeEnvironments, 'find')
+  const { result, rerender } = renderHook(
+    ({ enabled }) => useInstalledAgentSkill('example', { enabled, runtimeTarget }),
+    { initialProps: { enabled: false } }
+  )
+  act(() => {
+    useAppStore.getState().setSidebarWidth(300)
+    useAppStore.getState().clearRuntimeEnvironmentStatus(environment.id)
+  })
+  expect(catalogFind).not.toHaveBeenCalled()
+  expect(rpc).not.toHaveBeenCalled()
+
+  rpc.mockResolvedValueOnce(absent)
+  await act(async () => rerender({ enabled: true }))
+  expect(catalogFind).toHaveBeenCalledTimes(1)
+  expect(result.current.installed).toBe(false)
+  expect(result.current.settled).toBe(true)
+  expect(rpc).toHaveBeenCalledTimes(1)
 })
 
 it.each([
