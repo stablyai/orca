@@ -14,10 +14,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context.web'
-import {
-  BRIDGE_MAX_PENDING_REQUESTS,
-  BRIDGE_MAX_FORWARDED_REQUESTS
-} from '../mobile-web-shell/bridge/bridge-caps'
+import { BRIDGE_MAX_PENDING_REQUESTS } from '../mobile-web-shell/bridge/bridge-caps'
 import { useNativeVerbs, type NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
 import {
   createFakeBridgePortPair,
@@ -136,10 +133,9 @@ async function runDictation(
   }
   const framesToShell = pair.toShell.length - framesBefore.toShell
   const framesToPage = pair.toPage.length - framesBefore.toPage
-  const ending = capture.end()
-  await pair.flush()
-  await ending
   const freeSlots = await probeFreeSlots(pair)
+  capture.end()
+  await pair.flush()
   return {
     peakInFlight,
     freeSlots,
@@ -213,7 +209,7 @@ describe('what one dictation spends of the bridge', () => {
     await pair.flush()
     const spent = await runDictation(pair, shell, DICTATION_NATIVE_EVENT_INTERVAL_MS)
     // 31.25 events/second over a two-second link leaves almost no room for other requests.
-    expect(spent.peakInFlight).toBeGreaterThanOrEqual(BRIDGE_MAX_FORWARDED_REQUESTS - 2)
+    expect(spent.peakInFlight).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 2)
     expect(spent.freeSlots).toBeLessThanOrEqual(2)
   }, 60_000)
 
@@ -225,7 +221,7 @@ describe('what one dictation spends of the bridge', () => {
     // Two chunks/second over the same link holds four requests at unchanged audio throughput.
     expect(spent.peakInFlight).toBeLessThanOrEqual(6)
     expect(spent.refusals).toBe(0)
-    expect(spent.freeSlots).toBeGreaterThanOrEqual(BRIDGE_MAX_FORWARDED_REQUESTS - 8)
+    expect(spent.freeSlots).toBeGreaterThanOrEqual(BRIDGE_MAX_PENDING_REQUESTS - 8)
     // Ten seconds sends 19 reads and 19 forwards; four forwarded replies remain in flight, keeping total bridge traffic under four frames/second.
     expect({ toShell: spent.framesToShell, toPage: spent.framesToPage }).toEqual({
       toShell: 38,
