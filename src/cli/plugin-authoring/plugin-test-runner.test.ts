@@ -21,6 +21,18 @@ async function componentsPlugin(): Promise<string> {
 
 describe('orca plugin test', () => {
   it(
+    "runs the shipped examples' plugin tests (examples/plugins/*/src/*.test.tsx)",
+    async () => {
+      const dir = resolve('examples/plugins/hello-tsx')
+      const files = await findPluginTestFiles(dir)
+      expect(files.length).toBeGreaterThan(0)
+      expect(await runPluginTests({ dir, files, quietStdout: true })).toMatchObject({ code: 0 })
+    },
+    // Starts its own Node process and transpiles the plugin.
+    60_000
+  )
+
+  it(
     "runs the components template's own test with node:test on Orca's runtime and passes",
     async () => {
       const dir = await componentsPlugin()
