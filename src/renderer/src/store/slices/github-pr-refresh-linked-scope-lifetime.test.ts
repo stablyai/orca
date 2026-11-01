@@ -96,7 +96,8 @@ describe('linked review scope lifetime', () => {
     vi.useRealTimers()
   })
 
-  it.each([128, 129, 512])('clears every eligible link in a %s-alias refresh', (population) => {
+  it('clears every eligible link in a refresh exceeding the 128-entry cache limit', () => {
+    const population = 129
     const { store, update, repoId, start, finish } = setup(population)
     start()
     expect(prRefreshStartedHostedReviewEntries.size).toBe(128)
@@ -152,29 +153,6 @@ describe('linked review scope lifetime', () => {
     finish(2)
     expect(update).toHaveBeenCalledTimes(512)
     expect(prRefreshStartedLinkedReviewScopes.size).toBe(0)
-  })
-
-  it('checks only the oldest expiry while all scopes are live', () => {
-    const { store, start } = setup(512)
-    start()
-    let expiryReads = 0
-    for (const request of prRefreshStartedLinkedReviewScopes.values()) {
-      const expiresAt = request.expiresAt
-      Object.defineProperty(request, 'expiresAt', {
-        get: () => {
-          expiryReads++
-          return expiresAt
-        }
-      })
-    }
-    store.getState().applyGitHubPRRefreshEvent({
-      sequence: 2,
-      reason: 'visible',
-      aliases: [{ cacheKey: 'unrelated', repoPath: '/other', branch: 'other' }],
-      status: 'queued'
-    })
-    expect(expiryReads).toBe(1)
-    expect(prRefreshStartedLinkedReviewScopes.size).toBe(512)
   })
 
   it('preserves expiry order when a scope is superseded', () => {

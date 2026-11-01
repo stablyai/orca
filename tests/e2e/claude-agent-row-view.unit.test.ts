@@ -463,11 +463,8 @@ it.each(
       })
     }
     // Owner indexes are warm; clicks must not rescan either catalog.
-    const passBound = fallback ? 8 : 6
     expect(visits.worktrees).toBe(0)
-    expect(visits.worktrees).toBeLessThanOrEqual(passBound * population)
     expect(visits.repos).toBe(0)
-    expect(visits.repos).toBeLessThanOrEqual(passBound)
     expect(requests).toHaveLength(fallback ? 2 : 1)
     expect(bridge.receive({ ...identity(), action: 'take' })).toEqual({})
     expect(mocks.info).not.toHaveBeenCalled()
