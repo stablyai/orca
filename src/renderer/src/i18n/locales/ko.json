@@ -19023,7 +19023,7 @@
         "unnamedSender": "Agent",
         "messageFromCoordinator": "코디네이터의 메시지",
         "startedWorker": "워커 시작됨",
-        "handedOffToAgent": "Agent에게 넘김",
+        "handedOffToAgent": "에이전트에게 넘김",
         "taskFromCoordinator": "코디네이터의 작업",
         "updateFromWorker": "워커의 업데이트"
       },
