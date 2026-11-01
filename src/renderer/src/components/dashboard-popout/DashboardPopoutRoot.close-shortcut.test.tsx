@@ -59,4 +59,63 @@ describe('dashboard pop-out close shortcut', () => {
       expect(close).toHaveBeenCalledTimes(2)
     }
   )
+
+  it('honors a double-tap override without closing on a single or interrupted tap', () => {
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    useAppStore.setState({ keybindings: { 'tab.close': ['DoubleTap+Ctrl'] } })
+    const view = render(<DashboardPopoutRoot />)
+    const press = (type: 'keydown' | 'keyup', target: EventTarget = document.body): void => {
+      target.dispatchEvent(
+        new KeyboardEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          key: 'Control',
+          code: 'ControlLeft',
+          ctrlKey: type === 'keydown'
+        })
+      )
+      now += 50
+    }
+    const tap = (): void => {
+      press('keydown')
+      press('keyup')
+    }
+    tap()
+    expect(close).not.toHaveBeenCalled()
+    press('keydown')
+    expect(close).toHaveBeenCalledOnce()
+    press('keyup')
+
+    for (const event of ['blur', 'focusin', 'prevented']) {
+      tap()
+      if (event === 'prevented') {
+        window.addEventListener('keydown', (e) => e.preventDefault(), {
+          capture: true,
+          once: true
+        })
+        tap()
+      } else {
+        window.dispatchEvent(new Event(event))
+      }
+      press('keydown')
+      expect(close).toHaveBeenCalledOnce()
+      press('keyup')
+      now += 400
+    }
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.append(dialog)
+    tap()
+    press('keydown', dialog)
+    press('keyup', dialog)
+    press('keydown')
+    expect(close).toHaveBeenCalledOnce()
+    press('keyup')
+    view.unmount()
+    tap()
+    tap()
+    expect(close).toHaveBeenCalledOnce()
+  })
 })
