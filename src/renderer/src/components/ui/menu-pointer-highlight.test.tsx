@@ -37,7 +37,7 @@ function Menu(props: MenuProps): React.JSX.Element {
       <div role="menuitem" tabIndex={-1} id="a">
         <span id="a-label">A</span>
       </div>
-      <div role="menuitemcheckbox" tabIndex={-1} id="b" />
+      <div role="menuitemcheckbox" aria-checked="false" tabIndex={-1} id="b" />
       <div role="menuitem" tabIndex={-1} id="c" data-disabled="" />
       <div role="separator" id="sep" />
     </div>
