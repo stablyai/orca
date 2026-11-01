@@ -6,10 +6,10 @@ import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
+import { AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY } from './general-tab-strip-search'
 import {
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
-  AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY,
   getGeneralNavigationSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
