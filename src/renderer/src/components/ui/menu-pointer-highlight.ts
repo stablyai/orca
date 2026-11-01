@@ -87,12 +87,17 @@ export function useMenuPointerHighlight(
     pointerMovePrevented: false,
     frame: 0
   })
+  const [content, setContent] = React.useState<HTMLDivElement | null>(null)
   const trackContent = React.useCallback((content: HTMLDivElement | null) => {
-    const state = stateRef.current
-    resetPointerTracking(state)
+    resetPointerTracking(stateRef.current)
+    setContent(content)
+  }, [])
+
+  React.useEffect(() => {
     if (!content) {
       return
     }
+    const state = stateRef.current
     // A retained content node can reopen before its closing animation unmounts it.
     const observer = new MutationObserver(() => resetPointerTracking(state))
     observer.observe(content, { attributes: true, attributeFilter: ['data-state'] })
@@ -100,7 +105,7 @@ export function useMenuPointerHighlight(
       observer.disconnect()
       resetPointerTracking(state)
     }
-  }, [])
+  }, [content])
   const ref = useComposedRefs(props.ref, trackContent)
 
   return {
