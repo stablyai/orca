@@ -27,7 +27,7 @@ import {
 } from '../tasks/smart-source-paste-intent'
 import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
@@ -35,6 +35,7 @@ import { smartWorkspaceSourceDrawerStyles as styles } from './smart-workspace-so
 import { TextField } from './composer-input/TextField'
 import { SmartSourceModeIcon } from './SmartSourceModeIcon'
 import { SmartWorkspaceSourceRow } from './SmartWorkspaceSourceRow'
+import { SheetHeader } from './nav-bar/SheetHeader'
 
 // Delay focus like MobileSearchField: native autoFocus may not raise keyboard during drawer animation.
 const SOURCE_INPUT_FOCUS_DELAY_MS = 120
@@ -209,12 +210,14 @@ export function SmartWorkspaceSourceDrawer({
       {/* Fill column ends at keyboard top; non-flex dock stays beside flex results so FlatList cannot clip input. */}
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {t('components.smartWorkspaceSourceDrawer.title', "Name or 'Create From'")}
-          </Text>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <Text style={styles.done}>{t('common.done', 'Done')}</Text>
-          </Pressable>
+          <SheetHeader
+            title={
+              availability.textOnly
+                ? t('components.smartWorkspaceSourceDrawer.workspaceName', 'Workspace name')
+                : t('components.smartWorkspaceSourceDrawer.startFrom', 'Start from')
+            }
+            trailing={{ label: t('common.done', 'Done'), onPress: onClose }}
+          />
         </View>
 
         <View style={styles.results}>
@@ -231,11 +234,14 @@ export function SmartWorkspaceSourceDrawer({
                 )}
               </Text>
               <View style={styles.crossRepoActions}>
-                <Pressable style={styles.crossRepoDismiss} onPress={dismissCrossRepoPrompt}>
+                <Pressable
+                  style={({ pressed }) => [styles.crossRepoDismiss, pressed && pressedStyle]}
+                  onPress={dismissCrossRepoPrompt}
+                >
                   <Text style={styles.crossRepoDismissText}>{t('common.cancel', 'Cancel')}</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.crossRepoSwitch}
+                  style={({ pressed }) => [styles.crossRepoSwitch, pressed && pressedStyle]}
                   onPress={() => void handleAcceptCrossRepo()}
                 >
                   <Text style={styles.crossRepoSwitchText}>
@@ -277,11 +283,12 @@ export function SmartWorkspaceSourceDrawer({
           <FlatList
             data={rows}
             keyExtractor={(row) => row.value}
-            style={styles.list}
+            style={[styles.list, rows.length === 0 && styles.listEmpty]}
             contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
             nestedScrollEnabled
+            ItemSeparatorComponent={SourceRowSeparator}
             ListFooterComponent={
               loading ? (
                 <View style={styles.loading}>
@@ -315,7 +322,11 @@ export function SmartWorkspaceSourceDrawer({
                 return (
                   <Pressable
                     key={option.id}
-                    style={[styles.chip, selected && styles.chipSelected]}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      selected && styles.chipSelected,
+                      pressed && pressedStyle
+                    ]}
                     onPress={() => setMrStateFilter(option.id)}
                   >
                     <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
@@ -334,7 +345,11 @@ export function SmartWorkspaceSourceDrawer({
               return (
                 <Pressable
                   key={option.id}
-                  style={[styles.tab, selected && styles.tabSelected]}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    selected && styles.tabSelected,
+                    pressed && pressedStyle
+                  ]}
                   onPress={() => setMode(option.id)}
                 >
                   <SmartSourceModeIcon icon={option.icon} color={tint} />
@@ -366,4 +381,9 @@ export function SmartWorkspaceSourceDrawer({
       </View>
     </BottomDrawer>
   )
+}
+
+function SourceRowSeparator() {
+  useMobileColorScheme()
+  return <View style={styles.separator} />
 }

@@ -33,6 +33,12 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
+import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import {
+  followThroughWorkerReport,
+  passHeldWorkerMail,
+  settledDispatchId
+} from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -51,6 +57,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         replayedMutationReceipt,
         orchestrationCaller,
         orchestrationCompatibilityEvidence,
+        orchestrationMutation,
         signal
       }
     ) => {
@@ -73,6 +80,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         for (const target of settled ? handBackReplayTargets(db, settled) : []) {
           runtime.notifyMessageArrived(target.to, target.type)
         }
+        followThroughWorkerReport(runtime, db, settled)
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
       const from = params.from ?? 'unknown'
@@ -189,7 +197,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt
 
       if (!isGroupAddress(to)) {
-        const addressedDispatchId = to.startsWith('dispatch:')
+        let addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
         const federatedTarget =
@@ -198,6 +206,34 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
+          const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
+          // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
+          const followUp =
+            plan?.kind === 'start'
+              ? await startWorkerFollowUp({
+                  ctx: {
+                    runtime,
+                    orchestrationCompatibilityEvidence,
+                    orchestrationCaller,
+                    orchestrationMutation
+                  },
+                  db,
+                  plan,
+                  from,
+                  message: params
+                })
+              : plan
+          // A dispatch: address carries no recipient warnings, so `next` stays last.
+          if (followUp?.kind === 'started') {
+            if (typeof followUp.receipt.dispatchId === 'string') {
+              passHeldWorkerMail(runtime, db, followUp.receipt.dispatchId)
+            }
+            return followUp.receipt
+          }
+          if (followUp) {
+            addressedDispatchId = followUp.dispatchId
+            to = `dispatch:${addressedDispatchId}`
+          }
           assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
           const runBound = resolveRunBoundDispatchRecipient(
             runtime,
@@ -225,7 +261,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         if (federatedControl !== undefined) {
           return federatedControl
         }
-        return sendPointToPointMessage({
+        const sent = sendPointToPointMessage({
           params,
           runtime,
           db,
@@ -244,6 +280,12 @@ export const ORCHESTRATION_SEND_METHODS = [
           markWorkerDoneMutationEffectFree,
           withSendWarnings
         })
+        followThroughWorkerReport(
+          runtime,
+          db,
+          params.type === 'worker_done' ? settledDispatchId(sent) : undefined
+        )
+        return sent
       }
       return sendGroupMessage({
         params,
@@ -263,16 +305,3 @@ export const ORCHESTRATION_SEND_METHODS = [
     }
   })
 ]
-
-function settledDispatchId(receipt: unknown): string | undefined {
-  if (!receipt || typeof receipt !== 'object' || !('lifecycle' in receipt)) {
-    return undefined
-  }
-  const { lifecycle } = receipt
-  return lifecycle &&
-    typeof lifecycle === 'object' &&
-    'dispatchId' in lifecycle &&
-    typeof lifecycle.dispatchId === 'string'
-    ? lifecycle.dispatchId
-    : undefined
-}

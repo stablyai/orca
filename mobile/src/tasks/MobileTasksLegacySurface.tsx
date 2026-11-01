@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { describeLoadError } from '../components/load-error-description'
+import { mobileTasksListShowsError } from './mobile-tasks-list-state'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -73,11 +75,12 @@ import {
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
 } from './mobile-tasks-workspace-trust-drawers'
+import { pressedStyle } from '../theme/mobile-theme'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
 } from './mobile-tasks-project-detail-drawer'
-import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
@@ -115,9 +118,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderMobileTasksChrome(model)}
 
-      {error ? (
+      {error && !mobileTasksListShowsError(model) ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
         </View>
       ) : null}
 
@@ -170,7 +173,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                     'Retry loading issues from {{source}}',
                     { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
                   )}
-                  style={styles.sourceErrorRetry}
+                  style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
                   disabled={loading || isRetrying}
                   onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
                 >
@@ -268,7 +271,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksProjectDetailDrawer(model)}
 
-        {renderMobileTasksItemDetailDrawer(model)}
+        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}

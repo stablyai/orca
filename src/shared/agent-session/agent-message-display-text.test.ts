@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { agentMessageDisplayText, agentMessageTranscriptText } from './agent-message-display-text'
 import type { AgentMessageSource } from './agent-session-message-source'
-import type { NativeChatBlock } from '../native-chat-types'
+import type { NativeChatBlock } from '../native-chat/native-chat-types'
 import * as grammar from '../orca-dispatch-status-prompt'
 
 const task: AgentMessageSource = {

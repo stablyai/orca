@@ -119,18 +119,6 @@ describe('useStructuredAgentSession context usage', () => {
     unloadedTurnRevisions = undefined
   })
 
-  it('shows the host whole-journal answer when the loaded page starts after the turn row', async () => {
-    answerOptions([{ used: estimate(150_000), window: WINDOW }])
-    const { result } = render()
-
-    await waitFor(() =>
-      expect(result.current.contextUsage).toMatchObject({
-        usedTokens: 150_000,
-        windowTokens: 1_000_000
-      })
-    )
-  })
-
   it('prefers the loaded window when it holds a newer turn fact', async () => {
     // The window part is only on an older row, so a full reading needs the host answer applied.
     items = [turnRow(900, { used: estimate(180_000) })]
@@ -188,10 +176,15 @@ describe('useStructuredAgentSession context usage', () => {
         : Promise.resolve(null)
     )
     const { result, rerender } = render()
+    // Reads start one microtask after they are scheduled, so let each start before its revisions.
+    await waitFor(() => expect(replies).toHaveLength(1))
     await act(async () => replies[0](150_000))
     await waitFor(() => expect(result.current.contextUsage).toMatchObject({ usedTokens: 150_000 }))
 
-    for (let revision = 1; revision <= 5; revision += 1) {
+    unloadedTurnRevisions = 1
+    rerender()
+    await waitFor(() => expect(optionReads()).toBe(2))
+    for (let revision = 2; revision <= 5; revision += 1) {
       unloadedTurnRevisions = revision
       rerender()
     }

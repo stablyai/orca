@@ -26,10 +26,11 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
-    AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
+    ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
@@ -37,10 +38,7 @@ vi.mock('react-native', async () => {
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
-    StyleSheet: {
-      create: (styles: unknown) => styles,
-      hairlineWidth: 1
-    },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
     TextInput: 'TextInput',
     View: 'View'
@@ -49,6 +47,8 @@ vi.mock('react-native', async () => {
 
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  ListEnd: 'ListEnd',
+  CornerDownRight: 'CornerDownRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
@@ -295,17 +295,6 @@ describe('MobileNativeChatComposer', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('keeps the draft when the send is rejected', async () => {
-    const onChangeText = vi.fn()
-    const onSend = vi.fn().mockResolvedValue(false)
-    await render(onSend, onChangeText)
-
-    await act(async () => sendButton().props.onPress())
-
-    expect(onSend).toHaveBeenCalledWith(' hello ')
-    expect(onChangeText).not.toHaveBeenCalled()
-  })
-
   it('disables send while an attachment path is still being injected', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     await render(onSend, vi.fn(), true)
@@ -457,7 +446,7 @@ describe('MobileNativeChatComposer', () => {
     await act(async () => field().props.onBlur())
     await press('Effort, Not set')
     await press('Back to models')
-    await press('Close picker')
+    await press('Done')
     await act(async () => findByHostType(renderer!.root, 'BottomDrawer').props.onHidden())
     expect(focus).toHaveBeenCalledTimes(1)
     for (const id of ['model', 'effort']) {
@@ -684,14 +673,18 @@ describe('MobileNativeChatComposer', () => {
     expect(Keyboard.dismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the keyboard up when the send is rejected', async () => {
+  it('keeps the draft and keyboard when the send is rejected', async () => {
     // Keep the keyboard after rejection so the draft can be corrected and retried.
     vi.mocked(Keyboard.dismiss).mockClear()
-    await render(vi.fn().mockResolvedValue(false), vi.fn())
+    const onSend = vi.fn().mockResolvedValue(false)
+    const onChangeText = vi.fn()
+    await render(onSend, onChangeText)
 
     await act(async () => sendButton().props.onPress())
 
     expect(Keyboard.dismiss).not.toHaveBeenCalled()
+    expect(onSend).toHaveBeenCalledWith(' hello ')
+    expect(onChangeText).not.toHaveBeenCalled()
   })
 
   it('does not dismiss a newly focused composer when an old accepted send settles', async () => {

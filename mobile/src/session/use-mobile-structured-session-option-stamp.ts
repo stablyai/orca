@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import { structuredAgentSessionOptionStamp } from '../../../src/shared/structured-agent-session-option-state'
+import { structuredAgentSessionOptionStamp } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 
 const noSubscription = (): (() => void) => () => {}

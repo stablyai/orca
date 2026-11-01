@@ -1,3 +1,6 @@
+import { agentSessionRecordLineage } from './agent-session-record-lineage'
+import type Database from '../sqlite/sync-database'
+import { createAgentSessionOwnerProof } from './agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from './agent-session/ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
 import { pinAgentSessionRecordLaunchDirectory } from './agent-session-record-launch-directory'
@@ -23,7 +26,6 @@ import {
   retireAgentSessionClaimKey
 } from './agent-session/ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
@@ -33,7 +35,6 @@ import {
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
-  proveAgentSessionOwner,
   type AgentSessionProcessIdentityCommit
 } from './agent-session/ownership/agent-session-lease-transitions'
 import {
@@ -90,7 +91,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
-    readonly hostId: string
+    readonly hostId: string,
+    private readonly database: Database.Database
   ) {
     super(transactions)
     this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
@@ -110,7 +112,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.hostId,
       args.legacySessionTabIds
     )
-    return new AgentSessionRecordStore(transactions, args.hostId)
+    return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase.db)
   }
 
   private get state(): AgentSessionStoreState {
@@ -127,6 +129,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   getRecord = (sessionId: string): AgentSessionRecord | null =>
     this.state.records.get(sessionId) ?? null
+
+  lineageRecords = (record: AgentSessionRecord) =>
+    agentSessionRecordLineage(this.database, record, this.getRecord)
 
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
@@ -200,23 +205,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   commitProcessIdentity = (args: AgentSessionProcessIdentityCommit): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => commitAgentSessionProcessIdentity({ ...args, record }))
 
-  async proveOwner(args: {
-    sessionId: string
-    fence: number
-    link?: AgentSessionProviderHandleLink
-    now: number
-    leaseTtlMs?: number
-  }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      proveAgentSessionOwner({
-        record,
-        fence: args.fence,
-        ...(args.link ? { link: args.link } : {}),
-        now: args.now,
-        leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
-      })
-    )
-  }
+  proveOwner = createAgentSessionOwnerProof(
+    (id, transition) => this.mutate(id, transition),
+    AGENT_SESSION_LEASE_TTL_MS
+  )
 
   settleFailedAcquisition = (args: AgentSessionFailedAcquisitionSettlement) =>
     this.transact((draft) => settleFailedAgentSessionAcquisition(draft, args))

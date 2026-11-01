@@ -8,8 +8,11 @@ import type {
 } from './agent-session-journal-types'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
-import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
-import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
+import { structuredAgentTurnAnchors } from './native-chat/transcript/native-chat-turn-membership'
+import type {
+  NativeChatSettledTurn,
+  NativeChatSettledTurns
+} from './native-chat/transcript/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
 
 export type StructuredAgentTurnTiming = {

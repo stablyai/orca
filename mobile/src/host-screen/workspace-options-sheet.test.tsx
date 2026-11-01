@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
   X: 'X'
@@ -22,6 +23,8 @@ vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () =
 // The slide settles at once, so a back press unmounts the page in the same act.
 vi.mock('react-native-reanimated', () => ({
   default: { View: 'AnimatedView' },
+  Easing: { bezier: () => (t: number) => t },
+  useReducedMotion: () => false,
   runOnJS:
     <Args extends unknown[]>(fn: (...args: Args) => void) =>
     (...args: Args) =>
@@ -35,6 +38,7 @@ vi.mock('react-native-reanimated', () => ({
 }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'

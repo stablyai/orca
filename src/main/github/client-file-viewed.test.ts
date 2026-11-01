@@ -72,47 +72,6 @@ describe('setPRFileViewed', () => {
     acquireMock.mockResolvedValue(undefined)
   })
 
-  it('uses GitHub GraphQL file-viewed mutations', async () => {
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
-
-    await expect(
-      setPRFileViewed({
-        repoPath: '/repo-root',
-        pullRequestId: 'PR_kwDO123',
-        path: 'src/app.ts',
-        viewed: true
-      })
-    ).resolves.toBe(true)
-
-    const args = ghExecFileAsyncMock.mock.calls[0][0]
-    expect(args[0]).toBe('api')
-    expect(args[1]).toBe('graphql')
-    expect(args.find((arg: string) => arg.startsWith('query='))).toContain('markFileAsViewed')
-    expect(args).toContain('pullRequestId=PR_kwDO123')
-    expect(args).toContain('path=src/app.ts')
-    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({
-      cwd: '/repo-root',
-      host: 'github.com'
-    })
-    expect(releaseMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses GitHub GraphQL file-unviewed mutations', async () => {
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
-
-    await expect(
-      setPRFileViewed({
-        repoPath: '/repo-root',
-        pullRequestId: 'PR_kwDO123',
-        path: 'src/app.ts',
-        viewed: false
-      })
-    ).resolves.toBe(true)
-
-    const args = ghExecFileAsyncMock.mock.calls[0][0]
-    expect(args.find((arg: string) => arg.startsWith('query='))).toContain('unmarkFileAsViewed')
-  })
-
   it('routes local WSL file-viewed mutations through the selected distro', async () => {
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
 

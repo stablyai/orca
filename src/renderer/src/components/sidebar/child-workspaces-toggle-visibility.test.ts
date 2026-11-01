@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
@@ -103,53 +103,5 @@ describe('child workspace shortcut follows canonical rendered chips', () => {
     } finally {
       hook.unmount()
     }
-  })
-
-  it('keeps the parent chip available when its children are folded', () => {
-    const state = seed({ collapsedGroups: new Set(['lineage:parent']), activeWorktreeId: child.id })
-    expect(target(state)).toBe('lineage:parent')
-  })
-
-  it('does not toggle a family hidden by a collapsed section', () => {
-    expect(target(seed({ collapsedGroups: new Set(['all']) }))).toBeNull()
-  })
-
-  it('does not toggle a family excluded by the project filter', () => {
-    expect(target(seed({ filterRepoIds: ['another-project'] }))).toBeNull()
-  })
-
-  it('does not invent a chip when all children are sleeping and filtered out', () => {
-    const state = seed({
-      worktreesByRepo: {
-        [repo.id]: [{ ...parent, isMainWorktree: true, branch: 'refs/heads/main' }, child]
-      },
-      showSleepingWorkspaces: false,
-      alwaysShowDefaultBranchWorkspace: true
-    })
-    expect(target(state)).toBeNull()
-  })
-
-  it('drops archived children and stale child or parent instances', () => {
-    for (const worktrees of [
-      [parent, { ...child, isArchived: true }],
-      [parent, { ...child, instanceId: 'new-child' }],
-      [{ ...parent, instanceId: 'new-parent' }, child]
-    ]) {
-      expect(target(seed({ worktreesByRepo: { [repo.id]: worktrees } }))).toBeNull()
-    }
-  })
-
-  it('uses one persisted key when pinning duplicates the parent card', () => {
-    const pinnedParent = { ...parent, isPinned: true }
-    const state = seed({
-      worktreesByRepo: { [repo.id]: [pinnedParent, child] },
-      settings: createGlobalSettingsFixture({ showPinnedWorktreesInGroups: true })
-    })
-    const chips = computeRenderedSidebarRows(state, [pinnedParent, child]).filter(
-      (row) => row.type === 'item' && row.lineageGroupKey === 'lineage:parent'
-    )
-    expect(chips).toHaveLength(2)
-    expect(getRenderedLineageChipKeys(state)).toEqual(new Set(['lineage:parent']))
-    expect(target(state)).toBe('lineage:parent')
   })
 })

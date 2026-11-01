@@ -11,8 +11,8 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../src/shared/agent-session-journal-types'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
-import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat-turn-membership'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import {
   projectStructuredAgentSessionMessages,
   type StructuredAgentSessionOptimisticMessage

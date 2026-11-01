@@ -1,4 +1,5 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
+import { describeLoadError } from '../components/load-error-description'
 import { SetupHookTrustDrawer } from '../components/SetupHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -266,7 +267,7 @@ export function AutomationManager(props: {
         {catalog.error ? (
           <View style={styles.stack}>
             <Text accessibilityRole="alert" style={styles.error}>
-              {catalog.error}
+              {describeLoadError(catalog.error, t).message}
             </Text>
             <AutomationButton
               label={t('automations.mobile.refresh', 'Refresh')}

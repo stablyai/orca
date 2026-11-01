@@ -28,30 +28,12 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md
   },
   filterSheetHeader: {
-    marginHorizontal: -spacing.sm,
     marginBottom: spacing.xs
-  },
-  filterSectionLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted,
-    paddingHorizontal: spacing.md + 2,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm
-  },
-  filterRowValue: {
-    flexShrink: 1,
-    maxWidth: '50%',
-    fontSize: typography.bodySize,
-    color: colors.textSecondary
-  },
-  filterRowDisabled: {
-    opacity: 0.4
   },
   filterFootnote: {
     fontSize: 12,
     color: colors.textMuted,
-    paddingHorizontal: spacing.md + 2,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm
   },
   errorBanner: {

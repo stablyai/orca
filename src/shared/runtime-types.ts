@@ -200,6 +200,7 @@ export type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsConditionalResult,
   RuntimeWorktreePsResult,
+  RuntimeWorktreePsRowDeltaResult,
   RuntimeWorktreePsSnapshotResult,
   RuntimeWorktreePsSummary,
   RuntimeWorktreePsUnchangedResult,

@@ -9,7 +9,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session-turn-record'
-import { describeNativeChatTurnStatus } from '../../shared/native-chat-turn-status'
+import { describeNativeChatTurnStatus } from '../../shared/native-chat/transcript/native-chat-turn-status'
 import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { JournalStopEvent } from '../native-chat/agent-session-journal/journal-row-schema'

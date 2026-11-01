@@ -27,7 +27,7 @@ afterEach(() => {
 })
 import type * as NativeChatWorkRunModule from '../../../../shared/native-chat/native-chat-work-run'
 import type * as NativeChatProseModule from '../../../../shared/native-chat/transcript/native-chat-prose'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type * as UnifiedPatchModule from '../../../../shared/native-chat/tools/native-chat-unified-patch'

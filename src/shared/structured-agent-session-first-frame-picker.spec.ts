@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 import { independentAgentModelCatalog } from './agent-model-catalog-ownership'
-import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from './agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from './agent-session/options/structured-agent-session-options'
+import {
   canSetStructuredAgentSessionOption,
-  createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
-} from './structured-agent-session-options'
+} from './agent-session/options/structured-agent-session-option-snapshot'
 
 // Every agent a runtime registers today; the main-side contract test walks the registrations.
 const AGENTS = ['claude', 'codex', 'grok', 'opencode', 'pi'] as const

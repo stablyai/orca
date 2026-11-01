@@ -21,7 +21,6 @@
     "panel": {
       "all": "Все",
       "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
-      "loadFailed": "Не удалось загрузить",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -50,14 +49,12 @@
       "untitledSession": "Сессия без названия"
     },
     "sessionHistoryList": {
-      "assistantRole": "ассистент",
       "currentWorktree": "текущее рабочее дерево",
       "messages_few": "{{count}} сообщения",
       "messages_many": "{{count}} сообщений",
       "messages_one": "{{count}} сообщение",
       "messages_other": "{{count}} сообщения",
-      "resumeSession": "Продолжить сессию агента",
-      "userRole": "пользователь"
+      "resumeSession": "Продолжить сессию агента"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Не удалось связаться с сервером",
@@ -196,7 +193,11 @@
       "cancelEditing": "Отменить редактирование",
       "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
-      "sendMessage": "Отправить сообщение"
+      "sendMessage": "Отправить сообщение",
+      "sendQueue": "В очередь",
+      "sendSteer": "Направить",
+      "sendQueueHint": "Выполнится после текущего хода",
+      "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
@@ -287,7 +288,10 @@
       "compaction": "Контекст сокращён",
       "contextCleared": "Контекст очищен",
       "plan": "План",
-      "stoppedManually": "Остановлено вручную"
+      "stoppedManually": "Остановлено вручную",
+      "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
+      "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
+      "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт)."
     },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
@@ -367,7 +371,6 @@
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",
       "backToModels": "Назад к моделям",
-      "closePicker": "Закрыть окно выбора",
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
@@ -726,7 +729,6 @@
       "loadingDiff": "Загрузка различий…",
       "loadingReview": "Загрузка данных проверки…",
       "noReviewableChanges": "Нет изменений для проверки",
-      "retryLabel": "Повторить загрузку данных проверки",
       "reviewUnavailable": "Проверка недоступна",
       "selectFile": "Выберите файл для проверки.",
       "tooLargeMessage": "Объём изменений слишком велик для предпросмотра на мобильном устройстве.",
@@ -908,12 +910,10 @@
       "blankTerminal": "Пустой терминал"
     },
     "newWorktreeFormSheet": {
-      "advanced": "Дополнительно",
       "agent": "Агент",
       "connectTarget": "Подключить целевой сервер",
       "connectTargetFirst": "Сначала подключите целевой сервер",
       "createWorktree": "Создать рабочее дерево",
-      "nameOrCreateFrom": "Название или источник",
       "noProjectsFound": "Проекты не найдены",
       "note": "Заметка",
       "notePlaceholder": "Написать заметку",
@@ -934,10 +934,8 @@
       "selectRunTarget": "Выберите сервер для запуска"
     },
     "prSidebar": {
-      "loadFailed": "Что-то пошло не так.",
       "loading": "Загрузка пул-реквеста…",
-      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена.",
-      "retryLoading": "Повторить загрузку пул-реквеста"
+      "notPermitted": "Доступ запрещён — ваша учётная запись GitHub не подключена."
     },
     "protocolBlockScreen": {
       "backToHosts": "Вернуться к серверам",
@@ -1004,12 +1002,10 @@
       "noResults": "Ничего не найдено.",
       "searchPlaceholder": "Введите название или найдите источник",
       "switchRepo": "Переключиться на {{repoName}}",
-      "title": "Название или источник",
       "typeWorkspaceName": "Введите название рабочего пространства в поле ниже."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "Открыть выбранный источник",
-      "optional": "[Необязательно]",
       "searchPlaceholder": "Введите название или найдите источник"
     },
     "smartWorkspaceSourceRow": {
@@ -1090,6 +1086,16 @@
       "title": "Что-то пошло не так",
       "tryAgain": "Повторить",
       "home": "Главная"
+    },
+    "svgPreview": {
+      "drawFailed": "Не удалось отобразить этот SVG",
+      "label": "Рисунок {{title}}",
+      "previewDrawing": "Просмотр рисунка",
+      "viewSource": "Показать исходный код SVG"
+    },
+    "mermaidDiagram": {
+      "expand": "Развернуть диаграмму",
+      "label": "Диаграмма Mermaid"
     }
   },
   "connection": {
@@ -3259,7 +3265,6 @@
       "waitingForDesktop": "Ожидание подключения к компьютеру…"
     },
     "panel": {
-      "loadFailedTitle": "Не удалось загрузить",
       "unavailableTitle": "Управление версиями недоступно"
     },
     "prChip": {
@@ -3558,7 +3563,6 @@
       "changeStatus": "Изменить статус",
       "copyGitHubLink": "Скопировать ссылку на GitHub",
       "copyLinearLink": "Скопировать ссылку на Linear",
-      "createWorkspace": "Создать рабочее пространство",
       "creating": "Создание…",
       "mergeConflicts": "GitHub сообщает о конфликтах слияния.",
       "mergeMergeRequest": "Слить запрос на слияние",
@@ -3566,8 +3570,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "Добавить подзадачу",
-      "assignee": "Исполнитель",
-      "assignees": "Исполнители",
       "checks": "Проверки",
       "description": "Описание",
       "discussion": "Обсуждение",
@@ -3581,13 +3583,10 @@
       "pipelineJobs_many": "{{count}} заданий",
       "pipelineJobs_one": "{{count}} задание",
       "pipelineJobs_other": "{{count}} задания",
-      "project": "Проект",
       "rerunAll": "Повторить все",
       "rerunFailed": "Повторить неуспешные",
-      "status": "Статус",
       "subIssueTitle": "Название подзадачи",
-      "subIssues": "Подзадачи",
-      "type": "Тип"
+      "subIssues": "Подзадачи"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Обновить данные"
@@ -3948,19 +3947,14 @@
       "addRepository": "Добавьте репозиторий Git, прежде чем создавать рабочее пространство для задачи Linear.",
       "advanced": "Дополнительно",
       "agent": "Агент",
-      "connect": "Подключиться",
       "connectFirst": "Сначала подключите репозиторий",
       "connectRepository": "Подключить репозиторий",
-      "connecting": "Подключение…",
-      "createFrom": "Создать на основе {{branch}}",
       "defaultBranch": "Ветка по умолчанию",
       "detectingAgents": "Поиск агентов…",
-      "optional": "[Необязательно]",
       "remoteRepository": "Удалённый репозиторий",
       "repository": "Репозиторий",
       "repositoryNotFound": "Репозиторий не найден.",
       "selectRepository": "Выберите репозиторий",
-      "sshConnection": "SSH-подключение",
       "startFrom": "Начать с",
       "title": "Создать рабочее пространство",
       "workspaceName": "Название рабочего пространства"
@@ -4085,7 +4079,6 @@
       "existing": "Существующая ветка",
       "existingHint": "Новые коммиты добавляются в эту ветку.",
       "hostUpdateRequired": "Обновите Orca на сервере рабочего пространства, чтобы повторно использовать ветку или явно выбрать создание отдельной ветки.",
-      "new": "Новая ветка",
       "newHint": "Создать новую локальную ветку",
       "newName": "Имя новой ветки",
       "title": "Ветка для этого рабочего дерева"
@@ -4125,8 +4118,7 @@
       "noFilterMatches": "Нет рабочих пространств, соответствующих фильтрам",
       "noMatches": "Подходящие рабочие пространства не найдены",
       "reopen": "Откройте заново для обновления",
-      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает.",
-      "retrying": "Сбой worktree.ps ({{error}}) — автоматическая повторная попытка"
+      "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает."
     },
     "workspaceListSections": {
       "all": "Все",

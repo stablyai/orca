@@ -6,7 +6,7 @@ import {
   type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
-} from '../../../../../src/shared/native-chat-turn-status'
+} from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
 
 const EMPTY_TURN_TIMING_BY_TURN: NativeChatTurnTimingByTurn = Object.freeze({})
 

@@ -99,6 +99,19 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('escapes terminal control bytes in worker-written fields', async () => {
+    const { stdout } = await run('worker-start', [['task', 'task_1']], {
+      ...OLDER_RUNTIME_START,
+      state: 'failed',
+      failedStage: 'agent\x1b]0;x\x07',
+      lastError: 'bad \x9b31m output'
+    })
+    for (const raw of ['\x1b', '\x07', '\x9b']) {
+      expect(stdout).not.toContain(raw)
+    }
+    expect(stdout).toContain('failedStage=agent\\x1b]0;x\\x07')
+  })
+
   it('prints a question with its payload kept apart and a reply command for this executable', async () => {
     const question = {
       id: 'msg_q',
@@ -178,6 +191,36 @@ describe('orchestration agent views', () => {
     )
   })
 
+  it('prints a follow-up as where it went, naming the launch mode only for a fresh start', async () => {
+    const followUp = (delivery: string) =>
+      run(
+        'send',
+        [
+          ['to', 'dispatch:ctx_1'],
+          ['subject', 'More']
+        ],
+        {
+          ...OLDER_RUNTIME_START,
+          dispatchId: 'ctx_2',
+          delivery,
+          followUpOf: 'ctx_1',
+          turnStart: 'queued',
+          mode: {
+            mode: 'terminal',
+            preferred: 'terminal',
+            detail: 'Started a terminal agent worker.'
+          },
+          next: 'Orca wakes you when workers report; end your turn.'
+        }
+      )
+
+    expect((await followUp('reopened')).stdout).toBe(
+      'delivery=reopened followUpOf=ctx_1 dispatchId=ctx_2 taskId=task_1 runId=run_1 state=ready terminal=term_agent workspace=wt_1::/repo queued=true\n' +
+        'Next: Orca wakes you when workers report; end your turn.'
+    )
+    expect((await followUp('started_fresh')).stdout).toContain('mode=terminal')
+  })
+
   it('lists each worker with its agent terminal and a runnable next action', async () => {
     const { stdout } = await run('worker-list', [['run', 'run_1']], {
       workers: [
@@ -244,6 +287,25 @@ describe('orchestration agent views', () => {
       { messages: [], count: 0, cancelled: true }
     )
     expect(process.exitCode).toBeUndefined()
+  })
+
+  it('asks an older host to release only reclaimable finished workers', async () => {
+    const worker = { taskId: 'task_1', runId: 'run_1', workerState: 'succeeded' }
+    const { stdout } = await run(
+      'worker-list',
+      [['run', 'run_1']],
+      {
+        workers: [
+          { ...worker, dispatchId: 'ctx_done', terminalState: 'reclaimable', resource: null },
+          { ...worker, dispatchId: 'ctx_kept', terminalState: 'retained', resource: null }
+        ],
+        counts: {}
+      },
+      true
+    )
+    const [done, kept] = JSON.parse(stdout).result.workers
+    expect(done.next).toContain('orchestration worker-release --dispatch ctx_done')
+    expect(kept.next).toBeUndefined()
   })
 
   it('keeps --full ask output and exit exactly as before', async () => {
@@ -432,5 +494,45 @@ describe('orchestration agent views', () => {
     expect(stdout).toContain('Reply: orca-dev orchestration reply --id msg_q --body "..."')
     expect(stdout).not.toContain('read-only')
     expect(stdout).not.toContain('Next:')
+  })
+
+  it('previews inbox bodies and keeps only payload ids', async () => {
+    const huge = 'x'.repeat(10_000)
+    const inbox = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          {
+            id: 'msg_1',
+            from_handle: 'dispatch:ctx_1',
+            to_handle: 'run:run_1',
+            subject: 'Done',
+            body: huge,
+            type: 'worker_done',
+            payload: JSON.stringify({ taskId: 'task_1', dispatchId: { spec: huge }, notes: huge })
+          }
+        ],
+        count: 1
+      },
+      true
+    )
+    const [row] = JSON.parse(inbox.stdout).result.messages
+    expect(row.body).toBe(`${'x'.repeat(200)}… (truncated; --full)`)
+    expect(row.payload).toEqual({ taskId: 'task_1' })
+    const emoji = await run(
+      'inbox',
+      [],
+      {
+        messages: [
+          { id: 'msg_2', from_handle: 'term_1', body: `${'x'.repeat(199)}${'😀'.repeat(5)}` }
+        ],
+        count: 1
+      },
+      true
+    )
+    expect(JSON.parse(emoji.stdout).result.messages[0].body).toBe(
+      `${'x'.repeat(199)}😀… (truncated; --full)`
+    )
   })
 })

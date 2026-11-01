@@ -39,7 +39,10 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
   protected passiveStructuredSessionTabChangeEligible(change: ChatTabChange): boolean {
     const host = getStructuredAgentSessionHost()
     if ('open' in change) {
-      return host?.isSessionTabVisible(change.open.sessionId) ?? false
+      return (
+        !!host?.isSessionTabVisible(change.open.sessionId) &&
+        chatTabId(change.open.sessionId) === change.open.tabId
+      )
     }
     return (
       !!host &&
@@ -50,13 +53,23 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
   }
 
   /** Prune runtime snapshots after proven close/release; durable visibility alone leaves dead chat rows. Renderer-free for startup reconciliation and orchestration cleanup. */
-  retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean {
+  retireStructuredAgentSessionTabFromSnapshot(
+    sessionId: string,
+    expectedTabId?: string,
+    expectedWorktreeId?: string
+  ): boolean {
+    if (!expectedTabId) {
+      return false
+    }
     let retired = false
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (this.workspaceSessions.tryGetHostId(worktreeId) !== LOCAL_EXECUTION_HOST_ID) {
+      if (
+        (expectedWorktreeId && expectedWorktreeId !== worktreeId) ||
+        this.workspaceSessions.tryGetHostId(worktreeId) !== LOCAL_EXECUTION_HOST_ID
+      ) {
         continue
       }
-      const nextSnapshot = retireStructuredAgentSessionTabFrom(snapshot, sessionId)
+      const nextSnapshot = retireStructuredAgentSessionTabFrom(snapshot, sessionId, expectedTabId)
       if (!nextSnapshot) {
         continue
       }
@@ -69,29 +82,42 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
 
   private readonly localStructuredTabs = new WeakMap<
     RuntimeMobileSessionTabsSnapshot,
-    ReadonlySet<string>
+    ReadonlyMap<string, string>
   >()
 
   protected hasCurrentLocalStructuredSessionTab(sessionId: string): boolean {
+    try {
+      return this.currentLocalStructuredSessionPresentation(sessionId) !== null
+    } catch {
+      return false
+    }
+  }
+
+  currentLocalStructuredSessionPresentation(
+    sessionId: string
+  ): { worktreeId: string; tabId: string } | null {
     const record = getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
     if (
       !record ||
       record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
       this.workspaceSessions.tryGetHostId(record.location.workspaceId) !== LOCAL_EXECUTION_HOST_ID
     ) {
-      return false
+      throw new Error('Chat presentation scope is unavailable')
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(record.location.workspaceId)
     if (!snapshot) {
-      return false
+      return null
     }
     let ids = this.localStructuredTabs.get(snapshot)
     if (!ids) {
-      ids = new Set(
-        snapshot.tabs.flatMap((tab) => (tab.type === 'agent-session' ? [tab.sessionId] : []))
+      ids = new Map(
+        snapshot.tabs.flatMap((tab) =>
+          tab.type === 'agent-session' ? [[tab.sessionId, tab.id] as const] : []
+        )
       )
       this.localStructuredTabs.set(snapshot, ids)
     }
-    return ids.has(sessionId)
+    const tabId = ids.get(sessionId)
+    return tabId ? { worktreeId: record.location.workspaceId, tabId } : null
   }
 }

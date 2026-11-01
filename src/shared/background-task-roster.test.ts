@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionBackgroundTask } from './agent-session-wire'
+import type { AgentSessionBackgroundTask } from './agent-session/agent-session-background-task-wire'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import { sayBackgroundTaskEnglish as say } from './background-task-copy'
 import { backgroundTasksHeaderContent as headerContent } from './background-task-header-content'

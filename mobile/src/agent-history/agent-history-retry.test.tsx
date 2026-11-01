@@ -27,6 +27,14 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), canGoBack: () => false }),
   usePathname: () => '/'
 }))
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
@@ -55,11 +63,24 @@ vi.mock('react-native-svg', () => ({
   Stop: 'Stop'
 }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
   ChevronLeft: 'Icon',
-  Play: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
   RefreshCw: 'Icon',
   Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  WifiOff: 'Icon',
   X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
@@ -118,7 +139,7 @@ function retryControls(rendered: ReactTestRenderer): ReactTestInstance[] {
     .filter((node) =>
       node
         .findAll((text) => String(text.type) === 'Text')
-        .some((text) => text.props.children === 'Retry')
+        .some((text) => text.props.children === 'Reconnect')
     )
 }
 
@@ -126,7 +147,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   it('is absent on the page, where nothing can re-dial', async () => {
     const rendered = await mountPanel()
     expect(
-      rendered.root.findAll((node) => node.props.children === 'Waiting for host…')
+      rendered.root.findAll((node) => node.props.children === 'Waiting for desktop')
     ).not.toHaveLength(0)
     expect(retryControls(rendered)).toHaveLength(0)
   })

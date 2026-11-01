@@ -1,9 +1,10 @@
-import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
+import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
+import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
+import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
@@ -19,7 +20,6 @@ import {
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
-  resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal
 } from '../session/ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
@@ -30,9 +30,15 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
-import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/MobileStateView'
+import { AgentHistoryResumeNotice, AgentHistorySkippedNotice } from './AgentHistoryNotices'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'
@@ -136,7 +142,6 @@ function MobileAgentSessionHistoryPanelContent({
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
-  const count = issues.length
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -177,52 +182,53 @@ function MobileAgentSessionHistoryPanelContent({
         triggerError()
         return
       }
-      if (!session.sessionId) {
-        setResumeMessage(
-          t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
-        )
-        triggerError()
-        return
-      }
 
       const assertCurrentOwner = claimResumeOwnership()
       resumeLaunchInFlightRef.current = true
       setResumingSessionId(session.id)
       setResumeMessage(null)
       try {
-        const {
-          settings,
-          worktrees: freshWorktrees,
-          ...catalog
-        } = await loadMobileResumeMetadata(client)
-        assertCurrentOwner()
-        const target = resolveMobileAiVaultSessionResumeTarget({
-          session,
-          activeWorktreeId: worktreeId,
-          // Prefer live worktrees so deleted/archived workspace cannot be selected; fall back to mount list only on fetch failure.
-          worktrees: freshWorktrees ?? worktrees,
-          catalog,
-          hostPlatform: resumeHost.platform
-        })
-        if (target.status !== 'ready') {
-          setResumeMessage(target.message)
-          triggerError()
+        if (
+          await openMobileAgentHistoryChat({
+            client,
+            session,
+            hostId,
+            assertCurrentOwner,
+            opened: (href) => {
+              triggerSuccess()
+              router.replace(href)
+            },
+            failed: (reason) => {
+              triggerError()
+              setResumeMessage(mobileStructuredSessionOpenMessage(reason, session.agent))
+            }
+          })
+        ) {
           return
         }
-
-        const platform = resolveMobileAiVaultResumePlatform(
-          target.targetStatus,
-          resumeHost.platform,
-          target.workspacePath,
-          target.terminalPlatform
-        )
-        if (!platform) {
+        if (!session.sessionId) {
           setResumeMessage(
-            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+            t('agentHistory.panel.missingResumeId', 'This session is missing a resume id.')
           )
           triggerError()
           return
         }
+        const preparedTarget = await prepareMobileHistoryResumeTarget({
+          client,
+          session,
+          worktreeId,
+          worktrees,
+          hostPlatform: resumeHost.platform,
+          assertCurrentOwner,
+          unknownPlatformMessage: () =>
+            t('agentHistory.panel.unknownHostPlatform', 'Unable to determine host platform.')
+        })
+        if (preparedTarget.status !== 'ready') {
+          setResumeMessage(preparedTarget.message)
+          triggerError()
+          return
+        }
+        const { target, platform, settings } = preparedTarget
 
         const preparedSession = await prepareMobileAiVaultSessionResume(client, session)
         assertCurrentOwner()
@@ -323,64 +329,50 @@ function MobileAgentSessionHistoryPanelContent({
       </SafeAreaView>
 
       {screenState.kind === 'loading' ? (
-        <View style={styles.state}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
+        <MobileStateView
+          loading
+          title={t('agentHistory.panel.loading', 'Loading agent sessions…')}
+        />
       ) : screenState.kind === 'unsupported' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>
-            {t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
-          </Text>
-          <Text style={styles.stateText}>
-            {t(
-              'agentHistory.panel.updateHost',
-              'Update Orca on this host to browse agent session history.'
-            )}
-          </Text>
-        </View>
+        <MobileStateView
+          icon={History}
+          title={t('agentHistory.panel.unavailable', 'Agent Session History Unavailable')}
+          message={t(
+            'agentHistory.panel.updateHost',
+            'Update Orca on this host to browse agent session history.'
+          )}
+        />
+      ) : screenState.kind === 'error' && connState !== 'connected' ? (
+        <MobileOfflineState onReconnect={retry} />
       ) : screenState.kind === 'error' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>
-            {t('agentHistory.panel.loadFailed', 'Unable to Load')}
-          </Text>
-          <Text style={styles.stateText}>{screenState.message}</Text>
-          {retry ? (
-            <Pressable style={styles.retryButton} onPress={retry}>
-              <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {count === 1
-                  ? t('agentHistory.panel.skipped_one', '{{count}} transcript skipped', {
-                      count
-                    })
-                  : t('agentHistory.panel.skipped_other', '{{count}} transcripts skipped', {
-                      count
-                    })}
-              </Text>
-            </View>
-          ) : null}
+          {issues.length > 0 ? <AgentHistorySkippedNotice issues={issues} /> : null}
           {resumeMessage ? (
-            <View style={styles.resumeBanner}>
-              <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
-            </View>
+            <AgentHistoryResumeNotice
+              message={resumeMessage}
+              onDismiss={() => setResumeMessage(null)}
+            />
           ) : null}
           {sections.length === 0 ? (
-            <View style={[styles.state, { paddingBottom: searchBarHeight }]}>
-              <Text style={styles.stateTitle}>
-                {t('agentHistory.panel.noSessions', 'No agent sessions')}
-              </Text>
-              <Text style={styles.stateText}>
-                {query
-                  ? t('agentHistory.panel.noSearchResults', 'No sessions match your search.')
-                  : t('agentHistory.panel.emptyScope', 'No past agent sessions in this scope.')}
-              </Text>
-            </View>
+            query ? (
+              <MobileNoMatchState
+                message={t('agentHistory.panel.noSearchResults', 'No sessions match your search.')}
+                onClear={() => setQuery('')}
+                bottomInset={searchBarHeight}
+              />
+            ) : (
+              <MobileStateView
+                icon={History}
+                title={t('agentHistory.panel.noSessions', 'No agent sessions')}
+                message={t(
+                  'agentHistory.panel.emptyScope',
+                  'No past agent sessions in this scope.'
+                )}
+                bottomInset={searchBarHeight}
+              />
+            )
           ) : (
             <MobileAgentSessionHistoryList
               sections={sections}

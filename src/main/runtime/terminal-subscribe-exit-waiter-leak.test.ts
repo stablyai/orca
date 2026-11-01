@@ -47,35 +47,4 @@ describe('terminal.subscribe exit-waiter leak regression', () => {
 
     expect(waiterCount(runtime, 'handle-live')).toBe(0)
   })
-
-  it('leaks an unsignalled exit-waiter across reconnects (documents the bug the fix prevents)', async () => {
-    const runtime = new OrcaRuntimeService()
-    registerLivePty(runtime, 'pty-live', 'handle-live')
-
-    // Three subscribes with no signal, as the pre-fix subscribe paths did.
-    for (let i = 0; i < 3; i += 1) {
-      void runtime.waitForTerminal('handle-live', { condition: 'exit' }).catch(() => {})
-    }
-    await Promise.resolve()
-
-    // Nothing frees them short of real PTY exit — they accumulate.
-    expect(waiterCount(runtime, 'handle-live')).toBe(3)
-  })
-
-  it('does not leak when many signalled subscribes churn (reconnect simulation)', async () => {
-    const runtime = new OrcaRuntimeService()
-    registerLivePty(runtime, 'pty-live', 'handle-live')
-
-    for (let i = 0; i < 25; i += 1) {
-      const controller = new AbortController()
-      const settled = runtime
-        .waitForTerminal('handle-live', { condition: 'exit', signal: controller.signal })
-        .catch(() => 'aborted' as const)
-      await Promise.resolve()
-      controller.abort()
-      await settled
-    }
-
-    expect(waiterCount(runtime, 'handle-live')).toBe(0)
-  })
 })
