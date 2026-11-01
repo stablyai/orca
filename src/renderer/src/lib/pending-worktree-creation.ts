@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
+  CreateWorktreeArgs,
   SetupDecision,
   WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
@@ -85,6 +86,7 @@ export type WorktreeCreationRequest = {
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Parent picked in the composer's Advanced drawer. Sidebar nesting only, no git effect. */
   parentWorktreeId?: string
   workspaceStatus?: WorkspaceStatus
@@ -131,7 +133,53 @@ export type PendingWorktreeCreation = {
   provisioningLog?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
+  /** Phases entered so far with their start times, so the chat checklist can time each step. */
+  phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
+  /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
+  heldChatMessage?: string
   request: WorktreeCreationRequest
+}
+
+/** Draft scope of the chat composer shown while this creation has no workspace yet. */
+export function pendingCreationChatDraftScopeKey(creationId: string): string {
+  return `pending-worktree-creation:${creationId}`
+}
+
+/** The first message this creation's chat will send: one sent while pending, else the composer's auto-submit prompt. */
+export function pendingCreationHeldChatMessage(
+  entry: Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
+): string | null {
+  if (entry.heldChatMessage) {
+    return entry.heldChatMessage
+  }
+  const { quickPrompt, promptDelivery } = entry.request
+  return promptDelivery !== 'draft' && quickPrompt.trim() ? quickPrompt : null
+}
+
+/** The pending chat surface owns the first message and draft; hand both to the chat launch. */
+export function withPendingChatInput(
+  entry: PendingWorktreeCreation | undefined,
+  request: WorktreeCreationRequest
+): WorktreeCreationRequest {
+  if (!entry || !pendingCreationOpensNativeChat({ phase: entry.phase, request })) {
+    return request
+  }
+  const held = pendingCreationHeldChatMessage({ ...entry, request })
+  // The draft prompt was seeded into the pending composer, whose draft the launch moves over.
+  const { launchDraftPrompt: _seeded, ...rest } = request
+  return { ...rest, quickPrompt: held ?? '', promptDelivery: 'auto-submit' }
+}
+
+/** True when this creation ends in a native chat, so its pending surface is the chat itself. */
+export function pendingCreationOpensNativeChat(
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'request'>
+): boolean {
+  return (
+    entry.request.agentLaunchRoute === 'structured-native-chat' &&
+    entry.request.agent !== null &&
+    entry.phase !== 'provisioning-vm' &&
+    !entry.request.ephemeralVmRecipe
+  )
 }
 
 export function findPendingWorktreeCreationId(

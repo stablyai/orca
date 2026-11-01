@@ -181,7 +181,7 @@ describe('E2EEChannel v2', () => {
     })
     ctx.channel.handleRawMessage(clientText(capabilityFrame, schedule, 1n))
 
-    expect(ctx.channel.clientCapabilities).toEqual([])
+    expect(ctx.channel.capabilitySource.current).toEqual([])
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage.mock.calls[0]?.[0]).toBe(capabilityFrame)
   })

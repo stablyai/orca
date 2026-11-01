@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
@@ -24,7 +25,7 @@ beforeEach(() => {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings('/synthetic'),
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       sourceControlAi: normalizeSourceControlAiSettings({
         ...normalizeSourceControlAiSettings(undefined),
         enabled: false,
@@ -58,7 +59,8 @@ beforeEach(() => {
     configurable: true,
     value: {
       settings: { set: persist, get: vi.fn(async () => useAppStore.getState().settings) },
-      runtime: { call: runtimeCall }
+      runtime: { call: runtimeCall },
+      preflight: { detectAgents: async () => [] }
     }
   })
 })

@@ -45,6 +45,10 @@ export function buildUndecryptableWarning(counts: {
   decryptFailed: number
   appBoundFailed: number
   keyringUnavailableFailed: number
+  keyringFailure?: Extract<
+    NonNullable<BrowserCookieImportSummary['warning']>,
+    { code: 'cookies-undecryptable' }
+  >['keyringFailure']
 }): BrowserCookieImportSummary['warning'] {
   if (counts.decryptFailed === 0) {
     return undefined
@@ -67,6 +71,9 @@ export function buildUndecryptableWarning(counts: {
     code: 'cookies-undecryptable',
     failedCookies: dominant.count,
     reason: dominant.reason,
+    ...(dominant.reason === 'linux-keyring-unavailable' && counts.keyringFailure
+      ? { keyringFailure: counts.keyringFailure }
+      : {}),
     ...(otherFailedCookies > 0 ? { otherFailedCookies } : {})
   }
 }

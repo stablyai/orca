@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session-current-requests-capability'
+import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../src/shared/agent-session/requests/agent-session-current-requests-capability'
 
 export const SESSION = 'session-alpha'
 export const WORKSPACE = 'workspace-1'
@@ -51,6 +51,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.queuedMessageDelete',
     hostMethod: 'queuedMessageDelete',
     result: { ok: true, replayed: false }
+  },
+  {
+    method: 'agentSession.queuedMessageMove',
+    hostMethod: 'queuedMessageMove',
+    result: { ok: true, value: { messageId: 'queued-1', status: 'moved' } }
   },
   {
     method: 'agentSession.queuedMessagesResume',
@@ -109,6 +114,15 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.options',
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
+  },
+  {
+    method: 'agentSession.continuationContext',
+    hostMethod: 'continuationContext',
+    result: {
+      status: 'current',
+      capturedText: 'Saved context',
+      transcriptPath: '/handoff/chat.txt'
+    }
   },
   {
     method: 'agentSession.modelCatalog',

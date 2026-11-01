@@ -83,7 +83,7 @@ export function GhosttyDiscoveryRow({
         onClick={() => onImport(preview)}
       >
         {importing
-          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing...')
+          ? translate('auto.components.onboarding.ThemeStep.ad19e5c916', 'Importing…')
           : translate('auto.components.onboarding.ThemeStep.248c812283', 'Import')}
       </button>
     </div>

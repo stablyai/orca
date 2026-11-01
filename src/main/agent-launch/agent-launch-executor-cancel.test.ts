@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
@@ -58,17 +59,13 @@ function harness(options: {
     calls.push('createTerminalAgent')
     return { handle: 'term_1', ...carried(args.startupPrompt) }
   })
-  const deliverStructuredPrompt = vi.fn(async () => {
-    calls.push('deliverStructuredPrompt')
-    return 'msg-1'
-  })
   const deliverTerminalPrompt = vi.fn(async (_args: { signal?: AbortSignal }) => {
     calls.push('deliverTerminalPrompt')
     return true
   })
   const runtime: AgentLaunchExecution['runtime'] = {
     requireStore: () => ({
-      getSettings: () => (options.structured ? { experimentalNativeChat: true } : null)
+      getSettings: () => (options.structured ? { nativeChatProviders: EVERY_AGENT_CHAT } : null)
     }),
     getStructuredAgentSessionCreateSupport
   }
@@ -84,7 +81,6 @@ function harness(options: {
         surfaces: {
           createStructuredSession,
           createTerminalAgent,
-          deliverStructuredPrompt,
           deliverTerminalPrompt
         },
         workspaces: { createWorktree, createRecoveryShell },

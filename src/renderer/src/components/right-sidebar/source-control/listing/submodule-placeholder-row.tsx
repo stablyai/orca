@@ -5,9 +5,9 @@ import { translate } from '@/i18n/i18n'
 import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX,
-  SUBMODULE_EMPTY_LABEL,
-  SUBMODULE_ERROR_LABEL,
-  SUBMODULE_LOADING_LABEL
+  getSubmoduleEmptyLabel,
+  getSubmoduleErrorLabel,
+  getSubmoduleLoadingLabel
 } from './row-layout'
 
 export function SubmodulePlaceholderRow({
@@ -21,15 +21,15 @@ export function SubmodulePlaceholderRow({
 }): React.JSX.Element {
   const fallback =
     state === 'error'
-      ? SUBMODULE_ERROR_LABEL
+      ? getSubmoduleErrorLabel()
       : state === 'empty'
-        ? SUBMODULE_EMPTY_LABEL
+        ? getSubmoduleEmptyLabel()
         : state === 'truncated'
           ? translate(
               'auto.components.right.sidebar.SourceControl.submoduleTruncated',
               'More submodule changes were omitted'
             )
-          : SUBMODULE_LOADING_LABEL
+          : getSubmoduleLoadingLabel()
   return (
     <div
       className={cn(

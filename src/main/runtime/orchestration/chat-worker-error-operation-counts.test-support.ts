@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import * as stopProjection from '../../native-chat/agent-session-journal/journal-stop-note-projection'
 import * as lineage from './structured-session-lineage'
-import * as journalPosition from '../../../shared/agent-session-journal-position'
-import * as liveTurn from '../../../shared/structured-agent-session-live-turn'
+import * as journalPosition from '../../../shared/agent-session/journal/agent-session-journal-position'
+import * as liveTurn from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
@@ -12,7 +12,7 @@ import {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 
 // Per-instance array reads count the actual find/iteration work without replacing the algorithms.
 function countedEntries<T>(entries: T[], visit: () => void): T[] {
@@ -75,8 +75,8 @@ export async function countChatFailureOperations(
       return result
     }
   )
-  const list = store.listRecords.bind(store)
-  vi.spyOn(store, 'listRecords').mockImplementation(() => {
+  const list = store.listConversations.bind(store)
+  vi.spyOn(store, 'listConversations').mockImplementation(() => {
     const records = list()
     counts.lineageCopied += records.length
     return records.map((record) => ({
@@ -87,7 +87,9 @@ export async function countChatFailureOperations(
       }
     }))
   })
-  vi.spyOn(lineage, 'readAgentSessionRecordStore').mockReturnValue(store)
+  vi.spyOn(lineage, 'readAgentSessionRecordStore').mockReturnValue(
+    lineage.conversationRecordReader(store)
+  )
   const visit = journal.visitItems.bind(journal)
   vi.spyOn(journal, 'visitItems').mockImplementation((callback) =>
     visit((...args) => {

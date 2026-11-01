@@ -1,3 +1,10 @@
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -14,7 +21,7 @@ import {
   type DeclinedStructuredLaunchTerminalOptions,
   type HostAdmittedStructuredLaunch,
   type StructuredLaunchTerminal
-} from '@/lib/structured-agent-session-launch-admission'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
@@ -24,13 +31,13 @@ import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,
   opensAtAction
-} from '../structured-agent-session-action-launch'
+} from './launch/structured-agent-session-action-launch'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
 import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
-} from '../structured-agent-session-launch-surface'
+} from './launch/structured-agent-session-launch-surface'
 
 type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: OpenedAgentSessionTab }
 
@@ -192,8 +199,16 @@ function beginLocalProvisionalLaunch(
   if (!worktreeId) {
     throw new Error('A provisional structured launch needs its workspace.')
   }
+  const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(handle.sessionId))
+  const position = nativeChatDraftPositions.get(draft)
+  const retirePosition = (target = structuredAgentSessionTabId(handle.sessionId)) => {
+    if (position?.at === 'end' && position.target === target) {
+      position.pending = false
+    }
+  }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {
+      retirePosition()
       handle.cancel()
       return null
     }
@@ -206,8 +221,14 @@ function beginLocalProvisionalLaunch(
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
+    afterPendingTab(tab.id, (shown) => {
+      if (!shown || !useAppStore.getState().getTab(shown)) {
+        retirePosition(tab.id)
+      }
+    })
     return { ...handle, tab }
   } catch (error) {
+    retirePosition()
     // Why: a launch without its owning surface would strand a late publication.
     handle.cancel()
     throw error

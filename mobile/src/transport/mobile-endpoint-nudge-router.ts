@@ -10,7 +10,6 @@ export class MobileEndpointNudgeRouter {
       isStopped: () => boolean
       isForeground: () => boolean
       setForeground: (foreground: boolean) => void
-      replaceRelay: () => void
       scheduleDirectProbe: () => void
     }
   ) {}
@@ -27,10 +26,7 @@ export class MobileEndpointNudgeRouter {
       }
       args.setForeground(true)
     }
-    const verdict = args.controller.handleActiveNudge(args.logical, reason)
-    if (verdict === 'replace') {
-      args.replaceRelay()
-    }
+    args.controller.handleActiveNudge(args.logical, reason)
     args.scheduleDirectProbe()
   }
 }

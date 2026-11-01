@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
-} from '../../../src/shared/agent-session-journal-item-key'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import { structuredAgentSessionStartFailureRowIdentity } from '../../../src/shared/structured-agent-session-start-failure-row-key'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { structuredAgentSessionStartFailureRowIdentity } from '../../../src/shared/agent-session/failures/structured-agent-session-start-failure-row-key'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { mobileNativeChatUnsentNotices } from './mobile-native-chat-unsent-notices'
 
 function submission(
@@ -48,22 +48,6 @@ const startRow: AgentJournalRenderItem = {
 }
 
 describe("the phone's line under a not-sent message", () => {
-  it.each([
-    ['claude', 'Claude'],
-    ['codex', 'Codex']
-  ])('names %s when its terminal holds the conversation', (agent, name) => {
-    const notices = mobileNativeChatUnsentNotices(
-      {
-        items: [],
-        submissions: [submission('held', { rejection: { kind: 'conversationOpenInTerminal' } })]
-      },
-      agent
-    )
-    expect(notices.get(agentJournalSubmissionKey('held'))).toBe(
-      `${name} is already running this conversation in another terminal. Quit ${name} there or close that terminal to continue here.`
-    )
-  })
-
   it("words each rejected message as the desktop does, naming the chat's agent", () => {
     const notices = mobileNativeChatUnsentNotices(
       {

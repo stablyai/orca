@@ -1,9 +1,10 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { resolveAgentSessionLaunchDirectory } from './agent-session-launch-directory'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
@@ -96,6 +97,7 @@ beforeEach(async () => {
 afterEach(async () => {
   statFault.error = null
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

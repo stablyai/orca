@@ -413,6 +413,7 @@ describe('shared agent-hook-listener', () => {
       state: 'working',
       agentType: 'antigravity'
     })
+    expect(event?.payload.mainAgent).toBeUndefined()
   })
 
   it('keeps Antigravity tool hooks active after a non-idle Stop for the same transcript', () => {
@@ -482,7 +483,7 @@ describe('shared agent-hook-listener', () => {
     expect(lateTool).toBeNull()
   })
 
-  // Event order captured from agy 1.4.7 running an in-process invoke_subagent (#17650).
+  // Event order captured from agy 1.4.7 (#17650); transcript contents below are synthetic, not origin evidence.
   it('keeps an Antigravity parent working until its own idle Stop when a subagent finishes', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-subagent-'))
     const writeTranscript = (name: string, request: string, reply: string): string => {
@@ -513,10 +514,10 @@ describe('shared agent-hook-listener', () => {
         'antigravity',
         { paneKey: PANE_KEY, hook_event_name: hookEventName, payload },
         'production'
-      )?.payload.state ?? null
+      )?.payload ?? null
 
     try {
-      const states = [
+      const events = [
         send('PreInvocation', parent),
         send('PreToolUse', { ...parent, toolCall: subagentCall }),
         send('PostToolUse', { ...parent, toolCall: subagentCall }),
@@ -526,7 +527,7 @@ describe('shared agent-hook-listener', () => {
         send('Stop', { ...child, fullyIdle: true }),
         send('PreInvocation', parent)
       ]
-      expect(states).toEqual([
+      expect(events.map((event) => event?.state ?? null)).toEqual([
         'working',
         'working',
         'working',
@@ -536,6 +537,8 @@ describe('shared agent-hook-listener', () => {
         null,
         'working'
       ])
+      // Held open for helpers, so the terminal's done for the parent's turn cannot settle it.
+      expect(events[4]?.mainAgent?.state).toBe('done')
 
       const done = normalizeHookPayload(
         state,
@@ -547,8 +550,13 @@ describe('shared agent-hook-listener', () => {
         state: 'done',
         lastAssistantMessage: 'Parent final report'
       })
+      expect(send('PostToolUse', { ...parent, toolCall: subagentCall })).toBeNull()
+      expect(send('PreInvocation', parent)?.state).toBe('working')
+      const nextStop = send('Stop', { ...parent, fullyIdle: false })
+      expect(nextStop?.state).toBe('working')
+      expect(nextStop?.mainAgent).toBeUndefined()
       expect(
-        send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })
+        send('PreInvocation', { conversationId: 'next-conversation', lastUserInput: 'next' })?.state
       ).toBe('working')
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })

@@ -1,13 +1,13 @@
 // Capture once at acceptance; afterward only child identity can exclude the accepted target.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopReachesUnrecordedWork } from './structured-agent-session-queued-stop'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionStoppedTurnId } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session-journal-turn-scope'
 
 /** close joins shutdown; starting ends startup; interrupt reaches live work; withdraw only settles queued sends. */
 export type ChatStopReach = 'close' | 'starting' | 'interrupt' | 'withdraw'
@@ -61,7 +61,12 @@ export function captureChatStopTarget(
     return { ...target, reach: 'starting', marks: true }
   }
   // An aborted send remains this Stop's work even after its rejected answer reaches the fold.
-  if (!child || (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx))) {
+  const canHaveGoal =
+    ctx.agent !== undefined && ctx.agents.capabilities(ctx.agent)?.threadGoal === true
+  if (
+    !child ||
+    (turnId === undefined && !input.stoppedSend && !isMainAgentWorking(ctx) && !canHaveGoal)
+  ) {
     return queued || input.stoppedPrePrompt ? { ...target, reach: 'withdraw', marks: true } : null
   }
   // Repeated Stop must not pause cards queued after the first press.

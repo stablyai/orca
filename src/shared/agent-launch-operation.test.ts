@@ -5,7 +5,7 @@ import {
   computeAgentLaunchFingerprint,
   type AgentLaunchFingerprintInput
 } from './agent-launch-operation'
-import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
+import { canonicalAgentSessionDigest } from './agent-session/lifecycle/agent-session-mutation-envelope'
 
 const BASE = {
   agent: 'claude',
@@ -22,6 +22,17 @@ function fingerprintOfWirePayload(
 }
 
 describe('fields the launch fingerprint covers', () => {
+  it('covers encoded chat choices while omission keeps the previous digest', () => {
+    expect(
+      computeAgentLaunchFingerprint({ ...BASE, chatOptions: { model: 'opus', fastMode: 'false' } })
+    ).not.toBe(computeAgentLaunchFingerprint(BASE))
+    expect(
+      computeAgentLaunchFingerprint({ ...BASE, chatOptions: { model: 'opus', fastMode: 'false' } })
+    ).not.toBe(
+      computeAgentLaunchFingerprint({ ...BASE, chatOptions: { model: 'opus', fastMode: 'true' } })
+    )
+  })
+
   it('separates two launches that differ only in agentArgs', () => {
     expect(computeAgentLaunchFingerprint({ ...BASE, agentArgs: '--model opus' })).not.toBe(
       computeAgentLaunchFingerprint({ ...BASE, agentArgs: '--model sonnet' })

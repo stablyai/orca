@@ -1,7 +1,9 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printOrchestrationReceipt } from './agent-view'
 import { RuntimeClientError } from '../../runtime-client'
+import type { ResetRemovedWork } from '../../../shared/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
+import { formatResetResult } from './removed-work-format'
 
 export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
   'orchestration reset': async ({ flags, client, json }) => {
@@ -14,7 +16,7 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         'Choose exactly one reset scope: --all, --tasks, or --messages.'
       )
     }
-    const result = await callOrchestrationMutation<{ reset: string }>(
+    const result = await callOrchestrationMutation<{ reset: string; removed?: ResetRemovedWork }>(
       client,
       flags,
       'orchestration.reset',
@@ -24,6 +26,6 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         messages: flags.has('messages') ? true : undefined
       }
     )
-    printResult(result, json, (value) => `Reset: ${value.reset}`)
+    printOrchestrationReceipt(result, { flags, json }, formatResetResult)
   }
 }

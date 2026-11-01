@@ -2,10 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionStatusEvent } from '../../../shared/agent-session/agent-session-wire'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
@@ -72,7 +72,7 @@ async function feedFor(location: AgentSessionExecutionLocation) {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([[SESSION, { journal, params: { location, provider: 'codex' } }]]),
-    getRecord: (sessionId) => store.getRecord(sessionId),
+    getConversation: (sessionId) => store.getConversation(sessionId),
     now: () => NOW
   })
   const events: AgentSessionStatusEvent[] = []

@@ -8,6 +8,8 @@ export type TerminalLeafMoveRequest = {
   leafId: string
   /** The PTY the renderer's pane is attached to now, when it has one. */
   ptyId: string | null
+  /** The caller cannot retire an emptied source tab, so the move must leave the source a pane. */
+  keepsSourcePane?: true
 }
 
 export type TerminalLeafMoveResult =
@@ -22,7 +24,12 @@ export type TerminalLeafMoveResult =
   | { status: 'not_held' }
   | {
       status: 'refused'
-      reason: 'invalid_request' | 'target_tab_exists' | 'pty_mismatch' | 'leaf_in_other_tab'
+      reason:
+        | 'invalid_request'
+        | 'target_tab_exists'
+        | 'pty_mismatch'
+        | 'leaf_in_other_tab'
+        | 'last_pane'
     }
 
 export function terminalLeafMovePaneKeys(request: TerminalLeafMoveRequest): {
@@ -48,6 +55,7 @@ export function isTerminalLeafMoveRequest(value: unknown): value is TerminalLeaf
     !isId(candidate.targetTabId) ||
     !isId(candidate.leafId) ||
     !(candidate.ptyId === null || isId(candidate.ptyId)) ||
+    !(candidate.keepsSourcePane === undefined || candidate.keepsSourcePane === true) ||
     candidate.sourceTabId === candidate.targetTabId
   ) {
     return false

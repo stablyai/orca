@@ -118,6 +118,8 @@ describe('stopManagedOrcadEnvironment', () => {
       readFileSync(getRuntimeEnvironmentSidecarPath(harness.userDataPath), 'utf8')
     ).not.toContain('orcadDeployment')
     expect(harness.current().orcadFence).toBeUndefined()
+    // Persisted with the release so a reload or relaunch cannot deploy a replacement.
+    expect(harness.current().managedServerRemoved).toBeDefined()
     expect(harness.flushes).toHaveLength(1)
     expect(mocks.retire).toHaveBeenCalledWith('environment-1')
     expect(mocks.closeTunnel).toHaveBeenCalledWith('environment-1')

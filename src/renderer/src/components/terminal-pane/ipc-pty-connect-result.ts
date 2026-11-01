@@ -1,4 +1,4 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session-resume'
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { PtyConnectResult } from './pty-transport-types'
 

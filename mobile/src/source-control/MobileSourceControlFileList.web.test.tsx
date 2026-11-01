@@ -44,6 +44,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
     sections: dirty
       ? [
           {
+            id: 'unstaged',
             area: 'unstaged',
             title: 'Changes',
             data: [
@@ -53,10 +54,13 @@ function fileListState(count: number, dirty: boolean): FileListState {
                 status: 'modified',
                 canOpen: true,
                 canStage: true,
+                canUnstage: false,
                 canDiscard: true,
                 stageActionId: 'stage:src/uncommitted.ts',
                 unstageActionId: 'unstage:src/uncommitted.ts',
-                discardActionId: 'discard:src/uncommitted.ts'
+                discardActionId: 'discard:src/uncommitted.ts',
+                conflictResolutions: [],
+                resolveActionId: 'resolve:src/uncommitted.ts'
               }
             ]
           }
@@ -73,6 +77,7 @@ function fileListState(count: number, dirty: boolean): FileListState {
     openFile: vi.fn(async () => {}),
     openBranchDiff: vi.fn(async () => {}),
     runGitAction: vi.fn(async () => true),
+    resolveConflict: vi.fn(async () => {}),
     setDiscardTarget: vi.fn()
   }
 }
@@ -99,7 +104,9 @@ describe('source-control file virtualization in the mobile web page', () => {
       for (const count of [1_000, 20_000]) {
         const state = fileListState(count, dirty)
         await act(async () => {
-          root.render(createElement(MobileSourceControlFileList, { key: count, state }))
+          root.render(
+            createElement(MobileSourceControlFileList, { key: count, state, bottomInset: 0 })
+          )
         })
         const rows = container.querySelectorAll('[aria-label^="Open committed change "]')
         mountedCounts.push(rows.length)

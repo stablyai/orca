@@ -1,6 +1,7 @@
+import { wslDistroForCommand } from '../../../shared/wsl-paths'
+export { wslDistroForCommand } from '../../../shared/wsl-paths'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import { parseWslPath } from '../../wsl'
 import { isWslDirectGitReadCommand } from '../wsl-direct-git-read-commands'
 import {
   disableWslGitReadEnvironment,
@@ -18,14 +19,6 @@ import type { GitExecOptions } from './git-exec-options'
 // Linux Git needs Windows-checkout settings; classify original args and inject only at spawn.
 function wslGitArgs(args: string[], options: GitExecOptions): string[] {
   return withWslWindowsCheckoutGitConfig(args, options.cwd, options.wslDistro)
-}
-
-/** The WSL distro a Git command with this cwd runs in, or null when it runs on the host. */
-export function wslDistroForCommand(cwd: string | undefined, override?: string): string | null {
-  if (process.platform !== 'win32') {
-    return null
-  }
-  return (cwd ? parseWslPath(cwd)?.distro : undefined) ?? override ?? null
 }
 
 export function resolveGitCommand(

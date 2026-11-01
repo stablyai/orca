@@ -3,23 +3,24 @@ import {
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
-import { realHomeCodexResumeEnvDeletion } from '../../../shared/ai-vault-resume-command'
 import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { managedDataAccountResumeEnv } from '../../../shared/managed-data-account-resume'
 import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
-import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import {
+  getAiVaultResumePlatform,
+  type AiVaultResumePlatformState
+} from '@/lib/ai-vault-resume-platform'
 import {
   buildAiVaultLocalResumeStartup,
   getAiVaultAgentProviderSession,
-  getAiVaultResumeCodexHome,
   type AiVaultResumeCommandSession,
   type AiVaultResumeHostShell,
   type AiVaultResumeStartup
 } from '../../../shared/ai-vault-resume-startup'
+import {
+  buildAiVaultRemoteResumeStartup,
+  resolveAiVaultResumeHostShell
+} from '../../../shared/ai-vault-resume-host-startup'
 
 export type {
   AiVaultResumeCommandSession,
@@ -28,17 +29,7 @@ export type {
 export { getAiVaultAgentProviderSession }
 
 export type AiVaultResumeWorktreeArgs = {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'projects'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  >
+  state: AiVaultResumePlatformState
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null
@@ -95,23 +86,9 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   assertAntigravityReferenceTarget(args)
-  const providerSession = getAiVaultAgentProviderSession(args.session)
-  if (
-    args.session.executionHostId &&
-    args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
-    args.session.resumeCommand &&
-    !isAntigravityReferenceSession(args.session) &&
-    args.session.agent !== 'omp' &&
-    !(args.session.agent === 'codex' && args.session.codexHome === null) &&
-    !args.commandOverride?.trim()
-  ) {
-    const accountEnv = managedDataAccountResumeEnv(args.session)
-    return {
-      command: args.session.resumeCommand,
-      ...(Object.keys(accountEnv).length > 0 ? { env: accountEnv } : {}),
-      ...realHomeCodexResumeEnvDeletion(args.session),
-      ...(providerSession ? { providerSession } : {})
-    }
+  const remote = buildAiVaultRemoteResumeStartup(args.session, args.commandOverride)
+  if (remote) {
+    return remote
   }
   const host = resolveAiVaultResumeHost(args)
   if (isAntigravityReferenceSession(args.session)) {
@@ -142,27 +119,14 @@ function buildAiVaultResumeForWorktree(
 }
 
 export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVaultResumeHostShell {
-  const isLocalSession =
-    !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
-  const platform =
-    !isLocalSession && args.session.executionHostPlatform
-      ? args.session.executionHostPlatform
-      : getAiVaultResumePlatform(args.state, args.worktreeId)
-  // Local shell settings cannot describe remote Windows hosts; preserve remote PowerShell-default quoting.
-  const liveShell: AgentStartupShell | undefined =
-    platform === 'win32'
-      ? isLocalSession
-        ? resolveAiVaultResumeStartupShell({
-            state: args.state,
-            worktreeId: args.worktreeId,
-            platform,
-            isLocalSession
-          })
-        : 'powershell'
-      : undefined
-  return {
-    platform,
-    codexHome: getAiVaultResumeCodexHome(args.session.codexHome, platform),
-    liveShell
-  }
+  return resolveAiVaultResumeHostShell({
+    session: args.session,
+    workspacePlatform: getAiVaultResumePlatform(args.state, args.worktreeId),
+    localLiveShell: (platform) =>
+      resolveAiVaultResumeStartupShell({
+        state: args.state,
+        worktreeId: args.worktreeId,
+        platform
+      })
+  })
 }

@@ -12,7 +12,7 @@ import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../shared/orcad-terminal-census'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import type { OrcadActivationRecord } from '../managed-server/activation/orcad-activation-record'
 import { ensureOrcadManagedTunnel } from '../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../managed-server/lifecycle/orcad-managed-serving-verify'

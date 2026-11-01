@@ -20,6 +20,7 @@ import { onPairedWebClientHost } from './paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
@@ -50,8 +51,9 @@ export type WorktreeOperationOwnerRecord = {
 }
 
 // settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
-export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
-  repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
+export type WorktreeOperationRouteState = Omit<FolderWorkspaceRuntimeOwnerState, 'repos'> & {
+  repos?: readonly (Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'> &
+    Partial<Pick<AppState['repos'][number], 'path' | 'projectGroupId'>>)[]
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
   runtimeEnvironmentCatalogHydrated?: boolean
@@ -173,6 +175,23 @@ function resolveSelectedHostRoute(
       })
     }
   }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(state, scope.folderWorkspaceId, selectedHost.id)
+  ) {
+    return {
+      kind: 'resolved',
+      route: {
+        executionHostId: selectedHost.id,
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForFolderWorkspace(
+          state,
+          scope.folderWorkspaceId,
+          selectedHost.id
+        )
+      }
+    }
+  }
   const hubOwners = collectHubOwnerEnvironmentIds(state, worktreeId, selectedHost.id)
   if (
     hubOwners.environmentIds.size > 1 ||
@@ -261,7 +280,7 @@ function resolveOwnerRouteResult(
   }
 
   // Every server row is stamped on arrival; focus cannot make an unstamped row remote.
-  const savedRuntimeIds = state.runtimeEnvironments?.map((environment) => environment.id.trim())
+  const savedRuntimes = state.runtimeEnvironments
   // A listed/detected worktree backed by an unstamped repo proves local identity, matching folder routing despite unrelated saved runtimes (#16733). Stamped rows routed above; a repo alone proves no worktree exists (#16841).
   const localOwnerRoute = hasKnownWorktree
     ? resolveUnstampedLocalWorktreeRoute(state, repoId)
@@ -271,9 +290,9 @@ function resolveOwnerRouteResult(
   }
   // Why: no saved runtime can publish a remote ownerless row; otherwise current detected presence affirms identity under the stamped-writer invariant.
   const mayBeLegacyLocal =
-    savedRuntimeIds === undefined ||
+    savedRuntimes === undefined ||
     (state.runtimeEnvironmentCatalogHydrated === true &&
-      (savedRuntimeIds.length === 0 || hasDetectedWorktree))
+      (savedRuntimes.length === 0 || hasDetectedWorktree))
   return mayBeLegacyLocal
     ? {
         kind: 'resolved',
@@ -312,7 +331,10 @@ function resolveFolderWorkspaceOperationRoute(
     kind: 'resolved',
     route: {
       executionHostId,
-      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+      runtimeEnvironmentId:
+        parsedHost?.kind === 'runtime'
+          ? parsedHost.environmentId
+          : getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId, executionHostId)
     }
   }
 }

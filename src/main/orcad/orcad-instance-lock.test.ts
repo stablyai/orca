@@ -10,7 +10,7 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
@@ -497,6 +497,77 @@ describe('acquireOrcadInstanceLock', () => {
       machineIdentity: 'machine-a'
     })
   })
+
+  describe.skipIf(process.platform === 'win32')(
+    'a machine cloned with this machine-id (#32918)',
+    () => {
+      const HOUR = 3_600_000
+      const sharedLinux = (overrides: OrcadInstanceLockHooks = {}) =>
+        hooks({
+          platform: 'linux',
+          dataRootIsOnLocalDisk: () => false,
+          incarnation: () => ({ linuxStartTicks: '1', bootId: 'boot-self' }),
+          now: () => new Date(),
+          bootStartedAtMs: () => Date.now() - HOUR,
+          ...overrides
+        })
+      const writeLock = (root: string, writtenAtMs: number, host: string): string => {
+        const lockPath = join(root, ORCAD_LOCK_FILE_NAME)
+        const acquiredAt = new Date(writtenAtMs).toISOString()
+        const clone = { machineIdentity: 'machine-a', bootId: 'boot-clone', host, acquiredAt }
+        writeFileSync(lockPath, JSON.stringify(persistedRecord(clone)))
+        utimesSync(lockPath, writtenAtMs / 1000, writtenAtMs / 1000)
+        return lockPath
+      }
+
+      it.each(['dev-clone', hostname()])(
+        'refuses its live lock, written since this boot, whatever its hostname (%s)',
+        (host) => {
+          const root = makeRoot()
+          const lockPath = writeLock(root, Date.now(), host)
+          expect(() => acquireOrcadInstanceLock(root, sharedLinux())).toThrow(
+            expect.objectContaining({
+              code: 'orcad_instance_lock_holder_unverifiable',
+              message: expect.stringContaining('systemd-machine-id-setup')
+            })
+          )
+          expect(readOrcadInstanceLockRecord(lockPath)?.nonce).toBe('stale')
+        }
+      )
+
+      it('reclaims a lock this machine wrote before its boot, though since renamed', () => {
+        const root = makeRoot()
+        writeLock(root, Date.now() - 2 * HOUR, 'old-name')
+        acquireOrcadInstanceLock(root, sharedLinux()).release()
+      })
+
+      it('reclaims a crashed clone’s lock once its heartbeat is stale', () => {
+        const root = makeRoot()
+        writeLock(root, Date.now() - 10 * 60_000, 'dev-clone')
+        acquireOrcadInstanceLock(root, sharedLinux()).release()
+      })
+
+      it('reclaims on a local disk, which only one machine can use', () => {
+        const root = makeRoot()
+        writeLock(root, Date.now(), 'dev-clone')
+        acquireOrcadInstanceLock(root, sharedLinux({ dataRootIsOnLocalDisk: () => true })).release()
+      })
+
+      it('keeps the lock’s mtime fresh while held', () => {
+        vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
+        try {
+          const root = makeRoot()
+          const lock = acquireOrcadInstanceLock(root, hooks())
+          const before = statSync(lock.path).mtimeMs
+          vi.advanceTimersByTime(2 * 60_000)
+          expect(statSync(lock.path).mtimeMs).toBeGreaterThan(before)
+          lock.release()
+        } finally {
+          vi.useRealTimers()
+        }
+      })
+    }
+  )
 
   it('never lets a confirmed reclaim take a lock another machine id holds', () => {
     const root = makeRoot()

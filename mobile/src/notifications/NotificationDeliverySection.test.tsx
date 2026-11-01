@@ -6,12 +6,20 @@ import { DEFAULT_NOTIFICATION_DELIVERY } from './notification-delivery-preferenc
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: {} }))
+vi.mock(
+  '../settings/settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listRowDouble
+)
 vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value },
   View: 'View',
-  Text: 'Text',
-  Switch: 'Switch'
+  Text: 'Text'
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 
 it('shows only phone-specific controls while desktop owns category eligibility', () => {
   const onChange = vi.fn()

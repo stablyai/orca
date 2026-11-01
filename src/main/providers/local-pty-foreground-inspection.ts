@@ -6,6 +6,7 @@ import {
   getStrictProcessTableSnapshotWithAge
 } from '../../shared/process-table-snapshot-reader'
 import { confirmShellForegroundProcess } from './agent-foreground-process'
+import { confirmFreshPtyForeground } from './pty-foreground-confirmation'
 import {
   createPtyForegroundResolver,
   ptyProcessNameIsSpawnFile
@@ -30,7 +31,6 @@ import {
   canRevalidateCachedAgentWithoutScan,
   judgeCachedAgentJobEvidence
 } from './windows-cached-agent-revalidation'
-import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
 /** Retired masters still report the spawn name; inspect the descriptor first so unreadability cannot prove idle. */
@@ -241,33 +241,46 @@ async function readPosixSteadyState(
   }
 }
 
-export async function confirmLocalPtyForegroundProcess(id: string): Promise<string | null> {
+export async function confirmLocalPtyForegroundProcess(
+  id: string,
+  decision = false
+): Promise<string | null> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return null
   }
   try {
-    const resolution = await createPtyForegroundResolver(proc)(
-      proc.pid,
-      resolveForegroundFallbackProcess(
+    const windowsDecision = decision && process.platform === 'win32'
+    const cached = ptyLastRecognizedForeground.get(id)
+    const anchor = cached ? { processName: cached.name, pid: cached.pid } : null
+    const { resolution, processName } = await confirmFreshPtyForeground({
+      process: proc,
+      fallbackProcess: resolveForegroundFallbackProcess(
         ptyProcessNameIsSpawnFile(proc) ? (getPtyShellName(id) ?? null) : proc.process || null,
         getPtyShellName(id)
       ),
-      {
-        contextPaths: ptyAgentForegroundContextPaths.get(id),
-        fresh: true,
-        ...(process.platform === 'win32'
-          ? {
-              forceProcessScan: true,
-              readWindowsConsoleAttachedProcessIds: () =>
-                readWindowsConsoleAttachedProcessIds(proc.pid)
-            }
-          : {})
-      }
-    )
+      contextPaths: ptyAgentForegroundContextPaths.get(id),
+      decision: windowsDecision,
+      anchor,
+      anchorAt: cached?.at
+    })
     // Why: a fresh scan can outlive this PTY id; never publish identity from an exited or same-id-reusing session.
     if (ptyProcesses.get(id) !== proc) {
       return null
+    }
+    if (windowsDecision) {
+      const recognized = recognizeAgentProcessFromCommandLine(resolution.processName ?? '')
+      if (resolution.available && recognized) {
+        ptyLastRecognizedForeground.set(id, {
+          name: recognized.processName,
+          pid: resolution.processId ?? null,
+          at: Date.now(),
+          steady: null
+        })
+      } else if (processName !== anchor?.processName) {
+        ptyLastRecognizedForeground.delete(id)
+      }
+      return processName
     }
     return resolution.available ? resolution.processName : null
   } catch {

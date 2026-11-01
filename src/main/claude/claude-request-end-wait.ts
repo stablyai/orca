@@ -1,6 +1,6 @@
 // Stop grace follows the provider request, including sends whose echo has not opened a turn yet.
 
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 /** Interrupt acknowledgement and request wind-down share this budget. */
 export const CLAUDE_STOP_GRACE_MS = 3_000

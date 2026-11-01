@@ -18,6 +18,7 @@ import {
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 import { withProjectRef } from './merge-request-project-resolution'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
 export async function addMRComment(
   repoPath: string,
@@ -72,7 +73,7 @@ export async function addMRComment(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -94,7 +95,7 @@ export async function addMRInlineComment(
     async (projectRef) => {
       const body = input.body.trim()
       if (!body) {
-        return { ok: false, error: 'Comment body is required' }
+        return codeHostFailure('gitlab.commentBodyRequired')
       }
       await acquire()
       try {
@@ -154,12 +155,12 @@ export async function addMRInlineComment(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -182,7 +183,7 @@ export async function resolveMRDiscussion(
     async (projectRef) => {
       const trimmedDiscussionId = discussionId.trim()
       if (!trimmedDiscussionId) {
-        return { ok: false, error: 'Discussion id is required' }
+        return codeHostFailure('gitlab.discussionIdRequired')
       }
       await acquire()
       try {
@@ -202,12 +203,12 @@ export async function resolveMRDiscussion(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }
@@ -272,12 +273,12 @@ export async function updateMRReviewers(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        return { ok: false, error: classifyGlabError(msg).message }
+        return classifiedFailure(classifyGlabError(msg))
       } finally {
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    codeHostFailure('gitlab.projectUnresolved'),
     localGitOptions
   )
 }

@@ -7,7 +7,7 @@ import {
   sendParams,
   SESSION
 } from './structured-agent-session-rpc.test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 /** Stops or retires work the caller already owns; none of these builds a host. */
 export const CLEANUP_METHODS = [
@@ -68,6 +68,10 @@ export const WORK_METHODS = [
   {
     method: 'agentSession.queuedMessageDelete',
     params: { envelope: envelope(), messageId: 'queued-1' }
+  },
+  {
+    method: 'agentSession.queuedMessageMove',
+    params: { envelope: envelope(), messageId: 'queued-1', beforeMessageId: null }
   },
   { method: 'agentSession.queuedMessagesResume', params: { envelope: envelope() } },
   {

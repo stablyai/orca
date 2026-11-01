@@ -93,6 +93,7 @@ export function installModuleMocks(
     }),
     existsSync: vi.fn((p: string) => fsState.present.has(fsKey(p))),
     mkdirSync: vi.fn(),
+    statSync: vi.fn(() => ({ mtimeMs: 0 })),
     readFileSync: vi.fn((p: string) => {
       const v = fsState.files.get(fsKey(p))
       if (v === undefined) {
@@ -160,6 +161,8 @@ export function installModuleMocks(
   // Model legacy unmarked stages; real SQLite merges have separate file-backed coverage.
   vi.doMock('../cookies/browser-cookie-staged-import', () => ({
     SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
+    InvalidStagedCookieImportError: class extends Error {},
+    isPermanentStagedCookieImportFailure: vi.fn(() => false),
     applyScopedStagedCookieImport: vi.fn(() => false),
     isScopedStagedCookieImport: vi.fn(() => false),
     removeCookieImportScopeMarker: vi.fn()

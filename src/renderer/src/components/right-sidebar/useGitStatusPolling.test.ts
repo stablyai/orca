@@ -429,6 +429,8 @@ describe('useGitStatusPolling', () => {
     const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
     GitStatusPollingHarness({ runPolling })
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+    // The mount's status had no user switch; the user then switches here, so the next status wakes.
+    ;(await import('@/lib/workspace-switch-user-act')).noteUserWorkspaceSwitch(worktree.id)
 
     expect(windowListeners.get('orca:worktree-file-change')?.length).toBe(1)
     emitWorktreeFileChange({
@@ -449,6 +451,8 @@ describe('useGitStatusPolling', () => {
     // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
+    // Only the first status after the user's own switch here may start its WSL distro (E9).
+    expect(gitStatus.mock.calls.map(([args]) => args?.wakeWslDistro)).toEqual([undefined, true])
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
     expect(window.api.fs.unwatchWorktree).not.toHaveBeenCalled()
 

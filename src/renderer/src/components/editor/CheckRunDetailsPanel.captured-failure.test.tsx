@@ -14,7 +14,8 @@ import {
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
+    fallback.replace(/{{(\w+)}}/g, (_match, key) => String(values?.[key] ?? ''))
 }))
 vi.mock('@/components/sidebar/CommentMarkdown', () => ({
   default: ({ content }: { content: string }) => content

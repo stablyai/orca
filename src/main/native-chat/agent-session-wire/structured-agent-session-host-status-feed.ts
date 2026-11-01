@@ -22,12 +22,16 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   now: () => number
   currentWork: StructuredAgentSessionSubagentRowsDeps['currentWork']
   deps: () => {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replacedRuntime' | 'listRecords'>
+    store: Pick<
+      AgentSessionRecordStore,
+      'getConversation' | 'replacedRuntime' | 'listConversations'
+    >
     logger: StructuredAgentSessionLogger
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
     conversationNaming?: StructuredAgentSessionConversationNaming
   }
+  onPublished?: StructuredAgentSessionStatusFeedDeps['onPublished']
   onAgentStarted?: (sessionId: string) => void
   onChildWorkChanged?: (sessionId: string) => void
 }): StructuredAgentSessionStatusFeed {
@@ -58,8 +62,9 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
     starting: args.starting,
-    getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
-    listRecords: () => args.deps().store.listRecords(),
+    onPublished: args.onPublished,
+    getConversation: (sessionId) => args.deps().store.getConversation(sessionId),
+    listConversations: () => args.deps().store.listConversations(),
     replacedRuntime: (sessionId) => args.deps().store.replacedRuntime(sessionId),
     now: args.now,
     logger: deferredStructuredAgentSessionLogger(() => args.deps().logger),

@@ -1,5 +1,7 @@
+import { readTerminalStartFailure } from '../../../shared/terminal-start-failure'
+import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
-import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session-host-authority'
+import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Store, PtyBindingSourceExpectation } from '../../persistence'
@@ -15,16 +17,12 @@ import {
   codexReattachedHomeRouteField,
   shouldSkipCodexHomeEnvForWindowsShell
 } from './host-env/codex-home'
-import { commitAttachedPtySize, type PtyGrid } from './delivery/attached-pty-size'
+import { commitAttachedPtySize } from './delivery/attached-pty-size'
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import { admitProviderReattachLaunchIdentity } from './pane/launch-authority'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
 import { admitPtySpawnOwnership, registerPersistedPtySpawn } from './pane/spawn-registration'
-import {
-  resolvePaneSpawnReservation,
-  type PaneSpawnReservation,
-  type PaneSpawnReservationResult
-} from './pane/spawn-reservation'
+import type { PtySpawnOutcome } from './spawn-outcome'
 import type { StablePaneOwner } from './pane/stable-owner'
 import { seedHeadlessTerminalFromSpawnResult } from './pane/terminal-spawn-restore'
 import type { RuntimePtySpawnArgs } from './runtime/spawn-state'
@@ -59,11 +57,9 @@ export type PtySpawnCommitState = {
   metadataLeafId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
   pendingRegistrationPtyId: string | null
-  paneSpawnReservationKey: string | null
-  paneSpawnReservation: PaneSpawnReservation | null
   effectiveSessionAppId: string | undefined
   stablePaneOwner: StablePaneOwner | null
-  sessionSizeBeforeAttach: PtyGrid | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   isDaemonHostSpawn: boolean
   codexResumeHomeSelected: boolean
   codexResumeUnavailable?: boolean
@@ -78,10 +74,10 @@ export type PtySpawnCommitState = {
   preSpawnHiddenMarkId: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null
   agentTeamsLeaderHandle?: string | null
-  exitedBeforeRegistration?: boolean
 }
 
-export type PtySpawnCommitInput<Reply extends PtySpawnResult> = {
+/** Process facts for the common commit; hidden delivery remains transport-owned. */
+export type PtySpawnCommitInput = {
   state: PtySpawnCommitState
   nativeWindowsConptySpawn: boolean
   /** Pane key the headless model seeds under. */
@@ -95,34 +91,25 @@ export type PtySpawnCommitInput<Reply extends PtySpawnResult> = {
     worktreeId: string | null | undefined
     shellOverride: string | undefined
     rendererLaunchAuthority: { launchToken: string; launchAgent: TuiAgent } | null
+    /** The agent a fresh spawn's launch command starts; null for reattaches, adoptions and shells. */
+    launchedAgent: TuiAgent | null
   }
   preAllocatedHandle: string | null | undefined
   spawnTiming?: PtySpawnTiming
   /** Validated pane key; serializer readiness, aliases and resume identity read it. */
   paneKey: string | null
   paneKeyAliases?: PtySpawnPaneKeyAliases
-  memorySessionId: string | null
   resumeArgvDropped: boolean
-  /** Window reports base environment; host reports its assembled environment. */
+  /** TEMPORARY (rows 14–18): window reports base env, host assembled env; launch-env follow-up. */
   codexLaunchEnv: Record<string, string> | undefined
   initiallyHidden: boolean
-  /** Renderer-scoped marks refresh here; runtime-owned marks refresh after commit. */
+  /** TEMPORARY: renderer marks refresh here, host marks after commit; terminal-transport follow-up. */
   hiddenDelivery: 'renderer-scoped' | 'runtime-owned'
-  /** Drain returns early exit and settles registration; throw leaves cleanup to the runner. */
-  earlyExit: 'drain' | 'throw'
-  joinPayload: { reservation: PaneSpawnReservationResult; reply: Reply }
+  response: PtySpawnOutcome['result']
 }
 
-/** The one commit for a freshly started process, run inside the OpenCode prompt-intent wrapper. */
-export function commitPtySpawn<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply> & { earlyExit: 'throw' }
-): Promise<Reply | Awaited<ReturnType<typeof commitAdoptedAgentSession>>>
-export function commitPtySpawn<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply>
-): Promise<Reply | PtySpawnResult>
-export async function commitPtySpawn<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply>
-): Promise<Reply | PtySpawnResult> {
+/** The one commit for a freshly started process, run inside the prompt-intent wrapper. */
+export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpawnOutcome> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -157,6 +144,7 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
       runtime,
       registration.store,
       state.pendingRegistrationClaim,
+      result,
       result.id,
       registration.worktreeId,
       null,
@@ -173,19 +161,19 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
             ...(registration.rendererLaunchAuthority
               ? { agentLaunchAuthority: registration.rendererLaunchAuthority }
               : {}),
+            ...(registration.launchedAgent ? { launchedAgent: registration.launchedAgent } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,
       shouldSkipCodexHomeEnvForWindowsShell(registration.shellOverride, state.cwd)
     )
     if (rejectedRegistration) {
-      if (input.earlyExit === 'throw') {
-        return await rejectedRegistration
-      }
+      let terminalStartFailure
       await rejectedRegistration.catch((error: unknown) => {
         if (!(error instanceof Error) || error.message !== 'agent_session_exited_during_start') {
           throw error
         }
+        terminalStartFailure = readTerminalStartFailure(error)
       })
       runtime?.cancelPendingPtyRegistration?.(
         result.id,
@@ -193,39 +181,29 @@ export async function commitPtySpawn<Reply extends PtySpawnResult>(
         state.pendingRegistrationClaim
       )
       state.pendingRegistrationPtyId = null
-      state.exitedBeforeRegistration = true
-      // The renderer drains this incarnation's buffered output and exit without publishing it live.
-      return resolvePaneSpawnReservation(
-        state.paneSpawnReservationKey,
-        state.paneSpawnReservation,
-        input.joinPayload.reply
-      )
+      return {
+        kind: 'registration-exited',
+        result: input.response,
+        ...(terminalStartFailure ? { terminalStartFailure } : {})
+      }
     }
-  } else if (input.earlyExit === 'throw') {
-    // Worktree-less PTYs have no later surface-registration step to clear admission.
-    runtime?.cancelPendingPtyRegistration?.(
-      result.id,
-      result.incarnationId,
-      state.pendingRegistrationClaim
-    )
   } else if (state.pendingRegistrationPtyId) {
     runtime?.cancelPendingPtyRegistration?.(
       state.pendingRegistrationPtyId,
       result.incarnationId,
       state.pendingRegistrationClaim
     )
-  }
-  if (input.earlyExit === 'drain') {
     state.pendingRegistrationPtyId = null
   }
   return publishCommittedPtySpawn(input)
 }
 
-function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply>,
+/** An adopted claim attaches to a live owner: it publishes the owner's surface, not a new pane. */
+async function commitAdoptedAgentSession(
+  input: PtySpawnCommitInput,
   adopted: AgentSessionClaimedSpawnResult,
   providerReattachLaunchIdentity: ReturnType<typeof admitProviderReattachLaunchIdentity>
-): PtySpawnResult | Promise<never> {
+): Promise<PtySpawnOutcome> {
   const { state } = input
   const { result } = state
   const runtime = state.deps.runtime
@@ -236,6 +214,7 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
     runtime,
     input.registration.store,
     state.pendingRegistrationClaim,
+    adoptedResult,
     result.id,
     surface.worktreeId,
     null,
@@ -264,13 +243,11 @@ function commitAdoptedAgentSession<Reply extends PtySpawnResult>(
   commitAttachedPtySize({
     result: adoptedResult,
     requested: { cols: state.args.cols, rows: state.args.rows },
-    cachedBeforeAttach: state.sessionSizeBeforeAttach,
+    cachedBeforeAttach: state.provisionalPtySize?.cachedBeforeAttach,
     reflowHeadlessTerminalToPtyGrid: runtime?.reflowHeadlessTerminalToPtyGrid?.bind(runtime)
   })
-  resolvePaneSpawnReservation(
-    state.paneSpawnReservationKey,
-    state.paneSpawnReservation,
-    adoptedResult
-  )
-  return adoptedResult
+  return {
+    kind: 'adopted',
+    result: { ...input.response, isReattach: true, agentSessionEnsure: adopted }
+  }
 }

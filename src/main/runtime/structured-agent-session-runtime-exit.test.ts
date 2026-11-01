@@ -1,3 +1,4 @@
+import { openTestChats } from '../native-chat/agent-session-wire/structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +8,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
@@ -18,7 +19,7 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
 
 describe('structured session runtime provider-exit wiring', () => {
@@ -90,7 +91,7 @@ describe('structured session runtime provider-exit wiring', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection)
     })
@@ -191,7 +192,7 @@ describe('structured session runtime provider-exit wiring', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection)
     })
@@ -222,11 +223,11 @@ describe('structured session runtime provider-exit wiring', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection)
     })
-    await restarted.restoreReadableSessions()
+    await openTestChats(restarted)
     const history = await restarted.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
     expect(restarted.deps.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual(
@@ -296,7 +297,7 @@ describe('structured session runtime provider-exit wiring', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection)
     })
@@ -401,7 +402,7 @@ describe('structured session runtime provider-exit wiring', () => {
       resolveWorkspacePath: async () => root!,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection)
     })

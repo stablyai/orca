@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from 'react'
 import type { AgentChildRowContext } from '../../../src/shared/agent-child-row-model'
-import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { agentChildRowContextForSessionStream } from '../../../src/shared/agent-child-row-stream-context'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView
 } from '../../../src/shared/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../src/shared/structured-session-foreground-commands'
 import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 
@@ -31,9 +32,15 @@ export function useMobileStructuredBackgroundTasks(args: {
   mutate: MobileStructuredAgentMutate
 }): MobileStructuredBackgroundTasks {
   const { connected, mutate, sessionKey, state, turnId } = args
+  const { backgroundTasks, items, latestTurn } = state
   const view = useMemo(
-    () => structuredSessionBackgroundTasksView(state.backgroundTasks, turnId),
-    [state.backgroundTasks, turnId]
+    () =>
+      structuredSessionBackgroundTasksView(
+        backgroundTasks,
+        turnId,
+        structuredSessionForegroundCommands(backgroundTasks, { items, latestTurn })
+      ),
+    [backgroundTasks, items, latestTurn, turnId]
   )
   // Keep the roster through stream failure without claiming its tasks still run.
   const streamLive = connected && state.status === 'ready'

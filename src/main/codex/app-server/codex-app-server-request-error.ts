@@ -1,4 +1,7 @@
-import { providerDiagnostic, type ProviderDiagnostic } from '../../../shared/agent-session-failure'
+import {
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../../shared/agent-session/failures/agent-session-failure'
 
 /** Codex answered the call and refused it, rather than timing out or exiting. */
 export class CodexAppServerRequestError extends Error {

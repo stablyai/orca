@@ -19,13 +19,19 @@ export function createOrchestrationRpcHarness() {
   let dbOpen = false
   let runtime: OrcaRuntimeService
   let activeRunId: string | undefined
+  let databasePath = ':memory:'
 
   const coordinatorPaneKey = COORDINATOR_PANE_KEY
 
-  function setup(withBoundRun = true): OrchestrationRpcState {
-    db = new OrchestrationDb(':memory:')
+  function setup(
+    withBoundRun = true,
+    store: ConstructorParameters<typeof OrcaRuntimeService>[0] = null,
+    path = ':memory:'
+  ): OrchestrationRpcState {
+    databasePath = path
+    db = new OrchestrationDb(path)
     dbOpen = true
-    runtime = new OrcaRuntimeService()
+    runtime = new OrcaRuntimeService(store)
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
@@ -98,5 +104,12 @@ export function createOrchestrationRpcHarness() {
     return method.handler(parsed, ctx)
   }
 
-  return { coordinatorPaneKey, setup, cleanup, findMethod, call }
+  function reopenDatabase(): OrchestrationDb {
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    runtime.setOrchestrationDb(db)
+    return db
+  }
+
+  return { coordinatorPaneKey, setup, cleanup, findMethod, call, reopenDatabase }
 }

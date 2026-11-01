@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 import { dirname, joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
 import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 
@@ -43,44 +44,59 @@ export function useUntitledFileRename({
       if (!renameDialogFile) {
         return
       }
-      const oldPath = renameDialogFile.filePath
-      const worktreeRoot = getUntitledFileRoot(renameDialogFile)
-      const newPath = joinPath(worktreeRoot, newRelPath)
-      const fileContext = getEditorFileOperationContext(
-        useAppStore.getState(),
-        renameDialogFile,
-        worktreeRoot
-      )
+      try {
+        const oldPath = renameDialogFile.filePath
+        const worktreeRoot = getUntitledFileRoot(renameDialogFile)
+        const newPath = joinPath(worktreeRoot, newRelPath)
+        const acquisition = acquireEditorFileOperation(useAppStore.getState, renameDialogFile)
+        const fileContext = { ...acquisition.mutationContext(), worktreePath: worktreeRoot }
 
-      if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
-        setRenameError('A file with that name already exists')
-        return
-      }
-
-      await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
-      const draft = useAppStore.getState().editorDrafts[renameDialogFile.id]
-      if (draft !== undefined) {
-        try {
-          await requestEditorFileSave({ fileId: renameDialogFile.id, fallbackContent: draft })
-        } catch {
-          setRenameError('Failed to save file')
+        const destinationExists =
+          newPath !== oldPath && (await runtimePathExists(fileContext, newPath))
+        acquisition.assertCurrent()
+        if (destinationExists) {
+          setRenameError(
+            translate(
+              'auto.components.editor.UntitledFileRenameDialog.nameTaken',
+              'A file with that name already exists'
+            )
+          )
           return
         }
-      }
 
-      if (newPath === oldPath) {
-        clearUntitled(renameDialogFile.id)
-        closeRenameDialog()
-        return
-      }
+        await requestEditorSaveQuiesce({ fileId: renameDialogFile.id })
+        acquisition.assertCurrent()
+        const draft = useAppStore.getState().editorDrafts[renameDialogFile.id]
+        if (draft !== undefined) {
+          try {
+            await requestEditorFileSave({ fileId: renameDialogFile.id, fallbackContent: draft })
+          } catch {
+            setRenameError(
+              translate(
+                'auto.components.editor.UntitledFileRenameDialog.saveFailed',
+                'Failed to save file'
+              )
+            )
+            return
+          }
+        }
 
-      const newDir = dirname(newPath)
-      if (newDir !== worktreeRoot && !(await runtimePathExists(fileContext, newDir))) {
-        await createRuntimePath(fileContext, newDir, 'directory')
-      }
+        acquisition.assertCurrent()
+        if (newPath === oldPath) {
+          clearUntitled(renameDialogFile.id)
+          closeRenameDialog()
+          return
+        }
 
-      try {
-        // Rekey in place so explicit rename consumes untitled status without closing/reopening the tab.
+        const newDir = dirname(newPath)
+        if (newDir !== worktreeRoot && !(await runtimePathExists(fileContext, newDir))) {
+          acquisition.assertCurrent()
+          await createRuntimePath(fileContext, newDir, 'directory')
+        }
+        acquisition.assertCurrent()
+
+        // Retarget the untitled tab in place (the coordinator's rekey consumes
+        // its untitled status on this explicit rename), instead of close+reopen.
         await executeOpenEditorPathMove({
           context: fileContext,
           fromPath: oldPath,
@@ -88,11 +104,10 @@ export function useUntitledFileRename({
           worktreeId: renameDialogFile.worktreeId,
           worktreePath: worktreeRoot
         })
+        closeRenameDialog()
       } catch (err) {
         setRenameError(err instanceof Error ? err.message : 'Failed to rename file')
-        return
       }
-      closeRenameDialog()
     },
     [clearUntitled, closeRenameDialog, renameDialogFile]
   )

@@ -1,14 +1,16 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
+import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
+import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../shared/onboarding-state-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
-  nativeChatUpgradeTipVariant,
-  parseNativeChatUpgradeTipAudience,
-  type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat-upgrade-tip-audience'
+  chatUiLaunchTipVariant,
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipVariant
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
@@ -103,7 +105,7 @@ export class ProfilePreferences {
         rollback: () => {
           const currentEntries = new Map(Object.entries(runtime.state.settings))
           const nextEntries = new Map(Object.entries(next))
-          const restoredUpdates = Object.fromEntries(
+          const restoredUpdates: Record<string, unknown> = Object.fromEntries(
             Object.entries(previous).filter(
               ([key]) =>
                 updateKeys.has(key) && Object.is(currentEntries.get(key), nextEntries.get(key))
@@ -116,8 +118,13 @@ export class ProfilePreferences {
               Object.is(currentEntries.get(key), nextEntries.get(key))
             ) {
               Reflect.deleteProperty(restoredSettings, key)
+              restoredUpdates[key] = undefined
             }
           }
+          createAgentModelCatalogSettingsExpiry(agentModelCatalogStore, runtime.state.settings)(
+            restoredUpdates,
+            restoredSettings
+          )
           runtime.state.settings = restoredSettings
           retireAtRestCommandSettings(updateKeys)
         }
@@ -174,10 +181,10 @@ export class ProfilePreferences {
     return this.getOnboarding()
   }
 
-  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
-    return nativeChatUpgradeTipVariant(
-      parseNativeChatUpgradeTipAudience(
-        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
+  getChatUiLaunchTipVariant(): ChatUiLaunchTipVariant {
+    return chatUiLaunchTipVariant(
+      parseChatUiLaunchTipAudience(
+        this[profilePreferencesContext].runtime.state.chatUiLaunchTipAudience
       )
     )
   }
@@ -220,7 +227,12 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   }
   const ui = owner.getUI()
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
-    listener(ui)
+    // State is already applied; a broadcast failure must not fail the update (e.g. the shutdown checkpoint).
+    try {
+      listener(ui)
+    } catch (error) {
+      console.error('[preferences] UI change listener failed:', error)
+    }
   }
 }
 

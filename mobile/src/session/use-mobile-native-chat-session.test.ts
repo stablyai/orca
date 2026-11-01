@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   useMobileNativeChatSession,
@@ -145,7 +145,13 @@ describe('useMobileNativeChatSession', () => {
       expect(state?.hasMore).toBe(false)
       expect(sendRequest).toHaveBeenLastCalledWith(
         'nativeChat.readSession',
-        { agent: 'claude', sessionId: 'session', limit: 40, beforeOffset: 50 },
+        {
+          agent: 'claude',
+          sessionId: 'session',
+          limit: 40,
+          beforeOffset: 50,
+          capabilities: { transcriptSourceOrder: 1 }
+        },
         expect.objectContaining({ budgetSpansConnect: true })
       )
       await act(async () => state?.loadEarlier())
@@ -167,7 +173,13 @@ describe('useMobileNativeChatSession', () => {
       expect(sendRequest).toHaveBeenCalledTimes(requestsAtCap + 1)
       expect(sendRequest).toHaveBeenLastCalledWith(
         'nativeChat.readSession',
-        { agent: 'claude', sessionId: 'session', limit: 60, beforeOffset: 500 },
+        {
+          agent: 'claude',
+          sessionId: 'session',
+          limit: 60,
+          beforeOffset: 500,
+          capabilities: { transcriptSourceOrder: 1 }
+        },
         expect.objectContaining({ budgetSpansConnect: true })
       )
     }
@@ -295,7 +307,12 @@ describe('useMobileNativeChatSession', () => {
 
     expect(sendRequest).toHaveBeenCalledWith(
       'nativeChat.readSession',
-      { agent: 'claude', sessionId: 'session', limit: 100 },
+      {
+        agent: 'claude',
+        sessionId: 'session',
+        limit: 100,
+        capabilities: { transcriptSourceOrder: 1 }
+      },
       expect.objectContaining({ budgetSpansConnect: true })
     )
   })
@@ -462,7 +479,12 @@ describe('useMobileNativeChatSession', () => {
 
     expect(sendRequest).toHaveBeenLastCalledWith(
       'nativeChat.readSession',
-      { agent: 'claude', sessionId: 'session', limit: 130 },
+      {
+        agent: 'claude',
+        sessionId: 'session',
+        limit: 130,
+        capabilities: { transcriptSourceOrder: 1 }
+      },
       expect.objectContaining({ budgetSpansConnect: true })
     )
   })
@@ -673,7 +695,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
 
     expect(subscribe).toHaveBeenCalledWith(
       'nativeChat.subscribe',
-      expect.objectContaining({ capabilities: { transcriptPending: 1 } }),
+      expect.objectContaining({ capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 } }),
       expect.any(Function)
     )
     expect(renders.at(-1)).toMatchObject({

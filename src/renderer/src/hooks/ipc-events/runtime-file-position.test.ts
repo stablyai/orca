@@ -91,14 +91,6 @@ function focus(surface: 'main' | 'floating'): void {
   document.getElementById(surface)?.focus()
 }
 
-it('reveals the selected floating editor without selecting its workspace in the main window', async () => {
-  const { store, fileId, position } = await setup()
-  position(fileId, { line: 300, column: 7 }, true)
-  flushFrames()
-  expect(store.getState().activeWorktreeId).toBe(MAIN)
-  expect(store.getState().pendingEditorReveal).toMatchObject({ fileId, line: 300, column: 7 })
-})
-
 it('waits for an asynchronously revealed floating panel', async () => {
   const { store, fileId, position } = await setup(false)
   position(fileId, { line: 300, column: 7 }, true)

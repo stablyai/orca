@@ -127,19 +127,25 @@ export function CommitMessageAiPane({
   }
   const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
+  const writeImmediateConfig = (patch: SourceControlAiSettingsPatch): void => {
+    void writeConfig(patch).catch((error: unknown) => {
+      console.error('Failed to update settings:', error)
+    })
+  }
+
   const onToggleEnabled = (): void => {
-    void writeConfig({ enabled: !config.enabled })
+    writeImmediateConfig({ enabled: !config.enabled })
   }
 
   const onCustomCommandChange = (value: string): void => {
-    void writeConfig({ customAgentCommand: value })
+    writeImmediateConfig({ customAgentCommand: value })
   }
 
   const onPrDefaultChange = (
     key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>,
     value: boolean
   ): void => {
-    void writeConfig((current) => ({
+    writeImmediateConfig((current) => ({
       prCreationDefaults: {
         ...current.prCreationDefaults,
         [key]: value

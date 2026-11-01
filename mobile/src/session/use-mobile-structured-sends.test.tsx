@@ -3,14 +3,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   acceptedSubmission,
@@ -60,11 +60,13 @@ describe('a structured send in the open chat', () => {
   let listener: ((value: unknown) => void) | null = null
   let answer: (id: string) => unknown = () => null
   const onSendError = vi.fn()
-  const sendRequest = vi.fn<RpcClient['sendRequest']>()
+  const sendRequest = vi.fn<RpcClient['sendRequest']>(async () => ok({}))
   const client: RpcClient = {
     sendRequest,
     subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-      listener = onData
+      if (_method === 'agentSession.subscribe') {
+        listener = onData
+      }
       return vi.fn()
     }),
     updateTerminalSubscriptionViewport: () => {},

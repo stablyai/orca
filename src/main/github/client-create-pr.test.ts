@@ -30,12 +30,16 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: vi.fn(),
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
-  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: vi.fn((repoPath: string, connectionId?: string | null, options = {}) => ({
+    ...options,
     repoPath,
     connectionId: connectionId ?? null
   })),
-  ghRepoExecOptions: vi.fn((context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+  ghRepoExecOptions: vi.fn(
+    (context: { repoPath: string; connectionId?: string | null; wslDistro?: string }) =>
+      context.connectionId
+        ? {}
+        : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
   ),
   gitExecFileAsync: vi.fn(),
   extractExecError: extractExecErrorMock,
@@ -387,6 +391,7 @@ describe('createGitHubPullRequest', () => {
       ok: false,
       code: 'already_exists',
       error: 'A pull request already exists for this branch.',
+      reason: 'existing_review',
       existingReview: {
         number: 44,
         url: 'https://github.com/acme/widgets/pull/44'
@@ -432,7 +437,8 @@ describe('createGitHubPullRequest', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'validation',
-      error: 'Create PR failed: choose a different base branch before creating a pull request.'
+      error: 'Create PR failed: choose a different base branch before creating a pull request.',
+      reason: 'same_base_branch'
     })
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()

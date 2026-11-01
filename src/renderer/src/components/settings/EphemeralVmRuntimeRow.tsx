@@ -2,6 +2,7 @@ import { AlertTriangle, Copy, Loader2, Square, Trash2 } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../shared/ephemeral-vm-recipes'
 import { translate } from '@/i18n/i18n'
+import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 
@@ -29,6 +30,7 @@ export function EphemeralVmRuntimeRow({
   onCopyCleanupCommand
 }: EphemeralVmRuntimeRowProps): React.JSX.Element {
   const hasError = cleanupFailed || runtime.status === 'failed'
+  const cleanupError = ephemeralVmCleanupErrorText(runtime)
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div
@@ -48,8 +50,8 @@ export function EphemeralVmRuntimeRow({
         <p className="truncate text-xs text-muted-foreground">
           {runtime.recipeId} · {getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)}
         </p>
-        {runtime.cleanupLastError ? (
-          <p className="mt-0.5 truncate text-xs text-destructive">{runtime.cleanupLastError}</p>
+        {cleanupError ? (
+          <p className="mt-0.5 truncate text-xs text-destructive">{cleanupError}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">

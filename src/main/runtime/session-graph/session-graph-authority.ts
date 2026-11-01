@@ -1,3 +1,11 @@
+import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspace-execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/protocol-version'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
@@ -6,9 +14,15 @@ import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-s
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import {
   assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
+  getResolvedFolderWorkspacePathStatus,
   inferFolderWorkspacePathConnection
 } from '../../project-groups/folder-workspace-path-status'
+import {
+  blockedWslDistroForPath,
+  runAsWslUserAct,
+  wslDistroForPath
+} from '../../wsl/wsl-unc-access-gate'
+import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
@@ -117,57 +131,113 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return connection.kind === 'ssh' ? connection.connectionId : null
   }
 
+  /** `wslUserAct`: the user's start, so its folder check may start a stopped WSL distro (E9). */
   protected async resolveFolderWorkspaceLaunchScope(
-    selector: string
+    selector: string,
+    options: { wslUserAct?: boolean } = {},
+    resolvedFolder?: FolderWorkspace,
+    checkPath = true
   ): Promise<(TerminalWorkspaceLaunchScope & { folderWorkspace: FolderWorkspace }) | null> {
-    const workspace = this.resolveFolderWorkspaceSelector(selector)
+    const workspace = resolvedFolder ?? this.resolveFolderWorkspaceSelector(selector)
     if (!workspace) {
       return null
     }
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const status = await getFolderWorkspacePathStatus(this.store, {
-      scope: 'folder-workspace',
-      folderWorkspaceId: workspace.id
-    })
-    assertFolderWorkspacePathUsable(status)
+    const host = parseExecutionHostId(workspace.executionHostId)
+    if (resolvedFolder && host?.kind === 'runtime' && checkPath) {
+      throw new Error(WORKSPACE_ON_OTHER_RUNTIME)
+    }
+    const connectionId = getRepoSshConnectionId(workspace)
+    if (checkPath) {
+      const readStatus = () =>
+        getResolvedFolderWorkspacePathStatus(workspace, getRepoExecutionHostId(workspace))
+      if (options.wslUserAct) {
+        assertFolderWorkspacePathUsable(
+          await runAsWslUserAct(wslDistroForPath(workspace.folderPath), readStatus)
+        )
+      } else {
+        // Background work holds with Start, before any physical folder check.
+        const blocked = await blockedWslDistroForPath(workspace.folderPath)
+        if (blocked) {
+          throw new Error(wslDistroHoldMessage(blocked.distro, blocked.state))
+        }
+        assertFolderWorkspacePathUsable(await readStatus())
+      }
+    }
     return {
       id: folderWorkspaceKey(workspace.id),
       path: workspace.folderPath,
-      connectionId: this.resolveFolderWorkspaceConnectionId(workspace),
+      connectionId,
       repo: null,
       folderWorkspace: workspace
     }
   }
 
-  protected resolveFolderWorkspaceSelector(selector: string): FolderWorkspace | null {
+  protected resolveFolderWorkspaceSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): FolderWorkspace | null {
     const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(workspaceSelector)
     if (parsed?.type !== 'folder') {
       return null
     }
-    const workspace = this.store
-      ?.getFolderWorkspaces?.()
-      .find((entry) => entry.id === parsed.folderWorkspaceId)
-    if (!workspace) {
-      throw new Error('selector_not_found')
+    const result = resolveQualifiedFolderWorkspaceResult(
+      {
+        folderWorkspaces: this.store?.getFolderWorkspaces?.() ?? [],
+        projectGroups: this.store?.getProjectGroups?.() ?? [],
+        repos: this.store?.getRepos() ?? []
+      },
+      parsed.folderWorkspaceId,
+      requiredHostId
+    )
+    if (result.kind !== 'selected') {
+      throw new Error(result.kind === 'missing' ? 'selector_not_found' : 'selector_ambiguous')
     }
-    return workspace
+    const selected = result.value
+    return {
+      ...selected.workspace,
+      executionHostId: selected.hostId,
+      connectionId: selected.connectionId
+    }
+  }
+
+  /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
+  protected async resolveWorkspaceSelector(
+    selector: string,
+    options: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId } = {}
+  ): Promise<ResolvedWorktree> {
+    const selectedFolder = this.resolveFolderWorkspaceSelector(selector, options.requiredHostId)
+    const folderWorkspace = options.requireUsableFolderPath
+      ? (await this.resolveFolderWorkspaceLaunchScope(selector, {}, selectedFolder ?? undefined))
+          ?.folderWorkspace
+      : selectedFolder
+    return folderWorkspace
+      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      : this.resolveGitWorktreeSelector(selector, options.requiredHostId)
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
-    const folderWorkspace = this.resolveFolderWorkspaceSelector(selector)
-    return folderWorkspace
-      ? folderWorkspaceKey(folderWorkspace.id)
-      : (await this.resolveWorktreeSelector(selector)).id
+    const key = selector.startsWith('id:') ? selector.slice(3) : selector
+    const parsed = parseWorkspaceKey(key)
+    // Emulator association needs a unique folder identity, not a physical launch host.
+    if (parsed?.type === 'folder') {
+      const rows =
+        this.store
+          ?.getFolderWorkspaces?.()
+          .filter((workspace) => workspace.id === parsed.folderWorkspaceId) ?? []
+      if (rows.length !== 1) {
+        throw new Error(rows.length ? 'selector_ambiguous' : 'selector_not_found')
+      }
+      return folderWorkspaceKey(rows[0].id)
+    }
+    return (await this.resolveWorkspaceSelector(selector)).id
   }
 
-  protected async resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
-    const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
-    return folderScope?.folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace)
-      : this.resolveWorktreeSelector(selector)
+  protected resolveBrowserWorkspace(selector: string): Promise<ResolvedWorktree> {
+    return this.resolveWorkspaceSelector(selector, { requireUsableFolderPath: true })
   }
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */

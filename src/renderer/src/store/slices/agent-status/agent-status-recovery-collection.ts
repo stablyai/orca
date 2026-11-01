@@ -1,13 +1,13 @@
 import type { AppState } from '../../types'
-import '../../../../../shared/agent-session-resume'
+import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   normalizePaneKeySet,
   paneKeyMatchesAnyTabPrefix,
   retainedAgentEntryFromLive
-} from '../agent-status-pane-key-tab-binding'
+} from './agent-status-pane-key-tab-binding'
 import {
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
@@ -16,7 +16,7 @@ import {
   sleepingRecordFromEntry,
   type CollectSleepingAgentSessionRecordsOptions
 } from './agent-status-sleeping-records'
-import { getLaunchConfigForEntry } from '../agent-status-launch-config'
+import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-main-agent-verdict'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/live-resume-anchor-record'
 

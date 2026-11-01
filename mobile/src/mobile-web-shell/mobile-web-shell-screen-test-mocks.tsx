@@ -8,6 +8,17 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
   return {
     'react-native': () => ({
       ActivityIndicator: 'ActivityIndicator',
+      AppState: {
+        currentState: 'active',
+        addEventListener: (_name: string, listener: (state: string) => void) => {
+          dependencies.appStateListeners.add(listener)
+          return {
+            remove: () => {
+              dependencies.appStateListeners.delete(listener)
+            }
+          }
+        }
+      },
       AccessibilityInfo: {
         isReduceMotionEnabled: () => Promise.resolve(false),
         addEventListener: () => ({ remove: () => {} })
@@ -111,7 +122,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       usePathname: () => dependencies.pathname,
       useNavigation: () => ({
         setOptions: dependencies.setScreenOptions,
-        dispatch: dependencies.dispatch
+        dispatch: dependencies.dispatch,
+        isFocused: () => dependencies.screenFocused
       }),
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
       useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
@@ -155,19 +167,27 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     '../transport/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
-    // Stub host-store input to avoid expo-secure-store’s unavailable global.
-    './use-page-host-snapshot': () => ({
-      usePageHostSnapshot: () => ({
-        // Keep preference identity stable like useState; fresh objects would rebuild the bridge on every render and settle pending requests.
-        snapshot: SCREEN_SNAPSHOT,
-        unreadable: dependencies.snapshotUnreadable,
-        readStorage: () => ({ storage: {}, storageOversize: [] }),
-        refreshStorage: () => {
-          dependencies.storageRefreshes += 1
-        },
-        writeStorage: () => {}
-      })
-    }),
+    // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
+    // global this test does not have. What it answers is the screen's input, not its behaviour.
+    './use-page-host-snapshot': () => {
+      const readStorage = () => ({ storage: {}, storageOversize: [] })
+      const refreshStorage = async () => {
+        dependencies.storageRefreshes += 1
+      }
+      const writeStorage = () => {}
+      const retry = () => {}
+      return {
+        usePageHostSnapshot: () => ({
+          // Stable values match the real hook's state and callbacks across screen renders.
+          snapshot: SCREEN_SNAPSHOT,
+          unreadable: dependencies.snapshotUnreadable,
+          retry,
+          readStorage,
+          refreshStorage,
+          writeStorage
+        })
+      }
+    },
     './use-mobile-web-shell-session': () => ({
       useMobileWebShellSession: () => ({
         state: dependencies.state,
@@ -184,7 +204,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         reportPageBackClaim: dependencies.reportPageBackClaim,
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
-        backClaimed: dependencies.backClaimed
+        backClaimed: dependencies.backClaimed,
+        ownsHostArea: dependencies.ownsHostArea
       })
     })
   }

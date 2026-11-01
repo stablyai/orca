@@ -77,6 +77,7 @@ function AgentTerminalFrame({
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
           className={previewClassName}
+          onRequestClose={() => onOpenChange(false)}
         />
       ) : (
         <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">

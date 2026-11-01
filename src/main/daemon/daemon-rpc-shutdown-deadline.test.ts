@@ -39,7 +39,7 @@ async function start(): Promise<{
 }> {
   const exit = vi.fn()
   const log = vi.fn()
-  const deadline = createDaemonShutdownDeadline({ log, close: () => {} }, exit)
+  const deadline = createDaemonShutdownDeadline({ log, close: () => {} }, () => daemon, exit)
   cancelDeadline = deadline.cancel
   const requested = vi.fn(deadline.start)
   const socketPath = getDaemonSocketPath(directory)
@@ -51,7 +51,8 @@ async function start(): Promise<{
       throw new Error('No PTY expected')
     },
     onShutdownRequested: requested,
-    onRpcShutdown: deadline.cancel
+    onRpcShutdown: deadline.cancel,
+    onIdleShutdown: deadline.cancel
   })
   client = new DaemonClient({ socketPath, tokenPath })
   await client.ensureConnected()
@@ -91,3 +92,23 @@ it('cancels the deadline when the RPC completes normally', async () => {
   await vi.advanceTimersByTimeAsync(DAEMON_SHUTDOWN_TIMEOUT_MS)
   expect(exit).not.toHaveBeenCalled()
 })
+
+it.each(['disconnect', 'shutdownIfIdle'] as const)(
+  'bounds idle retirement after %s when terminal disposal never settles',
+  async (mode) => {
+    const { exit, requested } = await start()
+    const stalled = new Promise<void>((resolve) => {
+      releaseDisposal = resolve
+    })
+    const dispose = vi.spyOn(TerminalHost.prototype, 'dispose').mockReturnValue(stalled)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    if (mode === 'shutdownIfIdle') {
+      await expect(client.request('shutdownIfIdle', undefined)).resolves.toEqual({ retiring: true })
+    }
+    client.disconnect()
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalled())
+    expect(requested).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(DAEMON_SHUTDOWN_TIMEOUT_MS)
+    expect(exit).toHaveBeenCalledOnce()
+  }
+)

@@ -1,18 +1,28 @@
 import { defineMethod, type RpcContext } from '../core'
-import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
+import type { PluginFrameEntry } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
-import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
+import type { PluginHostListEntry } from '../../../../shared/plugins/plugin-list-entry'
 import type { PluginService } from '../../../plugins/plugin-service'
+import type { PluginConsentRequest } from '../../../../shared/plugins/approval/plugin-consent-request'
 import {
-  pluginConsentRequestSchema,
-  type PluginConsentRequest
-} from '../../../../shared/plugins/plugin-consent-request'
-import {
+  PluginDevInspectParams,
+  PluginDevLoadParams,
+  PluginDevUnloadParams,
+  PluginGetLogsParams,
   PluginInvokeCommandParams,
   PluginReadPanelEntryParams,
+  PluginRestartParams,
+  PluginRpcConsentParams,
   PluginSetEnabledParams,
+  PluginSetSystemEnabledParams,
   PluginsPanelActionParams
 } from '../../../../shared/rpc-contract/plugins-params'
+import {
+  approvePluginFromCli,
+  pluginCliApprovalRequest
+} from '../../../plugins/plugin-cli-approval'
+import { PluginApprovalRequiredError } from '../../../../shared/plugins/approval/plugin-cli-approval'
+import { loadPluginDevFolder, unloadPluginDevFolder } from '../../../plugins/plugin-dev-folders'
 
 /** Expose desktop IPC's plugin consent/actions over serve/headless RPC through the same PluginService permission boundary. */
 
@@ -22,27 +32,57 @@ let pluginServiceForRpc: PluginService | null = null
 // closures instead of the store itself.
 let pluginConsentForRpc: ((request: PluginConsentRequest) => Promise<void>) | null = null
 let pluginEnablementForRpc: ((pluginKey: string, enabled: boolean) => Promise<void>) | null = null
+let pluginDevPathsForRpc: ((paths: string[]) => void) | null = null
+let pluginSystemEnabledForRpc: ((enabled: boolean) => void) | null = null
+// Desktop only: headless hosts have no guest webContents to inspect.
+let pluginFrameDevToolsForRpc: ((pluginKey: string) => number) | null = null
 
 export function setPluginServiceForRpc(
   service: PluginService | null,
   writes?: {
     applyConsent: (request: PluginConsentRequest) => Promise<void>
     applyEnablement: (pluginKey: string, enabled: boolean) => Promise<void>
+    setDevPluginPaths?: (paths: string[]) => void
+    setPluginSystemEnabled?: (enabled: boolean) => void
+    openFrameDevTools?: (pluginKey: string) => number
   }
 ): void {
   pluginServiceForRpc = service
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
+  pluginDevPathsForRpc = writes?.setDevPluginPaths ?? null
+  pluginSystemEnabledForRpc = writes?.setPluginSystemEnabled ?? null
+  pluginFrameDevToolsForRpc = writes?.openFrameDevTools ?? null
 }
 
-function requirePluginService(): PluginService {
+export function requirePluginService(): PluginService {
   if (!pluginServiceForRpc) {
     throw new Error('Plugin service is not available on this runtime')
   }
   return pluginServiceForRpc
 }
 
-async function listForRpc(): Promise<PluginListEntry[]> {
+function requireConsentWrite(): (request: PluginConsentRequest) => Promise<void> {
+  if (!pluginConsentForRpc) {
+    throw new Error('Plugin consent is not available on this runtime')
+  }
+  return pluginConsentForRpc
+}
+
+function requireDevPathsWrite(): (paths: string[]) => void {
+  if (!pluginDevPathsForRpc) {
+    throw new Error('Plugin development folders are not available on this runtime')
+  }
+  return pluginDevPathsForRpc
+}
+
+async function listEntryForRpc(pluginKey: string | null): Promise<PluginHostListEntry | null> {
+  return pluginKey === null
+    ? null
+    : ((await listForRpc()).find((entry) => entry.pluginKey === pluginKey) ?? null)
+}
+
+async function listForRpc(): Promise<PluginHostListEntry[]> {
   return listPluginsForClients(requirePluginService())
 }
 
@@ -65,17 +105,39 @@ export const PLUGIN_METHODS = [
     handler: async () => listForRpc()
   }),
   defineMethod({
-    // Headless servers have no dialog; only explicit consent can activate a pending plugin.
+    // Why the flag even for paired callers: an agent CLI reaches serve as a paired device too, so
+    // no transport proves a person clicked; only the fingerprint from `approval_required` grants.
     name: 'plugins.consent',
     permission: 'host-admin',
-    params: pluginConsentRequestSchema,
-    handler: async (params) => {
+    params: PluginRpcConsentParams,
+    handler: async (params, context) => {
       const service = requirePluginService()
       await service.whenReady()
-      if (!pluginConsentForRpc) {
-        throw new Error('Plugin consent is not available on this runtime')
+      const applyConsent = requireConsentWrite()
+      if (params.decision === 'keep-disabled') {
+        await applyConsent({
+          pluginKey: params.pluginKey,
+          reviewedFingerprint: params.reviewedFingerprint ?? '',
+          decision: 'keep-disabled'
+        })
+        return listForRpc()
       }
-      await pluginConsentForRpc(params)
+      const plugin = service.findValidPlugin(params.pluginKey)
+      if (
+        plugin &&
+        params.reviewedFingerprint !== undefined &&
+        params.reviewedFingerprint !== plugin.consentFingerprint
+      ) {
+        throw new PluginApprovalRequiredError(pluginCliApprovalRequest(plugin, 'enable'), true)
+      }
+      await approvePluginFromCli({
+        service,
+        applyConsent,
+        pluginKey: params.pluginKey,
+        approvalFingerprint: params.approvalFingerprint,
+        action: 'enable',
+        caller: context.caller
+      })
       return listForRpc()
     }
   }),
@@ -83,14 +145,136 @@ export const PLUGIN_METHODS = [
     name: 'plugins.setEnabled',
     permission: 'host-admin',
     params: PluginSetEnabledParams,
-    handler: async (params) => {
+    handler: async (params, context) => {
       const service = requirePluginService()
       await service.whenReady()
       if (!pluginEnablementForRpc) {
         throw new Error('Plugin enablement is not available on this runtime')
       }
-      await pluginEnablementForRpc(params.pluginKey, params.enabled)
+      if (!params.enabled) {
+        await pluginEnablementForRpc(params.pluginKey, false)
+        return listForRpc()
+      }
+      // Enabling grants whatever consent is missing, so it goes through the same approve flag.
+      await approvePluginFromCli({
+        service,
+        applyConsent: requireConsentWrite(),
+        pluginKey: params.pluginKey,
+        approvalFingerprint: params.approvalFingerprint,
+        action: 'enable',
+        caller: context.caller
+      })
       return listForRpc()
+    }
+  }),
+  defineMethod({
+    // Agent dev loop: same list Settings → Plugins edits; code stays inert without the approve flag.
+    name: 'plugins.devLoad',
+    permission: 'host-admin',
+    params: PluginDevLoadParams,
+    handler: async (params, context) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      const result = await loadPluginDevFolder({
+        service,
+        writes: {
+          setDevPluginPaths: requireDevPathsWrite(),
+          applyConsent: requireConsentWrite()
+        },
+        path: params.path,
+        approvalFingerprint: params.approvalFingerprint,
+        caller: context.caller
+      })
+      return { ...result, plugin: await listEntryForRpc(result.pluginKey) }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.devUnload',
+    permission: 'host-admin',
+    params: PluginDevUnloadParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      return unloadPluginDevFolder({
+        service,
+        writes: { setDevPluginPaths: requireDevPathsWrite() },
+        target:
+          params.pluginKey !== undefined
+            ? { pluginKey: params.pluginKey }
+            : { path: params.path ?? '' }
+      })
+    }
+  }),
+  defineMethod({
+    // Settings → Plugins' switch for windowless hosts; it approves nothing, so only approved plugins run.
+    name: 'plugins.setSystemEnabled',
+    permission: 'host-admin',
+    params: PluginSetSystemEnabledParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      if (!pluginSystemEnabledForRpc) {
+        throw new Error('Turning plugins on or off is not available on this runtime')
+      }
+      pluginSystemEnabledForRpc(params.enabled)
+      // The settings listener's refresh only logs failures; awaiting a chained one surfaces them.
+      await service.refresh()
+      return { enabled: params.enabled, plugins: await listForRpc() }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.devInspect',
+    permission: 'host-admin',
+    params: PluginDevInspectParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      if (!pluginFrameDevToolsForRpc) {
+        throw new Error('Plugin frame DevTools are only available in the Orca desktop app')
+      }
+      return { pluginKey: params.pluginKey, opened: pluginFrameDevToolsForRpc(params.pluginKey) }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.refresh',
+    permission: 'host-admin',
+    params: null,
+    handler: async () => {
+      const service = requirePluginService()
+      await service.whenReady()
+      await service.refresh()
+      return listForRpc()
+    }
+  }),
+  defineMethod({
+    name: 'plugins.restart',
+    permission: 'host-admin',
+    params: PluginRestartParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      const plugin = service.findValidPlugin(params.pluginKey)
+      if (!plugin) {
+        throw new Error(`plugin ${params.pluginKey} is not installed or loaded`)
+      }
+      if (!plugin.manifest.main) {
+        throw new Error(`plugin ${params.pluginKey} has no worker to restart`)
+      }
+      // Why stop only: workers start on their next command or event, so that run loads fresh code.
+      await service.deactivatePlugin(params.pluginKey)
+      return { pluginKey: params.pluginKey, plugin: await listEntryForRpc(params.pluginKey) }
+    }
+  }),
+  defineMethod({
+    name: 'plugins.getLogs',
+    permission: 'host-admin',
+    params: PluginGetLogsParams,
+    handler: async (params) => {
+      const service = requirePluginService()
+      await service.whenReady()
+      // Why `cursor` even without `after`: `orca plugin dev watch` takes a baseline, then follows.
+      const { lines, cursor } = service.getLogsSince(params.pluginKey, params.after)
+      return { pluginKey: params.pluginKey, lines, cursor }
     }
   }),
   defineMethod({
@@ -111,7 +295,7 @@ export const PLUGIN_METHODS = [
     name: 'plugins.readPanelEntry',
     permission: 'workspace',
     params: PluginReadPanelEntryParams,
-    handler: async (params, context): Promise<PluginPanelEntry | null> => {
+    handler: async (params, context): Promise<PluginFrameEntry | null> => {
       const service = requirePluginService()
       await service.whenReady()
       const ownerKey = bindRpcPanelOwner(service, context)

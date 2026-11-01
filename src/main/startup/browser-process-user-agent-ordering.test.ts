@@ -295,7 +295,9 @@ describe('browser process user-agent startup ordering', () => {
     expect(writeIndex).toBeLessThan(continuationIndex)
     expect(getBrowserProcessUserAgentIdentity()).toEqual({
       mode: 'clean',
-      userAgent: mocks.userAgent()
+      userAgent: mocks.userAgent(),
+      electronUserAgent:
+        'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Orca Development/0.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
     })
     expect(mocks.userAgent()).not.toMatch(/Electron/)
     expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
@@ -375,7 +377,8 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 
     resolveReady?.()
     await ready
-    await Promise.resolve()
+    // The dialog waits for the async system-language catalog after ready.
+    await vi.waitFor(() => expect(mocks.app.exit).toHaveBeenCalled())
     expect(mocks.showErrorBox).toHaveBeenCalledWith(
       'Orca could not start',
       expect.stringContaining('Linux pre-ready failure')

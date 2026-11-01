@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { structuredAgentSessionOptionStamp } from '../../../../shared/agent-session/options/structured-agent-session-option-state'
 
 export function useStructuredAgentSessionStatusSummary(
   sessionId: string,
@@ -22,7 +23,6 @@ export function useStructuredAgentSessionStatusSummary(
   return { summary, observation }
 }
 
-/** The host status's option values as one stamp: another device's pick moves it, so options re-read. */
 export function useStructuredAgentSessionOptionStamp(
   sessionId: string,
   target: RuntimeClientTarget
@@ -31,10 +31,7 @@ export function useStructuredAgentSessionOptionStamp(
   useEffect(() => feed.activate(), [feed])
   return useSyncExternalStore(
     feed.subscribe,
-    () => {
-      const summary = feed.getSnapshot().get(sessionId)
-      return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
-    },
+    () => structuredAgentSessionOptionStamp(feed.getSnapshot().get(sessionId)),
     () => ''
   )
 }

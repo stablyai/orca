@@ -1,12 +1,12 @@
 import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { StructuredAgentSessionOwnerUnresolvedError } from '@/lib/launch-structured-agent-session'
@@ -29,7 +29,7 @@ import {
   type StructuredAgentLaunchHooks,
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
-import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
+import type { StructuredAgentLaunchOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
@@ -44,6 +44,8 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
+  /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
+  launchOptions?: Readonly<Record<string, string>>
 }
 
 /** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
@@ -59,6 +61,8 @@ export type AgentSessionLaunchVerdict = {
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
+  draftFromScope?: string
+  launchOptions?: Readonly<Record<string, string>>
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -95,7 +99,9 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {})
+    ...(verdict.draftFromScope ? { draftFromScope: verdict.draftFromScope } : {}),
+    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),
+    ...(verdict.launchOptions ? { launchOptions: verdict.launchOptions } : {})
   }
 }
 
@@ -286,6 +292,7 @@ export function planAgentSessionLaunch(
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
-    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
+    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
+    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {})
   })
 }

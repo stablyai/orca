@@ -7,11 +7,11 @@ import type {
   AgentLaunchPreferences,
   AgentSessionExecutionClaim,
   RuntimeCreateAgentSessionResult
-} from '../../shared/agent-session-host-authority'
+} from '../../shared/agent-session/agent-session-host-authority'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../shared/agent-session-resume'
+} from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrchestrationCompatibilityHostStamp } from '../../shared/orchestration-compatibility-evidence'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 import type {
@@ -67,6 +67,8 @@ export type TerminalCreateOptions = {
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
+  /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
+  terminalViewAttributes?: unknown
   viewMode?: 'terminal' | 'chat'
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
@@ -91,6 +93,9 @@ export type TerminalCreateOptions = {
   startFailure?: Error
   /** Main-owned sleep wake publishes resume outcomes instead of relying on window restore. */
   resumesSleepingRecord?: true
+  /** May start an existing pane again rather than new work in the workspace: a saved pane's
+   *  restore, a lost pane's recovery, or a paired window mounting its panes. */
+  reopensPane?: true
   /** Refuse, rather than attach, when `tabId`/`leafId` name a pane whose PTY is already live. */
   requireFreshPane?: boolean
   sessionId?: string
@@ -101,6 +106,8 @@ export type TerminalCreateOptions = {
   agentSessionCreateOperationId?: string
   /** The paired client's declared intent; the host's fork gate validates and may defer it. */
   spawnIntent?: SpawnIntent
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   signal?: AbortSignal
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean
@@ -240,6 +247,8 @@ export type OrchestrationCompatibilitySshTerminal = Readonly<{
 
 export type TerminalWaiter = {
   handle: string
+  /** The terminal the handle named when the wait began; the wait follows it, not the handle. */
+  ptyId: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
@@ -262,6 +271,8 @@ export type RuntimeProviderSnapshotReadOptions = {
 export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, 'inputKind'> & {
   /** `launch` for the prompt an agent starts with; `driving` for any prompt sent to a running one. */
   inputKind: Exclude<TerminalInputKind, 'query-reply'>
+  /** Caller observation may end without cancelling a paste already accepted by the host. */
+  observationSignal?: AbortSignal
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
   /** Caller observed composer input acceptance; schedule Enter using desktop draft-paste timing instead of render settlement. */

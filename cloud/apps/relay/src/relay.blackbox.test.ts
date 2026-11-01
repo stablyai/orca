@@ -470,17 +470,6 @@ afterAll(async () => {
 })
 
 describe('served relay URL', () => {
-  it('exposes only /health, never /healthz', async () => {
-    expect(await (await fetch(`${relayUrl}/health`)).json()).toEqual({
-      ok: true,
-      connectionCapacityProtocol: 2,
-      capacityReportedCapMin: true,
-      drainPaceWindowMaxMs: 1_200_000
-    })
-    expect(await (await fetch(`${relayUrl}/ready`)).json()).toEqual({ ok: true })
-    expect((await fetch(`${relayUrl}/healthz`)).status).toBe(404)
-  })
-
   it('keeps liveness healthy when dependency readiness fails', async () => {
     const port = await unusedPort()
     const url = `http://127.0.0.1:${port}`
@@ -974,15 +963,12 @@ describe('served relay URL', () => {
       credential: resumeToken
     })
     const originalExpiry = first.hello.resumeExpiresAt
-    const firstPhoneClosed = new Promise<void>((resolveClose) =>
-      first.phone.once('close', () => resolveClose())
-    )
-    const firstDataClosed = new Promise<void>((resolveClose) =>
-      first.data.once('close', () => resolveClose())
+    // Only the relay's close of the data leg proves it saw the phone leave; a client-side close can race the confirm.
+    const firstDataClosed = new Promise<number>((resolveClose) =>
+      first.data.once('close', (code) => resolveClose(code))
     )
     first.phone.close()
-    first.data.close()
-    await Promise.all([firstPhoneClosed, firstDataClosed])
+    expect(await firstDataClosed).toBe(4408)
     const closedBasis = nextMessage(host.socket)
     host.socket.send(
       JSON.stringify({

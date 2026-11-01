@@ -1159,7 +1159,7 @@ exports[`native-chat launch parity > codex floating fresh 1`] = `
     "permissionPolicy": {
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
-      "sandbox": "workspace-write",
+      "sandbox": "read-only",
     },
   },
   "pinnedLaunchDirectories": [
@@ -1233,7 +1233,7 @@ exports[`native-chat launch parity > codex floating resumed 1`] = `
     "permissionPolicy": {
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
-      "sandbox": "workspace-write",
+      "sandbox": "read-only",
     },
   },
   "pinnedLaunchDirectories": [],
@@ -1305,7 +1305,7 @@ exports[`native-chat launch parity > codex worktree fresh 1`] = `
     "permissionPolicy": {
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
-      "sandbox": "workspace-write",
+      "sandbox": "read-only",
     },
   },
   "pinnedLaunchDirectories": [],
@@ -1448,7 +1448,7 @@ exports[`native-chat launch parity > codex worktree fresh worker 1`] = `
     "permissionPolicy": {
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
-      "sandbox": "workspace-write",
+      "sandbox": "read-only",
     },
   },
   "pinnedLaunchDirectories": [],
@@ -1520,7 +1520,7 @@ exports[`native-chat launch parity > codex worktree resumed 1`] = `
     "permissionPolicy": {
       "approvalPolicy": "on-request",
       "approvalsReviewer": "user",
-      "sandbox": "workspace-write",
+      "sandbox": "read-only",
     },
   },
   "pinnedLaunchDirectories": [],

@@ -1,24 +1,5 @@
 import { expect, it } from 'vitest'
-import { decodeMergedSearchCursor, encodeMergedSearchCursor } from './ai-vault-search-merged-cursor'
-
-const cursor = {
-  limit: 20,
-  sort: 'newest',
-  hosts: {
-    local: { c: null, e: 3, g: 7 },
-    'ssh:box': { c: 'opaque', e: 0, g: 2 }
-  }
-} as const
-
-it('round-trips a merged cursor through base64url', () => {
-  expect(decodeMergedSearchCursor(encodeMergedSearchCursor(cursor))).toEqual(cursor)
-})
-
-it('refuses anything that is not a cursor this module minted', () => {
-  for (const raw of ['', 'not-base64url!!', Buffer.from('{]').toString('base64url')]) {
-    expect(decodeMergedSearchCursor(raw)).toBeNull()
-  }
-})
+import { decodeMergedSearchCursor } from './ai-vault-search-merged-cursor'
 
 it('refuses a payload whose shape would change what a skip count means', () => {
   const refused = [

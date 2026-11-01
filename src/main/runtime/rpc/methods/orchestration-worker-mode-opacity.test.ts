@@ -1,3 +1,9 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
 /** Both worker modes receive identical orchestration instructions after identity/surface normalization, and structured workers can dispatch sub-workers through session authority. */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,12 +54,12 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 }))
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true,
+  nativeChatProviders: EVERY_AGENT_CHAT,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
-const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }
+const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, nativeChatProviders: {} }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
 function installStructuredCoordinator(handle: string, sessionId: string): string {
@@ -71,18 +77,12 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     hasSession: () => true,
     deps: {
       store: {
-        getRecord: () => ({
-          provider: 'claude',
-          location: { executionHostId: 'local', wslDistro: null },
-          lease: {
-            runtimeKind: 'native',
-            claimStatus: 'live',
-            deathEvidence: null,
-            runtimeFence: 1
-          }
-        }),
+        getConversation: () =>
+          agentSessionConversationView(
+            agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId, runtimeFence: 1 }))
+          ),
         // No committed /clear: each session is its own lineage's root.
-        listRecords: () => []
+        listConversations: () => []
       }
     }
   }

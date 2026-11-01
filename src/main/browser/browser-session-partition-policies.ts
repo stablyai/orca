@@ -219,7 +219,9 @@ export async function installBrowserSessionPartitionPolicies(
       const decide = async (): Promise<boolean> => {
         const allowed = await decideBrowserSitePermissions({
           requester: webContents,
-          frameOrigin: browserSitePermissionRequestingOrigin(webContents, details),
+          frameOrigin: sitePermissions.includes('notifications')
+            ? browserSitePermissionRequestingOrigin(webContents, details)
+            : null,
           memory: siteMemory,
           permissions: sitePermissions
         })

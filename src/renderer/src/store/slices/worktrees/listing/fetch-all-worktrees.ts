@@ -1,15 +1,10 @@
-import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import {
@@ -20,11 +15,9 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
-import {
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
+import type { WorktreeRefreshResult } from './worktree-refresh-result'
 
 export function createFetchAllWorktrees(
   set: WorktreeSliceSet,
@@ -40,180 +33,58 @@ export function createFetchAllWorktrees(
             : repoHost?.kind !== 'runtime'
         })
       : get().repos
-
-    // Why: after the one-shot hydration purge, later calls only refresh cached lists — no IPC double-probe for the per-repo success signal.
-    if (get().hasHydratedWorktreePurge || options?.visibilityOwnerHostId) {
-      await mapReposForWorktreeRefresh(repos, async (r) => {
-        try {
-          const requestStartedState = get()
-          const requestStartedWorktrees = selectWorktreesByRepo(requestStartedState)[r.id]
-          const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
-          const parsedHost = parseExecutionHostId(hostId)
-          const directSshAuthority =
-            parsedHost?.kind === 'ssh'
-              ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
-              : undefined
-          if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
-            return
-          }
-          const refresh = await listDetectedWorktreesForRepoCoalesced(r.id, {
-            executionHostId: hostId,
-            reuseRecentCompatibilityFailure: true,
-            directSshAuthority,
-            connectionId: r.connectionId,
-            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
-            isStaleCatalogPublication: (result) =>
-              isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
-          })
-          if (refresh.status !== 'admitted') {
-            return
-          }
-          mergeFetchedWorktrees(set, get, {
-            repoId: r.id,
-            hostId,
-            ownerWasMissingAtStart: false,
-            requestStartedWorktrees,
-            setup,
-            refresh
-          })
-        } catch (err) {
-          if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
-            return
-          }
-          console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
-        }
-      })
-      return
-    }
-
-    // Purge pre-fix persisted zombie tab keys only after direct per-repo detection succeeds; fetchWorktrees swallows errors/empty replacements (design §2c).
+    const purgeRemovedWorktrees = get().hasHydratedWorktreePurge || !!options?.visibilityOwnerHostId
     const results = await mapReposForWorktreeRefresh(
       repos,
-      async (
-        r
-      ): Promise<
-        | {
-            repoId: string
-            hostId: ExecutionHostId
-            ok: boolean
-            detected: DetectedWorktreeListResult
-          }
-        | { repoId: string; ok: false }
-      > => {
+      async (repo): Promise<WorktreeRefreshResult> => {
+        const hostId = getRepoExecutionHostId(repo)
+        const failed = { repoId: repo.id, hostId, refresh: null }
         try {
           const requestStartedState = get()
-          const requestStartedWorktrees = selectWorktreesByRepo(requestStartedState)[r.id]
-          const hostId = getRepoExecutionHostId(r)
-          const setup = getProjectHostSetupForRepoHost(requestStartedState, r.id, hostId)
+          const requestStartedWorktrees = selectWorktreesByRepo(requestStartedState)[repo.id]
+          const setup = getProjectHostSetupForRepoHost(requestStartedState, repo.id, hostId)
           const parsedHost = parseExecutionHostId(hostId)
           const directSshAuthority =
             parsedHost?.kind === 'ssh'
               ? (getCurrentDirectSshAuthority(requestStartedState, hostId) ?? undefined)
               : undefined
           if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-            await fetchKnownSshWorktreesForRepo(set, r.id, parsedHost.id)
-            return { repoId: r.id, ok: false as const }
+            await fetchKnownSshWorktreesForRepo(set, repo.id, parsedHost.id)
+            return failed
           }
-          const refresh = await listDetectedWorktreesForRepoCoalesced(r.id, {
+          const refresh = await listDetectedWorktreesForRepoCoalesced(repo.id, {
             executionHostId: hostId,
             reuseRecentCompatibilityFailure: true,
             directSshAuthority,
-            connectionId: r.connectionId,
-            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, r.id, hostId),
+            connectionId: repo.connectionId,
+            knownWorktreeIds: getKnownWorktreeIdsForPurge(requestStartedState, repo.id, hostId),
             isStaleCatalogPublication: (result) =>
-              isStaleWorktreeCatalogPublication(get(), r.id, hostId, result.catalogVersion)
+              isStaleWorktreeCatalogPublication(get(), repo.id, hostId, result.catalogVersion)
           })
           if (refresh.status !== 'admitted') {
-            return { repoId: r.id, ok: false as const }
+            return failed
           }
           const outcome = mergeFetchedWorktrees(set, get, {
-            repoId: r.id,
+            repoId: repo.id,
             hostId,
             ownerWasMissingAtStart: false,
             requestStartedWorktrees,
             setup,
             refresh,
-            purgeRemovedWorktrees: false
+            purgeRemovedWorktrees
           })
-          // Why both refusals: rows from a listing that was not applied are no evidence for the purge.
-          if (outcome !== 'applied') {
-            return { repoId: r.id, ok: false as const }
-          }
-          return {
-            repoId: r.id,
-            hostId,
-            ok: refresh.result.authoritative,
-            detected: refresh.result
-          }
+          return outcome === 'applied' ? { repoId: repo.id, hostId, refresh } : failed
         } catch (err) {
           if (!notifyRuntimeScopeForbiddenIfNeeded(err)) {
-            console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+            console.error(`Failed to fetch worktrees for repo ${repo.id}:`, err)
           }
-          return { repoId: r.id, ok: false as const }
+          return failed
         }
       }
     )
-
-    const hasAnyDetectedWorktree = results.some(
-      (result) => 'detected' in result && result.ok && result.detected.worktrees.length > 0
-    )
-    const allSucceeded = results.length > 0 && results.every((r) => r.ok) && hasAnyDetectedWorktree
-    if (!allSucceeded) {
-      // Defer; try again on the next fetchAllWorktrees call.
-      return
+    if (!options?.visibilityOwnerHostId && options?.hydrationPurge !== 'defer') {
+      purgeHydratedWorktrees(set, get, results)
     }
-    if (
-      options?.hydrationPurge === 'defer' ||
-      get().workspaceSessionReady === false ||
-      get().hydrationSucceeded === false
-    ) {
-      // Why: startup refreshes local repos first; defer the one-shot purge to the later all-host refresh, once remote worktree ids are known.
-      return
-    }
-    // Defer purge if create/remove overtook any listing; those scanned rows are no longer evidence for the live union.
-    const listingSuperseded = results.some(
-      (result) =>
-        'detected' in result &&
-        isStaleWorktreeCatalogPublication(
-          get(),
-          result.repoId,
-          result.hostId,
-          result.detected.catalogVersion
-        )
-    )
-    if (listingSuperseded) {
-      return
-    }
-    const validIds = new Set<string>()
-    // Why: floating is persisted renderer state, not a repo worktree an authoritative scan returns.
-    validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
-    // Why: folder workspaces persist tabs under `folder:<id>` keys that authoritative repo scans never return.
-    for (const workspace of selectFolderWorkspaces(get()) ?? []) {
-      validIds.add(folderWorkspaceKey(workspace.id))
-    }
-    for (const key of Object.keys(get().restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
-      if (parseWorkspaceKey(key)?.type === 'folder') {
-        validIds.add(key)
-      }
-    }
-    for (const result of Object.values(selectDetectedWorktreesByRepo(get()))) {
-      if (!result.authoritative) {
-        continue
-      }
-      for (const w of result.worktrees) {
-        validIds.add(w.id)
-      }
-    }
-    const stale = Object.keys(get().tabsByWorktree).filter((id) => !validIds.has(id))
-    if (stale.length > 0) {
-      console.warn(
-        `[worktree-purge] hydration-time purge removing stale state for ${stale.length} worktree(s):`,
-        stale
-      )
-      runAsAutomaticDeselection(() => get().purgeWorktreeTerminalState(stale))
-    }
-    set({ hasHydratedWorktreePurge: true })
+    return results
   }
 }

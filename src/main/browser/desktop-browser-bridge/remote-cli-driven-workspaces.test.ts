@@ -2,7 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const owners = vi.hoisted(() => ({
   tabByGuest: new Map<number, string>(),
-  worktreeByTab: new Map<string, string>()
+  worktreeByTab: new Map<string, string>(),
+  urlByContents: new Map<number, string>()
+}))
+
+vi.mock('electron', () => ({
+  webContents: {
+    fromId: (id: number) => {
+      const url = owners.urlByContents.get(id)
+      return url === undefined ? undefined : { isDestroyed: () => false, getURL: () => url }
+    }
+  }
 }))
 
 vi.mock('../browser-manager', () => ({
@@ -22,14 +32,10 @@ afterEach(() => {
   resetRemoteCliDrivenWorkspacesForTests()
   owners.tabByGuest.clear()
   owners.worktreeByTab.clear()
+  owners.urlByContents.clear()
 })
 
 describe('isRemoteCliDrivenGuest', () => {
-  it('leaves every guest alone until a host drives a workspace', () => {
-    expect(isRemoteCliDrivenGuest(1)).toBe(false)
-    expect(isRemoteCliDrivenGuest(undefined)).toBe(false)
-  })
-
   it('covers a driven page and the popups it opened, not other workspaces', () => {
     owners.tabByGuest.set(1, 'host-page')
     owners.tabByGuest.set(2, 'host-page')
@@ -47,5 +53,14 @@ describe('isRemoteCliDrivenGuest', () => {
     markRemoteCliDrivenWorkspace('repo-host::/srv/app')
 
     expect(isRemoteCliDrivenGuest(99)).toBe(true)
+  })
+
+  it("keeps clipboard read for an unowned extension page, which runs only the extension's code", () => {
+    owners.urlByContents.set(7, `chrome-extension://${'a'.repeat(32)}/offscreen.html`)
+    owners.urlByContents.set(8, 'https://example.com/')
+    markRemoteCliDrivenWorkspace('repo-host::/srv/app')
+
+    expect(isRemoteCliDrivenGuest(7)).toBe(false)
+    expect(isRemoteCliDrivenGuest(8)).toBe(true)
   })
 })

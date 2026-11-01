@@ -1,3 +1,5 @@
+import type { CodexAccountSelectionTarget } from './codex-selection-lane'
+
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
 export type ManagedDataAccountSummary = {
@@ -96,6 +98,8 @@ export type ClaudeManagedAccountSummary = {
   needsSignIn?: true
   /** Its folder holds no login, so its launches run on System default, signed in to it. */
   runsOnSystemDefault?: true
+  /** The host folder its launches use; a legacy account's saved path may name an older one. */
+  home?: string
 }
 
 /** A sign-in to a new account folder, or to a saved account's own when `accountId` is given. */
@@ -119,8 +123,18 @@ export type ClaudeRateLimitAccountsState = {
   activeAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
   /** The login System default holds, when the host can read it and accounts exist. */
   systemDefaultEmail?: string
+  systemDefaultOrganizationUuid?: string
+  /** The host folder System default launches use, when accounts exist. */
+  systemDefaultHome?: string
   /** An older Orca's copy-based switching once wrote an account's login into System default. */
   systemDefaultMayBeCopied?: boolean
+}
+
+/** A Claude switch made over runtime RPC, e.g. from the phone. */
+export type ClaudeAccountSelectionChange = {
+  target: CodexAccountSelectionTarget
+  before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
 }
 
 export type ClaudeManagedAccountRuntimeSelection = {

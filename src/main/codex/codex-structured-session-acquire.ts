@@ -1,10 +1,10 @@
-import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../shared/agent-session/agent-session-availability'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../shared/agent-session-provider-handle-encoding'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
-  AgentSessionPreSpawnError,
+  launchPreparationFailure,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -22,7 +22,12 @@ import {
   handleCodexSessionExit
 } from './codex-structured-session-close'
 import { openCodexStructuredSession } from './codex-structured-session-start'
-import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { providerSpawnAbsent } from '../provider-process/provider-executable-missing'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
   mintCodexAcquisitionGeneration,
@@ -110,7 +115,7 @@ export async function acquireCodexStructuredSession(input: {
         ...(acquireInput.permissionMode ? { permissionMode: acquireInput.permissionMode } : {})
       })
       .catch((error: unknown) => {
-        throw new AgentSessionPreSpawnError(error)
+        throw launchPreparationFailure(error)
       })
     const { model: _savedNextModel, ...launchSettings } = resolvedLaunch
     const launch =
@@ -156,6 +161,7 @@ export async function acquireCodexStructuredSession(input: {
           ),
         onSpawned: spawnIdentity.onSpawned,
         onExit: (error, exit) => {
+          acquisition.appliedSettings.end()
           try {
             if (attempt.acquisitionGeneration && !sessions.has(sessionId)) {
               attempt.exitProven = true
@@ -174,9 +180,11 @@ export async function acquireCodexStructuredSession(input: {
                     : 'unexpected-exit',
                 failure: attempt.cancelled
                   ? agentSessionFailureFact('hostFault')
-                  : agentSessionFailureFact('providerExited', {
-                      detail: providerDiagnosticOf(error)
-                    }),
+                  : providerSpawnAbsent(error)
+                    ? providerStartupFailureFact(error)
+                    : agentSessionFailureFact('providerExited', {
+                        detail: providerDiagnosticOf(error)
+                      }),
                 observedAt: deps.now?.() ?? Date.now()
               })
             }

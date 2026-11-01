@@ -9,13 +9,13 @@ import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import {
   getTaskSourceHostAvailabilityForHost,
   getTaskPageRepoSourceContext
-} from '../task-page-source-context'
+} from './task-page-source-context'
 import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
 import {
   getTaskSourceAvailabilityNotice,
   getTaskSourceContextSummary
 } from '../task-source-context-summary'
-import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
+import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
   const {
     preflightStatus,

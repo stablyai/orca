@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { shallow } from 'zustand/shallow'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
+import { normalizeAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import { subscribeLocalRuntimeCapabilitiesKnown } from './local-runtime-capabilities'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
 import {
@@ -27,14 +28,16 @@ export function installLegacyChatRenameMigration(): () => void {
     const state = useAppStore.getState()
     const pending = state.workspaceSessionReady
       ? getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).flatMap((tab) => {
-          const alias = tab.customLabel
+          const alias = tab.customLabel ?? ''
+          const name = normalizeAgentSessionConversationName(alias)
           const owner = legacyStructuredChatRenameOwner(state, tab)
           const target = structuredAgentSessionTargetForHost(owner)
-          return alias && target
+          return name && target
             ? [
                 {
                   tab,
                   alias,
+                  name,
                   target,
                   key: JSON.stringify([owner, tab.worktreeId, tab.id, tab.entityId, alias])
                 }
@@ -61,11 +64,11 @@ export function installLegacyChatRenameMigration(): () => void {
       return
     }
     previousCandidates = candidates
-    for (const { tab, alias, key } of pending) {
+    for (const { tab, alias, name, key } of pending) {
       if (inFlight.has(key)) {
         continue
       }
-      const request = uploadLegacyStructuredChatRename(useAppStore.getState, tab, alias)
+      const request = uploadLegacyStructuredChatRename(useAppStore.getState, tab, alias, name)
         .catch((error: unknown) => console.warn('[structured-chat-rename] migration failed', error))
         .finally(() => inFlight.delete(key))
       inFlight.set(key, request)

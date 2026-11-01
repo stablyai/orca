@@ -27,12 +27,14 @@ export const FileWrite = FileMutationOpen.extend({
 
 // Why a separate method: a host too old to honor the precondition answers method_not_found
 // instead of silently dropping the field and writing over newer disk content.
+export const FileWriteDiskPreconditionParam = z.object({
+  expectedSignature: z.string().min(1).max(64),
+  allowMissing: z.boolean().optional(),
+  requireLosslessUtf8: z.boolean().optional()
+})
+
 export const FileWriteIfUnchanged = FileWrite.extend({
-  diskPrecondition: z.object({
-    expectedSignature: z.string().min(1).max(64),
-    allowMissing: z.boolean().optional(),
-    requireLosslessUtf8: z.boolean().optional()
-  })
+  diskPrecondition: FileWriteDiskPreconditionParam
 })
 
 export const FileWriteBase64 = FileMutationOpen.extend({
@@ -87,6 +89,16 @@ export const FileCommitUpload = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing final path'))
+})
+
+export const FileReplaceWithUpload = FileCommitUpload.extend({
+  bytesPrecondition: z.object({
+    expectedSha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    allowMissing: z.boolean().optional()
+  })
 })
 
 export const FileDelete = FileMutationOpen.extend({

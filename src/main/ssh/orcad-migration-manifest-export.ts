@@ -11,7 +11,7 @@ import type {
   OrcadMigrationManifest
 } from '../../shared/orcad-migration/orcad-migration-manifest'
 import type { SshTarget } from '../../shared/ssh-types'
-import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime-memory-limits'
+import { REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES } from '../../shared/remote-runtime/remote-runtime-memory-limits'
 import type { Store } from '../persistence'
 import { collectOrcadMigrationSourceCatalog } from '../persistence/migrating-orcad-catalog/orcad-source-catalog'
 import { computeOrcadMigrationManifestSha256 } from '../orcad/orcad-migration-manifest-digest'
@@ -105,7 +105,7 @@ const UNSIGNED_DIGEST = '0'.repeat(64)
 // Request id, device token, method name and JSON framing around the params.
 const REQUEST_ENVELOPE_RESERVE_BYTES = 1024
 /** The largest catalog-request params that still fit the host's sealed inbound frame. */
-const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
+export const ORCAD_MIGRATION_REQUEST_PARAMS_BUDGET_BYTES =
   REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES - REQUEST_ENVELOPE_RESERVE_BYTES
 
 /** Reject oversized manifest requests before fencing: stage/state/full abort would all exceed the sealed frame and close its socket. */
@@ -200,7 +200,7 @@ function restrictCatalog(
   }
 }
 
-function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
+export function hasDormantState(state: OrcadMigrationDormantStatePayload): boolean {
   return (
     state.worktreeMeta.length > 0 ||
     state.worktreeLineage.length > 0 ||

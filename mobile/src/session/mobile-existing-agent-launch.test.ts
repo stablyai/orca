@@ -209,8 +209,11 @@ describe('launchAgentInExistingWorkspace', () => {
   })
 
   it('treats a refusal of the first send as an unsupported host', async () => {
-    const { client } = scriptedClient(refused('agent_launch_replay_unsupported'))
-    await expect(launch(client)).resolves.toEqual({ kind: 'unsupported' })
+    const { client, sendRequest } = scriptedClient(refused('agent_launch_replay_unsupported'))
+    await expect(
+      launch(client, { chatOptions: { model: 'opus', fastMode: 'false' } })
+    ).resolves.toEqual({ kind: 'unsupported' })
+    expect(sendRequest.mock.calls[0]?.[1]).not.toHaveProperty('chatOptions')
   })
 
   it('never reads a refusal after a replay as unsupported: the first attempt may have run', async () => {
@@ -218,10 +221,23 @@ describe('launchAgentInExistingWorkspace', () => {
       { throws: markRpcDeliveryUnknown(new Error('Connection interrupted')) },
       refused('agent_launch_replay_unsupported')
     )
-    await expect(launch(client)).resolves.toEqual({
+    const chatOptions = { model: 'opus', fastMode: 'false' }
+    const capabilities = [...LAUNCH_CAPABILITIES, 'agent.launch.chat-options.v1']
+    const pending = launch(client, { hostCapabilities: capabilities, chatOptions })
+    chatOptions.model = 'changed-after-send'
+    capabilities.length = 0
+    await expect(pending).resolves.toEqual({
       kind: 'unknown',
       message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE
     })
+    expect(sendRequest.mock.calls.map(([, params]) => requestParam(params, 'chatOptions'))).toEqual(
+      [
+        { model: 'opus', fastMode: 'false' },
+        { model: 'opus', fastMode: 'false' }
+      ]
+    )
+    expect(sendRequest.mock.calls[0]?.[1]).toBe(sendRequest.mock.calls[1]?.[1])
+    // The replay reuses the same operation id.
     expect(sendRequest.mock.calls.map(([, params]) => requestParam(params, 'operationId'))).toEqual(
       ['op-1', 'op-1']
     )

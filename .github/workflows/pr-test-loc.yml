@@ -19,7 +19,7 @@ jobs:
   loc:
     name: test vs non-test LoC
     # API calls and a small Node script fit the free single-CPU container runner.
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
       # Read file counts through API without checkout; execute only default-branch scripts because GITHUB_TOKEN has write scope. PR edits take effect after merge.

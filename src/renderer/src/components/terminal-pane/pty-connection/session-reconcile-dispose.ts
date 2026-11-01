@@ -7,7 +7,7 @@ import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-s
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import { releaseRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
 
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { SHIFT_ENTER_RECONFIRM_IDLE_MS } from './foreground-output-scan'
 import type { PanePtyBinding } from './pane-pty-binding'
 
@@ -62,6 +62,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
   }
 
   return {
+    getOwnerContext: () => session.ownerContext,
     syncProcessTracking() {
       session.agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
@@ -72,6 +73,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     },
     // Why: visible-resume size readback repairs dropped hidden resizes without refitting against xterm's transient hidden DOM fallback.
     noteVisibilityResume() {
+      session.foregroundGridDriftProbeSettled = false
       session.armVisibleRemoteViewportClaim()
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
@@ -83,6 +85,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.sampleVisiblePaneForegroundAgent()
     },
     reassertPtySizeAfterWindowWake() {
+      session.foregroundGridDriftProbeSettled = false
       session.armVisibleRemoteViewportClaim()
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
@@ -193,6 +196,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null
       }
+      session.clearForegroundGridDriftTrailingProbe()
       // Why: a pane unmount must never leave its PTY delivery gated — the parked watcher or remounted pane re-decides.
       session.releaseHiddenRendererPtyDelivery()
       if (session.terminalKeyTargetSupportsEvents) {

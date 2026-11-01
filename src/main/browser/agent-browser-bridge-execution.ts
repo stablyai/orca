@@ -2,14 +2,15 @@ import { execFile } from 'node:child_process'
 import type { WebContents } from 'electron'
 import { BrowserError } from './cdp-bridge'
 import {
-  focusedRichTextEditExpression,
-  isExplicitContentEditableResult
-} from './agent-browser-bridge-input'
-import {
   isTabClosedTransportError,
   pageUnavailableMessageForSession
 } from './agent-browser-bridge-process'
 import { translateResult } from './agent-browser-bridge-result'
+import {
+  AGENT_BROWSER_BATCH_ARGS,
+  agentBrowserBatchInput,
+  agentBrowserResultMintsRefs
+} from './agent-browser-batch-command'
 import { AgentBrowserBridgeTabs } from './agent-browser-bridge-tabs'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
@@ -44,15 +45,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return wc
   }
 
-  /** Idle retirement loses daemon routes; restore them when its replacement connects. */
+  /** Idle retirement loses daemon routes and the delta baseline; restore routes when its replacement connects. */
   protected reinitializeIfDaemonIdledOut(sessionName: string, session: SessionState): void {
-    if (
-      this.agentBrowserIdleTimeoutMs === null ||
-      Date.now() - session.lastCommandAt < this.agentBrowserIdleTimeoutMs
-    ) {
+    if (!this.isDaemonIdledOut(session)) {
       return
     }
     session.initialized = false
+    session.hasDeltaBaseline = false
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -85,19 +84,10 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     this.reinitializeIfDaemonIdledOut(sessionName, session)
     session.lastCommandAt = Date.now()
 
-    const args = ['--session', sessionName]
     const managesInterceptRoutes =
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
     const needsInit = !session.initialized
-    // Every invocation must pin CDP ownership or a restarted daemon may launch Chrome.
-    args.push('--cdp', String(session.proxy.getPort()))
-
-    // Spreading large passthrough argv can exceed V8's argument limit.
-    for (const commandArg of commandArgs) {
-      args.push(commandArg)
-    }
-    args.push('--json')
 
     const pointAtTarget = ELEMENT_COMMANDS_WITHOUT_POINTER.has(commandArgs[0] ?? '')
     if (pointAtTarget) {
@@ -105,13 +95,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     }
     let stdout: string
     try {
-      stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
+      stdout = await this.runAgentBrowserCommand(sessionName, session, commandArgs, execOptions)
     } finally {
       if (pointAtTarget) {
         session.proxy.pointAtNextNode(false)
       }
     }
-    const translated = translateResult(stdout)
+    const translated = translateResult(stdout, execOptions)
 
     if (!translated.ok) {
       throw this.createCommandError(
@@ -120,6 +110,13 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         translated.error.code,
         session.webContentsId
       )
+    }
+
+    if (agentBrowserResultMintsRefs(translated.result)) {
+      const browserPageId = this.resolveTabIdSafe(session.webContentsId)
+      if (browserPageId) {
+        this.recordRefPage(browserPageId)
+      }
     }
 
     if (needsInit) {
@@ -133,16 +130,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         this.pendingInterceptRestore.delete(sessionName)
         try {
           const urlPattern = pendingPatterns[0] ?? '**/*'
-          await this.runAgentBrowserRaw(sessionName, [
-            '--session',
-            sessionName,
-            '--cdp',
-            String(session.proxy.getPort()),
-            'network',
-            'route',
-            urlPattern,
-            '--json'
-          ])
+          await this.runAgentBrowserCommand(sessionName, session, ['network', 'route', urlPattern])
           session.activeInterceptPatterns = pendingPatterns
         } catch {
           // Route restoration must not fail an otherwise successful command.
@@ -153,29 +141,27 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     return translated.result
   }
 
-  protected async isExplicitContentEditableTarget(
+  private runAgentBrowserCommand(
     sessionName: string,
-    element: string
-  ): Promise<boolean> {
-    const result = await this.execAgentBrowser(sessionName, [
-      'get',
-      'attr',
-      element,
-      'contenteditable'
-    ])
-    return isExplicitContentEditableResult(result)
-  }
-
-  protected async fillExplicitContentEditable(
-    sessionName: string,
-    element: string,
-    value: string
-  ): Promise<void> {
-    await this.execAgentBrowser(sessionName, ['focus', element])
-    // Send one stdin edit to avoid argv limits and focus changes between chunks.
-    await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
-      stdinText: focusedRichTextEditExpression(JSON.stringify(value), { selectAll: true })
-    })
+    session: SessionState,
+    commandArgs: string[],
+    execOptions?: AgentBrowserExecOptions
+  ): Promise<string> {
+    // Every invocation must pin CDP ownership or a restarted daemon may launch Chrome.
+    const args = ['--session', sessionName, '--cdp', String(session.proxy.getPort())]
+    // A caller's own stdin (eval --stdin) cannot share the pipe with batch input.
+    if (!execOptions?.cliArgv && execOptions?.stdinText === undefined) {
+      return this.runAgentBrowserRaw(sessionName, [...args, ...AGENT_BROWSER_BATCH_ARGS], {
+        ...execOptions,
+        stdinText: agentBrowserBatchInput(commandArgs)
+      })
+    }
+    // Spreading large passthrough argv can exceed V8's argument limit.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
+    return this.runAgentBrowserRaw(sessionName, args, execOptions)
   }
 
   protected createPageUnavailableError(sessionName: string): BrowserError {

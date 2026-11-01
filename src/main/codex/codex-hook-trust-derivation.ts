@@ -1,8 +1,9 @@
 import { realpathSync, statSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { withCliRuntimeOnPath } from '../codex-cli/command'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { collectListedHooks, type CodexListedHook } from './codex-app-server-client'
@@ -149,7 +150,7 @@ async function listScratchHomeHooks(
       projectHooksPath: join(project, '.codex', 'hooks.json')
     }
   } finally {
-    await rm(root, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+    await removeTree(root).catch(() => {})
   }
 }
 
@@ -240,7 +241,7 @@ export async function probeCodexVersion(codexCommand: string): Promise<string | 
     })
     return (result.code === 0 && result.stdout.trim()) || null
   } finally {
-    await rm(scratchHome, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+    await removeTree(scratchHome).catch(() => {})
   }
 }
 
@@ -251,7 +252,7 @@ export async function sweepStaleCodexScratchHomes(): Promise<void> {
     const path = join(root, name)
     const info = await stat(path).catch(() => null)
     if (info && Date.now() - info.mtimeMs > STALE_SCRATCH_MS) {
-      await rm(path, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
+      await removeTree(path).catch(() => {})
     }
   }
 }

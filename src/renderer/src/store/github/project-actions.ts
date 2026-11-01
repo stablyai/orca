@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
@@ -118,7 +119,10 @@ export const createProjectActions = (
           ok: false,
           error: {
             type: 'unknown',
-            message: err instanceof Error ? err.message : 'Failed to fetch project view'
+            message:
+              err instanceof Error
+                ? err.message
+                : translate('projectViews.picker.viewFailed', 'Failed to fetch project view')
           }
         }
       } finally {

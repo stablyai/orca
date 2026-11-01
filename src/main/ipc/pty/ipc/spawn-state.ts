@@ -1,3 +1,4 @@
+import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
@@ -8,11 +9,10 @@ import type {
 } from '../../../providers/pty-provider-contract'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ResumeSpawnAdmission } from '../host-env/saved-resume-admission'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
-import type { PtySpawnTiming } from '../pty-spawn-timing'
-import { createPtySpawnTiming } from '../pty-spawn-timing'
+import { type PtySpawnTiming, createPtySpawnTiming } from '../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
@@ -47,14 +47,12 @@ export type PtyIpcSpawnState = {
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
-  reconciledSnapshotSeq: number | null
-  snapshotKittyFlagsCoverReconciledSeq: boolean
+  provedSnapshotSeq: number | undefined
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   provider: IPtyProvider
   preAdoptedStablePane: AdoptStablePaneResult | null
   paneAgentLaunch: PaneAgentLaunch | null
-  exitedBeforeRegistration: boolean
   isClaudeLaunch: boolean
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   terminalRuntimeOptions: {
@@ -62,10 +60,11 @@ export type PtyIpcSpawnState = {
     terminalWindowsWslDistro?: string | null
   }
   isDaemonHostSpawn: boolean
-  isMintedSessionId: boolean
+  ownsNewIncarnation: boolean
   effectiveSessionId: string | undefined
   effectiveSessionAppId: string | undefined
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   baseEnv: Record<string, string> | undefined
   effectiveLaunchConfig: SleepingAgentLaunchConfig | undefined
   preAllocatedHandle: string | null
@@ -98,8 +97,7 @@ export type PtyIpcSpawnState = {
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   codexResumeHomeSelected: boolean
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   initiallyHidden: boolean
   preSpawnHiddenMarkId: string | null
 }
@@ -131,22 +129,21 @@ export function createPtyIpcSpawnState(
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,
-    reconciledSnapshotSeq: null,
-    snapshotKittyFlagsCoverReconciledSeq: true,
+    provedSnapshotSeq: undefined,
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
     provider: localProvider,
     preAdoptedStablePane: null,
     paneAgentLaunch: null,
-    exitedBeforeRegistration: false,
     isClaudeLaunch: false,
     claudeAuth: null,
     terminalRuntimeOptions: {},
     isDaemonHostSpawn: false,
-    isMintedSessionId: false,
+    ownsNewIncarnation: false,
     effectiveSessionId: undefined,
     effectiveSessionAppId: undefined,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     baseEnv: undefined,
     effectiveLaunchConfig: undefined,
     preAllocatedHandle: null,
@@ -177,8 +174,7 @@ export function createPtyIpcSpawnState(
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     codexResumeHomeSelected: false,
-    hadSessionSizeBeforeAttach: false,
-    sessionSizeBeforeAttach: undefined,
+    provisionalPtySize: undefined,
     initiallyHidden: false,
     preSpawnHiddenMarkId: null
   }

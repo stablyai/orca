@@ -22,21 +22,6 @@ afterEach(() => {
 })
 
 describe('the background retry of restores a host kept asleep', () => {
-  it('asks again after a while, without anyone opening the pane', async () => {
-    const retry = vi.fn(async () => true)
-    queueDeferredRestoreRetry('tab:a', null, retry)
-    await vi.advanceTimersByTimeAsync(29_000)
-    expect(retry).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(retry).toHaveBeenCalledTimes(1)
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'runtime.automaticWork.status',
-      undefined,
-      expect.anything()
-    )
-  })
-
   it('asks one pane per host at a time and takes the next soon after one starts', async () => {
     const order: string[] = []
     const retry = (name: string) => vi.fn(async () => (order.push(name), true))

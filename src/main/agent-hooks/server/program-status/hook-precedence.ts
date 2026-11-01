@@ -20,10 +20,13 @@ export function programStatusHookYieldEndsAt(
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
   }
-  // Why: the hook lane tracks its own children; a program's child roster must not reopen the hook's settled turn.
+  // Hook and program child rosters cannot settle or reopen each other's turns.
   if (
     payload.state === previous.payload.state ||
-    (previous.payload.state === 'done' && isAgentStatusHeldOpenByChildWork(payload))
+    (previous.payload.state === 'done' && isAgentStatusHeldOpenByChildWork(payload)) ||
+    (payload.state === 'done' &&
+      payload.sessionBoundary !== true &&
+      isAgentStatusHeldOpenByChildWork(previous.payload))
   ) {
     return Infinity
   }

@@ -15,6 +15,7 @@ import type { OpenFilePathRekey, RekeyOpenFilesResult } from '../types/open-file
 import { isEditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
+import { rekeyEditorBytesDocuments } from '@/components/editor/editor-bytes-document-boxes'
 
 /** Main's renames: an edit-mode file's record moves from its old path; a view takes the new one. */
 function renamesOf(
@@ -81,7 +82,12 @@ export function renameEditorFilesThroughLayoutOwner(
   const after = new Map((planned.patch.openFiles ?? []).map((file) => [file.id, file]))
   const rekeyHere = (own: readonly OpenFilePathRekey[]) => (s: AppState) => {
     const next = rekeyOpenFilesPatch(s, own, moveOperationId)
-    return next.ok ? next.patch : {}
+    if (!next.ok) {
+      return {}
+    }
+    // Why here: this runs as the rename lands, so the old tab's close never frees its bytes.
+    rekeyEditorBytesDocuments(own)
+    return next.patch
   }
   // Each file's own workspace: the same path can be open in more than one.
   const byWorktree = new Map<string, OpenFilePathRekey[]>()

@@ -1,12 +1,14 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import { AgentLaunchStructuredSessionRefusedError } from './agent-launch-surface-factories'
+import type { AgentLaunchSurfaceFactory } from './agent-launch-surface-factories'
 import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { readCreatedWorkspaceLaunch } from './agent-launch-created-workspace'
 
 const STRUCTURED_PREFERENCE = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 function harness(options: {
@@ -20,7 +22,6 @@ function harness(options: {
   lineCarriesPrompt?: boolean
   worktreeCreateError?: Error
   onStructuredCreate?: () => void
-  onStructuredPromptDelivery?: () => void
   onSurfacePublished?: AgentLaunchExecution['onSurfacePublished']
   worktreeOnlyFactory?: boolean
 }) {
@@ -63,25 +64,29 @@ function harness(options: {
     }
     return options.createSupport ?? { supported: true }
   })
-  const createStructuredSession = vi.fn(async () => {
-    calls.push('createStructuredSession')
-    options.onStructuredCreate?.()
-    if (options.structuredCreateError) {
-      throw options.structuredCreateError
+  const createStructuredSession = vi.fn(
+    async (args: Parameters<AgentLaunchSurfaceFactory['createStructuredSession']>[0]) => {
+      calls.push('createStructuredSession')
+      options.onStructuredCreate?.()
+      if (options.structuredCreateError) {
+        throw options.structuredCreateError
+      }
+      return {
+        sessionId: 'sess-1',
+        handle: 'handle_structured',
+        fence: 4,
+        ...(args.firstMessage && options.deliveredMessageId !== null
+          ? { firstMessage: { clientMessageId: 'msg-1' } }
+          : {})
+      }
     }
-    return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4 }
-  })
+  )
   const createTerminalAgent = vi.fn(async (args: { startupPrompt?: string }) => {
     calls.push('createTerminalAgent')
     if (options.terminalCreateError) {
       throw options.terminalCreateError
     }
     return { handle: 'term_1', ...carried(args.startupPrompt) }
-  })
-  const deliverStructuredPrompt = vi.fn(async () => {
-    calls.push('deliverStructuredPrompt')
-    options.onStructuredPromptDelivery?.()
-    return options.deliveredMessageId === undefined ? 'msg-1' : options.deliveredMessageId
   })
   const deliverTerminalPrompt = vi.fn(async () => {
     calls.push('deliverTerminalPrompt')
@@ -101,7 +106,6 @@ function harness(options: {
     createRecoveryShell,
     createStructuredSession,
     createTerminalAgent,
-    deliverStructuredPrompt,
     deliverTerminalPrompt,
     run: (intent: AgentLaunchIntent) =>
       executeAgentLaunch({
@@ -111,7 +115,6 @@ function harness(options: {
         surfaces: {
           createStructuredSession,
           createTerminalAgent,
-          deliverStructuredPrompt,
           deliverTerminalPrompt
         },
         workspaces: options.worktreeOnlyFactory
@@ -128,17 +131,17 @@ const CREATE_INTENT: AgentLaunchIntent = {
 }
 
 describe('a structured launch that creates its own worktree', () => {
-  it('keeps its live inventory through publication and clears it before prompt delivery', async () => {
+  it('keeps its live inventory through publication and clears it after launch', async () => {
     let duringCreate: unknown
-    let duringPrompt: unknown
+    let duringPublication: unknown
     const h = harness({
       onStructuredCreate: () => (duringCreate = readCreatedWorkspaceLaunch(h.runtime, 'wt-new')),
-      onStructuredPromptDelivery: () =>
-        (duringPrompt = readCreatedWorkspaceLaunch(h.runtime, 'wt-new'))
+      onSurfacePublished: () =>
+        (duringPublication = readCreatedWorkspaceLaunch(h.runtime, 'wt-new'))
     })
     await h.run({ ...CREATE_INTENT, prompt: { text: 'start', delivery: 'submit' } })
     expect(duringCreate).toMatchObject({ agent: 'claude', launchId: expect.any(String) })
-    expect(duringPrompt).toBeUndefined()
+    expect(duringPublication).toEqual(duringCreate)
     expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
   })
 
@@ -373,10 +376,17 @@ describe("a caller's chat default in place of the host's", () => {
 describe('a launch into a workspace that already exists', () => {
   it('opens a session without creating anything', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'codex', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      chatOptions: { model: 'action-model', fastMode: 'false' }
+    })
     expect(h.calls).toEqual(['createSupport', 'createStructuredSession'])
     expect(h.createWorktree).not.toHaveBeenCalled()
     expect(result.worktreeId).toBe('wt-7')
+    expect(h.createStructuredSession).toHaveBeenCalledWith(
+      expect.objectContaining({ chatOptions: { model: 'action-model', fastMode: 'false' } })
+    )
   })
 
   it.each(['claude', 'grok'] as const)(
@@ -398,7 +408,16 @@ describe('a launch into a workspace that already exists', () => {
 describe('an agent with no structured session', () => {
   it('stays a terminal without asking the host', async () => {
     const h = harness({})
-    const result = await h.run({ agent: 'gemini', target: { kind: 'existing', worktree: 'wt-7' } })
+    const result = await h.run({
+      agent: 'gemini',
+      target: { kind: 'existing', worktree: 'wt-7' },
+      chatOptions: { model: 'action-model', fastMode: 'false' }
+    })
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).not.toHaveProperty('chatOptions')
+    // The saved choice reaches the terminal too; its converter keeps only what has a flag.
+    expect(h.createTerminalAgent.mock.calls[0]?.[0]).toMatchObject({
+      options: { model: 'action-model', fastMode: 'false' }
+    })
     expect(h.calls).toEqual(['createTerminalAgent'])
     expect(result.receipt).toMatchObject({ reason: 'agent_without_structured_session' })
   })
@@ -426,20 +445,22 @@ describe('the prompt receipt', () => {
     expect(h.calls).toEqual([
       'createWorktree(startupAgent=undefined)',
       'createSupport',
-      'createStructuredSession',
-      'deliverStructuredPrompt'
+      'createStructuredSession'
     ])
-    expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
-      sessionId: 'sess-1',
-      fence: 4,
-      prompt: SUBMIT
-    })
+    expect(h.createStructuredSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstMessage: {
+          clientMessageId: expect.any(String),
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: SUBMIT.text }] }
+        }
+      })
+    )
   })
 
-  it('under-claims as not delivered when nothing was committed', async () => {
+  it('keeps a missing commit receipt unconfirmed', async () => {
     const h = harness({ deliveredMessageId: null })
     const result = await h.run({ ...CREATE_INTENT, prompt: SUBMIT })
-    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'not-delivered' })
+    expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'unconfirmed' })
   })
 
   it('leaves a draft with the caller, because the host has no composer to hold one', async () => {
@@ -449,7 +470,7 @@ describe('the prompt receipt', () => {
       prompt: { text: 'do the thing', delivery: 'draft' }
     })
     expect(result.prompt).toEqual({ delivery: 'draft', outcome: 'not-delivered' })
-    expect(h.deliverStructuredPrompt).not.toHaveBeenCalled()
+    expect(h.createStructuredSession.mock.calls[0]?.[0].firstMessage).toBeUndefined()
   })
 
   it('omits the receipt when no prompt was requested', async () => {
@@ -790,21 +811,13 @@ describe('the surface is published as the launch stands, before its prompt is de
     expect(launch.deliverTerminalPrompt).not.toHaveBeenCalled()
   })
 
-  it('records a chat before its first message is committed', async () => {
+  it('publishes a chat with its first message receipt', async () => {
     const { launch, published } = publishing({})
 
     const result = await launch.run(PROMPTED_EXISTING)
 
-    expect(launch.calls).toEqual([
-      'createSupport',
-      'createStructuredSession',
-      'published',
-      'deliverStructuredPrompt'
-    ])
-    expect(published[0]).toEqual({
-      ...result,
-      prompt: { delivery: 'submit', outcome: 'unconfirmed' }
-    })
+    expect(launch.calls).toEqual(['createSupport', 'createStructuredSession', 'published'])
+    expect(published[0]).toEqual(result)
     expect(result.prompt).toEqual({ delivery: 'submit', outcome: 'journaled', messageId: 'msg-1' })
   })
 })
@@ -812,7 +825,7 @@ describe('the surface is published as the launch stands, before its prompt is de
 describe('a new local worktree whose startup terminal did not come up', () => {
   it('opens its agent in the view a local workspace allows, as an existing one would', async () => {
     const h = harness({
-      settings: { experimentalNativeChat: true }
+      settings: { nativeChatProviders: EVERY_AGENT_CHAT }
     })
     h.createWorktree.mockImplementationOnce(async () => ({
       worktreeId: 'wt-new',

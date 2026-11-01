@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 import type { SidebarHostOption } from './sidebar-host-options'
 import { getSidebarHostHealthLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
+
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
@@ -25,6 +26,8 @@ type AddRepoHostSelectorProps = {
   onAddRemoteServer?: () => void
   /** Present only where WSL hosts are available and turned on. */
   onAddWslHost?: () => void
+  /** Serve-only: why "Add WSL distro" is missing from the add-host menu. */
+  wslHostsPausedNote?: string
   /** Opens Experimental → WSL distros as hosts, for a WSL host listed while that is off. */
   onOpenWslHostsSetting?: () => void
 }
@@ -37,7 +40,8 @@ function getHostStatusDetail(host: SidebarHostOption): string {
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${host.detail ? ` - ${host.detail}` : ''}`
+  const detail = host.failureReason ?? host.detail
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -50,6 +54,7 @@ export function AddRepoHostSelector({
   onAddSshHost,
   onAddRemoteServer,
   onAddWslHost,
+  wslHostsPausedNote,
   onOpenWslHostsSetting
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
@@ -186,6 +191,11 @@ export function AddRepoHostSelector({
                         </span>
                       </button>
                     ) : null}
+                    {!onAddWslHost && wslHostsPausedNote ? (
+                      <p className="px-2.5 py-2 text-2xs text-muted-foreground">
+                        {wslHostsPausedNote}
+                      </p>
+                    ) : null}
                     {onAddWslHost ? (
                       <button
                         type="button"
@@ -250,7 +260,9 @@ export function AddRepoHostSelector({
                         <span className="truncate font-medium">{host.label}</span>
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                        <span className="min-w-0 flex-1 truncate">{getHostStatusDetail(host)}</span>
+                        <span className="min-w-0 flex-1 truncate" title={host.failureReason}>
+                          {getHostStatusDetail(host)}
+                        </span>
                       </span>
                     </span>
                     {canConnectHost ? (

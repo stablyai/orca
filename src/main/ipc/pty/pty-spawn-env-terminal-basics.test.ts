@@ -4,9 +4,9 @@ import {
   piBuildPtyEnvMock,
   spawnMock,
   wslUncDirectoryExistsAsyncMock
-} from '../pty-ipc-mock-registry'
-import { TEST_CODEX_HOME } from '../pty-ipc-test-constants'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+} from './pty-ipc-mock-registry'
+import { TEST_CODEX_HOME } from './pty-ipc-test-constants'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../../pty/windows-path-registry-reader'
@@ -19,55 +19,59 @@ import {
 } from '../../../shared/jcode-runtime-dir'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { selectShellStartupFeatures } from '../../shell-startup-features'
-import { CODEX_REMOTE_VIEWER_SSH_CONNECTION } from './host-env/codex-terminal-clipboard'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
+import {
+  CODEX_REMOTE_VIEWER_SSH_CONNECTION,
+  PI_CLIPBOARD_OSC52_ENV
+} from './host-env/remote-viewer-clipboard-env'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
@@ -295,6 +299,37 @@ describe('registerPtyHandlers', () => {
           }
         }
       )
+
+      it('installs clipboard forwarding for agents started by hand in a remote shell', () => {
+        vi.stubEnv(PI_CLIPBOARD_OSC52_ENV, undefined)
+        try {
+          const env = buildPtyHostEnv(
+            'pty-pi-clipboard',
+            {},
+            {
+              isPackaged: true,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              agentStatusHooksEnabled: false,
+              routeBrowserOpensToClient: true
+            }
+          )
+          expect(env[PI_CLIPBOARD_OSC52_ENV]).toBe('1')
+          expect(env[REMOTE_VIEWER_CLIPBOARD_ENV]).toBe('1')
+          expect(env.SSH_CONNECTION).toBeUndefined()
+          expect(
+            selectShellStartupFeatures({
+              shellPath: '/bin/bash',
+              env,
+              hasStartupCommand: false,
+              waitsForShellReady: false,
+              emitsStartupIdentity: false
+            })
+          ).toContain('overlay')
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      })
     })
 
     it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
@@ -471,11 +506,17 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(undefined, {
         CLAUDE_CODE_CHILD_SESSION: '1',
         CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
-        CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
+        CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa',
+        CLAUDECODE: '1',
+        CLAUDE_CODE_EXECPATH: '/old/claude',
+        CLAUDE_CODE_ENTRYPOINT: 'cli'
       })
       expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
       expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
+      expect(env.CLAUDECODE).toBeUndefined()
+      expect(env.CLAUDE_CODE_EXECPATH).toBeUndefined()
+      expect(env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined()
     })
     it('strips an inherited agent session id so a pane never claims that session', async () => {
       // Inherited structured-session IDs must not make every pane claim the parent orchestration caller.
@@ -485,6 +526,10 @@ describe('registerPtyHandlers', () => {
       })
       expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
       expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    })
+    it('strips an inherited Claude background job dir so pane agent hooks keep reporting', async () => {
+      const env = await spawnAndGetEnv(undefined, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
+      expect(env.CLAUDE_JOB_DIR).toBeUndefined()
     })
     it('keeps an explicitly requested Claude child-session stamp on a local spawn', async () => {
       const env = await spawnAndGetEnv(

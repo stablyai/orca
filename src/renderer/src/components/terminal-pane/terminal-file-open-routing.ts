@@ -1,6 +1,6 @@
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -22,6 +22,7 @@ import {
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
+  hostGrantedEditorFields,
   resolveHostWorkspaceFile,
   type HostWorkspaceFile
 } from './terminal-host-workspace-file'
@@ -65,6 +66,7 @@ type TerminalFileOpenDeps = {
   browserDestination?: HttpLinkDestination
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
   terminalHandle?: string | null
+  hostFileOnly?: boolean
   /** Reports a path that could not be verified before opening; skipped once a later open supersedes it. */
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
@@ -114,7 +116,7 @@ export function openDetectedFilePath(
       getConnectionExecutionHostId(fileContext.connectionId)
     const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
     let hostWorkspaceFile: HostWorkspaceFile | null = null
-    let hostGrantId: string | null = null
+    let hostGrant: ReturnType<typeof hostGrantedEditorFields> | null = null
     let clientLocal = false
     if (!fileContext.sourceHostResolved) {
       if (refuseExplicitNonEditorRoute()) {
@@ -150,13 +152,9 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(
-        fileContext,
-        mappedFilePath,
-        deps.terminalHandle
-      )
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, deps)
       if (linkOwner?.kind === 'grant') {
-        hostGrantId = linkOwner.grantId
+        hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath
         statResult = { isDirectory: false, escapesWorktree: true }
       } else if (linkOwner?.kind === 'client') {
@@ -200,7 +198,7 @@ export function openDetectedFilePath(
     const pageDestination =
       canOpenWithSystemDefault &&
       !clientLocal &&
-      hostGrantId === null &&
+      hostGrant === null &&
       !explicitGroupRequest &&
       isHtmlFilePath(mappedFilePath)
         ? (deps.browserDestination ??
@@ -231,14 +229,14 @@ export function openDetectedFilePath(
     }
 
     // Why: a granted file is readable only through its grant, so it opens in Orca, never as a download.
-    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrantId === null) {
+    if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrant === null) {
       // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
       await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
       return
     }
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
-    if (isHtmlFilePath(mappedFilePath) && hostGrantId === null) {
+    if (isHtmlFilePath(mappedFilePath) && hostGrant === null) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -280,7 +278,7 @@ export function openDetectedFilePath(
         relativePath = maybeRelative
       }
     } else if (
-      hostGrantId === null &&
+      hostGrant === null &&
       !isFloatingWorkspaceId(worktreeId) &&
       store.openFiles.some(
         (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
@@ -320,8 +318,7 @@ export function openDetectedFilePath(
         runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
         // Why: a tab's owner must match its workspace's to be editable; this one is this computer's.
         ...(clientLocal && targetWorktreeId === worktreeId ? { readOnly: true } : {}),
-        // Why: the grant is the only authority to read a host file outside its workspaces.
-        ...(hostGrantId !== null ? { readOnly: true, terminalArtifactGrantId: hostGrantId } : {}),
+        ...hostGrant,
         // Retain SSH owner or restored absolute remote paths become indistinguishable from client-local external files.
         ...(relativePath === filePath &&
         fileContext.target.kind === 'local' &&

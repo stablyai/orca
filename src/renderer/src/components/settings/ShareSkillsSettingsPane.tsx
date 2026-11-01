@@ -99,7 +99,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
 
       {!isWebClient ? (
         <SettingsSwitchRow
-          label={translate('auto.components.settings.shareSkills.showButton', 'Show Skills Button')}
+          label={translate('auto.components.settings.shareSkills.showButton', 'Show Skills button')}
           description={translate(
             'auto.components.settings.shareSkills.showButtonDescription',
             'Show the Skills shortcut in the sidebar.'

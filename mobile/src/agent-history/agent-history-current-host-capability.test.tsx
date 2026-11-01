@@ -239,7 +239,7 @@ it.each([
         cwd: '/owned/workspace',
         codexHome: null
       },
-      hostPlatform: 'darwin'
+      workspacePlatform: 'darwin'
     })
     await act(async () => {
       resolveRetired(firstStatus)

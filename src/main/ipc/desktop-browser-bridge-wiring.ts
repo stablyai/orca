@@ -7,7 +7,7 @@ import {
   isDesktopBrowserBridgeMethod
 } from '../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import {
   getOrcadSshDeployment,
@@ -149,7 +149,8 @@ export function installDesktopBrowserBridge(options: {
             rendererResolveRemoteCliWorkspace(getMainWindow, {
               environmentId: candidate.environmentId,
               ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
-              ...(scope.page ? { pageId: scope.page } : {})
+              // The renderer knows tabs, not the popups they open.
+              ...(scope.page ? { pageId: browserManager.getOwningTabIdForPage(scope.page) } : {})
             }),
           markWorkspaceDriven: markRemoteCliDrivenWorkspace,
           isHostBrowsingRouted: () => isSshTargetBrowsingRouted(candidate.targetId),

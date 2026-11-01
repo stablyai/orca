@@ -4,17 +4,17 @@ import { translate } from '@/i18n/i18n'
 import {
   agentSessionFailureSentence,
   type AgentSessionFailureWordsContext
-} from '../../../../shared/agent-session-failure-words'
-import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session-refusal-notice'
+} from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionWriteNoticeParts } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   AGENT_SESSION_WRITE_NOTICE_COPY as COPY,
   type AgentSessionWriteNoticePart,
   type AgentSessionWriteNoticeSentence
-} from '../../../../shared/agent-session-write-notice-copy'
+} from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import type {
   AgentSessionWriteFailure,
   AgentSessionWriteKind
-} from '../../../../shared/agent-session-write-failure'
+} from '../../../../shared/agent-session/failures/agent-session-write-failure'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
@@ -143,6 +143,7 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.clearAfterSending', COPY.clearAfterSending),
   compactAfterSending: () =>
     translate('components.native-chat.writeNotice.compactAfterSending', COPY.compactAfterSending),
+  pendingWork: () => translate('components.native-chat.writeNotice.pendingWork', COPY.pendingWork),
   queueTooLarge: () =>
     translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
   shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),

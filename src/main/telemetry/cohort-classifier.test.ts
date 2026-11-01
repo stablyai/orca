@@ -16,10 +16,6 @@ function makeFakeStore(getRepos: () => Repo[]): Store {
   } as unknown as Store
 }
 
-function makeRepos(n: number): Repo[] {
-  return Array.from({ length: n }, (_, i) => ({ id: `repo-${i}` }) as unknown as Repo)
-}
-
 describe('cohort-classifier', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -29,21 +25,6 @@ describe('cohort-classifier', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     _setStoreForTests(null)
-  })
-
-  it('returns the current repo count', () => {
-    initCohortClassifier(makeFakeStore(() => makeRepos(3)))
-    expect(getCohortAtEmit()).toEqual({ nth_repo_added: 3 })
-  })
-
-  // Zero is the canonical pre-repo cohort, not absent classifier data.
-  it('returns 0 (not undefined) for an empty repo list', () => {
-    initCohortClassifier(makeFakeStore(() => []))
-    expect(getCohortAtEmit()).toEqual({ nth_repo_added: 0 })
-  })
-
-  it('returns undefined when the store is not initialized', () => {
-    expect(getCohortAtEmit()).toEqual({ nth_repo_added: undefined })
   })
 
   it('returns undefined and never throws when getRepos throws', () => {

@@ -242,7 +242,7 @@ describe('Codex WSL runtime hook install', () => {
       commandScriptPath: '/old/home/.orca/agent-hooks/codex-hook.sh',
       trustConfigPath: '/old/home/hooks.json'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan))?.state).toBe('installed')
     const oldCommand = expectedManagedCommand(oldPlan.commandScriptPath)
     const oldKey = computeTrustKey(getManagedTrustEntry(oldPlan, oldCommand))
 
@@ -251,7 +251,7 @@ describe('Codex WSL runtime hook install', () => {
       commandScriptPath: '/new/home/.orca/agent-hooks/codex-hook.sh',
       trustConfigPath: '/new/home/hooks.json'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan))?.state).toBe('installed')
     const newCommand = expectedManagedCommand(newPlan.commandScriptPath)
     const newKey = computeTrustKey(getManagedTrustEntry(newPlan, newCommand))
     const trustEntries = readHookTrustEntries(plan.tomlPath)
@@ -271,7 +271,7 @@ describe('Codex WSL runtime hook install', () => {
       writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
       writeFileSync(plan.tomlPath, '', 'utf-8')
 
-      expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+      expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
       const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
       const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
       expect(command).toBe(expectedManagedCommand(plan.commandScriptPath))
@@ -289,7 +289,7 @@ describe('Codex WSL runtime hook install', () => {
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
     writeFileSync(plan.tomlPath, '', 'utf-8')
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     _internals.removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
 
@@ -417,7 +417,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '1',
           ORCA_AGENT_HOOK_TOKEN: 'stale-token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -460,7 +461,8 @@ describe('Codex WSL runtime hook install', () => {
           ORCA_AGENT_HOOK_PORT: '43210',
           ORCA_AGENT_HOOK_TOKEN: 'token',
           ORCA_PANE_KEY: 'pane-1',
-          ORCA_TEST_CAPTURE: capturePath
+          ORCA_TEST_CAPTURE: capturePath,
+          CLAUDE_JOB_DIR: ''
         }
       })
 
@@ -501,7 +503,7 @@ describe('Codex WSL runtime hook install', () => {
       'utf-8'
     )
 
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
@@ -588,7 +590,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     })
     trustGrantInternals.setGrantSessionRunner(runner)
 
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     expect(runner).toHaveBeenCalledTimes(1)
     const request = runner.mock.calls[0]![0]!
@@ -617,7 +619,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
     })
     trustGrantInternals.setGrantSessionRunner(runner)
 
-    expect((await _internals.installManagedHooksIntoWslRuntime(plan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(plan))?.state).toBe('installed')
 
     expect(runner).toHaveBeenCalledTimes(1)
     const command = expectedManagedCommand(plan.commandScriptPath)
@@ -667,7 +669,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
       trustConfigPath: '/old/home/hooks.json',
       linuxRuntimeHome: '/old/home'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(oldPlan))?.state).toBe('installed')
     const oldKey = computeTrustKey(
       getManagedTrustEntry(oldPlan, expectedManagedCommand(oldPlan.commandScriptPath))
     )
@@ -679,7 +681,7 @@ describe('Codex WSL runtime hook install app-server grant lane', () => {
       trustConfigPath: '/new/home/hooks.json',
       linuxRuntimeHome: '/new/home'
     }
-    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan)).state).toBe('installed')
+    expect((await _internals.installManagedHooksIntoWslRuntime(newPlan))?.state).toBe('installed')
     const newKey = computeTrustKey(
       getManagedTrustEntry(newPlan, expectedManagedCommand(newPlan.commandScriptPath))
     )

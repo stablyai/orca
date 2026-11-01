@@ -13,6 +13,8 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import * as FailedStartTeardown from './failed-worker-start-teardown'
 
 vi.mock('../../../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -57,7 +59,8 @@ type PromptContractHarness = {
 }
 
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'swallowed'
+  outcome: 'accepted' | 'swallowed',
+  agent: TuiAgent = 'codex'
 ): Promise<PromptContractHarness> {
   let composerReady = false
   let submittedTurns = 0
@@ -84,7 +87,7 @@ async function createPromptContractHarness(
       startedTurns += 1
       runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     }
-  }, 'codex')
+  }, agent)
   const { runtime, handle } = fixture
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
@@ -150,7 +153,7 @@ async function createPromptContractHarness(
         from: 'term_coord',
         worktree: 'new-child',
         name: `prompt-contract-${outcome}`,
-        agent: 'codex'
+        agent
       }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
@@ -182,7 +185,27 @@ describe('orchestration worker-start prompt contract', () => {
       rmSync(root, { recursive: true, force: true })
     }
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
+
+  it.each(['pi', 'codex', 'claude', 'opencode'] as const)(
+    'returns the %s agent_readiness failure receipt promptly on recorded end',
+    async (agent) => {
+      vi.useFakeTimers()
+      const harness = await createPromptContractHarness('accepted', agent)
+      harness.runtime.onPtyExit('pty-prompt', 137, undefined, { providerExitObserved: true })
+      const send = vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt')
+      const receipt = vi.fn()
+      void harness.dispatcher.dispatch(harness.request).then(receipt)
+      await vi.waitFor(() => expect(receipt).toHaveBeenCalledOnce())
+      expect(receipt.mock.calls[0][0]).toMatchObject({
+        ok: true,
+        result: { state: 'failed', failedStage: 'agent_readiness', lastError: 'terminal_exited' }
+      })
+      expect(send).not.toHaveBeenCalled()
+      expect(harness.writes).toEqual([])
+    }
+  )
 
   it('durably accepts exactly one submitted and started turn', async () => {
     vi.useFakeTimers()
@@ -264,6 +287,49 @@ describe('orchestration worker-start prompt contract', () => {
       outcome === 'succeeded' ? 'completed' : 'failed'
     )
   })
+
+  it.each([
+    ['succeeded', false],
+    ['failed', true]
+  ] as const)(
+    'preserves an early %s report when prompt delivery then rejects (unknown=%s)',
+    async (outcome, unknown) => {
+      vi.useFakeTimers()
+      const teardown = vi.spyOn(FailedStartTeardown, 'tearDownFailedWorkerStart')
+      const harness = await createPromptContractHarness('swallowed')
+      vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt').mockImplementation(async () => {
+        const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)
+        harness.db.settleWorkerReport({
+          taskId: harness.taskId,
+          dispatchId: dispatch!.id,
+          outcome,
+          result: 'Finished before the prompt receipt'
+        })
+        throw Object.assign(
+          new Error('terminal_handle_stale'),
+          unknown ? { code: 'operation_unknown' } : {}
+        )
+      })
+      const pending = harness.dispatcher.dispatch(harness.request)
+      await vi.runAllTimersAsync()
+      const response = await pending
+      expect(response).toMatchObject({
+        ok: true,
+        result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
+      })
+      expect(response.ok && response.result).not.toHaveProperty('lastError')
+      // Its report is already mail to act on, so the receipt does not say to stop.
+      expect(response.ok && response.result).not.toHaveProperty('next')
+      expect(teardown).not.toHaveBeenCalled()
+      expect(harness.db.getTask(harness.taskId)?.status).toBe(
+        outcome === 'succeeded' ? 'completed' : 'failed'
+      )
+      expect(await harness.dispatcher.dispatch({ ...harness.request, id: 'retry' })).toMatchObject({
+        ok: true,
+        result: { state: 'ready', workerOutcome: outcome, mutation: { replayed: true } }
+      })
+    }
+  )
 
   it('retains accepted authority when the observation binding becomes stale', async () => {
     vi.useFakeTimers()
@@ -347,8 +413,10 @@ describe('orchestration worker-start prompt contract', () => {
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'start_unknown',
       stage: 'turn_start_unobserved',
-      last_error: expect.stringContaining('turn start could not be verified')
+      last_error: expect.stringContaining('turn start was not observed')
     })
+    // A swallowed Enter leaves the prompt in the composer, so the receipt must not claim submission.
+    expect(persisted.getWorkerDispatch(dispatchId)?.last_error).not.toMatch(/submitted/i)
     const persistedEffects = JSON.parse(
       persisted.getWorkerDispatch(dispatchId)?.effects ?? '[]'
     ) as { kind?: string; state?: string }[]

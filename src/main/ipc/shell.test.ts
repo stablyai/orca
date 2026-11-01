@@ -688,6 +688,7 @@ describe('registerShellHandlers', () => {
           port: 2222
         })
       )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/code')
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(
@@ -704,7 +705,33 @@ describe('registerShellHandlers', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it.each(['cursor', 'zed', 'code --reuse-window'])(
+    it('opens a manual custom-port target in Zed without an SSH config alias', async () => {
+      sshTargets.set(
+        'ssh-1',
+        createSshTarget({
+          source: 'manual',
+          configHost: 'builder.example.com',
+          host: 'builder.example.com',
+          port: 2222
+        })
+      )
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/zed')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler(
+          {},
+          { path: '/srv/project', command: 'zed', connectionId: 'ssh-1', ownerHostId: 'ssh:ssh-1' }
+        )
+      ).resolves.toEqual({ ok: true })
+      expect(spawnMock).toHaveBeenCalledWith(
+        '/usr/local/bin/zed',
+        ['ssh://ada@builder.example.com:2222/srv/project'],
+        HIDDEN_EDITOR_LAUNCH_OPTIONS
+      )
+    })
+
+    it.each(['subl', 'code --reuse-window'])(
       'rejects the unsupported SSH launcher %s',
       async (command) => {
         sshTargets.set('ssh-1', createSshTarget())

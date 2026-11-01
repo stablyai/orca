@@ -10,12 +10,12 @@ import type {
 } from '../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../codex/codex-app-server-connection'
 import { refuseUnroutedSteer } from '../codex/codex-structured-dispatch-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/agent-session/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../shared/protocol-version'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
@@ -213,7 +213,7 @@ export async function openStructuredCodexRpcHarness(
     hostId: 'local',
     claimKeyId: 'key-1',
     resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-    resolveCodexCommand: () => '/usr/local/bin/codex',
+    resolveCodexCommand: () => ({ command: '/usr/local/bin/codex', prefixArgs: [] }),
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
     resolveEnvironment: async () => ({

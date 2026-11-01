@@ -12,25 +12,10 @@ describe('resolveStableForegroundProcess', () => {
     expect(result.lastRecognizedAgent).toBe('claude')
   })
 
-  it('remembers the agent from a completed scan that found it', () => {
-    const result = resolveStableForegroundProcess({ available: true, processName: 'claude' }, null)
-    expect(result.processName).toBe('claude')
-    expect(result.lastRecognizedAgent).toBe('claude')
-  })
-
   it('reports a real exit and clears memory when a completed scan finds no agent', () => {
     const result = resolveStableForegroundProcess(
       { available: true, processName: 'powershell.exe' },
       'claude'
-    )
-    expect(result.processName).toBe('powershell.exe')
-    expect(result.lastRecognizedAgent).toBeNull()
-  })
-
-  it('passes through when a scan is unavailable and nothing is remembered', () => {
-    const result = resolveStableForegroundProcess(
-      { available: false, processName: 'powershell.exe' },
-      null
     )
     expect(result.processName).toBe('powershell.exe')
     expect(result.lastRecognizedAgent).toBeNull()

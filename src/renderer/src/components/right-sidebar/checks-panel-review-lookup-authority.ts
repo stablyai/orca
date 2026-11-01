@@ -1,8 +1,9 @@
+import type { HostedReviewLookupAuthority } from '../../../../shared/hosted-review-create-confirmation'
 import type { HostedReviewLookupOutcome } from '../../../../shared/hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 
 /** Separate renderable reviews, positive-unresolved evidence, accepted absence, and unknown lookups; only accepted absence permits create. */
-export type ChecksPanelReviewLookup = 'found' | 'positive_unresolved' | 'not_found' | 'unknown'
+export type ChecksPanelReviewLookup = HostedReviewLookupAuthority
 
 type ReviewLookupNumberLike = number | null | undefined
 

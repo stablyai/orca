@@ -1,5 +1,4 @@
 // The signed `com.stablyai.orca` helper that runs the terminal daemon on the pinned Node.
-// See docs/reference/macos-daemon-tcc-attribution.md.
 const { spawnSync } = require('node:child_process')
 const {
   chmodSync,

@@ -13,6 +13,7 @@ import {
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
 import {
   isFloatingWorkspacePanelFocused,
+  switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
@@ -168,7 +169,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
   }
   if (command.type === 'previous-recent') {
     if (isFloatingWorkspacePanelFocused()) {
-      return false
+      return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
   }

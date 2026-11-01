@@ -129,29 +129,6 @@ describe('installed WSL transcript watcher lifecycle', () => {
     subscription?.unsubscribe()
   })
 
-  it('returns the running reconciliation promise to the shared observer', async () => {
-    const subscription = await installTranscriptWatcher(UNC_PATH, () => null, {
-      agent: 'codex',
-      sessionId: 'wsl-session',
-      onAppend: () => {}
-    })
-    await vi.advanceTimersByTimeAsync(50)
-    let finishStat: (() => void) | undefined
-    mocks.stat.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishStat = () => resolve(EMPTY_STATS)
-        })
-    )
-
-    const reconciliation = mocks.observation?.(true)
-    expect(reconciliation).toBeInstanceOf(Promise)
-    await vi.waitFor(() => expect(finishStat).toBeDefined())
-    finishStat?.()
-    await reconciliation
-    subscription?.unsubscribe()
-  })
-
   it('defers a failed observed UNC probe to the next shared observation', async () => {
     const subscription = await installTranscriptWatcher(UNC_PATH, () => null, {
       agent: 'codex',

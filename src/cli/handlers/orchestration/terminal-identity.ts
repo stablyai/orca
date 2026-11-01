@@ -1,12 +1,11 @@
-import type { RuntimeClient } from '../../runtime-client'
-import { getOptionalStringFlag } from '../../flags'
-import { RuntimeClientError } from '../../runtime-client'
+import { getOptionalStringFlag, getPresentStringFlag } from '../../flags'
+import { type RuntimeClient, RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId
-} from '../../../shared/agent-session-caller-env'
+} from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { sessionAddressForHost } from '../../session-caller-flags'
 
 // --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.
@@ -21,7 +20,7 @@ export async function resolveOrchestrationTerminalHandle(
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string | undefined> {
   // CLI entry already fences caller flags using the command spec.
-  const explicit = getOptionalStringFlag(flags, flagName)
+  const explicit = getPresentStringFlag(flags, flagName)
   const sessionId = readInjectedAgentSessionId()
   if (sessionId) {
     return explicit ? sessionAddressForHost(explicit, sessionId) : undefined

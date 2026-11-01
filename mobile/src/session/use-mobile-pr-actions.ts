@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  fetchMarkPRReadyForReview,
   fetchMergePR,
   fetchRemovePRReviewers,
   fetchRequestPRReviewers,
@@ -31,6 +33,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
     mergePR: (args) => fetchMergePR(client, worktreeId, args),
     setPRAutoMerge: (args) => fetchSetPRAutoMerge(client, worktreeId, args),
     updatePRState: (args) => fetchUpdatePRState(client, worktreeId, args),
+    markReadyForReview: (args) => fetchMarkPRReadyForReview(client, worktreeId, args),
     requestReviewers: (args) => fetchRequestPRReviewers(client, worktreeId, args),
     removeReviewers: (args) => fetchRemovePRReviewers(client, worktreeId, args),
     rerunChecks: (args) => fetchRerunPRChecks(client, worktreeId, args)
@@ -38,6 +41,7 @@ function realMutations(client: RpcOperationSender, worktreeId: string): PrAction
 }
 
 export function useMobilePrActions(input: PrActionsInput) {
+  useMobileTranslation()
   const { client, connState, worktreeId, prNumber, headSha, prRepo, refetch } = input
   const [, forceRender] = useReducer((n: number) => n + 1, 0)
 
@@ -98,6 +102,11 @@ export function useMobilePrActions(input: PrActionsInput) {
       },
       [engine, ready]
     ),
+    markReadyForReview: useCallback(() => {
+      if (ready) {
+        void engine.markReadyForReview()
+      }
+    }, [engine, ready]),
     requestReviewer: useCallback(
       (login: string) => {
         if (ready) {
@@ -143,6 +152,7 @@ function noopMutations(): PrActionMutations {
     mergePR: fail,
     setPRAutoMerge: fail,
     updatePRState: fail,
+    markReadyForReview: fail,
     requestReviewers: fail,
     removeReviewers: fail,
     rerunChecks: fail

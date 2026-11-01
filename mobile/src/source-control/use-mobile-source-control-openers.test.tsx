@@ -50,6 +50,7 @@ async function tapChangedFile(args: {
   function Probe(): null {
     held.openFile = useMobileSourceControlOpeners({
       client,
+      diffShowWhitespace: false,
       connState: 'connected',
       hostId: 'host-1',
       worktreeId: 'wt',

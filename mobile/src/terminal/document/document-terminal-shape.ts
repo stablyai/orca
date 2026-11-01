@@ -1,8 +1,11 @@
+import type { IUnicodeHandling } from '@xterm/xterm'
+import type { XtermUnicodeServiceCore } from '../../../../src/shared/terminal-unicode-provider'
+
 // Describe only xterm members the document consumes; native globals and embedded imports satisfy the same seam.
 
 export type TerminalOscLinkService = { getLinkData?: (id: number) => { uri?: string } | undefined }
 
-export type TerminalDocumentCore = {
+export type TerminalDocumentCore = XtermUnicodeServiceCore & {
   _renderService?: { dimensions?: { css: { cell: { height: number; width: number } } } }
   _oscLinkService?: TerminalOscLinkService
   _inputHandler?: { _oscLinkService?: TerminalOscLinkService }
@@ -32,6 +35,7 @@ export type TerminalDocumentCell = {
 
 export type TerminalDocumentLine = {
   readonly length: number
+  readonly isWrapped: boolean
   translateToString: (trimRight: boolean, startColumn?: number, endColumn?: number) => string
   getCell?: (x: number, cell?: TerminalDocumentCell) => TerminalDocumentCell | undefined
 }
@@ -68,14 +72,14 @@ export type TerminalDocumentTerminal = {
   getSelection?: () => string
   select: (col: number, row: number, length: number) => void
   clearSelection: () => void
-  readonly unicode: { activeVersion: string }
+  readonly unicode: IUnicodeHandling
   attachCustomKeyEventHandler: (handler: () => boolean) => void
   onData: (listener: (data: string) => void) => TerminalDocumentDisposable
   readonly parser?: {
     registerOscHandler: (
       ident: number,
       callback: (data: string) => boolean
-    ) => TerminalDocumentDisposable
+    ) => { dispose: () => void }
   }
   readonly textarea?: {
     readOnly: boolean

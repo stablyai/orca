@@ -7,7 +7,7 @@ import {
 import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
-import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { getOptionalStringFlag, getPresentStringFlag, getRequiredStringFlag } from './flags'
 import {
   getCallerExecutionHostId,
   resolveCallerPaneWorktreeSelector,
@@ -112,7 +112,8 @@ export async function resolveCurrentWorktreeSelection(
   const selection = selectEnclosingWorktreeSelectionOnHost(
     worktrees.result.worktrees,
     cwd,
-    getCallerExecutionHostId()
+    getCallerExecutionHostId(),
+    process.env.ORCA_WORKTREE_ID
   )
   if (!selection) {
     throw new RuntimeClientError(
@@ -187,7 +188,7 @@ export async function getTerminalHandle(
   client: RuntimeClient,
   options: { requireUnambiguous?: boolean } = {}
 ): Promise<string> {
-  const explicit = getOptionalStringFlag(flags, 'terminal')
+  const explicit = getPresentStringFlag(flags, 'terminal')
   if (explicit) {
     return explicit
   }

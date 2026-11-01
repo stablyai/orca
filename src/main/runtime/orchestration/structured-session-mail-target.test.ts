@@ -1,3 +1,4 @@
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,11 +9,14 @@ import {
   setAppEnvironment,
   type AppEnvironment
 } from '../../../shared/app-environment'
-import type { AgentSessionLease, AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionLease,
+  AgentSessionRecord
+} from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { formatOrcaSessionAddress, type OrcaSessionId } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
@@ -67,8 +71,11 @@ function installStore(record: AgentSessionRecord | null, visible = true): Store 
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (sessionId: string) => store.records.get(sessionId) ?? null,
-        listRecords: () => [...store.records.values()],
+        getConversation: (sessionId: string) => {
+          const record = store.records.get(sessionId)
+          return record ? agentSessionConversationView(record) : null
+        },
+        listConversations: () => [...store.records.values()].map(agentSessionConversationView),
         getVisibleSessionTabIndex: () => store.visible
       }
     }
@@ -246,6 +253,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       _orchestrationDb: null,
       ensureOrchestrationFederationRelay: vi.fn(),
       scheduleRestoredMessageRepoints: vi.fn(),
+      continueRestoredWorkerMail: vi.fn(),
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
       notifyStructuredSessionJournalActivity: vi.fn()
     })

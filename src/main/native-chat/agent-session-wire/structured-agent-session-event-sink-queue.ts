@@ -51,7 +51,7 @@ export class StructuredAgentSessionSinkQueue {
   /** Closing drops only buffered operations after this handover sequence. */
   private handedOverSequence = 0
   private handedOverSettled: Promise<void> = Promise.resolve()
-  private readonly buffered = new Map<string | number, Admitted>()
+  private readonly buffered: Admitted[] = []
   private readonly waitingPublications = new Map<string, Admitted>()
   private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
   private readonly finalTail = new StructuredAgentSessionFinalTailReservation()
@@ -105,9 +105,7 @@ export class StructuredAgentSessionSinkQueue {
       return
     }
     this.target = target
-    const buffered = [...this.buffered.values()]
-    this.buffered.clear()
-    for (const operation of buffered) {
+    for (const operation of this.buffered.splice(0)) {
       this.handOver(operation, target)
     }
   }
@@ -151,8 +149,14 @@ export class StructuredAgentSessionSinkQueue {
       return { accepted: false, reason: 'failed' }
     }
     const key = operation.publicationKey
+    const replaceAt =
+      key === undefined ? -1 : this.buffered.findIndex((queued) => queued.publicationKey === key)
     const replaced =
-      key === undefined ? undefined : (this.buffered.get(key) ?? this.waitingPublications.get(key))
+      replaceAt >= 0
+        ? this.buffered[replaceAt]
+        : key === undefined
+          ? undefined
+          : this.waitingPublications.get(key)
     const finalTail = operation.finalTail === true
     const lifecycle = !finalTail && (operation.lifecycle ?? options.lifecycle === true)
     const lifecycleBytes = lifecycle ? (operation.lifecycleBytes ?? operation.bytes) : 0
@@ -167,7 +171,7 @@ export class StructuredAgentSessionSinkQueue {
       !finalTail && !lifecycle && nextOperations > this.deps.watermarks.maxQueuedOperations
     const exceedsLifecycle =
       lifecycle && nextLifecycleOperations > this.deps.watermarks.maxLifecycleQueuedOperations
-    if (!options.criticalRoot && (exceedsOrdinary || exceedsLifecycle)) {
+    if (exceedsOrdinary || exceedsLifecycle) {
       this.setBackpressure(true)
       return { accepted: false, reason: 'backpressure' }
     }
@@ -184,7 +188,9 @@ export class StructuredAgentSessionSinkQueue {
       lifecycleBytes,
       releaseFinalTail: releaseFinalTail ?? undefined
     }
-    if (replaced && !this.buffered.delete(key ?? replaced.sequence)) {
+    if (replaceAt >= 0) {
+      this.buffered.splice(replaceAt, 1)
+    } else if (replaced) {
       // Superseded publications still settle in order as no-ops.
       replaced.superseded = true
     }
@@ -195,7 +201,7 @@ export class StructuredAgentSessionSinkQueue {
     if (this.target) {
       this.handOver(accepted, this.target)
     } else {
-      this.buffered.set(key ?? accepted.sequence, accepted)
+      this.buffered.push(accepted)
     }
     this.updateBackpressure()
     return { accepted: true }
@@ -248,8 +254,7 @@ export class StructuredAgentSessionSinkQueue {
 
   /** Buffered drops settle only after earlier handed-over writes so barriers cannot overtake them. */
   private dropBuffered(): void {
-    const dropped = [...this.buffered.values()]
-    this.buffered.clear()
+    const dropped = this.buffered.splice(0)
     for (const operation of dropped) {
       this.release(operation)
     }

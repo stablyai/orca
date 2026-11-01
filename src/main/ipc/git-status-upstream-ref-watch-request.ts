@@ -11,6 +11,7 @@ import { setWorktreeGitStatusRefWatch } from './worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
+import { assertWslUncPathRunning } from '../wsl/wsl-unc-access-gate'
 
 export type GitStatusUpstreamRefWatchRequest = GitStatusRefBindingRequest
 
@@ -26,10 +27,13 @@ export function applyGitStatusUpstreamRefWatchRequest(
     }
     const signal = abortSignalWithTimeout(bindingSignal, UPSTREAM_REF_RESOLUTION_TIMEOUT_MS)
     requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+    // Sent after each accepted status: its Git would boot a stopped WSL distro (E9).
+    await assertWslUncPathRunning(args.worktreePath)
 
     const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
     const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
     const gitOptions = getLocalGitOptionsForRepo(store, repo)
+    await assertWslUncPathRunning(worktreePath, gitOptions.wslDistro)
     return resolveGitStatusUpstreamRef(
       (gitArgs, cwd, requestSignal) =>
         gitExecFileAsync(gitArgs, {

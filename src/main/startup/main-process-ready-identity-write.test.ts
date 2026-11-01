@@ -160,7 +160,7 @@ vi.mock('./dev-education-suppression', () => ({
   suppressDevEducationForStore: vi.fn()
 }))
 vi.mock('../browser/browser-session-proxy', () => ({
-  applyBrowserSessionProxies: vi.fn(async () => {}),
+  awaitBrowserSessionProxies: vi.fn(async () => {}),
   setBrowserNetworkProxySettingsResolver: vi.fn(),
   invalidateBrowserSessionProxyApplication: vi.fn()
 }))
@@ -239,6 +239,8 @@ import {
 } from '../browser/browser-identity-mode-record'
 import { BROWSER_SESSION_META_FILE_NAME } from '../browser/browser-session-meta-store'
 import { getOrcaProfileBrowserSessionPartition } from '../../shared/orca-profiles'
+// Transform the ready graph at collection, outside any test timeout; tests re-evaluate it after resetModules.
+import './main-process-ready'
 
 function seedIdentityRecord(mode: string, explicitSelection: boolean): void {
   writeFileSync(

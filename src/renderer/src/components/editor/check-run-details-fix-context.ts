@@ -2,7 +2,7 @@ import {
   buildFixBrokenChecksPrompt,
   getBrokenChecks,
   getCheckDetailsPromptKey
-} from '@/components/pr-checks-fix-prompt'
+} from '../../../../shared/pr-checks-fix-prompt'
 import { gitHubPRToChecksPanelReview } from '@/components/right-sidebar/checks-panel-review'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store'

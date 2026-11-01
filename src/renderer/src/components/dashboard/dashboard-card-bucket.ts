@@ -1,9 +1,9 @@
 import type {
   DashboardBucket,
-  DashboardCardDisplayState
+  DashboardCardBaseDisplayState
 } from '../../../../shared/dashboard-snapshot'
 
-export function dashboardBucketForDotState(state: DashboardCardDisplayState): DashboardBucket {
+export function dashboardBucketForDotState(state: DashboardCardBaseDisplayState): DashboardBucket {
   switch (state) {
     case 'working':
     case 'monitoring':

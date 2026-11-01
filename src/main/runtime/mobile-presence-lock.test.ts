@@ -1,3 +1,4 @@
+import * as inputAdmission from './terminal-input-admission'
 import './mobile-subscribe-integration.spec'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { listWorktrees } from '../git/worktree'
@@ -141,8 +142,9 @@ describe('mobile presence lock — driver state machine', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
   })
 
-  it('stops a preview paste when mobile claims the floor between chunks', async () => {
+  it('finishes an admitted preview paste then pauses the next action after phone takeover', async () => {
     const { runtime, controller, writes } = createRuntime()
+    const admission = vi.spyOn(inputAdmission, 'createTerminalInputReservation')
     runtime.setMobileDisplayMode('pty-1', 'desktop')
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
@@ -167,10 +169,14 @@ describe('mobile presence lock — driver state machine', () => {
 
       expect(floorClaim.current).not.toBeNull()
       expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
-      await expect(result).resolves.toBe(false)
-      expect(writes).toHaveLength(1)
-      expect(Buffer.byteLength(writes[0]!, 'utf8')).toBe(16 * 1024)
+      await expect(result).resolves.toBe(true)
+      expect(writes).toHaveLength(2)
+      expect(writes.join('')).toBe('x'.repeat(32 * 1024))
+      expect(await runtime.writeTerminalPreviewInput('pty-1', 'next')).toBe(false)
+      expect(admission).toHaveBeenCalledWith(runtime, 'desktop', undefined)
+      expect(writes).toHaveLength(2)
     } finally {
+      admission.mockRestore()
       floorClaim.current?.rollback()
     }
   })

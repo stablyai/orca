@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { StructuredAgentRegistry } from './structured-agent-registry'
 import { acpLaunchSpecFor } from '../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../acp/acp-structured-agent-definitions'
@@ -5,11 +6,11 @@ import { AcpBackgroundTaskTimeline } from '../../acp/acp-background-task-timelin
 import { createProviderTimelineAssembler } from '../agent-session-timeline/provider-timeline-assembler'
 import { providerTimelineSink } from '../agent-session-timeline/provider-timeline-plan'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -69,7 +70,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function restartAfterCrash(): Promise<void> {
@@ -80,7 +81,7 @@ async function restartAfterCrash(): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   rig.clock.now = RESTARTED_AT
   rig.store = await openTestAgentSessionRecordStore(rig.root)
   rig.host = new StructuredAgentSessionHost({
@@ -186,7 +187,7 @@ describe.each([
       const completedAt = bufferedOutput ? CONNECTION_CLOSED_AT : LAST_CHUNK_AT
       expect(journal.lastProviderActivityAt(1)).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       const snapshot = await rig.host.journalSnapshot(SESSION)
       const background = snapshot.items.find(
         (item) =>
@@ -204,7 +205,7 @@ describe.each([
         rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.lastProviderActivityAt(1)
       ).toBe(completedAt)
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(snapshot.items)
     }
   )

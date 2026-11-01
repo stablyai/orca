@@ -90,11 +90,7 @@ function LinearIssueWorkspaceIssue({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            <LinearIssueTextEditor
-              issue={detail.displayed}
-              onIssueChange={detail.handleIssueTextChange}
-              sourceContext={sourceContext}
-            />
+            <LinearIssueTextEditor issue={detail.displayed} sourceContext={sourceContext} />
             <LinearIssueSubIssues
               issue={detail.displayed}
               onOpenIssue={onOpenIssue}
@@ -115,8 +111,6 @@ function LinearIssueWorkspaceIssue({
             comments={detail.comments}
             editState={detail.editState}
             attachedWorkspaceLabel={attachedWorkspaceLabel}
-            onEditStateChange={detail.handleEditStateChange}
-            onProjectChanged={detail.handleProjectChanged}
             onOpenAttachedWorkspace={handleOpenOrUseIssue}
             sourceContext={sourceContext}
           />

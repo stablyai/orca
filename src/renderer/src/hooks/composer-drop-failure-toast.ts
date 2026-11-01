@@ -27,7 +27,11 @@ export function showComposerDropFailureToast({
     translate(
       'auto.hooks.useComposerState.dropPartiallyAttached',
       '{{failureCount}} of {{count}} items could not be attached.',
-      { failureCount, count: total }
+      {
+        failureCount,
+        count: total,
+        defaultValue_one: '{{failureCount}} of {{count}} item could not be attached.'
+      }
     ),
     {
       id: DROP_FAILURE_TOAST_ID,

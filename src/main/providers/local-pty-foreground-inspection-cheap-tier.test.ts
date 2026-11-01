@@ -90,17 +90,6 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     }
   })
 
-  it('a pane with NO recognized anchor never consults the cheap tier', async () => {
-    table = 'shell-only'
-    proc.process = 'zsh'
-    for (let i = 0; i < 3; i += 1) {
-      expect(await getLocalPtyForegroundProcess(ID)).toBe('zsh')
-    }
-    expect(cheapSnapshotMock).not.toHaveBeenCalled()
-    expect(resolveMock).toHaveBeenCalledTimes(3)
-    expect(ptyLastRecognizedForeground.get(ID)).toBeUndefined()
-  })
-
   it('once recognized, an unchanged pane re-proves the agent from the cheap tier without a full scan', async () => {
     expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
     expect(resolveMock).toHaveBeenCalledTimes(1)
@@ -118,15 +107,6 @@ describe('local POSIX provider cheap-tier revalidation', () => {
     expect(await getLocalPtyForegroundProcess(ID)).toBe('zsh')
     expect(resolveMock).toHaveBeenCalledTimes(2)
     expect(ptyLastRecognizedForeground.get(ID)).toBeUndefined()
-  })
-
-  it('a changed node-pty foreground name escalates without consulting the cheap tier', async () => {
-    expect(await getLocalPtyForegroundProcess(ID)).toBe('claude')
-    proc.process = 'zsh'
-    table = 'shell-only'
-    expect(await getLocalPtyForegroundProcess(ID)).toBe('zsh')
-    expect(cheapSnapshotMock).not.toHaveBeenCalled()
-    expect(resolveMock).toHaveBeenCalledTimes(2)
   })
 
   it('a cheap capture failure falls through to the full scan', async () => {

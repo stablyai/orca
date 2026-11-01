@@ -3,14 +3,14 @@
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionSendSubmission,
   type AgentSessionQueuedSendReceipt
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
-import { structuredAgentSessionMessageSendMutation } from '../../../shared/structured-agent-session-send-mutation'
+import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
 import { dispatchPreambleSendOptions, type DispatchPreambleSendOptions } from './preamble'
 import type { RuntimeAgentPromptWriteOptions } from '../runtime-terminal-contracts'
@@ -33,8 +33,6 @@ export type StructuredSessionTurn = {
   delivery: AgentTurnDelivery
   /** Host-local admission for an automated send. */
   beforeRun?: () => void
-  /** Host-local: a background notice carries no changed user choices. */
-  keepCurrentOptions?: true
 }
 
 export type StructuredSessionTurnSend = {
@@ -140,7 +138,7 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    { ...message, beforeRun: turn.beforeRun, keepCurrentOptions: turn.keepCurrentOptions }
+    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

@@ -29,7 +29,9 @@ export const FederationAckParams = z.object({
         ])
       })
     )
-    .optional()
+    .optional(),
+  // A home that can arm automatic release; older homes omit it and keep manual release.
+  autoRelease: z.boolean().optional()
 })
 
 export const FederationImportParams = z.object({

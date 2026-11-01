@@ -629,6 +629,29 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().worktreeNavHistory).toEqual([worktreeId])
   })
 
+  it('ignores a persisted workspace key that disagrees with the restored active worktree', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-current'
+    const staleFolderKey = folderWorkspaceKey('folder-stale')
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-current' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'repo1',
+        activeWorktreeId: worktreeId,
+        activeWorkspaceKey: staleFolderKey
+      },
+      { additionalValidWorkspaceKeys: [staleFolderKey] }
+    )
+
+    expect(store.getState().activeWorkspaceKey).toBe(worktreeWorkspaceKey(worktreeId))
+  })
+
   it('leaves nav history empty when no active worktree is restored', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: {} })

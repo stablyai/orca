@@ -6,6 +6,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
+import { questionAnswerWaitPrefix } from '../../orchestration/question-answer-delivery'
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -116,9 +117,10 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptysById.delete(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.launchComposerReadyByPtyId.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
-    this.recentPtyPathCandidatesById.delete(ptyId)
+    this.trustDialogStatus.forget(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
@@ -134,6 +136,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.terminalRunFacts.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     this.invalidatePtyIncarnationHandle(ptyId)
+    this.terminalWaiters.rejectPty(ptyId, 'terminal_handle_stale')
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
@@ -179,8 +182,15 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    // Heartbeats are stored handled and only record liveness; they never wake a mailbox.
+    if (messageType === 'heartbeat') {
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
+    } else {
+      // A waiting ask rechecks its question, which a settled Dispatch has closed.
+      this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

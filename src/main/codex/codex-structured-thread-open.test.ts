@@ -4,7 +4,7 @@ import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-fram
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { CodexAppServerConnection } from './app-server/codex-app-server-connection-types'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
@@ -14,37 +14,86 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
-  it.each([
-    ['workspaceWrite', 'auto'],
-    ['readOnly', 'read-only'],
-    ['read-only', 'read-only']
-  ])('leaves own policy omitted on start/resume and reports %s', async (sandboxType, expected) => {
-    const request = vi.fn(async () => ({
-      thread: { id: 'own-thread' },
-      approvalPolicy: 'on-request',
-      sandbox: { type: sandboxType },
-      approvalsReviewer: 'auto_review'
-    }))
-    for (const resumeThreadId of [null, 'own-thread']) {
+  it('retains the compiled Auto sandbox on start and resume', async () => {
+    const sandbox = {
+      type: 'workspaceWrite',
+      writableRoots: ['/workspace', '/extra-root'],
+      networkAccess: true,
+      excludeTmpdirEnvVar: true,
+      excludeSlashTmp: true
+    }
+    const connection = connectionFor(vi.fn(async () => ({ thread: { id: 'thread' }, sandbox })))
+    for (const resumeThreadId of [null, 'thread']) {
       const opened = await openCodexThread(
-        connectionFor(request),
-        { cwd: '/workspace', resumeThreadId },
+        connection,
+        {
+          cwd: '/workspace',
+          resumeThreadId,
+          permissionPolicy: codexStructuredPermissionPolicy('auto')
+        },
         2_000
       )
-      expect(opened.reportedPermissionMode).toBe(expected)
+      expect(opened.sandbox).toEqual(sandbox)
     }
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      'thread/start',
-      { cwd: '/workspace' },
-      { timeoutMs: 2_000 }
+  })
+
+  it.each([
+    ['workspaceWrite', 'on-request', 'auto_review', 'auto'],
+    ['readOnly', 'on-request', 'auto_review', 'read-only'],
+    ['read-only', 'on-request', 'auto_review', 'read-only'],
+    ['readOnly', 'on-request', 'user', 'ask'],
+    ['dangerFullAccess', 'never', 'user', 'full-access'],
+    ['workspaceWrite', 'on-request', 'user', 'ask'],
+    ['readOnly', 'untrusted', 'user', 'read-only'],
+    ['dangerFullAccess', 'never', 'auto_review', 'full-access'],
+    ['workspaceWrite', 'on-request', undefined, null],
+    [undefined, undefined, undefined, null]
+  ])(
+    'leaves own policy omitted on start/resume and reports %s/%s/%s',
+    async (sandboxType, approvalPolicy, approvalsReviewer, expected) => {
+      const request = vi.fn(async () => ({
+        thread: { id: 'own-thread' },
+        approvalPolicy,
+        sandbox: sandboxType ? { type: sandboxType } : undefined,
+        approvalsReviewer
+      }))
+      for (const resumeThreadId of [null, 'own-thread']) {
+        const opened = await openCodexThread(
+          connectionFor(request),
+          { cwd: '/workspace', resumeThreadId },
+          2_000
+        )
+        expect(opened.reportedPermissionMode).toBe(expected)
+      }
+      expect(request).toHaveBeenNthCalledWith(
+        1,
+        'thread/start',
+        { cwd: '/workspace' },
+        { timeoutMs: 2_000 }
+      )
+      expect(request).toHaveBeenNthCalledWith(
+        2,
+        'thread/resume',
+        { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
+        { timeoutMs: 2_000 }
+      )
+    }
+  )
+
+  it('recognizes snake-case exact settings without changing the custom-policy fallback', async () => {
+    const request = vi.fn(async () => ({
+      thread: { id: 'configured' },
+      approval_policy: 'on-request',
+      approvals_reviewer: 'user',
+      sandbox: 'read-only'
+    }))
+    const opened = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'configured' },
+      2_000
     )
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      'thread/resume',
-      { cwd: '/workspace', threadId: 'own-thread', excludeTurns: true },
-      { timeoutMs: 2_000 }
-    )
+    expect(opened.reportedPermissionMode).toBe('ask')
+    expect(request.mock.calls).toHaveLength(1)
   })
 
   it('applies the resolved permission policy when starting and resuming a thread', async () => {
@@ -107,7 +156,7 @@ describe('openCodexThread', () => {
     const params = request.mock.calls[0]?.[1] ?? {}
     expect(params).toMatchObject({
       approvalPolicy: 'on-request',
-      sandbox: 'workspace-write',
+      sandbox: 'read-only',
       approvalsReviewer: 'user'
     })
     expect(Object.keys(params)).toEqual(

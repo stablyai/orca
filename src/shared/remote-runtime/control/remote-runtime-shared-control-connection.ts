@@ -1,7 +1,7 @@
 import type { PairedE2EEClientHandshake } from '../../paired-e2ee-client-handshake'
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../../paired-runtime-connection'
-import { remoteRuntimeClientCapabilities } from '../../remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { openSharedControlSocket } from './remote-runtime-shared-control-open'
 import { closeSharedControlAfterError } from './remote-runtime-shared-control-refusal'
@@ -223,6 +223,7 @@ export class RemoteRuntimeSharedControlConnection {
       getSocket: () => this.ws,
       markReady: () => {
         this.diagnostics.markReady()
+        this.options.onReady?.()
         // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
         this.publishDiagnostics()
         this.readyStableReset.schedule({

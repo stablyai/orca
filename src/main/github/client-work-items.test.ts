@@ -163,6 +163,32 @@ describe('listWorkItems', () => {
     expect(calls.every(([, options]) => options?.host === 'github.acme-corp.com')).toBe(true)
   })
 
+  it('marks proven GitLab remotes without listing them', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => ({
+      stdout: args[1] === '-v' ? 'origin\tgit@gitlab.com:team/project.git (fetch)\n' : 'origin\n'
+    }))
+
+    const result = await listWorkItems('/repo', 24)
+    expect(result.sources).toMatchObject({ issues: null, prs: null, ineligible: true })
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'origin\tgit@custom.example.com:team/project.git (fetch)\n',
+    'origin\tgit@gitlab.com:team/project.git (fetch)\nupstream\tgit@github.com:team/project.git (fetch)\n'
+  ])('keeps unproven or mixed remote identity unresolved: %s', async (stdout) => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout })
+
+    const result = await listWorkItems('/repo', 24)
+
+    expect(result.sources.ineligible).toBeUndefined()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('does not run unscoped work-item queries when a local repository has no GitHub source', async () => {
     getIssueOwnerRepoMock.mockResolvedValue(null)
     getOwnerRepoMock.mockResolvedValue(null)
@@ -275,7 +301,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr assignee:@me sort:created-desc'
+        'assignee:@me sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -505,7 +531,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:open draft:true sort:created-desc'
+        'is:open draft:true sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -565,7 +591,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:merged sort:created-desc'
+        'is:merged sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -633,7 +659,7 @@ describe('listWorkItems', () => {
         '--state',
         'all',
         '--search',
-        'is:pr is:closed -is:merged sort:created-desc'
+        'is:closed -is:merged sort:created-desc'
       ]),
       { cwd: '/repo-root' }
     )
@@ -739,7 +765,7 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--search',
-        'is:pr is:open sort:created-desc'
+        'is:open sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )

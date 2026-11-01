@@ -92,17 +92,19 @@ export function projectRuntimeMobileSessionTabs(
   }
   // Claim each live PTY once or duplicate leaf keys crash client React.
   const claimedLivePtyIds = new Set<string>()
+  const isPtyLive = (ptyId: string): boolean =>
+    host.getPtyAvailability(ptyId) ?? host.ptysById.get(ptyId)?.connected ?? false
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
-      if (!liveTab) {
+      if (!liveTab && !host.isRendererOwnedMobileBrowserTab(snapshot, tab)) {
         continue
       }
-      // Renderer snapshots lag teardown/swaps; expose only pages the bridge still routes.
+      // Renderer snapshots stay authoritative while unmounted; only headless/client rows need a live bridge page.
       tabs.push({
         ...tab,
-        title: liveTab.title || tab.title,
-        url: liveTab.url || tab.url,
+        title: liveTab?.title || tab.title,
+        url: liveTab?.url || tab.url,
         // Bridge active means BrowserView/webContents, not Orca tab; retain renderer session focus.
         isActive: tab.isActive
       })
@@ -118,7 +120,7 @@ export function projectRuntimeMobileSessionTabs(
     }
     const syncedTab = host.tabs.get(tab.parentTabId)
     const leaf = host.leaves.get(host.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-    const liveLeaf = leaf?.ptyId && leaf.connected ? leaf : null
+    const liveLeaf = leaf?.ptyId && isPtyLive(leaf.ptyId) ? leaf : null
     const liveLeafPtyId = liveLeaf?.ptyId ?? null
     const liveLeafPty = liveLeafPtyId ? (host.ptysById.get(liveLeafPtyId) ?? null) : null
     const pty = liveLeaf
@@ -126,7 +128,7 @@ export function projectRuntimeMobileSessionTabs(
       : host.findPty(snapshot.worktree, tab, {
           allowWorktreeOnlyMatch: !snapshot.publicationEpoch.startsWith('headless')
         })
-    const livePty = pty?.connected ? pty : null
+    const livePty = pty?.connected && isPtyLive(pty.ptyId) ? pty : null
     // Drop later tabs sharing an already-claimed PTY so handles stay unique.
     const resolvedLivePtyId = liveLeafPtyId ?? livePty?.ptyId ?? null
     if (resolvedLivePtyId !== null) {

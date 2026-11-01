@@ -12,7 +12,7 @@ import {
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-} from '../../../shared/remote-runtime-memory-limits'
+} from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
@@ -151,7 +151,9 @@ describe('E2EEChannel', () => {
         )
       )
 
-      expect(ctx.channel.clientCapabilities).toEqual([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
+      expect(ctx.channel.capabilitySource.current).toEqual([
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+      ])
       expect(ctx.onReady).toHaveBeenCalledOnce()
     })
 
@@ -192,9 +194,9 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).not.toHaveBeenCalled()
     })
 
-    it('rejects malformed JSON', () => {
+    it.each(['not json', 'null'])('rejects invalid handshake JSON: %s', (raw) => {
       const ctx = setup()
-      ctx.channel.handleRawMessage('not json')
+      ctx.channel.handleRawMessage(raw)
 
       expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
     })

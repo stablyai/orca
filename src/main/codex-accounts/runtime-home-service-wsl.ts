@@ -20,7 +20,11 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     return this.getWslCodexHomePathForSelection(target)
   }
 
-  protected getWslCodexHomePathForSelection(target: CodexAccountSelectionTarget): string | null {
+  /** `probeHome: false` never runs wsl.exe for the guest home: an uncached one reads as unknown. */
+  protected getWslCodexHomePathForSelection(
+    target: CodexAccountSelectionTarget,
+    options: { probeHome?: boolean } = {}
+  ): string | null {
     const settings = this.store.getSettings()
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
@@ -33,7 +37,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
         return accountHome
       }
     }
-    return this.getWslSystemCodexHomePath(target)
+    return this.getWslSystemCodexHomePath(target, options)
   }
 
   protected getWslLaunchCodexHomePath(

@@ -12,7 +12,6 @@ vi.mock('electron', () => ({
 }))
 
 import { CliInstaller } from './cli-installer'
-import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 
 const created: string[] = []
 
@@ -46,15 +45,6 @@ async function makeGeneration() {
 describe.skipIf(process.platform === 'win32')(
   'CLI registration from an extracted generation',
   () => {
-    it('points bare `orca` at the stable launcher, never at a generation a later prune deletes', async () => {
-      const fixture = await makeGeneration()
-      const result = await installLinuxBareOrcaDispatcher({
-        resourcesPath: fixture.resourcesPath,
-        homePath: fixture.homePath
-      })
-      expect(result).toMatchObject({ state: 'installed', target: fixture.stableLauncherPath })
-    })
-
     it('recognises the stable launcher it registered as its own `orca-ide`', async () => {
       const fixture = await makeGeneration()
       const commandDirectory = join(fixture.homePath, '.local', 'bin')

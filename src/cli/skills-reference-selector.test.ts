@@ -6,7 +6,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'alpha',
       description: 'Use when alpha work is needed.',
       markdown: '# Alpha\n\nShort.\n',
-      fullMarkdown: '# Alpha\n\nShort.\n\n## References\n\nFull.\n',
       aliases: ['legacy-alpha'],
       references: [
         { name: 'first-gate', markdown: '# First gate\n\nDo the first thing.\n' },
@@ -17,7 +16,6 @@ vi.mock('./bundled-skill-guides.js', () => ({
       name: 'zeta',
       description: 'Use when zeta work is needed.',
       markdown: '# Zeta\n',
-      fullMarkdown: '# Zeta\n',
       aliases: [],
       references: []
     }

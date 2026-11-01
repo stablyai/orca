@@ -163,6 +163,12 @@ export async function acquireAcpStructuredSession(input: {
           )
         }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
+        if (
+          event.kind === 'known' &&
+          event.notification.update.sessionUpdate === 'available_commands_update'
+        ) {
+          events?.publish()
+        }
       }
       if (
         isAcpReadySession(session) &&
@@ -175,7 +181,8 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values)
+          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          catalogListing: { models: options.read().models }
         })
       }
     })

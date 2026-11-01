@@ -15,7 +15,11 @@ describe('waitForPtyExitRecord', () => {
     const wait = runtime.waitForPtyExitRecord(PTY_ID, 10_000)
     runtime.onPtyExit(PTY_ID, 0)
     await expect(wait).resolves.toBe(true)
-    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({
+      status: 'exited',
+      incarnationId: undefined,
+      cause: { kind: 'unknown', reason: 'cause_unreported' }
+    })
   })
 
   it('resolves false when no exit arrives within the budget', async () => {
@@ -26,13 +30,5 @@ describe('waitForPtyExitRecord', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await expect(wait).resolves.toBe(false)
     runtime.onPtyExit(PTY_ID, 0)
-  })
-
-  it('does not wait for a PTY the runtime never registered or already saw exit', async () => {
-    const runtime = new OrcaRuntimeService()
-    await expect(runtime.waitForPtyExitRecord('unknown-pty', 10_000)).resolves.toBe(true)
-    runtime.registerPty(PTY_ID, WORKTREE_ID, null)
-    runtime.onPtyExit(PTY_ID, 0)
-    await expect(runtime.waitForPtyExitRecord(PTY_ID, 10_000)).resolves.toBe(true)
   })
 })

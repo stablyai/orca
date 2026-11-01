@@ -4,15 +4,15 @@ import { stripRepoQualifiers } from '../../../../../shared/task-query'
 import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 import {
   resolveEmptyPageOutcome,
-  applyWindowPageLimit,
-  applyEmptyPageClamp
-} from '@/components/task-page-work-item-pagination'
+  applyEmptyPageClamp,
+  applyWindowPageLimit
+} from '../../../../../shared/work-item-empty-page'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { overlayPendingOnTaskPagePages } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
 import { scopeGitHubTaskSearch } from '../../../../../shared/task-github-search'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,

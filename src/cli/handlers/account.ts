@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -9,6 +10,7 @@ import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
@@ -38,6 +40,7 @@ import {
 import { getWslAccountTarget } from './account-wsl-location'
 import { addDataAccount, listDataAccounts, mutateDataAccount } from './data-account-commands'
 import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
@@ -55,7 +58,9 @@ function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const existing = new Set(currentEntries)
   const missing = getVersionManagerBinPaths().filter((entry) => !existing.has(entry))
   if (missing.length > 0) {
-    env[pathKey] = [...missing, ...currentEntries].join(delimiter)
+    const append = missing.filter(isWindowsFnmDefaultAliasDir)
+    const prepend = missing.filter((entry) => !append.includes(entry))
+    env[pathKey] = [...prepend, ...currentEntries, ...append].join(delimiter)
   }
   return env
 }
@@ -68,6 +73,12 @@ async function runAgentLoginInTerminal(
   json: boolean,
   session: InteractiveLoginSession
 ): Promise<void> {
+  if (command === 'opencode') {
+    command = await resolveOpenCodeLoginCommand(
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv }),
+      session
+    )
+  }
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const resolvedCommand = resolveCliCommand(command)
     let spawnCmd: string
@@ -92,6 +103,12 @@ async function runAgentLoginInTerminal(
       resolvedCommand,
       addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
     )
+    try {
+      assertWslDistroAllowed(spawnCmd, spawnArgs)
+    } catch (error) {
+      rejectPromise(error)
+      return
+    }
     const consoleStdio = stdioForWindowsInteractiveChild(json)
     let child: ReturnType<typeof spawn>
     try {

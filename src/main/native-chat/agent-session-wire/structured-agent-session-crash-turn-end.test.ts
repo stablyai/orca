@@ -1,23 +1,24 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 // Quiet tools may emit only start/end rows; pre-crash lease renewal supplies the latest observed work time.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionStatusSummary,
   AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { describeNativeChatTurnStatus } from '../../../shared/native-chat-turn-status'
+} from '../../../shared/agent-session/agent-session-wire'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { describeNativeChatTurnStatus } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
-} from '../../../shared/structured-agent-session-turn-timing'
+} from '../../../shared/agent-session/view/structured-agent-session-turn-timing'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
@@ -29,14 +30,14 @@ import {
 } from '../agent-session-journal/journal-host-database-test-support'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { JournalLifecycleBatchAppender } from '../agent-session-journal/journal-lifecycle-batch-appender'
-import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   type StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
 import { resettleOpenStructuredAgentSessionConversation } from './structured-agent-session-conversation-open'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { latestNativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import { beginAgentSessionRuntimeRecord } from '../../runtime/agent-session-runtime-end-record'
 import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
@@ -48,7 +49,7 @@ import {
 } from './structured-agent-session-host-test-data'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const PROVIDER_SESSION = 'provider-session-alpha-1'
@@ -105,7 +106,7 @@ function crashedClaudeRecord(): AgentSessionRecord {
 
 async function seedCrashedStore(): Promise<void> {
   await seedTestAgentSessionRecordStore(root, { records: [crashedClaudeRecord()] })
-  store = await openTestAgentSessionRecordStore(root)
+  store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
 }
 
 /** Seed an unacknowledged send with a started Bash call and no completion. */
@@ -194,7 +195,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await host?.flushAllStreamedEvents()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -202,7 +203,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('ends at the last renewal, not at the tool call the provider last reported', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
       kind: 'pid-absent',
@@ -223,7 +224,7 @@ describe('a turn a crash cut short mid-tool', () => {
   it('explains the cut once, with one notice row and a turn bar that does not repeat it', async () => {
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     const { items } = await host.journalSnapshot(SESSION)
     const statusRows = withNativeChatCutTurnNotices(items, { agentName: 'Claude' }).flatMap(
@@ -258,7 +259,7 @@ describe('a turn a crash cut short mid-tool', () => {
     })
     openHost({ probeOwner, stopOwnerProcess })
 
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.deathEvidence).toMatchObject({
@@ -363,7 +364,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
       ]
     })
     beginAgentSessionRuntimeRecord(root, 'runtime-crashed', TOOL_STARTED_AT - 60_000)
-    store = await openTestAgentSessionRecordStore(root)
+    store = await openTestAgentSessionRecordStore(root, { legacySessionTabIds: [SESSION] })
     openHost({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
     expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
 
@@ -398,7 +399,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
           host.collaboratorsForTests().sessions.get(SESSION)
         )
       )
-    await host.restoreReadableSessions()
+    await openTestChats(host)
 
     expect(await host.journalSnapshot(SESSION)).toEqual(settled)
   })
@@ -432,7 +433,7 @@ describe('a turn a read reached before the reconcile proved its owner dead', () 
     expect(await settledTurn()).toMatchObject(INTERRUPTED_TURN)
 
     // Reconciliation parks live orphans; recovery Stop supplies exit proof.
-    await host.restoreReadableSessions()
+    await openTestChats(host)
     await drainSession()
 
     expect(stopOwnerProcess).toHaveBeenCalledOnce()

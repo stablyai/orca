@@ -13,10 +13,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
-import type {
-  RuntimePtyWorktreeRecord,
-  RuntimeLeafRecord
-} from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -28,8 +25,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     cause: TerminalExitCause
   ): void
 
-  protected abstract resolveExitWaiters(leaf: RuntimeLeafRecord): void
-
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
   protected abstract resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void
@@ -37,6 +32,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
   protected abstract cancelPendingDriverMutations(ptyId: string): void
 
   protected abstract rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void
+
+  /** Its process ended on its own: no close, kill, sleep or restart, nor a lost host or replayed exit. */
+  protected notePtyEndedOnItsOwn(_pty: RuntimePtyWorktreeRecord): void {}
 
   /** The pane main's close already dropped, from its closed-pane record; null while main holds it. */
   private closedPaneOfExit(
@@ -65,6 +63,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       providerExitObserved?: boolean
       /** A window's view of the pane was showing when it ended (layout-owner build). */
       viewShown?: boolean
+      /** Its host went away (a WSL bridge pane's distro stopped): keep the pane to cold-restore, as after a daemon crash. */
+      hostLost?: boolean
     } = {}
   ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
@@ -74,6 +74,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       return
     }
     pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
+    // A stop's cleanup can report the exit again, after its stop request is spent.
+    const priorExit = this.getPtyLivenessVerdict(ptyId)
     this.invalidatePtyControllerInventoryForLifecycle(ptyId, pty?.connectionId)
     // A bare exit code is not enough to establish why a process ended: older
     // daemons and SSH relays can report 0 for crashes and wrapper exits.
@@ -108,6 +110,14 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     }
     const processDeathCertified =
       exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true
+    const endedOnItsOwn =
+      processDeathCertified &&
+      !stopRequested &&
+      options.hostLost !== true &&
+      !(
+        priorExit?.status === 'exited' &&
+        priorExit.incarnationId === (pty?.incarnationId ?? undefined)
+      )
     if (processDeathCertified) {
       // An unverifiable exit keeps the facet tracked until a certified exit or prune.
       this.clearLiveProgramStatusFacet(ptyId)
@@ -121,6 +131,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
     this.advancePtyLifecycleGeneration(ptyId)
     let retirement: Promise<void> | undefined
+    let preservesIntentionallyStoppedSurface = false
     try {
       const exactSurfaceByKey = new Map<
         string,
@@ -158,19 +169,20 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       }
       const exactSurfaces = [...exactSurfaceByKey.values()]
       // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
-      const preservesIntentionallyStoppedSurface =
+      preservesIntentionallyStoppedSurface =
         this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length >
         0
       advertisedUrlWatcher.unbindPty(ptyId)
       this.mobileSubscribers.delete(ptyId)
       this.terminalViewSubscribers.clearSubscribers(ptyId)
+      this.mainDaemonAttachments.forget(ptyId)
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
       this.recentPtyOutputById.delete(ptyId)
+      this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
-      this.recentPtyPathCandidatesById.delete(ptyId)
       this.ptyOutputSequenceById.delete(ptyId)
       this.providerSequenceInitializedPtys.delete(ptyId)
       this.providerSequenceOffsetByPtyId.delete(ptyId)
@@ -209,10 +221,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         if (mailboxHandle) {
           this.mailPointerRepointScheduler.schedule(mailboxHandle)
         }
-        const boundRun = this._orchestrationDb?.getCurrentRunForPane?.(
+        for (const boundRun of this._orchestrationDb?.runsBoundToPane?.(
           `${leaf.tabId}:${leaf.leafId}`
-        )
-        if (boundRun) {
+        ) ?? []) {
           this.mailPointerRepointScheduler.schedule(`run:${boundRun.id}`)
         }
       }
@@ -226,9 +237,14 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
       this.disposeHeadlessTerminal(ptyId)
+      this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
-        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
+        this.rememberPtyLivenessVerdict(ptyId, {
+          status: 'exited',
+          incarnationId: exitIncarnationId ?? candidateIncarnation ?? undefined,
+          cause: exitCause
+        })
       }
       if (pty) {
         pty.connected = false
@@ -242,7 +258,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (preservesIntentionallyStoppedSurface || preservesAbnormalSshSurface) {
+      if (
+        preservesIntentionallyStoppedSurface ||
+        preservesAbnormalSshSurface ||
+        options.hostLost === true
+      ) {
         // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
         this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
       } else {
@@ -277,7 +297,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       leaf.lastExitCode = exitCode
       leaf.lastExitCause = exitCause
       leaf.lastAgentStatusObservedLive = false
-      this.resolveExitWaiters(leaf)
       const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       if (leafHandle) {
         exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })
@@ -297,6 +316,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       }
     }
     this.pruneDisconnectedPtyRecords()
+    if (pty && endedOnItsOwn && !preservesIntentionallyStoppedSurface) {
+      this.notePtyEndedOnItsOwn(pty)
+    }
     return retirement
   }
 

@@ -15,6 +15,11 @@ import {
 const diskPreconditionMock = vi.hoisted(() => ({ writeLocalTextFileWithDiskPrecondition: vi.fn() }))
 vi.mock('./local-disk-write-precondition', () => diskPreconditionMock)
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+// The distro these UNC fixtures name counts as running, so the boot gate lets the touch through.
+vi.mock('../../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'running'
+}))
 const mkdirMock = vi.hoisted(() => vi.fn(async () => undefined))
 vi.mock('fs/promises', async () => ({
   ...(await import('./filesystem-test-harness')).fsPromisesMock,
@@ -116,16 +121,6 @@ describe.runIf(process.platform === 'win32')('editor IPC on a UNC drive-mount pr
       handlers.get('fs:pathsExist')!(null, { filePaths: [readme] })
     ).resolves.toMatchObject([{ exists: true }])
     expect(openMock).toHaveBeenCalledWith('C:\\src\\app\\README.md', expect.anything())
-  })
-
-  it('saves through the drive path', async () => {
-    await handlers.get('fs:writeFile')!(null, { filePath: readme, content: '# saved\n' })
-    expect(lstatMock).toHaveBeenCalledWith('C:\\src\\app\\README.md')
-    expect(diskPreconditionMock.writeLocalTextFileWithDiskPrecondition).toHaveBeenCalledWith(
-      readme,
-      '# saved\n',
-      undefined
-    )
   })
 
   it('creates a file and a folder, and saves a new file, where nothing exists yet', async () => {

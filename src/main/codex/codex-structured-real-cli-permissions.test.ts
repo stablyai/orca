@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentChatPermissionMode } from '../../shared/agent-chat-permission-mode'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
-import { codexStructuredPermissionPolicy } from './codex-structured-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../shared/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'
@@ -84,9 +84,15 @@ function effectivePolicy(mode: AgentChatPermissionMode) {
         sandbox: { type: 'dangerFullAccess' },
         approvalsReviewer: 'user'
       }
-    : {
-        approvalPolicy: 'on-request',
-        sandbox: { type: 'workspaceWrite' },
-        approvalsReviewer: mode === 'auto' ? 'auto_review' : 'user'
-      }
+    : mode === 'ask'
+      ? {
+          approvalPolicy: 'on-request',
+          sandbox: { type: 'readOnly' },
+          approvalsReviewer: 'user'
+        }
+      : {
+          approvalPolicy: 'on-request',
+          sandbox: { type: 'workspaceWrite' },
+          approvalsReviewer: mode === 'auto' ? 'auto_review' : 'user'
+        }
 }

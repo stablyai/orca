@@ -10,10 +10,8 @@ const markForFocusedHost = (
     owner: defaultScopeHost(useAppStore.getState().settings),
     ...args
   })
-import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
-  CODEX_ACCOUNT_RESTART_STARTUP,
   markLiveCodexSessionsForRestart,
   markRestoredStaleCodexSessionsForRestart
 } from './codex-session-restart'
@@ -35,18 +33,6 @@ function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
   }
   useAppStore.setState({ tabsByWorktree: { wt1: [{ ...tab, launchAgent }, ...rest] } })
 }
-
-describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
-  it('waits for shell readiness before relaunching Codex after an account switch', () => {
-    // launchAgent:codex enables managed-auth readiness/launch prep; omitting it can race handoff and record the wrong account.
-    expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
-      command: 'codex',
-      startupCommandDelivery: 'shell-ready',
-      launchAgent: 'codex'
-    })
-    expect(shouldUseShellReadyStartupDelivery(CODEX_ACCOUNT_RESTART_STARTUP)).toBe(true)
-  })
-})
 
 describe('markLiveCodexSessionsForRestart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

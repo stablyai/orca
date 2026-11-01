@@ -10,11 +10,11 @@ import {
 } from '@/i18n/hosted-review-localized-copy'
 import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import {
-  describeForcePushWithLease,
-  describePullCount,
-  describePushCount,
-  describeSyncCounts
-} from './source-control-primary-action-titles'
+  localizedForcePushWithLease,
+  localizedPullCount,
+  localizedPushCount,
+  localizedSyncCounts
+} from './source-control-count-localized-copy'
 
 export type {
   PrimaryActionKind,
@@ -207,13 +207,13 @@ function resolvePrimaryActionTitle(
         'Linked review branch target is unavailable.'
       )
     case 'force_push_with_lease':
-      return describeForcePushWithLease(decision.count, decision.upstreamName)
+      return localizedForcePushWithLease(decision.count, decision.upstreamName)
     case 'sync_counts':
-      return describeSyncCounts(decision.ahead ?? 0, decision.behind ?? 0)
+      return localizedSyncCounts(decision.ahead ?? 0, decision.behind ?? 0)
     case 'pull_count':
-      return describePullCount(decision.count ?? 0)
+      return localizedPullCount(decision.count ?? 0)
     case 'push_count':
-      return describePushCount(decision.count ?? 0)
+      return localizedPushCount(decision.count ?? 0)
     case 'create_review':
       return translate(
         'auto.components.right.sidebar.source.control.primary.action.946a8a05ea',

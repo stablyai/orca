@@ -10,8 +10,7 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
-import { appendRecentPtyPathCandidates } from '../../terminal-output-path-candidates'
+import { RecentPtyOutputBuffer } from '../../recent-pty-output-buffer'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
 import type { AgentDetectionHost } from '../../../preflight/workspace-agent-detection'
@@ -27,6 +26,7 @@ import { resolveStructuredWorkerAuthority } from '../../structured-worker-author
 import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { matchesProcessIncarnation } from '../../orchestration/worker-terminal-process-liveness'
+import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   protected abstract getExistingTerminalHandlesForPtyId(ptyId: string): string[]
@@ -54,6 +54,26 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       }
     }
     return paneKeys
+  }
+
+  protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
+    const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const readPane = this.getAgentStatusSnapshotForPaneFn
+    return claimIdleShellPrompt({
+      hasPaneAgent: () => {
+        const paneKeys = [...this.collectPaneKeysForPty(ptyId)]
+        // No store, no pane identity, or any row at all keeps the settle; a stale row costs only the wait.
+        return (
+          this.getPaneTerminalAgent(ptyId) !== null ||
+          !readPane ||
+          paneKeys.length === 0 ||
+          paneKeys.some((paneKey) => readPane(paneKey).length > 0)
+        )
+      },
+      claimPromptMarker: () =>
+        this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
+      confirmShellForeground: confirm ? () => confirm(ptyId) : null
+    })
   }
 
   /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
@@ -178,60 +198,13 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     return ptyId ? (this.terminalFileUriHostnameByPtyId.get(ptyId) ?? null) : null
   }
 
-  protected recordRecentPtyOutputForPathProvenance(ptyId: string, data: string): void {
+  protected recordRecentPtyOutput(ptyId: string, data: string): void {
     let recentOutputBuffer = this.recentPtyOutputById.get(ptyId)
     if (!recentOutputBuffer) {
-      // Boundaries are only owed to the one-time activation backfill; once
-      // tracking is live, new buffers keep the read-collapsing hot path.
-      recentOutputBuffer = new RecentPtyOutputBuffer({
-        preserveChunkBoundaries: !this.recentPtyPathCandidateTrackingActive
-      })
+      recentOutputBuffer = new RecentPtyOutputBuffer()
       this.recentPtyOutputById.set(ptyId, recentOutputBuffer)
     }
     recentOutputBuffer.append(data)
-    if (
-      this.recentPtyPathCandidateTrackingActive ||
-      // Extract over-window chunks intact before slicing; later backfill cannot reconstruct them.
-      data.length > RECENT_PTY_OUTPUT_LIMIT
-    ) {
-      this.recentPtyPathCandidatesById.set(
-        ptyId,
-        appendRecentPtyPathCandidates(this.recentPtyPathCandidatesById.get(ptyId), data)
-      )
-    }
-  }
-
-  activateRecentPtyPathCandidateTracking(): void {
-    if (this.recentPtyPathCandidateTrackingActive) {
-      return
-    }
-    this.recentPtyPathCandidateTrackingActive = true
-    // Backfill synchronously with original chunk boundaries; trimming/joining changes candidate semantics. Output evicted before first connection remains unavailable.
-    for (const [ptyId, buffer] of this.recentPtyOutputById) {
-      let candidates = this.recentPtyPathCandidatesById.get(ptyId)
-      const { chunks, headChunkIsPartial } = buffer.retainedChunks()
-      for (let index = 0; index < chunks.length; index += 1) {
-        if (index === 0 && headChunkIsPartial) {
-          // Oversized chunks were extracted intact at append; replaying truncated remnants could change the candidate set.
-          continue
-        }
-        candidates = appendRecentPtyPathCandidates(candidates, chunks[index]!)
-      }
-      if (candidates) {
-        this.recentPtyPathCandidatesById.set(ptyId, candidates)
-      }
-      // Chunk boundaries were owed only to this one-time backfill; return
-      // the buffer to the compact read-collapsing steady state.
-      buffer.compact()
-    }
-  }
-
-  resolveTerminalContext(
-    handle: string
-  ): { worktreeId: string; connectionId: string | null } | null {
-    const ptyId = this.resolveLeafForHandle(handle)?.ptyId
-    const pty = ptyId ? this.ptysById.get(ptyId) : null
-    return pty ? { worktreeId: pty.worktreeId, connectionId: pty.connectionId } : null
   }
 
   // Why: remote clients cannot resolve this runtime's WSL project preference,
@@ -252,7 +225,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       {
         store: this.store,
         resolveRepo: (selector) => this.resolveRepoSelector(selector),
-        resolveWorktree: (selector) => this.resolveWorktreeSelector(selector)
+        resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector)
       },
       worktreeId,
       repoId

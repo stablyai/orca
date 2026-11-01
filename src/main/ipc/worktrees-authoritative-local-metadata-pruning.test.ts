@@ -22,6 +22,11 @@ import {
 
 const localWorktreePathPresenceMock = vi.hoisted(() => vi.fn())
 
+// The WSL distros these fixtures route through count as running, so the boot gate lets Git run.
+vi.mock('../wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'running'
+}))
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -322,7 +327,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
       .mockImplementation(async () => [worktree(REPO_PATH), worktree('/workspace/orphan')])
 
     const pending = listDetected()
-    await Promise.resolve()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledOnce())
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => notifyWorktreesChanged(mainWindow as never, REPO_ID))
     await pending
@@ -345,7 +351,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
     )
 
     const pending = listDetected()
-    await Promise.resolve()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledOnce())
 
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => {
@@ -503,7 +510,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     mockSelectedWslProjectRuntime()
     const wslPending = listDetected()
-    await Promise.resolve()
+    // The WSL boot gate answers before the scan starts.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
 
     resolvers[1]?.([worktree(REPO_PATH)])
     await wslPending

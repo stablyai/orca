@@ -17,6 +17,7 @@ async function runTaskListBrief(): Promise<unknown> {
   vi.spyOn(client, 'call').mockImplementation(callMock)
   await ORCHESTRATION_HANDLERS['orchestration task-list']({
     flags: new Map<string, string | boolean>([
+      ['full', true],
       ['brief', true],
       ['run', 'run_1']
     ]),
@@ -68,5 +69,39 @@ describe('orchestration task-list brief output', () => {
 
     // Re-abbreviating would reset spec_truncated because the already-truncated text fits the cap.
     expect(response).toHaveProperty('result.tasks', serverTasks)
+  })
+})
+
+describe('orchestration task-list concise output', () => {
+  it('lists each task without its spec or result', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(client, 'call').mockImplementation(callMock)
+    callMock.mockReset().mockResolvedValue(
+      okFixture('req_tasks', {
+        tasks: [
+          {
+            id: 'task_1',
+            spec: 'long spec '.repeat(200),
+            task_title: 'Audit',
+            status: 'completed',
+            result: 'long result '.repeat(200),
+            dispatch_id: 'ctx_1'
+          }
+        ],
+        count: 1
+      })
+    )
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map<string, string | boolean>([['run', 'run_1']]),
+      client,
+      cwd: '/tmp/repo',
+      json: true
+    })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+      ok: true,
+      result: {
+        tasks: [{ id: 'task_1', status: 'completed', title: 'Audit', dispatchId: 'ctx_1' }]
+      }
+    })
   })
 })

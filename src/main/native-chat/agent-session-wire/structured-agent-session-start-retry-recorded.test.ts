@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { AcpAgentError } from '../../acp/acp-errors'
+import { AcpAgentError, AcpInvalidResponseError, AcpRpcError } from '../../acp/acp-errors'
 import { acpRpcEnvelopeSchema, settleAcpResponse } from '../../acp/acp-rpc-envelope'
 import {
   ClaudeControlRequestError,
@@ -10,12 +10,14 @@ import { createCodexAppServerRecordDispatcher } from '../../codex/codex-app-serv
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { JsonlRpcPeer, JsonlRpcResponseError } from '../../jsonl-rpc/peer'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
 } from './structured-agent-session-acquisition-errors'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter-errors'
+import { withObservedProviderExit } from './structured-agent-session-failure-text'
 import {
   retryableStructuredAgentSessionAcquisition,
   retryableStructuredAgentSessionStart
@@ -38,8 +40,16 @@ function expectExitEvidenceRequired(error: unknown) {
   ).toBe(false)
 }
 
+function expectFinalWithExitEvidence(error: Error) {
+  expect(retryableStructuredAgentSessionStart(error)).toBe(false)
+  expect(
+    retryableStructuredAgentSessionAcquisition(new AgentSessionAcquisitionExitProvenError(error))
+  ).toBe(false)
+  expect(retryableStructuredAgentSessionStart(withObservedProviderExit(error))).toBe(false)
+}
+
 describe('recorded command rejection wrappers at the startup classifier', () => {
-  it('wraps Claude rejection text at the SDK callback boundary', async () => {
+  it('keeps recorded Claude permission rejection retryable without a typed startup refusal', async () => {
     const capture = captures.claude
     // SDK rejection is supplied here; this does not exercise the SDK's wire parser.
     const error = await runClaudeControl(capture.request.request.subtype, () =>
@@ -53,7 +63,7 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     expectExitEvidenceRequired(error)
   })
 
-  it('dispatches the recorded Codex reply with its method, code and provider diagnostic', async () => {
+  it('keeps the recorded Codex invalid thread/read answer retryable outside resume', async () => {
     const capture = captures.codex
     const pending = Promise.withResolvers<unknown>()
     const failed = pending.promise.catch((caught: unknown) => caught)
@@ -78,7 +88,7 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     expectExitEvidenceRequired(error)
   })
 
-  it('parses the recorded Pi rejection through the JSONL peer', async () => {
+  it('keeps the recorded Pi model rejection retryable without a typed startup refusal', async () => {
     const capture = captures.pi
     const input = new PassThrough()
     const output = new PassThrough()
@@ -106,7 +116,7 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     }
   })
 
-  it('parses the recorded ACP agent error without losing code or data', async () => {
+  it('keeps the recorded ACP -32603 retryable regardless of its InvalidRequestError data', async () => {
     const capture = captures.acp
     const pending = Promise.withResolvers<unknown>()
     const failed = pending.promise.catch((caught: unknown) => caught)
@@ -117,6 +127,50 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     expect(error).toMatchObject(capture.response.error)
     expect(diagnose).not.toHaveBeenCalled()
     expectExitEvidenceRequired(error)
+  })
+
+  it.each([
+    new AcpInvalidResponseError('Invalid ACP response envelope', {}),
+    new AcpRpcError(-32601, 'ACP agent cannot load or resume this session')
+  ])('keeps Orca-made ACP errors final even with exit evidence: $message', (error) => {
+    expectFinalWithExitEvidence(error)
+  })
+
+  it.each([
+    'invalid session id: invalid character',
+    captures.codex.response.error.message,
+    'thread not found: missing-thread',
+    'no rollout found for thread id missing-thread'
+  ])('ends Codex -32600 resume identity failures even with exit evidence: %s', async (message) => {
+    const pending = Promise.withResolvers<unknown>()
+    const failed = pending.promise.catch((caught: unknown) => caught)
+    const dispatcher = createCodexAppServerRecordDispatcher({
+      handlers: {},
+      writeResponse: vi.fn(),
+      onProtocolFailure: vi.fn()
+    })
+    dispatcher.addPending(1, { method: 'thread/resume', ...pending, timer: undefined })
+    dispatcher.dispatch({ id: 1, error: { code: -32600, message } })
+    const error = await failed
+    expect(error).toBeInstanceOf(CodexAppServerRequestError)
+    if (!(error instanceof CodexAppServerRequestError)) {
+      throw new Error('Expected the dispatched Codex request error')
+    }
+    expectFinalWithExitEvidence(error)
+  })
+
+  it.each([
+    new AcpAgentError(-32601, 'Method not found'),
+    new AcpAgentError(-32602, 'Invalid params'),
+    new CodexAppServerRequestError('initialize', -32602, 'Invalid params')
+  ])('keeps standard method and parameter rejections final: $name $code', (error) => {
+    expectFinalWithExitEvidence(error)
+  })
+
+  it.each([-32600, -32603])('keeps unknown Codex resume answers retryable: %s', (code) => {
+    expectExitEvidenceRequired(
+      new CodexAppServerRequestError('thread/resume', code, 'Server is temporarily unavailable')
+    )
   })
 
   it.each([
@@ -131,5 +185,11 @@ describe('recorded command rejection wrappers at the startup classifier', () => 
     expect(
       retryableStructuredAgentSessionAcquisition(new AgentSessionAcquisitionExitProvenError(error))
     ).toBe(false)
+  })
+
+  it('keeps a working folder deleted under the chat final, even with its exit observed', () => {
+    expectFinalWithExitEvidence(
+      withProviderSpawnAbsence(new Error('claude exited (code 127)'), 'launchFolder')
+    )
   })
 })

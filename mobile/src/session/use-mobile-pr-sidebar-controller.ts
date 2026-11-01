@@ -18,7 +18,10 @@ import {
   type PrSidebarLoadDeps,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
-import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
+import {
+  clearMobileWorktreeReviewLink,
+  fetchWorktreeGitHubPRLink
+} from '../source-control/mobile-pr-link'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -68,7 +71,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
     return {
       fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-      fetchWorktreeLinkedPR: (wt) => fetchWorktreeLinkedPR(client, wt),
+      fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+      clearWorktreeReviewLink: (wt, shouldApply) =>
+        clearMobileWorktreeReviewLink(client, wt, shouldApply),
       fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
       fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
       fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)

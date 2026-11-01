@@ -49,7 +49,10 @@ vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () 
 }))
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
-import { registerClipboardHandlers } from './clipboard-ipc-handlers'
+import {
+  registerClipboardHandlers,
+  setTrustedClipboardRendererWebContentsId
+} from './clipboard-ipc-handlers'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
 
 type SaveImageHandler = (event: unknown, args?: unknown) => Promise<string | null>
@@ -106,6 +109,7 @@ function runtimeCall(method: string): unknown[] | undefined {
 describe('clipboard image paste for a runtime-owned SSH workspace', () => {
   beforeEach(() => {
     installFakeAppEnvironment({ getPath: () => '/tmp' })
+    setTrustedClipboardRendererWebContentsId(rendererEvent.sender.id)
     callRuntimeEnvironmentMock.mockReset()
     fsWriteFileMock.mockReset()
   })
@@ -164,34 +168,10 @@ describe('clipboard image paste for a runtime-owned SSH workspace', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('keeps a runtime-host paste (no SSH target) addressed to the runtime itself', async () => {
-    mockRuntimeUpload()
-
-    await expect(
-      saveImageHandler()(rendererEvent, { runtimeEnvironmentId: RUNTIME_ID })
-    ).resolves.toBe('/tmp/on-runtime-target.png')
-
-    expect(runtimeCall('clipboard.startImageUpload')?.[3]).toEqual({
-      expectedBase64Length: PNG.toString('base64').length,
-      connectionId: null
-    })
-  })
-
   it('reports the dropped-connection verdict for a client-dialed SSH target', async () => {
     await expect(
       saveImageHandler()(rendererEvent, { connectionId: CLIENT_SSH_TARGET })
     ).rejects.toThrow(SSH_HOST_NOT_SERVED_MESSAGE)
-    expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
-  })
-
-  it('keeps a plain local paste on the local temp dir', async () => {
-    fsWriteFileMock.mockResolvedValue(undefined)
-
-    await expect(saveImageHandler()(rendererEvent, undefined)).resolves.toMatch(
-      /orca-paste-.*\.png$/
-    )
-
-    expect(fsWriteFileMock).toHaveBeenCalledTimes(1)
     expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
   })
 })

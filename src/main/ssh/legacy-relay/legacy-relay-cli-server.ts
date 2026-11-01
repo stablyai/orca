@@ -27,6 +27,7 @@ import {
   stringFlag
 } from './legacy-relay-cli-args'
 import type { LegacyRelayCliServer } from './legacy-relay-client'
+import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../shared/rpc-contract/connector-params'
 import {
   cappedInboxLimit,
   cappedWait,
@@ -277,7 +278,9 @@ async function serveCli(
     return { stdout: `${LEGACY_RELAY_CLI_HELP}\n`, stderr: '', exitCode: 0 }
   }
   if (!COMMANDS.has(command)) {
-    throw new Error(LEGACY_RELAY_CLI_UNSUPPORTED)
+    throw new Error(
+      command === 'connector reply' ? CONNECTOR_REPLY_UNAVAILABLE : LEGACY_RELAY_CLI_UNSUPPORTED
+    )
   }
   const retryRequestId = retryRequestFlag(flags)
   const invocation = admit(deps, env, signal, retryRequestId)

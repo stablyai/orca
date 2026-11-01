@@ -1,7 +1,7 @@
 /** Lost replies are retried, including mobile workspace creation: claim an operation ID durably before side effects, then replay its recorded answer. Unknown outcomes stay refused; this ledger neither adopts nor recovers orphaned surfaces. */
 
-import { canonicalAgentSessionDigest } from './agent-session-mutation-envelope'
-import { parseAgentSessionOperationTimestamp } from './agent-session-host-authority'
+import { canonicalAgentSessionDigest } from './agent-session/lifecycle/agent-session-mutation-envelope'
+import { parseAgentSessionOperationTimestamp } from './agent-session/agent-session-host-authority'
 
 /** Digest launch behavior, excluding its operation ID and mutable host settings; changed defaults must not conflict with an honest retry. */
 export type AgentLaunchFingerprintInput = {
@@ -12,6 +12,7 @@ export type AgentLaunchFingerprintInput = {
     | { kind: 'create-folder-workspace'; create: Readonly<Record<string, unknown>> }
   prompt?: { text: string; delivery: string }
   sessionOptions?: Readonly<Record<string, string>>
+  chatOptions?: Readonly<Record<string, string>>
   reuseTerminal?: { handle: string }
   /** Arguments change operation identity; null explicitly clears defaults and differs from absence. */
   agentArgs?: string | null
@@ -34,6 +35,7 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     target: input.target,
     prompt: input.prompt,
     sessionOptions: input.sessionOptions,
+    chatOptions: input.chatOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
     cwd: input.cwd,

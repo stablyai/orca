@@ -4,9 +4,9 @@ import { afterEach, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/structured-agent-session-message-projection'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 

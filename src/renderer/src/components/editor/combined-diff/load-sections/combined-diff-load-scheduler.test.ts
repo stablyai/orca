@@ -15,6 +15,32 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('combined diff load scheduler', () => {
+  it('loads rendered rows first and drops viewport-only rows that left the rendered set', async () => {
+    const blocker = deferred()
+    const started: number[] = []
+    let rendered = new Set([0, 2, 3])
+    const scheduler = createCombinedDiffLoadScheduler({
+      getRenderedIndices: () => rendered,
+      schedule: (callback) => callback(),
+      loadSection: async (index) => {
+        started.push(index)
+        if (index === 0) {
+          await blocker.promise
+        }
+      }
+    })
+    scheduler.request(0)
+    scheduler.request(1)
+    scheduler.request(2, { viewportOnly: true })
+    scheduler.request(3, { viewportOnly: true })
+    rendered = new Set([3])
+    blocker.resolve()
+    await flushMicrotasks()
+    await flushMicrotasks()
+    expect(started).toEqual([0, 3, 1])
+    scheduler.dispose()
+  })
+
   it('defaults to serial section loads', async () => {
     const blockers = [deferred(), deferred()]
     const started: number[] = []

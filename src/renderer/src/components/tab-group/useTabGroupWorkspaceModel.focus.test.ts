@@ -43,6 +43,12 @@ const storeBox = vi.hoisted(() => ({
   state: null as Record<string, unknown> | null
 }))
 
+vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
+  admitStructuredAgentSession: (
+    await import('@/store/slices/store-session-test-harness')
+  ).admissionFromBusy(() => false)
+}))
+
 vi.mock(import('react'), async (importOriginal) => {
   const actual = await importOriginal()
   return {

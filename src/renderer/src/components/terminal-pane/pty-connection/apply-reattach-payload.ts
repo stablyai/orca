@@ -129,7 +129,10 @@ export function createReattachPayloadHandlers(
       if (modelSnapshot) {
         // Scan/reset needs composed snapshot bytes; actual writes use alt-screen choreography to preserve scrollback.
         const modelData = `${modelSnapshot.scrollbackAnsi ?? ''}${modelSnapshot.data}`
-        session.rememberReattachPayloadAgentSignal(modelData, { fullScreenReplay: true })
+        session.rememberReattachPayloadAgentSignal(modelData, {
+          fullScreenReplay: true,
+          imageTitle: modelSnapshot.lastTitle
+        })
         const modelCols = modelSnapshot.cols
         const modelRows = modelSnapshot.rows
         if (
@@ -164,7 +167,8 @@ export function createReattachPayloadHandlers(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
             modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
-            modelSnapshot.terminalOwner
+            modelSnapshot.terminalOwner,
+            modelSnapshot.lastTitle
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {
@@ -191,10 +195,7 @@ export function createReattachPayloadHandlers(
           `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
         )
         // Replay Kitty pushes with set semantics to avoid stack growth; fresh mirrors stay unproven for negotiations predating replay.
-        if (!session.kittyKeyboardModes.hasProvenBaseline) {
-          session.kittyKeyboardModes.resetForSnapshot()
-        }
-        session.kittyKeyboardModes.scanReplay(ctx.connectResult.replay)
+        session.kittyKeyboardModes.adoptSnapshot(ctx.connectResult.replay, undefined)
         session.writeReplayData(
           `${ctx.connectResult.coldRestore ? RESET_GRAPHIC_RENDITION : ''}${ctx.connectResult.replay}`
         )

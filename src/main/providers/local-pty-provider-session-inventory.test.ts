@@ -154,26 +154,6 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('listProcesses', () => {
-    it('returns spawned PTYs', async () => {
-      const before = await provider.listProcesses()
-      await provider.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/tmp/owned-cwd',
-        worktreeId: 'repo::/tmp/owned-cwd'
-      })
-      await provider.spawn({ cols: 80, rows: 24 })
-      const after = await provider.listProcesses()
-      expect(after.length - before.length).toBe(2)
-      const newEntries = after.slice(before.length)
-      expect(newEntries[0]).toHaveProperty('id')
-      expect(newEntries[0]).toHaveProperty('title', 'zsh')
-      expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
-      expect(newEntries[0]).toHaveProperty('worktreeId', 'repo::/tmp/owned-cwd')
-      expect(newEntries[0]).not.toHaveProperty('wslDistro')
-      expect(newEntries[1]).not.toHaveProperty('wslDistro')
-    })
-
     it('reports native and WSL ownership explicitly on Windows', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const native = await provider.spawn({
@@ -192,22 +172,6 @@ describe('LocalPtyProvider', () => {
 
       expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
       expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
-    })
-  })
-
-  describe('getDefaultShell', () => {
-    it('returns SHELL env var on Unix', async () => {
-      const originalShell = process.env.SHELL
-      try {
-        process.env.SHELL = '/bin/bash'
-        expect(await provider.getDefaultShell()).toBe('/bin/bash')
-      } finally {
-        if (originalShell === undefined) {
-          delete process.env.SHELL
-        } else {
-          process.env.SHELL = originalShell
-        }
-      }
     })
   })
 

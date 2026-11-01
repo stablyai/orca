@@ -1,4 +1,4 @@
-import type { DocPreviewFailure } from '../../shared/doc-preview-scheme'
+import type { DocPreviewExternalLink, DocPreviewFailure } from '../../shared/doc-preview-scheme'
 
 export type DocPreviewGrantOwner =
   | { kind: 'ssh'; connectionId: string }
@@ -24,7 +24,7 @@ export type DocPreviewApi = {
     mintGrant: (request: DocPreviewGrantRequest) => Promise<{ grantId: string; url: string }>
     revokeGrant: (grantId: string) => Promise<boolean>
     authorizeDirectory: (grantId: string, relativePath: string) => Promise<boolean>
-    onExternalLink: (callback: (payload: { url: string }) => void) => () => void
+    onExternalLink: (callback: (payload: DocPreviewExternalLink) => void) => () => void
     onLoadFailure: (callback: (payload: DocPreviewFailure) => void) => () => void
   }
 }

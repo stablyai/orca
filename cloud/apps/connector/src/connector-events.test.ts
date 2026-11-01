@@ -1,4 +1,8 @@
-import { CONNECTOR_PATHS, ConnectorPollResponseSchema } from '@orca-cloud/connector-contract'
+import {
+  CONNECTOR_LIMITS,
+  CONNECTOR_PATHS,
+  ConnectorPollResponseSchema
+} from '@orca-cloud/connector-contract'
 import { afterEach, describe, expect, it } from 'vitest'
 import { listenHostname } from './connector-server.js'
 import {
@@ -25,13 +29,14 @@ async function setup(options: Parameters<typeof createConnectorHarness>[1] = {})
   let nextSeq = 0
   const events = (list: unknown[], seq = nextSeq++, helloRev = 1) =>
     machine.call(CONNECTOR_PATHS.events, { v: 1, helloRev, seq, events: list })
-  const thread = async () =>
-    (
-      await harness.database.query(
-        `SELECT pane_key, agent, open_turn_id, turn_state, turn_stop_reason,
-           pending_prompt FROM connector_threads`
-      )
-    )[0]
+  // Postgres reads BIGINT back as a string; compare turn ids as numbers on both engines.
+  const thread = async () => {
+    const [row] = await harness.database.query(
+      `SELECT pane_key, agent, open_turn_id, turn_state, turn_stop_reason,
+         pending_prompt FROM connector_threads`
+    )
+    return row && { ...row, open_turn_id: row.open_turn_id === null ? null : Number(row.open_turn_id) }
+  }
   return { harness, machine, enqueue, events, thread }
 }
 
@@ -174,12 +179,99 @@ describe('connector turn events', () => {
     expect(await thread()).toMatchObject({ pending_prompt: null })
   })
 
+  it("leaves a Slack thread alone when another source's conversation has its id", async () => {
+    const { machine, enqueue, events, thread } = await setup()
+    await enqueue(machine.hostId)
+    await events([{ conversation, paneKey: 'slack-pane', kind: 'linked', agent: 'claude' }])
+    const other = { source: 'discord', externalId: conversation.externalId }
+    await events([{ conversation: other, paneKey: 'discord-pane', kind: 'linked', agent: 'codex' }])
+    const prompt = { kind: 'approval', promptId: 'p1', tool: 'Bash', options: [] }
+    await events([
+      {
+        kind: 'snapshot',
+        conversations: [
+          {
+            conversation: { ...other, source: 'linear' },
+            paneKey: 'linear-pane',
+            agent: 'codex',
+            working: true,
+            prompt
+          }
+        ]
+      }
+    ])
+    expect(await thread()).toMatchObject({
+      pane_key: 'slack-pane',
+      agent: 'claude',
+      pending_prompt: null
+    })
+  })
+
   it('reads an open turn missing from the snapshot as unverifiable', async () => {
     const { machine, enqueue, events, thread } = await setup()
     await enqueue(machine.hostId)
     await events([{ conversation, paneKey: 'pane-1', kind: 'turn-started', at: 100 }])
     await events([{ kind: 'snapshot', conversations: [] }])
     expect(await thread()).toMatchObject({ turn_state: 'unverifiable' })
+  })
+
+  it('keeps a newer turn and its prompt from a snapshot when an older turn end follows it', async () => {
+    const { machine, enqueue, events, thread } = await setup()
+    await enqueue(machine.hostId)
+    const prompt = { kind: 'approval', promptId: 'p2', tool: 'Bash', options: [] }
+    await events([{ conversation, paneKey: 'pane-1', kind: 'turn-started', at: 100 }])
+    await events([
+      {
+        kind: 'snapshot',
+        conversations: [
+          { conversation, paneKey: 'pane-1', agent: 'claude', working: true, prompt, turnId: 200 }
+        ]
+      },
+      {
+        conversation,
+        paneKey: 'pane-1',
+        kind: 'turn-ended',
+        turnId: 100,
+        at: 150,
+        stopReason: 'end_turn'
+      }
+    ])
+    expect(await thread()).toMatchObject({
+      open_turn_id: 200,
+      turn_state: 'working',
+      pending_prompt: JSON.stringify(prompt)
+    })
+  })
+
+  it('restores the same turn to working once a snapshot sees it working again, never an ended one', async () => {
+    const { machine, enqueue, events, thread } = await setup()
+    await enqueue(machine.hostId)
+    const prompt = { kind: 'approval', promptId: 'p1', tool: 'Bash', options: [] }
+    const entry = { conversation, paneKey: 'pane-1', agent: 'claude', turnId: 100 }
+    await events([{ conversation, paneKey: 'pane-1', kind: 'turn-started', at: 100 }])
+    await events([{ kind: 'snapshot', conversations: [{ ...entry, working: false, prompt }] }])
+    expect(await thread()).toMatchObject({ open_turn_id: 100, turn_state: 'unverifiable' })
+    await events([{ kind: 'snapshot', conversations: [{ ...entry, working: true, prompt: null }] }])
+    expect(await thread()).toMatchObject({ open_turn_id: 100, turn_state: 'working' })
+    await events([
+      { conversation, paneKey: 'pane-1', kind: 'turn-ended', turnId: 100, at: 150, stopReason: null }
+    ])
+    await events([{ kind: 'snapshot', conversations: [{ ...entry, working: true, prompt: null }] }])
+    expect(await thread()).toMatchObject({ open_turn_id: 100, turn_state: 'ended' })
+  })
+
+  it('refuses an event over the per-event cap, and a body over the request cap', async () => {
+    const { machine, enqueue, events } = await setup()
+    await enqueue(machine.hostId)
+    const big = (bytes: number) => ({
+      conversation,
+      paneKey: 'pane-1',
+      kind: 'prompt',
+      prompt: { kind: 'question', promptId: 'p1', question: 'x'.repeat(bytes), options: [] }
+    })
+    expect((await events([big(CONNECTOR_LIMITS.maxEventBytes)])).status).toBe(400)
+    const half = big(CONNECTOR_LIMITS.maxEventBytes - 1024)
+    expect((await events([half, half])).status).toBe(413)
   })
 
   it("drops a batch at or below the host's high-water mark", async () => {
@@ -223,42 +315,26 @@ describe('connector turn events', () => {
   })
 
   it('applies events only for the current hello and restarts the mark with a new one', async () => {
-    const { machine, enqueue, events, thread } = await setup()
+    const { harness, machine, enqueue, events, thread } = await setup()
     await enqueue(machine.hostId)
     const linked = (paneKey: string) => [{ conversation, paneKey, kind: 'linked', agent: 'claude' }]
     await events(linked('pane-1'), 5)
     expect((await events(linked('pane-x'), 0, 2)).status).toBe(409)
-    await machine.hello(2)
+    expect((await machine.hello()).helloRev).toBe(2)
     // The new hello's batch 0 applies; a late batch from the old hello changes nothing.
     expect((await events(linked('pane-2'), 0, 2)).status).toBe(204)
-    expect((await events(linked('pane-old'), 6, 1)).status).toBe(204)
+    expect((await events(linked('pane-old'), 6, 1)).status).toBe(409)
     expect(await thread()).toMatchObject({ pane_key: 'pane-2' })
-    // A repeated hello for the same revision keeps the mark.
-    await machine.hello(2)
-    await events(linked('pane-retry'), 0, 2)
-    expect(await thread()).toMatchObject({ pane_key: 'pane-2' })
-  })
-
-  it('keeps the newer hello when an older one arrives late', async () => {
-    const { harness, machine, enqueue, events, thread } = await setup()
-    await enqueue(machine.hostId)
-    await machine.hello(2)
-    const linked = (paneKey: string) => [{ conversation, paneKey, kind: 'linked', agent: 'claude' }]
-    await events(linked('new-pane'), 3, 2)
-    expect((await machine.hello(1)).status).toBe(204)
-    expect((await events(linked('old-pane'), 0, 1)).status).toBe(204)
-    expect(await thread()).toMatchObject({ pane_key: 'new-pane' })
     const [host] = await harness.database.query('SELECT hello_rev, events_seq FROM connector_hosts')
     expect({ helloRev: Number(host?.hello_rev), eventsSeq: Number(host?.events_seq) }).toEqual({
       helloRev: 2,
-      eventsSeq: 3
+      eventsSeq: 0
     })
-    expect((await machine.poll(2)).status).toBe(200)
   })
 
   // SQLite runs one transaction at a time, so only Postgres can race a batch with a hello.
   it.skipIf(!process.env.ORCA_CONNECTOR_TEST_DATABASE_URL)(
-    'ignores a batch from the old hello that waited on a newer hello',
+    'refuses a batch from the old hello that waited on a newer hello',
     async () => {
       let gate!: ReturnType<typeof pauseBefore>
       const { machine, enqueue, events, thread } = await setup({
@@ -268,13 +344,13 @@ describe('connector turn events', () => {
         }
       })
       await enqueue(machine.hostId)
-      const hello = machine.hello(2)
+      const hello = machine.hello()
       await gate.atStatement
       const late = events([{ conversation, paneKey: 'pane-old', kind: 'linked', agent: 'claude' }], 0, 1)
       await new Promise((resolve) => setTimeout(resolve, 200))
       gate.release()
-      expect((await hello).status).toBe(204)
-      expect((await late).status).toBe(204)
+      expect((await hello).status).toBe(200)
+      expect((await late).status).toBe(409)
       expect(await thread()).toMatchObject({ pane_key: null })
     }
   )

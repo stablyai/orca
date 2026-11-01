@@ -5,7 +5,7 @@ import type {
   RemoteRuntimeMultiplexedTerminal,
   RemoteRuntimeMultiplexedTerminalCallbacks
 } from '@/runtime/remote-runtime-terminal-multiplexer-types'
-import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,

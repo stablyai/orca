@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { MarkdownHeadingSlugger } from './markdown-heading-slug'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
@@ -12,10 +13,11 @@ export function scrollToAnchorInEditor(root: HTMLElement | null, anchor: string)
   } catch {
     // Malformed %-escapes: fall back to the raw fragment.
   }
-  const headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  const headings = root.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')
   const slugger = new MarkdownHeadingSlugger()
   for (const heading of headings) {
     if (slugger.slug(heading.textContent ?? '') === decoded) {
+      revealMarkdownNavigationDetails(heading)
       heading.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
       return
     }

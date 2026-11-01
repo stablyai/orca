@@ -17,7 +17,7 @@ import {
   resolveBundledWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
 } from '../agent-hooks/windows-native-hook-executable'
-import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from './hook-script'
+import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../agent-hooks/claude-background-job-guard'
 
 const PAYLOAD_FILE_NAME = 'claude-hook-impl.cmd'
 

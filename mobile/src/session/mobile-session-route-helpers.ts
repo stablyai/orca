@@ -1,13 +1,26 @@
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import type { ConnectionState } from '../transport/types'
+import { translate } from '../i18n/mobile-i18n'
 
 export const MOBILE_SESSION_STATUS_LABELS: Record<ConnectionState, string> = {
-  connecting: 'Connecting',
-  handshaking: 'Securing',
-  connected: 'Connected',
-  disconnected: 'Disconnected',
-  reconnecting: 'Reconnecting',
-  'auth-failed': 'Pairing invalid'
+  get connecting() {
+    return translate('session.routeHelpers.connecting', 'Connecting')
+  },
+  get handshaking() {
+    return translate('session.routeHelpers.securing', 'Securing')
+  },
+  get connected() {
+    return translate('session.routeHelpers.connected', 'Connected')
+  },
+  get disconnected() {
+    return translate('session.routeHelpers.disconnected', 'Disconnected')
+  },
+  get reconnecting() {
+    return translate('session.routeHelpers.reconnecting', 'Reconnecting')
+  },
+  get 'auth-failed'() {
+    return translate('session.routeHelpers.pairingInvalid', 'Pairing invalid')
+  }
 }
 
 export const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
@@ -18,11 +31,6 @@ export const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
 export function isFileExistsErrorMessage(message: string): boolean {
   const normalized = message.toLowerCase()
   return normalized.includes('eexist') || normalized.includes('already exists')
-}
-
-export function getRepoIdFromMobileWorktreeId(id: string): string {
-  const separatorIdx = id.indexOf('::')
-  return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
 }
 
 export function isGestureMouseTrackingMode(

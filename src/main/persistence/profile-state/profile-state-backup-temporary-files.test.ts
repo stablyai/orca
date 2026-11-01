@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -11,6 +12,7 @@ import {
   profileStateBackupTemporaryPath,
   removeAbandonedProfileStateBackupFiles
 } from './profile-state-backup-temporary-files'
+import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 
 vi.mock('./profile-state-access-identity', () => ({
   profileStateAccessBootIdentity: () => 'test-boot'
@@ -51,7 +53,13 @@ describe('abandoned profile database backups', () => {
     const live = temporary.replace(`.${process.pid}.`, '.12346.')
     const unknown = temporary.replace(`.${process.pid}.`, '.12347.')
     const recent = profileStateBackupTemporaryPath(backup).replace(`.${process.pid}.`, '.12345.')
-    const remote = orphan.replace(/owner-[a-f0-9]{64}/, `owner-${'0'.repeat(64)}`)
+    const remote = orphan.replace(/owner-[\w-]{8}\./, 'owner-AAAAAAAA.')
+    // Versions before the short owner token wrote the full SHA-256 in hex.
+    const fullScope = createHash('sha256')
+      .update(JSON.stringify([process.platform, 'test-boot', 'test-namespace']))
+      .digest('hex')
+    const fullOwnerOrphan = orphan.replace(/owner-[\w-]{8}\./, `owner-${fullScope}.`)
+    const fullOwnerRemote = orphan.replace(/owner-[\w-]{8}\./, `owner-${'0'.repeat(64)}.`)
     const legacy = `${backup}.12345.${now}.ab12.tmp`
     const unrelated = `${databasePath}.unrelated.tmp`
     for (const path of [
@@ -60,10 +68,13 @@ describe('abandoned profile database backups', () => {
       `${orphan}-wal`,
       `${orphan}-shm`,
       `${orphan}-journal`,
+      fullOwnerOrphan,
+      `${fullOwnerOrphan}-wal`,
       live,
       unknown,
       recent,
       remote,
+      fullOwnerRemote,
       legacy,
       unrelated
     ]) {
@@ -83,9 +94,25 @@ describe('abandoned profile database backups', () => {
     })
     await removeAbandonedProfileStateBackupFiles(databasePath, now)
     expect(readdirSync(root).sort()).toEqual(
-      [backup, live, unknown, recent, remote, legacy, unrelated]
+      [backup, live, unknown, recent, remote, fullOwnerRemote, legacy, unrelated]
         .map((path) => basename(path))
         .sort()
     )
+  })
+
+  it('keeps temporary names and their SQLite sidecars within eCryptfs’s 143-byte name limit', () => {
+    const backup = profileStateDatabaseBackupPath(
+      '/profile/profile-state.db',
+      createProfileStateDatabaseBackupId()
+    )
+    // Widest realistic suffix: a 7-digit Linux pid and a 16-digit random part.
+    const widest = profileStateBackupTemporaryPath(backup).replace(
+      /\.\d+\.(\d+)\.[0-9a-f]+\.tmp$/,
+      `.4194304.$1.${'f'.repeat(16)}.tmp`
+    )
+    expect(widest).toContain('.owner-')
+    for (const path of profileStateDatabaseFiles(widest)) {
+      expect(Buffer.byteLength(basename(path))).toBeLessThanOrEqual(143)
+    }
   })
 })

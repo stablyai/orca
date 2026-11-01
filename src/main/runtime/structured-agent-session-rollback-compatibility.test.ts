@@ -1,8 +1,9 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { safeParseWorkspaceSession } from '../../shared/workspace-session-schema'
 import {
   openTestAgentSessionRecordStore,
@@ -73,6 +74,7 @@ function pinnedBaseRoundTrip(raw: Record<string, unknown>): Record<string, unkno
 let root: string
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

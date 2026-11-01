@@ -1,10 +1,11 @@
+import { continuingStructuredAgentSessionInput } from './structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { refuseUnclassified } from '../../../shared/agent-session-wire-refusals'
-import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session-refusal-notice'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { refuseUnclassified } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { agentSessionWriteNoticeEnglish } from '../../../shared/agent-session/failures/agent-session-refusal-notice'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
@@ -200,7 +201,10 @@ export function structuredAgentSessionStartStillQueued(
     session?.journal
       .submissions()
       .some(
-        (entry) => entry.clientMessageId === startedFor && isQueuedAgentJournalSubmission(entry)
+        (entry) =>
+          entry.clientMessageId === startedFor &&
+          (isQueuedAgentJournalSubmission(entry) ||
+            continuingStructuredAgentSessionInput(session.journal, startedFor))
       ) === true
   )
 }

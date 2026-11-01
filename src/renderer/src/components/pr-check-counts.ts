@@ -90,20 +90,38 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
 export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string {
   const counts = getCheckCounts(checks)
   if (checks.length === 0) {
-    return 'No checks found'
+    return translate('auto.components.prCheckCounts.noChecksFound', 'No checks found')
   }
   if (counts.failing > 0) {
-    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
+    return translate('auto.components.prCheckCounts.checksFailing', '{{count}} checks failing', {
+      count: counts.failing,
+      defaultValue_one: '{{count}} check failing'
+    })
   }
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
-    return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
+    return translate(
+      'auto.components.prCheckCounts.checksNeedAction',
+      '{{count}} checks need action',
+      { count: counts.needsAction, defaultValue_one: '{{count}} check needs action' }
+    )
   }
   if (counts.pending > 0) {
-    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
+    return translate('auto.components.prCheckCounts.checksPending', '{{count}} checks pending', {
+      count: counts.pending,
+      defaultValue_one: '{{count}} check pending'
+    })
   }
   if (counts.passing === checks.length) {
-    return 'All checks passing'
+    return translate('auto.components.prCheckCounts.allChecksPassing', 'All checks passing')
   }
-  return `${counts.passing} of ${checks.length} checks passing`
+  return translate(
+    'auto.components.prCheckCounts.checksPassingOfTotal',
+    '{{passing}} of {{count}} checks passing',
+    {
+      count: checks.length,
+      passing: counts.passing,
+      defaultValue_one: '{{passing}} of {{count}} check passing'
+    }
+  )
 }

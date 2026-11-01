@@ -163,3 +163,27 @@ describe('session tabs tab delta', () => {
     ).toEqual({ ok: false })
   })
 })
+
+it('accepts the optional row origin with legacy and delta session frames', () => {
+  const decoder = createSessionTabsTabDeltaDecoder()
+  const encoder = createSessionTabsTabDeltaEncoder(CAPABLE)
+  const tab = {
+    ...terminalTab(0),
+    agentStatus: {
+      state: 'working',
+      prompt: 'task',
+      updatedAt: 5000,
+      paneKey: 'tab-0:leaf-0',
+      stateStartedAt: 5000,
+      firstStateStartedAt: 1000,
+      stateHistory: []
+    }
+  }
+  const legacy = wire({ type: 'snapshot', ...frame(1, [tab]) })
+  expect(decoder.decode(legacy)).toEqual({ ok: true, result: legacy })
+  const sent = wire({ type: 'snapshot', ...encoder.full(frame(2, [tab])) })
+  expect(decoder.decode(sent)).toEqual({
+    ok: true,
+    result: wire({ type: 'snapshot', ...frame(2, [tab]) })
+  })
+})

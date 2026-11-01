@@ -1,6 +1,7 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { linearLabelCountLabel } from './linear-attribute-count-labels'
 import { ChevronDown, LoaderCircle, Check, UserRound, FolderKanban, Tag } from 'lucide-react'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 export function TaskPageLinearIssueAttributes({
@@ -253,7 +254,10 @@ export function TaskPageLinearIssueAttributes({
                 const selectedProj = newLinearIssueProjects.find(
                   (p) => p.id === newLinearIssueProjectId
                 )
-                return selectedProj?.name || 'Project'
+                return (
+                  selectedProj?.name ||
+                  translate('auto.components.TaskPage.linearProjectPlaceholder', 'Project')
+                )
               })()}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />
@@ -310,10 +314,7 @@ export function TaskPageLinearIssueAttributes({
             <span>
               {newLinearIssueLabelIds.length === 0
                 ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                : translate('auto.components.TaskPage.eff9800d4b', '{{value0}} label{{value1}}', {
-                    value0: newLinearIssueLabelIds.length,
-                    value1: newLinearIssueLabelIds.length > 1 ? 's' : ''
-                  })}
+                : linearLabelCountLabel(newLinearIssueLabelIds.length)}
             </span>
             <ChevronDown className="size-3 text-muted-foreground/70" />
           </button>

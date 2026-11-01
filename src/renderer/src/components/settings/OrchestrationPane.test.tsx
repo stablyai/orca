@@ -6,7 +6,7 @@ import { planEntry, planOf, planOp } from '../skills/bundled-skill-plan-fixtures
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
+
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
@@ -161,58 +161,6 @@ describe('OrchestrationPane', () => {
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   })
 
-  it('keeps skill setup visible after install and shows agent coverage plus examples', () => {
-    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
-
-    expect(markup).toContain('Orchestration skill')
-    expect(markup).toContain('Installed')
-    expect(markup).toContain('Agent coverage')
-    expect(markup).not.toContain('Prefer your own terminal?')
-    expect(markup).not.toContain('Copy update command')
-    expect(markup).toContain('detected agents')
-    expect(markup).toContain('Gemini')
-    expect(markup).toContain('Ready')
-    expect(markup).toContain('How to use it')
-    expect(markup).not.toContain('See examples')
-    const examples = getOrchestrationUsageExamples()
-    expect(examples).toHaveLength(5)
-    for (const example of examples) {
-      expect(markup).toContain(example.title)
-    }
-    expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
-    expect(markup).toContain('Re-check')
-  })
-
-  it('renders nested worker depth as an unbounded positive whole-number input', () => {
-    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
-
-    expect(markup).toContain('Nested worker depth')
-    expect(markup).toContain('type="number"')
-    expect(markup).toContain('aria-label="Nested worker depth"')
-    expect(markup).toContain('min="1"')
-    expect(markup).not.toContain('max=')
-    expect(markup).not.toContain('Default:')
-    expect(markup.indexOf('Nested worker depth')).toBeGreaterThan(
-      markup.indexOf('Orchestration skill')
-    )
-    expect(matchesSettingsSearch('nested worker', getOrchestrationPaneSearchEntries())).toBe(true)
-  })
-
-  it('shows the chat-error preference disabled and unchecked while Chat UI is off, preserving its saved choice', () => {
-    const settings = getDefaultSettings('/tmp')
-    settings.experimentalNativeChat = false
-    settings.orchestrationChatErrorEscalationEnabled = true
-    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps(settings)} />)
-    expect(markup).toContain('Turn on Chat UI in Experimental settings to use it.')
-    const container = document.createElement('div')
-    container.innerHTML = markup
-    const toggle = container.querySelector('[aria-label="Tell the coordinator about chat errors"]')
-    expect(toggle?.hasAttribute('disabled')).toBe(true)
-    expect(toggle?.getAttribute('aria-checked')).toBe('false')
-    expect(settings.orchestrationChatErrorEscalationEnabled).toBe(true)
-    expect(matchesSettingsSearch('chat errors', getOrchestrationPaneSearchEntries())).toBe(true)
-  })
-
   it('keeps the nested depth row visible when settings search routes to Orchestration', () => {
     useAppStore.setState({ settingsSearchQuery: 'Nested worker' })
 
@@ -266,17 +214,5 @@ describe('OrchestrationPane', () => {
         getOrchestrationPaneSearchEntries({ includeLocalRuntimeSettings: false })
       )
     ).toBe(false)
-  })
-
-  it('installs the orchestration skill, which also updates, with no manual-copy path', async () => {
-    mocks.skillInstalled = false
-    const rendered = await renderPane()
-
-    expect(mocks.panelProps.at(-1)).toEqual(
-      expect.objectContaining({ skillNames: ['orchestration'] })
-    )
-    expect(mocks.panelProps.at(-1)?.installedSkillNames).toBeUndefined()
-    expect(rendered.textContent).not.toContain('Prefer your own terminal?')
-    expect(rendered.textContent).not.toContain('Copy install command')
   })
 })

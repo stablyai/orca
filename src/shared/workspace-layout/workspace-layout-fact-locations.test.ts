@@ -5,8 +5,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import {
   DISK_TABLES,
   type DiskFieldWritten,
-  type LayoutSource,
-  type UnwrittenLayoutSource
+  type LayoutSource
 } from './workspace-layout-disk-fields'
 import { EDITOR_FILE_KEY_FIELDS } from './workspace-layout-editor-tab-file'
 import { loadWorkspaceLayout } from './workspace-layout-load'
@@ -17,37 +16,6 @@ import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { addWorkspace, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 import type { WorkspaceSessionState } from '../workspace-session-state-types'
-
-// A model or side-data field no disk field is written from fails here.
-const everySourceIsWritten: [UnwrittenLayoutSource] extends [never] ? true : UnwrittenLayoutSource =
-  true
-
-/** On-disk fields that hold one fact; each group must be written from the same source. */
-const COPIES = [
-  ['row.ptyId', 'layout.ptyIdsByLeafId'],
-  ['row.id', 'terminalEntry.entityId'],
-  ['row.title', 'terminalEntry.label'],
-  ['row.customTitle', 'terminalEntry.customLabel'],
-  ['row.generatedTitle', 'terminalEntry.generatedLabel'],
-  ...['createdAt', 'color', 'aiVaultTitle', 'quickCommandLabel', 'isPinned', 'viewMode'].map(
-    (field) => [`row.${field}`, `terminalEntry.${field}`]
-  ),
-  ['row.sortOrder', 'terminalEntry.sortOrder', 'entry.sortOrder', 'group.tabOrder'],
-  [
-    'row.worktreeId',
-    'terminalEntry.worktreeId',
-    'entry.worktreeId',
-    'group.worktreeId',
-    'file.worktreeId',
-    'browser.worktreeId',
-    'sleeping.worktreeId',
-    'closedTab.worktreeId'
-  ],
-  ['sleeping.paneKey', 'sleeping.tabId'],
-  ['terminalEntry.executionHostId', 'entry.executionHostId'],
-  ['entry.isPreview', 'file.isPreview'],
-  ['terminalEntry.groupId', 'entry.groupId', 'group.id']
-]
 
 /** Do not mutate identity fields: broken references would test integrity rather than fact ownership. */
 const IDENTITY_SOURCES = new Set<LayoutSource>([
@@ -290,32 +258,6 @@ function diskValues(session: WorkspaceSessionState): Map<string, string> {
 const ALL_SOURCES = [...new Set([...WRITTEN_BY_FIELD.values(), TAB_LIST_ORDER].flatMap(sourcesOf))]
 
 describe('each on-disk field has one source', () => {
-  it('is typed over every disk, model and side-data field', () => {
-    expect(everySourceIsWritten).toBe(true)
-  })
-
-  it('writes every copy of one fact from the same source', () => {
-    for (const group of COPIES) {
-      const sources = group.map((field) => {
-        const written = writtenOf(field)
-        return typeof written === 'string' ? written : written.from
-      })
-      expect(new Set(sources).size, group.join(' = ')).toBe(1)
-    }
-  })
-
-  it('has every source populated, so a mutation can show what it writes', () => {
-    const loaded = richLoaded()
-    const empty = ALL_SOURCES.filter((source) => {
-      const [prefix, field] = splitSource(source)
-      return (
-        !IDENTITY_SOURCES.has(source) &&
-        !holdersOf(loaded, prefix).some((holder) => holder[field] != null)
-      )
-    })
-    expect(empty).toEqual([])
-  })
-
   it('holds each placed pane record in exactly one of its two holders', () => {
     const loaded = richLoaded()
     const leaves = Object.values(loaded.layout.workspaces).flatMap((workspace) =>

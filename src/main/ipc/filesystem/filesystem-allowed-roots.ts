@@ -1,6 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
 import { computeWorkspaceRootWithin, getWorktreePathSettings } from '../worktree-logic'
+import { wslHomeUnlessStopped } from '../../wsl/wsl-home-unless-stopped'
 import { getWorktreeMirrorDistroForRuntime } from '../../project-runtime-git-options'
 import { resolveLocalProjectRuntimesForRepos } from '../../local-project-runtime-resolution'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
@@ -145,7 +146,9 @@ export async function getAllowedRoots(store: RuntimeStore): Promise<string[]> {
               settings,
               getWorktreeMirrorDistroForRuntime(projectRuntimeByRepoId.get(repo.id))
             ),
-            ALLOWED_ROOT_WSL_HOME_DEADLINE_MS
+            ALLOWED_ROOT_WSL_HOME_DEADLINE_MS,
+            // An uncached home is only probed while its distro runs (E9).
+            wslHomeUnlessStopped
           )
         )
       )

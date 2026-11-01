@@ -16,9 +16,11 @@ import {
 import { resolveEnvironmentFromStore } from './runtime-environment-store'
 import { findCollidingEnvironmentName } from './runtime-environment-name-collision'
 import {
+  hasNonWslOwner,
   readWslHostDeployments,
   writeWslHostDeployment,
-  type WslHostDeploymentRecord
+  type WslHostDeploymentRecord,
+  type WslHostPendingStop
 } from './wsl-host-deployment-store'
 
 type WslHostPorts = Pick<WslHostDeploymentRecord, 'localPort' | 'remotePort'>
@@ -63,7 +65,7 @@ export function addWslHostEnvironment(
   }
 ): KnownRuntimeEnvironment {
   const offer = parseBridgedPairing(args.pairingCode)
-  const known = readEnvironmentStore(userDataPath).environments
+  const known = readEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments
   if (known.some((entry) => entry.id === args.id)) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
@@ -90,14 +92,16 @@ export function addWslHostEnvironment(
   writeWslHostDeployment(userDataPath, args.id, {
     ...args.record,
     environmentId: args.id,
-    createdAt: now
+    createdAt: now,
+    pairingPublicKeyB64: offer.publicKeyB64
   })
   const persisted = PersistedRuntimeEnvironmentSchema.parse(environment)
   writeEnvironmentStore(userDataPath, {
     version: 1,
-    environments: [...readPersistedEnvironmentStore(userDataPath).environments, persisted].sort(
-      (a, b) => a.name.localeCompare(b.name)
-    )
+    environments: [
+      ...readPersistedEnvironmentStore(userDataPath, { recoverBlankStore: true }).environments,
+      persisted
+    ].sort((a, b) => a.name.localeCompare(b.name))
   })
   return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), args.id)
 }
@@ -114,42 +118,99 @@ export function refreshWslHostPairing(
   if (!record) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
   }
-  if (record.localPort !== args.localPort || record.remotePort !== args.remotePort) {
+  const store = readPersistedEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, environmentId)
+  const pairingChanged = !samePairing(getPreferredPairingOffer(existing), offer)
+  // Validated before any write, so a refused pairing leaves both files as they were.
+  const next = pairingChanged
+    ? PersistedRuntimeEnvironmentSchema.parse({
+        ...createEnvironmentFromPairingOffer({
+          id: existing.id,
+          name: existing.name,
+          now: existing.createdAt,
+          offer,
+          runtimeId: existing.runtimeId
+        }),
+        updatedAt: now,
+        pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
+        lastUsedAt: existing.lastUsedAt
+      })
+    : null
+  if (next) {
+    assertPairingUsesBridge(next, args.localPort)
+  }
+  const keyChanged = record.pairingPublicKeyB64 !== offer.publicKeyB64
+  if (record.localPort !== args.localPort || record.remotePort !== args.remotePort || keyChanged) {
+    // The previous key keeps the record bound to the old pairing until the write below lands.
     writeWslHostDeployment(userDataPath, environmentId, {
       ...record,
       localPort: args.localPort,
-      remotePort: args.remotePort
+      remotePort: args.remotePort,
+      pairingPublicKeyB64: offer.publicKeyB64,
+      previousPairingPublicKeyB64: keyChanged
+        ? record.pairingPublicKeyB64
+        : record.previousPairingPublicKeyB64
     })
   }
-  const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
-  if (samePairing(getPreferredPairingOffer(current), offer)) {
-    return { environment: current, pairingChanged: false }
+  if (next) {
+    writeEnvironmentStore(userDataPath, {
+      version: 1,
+      environments: store.environments.map((candidate) =>
+        candidate.id === existing.id ? next : candidate
+      )
+    })
   }
-  const store = readPersistedEnvironmentStore(userDataPath)
-  const existing = resolveEnvironmentFromStore(store, environmentId)
-  const next = PersistedRuntimeEnvironmentSchema.parse({
-    ...createEnvironmentFromPairingOffer({
-      id: existing.id,
-      name: existing.name,
-      now: existing.createdAt,
-      offer,
-      runtimeId: existing.runtimeId
-    }),
-    updatedAt: now,
-    pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
-    lastUsedAt: existing.lastUsedAt
-  })
-  assertPairingUsesBridge(next, args.localPort)
-  writeEnvironmentStore(userDataPath, {
-    version: 1,
-    environments: store.environments.map((candidate) =>
-      candidate.id === existing.id ? next : candidate
-    )
-  })
   return {
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
-    pairingChanged: true
+    pairingChanged
   }
+}
+
+/**
+ * A crash between refreshWslHostPairing's writes leaves the record's bridge port off the saved
+ * pairing, so the overlay drops the WSL link. The record follows the pairing: its port is only
+ * where the next connect listens, and that connect saves both. Returns the repaired ids.
+ */
+export function reconcileWslHostBridgePorts(userDataPath: string): string[] {
+  const environments = readEnvironmentStore(userDataPath).environments
+  const repaired: string[] = []
+  for (const record of readWslHostDeployments(userDataPath).deployments) {
+    const environment = environments.find((entry) => entry.id === record.environmentId)
+    // A link that overlaid cleanly reads as an owner too, and needs nothing.
+    if (!environment || hasNonWslOwner(environment)) {
+      continue
+    }
+    // A record written for a different pairing stays ignored, not rebound to this one.
+    const key = getPreferredPairingOffer(environment).publicKeyB64
+    if (
+      record.pairingPublicKeyB64 !== undefined &&
+      key !== record.pairingPublicKeyB64 &&
+      key !== record.previousPairingPublicKeyB64
+    ) {
+      continue
+    }
+    const port = getPreferredLoopbackRuntimePort(environment)
+    if (port === null || port === record.localPort) {
+      continue
+    }
+    writeWslHostDeployment(userDataPath, record.environmentId, { ...record, localPort: port })
+    repaired.push(record.environmentId)
+  }
+  return repaired
+}
+
+/** Marks (or with null, clears) a Remove that could not prove the host's server stopped. */
+export function setWslHostPendingStop(
+  userDataPath: string,
+  environmentId: string,
+  pendingStop: WslHostPendingStop | null
+): void {
+  const record = findWslHostDeployment(userDataPath, environmentId)
+  if (!record) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
+  }
+  const { pendingStop: _previous, ...rest } = record
+  writeWslHostDeployment(userDataPath, environmentId, pendingStop ? { ...rest, pendingStop } : rest)
 }
 
 /** Environment first: a crash between the writes leaves an ownerless record, never a bare server. */

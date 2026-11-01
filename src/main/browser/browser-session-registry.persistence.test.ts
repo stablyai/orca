@@ -14,7 +14,7 @@ describe('BrowserSessionRegistry persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('migrates and consumes legacy pendingCookieDbPath into default partition replay', async () => {
+  it('expires a legacy pendingCookieDbPath without copying it over the live jar', async () => {
     const fsState = createFsState()
     seedMeta(fsState, {
       defaultSource: null,
@@ -32,10 +32,10 @@ describe('BrowserSessionRegistry persistence', () => {
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
     expect(written.pendingCookieDbPath).toBeNull()
     expect(written.pendingCookieImports).toEqual({})
-    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(true)
+    expect(fsState.present.has('/user-data/Partitions/orca-browser/Cookies')).toBe(false)
   })
 
-  it('replays pending cookies into an existing Network database', async () => {
+  it('keeps the existing Network database when expiring an unmarked legacy image', async () => {
     const stagedPath = '/staged/network-import'
     const networkPath = '/user-data/Partitions/orca-browser/Network/Cookies'
     const legacyPath = '/user-data/Partitions/orca-browser/Cookies'
@@ -56,7 +56,7 @@ describe('BrowserSessionRegistry persistence', () => {
 
     browserSessionRegistry.applyPendingCookieImport()
 
-    expect(fsState.files.get(networkPath)).toBe('imported cookies')
+    expect(fsState.files.get(networkPath)).toBe('old cookies')
     expect(fsState.present.has(legacyPath)).toBe(false)
   })
 
@@ -97,37 +97,6 @@ describe('BrowserSessionRegistry persistence', () => {
       profileSession,
       expect.any(Function)
     )
-  })
-
-  it('merges partition-keyed pending entries without clobbering unrelated entries', async () => {
-    const fsState = createFsState()
-    seedMeta(fsState, {
-      defaultSource: null,
-      userAgent: null,
-      userAgentByPartition: {},
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: []
-    })
-
-    installModuleMocks(fsState)
-    const { browserSessionRegistry } = await import('./browser-session-registry')
-
-    browserSessionRegistry.setPendingCookieImport('persist:orca-browser', '/staged/default')
-    browserSessionRegistry.setPendingCookieImport(
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      '/staged/imported'
-    )
-
-    const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieDbPath).toBeNull()
-    expect(written.pendingCookieImports).toEqual({
-      'persist:orca-browser': { format: 'scoped-v1', path: '/staged/default' },
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': {
-        format: 'scoped-v1',
-        path: '/staged/imported'
-      }
-    })
   })
 
   it('clears only the requested partition and unlinks its staged database files', async () => {
@@ -480,7 +449,7 @@ describe('BrowserSessionRegistry persistence', () => {
     })
   })
 
-  it('keeps failed partition replay pending and removes unrelated missing entries', async () => {
+  it('expires an old unmarked stage and removes unrelated missing entries', async () => {
     const importedPartition = 'persist:orca-browser-session-22222222-2222-4222-8222-222222222222'
     const fsState = createFsState()
     seedMeta(fsState, {
@@ -510,7 +479,7 @@ describe('BrowserSessionRegistry persistence', () => {
     browserSessionRegistry.applyPendingCookieImport()
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieImports).toEqual({ [importedPartition]: '/staged/imported' })
+    expect(written.pendingCookieImports).toEqual({})
     expect(written.pendingCookieDbPath).toBeNull()
   })
 

@@ -3,6 +3,7 @@ import { openExternalLink } from '../platform/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
+import { useProvideSessionScreenHandlers } from './session-screen-handlers'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
 
@@ -21,6 +22,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     activeSessionTab,
     activeSessionTabTypeRef,
     switchSessionTabRef,
+    switchTab,
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
@@ -81,6 +83,11 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     },
     [fetchSessionTabs, scheduleDelayedAction]
   )
+  useProvideSessionScreenHandlers(hostId, worktreeId, {
+    onFileOpenStart: handleFileOpenStart,
+    onOpenedFileDiff: handleOpenedFileDiff,
+    onResumedTerminal: switchTab
+  })
 
   const handleTerminalOpenUrl = useCallback(
     (handle: string, url: string) => {

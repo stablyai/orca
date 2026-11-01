@@ -5,6 +5,10 @@ import { hardenOrchestrationDatabaseFiles } from './database-file-permissions'
 import { backfillFederatedStubHomeRuns } from './federation/federated-stub-home-run-backfill'
 import type { OrchestrationDbMethods } from './orchestration-db-methods'
 import {
+  installRemovedWorkCapture,
+  isRemovedWorkCaptureIntact
+} from './reset/removed-orchestration-work-store'
+import {
   createCoordinatorMailRoutingTrigger,
   createRunCoordinatorAddressTriggers,
   rememberCurrentRunCoordinatorHandles
@@ -24,6 +28,10 @@ class OrchestrationDbCore {
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
+  /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
+  workerTerminalAutoReleaseListener: (() => void) | undefined
+  /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
+  workerAutoReleaseEnabled: (() => boolean) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
@@ -31,10 +39,26 @@ class OrchestrationDbCore {
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
     createTables.call(this as unknown as OrchestrationDb)
+    // Read before migrate, which drops the capture triggers it may need to rebuild around.
+    const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
     migrate.call(this as unknown as OrchestrationDb)
     createRunCoordinatorAddressTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
+    // After every open step that creates Runs, before any step that deletes work.
+    installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)
     backfillStructuredWorkerOrcaSessionIds(this.db)
+    this.db.exec(`
+      DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
+      CREATE INDEX IF NOT EXISTS idx_dispatch_creator_mailbox_work
+        ON dispatch_contexts(creator_dispatch_id, status);
+      CREATE INDEX IF NOT EXISTS idx_runs_current_coordinator_handle ON runs(coordinator_handle);
+      CREATE INDEX IF NOT EXISTS idx_messages_native_account_work
+        ON messages(run_id, to_handle, type)
+        WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+      CREATE INDEX IF NOT EXISTS idx_messages_native_direct_work
+        ON messages(to_handle, type)
+        WHERE read = 0 AND delivered_at IS NULL AND delivery_contract <> 'audit_only';
+    `)
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)

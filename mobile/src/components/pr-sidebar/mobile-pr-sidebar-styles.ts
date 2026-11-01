@@ -1,11 +1,11 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
 // Dock width leaves diff ~380px at 700px breakpoint (KTD2/U4).
 export const PR_SIDEBAR_DOCK_WIDTH = 320
 
-export const mobilePrSidebarStyles = StyleSheet.create({
+export const mobilePrSidebarStyles = themedStyleSheet(() => ({
   dockColumn: {
     width: PR_SIDEBAR_DOCK_WIDTH,
     backgroundColor: colors.bgPanel,
@@ -29,7 +29,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
@@ -40,7 +40,8 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     gap: spacing.sm
   },
   sectionBody: {
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },
   sectionLabel: {
@@ -69,7 +70,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     backgroundColor: colors.bgRaised
   },
@@ -80,9 +81,9 @@ export const mobilePrSidebarStyles = StyleSheet.create({
   prTitle: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    lineHeight: 24
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 21
   },
   prMeta: {
     color: colors.textSecondary,
@@ -118,7 +119,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
-    borderRadius: radii.button
+    borderRadius: radii.pill
   },
   row: {
     minHeight: 44,
@@ -147,7 +148,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   emptyText: {
     color: colors.textSecondary,
@@ -208,7 +209,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
   checkDetailLogScroll: {
     maxHeight: 160,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -244,7 +245,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   retryText: {
@@ -263,7 +264,7 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   pickerTitle: {
     color: colors.textPrimary,
@@ -272,14 +273,6 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     marginBottom: spacing.sm
   },
   pickerSearch: {
-    minHeight: 40,
-    borderRadius: radii.input,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    fontSize: TEXT_INPUT_FONT_SIZE,
     marginBottom: spacing.sm
   },
   // Let parent drawer scroll mapped rows; never nest VirtualizedList inside PR ScrollView.
@@ -302,4 +295,4 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm
   }
-})
+}))

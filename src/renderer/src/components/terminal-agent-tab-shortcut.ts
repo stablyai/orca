@@ -18,39 +18,69 @@ export type TerminalAgentTabShortcut = {
   pendingAgent?: Promise<TuiAgent | null>
 }
 
+export function readAgentTabShortcutActions(
+  activeWorktreeId: string,
+  keybindings: KeybindingOverrides
+) {
+  const state = useAppStore.getState()
+  const preferences = readAgentLaunchPreferencesForWorktree(state, activeWorktreeId)
+  return [
+    { actionId: 'tab.newTerminal' as const, agent: null },
+    {
+      actionId: 'tab.newAgent' as const,
+      get agent() {
+        const detectedAgentIds = readDetectedAgentsForWorktree(state, activeWorktreeId)
+        const agent = resolveDefaultAgentForNewTab({
+          ...preferences,
+          detectedAgentIds,
+          chatIn: { store: state, worktreeId: activeWorktreeId }
+        })
+        return agent &&
+          !chosenAgentChatUnlearned(
+            state,
+            preferences.defaultTuiAgent,
+            detectedAgentIds,
+            worktreeLaunchWorkspace(activeWorktreeId)
+          )
+          ? agent
+          : null
+      }
+    },
+    ...listBoundAgentTabActions(keybindings, preferences.disabledTuiAgents)
+  ]
+}
+
+export function resolveAgentTabShortcutAction(
+  actions: ReturnType<typeof readAgentTabShortcutActions>,
+  matchShortcut: (actionId: KeybindingActionId) => boolean
+) {
+  return actions.find(({ actionId }) => matchShortcut(actionId))
+}
+
 export function resolveTerminalAgentTabShortcut({
   activeWorktreeId,
   keybindings,
-  matchShortcut
+  matchShortcut,
+  includeTerminal = false
 }: {
   activeWorktreeId: string
   keybindings: KeybindingOverrides
   matchShortcut: (actionId: KeybindingActionId) => boolean
+  includeTerminal?: boolean
 }): TerminalAgentTabShortcut {
-  const state = useAppStore.getState()
-  const preferences = readAgentLaunchPreferencesForWorktree(state, activeWorktreeId)
-  if (matchShortcut('tab.newAgent')) {
-    const detectedAgentIds = readDetectedAgentsForWorktree(state, activeWorktreeId)
-    const chosen = preferences.defaultTuiAgent
-    const agent = resolveDefaultAgentForNewTab({
-      ...preferences,
-      detectedAgentIds,
-      chatIn: { store: state, worktreeId: activeWorktreeId }
-    })
-    const workspace = worktreeLaunchWorkspace(activeWorktreeId)
-    // Probe the workspace host when cache is cold or the chat-only default is unlearned.
-    return agent && !chosenAgentChatUnlearned(state, chosen, detectedAgentIds, workspace)
-      ? { actionId: 'tab.newAgent', agent }
-      : {
-          actionId: 'tab.newAgent',
-          agent: null,
-          pendingAgent: resolveDefaultAgentForWorktreeNewTab(useAppStore.getState, activeWorktreeId)
-        }
+  const action = resolveAgentTabShortcutAction(
+    readAgentTabShortcutActions(activeWorktreeId, keybindings),
+    (actionId) => (includeTerminal || actionId !== 'tab.newTerminal') && matchShortcut(actionId)
+  )
+  if (!action) {
+    return { actionId: null, agent: null }
   }
-  for (const bound of listBoundAgentTabActions(keybindings, preferences.disabledTuiAgents)) {
-    if (matchShortcut(bound.actionId)) {
-      return { actionId: bound.actionId, agent: bound.agent }
-    }
-  }
-  return { actionId: null, agent: null }
+  const { actionId, agent } = action
+  return actionId === 'tab.newAgent' && !agent
+    ? {
+        actionId,
+        agent,
+        pendingAgent: resolveDefaultAgentForWorktreeNewTab(useAppStore.getState, activeWorktreeId)
+      }
+    : { actionId, agent }
 }

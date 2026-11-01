@@ -41,8 +41,16 @@ export type HostKeyVerifierDeps = {
   isCurrentAttempt?: () => boolean
 }
 
+let defaultServerHostKeyAlgorithms: string[] | null | undefined
+
 /** Read packaged ssh2 defaults at runtime so proposals track supported algorithms instead of a stale copy. */
-export const DEFAULT_SERVER_HOST_KEY_ALGORITHMS = readSsh2DefaultServerHostKeyAlgorithms()
+export function getDefaultServerHostKeyAlgorithms(): string[] | null {
+  // Read on first connect; this pulls in half of ssh2, too costly for startup (#35731).
+  if (defaultServerHostKeyAlgorithms === undefined) {
+    defaultServerHostKeyAlgorithms = readSsh2DefaultServerHostKeyAlgorithms()
+  }
+  return defaultServerHostKeyAlgorithms
+}
 
 /** Return null when defaults cannot be read: runtime probes can remove algorithms, so guessed lists may throw only for trusted hosts. */
 function readSsh2DefaultServerHostKeyAlgorithms(): string[] | null {

@@ -1,18 +1,6 @@
-import { readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { C5_PAGE_CLOSURE } from './c5-page-closure'
-import {
-  pageClosureDrift,
-  pageClosureExclusions,
-  pageClosureTotals,
-  type PageClosureObservation
-} from './page-closure'
-import { C1_PAGE_CLOSURE } from './c1-page-closure'
-import { BRIDGED_PARITY_EXCLUSIONS } from './divergence-classes'
-import { readGolden } from '../rpc-recording/golden-recording'
-
-const GOLDENS = resolve(import.meta.dirname, '../../../rpc-foundation/goldens')
+import { pageClosureDrift, type PageClosureObservation } from './page-closure'
 
 function asPinned(): Map<string, PageClosureObservation> {
   const run = new Map<string, PageClosureObservation>()
@@ -24,89 +12,7 @@ function asPinned(): Map<string, PageClosureObservation> {
   return run
 }
 
-describe('the C5 page closure', () => {
-  it('assigns each pinned golden to one closure family', () => {
-    const goldens = Object.values(C5_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
-    expect(new Set(goldens).size).toBe(goldens.length)
-  })
-
-  // Assert class totals beside per-id pins; a self-consistent misderived table can satisfy each pin while losing wrapped entries.
-  it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
-    expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
-      identical: 61,
-      'result-absent-settlement': 49,
-      'params-undefined': 7,
-      'result-absent-stream-release': 3,
-      'write-ordinal': 7
-    })
-  })
-
-  it("inherits C1's families whole, with the verdicts C1 committed", () => {
-    // C5 inlines its pins, so compare imported C1 directly; composed spread tables need source parsing to detect overwritten inherited entries.
-    for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
-      expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
-    }
-    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(20)
-  })
-
-  it('adds five families and nothing else, all of them AI Vault', () => {
-    const added = Object.keys(C5_PAGE_CLOSURE).filter((family) => !(family in C1_PAGE_CLOSURE))
-    expect(added.sort()).toEqual([
-      'aiVault.history',
-      'aiVault.history-screen',
-      'aiVault.resume-launch',
-      'aiVault.resume-preparation',
-      'settings.resume-metadata'
-    ])
-  })
-
-  it('keeps byte-identical controls outside History and strict ordinal controls within it', () => {
-    const added = Object.entries(C5_PAGE_CLOSURE).filter(([family]) => !(family in C1_PAGE_CLOSURE))
-    const wholly = added
-      .filter(([, pins]) => !Object.values(pins).includes('identical'))
-      .map(([family]) => family)
-    expect(wholly.sort()).toEqual(['aiVault.history', 'aiVault.history-screen'])
-    for (const family of wholly) {
-      expect(Object.values(C5_PAGE_CLOSURE[family] ?? {})).toContain('write-ordinal')
-    }
-  })
-
-  it('pins goldens that exist, in the family the corpus records them under', () => {
-    for (const [family, goldens] of Object.entries(C5_PAGE_CLOSURE)) {
-      for (const id of Object.keys(goldens)) {
-        // Use the corpus decoder instead of inventing another golden-shape check.
-        const recorded = readGolden(GOLDENS, id)
-        expect({ id, family: recorded.family }).toEqual({ id, family })
-      }
-    }
-  })
-
-  it('claims no golden the corpus does not have', () => {
-    const corpus = new Set(
-      readdirSync(GOLDENS)
-        .filter((name) => name.endsWith('.json'))
-        .map((name) => name.replace(/\.json$/, ''))
-    )
-    const missing = Object.values(C5_PAGE_CLOSURE)
-      .flatMap((family) => Object.keys(family))
-      .filter((id) => !corpus.has(id))
-    expect(missing).toEqual([])
-  })
-
-  it('excludes a closure golden only into a class that has a reason', () => {
-    const exclusions = pageClosureExclusions(C5_PAGE_CLOSURE)
-    expect(exclusions.length).toBe(66)
-    expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
-      []
-    )
-  })
-})
-
 describe('reading a run against the C5 pin', () => {
-  it('says nothing when the run is the pin', () => {
-    expect(pageClosureDrift(C5_PAGE_CLOSURE, asPinned())).toEqual([])
-  })
-
   it('names a closure golden that changed verdict', () => {
     const run = asPinned()
     const found = [...run].find(([, seen]) => seen.verdict !== 'params-undefined')

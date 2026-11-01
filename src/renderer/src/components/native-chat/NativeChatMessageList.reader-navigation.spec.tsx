@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'

@@ -14,12 +14,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  CodexStructuredSessionAdapter,
-  type CodexStructuredLaunch,
-  type CodexStructuredSessionEvent
-} from './codex-structured-session-adapter'
-import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
+import type {
+  CodexStructuredLaunch,
+  CodexStructuredSessionEvent
+} from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
@@ -45,6 +45,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',
       'thread/start',
+      'config/read',
       'skills/list'
     ])
   })
@@ -115,7 +116,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false
@@ -148,7 +150,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       resolveLaunch: createCodexStructuredLaunchResolver({
         store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
         resolveWorkspacePath: async () => '/work/repo',
-        resolveCommand: () => 'codex',
+        resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
         resolveLaunchArgs: () => []
       })
     })
@@ -164,7 +166,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       params: {
         cwd: '/work/repo',
         approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        sandbox: 'read-only',
         approvalsReviewer: 'user',
         // Explicit values survive inherit = core.
         config: {
@@ -473,6 +475,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       {
         threadId: THREAD_ID,
         clientUserMessageId: 'client-1',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        sandboxPolicy: { type: 'readOnly' },
         input: [
           { type: 'text', text: 'ship it' },
           { type: 'localImage', path: '/tmp/shot.png' },

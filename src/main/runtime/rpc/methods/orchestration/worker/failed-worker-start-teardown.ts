@@ -13,8 +13,8 @@ export async function tearDownFailedWorkerStart(args: {
   dispatchId: string
 }): Promise<void> {
   const { runtime, structuredSession } = args
-  releaseStructuredWorkerSession(args.dispatchId, runtime)
   if (structuredSession) {
+    releaseStructuredWorkerSession(structuredSession.identity.sessionId, runtime)
     await discardStructuredWorkerSession(structuredSession.identity.sessionId, runtime)
   }
 }

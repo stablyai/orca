@@ -1,12 +1,12 @@
 /** Centralize store fixtures in the host chat-journal DB; closeTestJournalHostDatabases owns their cleanup. */
 
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { PersistedAgentSessionRecord } from '../../shared/agent-session-legacy-handoff-lease'
+import type { AgentSessionOperationRow } from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { PersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import {
   encodePersistedAgentSessionProviderHandle,
   isAgentSessionProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../native-chat/agent-session-journal/journal-database-schema'
 import {
   closeTestJournalHostDatabase,
@@ -35,11 +35,12 @@ function databaseFor(stateDirectory: string): Database.Database {
 
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
-  options: { hostId?: string } = {}
+  options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
 ): Promise<AgentSessionRecordStore> {
   return AgentSessionRecordStore.open({
     journalDatabase: openTestJournalHostDatabase(stateDirectory),
-    hostId: options.hostId ?? TEST_HOST_ID
+    hostId: options.hostId ?? TEST_HOST_ID,
+    legacySessionTabIds: options.legacySessionTabIds ?? []
   })
 }
 
@@ -131,7 +132,7 @@ export async function seedTestAgentSessionStoreFromNewerBuild(
   openTestJournalHostDatabase(stateDirectory).db.pragma(
     `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
   )
-  closeTestJournalHostDatabase(stateDirectory)
+  await closeTestJournalHostDatabase(stateDirectory)
 }
 
 function parsed(json: unknown): unknown {

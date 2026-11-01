@@ -6,8 +6,8 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionFirstMessage,
   type StructuredAgentSessionResumeSource
-} from '../../../shared/structured-agent-session-create'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
+} from '../../../shared/agent-session/structured-agent-session-create'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
@@ -27,7 +27,7 @@ import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError,
   StructuredAgentSessionOwnerUnresolvedError
-} from '@/lib/structured-agent-session-launch-errors'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export {
   StructuredAgentSessionCreateRefusalError,
@@ -43,11 +43,14 @@ export type StructuredAgentSessionLaunchIntent = {
   target: RuntimeClientTarget
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
-  prepareCreate?: () => void
+  prepareCreate?: (hostTakesExplicitOptions: boolean) => void
   beforeCreate?: () => boolean
   surfaceAddress?: StructuredLaunchSurfaceAddress
+  /** The saved selection create seeds, read when the intent is built. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
 }
 
@@ -58,12 +61,18 @@ function launchSeedOptions(
   state: ReturnType<typeof useAppStore.getState>,
   owner: Pick<StructuredAgentSessionLaunchIntent, 'target'>,
   agent: TuiAgent,
-  hostSeedOptions: LaunchSeed
+  hostSeedOptions: LaunchSeed,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): { seedOptions?: Readonly<Record<string, string>> } {
   const seedOptions =
     owner.target.kind === 'local'
-      ? structuredLaunchSeedOptions(state.settings, agent)
-      : hostSeedOptions
+      ? structuredLaunchSeedOptions(
+          resumeFrom ? { ...state.settings, agentLaunchChoices: undefined } : state.settings,
+          agent
+        )
+      : resumeFrom
+        ? undefined
+        : hostSeedOptions
   return seedOptions ? { seedOptions } : {}
 }
 
@@ -133,7 +142,7 @@ function buildStructuredAgentSessionLaunchIntent(
       ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: createBrowserUuid
     }),
-    ...launchSeedOptions(state, owner, agent, hostSeedOptions)
+    ...launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom)
   }
 }
 
@@ -141,14 +150,17 @@ function buildStructuredAgentSessionLaunchIntent(
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredAgentSessionLaunchIntent {
-  return buildStructuredAgentSessionLaunchIntent(
-    intent.worktreeId,
-    intent,
-    intent.agent,
-    intent.sessionId,
-    intent.params.resumeFrom,
-    intent.seedOptions
-  )
+  return {
+    ...buildStructuredAgentSessionLaunchIntent(
+      intent.worktreeId,
+      intent,
+      intent.agent,
+      intent.sessionId,
+      intent.params.resumeFrom,
+      intent.seedOptions
+    ),
+    explicitLaunchOptions: intent.explicitLaunchOptions
+  }
 }
 
 export function restoreStructuredAgentSessionLaunchIntent(args: {
@@ -160,9 +172,13 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   payloadFingerprint: string
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** A paired server's seed, kept with the launch so a reload shows what create runs. */
+  explicitLaunchOptions?: Readonly<Record<string, string>>
   seedOptions?: Readonly<Record<string, string>>
   firstMessage?: StructuredAgentSessionFirstMessage
+  optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
@@ -184,13 +200,19 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
+      ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
       ...(args.options ? { options: args.options } : {})
     },
     ...(args.createMessageSupport === undefined
       ? {}
       : { createMessageSupport: args.createMessageSupport }),
     ...(args.createMessageSupport === undefined ? {} : { createPrepared: true as const }),
-    ...launchSeedOptions(state, { target }, args.agent, args.seedOptions)
+    ...(args.explicitLaunchOptions ? { explicitLaunchOptions: args.explicitLaunchOptions } : {}),
+    ...(args.createMessageSupport !== undefined
+      ? args.seedOptions
+        ? { seedOptions: args.seedOptions }
+        : {}
+      : launchSeedOptions(state, { target }, args.agent, args.seedOptions, args.resumeFrom))
   }
 }
 
@@ -207,4 +229,4 @@ export function abandonStructuredAgentSessionLaunchIntent(
 export {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from './structured-agent-session-launch-create-call'
+} from './agent-session/launch/structured-agent-session-launch-create-call'

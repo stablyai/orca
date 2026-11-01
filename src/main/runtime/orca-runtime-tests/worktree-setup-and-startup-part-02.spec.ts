@@ -1,5 +1,6 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
@@ -69,7 +70,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
@@ -115,15 +116,19 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setupScript = spawnedPtyEnv(spawn.mock.calls[1]![0])[
+      SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
+    ]
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand.length).toBeLessThan(256)
     expect(startupScript).toContain('exec claude')
     expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(spawn.mock.calls[1]![0]).toMatchObject({
+      command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
+    })
+    expect(setupScript).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
   })
 
@@ -162,7 +167,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',
@@ -238,7 +243,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
@@ -552,7 +557,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
+    vi.mocked(createSetupRunnerScript).mockResolvedValue({
       runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
       envVars: {
         ORCA_ROOT_PATH: '/tmp/repo',

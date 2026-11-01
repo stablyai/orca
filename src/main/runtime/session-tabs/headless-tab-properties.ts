@@ -1,5 +1,5 @@
 import { renameStructuredSessionTab, type SessionTabProps } from './structured-session-tab-rename'
-import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
+import { OrcaRuntimeWithHeadlessPaneMoveToNewTab } from './headless-pane-move-to-new-tab'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
@@ -32,7 +32,7 @@ function paneLayoutEditIsNoOp(
   )
 }
 
-export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
+export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadlessPaneMoveToNewTab {
   // Remote tab color/pin need persistence and live publication or the next snapshot reverts them.
   async setMobileSessionTabProps(
     worktreeSelector: string,
@@ -40,7 +40,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     const worktreeId =
-      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Attached renderers own and republish props; headless writes would be overwritten.
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)

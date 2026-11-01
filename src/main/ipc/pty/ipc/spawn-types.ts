@@ -1,10 +1,11 @@
+import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -61,6 +62,8 @@ export type PtySpawnIpcArgs = {
   placement?: unknown
   // Accept declared restore intent only through isRestoreSpawnIntent.
   spawnIntent?: unknown
+  // Only `true` counts: a window restore no user act asked for.
+  wslPassiveRestore?: unknown
   // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
   // Main validates renderer telemetry; retain unknown input types at the IPC boundary.
@@ -81,6 +84,7 @@ export type AdoptStablePaneArgs = {
   tabId: string
   leafId: string
   onAdopted?: (result: PtySpawnResult) => void
+  onOutcome?: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => void
   completed?: AdoptStablePaneResult
   ownsPaneSpawnReservation?: true
   reservation?: PaneSpawnReservation
@@ -94,7 +98,9 @@ export type AdoptStablePaneArgs = {
 }
 
 export type AdoptStablePaneResult = {
+  operation?: PaneSpawnOperation
   result: PtySpawnResult
+  outcome?: PtySpawnOutcome
   owner: StablePaneOwner
   materialized?: true
 }
@@ -113,12 +119,16 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
   adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
   assertWorkspaceAcceptsNewPty: (
     worktreeId: string | undefined,
-    sessionId?: string
+    sessionId?: string,
+    cwd?: string,
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
   ) => string | undefined
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>

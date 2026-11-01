@@ -98,6 +98,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // Only this shell launch config may choose Orca-owned features.
     delete env.ORCA_SHELL_FEATURES
     delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
+    const userShellArgs = !spawn.command && !spawn.launchAgent ? spawn.terminalShellArgs : undefined
     // Capture before launch config prefixes XDG_DATA_DIRS.
     const fishLaunch = {
       inheritedXdgDataDirs: env.XDG_DATA_DIRS,
@@ -130,7 +131,7 @@ export function finalizeLocalPtySpawnEnvironment(args: {
       Object.keys(shellLaunch.env).map((key) => [key, env[key]])
     )
     Object.assign(env, shellLaunch.env)
-    plan.shellArgs = shellLaunch.args ?? plan.shellArgs
+    plan.shellArgs = userShellArgs ?? shellLaunch.args ?? plan.shellArgs
     plan.shellReadyLaunch = spawn.command ? shellLaunch : null
   }
   return historyResult

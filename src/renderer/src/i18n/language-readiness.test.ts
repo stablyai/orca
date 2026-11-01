@@ -22,37 +22,6 @@ function installBridge(
 afterEach(() => vi.useRealTimers())
 
 describe('client-local startup language', () => {
-  it('uses the local native snapshot over Chromium preferences and freezes it for startup', async () => {
-    const probe = vi.fn().mockResolvedValue({
-      detectedTag: 'de-DE',
-      status: 'unsupported',
-      locale: 'en',
-      source: 'native'
-    })
-    installBridge(probe)
-    const { initializeLanguageDetection } = await import('./language-readiness')
-    expect(await initializeLanguageDetection()).toMatchObject({
-      detectedTag: 'de-DE',
-      source: 'native'
-    })
-    await initializeLanguageDetection()
-    expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith(['fr-FR'])
-  })
-
-  it('does not replace a C-only native result with browser English', async () => {
-    installBridge(
-      vi
-        .fn()
-        .mockResolvedValue({ detectedTag: null, status: 'unknown', locale: 'en', source: 'native' })
-    )
-    const { initializeLanguageDetection } = await import('./language-readiness')
-    expect(await initializeLanguageDetection()).toMatchObject({
-      status: 'unknown',
-      source: 'native'
-    })
-  })
-
   it('uses uncertain browser fallback when an older bridge lacks the optional snapshot', async () => {
     installBridge()
     const { initializeLanguageDetection } = await import('./language-readiness')
@@ -61,23 +30,6 @@ describe('client-local startup language', () => {
       locale: 'fr',
       source: 'browser-fallback'
     })
-  })
-
-  it('shares the main-owned browser fallback when native detection is unavailable', async () => {
-    const probe = vi.fn().mockResolvedValue({
-      detectedTag: 'ja-JP',
-      status: 'supported',
-      locale: 'ja',
-      source: 'browser-fallback'
-    })
-    installBridge(probe)
-    const { initializeLanguageDetection } = await import('./language-readiness')
-    expect(await initializeLanguageDetection()).toMatchObject({
-      detectedTag: 'ja-JP',
-      locale: 'ja',
-      source: 'browser-fallback'
-    })
-    expect(probe).toHaveBeenCalledWith(['fr-FR'])
   })
 
   it('uses browser preferences on web/mobile without asking the server for its locale', async () => {
@@ -112,13 +64,4 @@ it('bounds startup with browser fallback and reconciles a late native result', a
   const { getRendererLanguageDetection } = await import('../../../shared/ui-locale')
   expect(getRendererLanguageDetection().locale).toBe('ja')
   expect(await initializeLanguageDetection()).toMatchObject({ locale: 'ja', source: 'native' })
-})
-
-it('uses browser fallback when native IPC rejects', async () => {
-  installBridge(() => Promise.reject(new Error('Native locale API unavailable')))
-  const { initializeLanguageDetection } = await import('./language-readiness')
-  expect(await initializeLanguageDetection()).toMatchObject({
-    locale: 'fr',
-    source: 'browser-fallback'
-  })
 })

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
+import { disposePane } from '@/lib/pane-manager/pane-lifecycle'
 import {
   isPaneReplaying,
   replayIntoTerminal,
@@ -49,13 +51,17 @@ type FakeTerminal = {
   }
   _core: {
     refresh: (start: number, end: number, sync?: boolean) => void
+    // Private flag read by isXtermInstanceDisposed.
+    _store?: { _isDisposed: boolean }
   }
   refresh: (start: number, end: number) => void
+  /** Like xterm 6: drops queued write callbacks and flags the private store. */
+  dispose: () => void
   /** Flush all pending xterm write callbacks, simulating parse completion. */
   flush: () => void
 }
 
-function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTerminal } {
+function makeFakePane(paneId: number): { pane: ManagedPaneInternal; terminal: FakeTerminal } {
   const pendingCallbacks: (() => void)[] = []
   const terminal: FakeTerminal = {
     lastData: [],
@@ -71,6 +77,10 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       refresh() {}
     },
     refresh() {},
+    dispose() {
+      pendingCallbacks.length = 0
+      terminal._core._store = { _isDisposed: true }
+    },
     write(data: string, cb?: () => void) {
       terminal.lastData.push(data)
       if (cb) {
@@ -83,8 +93,8 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
       }
     }
   }
-  // Only `id` and `terminal` are exercised by replayIntoTerminal.
-  const pane = { id: paneId, terminal } as unknown as ManagedPane
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replay reads only id/terminal; disposePane null-checks or try-wraps every other field it touches.
+  const pane = { id: paneId, terminal } as unknown as ManagedPaneInternal
   return { pane, terminal }
 }
 
@@ -666,6 +676,34 @@ describe('replay-guard stall handling (probe-certified release)', () => {
       )
     } finally {
       errorSpy.mockRestore()
+    }
+  })
+
+  it('settles guards on a disposed xterm without certifying a wedge', async () => {
+    vi.useFakeTimers()
+    const ref = makeRef()
+    const { pane, terminal } = makeFakePane(1)
+    const onUndeliverable = vi.fn()
+    registerUndeliverableWriteHandler(pane.terminal, onUndeliverable)
+    try {
+      let resolved = false
+      void replayIntoTerminalAsync(pane, ref, 'snapshot', { stallCheckMs: 1_000 }).then(() => {
+        resolved = true
+      })
+      replayIntoTerminal(pane, ref, 'epilogue', { stallCheckMs: 1_000 })
+      disposePane(pane, new Map([[pane.id, pane]]))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(resolved).toBe(true)
+
+      replayIntoTerminal(pane, ref, 'late replay', { stallCheckMs: 1_000 })
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(terminal.lastData).toEqual(['snapshot', 'epilogue'])
+      expect(isPaneReplaying(ref, 1)).toBe(false)
+      expect(onUndeliverable).not.toHaveBeenCalled()
+      expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    } finally {
+      _resetWritePipelineHealthForTests(pane.terminal)
     }
   })
 

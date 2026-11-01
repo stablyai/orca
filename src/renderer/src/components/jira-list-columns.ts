@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { translate } from '@/i18n/i18n'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 
 export type JiraListColumnId =
   | 'key'
@@ -161,11 +162,18 @@ export function formatJiraEstimate(seconds: number | undefined): string {
     return '–'
   }
   if (seconds === 0) {
-    return '0m'
+    return formatUiNarrowDuration(0, 'minute')
   }
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
-  return [hours ? `${hours}h` : '', minutes ? `${minutes}m` : ''].filter(Boolean).join(' ') || '<1m'
+  return (
+    [
+      hours ? formatUiNarrowDuration(hours, 'hour') : '',
+      minutes ? formatUiNarrowDuration(minutes, 'minute') : ''
+    ]
+      .filter(Boolean)
+      .join(' ') || `<${formatUiNarrowDuration(1, 'minute')}`
+  )
 }
 
 export function formatJiraStoryPoints(points: number | undefined): string {

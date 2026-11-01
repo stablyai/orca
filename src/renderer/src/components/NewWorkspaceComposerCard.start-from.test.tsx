@@ -165,6 +165,17 @@ describe('NewWorkspaceComposerCard start from', () => {
     container = null
   })
 
+  it('offers opening a known workspace for the reused branch', () => {
+    const openWorkspace = vi.fn()
+    container = renderCard({
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: true,
+      onOpenSelectedBranchWorkspace: openWorkspace
+    })
+    clickButton(container, 'Open existing workspace')
+    expect(openWorkspace).toHaveBeenCalledOnce()
+  })
+
   it('offers a base ref while a Jira issue names the workspace', () => {
     container = renderCard()
 

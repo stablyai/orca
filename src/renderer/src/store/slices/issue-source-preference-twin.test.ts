@@ -6,8 +6,8 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { buildTaskPageRepoSourceState } from '../../components/task-page-cache-selectors'
-import { getTaskPageRepoCacheInput } from '../../components/task-page-source-context'
+import { buildTaskPageRepoSourceState } from '../../components/task-page/task-page-cache-selectors'
+import { getTaskPageRepoCacheInput } from '../../components/task-page/task-page-source-context'
 
 const localTwin: Repo = {
   id: 'twin',

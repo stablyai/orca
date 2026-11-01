@@ -1,7 +1,7 @@
 export class StructuredAgentSessionAcquireAborts {
   private readonly inFlight = new Map<
     string,
-    Set<{ controller: AbortController; handover: boolean; goal: boolean; opening: boolean }>
+    Set<{ controller: AbortController; handover: boolean; goal: boolean; bound?: () => boolean }>
   >()
   /** Starts admitted after quit must begin aborted. */
   private quitReason: Error | null = null
@@ -11,7 +11,7 @@ export class StructuredAgentSessionAcquireAborts {
     sessionId: string,
     handover = false,
     goal = false,
-    opening = false
+    bound?: () => boolean
   ): { signal: AbortSignal; abort: () => void; end: () => void } {
     const controller = new AbortController()
     if (this.quitReason) {
@@ -19,8 +19,13 @@ export class StructuredAgentSessionAcquireAborts {
     }
     const waits =
       this.inFlight.get(sessionId) ??
-      new Set<{ controller: AbortController; handover: boolean; goal: boolean; opening: boolean }>()
-    const active = { controller, handover, goal, opening }
+      new Set<{
+        controller: AbortController
+        handover: boolean
+        goal: boolean
+        bound?: () => boolean
+      }>()
+    const active = { controller, handover, goal, bound }
     waits.add(active)
     this.inFlight.set(sessionId, waits)
     return {
@@ -56,10 +61,11 @@ export class StructuredAgentSessionAcquireAborts {
     return { reached, handedOver }
   }
 
-  abortOpen(sessionId: string): void {
+  /** Called synchronously while the exact ending child is still indexed. */
+  abortBound(sessionId: string): void {
     for (const wait of this.inFlight.get(sessionId) ?? []) {
-      if (wait.opening) {
-        wait.controller.abort(new Error('provider exited while opening'))
+      if (wait.bound?.()) {
+        wait.controller.abort(new Error('bound provider child exited'))
       }
     }
   }

@@ -106,7 +106,8 @@ async function submitRename(
 export async function uploadLegacyStructuredChatRename(
   get: () => AppState,
   tab: Tab,
-  alias: string
+  alias: string,
+  name: string
 ): Promise<boolean> {
   const target = structuredAgentSessionTargetForHost(legacyStructuredChatRenameOwner(get(), tab))
   if (!target || !(await supportsStructuredAgentSessionRename(target))) {
@@ -115,7 +116,7 @@ export async function uploadLegacyStructuredChatRename(
   try {
     await callRuntimeRpc<RenameResult>(target, 'agentSession.rename', {
       sessionId: tab.entityId,
-      name: normalizeAgentSessionConversationName(alias) ?? '',
+      name,
       legacyAlias: true
     })
   } catch (error) {

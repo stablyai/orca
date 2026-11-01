@@ -1,4 +1,12 @@
-import { FileText, FolderPlus, Globe, Play, SquareTerminal, Trash2 } from 'lucide-react'
+import {
+  FileText,
+  FolderPlus,
+  Globe,
+  PanelRightClose,
+  Play,
+  SquareTerminal,
+  Trash2
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
@@ -42,7 +50,7 @@ function currentWorkspaceActionAvailability(
   return getCurrentWorkspaceActionAvailability(ctx)
 }
 
-async function runWorkspaceAction(
+export async function runWorkspaceAction(
   ctx: CmdJQuickActionContext,
   run: (groupId: string) => Promise<void>
 ): Promise<CmdJQuickActionRunResult> {
@@ -87,6 +95,27 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     ],
     isAvailable: getBrowserWorkspaceActionAvailability,
     run: (ctx) => runBrowserWorkspaceAction(ctx, ctx.openNewBrowserTab)
+  },
+  {
+    id: 'new-browser-tab-split-right',
+    kind: 'action',
+    title: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRight',
+      'New Browser Tab in Right Split'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.newBrowserTabSplitRightDescription',
+      'Open a browser tab in a new split to the right.'
+    ),
+    icon: PanelRightClose,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.browserRight', 'browser right'),
+      translate('auto.components.cmd.j.quick.actions.verbs.splitBrowser', 'split browser'),
+      translate('auto.components.cmd.j.quick.actions.verbs.browserSplit', 'browser split')
+    ],
+    isAvailable: getBrowserWorkspaceActionAvailability,
+    run: (ctx) =>
+      runBrowserWorkspaceAction(ctx, (groupId) => ctx.openNewBrowserTab(groupId, 'right'))
   },
   {
     id: 'new-markdown-file',

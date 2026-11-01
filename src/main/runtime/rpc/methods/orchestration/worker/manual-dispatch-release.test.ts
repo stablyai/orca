@@ -269,6 +269,50 @@ describe('orchestration.workerAbandon', () => {
     )
   })
 
+  it('refuses self-abandon by a terminal handle, reissued pane, or resolved session before effects', async () => {
+    const dispatchId = readyWorker()
+    const pane = 'tab_worker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const orcaSessionId = parseOrcaSessionAddress('orca_session_id:worker_1')!
+    const session: OrchestrationSessionCaller = {
+      address: 'term_worker',
+      terminalHandle: 'term_worker',
+      paneKey: pane,
+      orcaSessionId,
+      sessionId: orcaSessionId,
+      workspaceId: 'wt'
+    }
+    const callers: Partial<RpcContext>[] = [
+      { orchestrationCompatibilityEvidence: { terminalHandle: 'term_worker', paneKey: pane } },
+      { orchestrationCompatibilityEvidence: { terminalHandle: 'term_reminted', paneKey: pane } },
+      { orchestrationCaller: session }
+    ]
+    for (const caller of callers) {
+      await expect(abandon(dispatchId, caller)).rejects.toMatchObject({
+        code: 'invalid_argument',
+        data: { effectsApplied: false, dispatchId }
+      })
+    }
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+    expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
+  })
+
+  it('refuses self-abandon of a context-only Dispatch', async () => {
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'context-only worker' })
+    const dispatch = db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_worker',
+      creator: { kind: 'system' },
+      maxDepth: 9
+    })
+    await expect(
+      abandon(dispatch.id, {
+        orchestrationCompatibilityEvidence: { terminalHandle: 'term_worker' }
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument', data: { effectsApplied: false } })
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
   it('reports an already-settled worker as stale and changes nothing', async () => {
     const dispatchId = readyWorker()
     db.failDispatch(dispatchId, 'tab closed', { workerProcessExited: true })

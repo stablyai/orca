@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { info: mocks.toastInfo, error: mocks.toastError } }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: mocks.launchAgentInNewTab }))
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
+}))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
@@ -54,10 +56,10 @@ import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer/src/lib/agent-session/structured-agent-session-provisional-tab'
 import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/launch-work-item-direct-agent-routing'
-import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/structured-agent-session-launch-status'
-import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/structured-agent-session-launch-options'
+import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
+import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
-import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/structured-agent-session-host-admission'
+import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 import {
@@ -176,6 +178,46 @@ describe('a structured chat launch on a paired server', () => {
     expectNoChatCommitted()
   })
 
+  it.each(['created', 'failed'] as const)(
+    'waits for the declined terminal %s before claiming success',
+    async (status) => {
+      mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+      const completion = Promise.withResolvers<{
+        outcome: { status: 'created' } | { status: 'failed'; message: string }
+        delivered: boolean
+        failureNotified: boolean
+      }>()
+      const onHostDeclined = vi.fn(() => ({
+        opened: true,
+        completion: completion.promise,
+        promptDeliveryResult: completion.promise
+      }))
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: { ...pairedPlan(), promptDelivery: 'draft' },
+        hooks: {},
+        beforeOpen: vi.fn(),
+        onHostDeclined
+      })
+      await vi.waitFor(() => expect(onHostDeclined).toHaveBeenCalledOnce())
+      expect(mocks.toastInfo).not.toHaveBeenCalled()
+      completion.resolve({
+        outcome: status === 'created' ? { status } : { status, message: 'already notified' },
+        delivered: status === 'created',
+        failureNotified: status === 'failed'
+      })
+      await expect(launch?.settlement).resolves.toEqual(
+        status === 'created' ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+      )
+      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: status === 'created',
+        failureNotified: status === 'failed'
+      })
+      expect(mocks.toastInfo).toHaveBeenCalledTimes(status === 'created' ? 1 : 0)
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expectNoChatCommitted()
+    }
+  )
+
   it("opens a direct caller's terminal with the caller's own CLI arguments on a decline", async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
@@ -214,7 +256,10 @@ describe('a structured chat launch on a paired server', () => {
     })
     await useAppStore.getState().ensureNativeDetectedAgents()
     mocks.createSupport.mockResolvedValue({ supported: false })
-    const openTerminal = vi.fn(() => ({ surface: { kind: 'host-published' as const } }))
+    const openTerminal = vi.fn(() => ({
+      surface: { kind: 'host-published' as const },
+      pasteDraftAfterLaunch: false
+    }))
     const declined = () =>
       launchStructuredAgentFromNewTab({ plan: plan(), worktreeId, openTerminal })
     await expect(declined()?.structuredSettlement).resolves.toMatchObject({ kind: 'failed' })

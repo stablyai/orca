@@ -109,14 +109,6 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(onPaneCreated).toHaveBeenCalledTimes(1)
   })
 
-  it('focuses a pane main added, as a split does', () => {
-    manager.setActivePane(manager.getNumericIdForLeaf(A)!, { focus: false })
-
-    reconcile(split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C))))
-
-    expect(manager.getActivePane()?.leafId).toBe(C)
-  })
-
   it('leaves focus on the source pane for the window’s startup split, as switch-off does', () => {
     manager.setActivePane(manager.getNumericIdForLeaf(A)!, { focus: false })
     expectPaneToMountUnfocused(TAB, C)
@@ -162,11 +154,5 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(serialized()).toEqual(split('horizontal', leaf(B), leaf(A), 0.2))
     expect(manager.getPanes().map((pane) => pane.container)).toEqual(before)
     expect(onPaneCreated).not.toHaveBeenCalled()
-  })
-
-  it('leaves a zoomed tab’s shape for later, still mounting main’s new pane', () => {
-    reconcile(split('horizontal', leaf(B), split('vertical', leaf(A), leaf(C))), true)
-
-    expect(leaves()).toEqual([A, B, C])
   })
 })

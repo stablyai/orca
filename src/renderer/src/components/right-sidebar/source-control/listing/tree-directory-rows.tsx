@@ -1,8 +1,9 @@
 import React from 'react'
-import { ChevronDown, Folder, FolderOpen, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { ChevronDown, Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { FolderIcon } from '@/components/FileTypeIcon'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
 import type {
   BranchSourceControlTreeDirectoryNode,
   SourceControlDirectoryActionPaths,
@@ -42,11 +43,7 @@ function SourceControlTreeDirectoryHeader({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <FolderIcon folderPath={node.name} open={!isCollapsed} className="size-3 shrink-0" />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
       <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">

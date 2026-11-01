@@ -77,6 +77,8 @@ export type GitHubPRRefreshSkippedReason =
   | 'bare'
   | 'archived'
   | 'disconnected'
+  /** The workspace's WSL host is off; a poll never starts its distro. */
+  | 'host-off'
   | 'remote'
   | 'rate-limit'
   | 'capacity'

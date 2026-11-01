@@ -14,11 +14,12 @@ import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../codex/codex-structured-dispatch-test-support'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../codex/codex-structured-turn-open-wait'
 import type * as CodexTurnOpenWait from '../codex/codex-structured-turn-open-wait'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import type { AgentJournalSubmission } from '../../shared/agent-session-journal-types'
-import { classifyDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
-import { owesStructuredAgentSessionWork } from '../../shared/structured-agent-session-owed-work'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { classifyDispatchRejection } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import { owesStructuredAgentSessionWork } from '../../shared/agent-session/view/structured-agent-session-owed-work'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../shared/agent-session-goal-control-copy'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -211,10 +212,19 @@ beforeEach(async () => {
   ) => {
     handlers = connectionHandlers
     connections += 1
+    let closed = false
     const connection: CodexAppServerConnection = {
       pid: 4321,
-      closed: false,
+      get closed() {
+        return closed
+      },
+      get closeResult(): CodexAppServerConnection['closeResult'] {
+        return closed ? { root: 'exited', tree: 'exited' } : null
+      },
       request: async (method, params) => {
+        if (method === 'thread/goal/get') {
+          return { goal: null }
+        }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD } }
         }
@@ -258,6 +268,7 @@ beforeEach(async () => {
           throw new Error('the kill timed out')
         }
         childCloses += 1
+        closed = true
         return true
       }
     }
@@ -271,7 +282,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async () => root,
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-    resolveCodexCommand: () => 'codex',
+    resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
   })
@@ -507,6 +518,8 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
       expect(verdictOf((await settled()).submissions, sent)).toBe('accepted')
     )
     expect((await settled()).owesWork).toBe(false)
+    // Delivered once: the turn's end neither steers it again nor starts a turn with it.
+    expect([steers, answers]).toEqual([1, 1])
   })
 
   it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {
@@ -531,7 +544,7 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
 })
 
 describe('a second send made after Codex answered the first, before it opened that turn', () => {
-  it('waits for the opener before steering the later send, which Stop then withdraws', async () => {
+  it('waits for the native turn to open before steering, keeps echo acceptance separate, and withdraws on Stop', async () => {
     const opening = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     const followUp = await send('and check the tests')
@@ -545,10 +558,14 @@ describe('a second send made after Codex answered the first, before it opened th
       'running'
     )
     await vi.waitFor(() => expect(loop.isRunning(SESSION)).toBe(false))
-    expect(steers).toBe(0)
+    expect(steers).toBe(1)
     expect(verdictOf((await settled()).submissions, followUp)).toBe('pending')
+    expect(verdictOf((await settled()).submissions, opening)).toBe('pending')
     turns.echo(opening)
-    await vi.waitFor(() => expect(steers).toBe(1))
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, opening)).toBe('accepted')
+    )
+    expect(steers).toBe(1)
     expect(answers).toBe(1)
 
     await stop()
@@ -769,7 +786,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
     await stopWhenItsTurnNeverOpens(release)
 
     expect(verdictOf((await settled()).submissions, sent)).toBe('withdrawn')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
     expect(turnRow((await host.journalSnapshot(SESSION)).items)).toMatchObject({
       state: 'completed'
     })
@@ -821,7 +838,7 @@ describe("a Stop pressed while Codex's turn/start is in flight", () => {
 
     expect(childCloses).toBe(1)
     expect(verdictOf((await settled()).submissions, sent)).toBe('unknown')
-    expect(await statusRows()).toEqual(['Cancellation requested.'])
+    expect(await statusRows()).toEqual([AGENT_SESSION_GOAL_CONTROL_COPY.stopUnconfirmed])
   })
 
   // Handed over once the stopped turn read ended, it started its own turn, however late that

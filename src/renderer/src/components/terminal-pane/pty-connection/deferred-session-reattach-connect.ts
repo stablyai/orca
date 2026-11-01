@@ -1,13 +1,15 @@
 import { NOT_REOPENED, reopenPaneAfterMissingReattach } from './cold-restore-resume-startup'
 import { writeStartupCwdFallbackNotice } from './startup-cwd-fallback-notice'
 import { armPaneOwnerRetry } from './pane-owner-recovery'
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import { isSshSessionGoneError, recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import type { HeldPaneReopenOutcome } from '../newer-daemon-hold-state'
 import { holdForNewerDaemon } from './newer-daemon-hold-pane'
+import { holdForStoppedWslDistro, wslRestoreStartArgs } from './wsl-distro-stopped-hold-pane'
+import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../shared/newer-daemon-hold'
 import { PANE_NOT_LIVE_ERROR } from '../../../../../shared/pane-attach-only-view'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -24,7 +26,7 @@ const PANE_OWNER_UNVERIFIED_ERROR = 'terminal_pane_owner_unverified'
 const PANE_OWNER_CHANGED_ERROR = 'terminal_pane_owner_changed'
 
 /** Layout-owner build: `afterMainStart` attaches to the terminal main just started for the pane. */
-type ReattachOptions = { afterMainStart?: true }
+type ReattachOptions = { afterMainStart?: true; userAct?: true }
 
 export function startDeferredSessionReattach(
   session: ConnectPanePtySession,
@@ -89,6 +91,7 @@ function connectDeferredSessionReattach(
   let paneOwnerUnverified = false
   let paneOwnerChanged = false
   let heldByNewerDaemon = false
+  let heldForStoppedDistro: ReturnType<typeof parseWslDistroHold> = null
   // Why: main started this pane's agent; the window's attach never resumes it a second time.
   const attachOnlyView = mainStartsPane(session)
   const resumeStartup = session.buildColdRestoreAgentResumeStartup()
@@ -107,6 +110,10 @@ function connectDeferredSessionReattach(
       // Why local only: a paired host refuses for its own daemon, which this window cannot stop.
       if (!session.runtimeEnvironmentId && message.includes(NEWER_DAEMON_HOLD_ERROR)) {
         heldByNewerDaemon = true
+        return
+      }
+      heldForStoppedDistro ??= session.runtimeEnvironmentId ? null : parseWslDistroHold(message)
+      if (heldForStoppedDistro) {
         return
       }
       if (message.includes(PANE_OWNER_UNVERIFIED_ERROR)) {
@@ -141,12 +148,21 @@ function connectDeferredSessionReattach(
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),
     ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
     ...(attachOnlyView ? { attachOnlyView: true as const } : {}),
+    ...wslRestoreStartArgs(session, options.userAct === true),
     callbacks: outputCallbacks.callbacks
   })
   const isCurrentReattach = (): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     outputCallbacks.generation === session.transportStreamGeneration
+  // A reattach that did not take: drop the serializer this pane declared for it.
+  const abandonPendingSerializer = async (): Promise<void> => {
+    session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+    const gen = await preSignalPromise
+    if (typeof gen === 'number') {
+      void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
+    }
+  }
   const startFreshInstead = (): Promise<HeldPaneReopenOutcome> =>
     reopenPaneAfterMissingReattach(session, coldRestoreStartup, resumedAgent)
 
@@ -158,20 +174,17 @@ function connectDeferredSessionReattach(
   const outcome = Promise.resolve(reattachPromise)
     .then(async (result): Promise<HeldPaneReopenOutcome> => {
       if (!isCurrentReattach()) {
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        await abandonPendingSerializer()
         return NOT_REOPENED
       }
-      if (!result && heldByNewerDaemon) {
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
-        if (isCurrentReattach()) {
+      if (!result && (heldByNewerDaemon || heldForStoppedDistro)) {
+        await abandonPendingSerializer()
+        if (isCurrentReattach() && heldForStoppedDistro) {
+          // Start is the user's act: this reconnect may start the distro.
+          holdForStoppedWslDistro(session, deferredReattachSessionId, heldForStoppedDistro, () =>
+            connectDeferredSessionReattach(session, deferredReattachSessionId, { userAct: true })
+          )
+        } else if (isCurrentReattach()) {
           holdForNewerDaemon(session, deferredReattachSessionId, () =>
             connectDeferredSessionReattach(session, deferredReattachSessionId)
           )
@@ -179,11 +192,7 @@ function connectDeferredSessionReattach(
         return NOT_REOPENED
       }
       if (!result && paneOwnerChanged) {
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        await abandonPendingSerializer()
         armPaneOwnerRetry(session, outputCallbacks.generation, () =>
           connectDeferredSessionReattach(session, deferredReattachSessionId)
         )
@@ -194,20 +203,12 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(session, outputCallbacks.generation, () =>
           connectDeferredSessionReattach(session, deferredReattachSessionId)
         )
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        await abandonPendingSerializer()
         session.settlePaneAttachAttempt('failed')
         return NOT_REOPENED
       }
       if (!result && paneNotLive) {
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        await abandonPendingSerializer()
         if (!isCurrentReattach()) {
           return NOT_REOPENED
         }
@@ -219,11 +220,7 @@ function connectDeferredSessionReattach(
         return startFreshInstead()
       }
       if (!result && expiredReattachError) {
-        session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-        const gen = await preSignalPromise
-        if (typeof gen === 'number') {
-          void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-        }
+        await abandonPendingSerializer()
         if (!isCurrentReattach()) {
           return NOT_REOPENED
         }
@@ -266,11 +263,7 @@ function connectDeferredSessionReattach(
       }
     })
     .catch(async (err): Promise<HeldPaneReopenOutcome> => {
-      session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
-      const gen = await preSignalPromise
-      if (typeof gen === 'number') {
-        void window.api.pty.clearPendingPaneSerializer(session.cacheKey, gen).catch(() => {})
-      }
+      await abandonPendingSerializer()
       const message = err instanceof Error ? err.message : String(err)
       if (!isCurrentReattach()) {
         return NOT_REOPENED

@@ -28,14 +28,14 @@ it.each([
   ['ubuntu-24.04-arm', 'blacksmith-8vcpu-ubuntu-2404-arm'],
   ['macos-15', 'blacksmith-6vcpu-macos-15'],
   ['macos-15-intel', 'macos-15-intel'],
-  ['windows-2022', 'blacksmith-8vcpu-windows-2025'],
+  ['windows-2022', 'windows-2022'],
   ['windows-11-arm', 'windows-11-arm']
 ])('preserves the qualification architecture for %s', (os, fastRunner) => {
   expect(runnerFor(workflow.jobs.persistence, os, false)).toBe(os)
   expect(runnerFor(workflow.jobs.persistence, os, true)).toBe(fastRunner)
   expect(runnerFor(workflow.jobs.persistence, os, undefined)).toBe(os)
   for (const event of ['pull_request', 'schedule']) {
-    expect(runnerFor(workflow.jobs.persistence, os, undefined, event)).toBe(fastRunner)
+    expect(runnerFor(workflow.jobs.persistence, os, undefined, event)).toBe(os)
   }
 })
 
@@ -48,6 +48,9 @@ it('retains both Linux architectures and the pinned libc qualification container
       expect(runnerFor(job, os, true)).toBe(
         `blacksmith-8vcpu-ubuntu-${os === 'ubuntu-22.04' ? '2204' : '2404-arm'}`
       )
+      for (const event of ['pull_request', 'schedule']) {
+        expect(runnerFor(job, os, undefined, event)).toBe(os)
+      }
     }
   }
   const floor = workflow.jobs.linux_glibc_floor
@@ -68,8 +71,8 @@ it.each([
 ])('sizes %s while preserving the signing workflow override', (name, hostedRunner, fastRunner) => {
   expect(runnerFor(workflow.jobs[name], undefined, false)).toBe(hostedRunner)
   expect(runnerFor(workflow.jobs[name], undefined, true)).toBe(fastRunner)
-  expect(runnerFor(workflow.jobs[name], undefined, undefined, 'pull_request')).toBe(fastRunner)
-  expect(runnerFor(workflow.jobs[name], undefined, undefined, 'schedule')).toBe(fastRunner)
+  expect(runnerFor(workflow.jobs[name], undefined, undefined, 'pull_request')).toBe(hostedRunner)
+  expect(runnerFor(workflow.jobs[name], undefined, undefined, 'schedule')).toBe(hostedRunner)
 })
 
 it('still builds and uploads cross-compiled Windows template addons on the x64 lane', () => {

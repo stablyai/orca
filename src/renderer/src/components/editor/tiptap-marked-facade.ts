@@ -1,4 +1,7 @@
-import { getMarkdownTokenizerStartMarker } from './markdown-tokenizer-start'
+import {
+  createMarkdownTokenizerStartCursor,
+  getMarkdownTokenizerStartMarker
+} from './markdown-tokenizer-start'
 import {
   Hooks,
   Lexer,
@@ -88,10 +91,12 @@ export function createTiptapMarkedFacade(): typeof marked {
       if (!extensions?.startBlock) {
         return super.blockTokens(source, tokens, lastParagraphClipped)
       }
-      const startBlock = extensions.startBlock.filter((start) => {
-        const marker = getMarkdownTokenizerStartMarker(start)
-        return !marker || source.includes(marker)
-      })
+      const startBlock = extensions.startBlock
+        .filter((start) => {
+          const marker = getMarkdownTokenizerStartMarker(start)
+          return !marker || source.includes(marker)
+        })
+        .map(createMarkdownTokenizerStartCursor)
       this.options.extensions = { ...extensions, startBlock }
       try {
         return super.blockTokens(source, tokens, lastParagraphClipped)

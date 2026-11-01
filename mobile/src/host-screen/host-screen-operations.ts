@@ -2,21 +2,23 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
-  hostRepoCatalogSchema,
+  hostRepoCatalogSnapshotSchema,
   hostScreenUnreadReplySchema,
   hostSshTargetSummariesSchema,
-  hostViewSettingsSchema
+  hostViewSettingsSchema,
+  worktreeArchiveHookTrustSchema
 } from './host-screen-reply-schema'
 
 // Decorative reads skip refusals and retry on refresh; malformed accepted replies throw into the refresh/settings catches. Writes read no body.
 
-export const hostRepoCatalogRead = bindDeferredRpcOperation(
+// The host screen's repo poll: repeats of an unchanged catalog cost a snapshot id, not every icon.
+export const hostRepoCatalogSnapshotRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'repo.host-catalog-or-skip',
+    name: 'repo.host-catalog-snapshot-or-skip',
     method: 'repo.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('repo-catalog', hostRepoCatalogSchema)
+    read: rpcResultVariant('repo-catalog-snapshot', hostRepoCatalogSnapshotSchema)
   })
 )
 
@@ -94,7 +96,18 @@ export const worktreeSleep = bindDeferredRpcOperation(
   })
 )
 
-// Deletion reads acceptance only; refusal restores the row.
+// A refused read leaves the archive hook unverified, so deletion does not run it.
+export const worktreeArchiveHookTrustRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.archive-hook-trust-or-skip',
+    method: 'repo.hooks',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('archive-hook-trust', worktreeArchiveHookTrustSchema)
+  })
+)
+
+// Deletion reads acceptance only; refusal restores the row and an archive-hook refusal offers Delete Anyway.
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.remove-or-skip',

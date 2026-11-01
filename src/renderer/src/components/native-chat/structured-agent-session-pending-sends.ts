@@ -1,7 +1,7 @@
 // Keep unanswered sends in memory only for the sender and mounted views.
 
-import type { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
+import type { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-identity'
 
 export type StructuredAgentSessionPendingSend = {
   clientMessageId: string
@@ -10,6 +10,7 @@ export type StructuredAgentSessionPendingSend = {
   previewUris: readonly string[]
   queuedAt: number
   delivery?: 'queue-if-active'
+  selection?: Readonly<Record<string, string>>
   options?: Readonly<Record<string, string>>
   usageLimitContinuationOfTurnItemId?: string
   /** Sending blocks new sends; recorded releases the slot but retains its echo until host rows/cards arrive. */

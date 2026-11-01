@@ -9,6 +9,7 @@ import {
   reconcileHostWorktreeRemovals
 } from '../../hooks/ipc-events/background-worktree-removal-bridge'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeDeleteErrorToShow } from '../../components/sidebar/worktree-delete-error-display'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -206,13 +207,18 @@ describe('removing a worktree the host deletes in the background', () => {
 
   it('shows the host error on a row the host lists as a failed delete, until it leaves', () => {
     // A window that opened after the delete failed, or a restart after a failed startup finish.
-    seedRow(store, { removalError: 'Operation not permitted' })
+    const message =
+      '/path/wt1/profile/lockfile is open in another program. Close any program using it. You may need to delete the remaining folder at /path/wt1 manually to finish removing this workspace.'
+    seedRow(store, { removalError: message })
     reconcileHostWorktreeRemovals(store)
     expect(deleteState(store)).toMatchObject({
       isDeleting: false,
-      error: 'Operation not permitted',
+      error: message,
       canForceDelete: false
     })
+    expect(getWorktreeDeleteErrorToShow({ removalError: message }, deleteState(store))).toBe(
+      message
+    )
 
     // Forgotten, or the checkout deleted outside Orca: the host stops listing it.
     seedStore(store, { worktreesByRepo: { repo1: [] } })

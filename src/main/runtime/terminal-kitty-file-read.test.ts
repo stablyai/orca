@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { readTerminalKittyFile, resolveKittyFilePath } from './terminal-kitty-file-read'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../shared/terminal-kitty-file'
-import * as terminalArtifacts from './terminal/artifacts/artifact-integrity'
+import * as kittyTemporaryRoots from './terminal-kitty-temporary-roots'
 import { TerminalReadKittyFile } from '../../shared/rpc-contract/terminal-unary-params'
 
 const roots: string[] = []
@@ -47,7 +47,7 @@ describe('PTY-owned Kitty file reads', () => {
     const { root, path } = await fixture()
     const temporary = join(root, 'allowed-temp')
     await mkdir(temporary)
-    vi.spyOn(terminalArtifacts, 'localTerminalArtifactRoots').mockResolvedValue([
+    vi.spyOn(kittyTemporaryRoots, 'kittyTemporaryRoots').mockResolvedValue([
       await realpath(temporary)
     ])
     const image = join(temporary, 'image')

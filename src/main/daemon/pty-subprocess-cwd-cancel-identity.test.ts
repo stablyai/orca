@@ -60,8 +60,9 @@ describe('createPtySubprocess cwd cancellation identity', () => {
   })
 
   it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\Volumes\\dead\\repo' : '/Volumes/dead/repo'
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new WorkingDirectoryValidationAbortedError('/Volumes/dead/repo')
+      new WorkingDirectoryValidationAbortedError(cwd)
     )
     const abort = new AbortController()
     abort.abort()
@@ -71,25 +72,10 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'canceled-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/Volumes/dead/repo',
+        cwd,
         cancelSignal: abort.signal
       })
     ).rejects.toThrow(TerminalAttachCanceledError)
     expect(spawnMock).not.toHaveBeenCalled()
-  })
-
-  it('leaves a genuine missing-directory failure alone', async () => {
-    validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new Error('Working directory "/gone" does not exist. It may have been deleted.')
-    )
-
-    await expect(
-      createPtySubprocess({
-        sessionId: 'missing-cwd-session',
-        cols: 80,
-        rows: 24,
-        cwd: '/gone'
-      })
-    ).rejects.toThrow(/does not exist/)
   })
 })

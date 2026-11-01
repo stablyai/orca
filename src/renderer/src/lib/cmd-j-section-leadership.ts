@@ -1,12 +1,12 @@
 import {
   paletteResultQualityClassRank,
   type PaletteResultQualityClass
-} from './palette-match/match-quality'
-import type { PaletteDocumentRank } from './palette-match/palette-document'
+} from '../../../shared/palette-match/match-quality'
+import type { PaletteDocumentRank } from '../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
   type PaletteActivityRank
-} from './palette-match/palette-ranking'
+} from '../../../shared/palette-match/palette-ranking'
 
 // Section scores encode incompatible list positions; compare shared match ranks first, lower leading.
 export const NO_PALETTE_QUALITY_RANK = Number.MAX_SAFE_INTEGER

@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { AgentsPane } from './AgentsPane'
+import { AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 import { persist, runtimeCall } from './__fixtures__/settings-persistence-test-fixture'
 import { permissionNotice } from './__fixtures__/permission-notice-test-fixture'
 import { TooltipProvider } from '../ui/tooltip'
@@ -77,7 +78,9 @@ beforeEach(() => {
   if (!settings) {
     throw new Error('Missing settings fixture')
   }
-  useAppStore.setState({ settings: { ...settings, agentPermissionDefault: 'ask' } })
+  useAppStore.setState({
+    settings: { ...settings, agentLaunchChoices: undefined, agentPermissionDefault: 'ask' }
+  })
 })
 
 function AgentsHarness() {
@@ -98,7 +101,12 @@ function AgentsHarness() {
 }
 
 function argumentsInput(label: string): HTMLTextAreaElement {
-  const row = screen.getByText(label, { selector: 'span' }).closest('div.py-3')
+  // Scoped to the Installed list; the Open agents as previews also show agent names.
+  const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
+  if (!list) {
+    throw new Error('Missing Installed list')
+  }
+  const row = within(list).getByText(label, { selector: 'span' }).closest('div.py-3')
   if (!(row instanceof HTMLElement)) {
     throw new Error('Missing agent row')
   }
@@ -106,7 +114,7 @@ function argumentsInput(label: string): HTMLTextAreaElement {
   if (expand) {
     fireEvent.click(expand)
   }
-  const input = within(row).getByPlaceholderText('No default arguments')
+  const input = within(row).getByRole('textbox', { name: 'Arguments' })
   if (!(input instanceof HTMLTextAreaElement)) {
     throw new Error('Missing Arguments input')
   }
@@ -123,6 +131,9 @@ it.each(
   savedArguments(models, 'full-access')
   render(<AgentsHarness />)
   const input = argumentsInput('Claude')
+  expect(screen.getByRole('button', { name: 'Claude permissions' }).getAttribute('data-size')).toBe(
+    'xs'
+  )
   const remove = () =>
     screen.getByRole('button', { name: /Remove .* and use Claude's own settings/ })
   fireEvent.click(remove())
@@ -423,7 +434,9 @@ it.each(['blur', 'reset'])('retains ordered Environment work when %s rejects', a
   } else {
     await act(async () => reset.resolve())
   }
-  await waitFor(() => expect(input.isConnected).toBe(false))
+  await waitFor(() => expect(input.readOnly).toBe(false))
+  expect(input.isConnected).toBe(true)
+  expect(input.value).toBe('')
   expect(useAppStore.getState().settings?.agentDefaultEnv?.claude).toEqual({})
   expect(persist).toHaveBeenCalledTimes(2)
   expect(toast.error).toHaveBeenCalledTimes(1)
@@ -673,3 +686,35 @@ it.each([false, true])(
     }
   }
 )
+
+it('writes local launch choices through the durable RPC as one dirty-text transaction', async () => {
+  useAppStore.setState(({ settings }) => ({
+    settings: settings && {
+      ...settings,
+      agentLaunchChoices: { claude: { model: 'opus', options: { effort: 'high' } } },
+      agentDefaultArgs: { claude: '--verbose' }
+    }
+  }))
+  render(<AgentsHarness />)
+  const input = argumentsInput('Claude')
+  fireEvent.change(input, { target: { value: '--model sonnet --verbose' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Remove --model opus' }))
+  await waitFor(() => expect(input.value).toBe('--model sonnet --verbose'))
+  await waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+  expect(runtimeCall.mock.calls[0]?.[0]).toMatchObject({
+    method: 'settings.mutateAgentLaunch',
+    params: {
+      type: 'launch-choices',
+      agent: 'claude',
+      patch: { model: null },
+      userArgs: '--model sonnet --verbose'
+    }
+  })
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Remove --model opus' })).toBeNull()
+  )
+  expect(persist).toHaveBeenCalledTimes(1)
+  expect(useAppStore.getState().settings?.agentLaunchChoices?.claude).toEqual({
+    options: { effort: 'high' }
+  })
+})

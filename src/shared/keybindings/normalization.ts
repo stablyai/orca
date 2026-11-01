@@ -5,6 +5,7 @@ import type {
 } from './types'
 import { DEFINITIONS_BY_ID, DIGIT_INDEX_KEY_PATTERN, isDigitIndexActionId } from './definitions'
 import { canonicalizeParsedKeybinding, isSafeBareKey, parseKeybinding } from './parser'
+import { keybindingValidationFailure } from './keybinding-diagnostic-copy'
 
 export function normalizeKeybindingWithOptions(
   binding: string,
@@ -12,10 +13,10 @@ export function normalizeKeybindingWithOptions(
 ): KeybindingValidationResult {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
-    return { ok: false, error: 'Use a shortcut like Ctrl+Shift+P or Cmd+K.' }
+    return keybindingValidationFailure('invalidFormat')
   }
   if (parsed.mod && (parsed.meta || parsed.control)) {
-    return { ok: false, error: 'Use either Mod or a platform-specific modifier, not both.' }
+    return keybindingValidationFailure('mixedModifiers')
   }
   if (parsed.doubleTapModifier) {
     return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
@@ -38,7 +39,7 @@ export function normalizeKeybindingWithOptions(
     !isBareAllowed &&
     !isShiftOnlyAllowed
   ) {
-    return { ok: false, error: 'Include at least one modifier key.' }
+    return keybindingValidationFailure('modifierRequired')
   }
   return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
 }
@@ -109,10 +110,7 @@ export function normalizeOptionsForAction(
 export function canonicalizeDigitIndexBinding(binding: string): KeybindingValidationResult {
   const parsed = parseKeybinding(binding)
   if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
-    return {
-      ok: false,
-      error: 'Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.'
-    }
+    return keybindingValidationFailure('digitKeyRequired')
   }
   return { ok: true, value: canonicalizeParsedKeybinding({ ...parsed, key: '1' }) }
 }

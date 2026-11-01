@@ -1,7 +1,9 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { RotateCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { ScrollView, Text, View } from 'react-native'
+import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobilePrActions, type MobilePrActions } from '../session/use-mobile-pr-actions'
@@ -17,6 +19,8 @@ import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobil
 import { useHostProtocolGates } from './host-protocol-gates-context'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
+import { fetchPRCheckDetails } from '../session/github-pr-rpc'
+import { hasGitHubCheckHandle } from '../../../src/shared/pr-checks-fix-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
@@ -32,7 +36,7 @@ type Props = {
   state: PrSidebarState
   onRetry: () => void
   // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -61,6 +65,7 @@ export function MobilePRSidebar({
   showOpenOnWeb = true,
   workspaceLabel
 }: Props) {
+  useMobileColorScheme()
   const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -160,7 +165,7 @@ function PrSidebarContent({
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
@@ -174,29 +179,19 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   if (branch === 'loading') {
     return (
-      <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
-      </View>
+      <MobileStateView loading title={t('components.prSidebar.loading', 'Loading pull request…')} />
     )
   }
   if (branch === 'error') {
-    const message = state.kind === 'error' ? state.message : 'Something went wrong.'
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>{message}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
-        >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
-      </View>
+      <MobileLoadErrorState
+        error={state.kind === 'error' ? state.message : null}
+        onRetry={onRetry}
+      />
     )
   }
   if (branch === 'blocked' || actions.blocked) {
@@ -205,7 +200,10 @@ function PrSidebarContent({
       actions.blocked ??
       (state.kind === 'blocked'
         ? state.message
-        : 'Not permitted — your GitHub account is not connected.')
+        : t(
+            'components.prSidebar.notPermitted',
+            'Not permitted — your GitHub account is not connected.'
+          ))
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>
@@ -264,10 +262,11 @@ function PrSidebarSections({
   commentActions: MobilePrCommentActions
   titleAction: MobilePrTitleAction
   triage: MobilePrAiTriage
-  refetch: () => void
+  refetch: (options?: PrSidebarLoadOptions) => void
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileColorScheme()
   const pr = data.pr
   // Build pure triage prompts lazily at launch so each uses current PR data.
   const checksTriage = {
@@ -277,7 +276,20 @@ function PrSidebarSections({
           prNumber: pr.number,
           prTitle: pr.title,
           prUrl: pr.url,
-          checks: data.checks
+          checks: data.checks,
+          loadCheckDetails: async (check) => {
+            if (!client || !hasGitHubCheckHandle(check)) {
+              return null
+            }
+            const outcome = await fetchPRCheckDetails(client, worktreeId, {
+              checkRunId: check.checkRunId,
+              workflowRunId: check.workflowRunId,
+              checkName: check.name,
+              url: check.url,
+              prRepo: pr.prRepo ?? null
+            })
+            return outcome.ok ? outcome.result : null
+          }
         })
       ),
     isBusy: triage.isBusy('fix-checks'),
@@ -290,7 +302,8 @@ function PrSidebarSections({
         buildResolveConflictsPrompt({
           prNumber: pr.number,
           baseRef: pr.conflictSummary?.baseRef ?? pr.baseRefName ?? null,
-          files: pr.conflictSummary?.files ?? []
+          files: pr.conflictSummary?.files ?? [],
+          worktreeId
         })
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
@@ -315,6 +328,7 @@ function PrSidebarSections({
             client={client}
             worktreeId={worktreeId}
             onUnlinked={refetch}
+            onRecheck={() => refetch({ includeDetails: false })}
           />
         </View>
       </View>

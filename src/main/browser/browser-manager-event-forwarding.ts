@@ -85,6 +85,14 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
   }
 
   protected sendPopupEvent(browserTabId: string, event: PendingPopupEvent): void {
+    // An Orca tab is reported where it is requested and a child window where it opens.
+    if (event.action !== 'opened-in-orca') {
+      this.pageEvents.emit(browserTabId, {
+        kind: 'popup',
+        action: event.action,
+        origin: event.origin
+      })
+    }
     const renderer = this.resolveRendererForBrowserTab(browserTabId)
     if (!renderer) {
       return

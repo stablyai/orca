@@ -325,8 +325,9 @@ export class EmulatorBridge {
   }
 
   private async backendForDevice(device: string): Promise<EmulatorBackend> {
+    const registered = this.sessionRegistry.getSession(device)
     for (const backend of this.backends) {
-      if (await backend.ownsDevice(device)) {
+      if (registered ? backend.kind === registered.backend : await backend.ownsDevice(device)) {
         return backend
       }
     }

@@ -1,7 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('electron', () => ({ app: { isPackaged: true } }))
+const { dockSetIconMock } = vi.hoisted(() => ({ dockSetIconMock: vi.fn() }))
+
+vi.mock('electron', () => ({
+  app: { isPackaged: true, dock: { setIcon: dockSetIconMock } },
+  nativeImage: { createEmpty: () => ({ isEmpty: () => true }) }
+}))
 
 vi.mock('../../resources/icon.png?asset', () => ({
   default: 'classic-icon'
@@ -50,6 +55,25 @@ function createMockChildProcess(): EventEmitter & { kill: ReturnType<typeof vi.f
 describe('app icon selection', () => {
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('restores the bundle Dock icon only after the custom icon clear succeeds', async () => {
+    const persistClassic = (clearError: Error | null): Promise<void> => {
+      persistMacDockIcon('classic', {
+        appBundlePath: '/Applications/Orca.app',
+        execFile: (file, _args, _options, callback) =>
+          callback?.(file === '/usr/bin/osascript' ? clearError : null),
+        isDevApp: false,
+        platform: 'darwin'
+      })
+      return waitForQueuedPersistence()
+    }
+
+    dockSetIconMock.mockClear()
+    await persistClassic(new Error('clear failed'))
+    expect(dockSetIconMock).not.toHaveBeenCalled()
+    await persistClassic(null)
+    expect(dockSetIconMock.mock.lastCall?.[0].isEmpty()).toBe(true)
   })
 
   it('serializes rapid macOS dock icon persistence so the last icon request wins', async () => {

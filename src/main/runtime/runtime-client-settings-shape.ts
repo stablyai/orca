@@ -13,6 +13,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'codexShareHistoryAcrossAccounts'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
@@ -22,7 +23,6 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
-  | 'experimentalNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -34,10 +34,11 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
+  | 'nativeChatQueueFollowUps'
+  | 'sourceControlGroupOrder'
+  | 'sourceControlCompareAgainstUpstream'
+  | 'diffShowWhitespace'
 > & {
-  /** Older clients still read these; neither is persisted or accepted as an update. */
-  openAgentTabsInChatByDefault?: boolean
-  experimentalStructuredNativeChat?: boolean
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
 }

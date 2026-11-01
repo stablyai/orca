@@ -32,6 +32,10 @@ import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
@@ -39,6 +43,7 @@ const MAX_ASSET_FAILURES = 50
 
 export function HtmlDocPreview({
   previewId,
+  browserWorkspaceId,
   filePath,
   relativePath,
   worktreeId,
@@ -49,6 +54,7 @@ export function HtmlDocPreview({
   convertedFrom = null,
   convertedTo = null
 }: HtmlDocPreviewProps): React.JSX.Element {
+  const confirm = useConfirmationDialog()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const reloadRef = useRef<(() => void) | null>(null)
@@ -133,6 +139,7 @@ export function HtmlDocPreview({
   useEffect(() => {
     let disposed = false
     let detach: (() => void) | undefined
+    let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
       resetBrowserOverlayViewport()
@@ -203,6 +210,12 @@ export function HtmlDocPreview({
         if (disposed || !containerRef.current) {
           return
         }
+        unsubscribeExternalLinks = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+          grantId: handle.grantId,
+          owner: handle.location.owner,
+          worktreeId,
+          browserWorkspaceId
+        })
         const attached = attachDocPreviewWebview({
           previewId,
           container: containerRef.current,
@@ -245,9 +258,12 @@ export function HtmlDocPreview({
       reloadRef.current = null
       webviewRef.current = null
       unsubscribeFailure?.()
+      unsubscribeExternalLinks?.()
       detach?.()
     }
   }, [
+    browserWorkspaceId,
+    confirm,
     filePath,
     offerDirectoryAccess,
     previewId,
@@ -307,7 +323,14 @@ export function HtmlDocPreview({
         history={historyWithConversionCrossings}
         onReload={handleReload}
         onHardReload={handleHardReload}
-        onCopyPath={() => void window.api.ui.writeClipboardText(identity.absolutePath)}
+        onCopyPath={() =>
+          void window.api.ui.writeClipboardText(
+            formatClipboardFilePath(
+              identity.absolutePath,
+              getOpenFileRevealOwner(useAppStore.getState(), previewDocument)
+            )
+          )
+        }
         onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
         onOpenSource={() => openDocPreviewSource(previewDocument)}
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}

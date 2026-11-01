@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
+import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog-context'
 import { isWindowsUserAgent } from './pane-helpers'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import type { TerminalPaneChatController } from './use-terminal-pane-chat-state'
 
 export function useTerminalPaneStoreBindings(controller: TerminalPaneChatController) {
-  const { expectedLayoutLeafIds, isVisible, restoredLayout, tabId } = controller
+  const { expectedLayoutLeafIds, isVisible, measureWhileHidden, restoredLayout, tabId } = controller
   const {
     clearRuntimePaneTitle,
     clearTabPtyId,
@@ -32,9 +32,11 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
   const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
-  const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
+  const [shouldMeasureHiddenStartupState, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
   )
+  const shouldMeasureHiddenStartup =
+    shouldMeasureHiddenStartupState || (measureWhileHidden === true && !isVisible)
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())

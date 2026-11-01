@@ -1,3 +1,4 @@
+import { revealMarkdownNavigationDetails } from './markdown-navigation-details'
 import { useCallback, useMemo, type MutableRefObject } from 'react'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
 import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
@@ -31,7 +32,10 @@ export function useRichMarkdownTableOfContents(
         return
       }
       const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
-      heading?.scrollIntoView({ block: 'center' })
+      if (heading) {
+        revealMarkdownNavigationDetails(heading)
+        heading.scrollIntoView({ block: 'center' })
+      }
     },
     [flatTableOfContentsItems, scrollContainerRef]
   )

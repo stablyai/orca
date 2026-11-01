@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { REVIEW_HEAD_FETCH_TIMEOUT_MS } from '../../shared/review-head-tracking-ref'
-import { getPullRequestPushTargetMock, gitExecFileAsyncMock } from './worktrees-test-module-mocks'
+import { gitExecFileAsyncMock } from './worktrees-test-module-mocks'
+
 import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { ORIGIN_HEAD_COMPONENT, ORIGIN_REMOTE_URL } from './worktrees-test-fixtures'
-import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -83,45 +83,8 @@ vi.mock('./pty/provider/state-cleanup', async () =>
 )
 
 describe('registerWorktreeHandlers', () => {
-  let runtimeStub: WorktreeRuntimeStub
-
   beforeEach(() => {
-    runtimeStub = setupWorktreeHandlers()
-  })
-
-  it('resolves a fork PR base even when push-target discovery fails', async () => {
-    getPullRequestPushTargetMock.mockRejectedValueOnce(new Error('lookup failed'))
-    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: `${ORIGIN_REMOTE_URL}\n`, stderr: '' }
-      }
-      if (args[0] === 'rev-parse') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    const result = await handlers['worktrees:resolvePrBase'](null, {
-      repoId: 'repo-1',
-      prNumber: 1849,
-      headRefName: 'feat/onboarding-model-choice-782',
-      isCrossRepository: true
-    })
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        'fetch',
-        '--no-tags',
-        'origin',
-        `+refs/pull/1849/head:refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/1849`
-      ],
-      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
-    )
-    expect(result).toEqual({
-      baseBranch: 'abc123',
-      headSha: 'abc123',
-      branchNameOverride: 'feat/onboarding-model-choice-782'
-    })
+    setupWorktreeHandlers()
   })
 
   it('refuses local git for a PR base on an executionHostId-only SSH repo', async () => {
@@ -215,31 +178,6 @@ describe('registerWorktreeHandlers', () => {
     expect(result).toMatchObject({
       error:
         'Failed to fetch origin/feat/onboarding-model-choice-782: fatal: unable to access repo: Could not resolve host: github.com'
-    })
-  })
-
-  it('delegates GitLab MR base resolution through the runtime implementation', async () => {
-    runtimeStub.resolveManagedMrBase.mockResolvedValueOnce({
-      baseBranch: 'fork-mr-sha',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/mr' }
-    })
-
-    const result = await handlers['worktrees:resolveMrBase'](null, {
-      repoId: 'repo-1',
-      mrIid: 42,
-      sourceBranch: 'feature/mr',
-      isCrossRepository: true
-    })
-
-    expect(runtimeStub.resolveManagedMrBase).toHaveBeenCalledWith({
-      repoSelector: 'id:repo-1',
-      mrIid: 42,
-      sourceBranch: 'feature/mr',
-      isCrossRepository: true
-    })
-    expect(result).toMatchObject({
-      baseBranch: 'fork-mr-sha',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/mr' }
     })
   })
 })

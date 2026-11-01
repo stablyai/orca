@@ -1,15 +1,32 @@
-import { View, Text, Pressable } from 'react-native'
+import { useRef, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, Folder, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
+import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
-import { StatusDot } from '../components/StatusDot'
+import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
+import type { SessionTitleCard } from './use-session-title-card'
 import { styles } from './mobile-session-styles'
+import { spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useTopChromeSpace } from '../layout/use-top-chrome-space'
+import { useShellSideRail } from '../layout/use-shell-side-rail'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  details
+}: {
+  controller: MobileSessionController
+  details: SessionTitleCard
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const {
     hostId,
     isFolderWorkspaceRoute,
@@ -22,84 +39,149 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     requestLeaveSession,
     visibleTabs,
     showConnectionRetry,
+    connectionEscalated,
     terminalSummary,
-    handlePanelTap,
-    showHeaderMoreButton
+    handlePanelTap
   } = controller
+  const layout = useResponsiveLayout()
+  const [headerWidth, setHeaderWidth] = useState<number | null>(null)
+  const moreRef = useRef<View>(null)
   const revealSidebar = useHostSidebarReveal()
+  const topChrome = useTopChromeSpace()
+  const sideRail = useShellSideRail()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
-  const tabsInTopBar = useResponsiveLayout().isLandscapePhone && hasTabs
+  const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
+  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
+  const sourceControlInBar =
+    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip controller={controller} inTopBar={tabsInTopBar} />
+    <MobileSessionTabStrip
+      controller={controller}
+      inTopBar={tabsInTopBar}
+      details={details.tabDetails}
+      actionsCollapsed={actionsCollapsed}
+    />
   ) : null
-  return (
-    <SafeAreaView style={styles.sessionChrome} edges={['top']}>
-      <View style={styles.sessionTopBar}>
-        {revealSidebar ? (
-          <MobileSessionHeaderIconButton
-            accessibilityLabel="Show sidebar"
-            icon={PanelLeftOpen}
-            onPress={revealSidebar}
-          />
-        ) : null}
-        <MobileSessionHeaderIconButton
-          accessibilityLabel="Back to worktrees"
-          icon={ChevronLeft}
-          onPress={requestLeaveSession}
+  const leading = (
+    <>
+      {revealSidebar ? (
+        <NavBarButton
+          accessibilityLabel={t('session.header.showSidebar', 'Show sidebar')}
+          icon={PanelLeftOpen}
+          onPress={revealSidebar}
         />
-
+      ) : null}
+      <NavBarButton
+        accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
+        icon={ChevronLeft}
+        ref={details.backRef}
+        onPress={() => {
+          if (!details.closeFirst()) {
+            requestLeaveSession()
+          }
+        }}
+      />
+    </>
+  )
+  const titleBlock =
+    !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
+      <MobileSessionTitleBlock
+        title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        connState={presentedConnState}
+        details={details}
+        meta={terminalSummary}
+        centered={!tabsInTopBar}
+        showConnectionRetry={showConnectionRetry}
+        onRetry={() => {
+          if (hostId && forceReconnectHost) {
+            void forceReconnectHost(hostId)
+          }
+        }}
+      />
+    ) : null
+  const trailing = (
+    <>
+      {sourceControlInBar ? (
+        <NavBarButton
+          active={activePanel === 'sourceControl'}
+          accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
+          icon={GitBranch}
+          onPress={() => handlePanelTap('sourceControl')}
+        />
+      ) : null}
+      <NavBarButton
+        ref={moreRef}
+        active={activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')}
+        accessibilityLabel={t('session.header.moreActions', 'More session actions')}
+        icon={MoreHorizontal}
+        onPress={() => setShowHeaderMoreActions(true)}
+      />
+    </>
+  )
+  return (
+    <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
+      <SafeAreaView
+        style={[
+          styles.sessionChrome,
+          topChrome.space && {
+            paddingLeft: topChrome.space.left,
+            paddingRight: topChrome.space.right,
+            minHeight: topChrome.space.minHeight
+          }
+        ]}
+        edges={topChrome.space ? [] : ['top']}
+      >
         <View
-          style={[styles.sessionTitleBlock, tabsInTopBar && styles.sessionTitleBlockBesideTabs]}
+          // Sideways the row is a different bar, so rotating measures a fresh one.
+          key={tabsInTopBar ? 'tab-row' : 'nav-bar'}
+          ref={details.barRef}
+          style={tabsInTopBar ? styles.sessionTopBar : undefined}
+          onLayout={(event) => {
+            details.onAnchorLayout()
+            const width = event.nativeEvent.layout.width
+            setHeaderWidth((previous) => (previous === width ? previous : width))
+          }}
         >
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {worktreeName || 'Terminal'}
-          </Text>
-          <Pressable
-            style={styles.sessionMetaRow}
-            disabled={!showConnectionRetry}
-            onPress={() => {
-              if (hostId && forceReconnectHost) {
-                void forceReconnectHost(hostId)
-              }
-            }}
-            accessibilityRole={showConnectionRetry ? 'button' : undefined}
-            accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
-          >
-            <StatusDot state={presentedConnState} />
-            <Text style={styles.sessionMetaText} numberOfLines={1}>
-              {terminalSummary}
-            </Text>
-          </Pressable>
+          {tabsInTopBar ? (
+            // NavBar centres its title; sideways, the tabs take the row's spare width instead.
+            <>
+              <View style={barStyles.group}>{leading}</View>
+              {titleBlock}
+              {tabStrip}
+              <View style={barStyles.group}>{trailing}</View>
+            </>
+          ) : (
+            <NavBar
+              leading={leading}
+              center={titleBlock}
+              trailing={trailing}
+              style={barStyles.inChrome}
+            />
+          )}
         </View>
-        {tabsInTopBar ? tabStrip : null}
-        {!isFloatingWorkspaceRoute && (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'files'}
-            accessibilityLabel="Open file explorer"
-            icon={Folder}
-            onPress={() => handlePanelTap('files')}
-          />
-        )}
-        {!isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'sourceControl'}
-            accessibilityLabel="Open source control"
-            icon={GitBranch}
-            onPress={() => handlePanelTap('sourceControl')}
-          />
-        )}
-        {showHeaderMoreButton ? (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'pr'}
-            accessibilityLabel="More session actions"
-            icon={MoreHorizontal}
-            onPress={() => setShowHeaderMoreActions(true)}
-          />
-        ) : null}
-      </View>
-
-      {tabsInTopBar ? null : tabStrip}
-    </SafeAreaView>
+        {tabsInTopBar ? null : tabStrip}
+      </SafeAreaView>
+      <MobileSessionHeaderMoreMenu
+        controller={controller}
+        anchorRef={moreRef}
+        actionsCollapsed={actionsCollapsed}
+      />
+    </View>
   )
 }
+
+const barStyles = StyleSheet.create({
+  group: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.xs
+  },
+  // The session chrome already draws the background and the line under the tabs.
+  inChrome: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0
+  }
+})

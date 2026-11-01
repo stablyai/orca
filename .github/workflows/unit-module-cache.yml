@@ -1,0 +1,30 @@
+name: Unit transform cache producer
+
+# Cold full unit run on main that publishes per-shard Vitest transform caches.
+# Dispatch only: PR shards run on hosted runners, which cannot read this Blacksmith-store cache.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: unit-module-cache-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit_plan:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/unit-plan.yml
+
+  test:
+    needs: unit_plan
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      # Match the PR unit matrix so the cache key's runtime and shard fields line up.
+      node_versions: '["24"]'
+      runner: blacksmith-8vcpu-ubuntu-2404
+      shards: ${{ needs.unit_plan.outputs.shards }}
+      module_cache: cold
+      artifact_prefix: cache-producer-unit
+      run_relay_integration: false

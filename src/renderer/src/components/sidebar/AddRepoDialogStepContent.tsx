@@ -43,6 +43,8 @@ type AddRepoDialogStepContentProps = {
   createError: string | null
   isCreating: boolean
   hostSelector?: ReactNode
+  /** A WSL host's Windows drive refusal, with its "Add on this computer" action. */
+  windowsDriveNotice?: ReactNode
   actionsDisabled?: boolean
   manualCreateParentEntry?: boolean
   browseHostKind?: 'local' | 'runtime'
@@ -106,6 +108,7 @@ export function AddRepoDialogStepContent({
   createError,
   isCreating,
   hostSelector,
+  windowsDriveNotice,
   actionsDisabled = false,
   manualCreateParentEntry = isRuntimeEnvironmentActive,
   browseHostKind = 'local',
@@ -147,6 +150,7 @@ export function AddRepoDialogStepContent({
   if (step === 'add' || (step === 'remote' && !serverSsh)) {
     return (
       <AddRepoLocalStartStep
+        notice={windowsDriveNotice}
         repoCount={repoCount}
         isAdding={isAdding}
         addProjectBusyLabel={addProjectBusyLabel}
@@ -168,6 +172,7 @@ export function AddRepoDialogStepContent({
   if (step === 'server-path') {
     return (
       <AddRepoServerPathStartStep
+        notice={windowsDriveNotice}
         serverPath={serverPath}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         isAddingServerPath={isAddingServerPath}
@@ -254,6 +259,7 @@ export function AddRepoDialogStepContent({
         onPickParent={onPickCreateParent}
         onCreate={onCreate}
         submitDisabled={actionsDisabled}
+        notice={windowsDriveNotice}
       />
     )
   }

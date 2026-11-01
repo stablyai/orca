@@ -1,172 +1,58 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  captureEditorFileOperationProvenance,
+  getExpectedSshConnectionGeneration,
+  OWNER_CHANGED_MESSAGE,
+  type EditorFileOperationProvenance
+} from './editor-file-operation-provenance'
+export {
+  captureEditorFileOperationProvenance,
+  assertEditorFileOperationCurrent,
+  resolveEditorOwnerRoute,
+  type EditorFileOperationProvenance
+} from './editor-file-operation-provenance'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import type { OpenFile } from '@/store/slices/editor'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
+import { resolveWorkspaceDirectory } from './workspace-directory'
+import { getFileConnectionOwnerFromState } from './connection-owner-resolution'
+import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
 import {
-  assertWorktreeOperationGenerationSnapshotCurrent,
-  captureWorktreeOperationGenerationSnapshot,
-  type WorktreeOperationGenerationSnapshot
-} from './worktree-operation-generation'
-import {
-  getFloatingWorkspaceOperationRoute,
-  resolveWorktreeOperationRoute,
-  type WorktreeOperationRoute
-} from './worktree-operation-route'
-import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+  editorFileChildRoute,
+  editorFileChildAuthority,
+  assertEditorFileOwnerCurrent,
+  captureEditorFileOperationForOwner
+} from './editor-file-child-owner'
+export {
+  assertEditorFileOwnerCurrent,
+  captureEditorFileOperationForOwner
+} from './editor-file-child-owner'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 
-export type EditorFileOperationProvenance = {
-  generation: WorktreeOperationGenerationSnapshot
-  ownershipProjection: 'explicit' | 'legacy'
-  expectedSshConnectionGeneration?: number
-}
-
-type EditorOwnerState = Pick<
-  AppState,
-  | 'settings'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'repos'
-  | 'worktreesByRepo'
-  | 'detectedWorktreesByRepo'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-  | 'runtimeEnvironments'
-  | 'runtimeEnvironmentCatalogHydrated'
-  | 'removedRuntimeEnvironmentIds'
-  | 'sshConnectionStates'
-  | 'sshStateByEnvironment'
->
-
-const OWNER_CHANGED_MESSAGE =
-  "Couldn't verify which host owns this file. Reopen the file after the connection settles."
-
-export function captureEditorFileOperationProvenance(
-  state: EditorOwnerState,
-  worktreeId: string,
-  ownerHint: string | null | undefined,
-  ownerHintProvided: boolean
-): EditorFileOperationProvenance {
-  const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
-  const worktreeIsPublished = isWorktreePublished(state, worktreeId)
-  const ownershipProjection =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID || explicitResolution.kind === 'resolved'
-      ? 'explicit'
-      : 'legacy'
-  const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
-  const route =
-    getFloatingWorkspaceOperationRoute(worktreeId) ??
-    (explicitResolution.kind === 'resolved'
-      ? explicitResolution.route
-      : explicitResolution.kind === 'ambiguous'
-        ? null
-        : ownerHintProvided && worktreeIsPublished
-          ? {
-              executionHostId: hintedRuntimeEnvironmentId
-                ? (`runtime:${encodeURIComponent(hintedRuntimeEnvironmentId)}` as const)
-                : ('local' as const),
-              runtimeEnvironmentId: hintedRuntimeEnvironmentId
-            }
-          : resolveEditorOwnerRoute(state, worktreeId))
-  if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
-  const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(state, route)
-  return {
-    generation: captureWorktreeOperationGenerationSnapshot(route),
-    ownershipProjection,
-    ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
-  }
-}
-
-function resolveEditorOwnerRoute(
-  state: EditorOwnerState,
-  worktreeId: string,
-  capturedHostId?: ExecutionHostId | null
-): WorktreeOperationRoute | null {
-  // Neither workspace focus nor the Active Server focus can replace a file's catalog owner.
-  const ownerState = { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null }
-  const route = resolveWorktreeOperationRoute(ownerState, worktreeId)
-  const scope = parseWorkspaceKey(worktreeId)
-  const hostId =
-    capturedHostId ??
-    (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
-  if (route || scope?.type !== 'folder' || !hostId) {
-    return route
-  }
-  // Same-id folders may use a host qualifier only when the catalog confirms that owner.
-  const folder = findFolderWorkspaceOwner(ownerState, scope.folderWorkspaceId, hostId)
-  const qualifiedRoute = folder
-    ? resolveWorktreeOperationRoute({ ...ownerState, folderWorkspaces: [folder] }, worktreeId)
-    : null
-  return qualifiedRoute?.executionHostId === hostId ? qualifiedRoute : null
-}
-
-export function assertEditorFileOperationCurrent(
-  state: EditorOwnerState,
-  worktreeId: string,
-  provenance: EditorFileOperationProvenance
-): WorktreeOperationRoute {
-  const route = assertWorktreeOperationGenerationSnapshotCurrent(
-    () => state,
-    worktreeId,
-    provenance.generation,
-    () => new Error(OWNER_CHANGED_MESSAGE),
-    () => resolveCurrentEditorRoute(state, worktreeId, provenance)
-  )
-  const currentGeneration = getExpectedSshConnectionGeneration(state, route)
-  if (currentGeneration !== provenance.expectedSshConnectionGeneration) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
-  return route
-}
-
-function resolveCurrentEditorRoute(
-  state: EditorOwnerState,
-  worktreeId: string,
-  provenance: EditorFileOperationProvenance
-): WorktreeOperationRoute | null {
-  const floatingRoute = getFloatingWorkspaceOperationRoute(worktreeId)
-  if (floatingRoute) {
-    return floatingRoute
-  }
-  const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
-  if (explicitResolution.kind === 'resolved') {
-    return explicitResolution.route
-  }
-  if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
-    return null
-  }
-  // Folder workspaces lack worktree rows; re-resolve their live owner while preserving explicit-owner fail-closed checks (#10251).
-  if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-    return resolveEditorOwnerRoute(state, worktreeId, provenance.generation.route.executionHostId)
-  }
-  return isWorktreePublished(state, worktreeId) ? provenance.generation.route : null
-}
-
-function isWorktreePublished(state: EditorOwnerState, worktreeId: string): boolean {
-  return (
-    Object.values(selectWorktreesByRepo(state) ?? {}).some((worktrees) =>
-      worktrees.some((worktree) => worktree.id === worktreeId)
-    ) ||
-    Object.values(selectDetectedWorktreesByRepo(state) ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
-  )
-}
-
 export function getEditorFileOperationContext(
+  ...args: Parameters<typeof getEditorFileReadContext>
+) {
+  const context = getEditorFileReadContext(...args)
+  if (
+    !context.expectedExecutionHostId ||
+    (context.expectedSshTargetId && context.expectedSshConnectionGeneration === undefined)
+  ) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
+  return { ...context, expectedExecutionHostId: context.expectedExecutionHostId }
+}
+
+export function getEditorFileReadContext(
   state: AppState,
   file: {
     worktreeId: string
+    filePath?: string
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
     operationProvenance?: EditorFileOperationProvenance
@@ -179,49 +65,49 @@ export function getEditorFileOperationContext(
   connectionId?: string
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
-  expectedExecutionHostId: 'local' | `ssh:${string}`
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
 } {
-  const provenance =
-    file.operationProvenance ??
-    captureEditorFileOperationProvenance(
-      state,
-      file.worktreeId,
-      file.runtimeEnvironmentId,
-      file.runtimeEnvironmentId !== undefined
-    )
-  const route = file.operationProvenance
-    ? assertEditorFileOperationCurrent(state, file.worktreeId, provenance)
-    : provenance.generation.route
-  const host = parseExecutionHostId(route.executionHostId)
+  const provenance = file.operationProvenance
+    ? captureEditorFileOperationForOwner(state, file, file.operationProvenance)
+    : captureEditorFileOperationProvenance(
+        state,
+        file.worktreeId,
+        file.runtimeEnvironmentId,
+        file.runtimeEnvironmentId !== undefined
+      )
+  const route = provenance.generation.route
   const workspaceScope = parseWorkspaceKey(file.worktreeId)
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
     (workspaceScope?.type === 'folder'
-      ? (selectFolderWorkspaces(state).find(
-          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-        )?.folderPath ?? null)
+      ? resolveWorkspaceDirectory(state, file.worktreeId, route.executionHostId)
       : null)
-  if (!host) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
+  return editorFileReadContext(file, provenance, resolvedWorktreePath)
+}
+
+function editorFileReadContext(
+  file: Parameters<typeof getEditorFileReadContext>[1],
+  provenance: EditorFileOperationProvenance,
+  resolvedWorktreePath: string | null
+) {
+  const route = provenance.generation.route
+  const host = parseExecutionHostId(provenance.generation.authority?.at ?? route.executionHostId)
   const externalSshTargetId = file.externalSshTargetId?.trim()
   if (
     externalSshTargetId &&
-    (host.kind !== 'ssh' ||
+    (host?.kind !== 'ssh' ||
       route.runtimeEnvironmentId !== null ||
       host.targetId !== externalSshTargetId)
   ) {
-    throw new Error(OWNER_CHANGED_MESSAGE)
-  }
-  if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {
-    // Why: an old/partial SSH publication may be readable but cannot safely authorize mutations.
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
   return {
     target: runtimeTargetForOwnerEnvironment(route.runtimeEnvironmentId),
     worktreeId: file.worktreeId,
     worktreePath: resolvedWorktreePath,
-    expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local',
+    ...(host
+      ? { expectedExecutionHostId: host.kind === 'ssh' ? host.id : ('local' as const) }
+      : {}),
     ...(route.runtimeEnvironmentId === null && host?.kind === 'ssh'
       ? { connectionId: host.targetId }
       : {}),
@@ -232,17 +118,138 @@ export function getEditorFileOperationContext(
   }
 }
 
-function getExpectedSshConnectionGeneration(
-  state: Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>,
-  route: WorktreeOperationRoute
-): number | undefined {
-  const host = parseExecutionHostId(route.executionHostId)
-  if (host?.kind !== 'ssh') {
-    return undefined
+export function isSameEditorFileOperationIdentity(file: OpenFile, live: OpenFile): boolean {
+  return (
+    file.id === live.id &&
+    file.worktreeId === live.worktreeId &&
+    file.filePath === live.filePath &&
+    file.relativePath === live.relativePath &&
+    file.mode === live.mode &&
+    file.runtimeEnvironmentId === live.runtimeEnvironmentId &&
+    file.externalSshTargetId === live.externalSshTargetId &&
+    (!file.operationProvenance || file.operationProvenance === live.operationProvenance)
+  )
+}
+
+export function acquireEditorFileOperation(
+  getState: () => AppState,
+  file: OpenFile,
+  resource?: { filePath: string; worktreePath: string | null }
+) {
+  const selectChild = (state: AppState) =>
+    getFileConnectionOwnerFromState(state, file.worktreeId, resource?.filePath ?? file.filePath)
+      ?.repo
+  const child = selectChild(getState())
+  const selectedFile = child
+    ? getState().openFiles.find((live) => isSameEditorFileOperationIdentity(file, live))
+    : getState().acquireEditorFileOperationProvenance(file)
+  if (!selectedFile) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
   }
-  return route.runtimeEnvironmentId
-    ? state.sshStateByEnvironment
-        .get(route.runtimeEnvironmentId)
-        ?.connectionStates.get(host.targetId)?.connectionGeneration
-    : state.sshConnectionStates.get(host.targetId)?.connectionGeneration
+  const state = getState()
+  const route = editorFileChildRoute(child)
+  const selectedProvenance = route
+    ? {
+        generation: captureWorktreeOperationGenerationSnapshot(
+          route,
+          editorFileChildAuthority(child)
+        ),
+        ownershipProjection: 'explicit' as const,
+        ...(child ? { childRepo: { id: child.id, path: child.path } } : {}),
+        expectedSshConnectionGeneration: getExpectedSshConnectionGeneration(
+          state,
+          route,
+          editorFileChildAuthority(child)
+        )
+      }
+    : undefined
+  const captured =
+    child && !resource
+      ? getState().acquireEditorFileOperationProvenance(selectedFile, selectedProvenance)
+      : selectedFile
+  const ownerProvenance =
+    resource && resource.filePath !== captured.filePath
+      ? (selectedProvenance ?? captured.operationProvenance)
+      : (captured.operationProvenance ?? selectedProvenance)
+  if (
+    !ownerProvenance ||
+    (child &&
+      captured.runtimeEnvironmentId !== undefined &&
+      captured.runtimeEnvironmentId !== ownerProvenance.generation.route.runtimeEnvironmentId)
+  ) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
+  const provenance = captureEditorFileOperationForOwner(
+    state,
+    { worktreeId: captured.worktreeId, filePath: resource?.filePath ?? captured.filePath },
+    ownerProvenance
+  )
+  const resolveOwnerDirectory = (current: AppState): string | null => {
+    const scope = parseWorkspaceKey(captured.worktreeId)
+    if (provenance.childRepo && scope?.type === 'folder') {
+      const folders = selectFolderWorkspaces(current).filter(
+        (folder) => folder.id === scope.folderWorkspaceId
+      )
+      return folders.length === 1 ? folders[0].folderPath : null
+    }
+    const qualified = resolveWorkspaceDirectory(
+      current,
+      captured.worktreeId,
+      provenance.generation.route.executionHostId
+    )
+    if (qualified || provenance.ownershipProjection !== 'legacy') {
+      return qualified
+    }
+    const paths = new Set(
+      [
+        ...Object.values(selectWorktreesByRepo(current) ?? {}).flat(),
+        ...Object.values(selectDetectedWorktreesByRepo(current) ?? {}).flatMap(
+          (listing) => listing.worktrees
+        )
+      ]
+        .filter((row) => row.id === captured.worktreeId)
+        .map((row) => row.path || null)
+    )
+    return paths.size === 1 ? (paths.values().next().value ?? null) : null
+  }
+  const ownerDirectory = resolveOwnerDirectory(state)
+  const directory = resource?.worktreePath ?? ownerDirectory
+  const context = editorFileReadContext(captured, provenance, directory)
+  const assertAuthorityCurrent = (): void => {
+    const current = getState()
+    assertEditorFileOwnerCurrent(
+      current,
+      { ...captured, filePath: resource?.filePath ?? captured.filePath },
+      provenance
+    )
+    if (resolveOwnerDirectory(current) !== ownerDirectory) {
+      throw new Error(OWNER_CHANGED_MESSAGE)
+    }
+  }
+  const mutationContext = () => {
+    if (
+      !context.expectedExecutionHostId ||
+      (context.expectedSshTargetId && context.expectedSshConnectionGeneration === undefined)
+    ) {
+      throw new Error(OWNER_CHANGED_MESSAGE)
+    }
+    return { ...context, expectedExecutionHostId: context.expectedExecutionHostId }
+  }
+  const assertCurrent = (): void => {
+    const current = getState()
+    const live = current.openFiles.find((candidate) => candidate.id === file.id)
+    if (!live || !isSameEditorFileOperationIdentity(captured, live)) {
+      throw new Error(OWNER_CHANGED_MESSAGE)
+    }
+    assertAuthorityCurrent()
+  }
+  assertCurrent()
+  return {
+    file: captured,
+    provenance,
+    context,
+    mutationContext,
+    assertAuthorityCurrent,
+    assertCurrent
+  }
 }

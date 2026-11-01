@@ -3,11 +3,11 @@ import { ArrowUp, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
-import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat-visual-directive'
+import { withoutNativeChatVisualDirectiveLines } from '../../../../shared/native-chat/native-chat-visual-directive'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import {
   getLocalImageCacheKey,
@@ -17,7 +17,7 @@ import {
 } from '@/components/editor/useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { isNativeChatPastedImagePath } from '../../../../shared/native-chat-image-label'
 import { nativeChatImageLabel } from './native-chat-image-label'
 import { chatImageAccess } from '@/lib/local-file-access'
 
@@ -153,15 +153,25 @@ function TranscriptImagePreview({
     return () => releaseLocalImageSrcByKey(releaseKey)
   }, [leaseActive, releaseKey])
 
+  const previewable = Boolean(source) && (external || runtimeContext !== null)
   const showPreview =
-    leaseActive &&
-    Boolean(displaySrc) &&
-    displaySrc !== thumbnailErrorSrc &&
-    Boolean(source) &&
-    (external || runtimeContext !== null)
+    previewable && leaseActive && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
 
-  if (!showPreview) {
+  if (!previewable) {
     return <div ref={ref}>{fallback}</div>
+  }
+  // Offscreen or loading keeps the thumbnail's square so scrolling never rewraps the row.
+  if (!showPreview) {
+    return (
+      <div
+        ref={ref}
+        className="flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-border bg-chat-canvas px-1.5 text-xs text-chat-foreground-faint"
+        title={label}
+      >
+        <ImageIcon className="size-4 shrink-0" />
+        <span className="max-w-full truncate">{label}</span>
+      </div>
+    )
   }
   return (
     <div ref={ref} className="relative size-20 shrink-0">
@@ -202,7 +212,7 @@ export function NativeChatImageAttachments({
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
-  /** Keep legacy terminal chips unchanged until that lane opts into previews. */
+  /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
@@ -214,7 +224,11 @@ export function NativeChatImageAttachments({
     return (
       <div className="mb-2 flex flex-wrap gap-1.5">
         {images.map((image) => {
-          const label = image.alt ?? image.path ?? image.url ?? 'Image'
+          const label =
+            image.alt ??
+            image.path ??
+            image.url ??
+            translate('components.native-chat.transcript.imageFallback', 'Image')
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -241,7 +255,11 @@ export function NativeChatImageAttachments({
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image) => {
-        const label = image.alt ?? image.path ?? image.url ?? 'Image'
+        const label =
+          image.alt ??
+          image.path ??
+          image.url ??
+          translate('components.native-chat.transcript.imageFallback', 'Image')
         const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -305,32 +323,65 @@ export function ProviderFrameRow({
   }
   const frame = block.providerFrame
   return (
+    <NativeChatDetailsDisclosure
+      lead={
+        frame ? (
+          <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>
+        ) : null
+      }
+      summary={summary ?? nativeChatProviderFrameSummary(block)}
+      trail={
+        frame?.payload.truncated ? (
+          <span>
+            ·{' '}
+            {translate('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
+              count: frame.payload.byteLength,
+              defaultValue_one: '{{count}} byte'
+            })}
+          </span>
+        ) : null
+      }
+    >
+      {detail}
+      {detail && frame ? '\n\n' : ''}
+      {frame?.payload.head}
+      {frame?.payload.truncated ? '\n…' : ''}
+    </NativeChatDetailsDisclosure>
+  )
+}
+
+/** A collapsed monospace body, for provider frames and the diagnostics behind a failure. */
+export function NativeChatDetailsDisclosure({
+  summary,
+  lead,
+  trail,
+  bodyClassName,
+  children
+}: {
+  summary: string
+  lead?: React.ReactNode
+  trail?: React.ReactNode
+  bodyClassName?: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
     <details className="group text-xs text-chat-foreground-faint">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="transition-transform motion-reduce:transition-none group-open:rotate-90">
           ›
         </span>
-        {frame ? (
-          <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>
-        ) : null}
-        <span className="truncate">{summary ?? nativeChatProviderFrameSummary(block)}</span>
-        {frame?.payload.truncated ? (
-          <span>
-            ·{' '}
-            {translate('components.native-chat.providerFrame.byteLength', '{{value0}} bytes', {
-              value0: frame.payload.byteLength
-            })}
-          </span>
-        ) : null}
+        {lead}
+        <span className="min-w-0 truncate">{summary}</span>
+        {trail}
       </summary>
       <pre
         data-native-chat-code-content
-        className="scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-chat-code text-foreground"
+        className={cn(
+          'scrollbar-sleek mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-chat-code text-foreground',
+          bodyClassName
+        )}
       >
-        {detail}
-        {detail && frame ? '\n\n' : ''}
-        {frame?.payload.head}
-        {frame?.payload.truncated ? '\n…' : ''}
+        {children}
       </pre>
     </details>
   )

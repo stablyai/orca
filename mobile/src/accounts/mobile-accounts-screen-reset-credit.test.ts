@@ -16,7 +16,9 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   ScrollView: 'ScrollView',
@@ -58,7 +60,10 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 
-vi.mock('../transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
+vi.mock('../transport/host-store', () => ({
+  loadHosts: dependencies.loadHosts,
+  peekHosts: () => null
+}))
 
 vi.mock('../transport/host-client-hooks', () => {
   const client = {
@@ -93,6 +98,7 @@ vi.mock('../transport/host-client-hooks', () => {
     }
   }
   return {
+    useForceReconnect: () => null,
     useHostClient: () => ({ client, state: 'connected' })
   }
 })

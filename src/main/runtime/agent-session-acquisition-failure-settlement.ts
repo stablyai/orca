@@ -2,12 +2,10 @@ import {
   agentSessionOperationKey,
   settleAgentSessionOperation,
   type AgentSessionOperationOutcome
-} from '../../shared/agent-session-operation-ledger'
-import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
-import type {
-  AgentSessionDeathEvidence,
-  AgentSessionRecord
-} from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { nextAgentSessionFence } from '../../shared/agent-session/lifecycle/agent-session-next-fence'
+import type { AgentSessionDeathEvidence } from '../../shared/agent-session-death-evidence'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { assertFence, withLease } from './agent-session/ownership/agent-session-lease-transitions'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
@@ -17,6 +15,7 @@ import type { AgentSessionStoreState } from './agent-session-store-state'
 export type AgentSessionAcquisitionExitProof =
   | 'exit-proven'
   | 'root-exit-observed'
+  | 'kill-delivered'
   | 'processless'
   | 'unproven'
 
@@ -95,7 +94,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
           lastRenewedAt: args.now,
           handoffOperationId: null,
           deathEvidence: {
-            kind: 'exit-observed',
+            kind: args.exitProof === 'kill-delivered' ? 'kill-delivered' : 'exit-observed',
             detail:
               args.exitProof === 'root-exit-observed'
                 ? 'the provider process exited; its descendants were not proven gone'
@@ -159,6 +158,13 @@ function acquisitionDeathEvidence(
   const proof = { observedAt, ownerFence }
   if (exitProof === 'processless') {
     return { kind: 'pid-absent', detail: 'reservation failed before spawn', ...proof }
+  }
+  if (exitProof === 'kill-delivered') {
+    return {
+      kind: 'kill-delivered',
+      detail: 'termination reached the conversation writer',
+      ...proof
+    }
   }
   if (exitProof === 'root-exit-observed') {
     return {

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   openRemoteRuntimePassthroughSocket,
   type RemoteRuntimePassthroughSocket

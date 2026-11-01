@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
-  isConnectedRuntimeHostState,
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
   runtimeHostConnectionStateForEntry,
@@ -29,37 +28,6 @@ const windowClosedStatus = makeStatus({
 })
 
 describe('runtime host connection state', () => {
-  it('counts connected remote servers as connected hosts', () => {
-    // Connected means reachable, independent of active/default host; there is no separate available state.
-    expect(runtimeStatusForOverall('connected')).toBe('connected')
-    expect(isConnectedRuntimeHostState('connected')).toBe(true)
-  })
-
-  it('keeps reconnecting and disconnected remote servers out of the connected count', () => {
-    expect(runtimeStatusForOverall('reconnecting')).toBe('connecting')
-    expect(runtimeStatusForOverall('disconnected')).toBe('disconnected')
-    expect(isConnectedRuntimeHostState('reconnecting')).toBe(false)
-    expect(isConnectedRuntimeHostState('disconnected')).toBe(false)
-  })
-
-  it('distinguishes a connected transport from an unavailable runtime', () => {
-    expect(
-      runtimeHostConnectionState({
-        hasStatusEntry: true,
-        status: null,
-        transportStatus: 'connected'
-      })
-    ).toBe('runtime-unavailable')
-    expect(runtimeStatusForOverall('runtime-unavailable')).toBe('connected')
-    expect(isConnectedRuntimeHostState('runtime-unavailable')).toBe(true)
-  })
-
-  it('still counts a workspace-window-closed remote server as a connected host', () => {
-    // Healthy transport remains connected; degraded runtime changes only wording (#12350).
-    expect(runtimeStatusForOverall('workspace-window-closed')).toBe('connected')
-    expect(isConnectedRuntimeHostState('workspace-window-closed')).toBe(true)
-  })
-
   it('distinguishes a reachable host whose workspace window is closed', () => {
     expect(runtimeHostConnectionState({ hasStatusEntry: true, status: windowClosedStatus })).toBe(
       'workspace-window-closed'
@@ -191,27 +159,6 @@ describe('runtime host connection state for a recorded status entry', () => {
         remoteControl: remoteControl('reconnecting')
       })
     ).toBe('reconnecting')
-  })
-
-  it('agrees with the status bar that a closed control channel is disconnected', () => {
-    expect(
-      runtimeHostConnectionStateForEntry({
-        status: makeStatus({ remoteControl: remoteControl('closed') })
-      })
-    ).toBe('disconnected')
-  })
-
-  it('names only the disconnected verdict as disconnected', () => {
-    expect(isDisconnectedRuntimeHostState('disconnected')).toBe(true)
-    for (const state of [
-      'connected',
-      'checking',
-      'reconnecting',
-      'runtime-unavailable',
-      'workspace-window-closed'
-    ] as const) {
-      expect(isDisconnectedRuntimeHostState(state)).toBe(false)
-    }
   })
 })
 

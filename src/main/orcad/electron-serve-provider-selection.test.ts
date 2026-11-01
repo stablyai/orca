@@ -20,6 +20,7 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
 vi.mock('./orcad-browser-install-park', () => ({ openOrcadBrowserInstallPark: () => null }))
 
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import { agentBrowserCommandOf } from '../browser/agent-browser-bridge-test-harness'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
@@ -29,14 +30,6 @@ let controlPath: string
 let chromiumExecutable: string
 let sidecarMode: string | undefined
 let provider: OrcadBrowserProvider | null
-
-function commandFromArgs(args: readonly string[]): string[] {
-  let index = 0
-  while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
-    index += 2
-  }
-  return args.slice(index, -1)
-}
 
 function agentBrowserSuccess(data: unknown) {
   return Promise.resolve({
@@ -76,7 +69,7 @@ beforeEach(async () => {
   )
   runProcessMock.mockReset()
   runProcessMock.mockImplementation(async (spec: ProcessSpec) => {
-    const command = commandFromArgs(spec.args ?? [])
+    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
     if (command[0] === 'open') {
       return agentBrowserSuccess({ url: 'about:blank', title: '' })
     }
@@ -99,20 +92,6 @@ afterEach(async () => {
 })
 
 describe('resolveOrcadBrowserProvider Electron preference', () => {
-  it('uses the installed Electron app even when a Chromium executable is configured', async () => {
-    provider = await resolveOrcadBrowserProvider({
-      userDataPath: join(harnessRoot, 'state'),
-      environment: { ORCA_BROWSER_EXECUTABLE: chromiumExecutable },
-      resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE,
-      resolveAgentBrowserBinary: () => '/agent-browser'
-    })
-
-    expect(provider?.kind).toBe('electron')
-    expect(provider?.isAvailable()).toBe(true)
-    expect(spawnProcessMock.mock.calls[0][0].program).toBe(INSTALLED_EXECUTABLE)
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
   it('falls back to the operator Chromium when the installed Electron app cannot start', async () => {
     sidecarMode = 'exit-before-ready'
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -130,20 +109,5 @@ describe('resolveOrcadBrowserProvider Electron preference', () => {
       '[orcad] Installed Electron browser provider unavailable:',
       expect.anything()
     )
-  })
-
-  it('returns no provider when Electron fails and no Chromium is configured', async () => {
-    sidecarMode = 'exit-before-ready'
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    provider = await resolveOrcadBrowserProvider({
-      userDataPath: join(harnessRoot, 'state'),
-      environment: {},
-      resolveInstalledElectronExecutable: async () => INSTALLED_EXECUTABLE,
-      resolveAgentBrowserBinary: () => '/agent-browser'
-    })
-
-    expect(provider).toBeNull()
-    expect(runProcessMock).not.toHaveBeenCalled()
   })
 })

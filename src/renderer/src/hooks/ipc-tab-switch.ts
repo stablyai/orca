@@ -4,9 +4,9 @@ import {
   getActiveEntityIdForTabType,
   getNextTabAcrossAllTypes,
   getNextTabWithinActiveType,
+  getPreviousRecentTab,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
-import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
 import { activateCycledTabOnOwner } from '@/lib/cycled-tab-owner-activation'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
@@ -252,26 +252,11 @@ export function handleSwitchRecentTab(): boolean {
     return false
   }
   const { store, worktreeId, allTabIds, groupTabIdInNav } = ctx
-  if (!groupTabIdInNav) {
-    return false
-  }
   const groupId = store.activeGroupIdByWorktree[worktreeId]
   const group = groupId
     ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
     : undefined
-  if (!group?.recentTabIds) {
-    return false
-  }
-
-  const visibleTabIds = allTabIds.flatMap((entry) => (entry.tabId ? [entry.tabId] : []))
-  const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, visibleTabIds)
-  const currentIndex = recentTabIds.lastIndexOf(groupTabIdInNav)
-  if (currentIndex <= 0) {
-    return false
-  }
-
-  const previousRecentTabId = recentTabIds[currentIndex - 1]
-  const next = allTabIds.find((entry) => entry.tabId === previousRecentTabId)
+  const next = getPreviousRecentTab(allTabIds, group?.recentTabIds, groupTabIdInNav)
   if (!next) {
     return false
   }

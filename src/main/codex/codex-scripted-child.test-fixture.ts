@@ -12,6 +12,8 @@ const THREAD = CODEX_SCRIPTED_THREAD
 type ScriptedCodexRoute = (params: Record<string, unknown> | undefined) => unknown
 
 export type ScriptedCodexChild = ScriptedAgentChild & {
+  notify(method: string, params: unknown): void
+  closeEvidence: NonNullable<CodexAppServerConnection['closeResult']>
   requests(): readonly { method: string; params?: Record<string, unknown> }[]
 }
 
@@ -44,6 +46,8 @@ function heldAnswer(
 export const codexScriptedChild = (
   routes: Readonly<Record<string, ScriptedCodexRoute>> = {}
 ): ScriptedCodexChild => {
+  let notify: ScriptedCodexChild['notify'] = () => {}
+  let closeEvidence: ScriptedCodexChild['closeEvidence'] = { root: 'exited', tree: 'exited' }
   let holdHandshakes = true
   let completeTurns = true
   let spawned = 0
@@ -53,6 +57,7 @@ export const codexScriptedChild = (
   const requests: { method: string; params?: Record<string, unknown> }[] = []
   let newest: ReturnType<typeof Promise.withResolvers<unknown>> | undefined
   const open: typeof openCodexAppServerConnection = async (_launch, handlers = {}) => {
+    notify = (method, params) => handlers.onNotification?.(method, params)
     spawned += 1
     const gate = Promise.withResolvers<unknown>()
     newest = gate
@@ -80,7 +85,8 @@ export const codexScriptedChild = (
           resumed += 1
         }
         if (route) {
-          return route(params)
+          const answer = route(params)
+          return answer instanceof Promise ? heldAnswer(answer, method, options?.timeoutMs) : answer
         }
         if (method === 'thread/start' || method === 'thread/resume') {
           return { thread: { id: THREAD }, model: 'scripted-model' }
@@ -134,6 +140,9 @@ export const codexScriptedChild = (
       notify: () => {},
       respond: () => {},
       respondWithError: () => {},
+      get closeResult() {
+        return ended ? closeEvidence : undefined
+      },
       close: async () => {
         if (!ended) {
           ended = true
@@ -150,10 +159,17 @@ export const codexScriptedChild = (
     return connection
   }
   return {
+    notify: (method, params) => notify(method, params),
+    get closeEvidence() {
+      return closeEvidence
+    },
+    set closeEvidence(value) {
+      closeEvidence = value
+    },
     deps: {
       openCodexConnection: open,
       readProcessStartTime: async () => 1_700_000_000_000,
-      resolveCodexCommand: () => '/nonexistent/scripted-codex',
+      resolveCodexCommand: () => ({ command: '/nonexistent/scripted-codex', prefixArgs: [] }),
       resolveEnvironment: async () => ({})
     },
     get holdHandshakes() {

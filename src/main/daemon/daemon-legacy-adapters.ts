@@ -1,27 +1,12 @@
-import { readFileSync, unlinkSync } from 'node:fs'
+import { unlinkSync } from 'node:fs'
 import {
   getDaemonHistoryDir as getHistoryDir,
   probeDaemonSocket as probeSocket
 } from './daemon-launch-paths'
-import { parseDaemonPidFile } from './daemon-pid-file-parse'
+import { legacyDaemonProcessMayBeAlive } from './daemon-legacy-process-liveness'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { getDaemonPidPath, getDaemonSocketPath, getDaemonTokenPath } from './daemon-spawner'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS } from './types'
-
-function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: number): boolean {
-  try {
-    const parsed = parseDaemonPidFile(
-      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    )
-    if (!parsed) {
-      return false
-    }
-    process.kill(parsed.pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
 
 // Isolated runtimes must keep discovery history outside app userData.
 export async function createLegacyDaemonAdapters(

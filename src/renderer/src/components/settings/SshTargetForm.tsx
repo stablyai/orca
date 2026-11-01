@@ -232,6 +232,7 @@ export function SshTargetForm({
               </div>
               <SshHostAdvancedFields
                 offerProxyConnectionReuse
+                offerReconnectOnLaunch
                 open={advancedOpen}
                 onOpenChange={setAdvancedOpen}
                 form={form}

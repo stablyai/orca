@@ -12,7 +12,8 @@ import {
 } from '../../../shared/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
+  type PublicKnownRuntimeEnvironment,
+  type RuntimeEnvironmentRemoval
 } from '../../../shared/runtime-environments'
 import {
   connectThroughOwningService,
@@ -49,6 +50,10 @@ import {
   wslOrcadHostSupports
 } from '../../wsl/wsl-orcad-host-environments'
 import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+import {
+  isHostSpawnFencedForWslMoveUndo,
+  wslMoveUndoSpawnFencedResponse
+} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
@@ -110,9 +115,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     (
       _event,
       args: { selector: string }
-    ):
-      | { removed: PublicKnownRuntimeEnvironment }
-      | Promise<{ removed: PublicKnownRuntimeEnvironment }> => {
+    ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
@@ -123,7 +126,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       const ownedRemoval = removeThroughOwningService(environment)
       if (ownedRemoval) {
-        return ownedRemoval.then(() => ({ removed: redactRuntimeEnvironment(environment) }))
+        // A WSL host whose server Remove couldn't prove stopped stays listed; say so (E11).
+        return ownedRemoval.then((serverStop) => ({
+          removed: redactRuntimeEnvironment(environment),
+          serverStop
+        }))
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       void retireRemovedRuntimeEnvironment(
@@ -225,6 +232,9 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
+      }
+      if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
+        return wslMoveUndoSpawnFencedResponse(environment, args.method)
       }
       void desktopChatCreationHistory(getUserDataPath()).recordCreate(
         environment.id,

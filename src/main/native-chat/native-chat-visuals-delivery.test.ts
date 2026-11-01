@@ -6,8 +6,8 @@ import {
   NATIVE_CHAT_VISUAL_MAX_BYTES,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../shared/native-chat-visual-directive'
-import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat-visual-shell'
+} from '../../shared/native-chat/native-chat-visual-directive'
+import { NATIVE_CHAT_VISUAL_THEME_TOKENS } from '../../shared/native-chat/native-chat-visual-shell'
 import { ORCAD_NATIVE_CHAT_VISUALS_ARTIFACTS } from '../../shared/orcad-artifacts'
 import {
   createNativeChatVisualsDelivery,
@@ -18,7 +18,7 @@ import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-c
 import { buildClaudeChildProcessEnv } from '../claude/claude-child-process-environment'
 import { createCodexStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { agentSessionRecordFixture } from './agent-session-record-test-fixture'
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-identity'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
 import {
   NATIVE_CHAT_VISUALS_SKILL_NAME,
@@ -136,7 +136,7 @@ describe('preparing a chat for visuals', () => {
       resolveProviderChildEnv(
         await createCodexStructuredLaunchResolver({
           store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-          resolveCommand: () => 'codex',
+          resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
           resolveLaunchArgs: () => [],
           prepareVisuals: async () => (withVisuals ? visuals : null)
         })({

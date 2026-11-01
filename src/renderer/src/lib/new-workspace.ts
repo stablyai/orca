@@ -11,8 +11,6 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
-import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
@@ -46,39 +44,6 @@ export function canUseIssueCommandForLinkedItemProvider(
 // Linked work items without user prompt or issueCommand still need an actionable default task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
 
-export type SetupConfig = {
-  source: 'yaml' | 'local' | 'both'
-  command: string
-  kind: 'setup' | 'default-tabs' | 'setup-and-default-tabs'
-}
-
-function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
-  return (yamlHooks?.defaultTabs ?? [])
-    .map((tab, index) => {
-      const command = tab.command?.trim()
-      if (!command) {
-        return null
-      }
-      const label = tab.title ? ` ${tab.title}` : ''
-      return `# defaultTabs[${index + 1}]${label}\n${command}`
-    })
-    .filter((entry): entry is string => entry !== null)
-    .join('\n\n')
-}
-
-function getSetupConfigKind(
-  hasSetup: boolean,
-  hasDefaultTabCommands: boolean
-): SetupConfig['kind'] {
-  if (hasSetup && hasDefaultTabCommands) {
-    return 'setup-and-default-tabs'
-  }
-  if (hasDefaultTabCommands) {
-    return 'default-tabs'
-  }
-  return 'setup'
-}
-
 /** Prefer artifact_url while retaining issue substitutions for unmigrated orca.yaml/.orca/issue-command templates. */
 export function renderIssueCommandTemplate(
   template: string,
@@ -98,47 +63,6 @@ export function renderIssueCommandTemplate(
 export function getAttachmentLabel(pathValue: string): string {
   const segments = pathValue.split(/[/\\]/)
   return segments.at(-1) || pathValue
-}
-
-export function getSetupConfig(
-  repo:
-    | {
-        hookSettings?: {
-          commandSourcePolicy?: unknown
-          scripts?: { setup?: string }
-        }
-      }
-    | undefined,
-  yamlHooks: OrcaHooks | null
-): SetupConfig | null {
-  const yamlSetup = yamlHooks?.scripts?.setup?.trim()
-  const yamlDefaultTabCommands = getDefaultTabCommandPreview(yamlHooks)
-  const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
-  const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
-    hasLocalScript: Boolean(localSetup)
-  })
-
-  if (sourcePolicy === 'local-only') {
-    return localSetup ? { source: 'local', command: localSetup, kind: 'setup' } : null
-  }
-
-  const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
-  if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
-    return {
-      source: 'both',
-      command: `${yamlCommand}\n\n${localSetup}`,
-      kind: getSetupConfigKind(true, Boolean(yamlDefaultTabCommands))
-    }
-  }
-
-  if (yamlCommand) {
-    return {
-      source: 'yaml',
-      command: yamlCommand,
-      kind: getSetupConfigKind(Boolean(yamlSetup), Boolean(yamlDefaultTabCommands))
-    }
-  }
-  return null
 }
 
 export function getWorkspaceSeedName(args: {

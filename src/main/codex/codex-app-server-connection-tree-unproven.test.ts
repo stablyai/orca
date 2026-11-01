@@ -5,6 +5,7 @@ import type { spawnProcess } from '@orca/process-host'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
+import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import { codexTurnLifecycleRig } from './codex-structured-dispatch-test-support'
 
 const teardown = vi.hoisted(() => {
@@ -64,19 +65,47 @@ describe('Codex process-tree diagnostic after a forced close', () => {
       )
       const original = session.connection
       session.connection = connection
+      const acceptedAt = Date.now()
       const stopping = rig.adapter.cancelTurn({
         sessionId: 'session-1',
         fence: 7,
         turnId,
         stoppedAt: Date.now() - 4_900
       })
-      const timedOut = expect(stopping).rejects.toThrow('exceeded 100ms')
-      await vi.advanceTimersByTimeAsync(100)
-      await timedOut
-      await expect(stopping.then(() => null, providerRequestTimeoutOf)).resolves.toEqual({
-        method: 'turn/interrupt',
-        timeoutMs: 100
+      let settled = false
+      const observed = stopping.then((outcome) => {
+        settled = true
+        return outcome
       })
+      await vi.advanceTimersByTimeAsync(99)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      const outcome = await observed
+      expect(Date.now() - acceptedAt).toBe(100)
+      expect(outcome).toMatchObject({
+        cancelled: false,
+        stop: {
+          pause: 'unconfirmed',
+          interrupt: 'unconfirmed',
+          root: 'unproven',
+          workload: 'unproven'
+        }
+      })
+      const timeouts = outcome.stop?.errors.flatMap((error) =>
+        error instanceof CodexAppServerTimeoutError && 'providerRequestTimeout' in error
+          ? [error.providerRequestTimeout]
+          : []
+      )
+      expect(timeouts).toEqual([
+        { method: 'thread/goal/get', timeoutMs: expect.closeTo(100 / 3, 3) },
+        { method: 'turn/interrupt', timeoutMs: 67 }
+      ])
+      expect(providerRequestTimeoutOf(outcome.stop?.errors[1])).toEqual({
+        method: 'turn/interrupt',
+        timeoutMs: 67
+      })
+      expect(outcome.stop?.errors).toHaveLength(3)
+      expect(outcome.stop?.errors[2]).toEqual(new Error('codex Stop reconciliation unavailable'))
       const replacement = {
         ...session,
         connection: original,

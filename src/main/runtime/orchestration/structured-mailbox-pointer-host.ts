@@ -5,8 +5,8 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSessionFacts
-} from './structured-mailbox-pointer-delivery'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+} from './structured-mailbox-pointer-host-contract'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
@@ -45,7 +45,7 @@ async function readPointerSessionFacts(
     return null
   }
   const host = getStructuredAgentSessionHost()
-  const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
+  const boundary = host?.deps.store.getConversation(sessionId)?.providerContextBoundary
   return {
     submissions: boundary
       ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
@@ -86,12 +86,12 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     currentFence(sessionId) {
       return (
-        getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? null
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ?? null
       )
     },
 
     currentContextClearOperationId(sessionId) {
-      return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+      return getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
         ?.providerContextBoundary?.operationId
     },
 
@@ -113,15 +113,17 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             body: input.body,
             // A person's plain send: every agent takes it the way it takes their own mid-turn message.
             delivery: 'now',
-            keepCurrentOptions: true,
             operationId: input.operationId,
             expectedRuntimeFence: input.expectedRuntimeFence,
             beforeRun: () => {
+              if (input.body.from?.orchestration?.message !== 'mail-notice') {
+                return
+              }
+              if (!input.stillOwed()) {
+                throw new StructuredMailObsoleteError()
+              }
               const work = host.currentWork(input.sessionId)
-              if (
-                input.body.from?.orchestration?.message === 'mail-notice' &&
-                (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working()))
-              ) {
+              if (work?.hasActionablePrompt() || (input.holdWhileWorking && work?.working())) {
                 throw new StructuredMailHeldError()
               }
             }
@@ -130,6 +132,9 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
       } catch (error) {
         if (error instanceof StructuredMailHeldError) {
           return { kind: 'held' }
+        }
+        if (error instanceof StructuredMailObsoleteError) {
+          return { kind: 'obsolete' }
         }
         throw error
       }
@@ -154,3 +159,4 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 }
 
 class StructuredMailHeldError extends Error {}
+class StructuredMailObsoleteError extends Error {}

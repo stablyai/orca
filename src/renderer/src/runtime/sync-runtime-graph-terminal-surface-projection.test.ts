@@ -390,6 +390,7 @@ describe('buildMobileSessionTabSnapshots', () => {
           prompt: 'fix parity',
           updatedAt: 1_700_000_000_000,
           stateStartedAt: 1_699_999_999_000,
+          firstStateStartedAt: 1_699_999_990_000,
           agentType: 'codex',
           paneKey,
           terminalTitle: 'codex [working]',
@@ -406,6 +407,7 @@ describe('buildMobileSessionTabSnapshots', () => {
           state: 'working',
           prompt: 'fix parity',
           agentType: 'codex',
+          firstStateStartedAt: 1_699_999_990_000,
           paneKey
         }
       }
@@ -534,7 +536,7 @@ describe('buildMobileSessionTabSnapshots', () => {
         ...getDefaultSettings('/tmp'),
         theme: 'light',
         terminalUseSeparateLightTheme: true,
-        terminalColorOverrides: {
+        terminalColorOverridesLight: {
           background: '#f8f8f8',
           foreground: '#101010',
           cursor: '#202020'

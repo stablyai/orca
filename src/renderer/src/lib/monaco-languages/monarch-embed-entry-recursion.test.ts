@@ -11,6 +11,7 @@ import {
   tokenizeLines
 } from './monarch-tokenizer-test-harness'
 import { astroMonarchLanguage } from './register-astro'
+import { glimmerTsMonarchLanguage } from './register-glimmer'
 import { svelteMonarchLanguage } from './register-svelte'
 import { vueMonarchLanguage } from './register-vue'
 
@@ -200,5 +201,44 @@ describe('vue embed-entry recursion', () => {
 
     expect(measurement.error).toBeUndefined()
     expect(measurement.maxNestedDepth).toBeGreaterThan(0)
+  })
+})
+
+describe('glimmer embed-entry recursion', () => {
+  const islandLine = (count: number): string =>
+    `const a = 1; ${'<template>a</template>'.repeat(count)}`
+
+  it('stays within the embed budget for a line of template islands', () => {
+    const ramp = [50, 200, 500, 900].filter(
+      (count) => islandLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
+    )
+    expect(ramp.length).toBeGreaterThanOrEqual(3)
+
+    const depths = ramp.map((count) =>
+      measureNestedDepth(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
+        islandLine(count)
+      ])
+    )
+
+    for (const measurement of depths) {
+      expect(measurement.error).toBeUndefined()
+      expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+    }
+  })
+
+  it('re-embeds script and template after over-budget lines', () => {
+    const long = 'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)
+    const embeds = endEmbeddedLanguages(
+      tokenizeLines(createMonarchTokenizer('glimmer-ts', glimmerTsMonarchLanguage), [
+        `const s = "${long}"`,
+        'const b = 1',
+        `<template>${long}x`,
+        '  {{b}}',
+        '</template>',
+        'const c = 1'
+      ])
+    )
+
+    expect(embeds).toEqual([null, 'typescript', null, 'handlebars', null, 'typescript'])
   })
 })

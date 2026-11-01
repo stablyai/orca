@@ -4,7 +4,7 @@ import type { TerminalPaneLayoutNode } from '../../../../../shared/terminal-tab-
 import type { RetainedAgentEntry } from './agent-status-contract'
 import '../../../../../shared/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
-import { getTabIdFromPaneKey } from '../agent-status-pane-key-tab-binding'
+import { getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 
 const MAX_RETAINED_AGENTS = 500
 

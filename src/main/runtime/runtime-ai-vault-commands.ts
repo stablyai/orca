@@ -8,6 +8,11 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { listAiVaultSessions } from '../ai-vault/cached-session-list'
+import { deleteAiVaultSessionForRemoteClient } from '../ai-vault/host-session-delete'
+import type {
+  AiVaultDeleteSessionArgs,
+  AiVaultDeleteSessionResult
+} from '../../shared/ai-vault-session-deletion'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 
 export class RuntimeAiVaultCommands {
@@ -26,6 +31,12 @@ export class RuntimeAiVaultCommands {
     signal?: AbortSignal
   ): Promise<AiVaultSessionTitlesResult> {
     return resolveLocalAiVaultSessionTitles(requests, signal)
+  }
+
+  delete(
+    args: Omit<AiVaultDeleteSessionArgs, 'executionHostId'>
+  ): Promise<AiVaultDeleteSessionResult> {
+    return deleteAiVaultSessionForRemoteClient(args)
   }
 
   prepare(args: AiVaultPrepareSessionResumeArgs): Promise<AiVaultPrepareSessionResumeResult> {

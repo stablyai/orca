@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'

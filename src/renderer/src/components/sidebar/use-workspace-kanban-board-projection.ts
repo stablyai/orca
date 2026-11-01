@@ -10,7 +10,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { useRepoMap } from '@/store/selectors'
@@ -22,7 +22,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
   open: boolean
   repoMap: ReturnType<typeof useRepoMap>
   sortBy: ReturnType<typeof useAppStore.getState>['sortBy']
-  workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
 }) {
   const visibleWorktreeIds = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees: args.allWorktrees,
@@ -42,15 +42,22 @@ export function useWorkspaceKanbanBoardProjection(args: {
     () => buildUnambiguousWorktreeIdIndex(args.allWorktrees),
     [args.allWorktrees]
   )
+  // Drops carry each card's host identity, so same-id copies on two hosts stay separate cards.
+  const worktreeByKey = useMemo(
+    () =>
+      new Map(args.allWorktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])),
+    [args.allWorktrees]
+  )
   const boardWorktrees = useMemo(
     () => args.workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
     [args.workspaceStatuses, worktreesByStatus]
   )
+  // Lane members are host identities, as in the sidebar's drag groups.
   const boardDragGroups = useMemo<WorktreeDragGroup[]>(
     () =>
       args.workspaceStatuses.map((status) => ({
         key: status.id,
-        worktreeIds: (worktreesByStatus.get(status.id) ?? []).map((worktree) => worktree.id)
+        worktreeIds: (worktreesByStatus.get(status.id) ?? []).map(getWorktreeHostIdentity)
       })),
     [args.workspaceStatuses, worktreesByStatus]
   )
@@ -101,6 +108,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
     renderedBoardWorktrees,
     search,
     worktreeById,
+    worktreeByKey,
     worktreesByStatus
   }
 }

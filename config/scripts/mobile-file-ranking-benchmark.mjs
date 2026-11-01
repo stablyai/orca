@@ -14,7 +14,7 @@ if (!baseline) {
     'Usage: node config/scripts/mobile-file-ranking-benchmark.mjs <baseline-ref|--autocomplete-stdin>'
   )
 }
-// git show <ref>:mobile/src/session/mobile-native-chat-autocomplete.ts | node config/scripts/mobile-file-ranking-benchmark.mjs --autocomplete-stdin
+// git show <ref>:mobile/src/session/native-chat/composer/mobile-native-chat-autocomplete.ts | node config/scripts/mobile-file-ranking-benchmark.mjs --autocomplete-stdin
 const autocompleteSource = baseline === '--autocomplete-stdin' ? readFileSync(0, 'utf8') : null
 const root = path.resolve(import.meta.dirname, '../..')
 function git(args) {
@@ -116,7 +116,7 @@ const results = []
 let differentialCases = 0
 for (const [file, name] of [
   ['src/main/runtime/files/search/mobile-path-search.ts', 'rankRuntimeMobileFilePaths'],
-  ['mobile/src/session/mobile-native-chat-autocomplete.ts', 'rankSuggestions']
+  ['mobile/src/session/native-chat/composer/mobile-native-chat-autocomplete.ts', 'rankSuggestions']
 ]) {
   if (autocompleteSource !== null && name === 'rankRuntimeMobileFilePaths') {
     continue

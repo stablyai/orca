@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
+
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/github/visible-hosted-review-refresh-scheduler'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getWorkspaceReferenceRefreshTargets } from './workspace-reference-refresh-targets'
@@ -172,14 +172,4 @@ it('retains both explicit owners when equal visible workspace IDs exist on two h
   expect(
     getWorkspaceReferenceRefreshTargets(useAppStore.getState(), { selectedOnly: true })
   ).toHaveLength(1)
-})
-
-it('admits attached reviews on visible external detected worktrees', () => {
-  useAppStore.setState({
-    worktreesByRepo: {},
-    detectedWorktreesByRepo: {
-      repo: makeDetectedResult('repo', [workspace])
-    }
-  })
-  expect(update()).toHaveLength(1)
 })

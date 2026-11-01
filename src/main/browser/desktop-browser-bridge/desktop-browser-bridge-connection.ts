@@ -4,7 +4,7 @@ import {
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/desktop-browser-bridge-protocol'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime-client'
+import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 

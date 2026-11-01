@@ -21,7 +21,8 @@ import {
 } from './structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from './structured-agent-session-acquire-aborts'
 import { recordAgentSessionProviderHandle } from '../../runtime/agent-session/ownership/agent-session-provider-handle-transition'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { settleUnheldStructuredAgentSessionTurns } from './structured-agent-session-unheld-turns'
 import {
   applyStructuredRewindRecovery,
   readStructuredRewindRecovery,
@@ -38,6 +39,8 @@ export type StructuredAgentSessionProviderStartedContext = {
     startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'ready' | 'onClock' | 'readiness'>
     acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   }
+  /** Commits the child's buffered lifecycle events. */
+  flushLifecycle?: (sessionId: string) => Promise<unknown>
   /** Release startup’s delivery barrier and drain all currently handable sends. */
   wakeDelivery: (sessionId: string) => Promise<void>
   stopStartingChild: (sessionId: string, child: StructuredAgentSessionProviderChildIdentity) => void
@@ -56,6 +59,8 @@ export async function settleStructuredAgentSessionProviderStarted(
 ): Promise<void> {
   // Read provider state outside serialization so sends can still be accepted.
   const rewind = await readRewindAtStart(context, event, signal)
+  // Restored history is committed and the child's own events drained before its turns are judged.
+  await context.flushLifecycle?.(event.sessionId)
   // Follow attach publication so its proven lease has committed.
   await context.serialize(event.sessionId, async () => {
     signal?.throwIfAborted()
@@ -84,6 +89,20 @@ export async function settleStructuredAgentSessionProviderStarted(
     ) {
       return null
     }
+    await settleUnheldStructuredAgentSessionTurns(
+      session.journal,
+      event.sessionId,
+      child.fence,
+      event.acquisitionGeneration,
+      context.deps.adapter.liveTurnId?.(event.sessionId)
+    ).catch((error: unknown) =>
+      context.deps.logger.warn('settling turns the agent is not running failed', {
+        scope: 'unheld-turns',
+        sessionId: event.sessionId,
+        error
+      })
+    )
+    const sourceChild = session.child
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
     noteStructuredAgentSessionRuntimePermission(session.child, event.reportedOptions, true)
     context.publishStatus?.(event.sessionId)
@@ -94,9 +113,22 @@ export async function settleStructuredAgentSessionProviderStarted(
       event.reportedOptions
     )
     void context.wakeDelivery(event.sessionId)
-    noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
+    noteStructuredAgentSessionProviderStarted(
+      context.deps,
+      event.sessionId,
+      () =>
+        context.sessions.get(event.sessionId)?.child === sourceChild &&
+        sourceChild?.catalogSource?.() !== false
+    )
     if (event.catalogListing) {
-      saveStructuredAgentSessionListing(context, event.sessionId, event.catalogListing)
+      saveStructuredAgentSessionListing(
+        context,
+        event.sessionId,
+        event.catalogListing,
+        () =>
+          context.sessions.get(event.sessionId)?.child === sourceChild &&
+          sourceChild?.catalogSource?.() !== false
+      )
     }
     context.publishStatus?.(event.sessionId)
     return undefined
@@ -196,9 +228,13 @@ async function recordStartedHandle(
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
-    await store.transitionHandoff(event.sessionId, (record) =>
+    const committed = await store.transitionHandoff(event.sessionId, (record) =>
       recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
     )
+    // Inherit only a committed new context; a resumed CLI keeps its own later title.
+    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
+      context.deps.nameProviderConversation?.(committed)
+    }
     return true
   } catch (error) {
     logger.warn('recording the handle a started provider answered with failed', {
@@ -213,11 +249,12 @@ async function recordStartedHandle(
 /** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */
 export function noteStructuredAgentSessionProviderStarted(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
-  sessionId: string
+  sessionId: string,
+  source?: () => boolean
 ): void {
   const record = deps.store.getRecord(sessionId)
   if (record) {
-    deps.modelCatalog?.providerStarted(record)
+    deps.modelCatalog?.providerStarted(record, source)
   }
 }
 

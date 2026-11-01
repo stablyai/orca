@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
+import { ERRNO_CODE_PATTERN } from './errno-code'
 import {
   DAEMON_LIFECYCLE_SESSION_BUCKETS,
   DAEMON_LIFECYCLE_TRANSITIONS,
@@ -221,11 +222,11 @@ export const profileStateAuthoritySelectedSchema = z
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
-// Callers truncate config-shape errors before track; max(200) rejects overlength strings rather than truncating.
+// Why (#21492): field name kept for dashboards, but it holds an errno code or 'unknown', never the raw message (home-dir paths).
 export const agentHookInstallFailedSchema = z
   .object({
     agent: hookInstallAgentSchema,
-    error_message: z.string().max(200)
+    error_message: z.union([z.literal('unknown'), z.string().regex(ERRNO_CODE_PATTERN)])
   })
   .strict()
 

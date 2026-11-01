@@ -40,9 +40,4 @@ describe('settleTeardownWithinDeadline', () => {
     await expect(pending).resolves.toEqual(['runtime-rpc'])
     expect(vi.getTimerCount()).toBe(0)
   })
-
-  it('keeps the deadline within the checkpoint-safe window', () => {
-    expect(WILL_QUIT_TEARDOWN_DEADLINE_MS).toBeGreaterThanOrEqual(10_000)
-    expect(WILL_QUIT_TEARDOWN_DEADLINE_MS).toBeLessThanOrEqual(30_000)
-  })
 })

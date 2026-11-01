@@ -1,11 +1,8 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
 import { writeOrchestrationPointerWithSettlement } from '../mailbox-pointer-pty-write'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
-import type {
-  RuntimeLeafRecord,
-  RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -18,16 +15,13 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { getLatestLeafTitle } from '../../runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import type { OrchestrationMailboxLeaf } from '../mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../mailbox-pointer-submit'
-import { ptyMailboxLeaf } from '../pty-mailbox-leaf'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
-  protected abstract headlessMailboxLaneAdmitsPty(pty: RuntimePtyWorktreeRecord): boolean
 
   protected writeOrchestrationPointerPty(
     ptyId: string,
@@ -40,39 +34,13 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     })
   }
 
-  // A parked leaf may retain a live PTY outside the graph; rebuild its submit target from the PTY record.
+  /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
   protected resolveOrchestrationPointerSubmitTarget(
-    stagedLeaf: OrchestrationMailboxLeaf,
     ptyId: string
   ): OrchestrationMailboxPointerSubmitTarget | null {
-    const leafKey = this.getLeafKey(stagedLeaf.tabId, stagedLeaf.leafId)
-    const currentLeaf = this.leaves.get(leafKey)
-    const parked = currentLeaf === undefined
-    const terminalHandle = parked
-      ? this.handleByPtyId.get(ptyId)
-      : this.handleByLeafKey.get(leafKey)
-    if (!terminalHandle) {
-      return null
-    }
-    const pty = this.ptysById.get(ptyId)
-    const pane = pty?.connected ? this.paneOfPty(pty) : null
-    const leaf = parked
-      ? pty?.connected &&
-        pane?.tabId === stagedLeaf.tabId &&
-        isTerminalLeafId(stagedLeaf.leafId) &&
-        pane.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId) &&
-        // Re-checked at Enter: a second claimant may have appeared since the pointer was staged.
-        this.headlessMailboxLaneAdmitsPty(pty)
-        ? { ...stagedLeaf, ...ptyMailboxLeaf(stagedLeaf, pty) }
-        : null
-      : currentLeaf.ptyId === ptyId
-        ? currentLeaf
-        : null
-    if (!leaf) {
-      return null
-    }
-    const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
-    return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
+    return processIncarnation ? { terminal, processIncarnation } : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {

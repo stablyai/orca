@@ -7,10 +7,7 @@ const { appGetPathMock } = vi.hoisted(() => ({ appGetPathMock: vi.fn() }))
 
 vi.mock('electron', () => ({ app: { getPath: appGetPathMock } }))
 
-import {
-  applyPendingBrowserCookieImports,
-  supportsPendingBrowserCookieImportReplay
-} from './browser-session-cookie-staging'
+import { applyPendingBrowserCookieImports } from './browser-session-cookie-staging'
 import { loadBrowserSessionMeta, persistBrowserSessionMeta } from './browser-session-meta-store'
 
 const defaultPartition = 'persist:orca-browser-default'
@@ -26,14 +23,6 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(userData, { recursive: true, force: true })
-})
-
-describe('supportsPendingBrowserCookieImportReplay', () => {
-  it('refuses a client-hosted route partition and allows profile partitions', () => {
-    expect(supportsPendingBrowserCookieImportReplay(routePartition)).toBe(false)
-    expect(supportsPendingBrowserCookieImportReplay(defaultPartition)).toBe(true)
-    expect(supportsPendingBrowserCookieImportReplay('persist:orca-browser-profile-a')).toBe(true)
-  })
 })
 
 describe('applyPendingBrowserCookieImports', () => {

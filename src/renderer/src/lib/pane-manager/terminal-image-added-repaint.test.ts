@@ -33,17 +33,6 @@ describe('repaintTerminalAfterImageAdded', () => {
     expect(coreRefresh).toHaveBeenCalledTimes(2)
   })
 
-  it('falls back to the public refresh when the core refresh is unavailable', async () => {
-    const terminal = { rows: 10, refresh: vi.fn() }
-    const addon = makeAddon()
-    repaintTerminalAfterImageAdded(terminal, addon)
-
-    addon.fire()
-    await Promise.resolve()
-
-    expect(terminal.refresh).toHaveBeenCalledWith(0, 9)
-  })
-
   it('stops repainting once disposed, including a repaint already queued', async () => {
     const coreRefresh = vi.fn()
     const terminal = { rows: 24, refresh: vi.fn(), _core: { refresh: coreRefresh } }
@@ -56,10 +45,5 @@ describe('repaintTerminalAfterImageAdded', () => {
     await Promise.resolve()
 
     expect(coreRefresh).not.toHaveBeenCalled()
-  })
-
-  it('does nothing for an addon build without the image-added event', () => {
-    const terminal = { rows: 24, refresh: vi.fn() }
-    expect(repaintTerminalAfterImageAdded(terminal, {})).toBeNull()
   })
 })

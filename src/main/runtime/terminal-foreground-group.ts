@@ -2,7 +2,13 @@
 
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
-import { parseShellForegroundRows, type ProcessTableRow } from '../../shared/process-table-snapshot'
+import { runPsInProcess } from '../../shared/libproc-process-table'
+import {
+  parseShellForegroundRows,
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../shared/process-table-snapshot'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -14,12 +20,20 @@ const TTY_CACHE_LIMIT = 256
 
 async function ps(args: readonly string[]): Promise<string | null> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args,
-      timeoutMs: PS_TIMEOUT_MS,
-      maxOutputBytes: PS_MAX_OUTPUT_BYTES
-    })
+    const env = psLocaleEnvironment()
+    const result =
+      (await runPsInProcess(args, {
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      })) ??
+      (await runProcess({
+        program: 'ps',
+        args,
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      }))
     return result.code === 0 ? result.stdout : null
   } catch {
     return null
@@ -80,7 +94,12 @@ export function judgeTerminalForeground(
     return 'unknown'
   }
   const front = rows.filter((row) => row.pgid === foregroundGroup)
-  if (front.length === 0) {
+  // An unrecovered root shell (`su`) prints `(bash)`; typing into it could run the text. Our own exiting `(git)` is no risk.
+  const unreadableShell = (row: ProcessTableRow): boolean => {
+    const name = unreadableArgvName(row.command)
+    return name !== null && isShellProcess(name.replace(/^-/, ''))
+  }
+  if (front.length === 0 || front.some(unreadableShell)) {
     return 'unknown'
   }
   return front.some(

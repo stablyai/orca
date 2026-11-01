@@ -5,9 +5,9 @@ import {
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../shared/agent-session-account-home'
-import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { structuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-metadata'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 
@@ -27,7 +27,7 @@ export function conversationFamily(agent: string): string {
 }
 
 export function recordConversationKey(
-  record: AgentSessionRecord,
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome'>,
   link: AgentSessionProviderHandleLink
 ): ConversationKey | null {
   const history = structuredAgentRuntimeMetadata(record.provider)?.sessionHistory

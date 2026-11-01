@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type TextStyle
 } from 'react-native'
-import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
 import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
@@ -21,6 +21,9 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { MarkdownText } from './mobile-markdown-text'
 import { codeFenceClosed, plainText } from './mobile-markdown-tree'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { translate } from '../i18n/mobile-i18n'
+import { pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -32,6 +35,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
   listText: StyleProp<TextStyle>
+  listMarker: StyleProp<TextStyle>
   /** Interactive children own their touches and must forward the row action. */
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
@@ -53,15 +57,12 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
     )
   }
   return (
-    <View key={key} style={styles.codeBlock}>
-      {node.lang ? <NativeText style={styles.codeLanguage}>{node.lang}</NativeText> : null}
-      <MarkdownText
-        selectable
-        style={[styles.codeText, scaledMarkdownText(styles.codeText, ctx.textScale)]}
-      >
-        {node.value}
-      </MarkdownText>
-    </View>
+    <MobileMarkdownCodeBlock
+      key={key}
+      code={node.value}
+      language={node.lang ?? undefined}
+      textScale={ctx.textScale}
+    />
   )
 }
 
@@ -71,11 +72,11 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
+          <NativeText style={ctx.listMarker}>
             {item.checked == null
               ? node.ordered
                 ? `${(node.start ?? 1) + itemIndex}.`
-                : '-'
+                : '•'
               : item.checked
                 ? '[x]'
                 : '[ ]'}
@@ -93,12 +94,18 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
   const rows = node.children.map((row) => row.children)
   // Rows lay out independently, so a shared width per column is what lines them up.
   const columnWidths = mobileMarkdownTableColumnWidths(
-    rows.map((cells) => cells.map((cell) => plainText(cell)))
+    rows.map((cells) => cells.map((cell) => plainText(cell))),
+    ctx.textScale
   )
   // A table keeps its own dark surface, so its spans keep the default palette.
   const cellCtx = { ...ctx, tone: MARKDOWN_TONES.default }
   return (
-    <ScrollView key={key} horizontal showsHorizontalScrollIndicator={false}>
+    <ScrollView
+      key={key}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.tableScroll}
+    >
       <View style={styles.table}>
         {rows.map((cells, rowIndex) => (
           <View key={rowIndex} style={styles.tableRow}>
@@ -110,7 +117,7 @@ function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): React
                   styles.tableCell,
                   rowIndex === 0 ? styles.tableHeader : null,
                   scaledMarkdownText(styles.tableCell, ctx.textScale),
-                  { width: width * ctx.textScale, textAlign: node.align?.[cellIndex] ?? 'left' }
+                  { width, textAlign: node.align?.[cellIndex] ?? 'left' }
                 ]}
               >
                 {renderInline(cells[cellIndex]?.children ?? [], cellCtx)}
@@ -159,11 +166,13 @@ function renderBlock(
         return (
           <Pressable
             key={key}
-            style={styles.imageFrame}
+            style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
             onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
             onLongPress={ctx.rowLongPress}
           >
-            <NativeText style={styles.link}>{only.alt || 'Open image'}</NativeText>
+            <NativeText style={styles.link}>
+              {only.alt || translate('components.markdownBlocks.openImage', 'Open image')}
+            </NativeText>
             <NativeText style={styles.imageCaption} numberOfLines={1}>
               {only.url}
             </NativeText>
@@ -223,9 +232,7 @@ function renderBlock(
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={[styles.listMarker, ctx.tone.secondary]}>
-            {`[${node.label ?? node.identifier}]`}
-          </NativeText>
+          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>

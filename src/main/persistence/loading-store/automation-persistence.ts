@@ -1,3 +1,4 @@
+import type { Repo } from '../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
@@ -40,6 +41,7 @@ import {
 } from '../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  disableAutomations as disableAutomationsOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../scheduling-automations/automation-schedule-operations'
 import {
@@ -144,7 +146,7 @@ export class AutomationPersistence {
 
   createAutomation(
     input: AutomationCreateInput,
-    options?: { destination?: AutomationDestination }
+    options?: { destination?: AutomationDestination; resolvedRepo?: Repo }
   ): Automation {
     return createAutomationOperation(getAutomationDefinitionOperations(this), input, options)
   }
@@ -152,7 +154,11 @@ export class AutomationPersistence {
   updateAutomation(
     id: string,
     updates: AutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    options?: {
+      expectedOwner?: AutomationOwnerPrecondition
+      destination?: AutomationDestination
+      resolvedRepo?: Repo
+    }
   ): Automation {
     return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }
@@ -219,6 +225,17 @@ export class AutomationPersistence {
       },
       id,
       now
+    )
+  }
+
+  disableAutomations(ids: ReadonlySet<string>): number {
+    return disableAutomationsOperation(
+      this[automationPersistenceContext].runtime.state,
+      () => {
+        markAutomationDefinitionDomain(this)
+        this[automationPersistenceContext].flushBarriers.flush()
+      },
+      ids
     )
   }
 

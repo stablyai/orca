@@ -1,4 +1,4 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   TERMINAL_VIEWPORT_MIN_ROWS,
   clampTerminalViewport
@@ -14,7 +14,7 @@ export const REMOTE_PROGRAM_REDRAW_RESTORE_MS = 250
 // Why: hosts that predate desktop fit answers never confirm; put the row back anyway.
 export const REMOTE_PROGRAM_REDRAW_ACK_TIMEOUT_MS = 2_000
 
-/** When no host image exists, nudge idle differential TUIs to repaint instead of retaining a stale frame until manual resize (#26887). */
+/** When no host image exists, nudge idle differential TUIs to repaint instead of retaining a stale frame or the loss banner until manual resize (#26887). */
 export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
   session.remoteProgramRedrawRestore = null
 
@@ -29,7 +29,6 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     if (
       session.disposed ||
       !ptyId ||
-      !isRemoteRuntimePtyId(ptyId) ||
       session.remoteProgramRedrawRestore !== null ||
       // Recovery replays only the last deferred grid; claiming mid-recovery would skip the short size and its repaint.
       !session.transport.isConnected() ||
@@ -88,6 +87,10 @@ export function bindRemoteProgramRedraw(session: ConnectPanePtySession): void {
     if (!session.transport.resize(cols, nudgeRows, { claim: true })) {
       finish()
       return
+    }
+    if (!isRemoteRuntimePtyId(ptyId)) {
+      // Local main never confirms a desktop fit; IPC order alone keeps the two sizes distinct.
+      scheduleRestore()
     }
     recordTerminalFreezeBreadcrumb('remote-program-redraw', {
       id: redactPtyIdForDiagnostics(ptyId),

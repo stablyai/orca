@@ -1,6 +1,10 @@
+import {
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput
+} from './structured-agent-session-handing-over'
 import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -8,7 +12,7 @@ import {
   type StructuredAgentSessionWatchedExit
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
   appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
@@ -57,6 +61,7 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
       .some(
         (send) =>
           heldSends?.has(send.clientMessageId) &&
+          !finalizingStructuredAgentSessionInput(journal, send.clientMessageId) &&
           send.fence === exit?.ownerFence &&
           !isQueuedAgentJournalSubmission(send) &&
           (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
@@ -121,9 +126,11 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
     ? submissions.some(
         (submission) =>
           // Unhanded queued messages are not work in progress.
-          (submission.dispatchState === 'pending' &&
+          !continuingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          !finalizingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          ((submission.dispatchState === 'pending' &&
             !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
-          (submission.dispatchState === 'unknown' && submission.recovered !== true)
+            (submission.dispatchState === 'unknown' && submission.recovered !== true))
       )
     : (journal.pendingSubmissions?.().length ?? 0) > 0
 }

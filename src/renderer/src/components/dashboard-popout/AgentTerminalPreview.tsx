@@ -14,7 +14,7 @@ import {
 import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
+import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { createPreviewGridClaim } from './preview-grid-claim'
@@ -41,12 +41,14 @@ function clamp(value: number, min: number, max: number): number {
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
-  className
+  className,
+  onRequestClose
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
   className?: string
+  onRequestClose?: () => void
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -57,15 +59,13 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
+  const onRequestCloseRef = useRef(onRequestClose)
   const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
     }
     const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
-    const theme = composeActiveTerminalTheme(
-      appearance.theme ?? getBuiltinTheme(appearance.themeName),
-      settings
-    )
+    const theme = composeActiveTerminalTheme(appearance.theme, settings)
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
   // Settings arrive as cloned snapshots; compare theme values before reconnecting.
@@ -80,7 +80,8 @@ export function AgentTerminalPreview({
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
-  }, [settings, macOptionAsAlt, terminalInput])
+    onRequestCloseRef.current = onRequestClose
+  }, [settings, macOptionAsAlt, terminalInput, onRequestClose])
 
   // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
@@ -176,7 +177,8 @@ export function AgentTerminalPreview({
           answersQueries: false,
           getSettings: () => settingsRef.current,
           getMacOptionAsAlt: () => macOptionAsAltRef.current,
-          getTerminalInput: () => terminalInputRef.current
+          getTerminalInput: () => terminalInputRef.current,
+          requestClose: () => onRequestCloseRef.current?.()
         })
         if (!standalone) {
           return
@@ -311,6 +313,7 @@ export function AgentTerminalPreview({
   return (
     // Fix the box to the viewport so snapshot geometry cannot resize the dialog; fit/clip the true PTY frame at its cursor end.
     <div
+      data-agent-terminal-preview
       className={cn(
         'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
         className

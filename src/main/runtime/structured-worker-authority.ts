@@ -1,7 +1,7 @@
 /** Rehydrate worker identity from durable rows after restart; records, tab index and orchestration state decide custody.
  * Mail reaches agents at rest and starts them, so routing ignores process liveness. Resolve clear successors for every worker-level operation. */
 
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../shared/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
@@ -19,7 +19,6 @@ import {
   structuredSessionTabRetired,
   structuredWorkerAddressable
 } from './structured-worker-custody'
-import { structuredSessionNeverStarted } from './agent-session-record-founding'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
@@ -46,9 +45,11 @@ export type StructuredWorkerHold =
       refusal: OrchestrationError
     }
 
-export function readStructuredAgentSessionRecord(sessionId: string): AgentSessionRecord | null {
+export function readStructuredAgentSessionRecord(
+  sessionId: string
+): AgentSessionConversationView | null {
   try {
-    return getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId) ?? null
+    return getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId) ?? null
   } catch {
     return null
   }
@@ -216,7 +217,7 @@ export function structuredSessionCloseSettled(sessionId: string): boolean {
   return (
     status === 'exited' ||
     (status === 'unverifiable' &&
-      readStructuredAgentSessionRecord(sessionId)?.lease.claimStatus === 'released')
+      readStructuredAgentSessionRecord(sessionId)?.ownerObservation.claimStatus === 'released')
   )
 }
 
@@ -247,19 +248,19 @@ export function observeStructuredSession(sessionId: string): StructuredWorkerObs
       reason: 'The structured agent-session host is not installed in this runtime generation.'
     }
   }
-  const record = host.deps.store.getRecord(sessionId)
+  const record = host.deps.store.getConversation(sessionId)
   if (!record) {
     return { status: 'unverifiable', reason: 'No durable record backs this structured session.' }
   }
-  if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
+  if (record.ownerObservation.claimStatus === 'released' && record.ownerObservation.deathEvidence) {
     return { status: 'exited' }
   }
-  if (structuredSessionNeverStarted(record) && structuredSessionTabRetired(host, sessionId)) {
+  if (record.neverStarted && structuredSessionTabRetired(host, sessionId)) {
     // A never-reserved session has no death evidence; with its tab retired nothing can start it.
     // hasSession only means an open conversation, which any history read creates.
     return { status: 'exited' }
   }
-  if (host.hasSession(sessionId) && record.lease.claimStatus === 'live') {
+  if (host.hasSession(sessionId) && record.ownerObservation.claimStatus === 'live') {
     return { status: 'live' }
   }
   return {

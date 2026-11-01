@@ -7,6 +7,8 @@ import {
   type GitHubApiRepository
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
 
 export async function updateIssue(
   repoPath: string,
@@ -33,11 +35,11 @@ export async function updateIssue(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
 
   if (updates.state) {
     await acquire()
@@ -56,11 +58,9 @@ export async function updateIssue(
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
+      // Why: gh exits 0 when the issue is already in the target state, so any failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Repeated state transitions are idempotent.
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGhError(stderr).message)
-      }
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -75,14 +75,14 @@ export async function updateIssue(
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
+          '--input',
+          '-'
         ],
-        ghOptions
+        { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -118,14 +118,14 @@ export async function updateIssue(
       await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
   return { ok: true }
 }

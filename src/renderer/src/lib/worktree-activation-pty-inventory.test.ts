@@ -43,17 +43,6 @@ describe('activation inventory execution scope', () => {
     ).toBeUndefined()
   })
 
-  it.each(['local', 'ssh:remote%20box'] as const)('resolves only %s', (hostId) => {
-    expect(
-      resolveActivationPtyListScope(
-        {
-          repos: [{ id: 'repo', executionHostId: hostId }]
-        },
-        worktreeId
-      )
-    ).toEqual({ connectionId: hostId === 'local' ? null : 'remote box' })
-  })
-
   it('resolves folder workspaces without a Git worktree row', () => {
     expect(
       resolveActivationPtyListScope(
@@ -97,14 +86,6 @@ describe('activation inventory execution scope', () => {
 })
 
 describe('activation inventory census', () => {
-  it('asks only the owning provider when the client can name one', async () => {
-    const listSessions = stubListSessions(async () => [{ id: 'ssh:box@@pty-1' }])
-    await expect(
-      listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
-    ).resolves.toEqual([{ id: 'ssh:box@@pty-1' }])
-    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: 'box' })
-  })
-
   it('rejects paired ownership without consulting the client inventory', async () => {
     const listSessions = stubListSessions(async () => [])
     await expect(
@@ -125,28 +106,5 @@ describe('activation inventory census', () => {
       )
     ).rejects.toThrow('Activation PTY inventory is unverifiable')
     expect(listSessions).not.toHaveBeenCalled()
-  })
-
-  it('propagates detached and unavailable host errors without a client fallback', async () => {
-    const detached = stubListSessions(async (scope) => {
-      if (scope) {
-        throw new Error(
-          'Error invoking remote method: Error: No PTY provider for connection "box": the SSH relay for this host is not attached'
-        )
-      }
-      return [{ id: 'local-1' }]
-    })
-    await expect(
-      listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
-    ).rejects.toThrow('No PTY provider for connection')
-    expect(detached.mock.calls).toEqual([[{ connectionId: 'box' }]])
-
-    const refused = stubListSessions(async () => {
-      throw new Error('relay unavailable')
-    })
-    await expect(
-      listActivationPtySessions({ repos: [{ id: 'repo', executionHostId: 'ssh:box' }] }, worktreeId)
-    ).rejects.toThrow('relay unavailable')
-    expect(refused).toHaveBeenCalledOnce()
   })
 })

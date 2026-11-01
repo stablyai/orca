@@ -1,4 +1,6 @@
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { Check, FileCheck, FileX, type LucideIcon } from 'lucide-react'
+import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
 import { translate } from '@/i18n/i18n'
 
 /** Localized short label for a merge-conflict kind, e.g. `both_modified` → "both modified". */
@@ -20,5 +22,25 @@ export function getLocalizedConflictKindLabel(
       return translate('auto.components.right.sidebar.SourceControl.c03d7c952f', 'added by them')
     case 'both_deleted':
       return translate('auto.components.right.sidebar.SourceControl.5b176fa431', 'both deleted')
+  }
+}
+
+export const CONFLICT_RESOLUTION_ICONS: Record<ConflictResolution, LucideIcon> = {
+  mark_resolved: Check,
+  keep_file: FileCheck,
+  keep_deletion: FileX
+}
+
+export function getLocalizedConflictResolutionLabel(resolution: ConflictResolution): string {
+  switch (resolution) {
+    case 'mark_resolved':
+      return translate(
+        'auto.components.right.sidebar.SourceControl.markResolved',
+        'Mark as resolved'
+      )
+    case 'keep_file':
+      return translate('auto.components.right.sidebar.SourceControl.keepFile', 'Keep file')
+    case 'keep_deletion':
+      return translate('auto.components.right.sidebar.SourceControl.keepDeletion', 'Keep deletion')
   }
 }

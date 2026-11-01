@@ -1,12 +1,14 @@
 import { foldOmpTranscriptTitle, type OmpTranscriptTitle } from './session-scanner-omp-title'
+import { isOmpWrittenRecord } from './session-scanner-omp-written-record'
 import {
   remoteSessionContentLines,
   type RemoteSessionContent
 } from './remote-session-content-lines'
 import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { rovoTranscriptPathForMetadata } from '../../shared/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { withOmpSubagentTranscriptCount } from './session-scanner-omp-subagent-transcripts'
 import type {
@@ -83,7 +85,7 @@ export async function parseRovoSessionFile(
     extractString(metadata.updated_at) ?? extractString(metadata.updatedAt)
   )
 
-  const contextPath = join(dirname(file.path), 'session_context.json')
+  const contextPath = rovoTranscriptPathForMetadata(file.path)
   const context = await readJsonObjectIfExists(contextPath)
   if (context) {
     consumeRovoSessionContext(accumulator, context)
@@ -221,12 +223,16 @@ function consumeMessageGraphRecordLine(state: MessageGraphParseState, line: stri
   if (!record) {
     return
   }
+  if (accumulator.agent === 'pi' && isOmpWrittenRecord(record)) {
+    accumulator.agent = 'omp'
+    accumulator.fallbackTitle = accumulator.title
+    accumulator.title = null
+  }
   updateTimeline(accumulator, extractString(record.timestamp))
-  if (accumulator.agent === 'omp') {
-    state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
-    if (state.ompTitle) {
-      accumulator.title = state.ompTitle.title
-    }
+  // Fold before the writer is known: an OMP title can precede the record that proves OMP wrote it.
+  state.ompTitle = foldOmpTranscriptTitle(state.ompTitle, record)
+  if (accumulator.agent === 'omp' && state.ompTitle) {
+    accumulator.title = state.ompTitle.title
   }
   if (record.type === 'session') {
     const sessionId = extractString(record.id)
@@ -277,8 +283,7 @@ export function createMessageGraphSessionResumeState(
     }),
     ompTitle: null
   })
-  // Only OMP has this task-artifact layout; avoid directory reads for the other graph agents.
-  return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
+  return withOmpSubagentTranscriptCount(state, file.path)
 }
 
 function createMessageGraphResumeState(state: MessageGraphParseState): ResumableSessionParseState {

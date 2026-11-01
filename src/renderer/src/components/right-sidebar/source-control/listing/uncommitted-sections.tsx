@@ -3,13 +3,14 @@ import { Minus, Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control-discard-all-sequence'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import { SourceControlSectionFileList } from './section-file-list'
@@ -19,7 +20,7 @@ import {
   type SourceControlDisplaySectionId,
   type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
-} from './section-order'
+} from '../../../../../../shared/source-control-section-order'
 import type {
   RenderableSourceControlNode,
   RenderableSubmoduleListItem
@@ -83,6 +84,7 @@ export function SourceControlUncommittedSections(props: {
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
+  handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
@@ -200,6 +202,7 @@ export function SourceControlUncommittedSections(props: {
                 activeConnectionId={props.activeConnectionId}
                 handleOpenDiff={props.handleOpenDiff}
                 handleStage={props.handleStage}
+                handleResolveConflict={props.handleResolveConflict}
                 handleUnstage={props.handleUnstage}
                 requestDiscardEntry={props.requestDiscardEntry}
                 diffCommentCountByPath={props.diffCommentCountByPath}

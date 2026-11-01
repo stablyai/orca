@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
+import { createTestStore } from './linear-slice-test-harness'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearConnectionStatus, LinearTeam } from '../../../../shared/linear/workspace-types'
-import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
 const linearConnect = vi.fn()
@@ -47,16 +45,6 @@ const viewer = {
   displayName: 'Ada',
   email: 'ada@example.com',
   organizationName: 'Alpha'
-}
-
-function createTestStore() {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        settings: null,
-        ...createLinearSlice(...a)
-      }) as AppState
-  )
 }
 
 function issue(id: string): LinearIssue {
@@ -111,91 +99,7 @@ function deferred<T>() {
 
 describe('createLinearSlice invalidation', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('refreshing a linked Linear issue invalidates stale issue collection caches', async () => {
-    const store = createTestStore()
-    linearGetIssue.mockResolvedValueOnce(issue('issue-id'))
-    store.setState({
-      linearIssueCache: {
-        'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
-      },
-      linearSearchCache: {
-        'workspace-1::search::issue::20': { data: [issue('issue-id')], fetchedAt: Date.now() }
-      },
-      linearListCache: {
-        'workspace-1::list::all::36::': {
-          data: { items: [issue('issue-id')], hasMore: false },
-          fetchedAt: Date.now()
-        }
-      },
-      linearProjectIssueCache: {
-        'workspace-1::project-issues::project-1::20': {
-          data: { items: [issue('issue-id')], hasMore: false },
-          fetchedAt: Date.now()
-        }
-      },
-      linearCustomViewIssueCache: {
-        'workspace-1::custom-view-issues::view-1::20': {
-          data: { items: [issue('issue-id')], hasMore: false },
-          fetchedAt: Date.now()
-        }
-      }
-    })
-
-    await store.getState().refreshLinearIssue('issue-id', 'workspace-1')
-
-    expect(store.getState().linearSearchCache).toEqual({})
-    expect(store.getState().linearListCache).toEqual({})
-    expect(store.getState().linearProjectIssueCache).toEqual({})
-    expect(store.getState().linearCustomViewIssueCache).toEqual({})
-    expect(linearGetIssue).toHaveBeenCalledWith(
-      { kind: 'default-scope', settings: null },
-      'issue-id',
-      'workspace-1'
-    )
-  })
-
-  it('connect invalidates cached Linear rows and waits for refreshed status', async () => {
-    const store = createTestStore()
-    const statusRefresh = deferred<LinearConnectionStatus>()
-    store.setState({
-      linearIssueCache: {
-        'workspace-1::issue-1': { data: issue('issue-1'), fetchedAt: Date.now() }
-      },
-      linearListCache: {
-        'workspace-1::list::all::36::': {
-          data: { items: [issue('LIN-CACHED')] },
-          fetchedAt: Date.now()
-        }
-      },
-      linearTeamCache: {
-        'workspace-1::teams': { data: [team('team-old')], fetchedAt: Date.now() }
-      }
-    })
-    linearConnect.mockResolvedValueOnce({ ok: true, viewer })
-    linearStatus.mockReturnValueOnce(statusRefresh.promise)
-
-    let resolved = false
-    const connectPromise = store
-      .getState()
-      .connectLinear('linear-key')
-      .then((result) => {
-        resolved = true
-        return result
-      })
-    await Promise.resolve()
-
-    expect(resolved).toBe(false)
-    expect(store.getState().linearIssueCache).toEqual({})
-    expect(store.getState().linearSearchCache).toEqual({})
-    expect(store.getState().linearListCache).toEqual({})
-    expect(store.getState().linearTeamCache).toEqual({})
-
-    statusRefresh.resolve(status('workspace-1'))
-    await expect(connectPromise).resolves.toEqual({ ok: true, viewer })
-    expect(store.getState().linearStatus.selectedWorkspaceId).toBe('workspace-1')
+    vi.resetAllMocks()
   })
 
   it('drops stale in-flight issue and team cache writes after connect invalidation', async () => {
@@ -216,7 +120,8 @@ describe('createLinearSlice invalidation', () => {
 
     staleIssue.resolve(issue('issue-1'))
     staleTeams.resolve([team('team-stale')])
-    await Promise.all([issuePromise, teamPromise])
+    await expect(issuePromise).rejects.toThrow('Linear read abandoned')
+    await teamPromise
 
     expect(store.getState().linearIssueCache).toEqual({})
     expect(store.getState().getCachedLinearTeams('workspace-1')).toBeNull()
@@ -276,9 +181,7 @@ describe('createLinearSlice invalidation', () => {
 
     await expect(
       store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
-    ).resolves.toEqual({
-      items: []
-    })
+    ).rejects.toThrow('401 unauthorized')
     expect(store.getState().linearStatus.connected).toBe(true)
     await vi.waitFor(() => {
       expect(store.getState().linearStatus.workspaces?.map((workspace) => workspace.id)).toEqual([

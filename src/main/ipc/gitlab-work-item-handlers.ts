@@ -12,6 +12,7 @@ import { getWorkItemDetails } from '../gitlab/work-item-details'
 import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
+import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
 
 export function registerGitLabWorkItemHandlers(store: Store): void {
   ipcMain.handle(
@@ -50,19 +51,26 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
         iid: number
         type: 'issue' | 'mr'
         includeReviewDetails?: boolean
+        /** A checks-panel poll: refused rather than booting a stopped WSL distro (E9). */
+        background?: boolean
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
-      return getWorkItemDetails(
-        repo.path,
-        args.iid,
-        args.type,
-        repo.issueSourcePreference,
-        repoConnectionId(repo),
-        undefined,
-        localGitOptionArgs(store, repo)[0] ?? {},
-        { includeReviewDetails: args.includeReviewDetails }
-      )
+      const localGitOptions = localGitOptionArgs(store, repo)[0] ?? {}
+      const read = (): ReturnType<typeof getWorkItemDetails> =>
+        getWorkItemDetails(
+          repo.path,
+          args.iid,
+          args.type,
+          repo.issueSourcePreference,
+          repoConnectionId(repo),
+          undefined,
+          localGitOptions,
+          { includeReviewDetails: args.includeReviewDetails }
+        )
+      return args.background
+        ? guardWslUncPathAccess(repo.path, read, { wslDistro: localGitOptions.wslDistro })
+        : read()
     }
   )
 

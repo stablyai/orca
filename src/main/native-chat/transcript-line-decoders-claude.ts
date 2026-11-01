@@ -4,14 +4,14 @@ import {
   type NativeChatEditPatch,
   type NativeChatEditPatchHunk,
   type NativeChatMessage
-} from '../../shared/native-chat-types'
+} from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
   extractString,
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
+import { imageSourcePathFromText } from '../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { unwrapClaudePastedContentBlock } from '../../shared/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'

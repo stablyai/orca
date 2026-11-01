@@ -1,9 +1,7 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
-import {
-  createClaudeCatalogOptions,
-  getAgentSessionOptionCatalog,
-  type CatalogModel
-} from '../../../../shared/agent-session-option-catalog'
+import { createClaudeCatalogOptions } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat-discovered-catalog-models'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope,
@@ -22,7 +20,7 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
-} from '../../../../shared/agent-session-wire'
+} from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 
@@ -140,29 +138,8 @@ export async function discoverNativeChatCatalogModels(
       return fromHost
     }
   }
-  const result = await discoverRuntimeCommitMessageModels(context, agent)
-  const catalog = getAgentSessionOptionCatalog(agent)
-  if (
-    !result.success ||
-    result.models.length === 0 ||
-    // Static fallback lists cannot prove retirements for authoritative catalogs.
-    ((agent === 'claude' || catalog?.discoveredModelsAreAuthoritative) &&
-      result.catalogOrigin !== 'probe')
-  ) {
-    return null
-  }
-  return result.models.map((model) => ({
-    id: model.id,
-    label: model.label,
-    ...(model.description ? { description: model.description } : {}),
-    ...(model.isDefault ? { isDefault: true as const } : {}),
-    ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
-    options:
-      agent === 'claude'
-        ? createClaudeCatalogOptions({
-            effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
-            supportsFastMode: model.supportsFastMode
-          })
-        : []
-  }))
+  return catalogModelsFromModelDiscovery(
+    agent,
+    await discoverRuntimeCommitMessageModels(context, agent)
+  )
 }

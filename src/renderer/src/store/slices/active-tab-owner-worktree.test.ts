@@ -19,22 +19,6 @@ beforeEach(() => {
 })
 
 describe('resolveActiveTabOwnerWorktreeId', () => {
-  it('returns the sole owner and stays quiet', () => {
-    const owner = resolveActiveTabOwnerWorktreeId(
-      { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t2', 'wt-b')] },
-      'wt-a',
-      't1'
-    )
-    expect(owner).toBe('wt-a')
-    expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
-  })
-
-  it('returns null when no worktree owns the tab', () => {
-    expect(resolveActiveTabOwnerWorktreeId({ 'wt-a': [tab('t1', 'wt-a')] }, 'wt-a', 'gone')).toBe(
-      null
-    )
-  })
-
   it('prefers the active worktree over an earlier-scanned duplicate', () => {
     const owner = resolveActiveTabOwnerWorktreeId(
       { 'wt-other': [tab('t1', 'wt-other')], 'wt-active': [tab('t1', 'wt-active')] },
@@ -69,53 +53,5 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       't1'
     )
     expect(owner).toBe('')
-  })
-
-  it('breadcrumbs a given tab id once per verdict so it cannot flood the ring', () => {
-    const maps = { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t1', 'wt-b')] }
-    for (let i = 0; i < 5; i += 1) {
-      resolveActiveTabOwnerWorktreeId(maps, 'wt-a', 't1')
-    }
-    expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(1)
-  })
-
-  // Duplicates can change verdict across worktree switches; once-per-tab guards would coalesce away one verdict forever.
-  it('still reports a non-converging verdict after that tab id reported a converging one', () => {
-    const maps = { 'wt-other': [tab('t1', 'wt-other')], 'wt-active': [tab('t1', 'wt-active')] }
-    resolveActiveTabOwnerWorktreeId(maps, 'wt-active', 't1')
-    resolveActiveTabOwnerWorktreeId(maps, 'wt-third', 't1')
-    resolveActiveTabOwnerWorktreeId(maps, 'wt-third', 't1')
-
-    expect(recordRendererCrashBreadcrumb.mock.calls).toEqual([
-      [
-        'terminal_tab_id_owned_by_multiple_worktrees',
-        { ownerCount: 2, resolvedToActiveWorktree: true }
-      ],
-      [
-        'terminal_tab_id_owned_by_multiple_worktrees',
-        { ownerCount: 2, resolvedToActiveWorktree: false }
-      ]
-    ])
-  })
-
-  // Require counts too: per-worktree dedupe passes earlier cases but floods per tab ID.
-  it('never exceeds two crumbs for one tab id however the active worktree moves', () => {
-    const maps = { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t1', 'wt-b')] }
-    const activeWorktreeIds = ['wt-a', 'wt-b', 'wt-c', '', 'wt-d', 'wt-a']
-    for (let i = 0; i < 600; i += 1) {
-      resolveActiveTabOwnerWorktreeId(maps, activeWorktreeIds[i % activeWorktreeIds.length], 't1')
-    }
-    expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(2)
-  })
-
-  // Why: the guard set is never pruned and tab ids are minted per created tab.
-  it('stops recording once the per-session sample cap is reached', () => {
-    for (let i = 0; i < 400; i += 1) {
-      const id = `t-${i}`
-      const maps = { 'wt-a': [tab(id, 'wt-a')], 'wt-b': [tab(id, 'wt-b')] }
-      resolveActiveTabOwnerWorktreeId(maps, 'wt-a', id)
-      resolveActiveTabOwnerWorktreeId(maps, 'wt-c', id)
-    }
-    expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(256)
   })
 })

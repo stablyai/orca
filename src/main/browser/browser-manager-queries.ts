@@ -5,8 +5,13 @@ import type {
 } from '../../shared/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from './browser-certificate-trust-controller'
 import { redactKagiSessionToken } from '../../shared/browser-url'
-import { safeOrigin } from './browser-manager-types'
+import { safeOrigin, type BrowserPopupPage } from './browser-manager-types'
 import { BrowserManagerRegistration } from './browser-manager-registration'
+import {
+  isBrowserRouteGuestPopup,
+  listBrowserRouteGuestPopups
+} from './browser-route-guest-popup-ownership'
+import { browserPopupPageId, browserPopupPageWebContentsId } from './browser-popup-page-id'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -26,16 +31,82 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
   }
 
+  /** A popup page belongs to its opener tab, sharing its workspace and profile. */
+  getOwningTabIdForPage(browserPageId: string): string {
+    const popupWebContentsId = this.resolvePopupPageWebContentsId(browserPageId)
+    const ownerTabId =
+      popupWebContentsId === null
+        ? null
+        : this.resolveBrowserTabIdForGuestWebContentsId(popupWebContentsId)
+    return ownerTabId ?? browserPageId
+  }
+
+  // A tab created with a popup-shaped id keeps it; the popup goes unlisted rather than shadow it.
+  private resolvePopupPageWebContentsId(browserPageId: string): number | null {
+    const webContentsId = browserPopupPageWebContentsId(browserPageId)
+    return webContentsId !== null &&
+      !this.webContentsIdByTabId.has(browserPageId) &&
+      (this.popupOwnerContextByGuestId.has(webContentsId) ||
+        isBrowserRouteGuestPopup(webContentsId))
+      ? webContentsId
+      : null
+  }
+
   getWorktreeIdForTab(browserTabId: string): string | undefined {
-    return this.worktreeIdByTabId.get(browserTabId)
+    return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
   }
 
   getSessionProfileIdForTab(browserTabId: string): string | null {
-    return this.sessionProfileIdByPageId.get(browserTabId) ?? null
+    return this.sessionProfileIdByPageId.get(this.getOwningTabIdForPage(browserTabId)) ?? null
+  }
+
+  /** Native popups (OAuth, payment) keep their opener, so agents reach them as pages beside their tab. */
+  getPopupPages(): BrowserPopupPage[] {
+    const popupWebContentsIds = new Set([
+      ...this.popupOwnerContextByGuestId.keys(),
+      ...listBrowserRouteGuestPopups()
+    ])
+    const pages: BrowserPopupPage[] = []
+    for (const webContentsId of popupWebContentsIds) {
+      const browserPageId = browserPopupPageId(webContentsId)
+      const openerBrowserPageId = this.resolveBrowserTabIdForGuestWebContentsId(webContentsId)
+      const popup = webContents.fromId(webContentsId)
+      if (
+        openerBrowserPageId &&
+        !this.webContentsIdByTabId.has(browserPageId) &&
+        popup &&
+        !popup.isDestroyed()
+      ) {
+        pages.push({
+          browserPageId,
+          webContentsId,
+          openerBrowserPageId
+        })
+      }
+    }
+    return pages
+  }
+
+  /** Closes a popup page as the page's own window.close() would; false when it is not a live popup. */
+  async closePopupPage(browserPageId: string): Promise<boolean> {
+    const page = this.getPopupPages().find((popup) => popup.browserPageId === browserPageId)
+    const popup = page ? webContents.fromId(page.webContentsId) : undefined
+    if (!popup || popup.isDestroyed()) {
+      return false
+    }
+    // Settle after the agent is handed back to the opener, so its next command lands there.
+    await new Promise<void>((resolve) => {
+      popup.once('destroyed', () => resolve())
+      popup.close()
+    })
+    return true
   }
 
   getBrowserPageLoadError(browserPageId: string): BrowserLoadError | null {
-    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const webContentsId =
+      this.webContentsIdByTabId.get(browserPageId) ??
+      this.resolvePopupPageWebContentsId(browserPageId) ??
+      undefined
     return webContentsId === undefined
       ? null
       : (this.loadErrorsByGuestId.get(webContentsId) ?? null)

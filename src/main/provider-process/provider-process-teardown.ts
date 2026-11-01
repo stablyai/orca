@@ -9,7 +9,10 @@ import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-t
 import { hasErrorCode } from '../daemon/daemon-process-inspection'
 
 /** What the teardown observed of the descendants; null when it signalled but observed nothing. */
-export type ProviderProcessTeardownVerdict = DescendantTreeVerdict | null
+export type ProviderProcessTeardownVerdict =
+  | DescendantTreeVerdict
+  | null
+  | { tree: DescendantTreeVerdict | null; killDelivered: true }
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
@@ -19,6 +22,7 @@ export type ProviderProcessTeardownDeps = {
   site: string
   platform?: NodeJS.Platform
   dedicatedProcessGroup?: boolean
+  supervised?: boolean
   captureDescendants?: (rootPid: number) => Promise<DescendantSnapshot | null>
   terminateDescendants?: (snapshot: DescendantSnapshot) => Promise<DescendantTreeVerdict>
   /** Resolves true only when taskkill reports the whole tree terminated. */
@@ -47,7 +51,32 @@ function terminateDedicatedPosixGroup(
     scope: 'posix-process-group'
   })
   // A delivered signal is not an observed exit.
-  return null
+  return { tree: null, killDelivered: true }
+}
+
+/** A supervisor kill alone cannot fence the conversation writer. */
+export function killProviderWriter(
+  child: TeardownChild,
+  snapshot: DescendantSnapshot | null,
+  deps: Pick<ProviderProcessTeardownDeps, 'supervised' | 'signalProcessGroup'>
+): boolean {
+  const signalGroup =
+    deps.signalProcessGroup ??
+    ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
+  let delivered = false
+  if (deps.supervised) {
+    for (const descendant of snapshot?.descendants ?? []) {
+      if (descendant.ppid === child.pid && descendant.pgid === descendant.pid) {
+        try {
+          signalGroup(descendant.pid, 'SIGKILL')
+          delivered = true
+        } catch {
+          // The retained root still needs its kill attempt.
+        }
+      }
+    }
+  }
+  return deps.supervised ? delivered : child.kill('SIGKILL')
 }
 
 async function terminatePosixTree(
@@ -60,15 +89,24 @@ async function terminatePosixTree(
   const snapshot = await capture(rootPid).catch(() => null)
   if (!snapshot) {
     // Preserve Codex compatibility: missing snapshot is no observation (null), not an unverifiable verdict.
-    child.kill('SIGKILL')
-    return null
+    const delivered = killProviderWriter(child, null, deps)
+    if (deps.supervised) {
+      child.kill('SIGKILL')
+    }
+    return delivered ? { tree: null, killDelivered: true } : null
   }
   const terminate =
     deps.terminateDescendants ??
     ((captured: DescendantSnapshot) => terminateDescendantSnapshotWithVerdict(captured))
-  let verdict: ProviderProcessTeardownVerdict = 'unverifiable'
+  let verdict: DescendantTreeVerdict = 'unverifiable'
+  let killDelivered = false
   try {
+    if (deps.supervised) {
+      killDelivered = killProviderWriter(child, snapshot, deps)
+    }
     verdict = await terminate(snapshot)
+  } catch {
+    // Descendant observation cannot undo a delivered writer kill.
   } finally {
     const signal = deps.signalProcess ?? process.kill
     const signalGroup =
@@ -79,7 +117,7 @@ async function terminatePosixTree(
       if (descendant.ppid !== rootPid) {
         continue
       }
-      if (descendant.pgid === descendant.pid) {
+      if (!deps.supervised && descendant.pgid === descendant.pid) {
         try {
           signalGroup(descendant.pid, 'SIGKILL')
         } catch {
@@ -104,9 +142,17 @@ async function terminatePosixTree(
         // The held root is still addressed through its exact child handle below.
       }
     }
-    child.kill('SIGKILL')
+    try {
+      if (deps.supervised) {
+        child.kill('SIGKILL')
+      } else {
+        killDelivered = killProviderWriter(child, snapshot, deps)
+      }
+    } catch {
+      // A wrapper failure cannot undo termination of its writer.
+    }
   }
-  return verdict
+  return killDelivered ? { tree: verdict, killDelivered: true } : verdict
 }
 
 /** Attempt tree termination; callers must inspect the verdict before claiming descendant exit. */
@@ -123,9 +169,13 @@ async function terminateOnce(
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
     const treeTerminated = await terminate(rootPid, { site: deps.site })
     // Always stop the held root, even when taskkill fails.
-    child.kill('SIGKILL')
-    // Only successful taskkill supplies tree-exit proof here.
-    return treeTerminated ? 'exited' : 'unverifiable'
+    try {
+      child.kill('SIGKILL')
+    } catch {
+      // Exact-root cleanup cannot retract successful tree termination.
+    }
+    // The root may be a cmd.exe shim, so only taskkill proves the writer was terminated.
+    return treeTerminated ? { tree: 'exited', killDelivered: true } : 'unverifiable'
   }
   if (deps.dedicatedProcessGroup) {
     return terminateDedicatedPosixGroup(rootPid, deps)

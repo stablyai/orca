@@ -14,7 +14,7 @@ import type {
 } from '../../runtime-session-contracts'
 import type { TerminalLayoutSnapshot } from '../../terminal-tab-types'
 import { pruneGroupLayout } from '../../workspace-session-terminal-tab-close'
-import { diffTabRow, editorTabRow, reviewTabRow } from './old-client-session-editor-rows'
+import { diffTabRow, editorTabRow } from './old-client-session-editor-rows'
 import { agentSessionRowId, publishedTabOrderId, terminalRowId } from './old-client-session-row-ids'
 import { collectLayoutLeafIdsInOrder } from '../terminal-pane-tree'
 import { groupsInLayoutOrder } from './old-client-group-order'
@@ -154,10 +154,9 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
       return row ? [row] : []
     }
     case 'conflict-review':
-    case 'check-details': {
-      const row = reviewTabRow({ ...tab, kind: tab.kind }, scope)
-      return row ? [row] : []
-    }
+    case 'check-details':
+      // Virtual views have no file to read and no compatible session.tabs kind.
+      return []
     // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
       return []
@@ -270,7 +269,7 @@ function agentSessionRow(tab: LayoutContentTab, scope: Scope): RuntimeMobileSess
   }
   return {
     type: 'agent-session',
-    id: agentSessionRowId(tab.entityId),
+    id: agentSessionRowId(tab.entityId, tab.id),
     title:
       tab.customTitle?.trim() ||
       scope.facts.tabLabels[scope.key]?.[tab.id] ||

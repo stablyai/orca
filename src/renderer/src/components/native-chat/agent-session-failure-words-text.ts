@@ -6,7 +6,7 @@ import {
   type AgentSessionFailureCopyId,
   type AgentSessionFailureCopyValues,
   type AgentSessionFailureSay
-} from '../../../../shared/agent-session-failure-copy'
+} from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import { AVAILABILITY_PIECES } from './agent-session-availability-words-text'
 import { ATTACHMENT_FAILURE_PIECES } from './agent-session-failure-attachment-words-text'
 import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
@@ -149,6 +149,18 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.runtimeNotInstalled,
         values
       ),
+    fullAccessAsRoot: (values) =>
+      translate(
+        'components.native-chat.failureWords.fullAccessAsRoot',
+        COPY.fullAccessAsRoot,
+        values
+      ),
+    launchPreparationFailed: (values) =>
+      translate(
+        'components.native-chat.failureWords.launchPreparationFailed',
+        COPY.launchPreparationFailed,
+        values
+      ),
     conversationOpenElsewhere: () =>
       translate(
         'components.native-chat.failureWords.conversationOpenElsewhere',
@@ -177,6 +189,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.chooseClaudeAccountThenSend
       ),
     ...PROVIDER_EXIT_PIECES,
+    claudeEffortInvalid: () =>
+      translate(
+        'components.native-chat.failureWords.claudeEffortInvalid',
+        COPY.claudeEffortInvalid
+      ),
     providerRejected: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejected',
@@ -235,8 +252,6 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
       translate('components.native-chat.writeNotice.waitForStart', COPY.waitForStart),
     agentStillWorking: () =>
       translate('components.native-chat.writeNotice.agentStillWorking', COPY.agentStillWorking),
-    waitForTurn: () =>
-      translate('components.native-chat.writeNotice.waitForTurn', COPY.waitForTurn),
     runCommandWhenDone: (values) =>
       translate(
         'components.native-chat.failureWords.runCommandWhenDone',

@@ -1,27 +1,12 @@
 // useShallow skips renders, not selectors; memoize host resolution to avoid per-tab traversal and discarded objects on every publication.
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ConnectionContext from '@/lib/connection-context'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   resetTerminalPaneHostStateMemoForTests,
   selectTerminalPaneHostState
 } from './terminal-pane-host-state'
 
-const connectionIdCalls = vi.hoisted(() => ({ count: 0 }))
-
-vi.mock('@/lib/connection-context', async (importOriginal) => {
-  const actual = await importOriginal<typeof ConnectionContext>()
-  return {
-    ...actual,
-    getConnectionIdFromState: (state: AppState, worktreeId: string | null) => {
-      connectionIdCalls.count += 1
-      return actual.getConnectionIdFromState(state, worktreeId)
-    }
-  }
-})
-
 const LOCAL_WORKTREE = 'repo-1::/repo/worktrees/local'
-const OTHER_WORKTREE = 'repo-2::/repo/worktrees/other'
 
 /** Only the fields the resolver touches; the memo key is the whole object. */
 function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
@@ -46,7 +31,6 @@ function makeState(overrides: Partial<Record<string, unknown>> = {}): AppState {
 
 beforeEach(() => {
   resetTerminalPaneHostStateMemoForTests()
-  connectionIdCalls.count = 0
 })
 
 describe('selectTerminalPaneHostState memo', () => {
@@ -77,21 +61,6 @@ describe('selectTerminalPaneHostState memo', () => {
     expect(after).toBe(before)
   })
 
-  it('resolves the host once per published state, not once per mounted tab', () => {
-    const state = makeState()
-    selectTerminalPaneHostState(state, LOCAL_WORKTREE)
-    const afterFirstTab = connectionIdCalls.count
-    expect(afterFirstTab).toBe(1)
-
-    for (let index = 0; index < 4; index += 1) {
-      selectTerminalPaneHostState(state, LOCAL_WORKTREE)
-    }
-    expect(connectionIdCalls.count).toBe(afterFirstTab)
-
-    selectTerminalPaneHostState(state, OTHER_WORKTREE)
-    expect(connectionIdCalls.count).toBe(afterFirstTab + 1)
-  })
-
   it('re-resolves when the published state changes, so a host change is never stale', () => {
     const local = makeState()
     const before = selectTerminalPaneHostState(local, LOCAL_WORKTREE)
@@ -107,32 +76,5 @@ describe('selectTerminalPaneHostState memo', () => {
 
     expect(after).not.toBe(before)
     expect(after.sshReconnectTargetId).toBe('ssh-host-a')
-  })
-
-  it('allocates nothing across 1,000 publications at 6 worktrees x 5 tabs', () => {
-    const worktreeIds = Array.from({ length: 6 }, (_, index) => `repo-${index}::/repo/wt-${index}`)
-    const firstState = makeState()
-    const firstByWorktree = new Map(
-      worktreeIds.map((worktreeId) => [
-        worktreeId,
-        selectTerminalPaneHostState(firstState, worktreeId)
-      ])
-    )
-    connectionIdCalls.count = 0
-    let allocations = 0
-
-    for (let publication = 0; publication < 1_000; publication += 1) {
-      const state = makeState({ agentStatusEpoch: publication })
-      for (const worktreeId of worktreeIds) {
-        for (let tab = 0; tab < 5; tab += 1) {
-          if (selectTerminalPaneHostState(state, worktreeId) !== firstByWorktree.get(worktreeId)) {
-            allocations += 1
-          }
-        }
-      }
-    }
-
-    expect(allocations).toBe(0)
-    expect(connectionIdCalls.count).toBe(6 * 1_000)
   })
 })

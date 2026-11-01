@@ -1,3 +1,6 @@
+import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
+import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
+import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
@@ -21,15 +24,16 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
-} from '../../../../shared/agent-session-resume'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session-host-authority'
+} from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { TerminalWorkspaceLaunchScope } from '../../../runtime/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -53,8 +57,9 @@ export type RuntimePtySpawnState = {
   requestedSessionId: string | undefined
   sessionId: string | undefined
   effectiveSessionAppId: string | undefined
-  isNewDaemonSession: boolean
+  ownsNewIncarnation: boolean
   expectedWslDistro: string | null
+  wslHoldReadAnchor: number | undefined
   /** The host's verdict on the spawn's resume; a refused one starts the pane's plain shell. */
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
@@ -82,8 +87,7 @@ export type RuntimePtySpawnState = {
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   spawnOptions: PtySpawnOptions
-  hadSessionSizeBeforeAttach: boolean
-  sessionSizeBeforeAttach: { cols: number; rows: number } | undefined
+  provisionalPtySize: PtySpawnSizeSeed | undefined
   materializedPaneKey: string | null
   metadataLeafId: string | null
   metadataPaneKey: string | null
@@ -100,8 +104,7 @@ export type RuntimePtySpawnState = {
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
-  reconciledSnapshotSeq: number | null
-  snapshotKittyFlagsCoverReconciledSeq: boolean
+  provedSnapshotSeq: number | undefined
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   reportPtySpawnCommitted: () => void
@@ -109,6 +112,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
   cwd?: string
@@ -128,6 +132,8 @@ export type RuntimePtySpawnArgs = {
   resumeProviderSession?: AgentProviderSessionMetadata
   /** `saved`: built from a pane's saved facts, which the host refuses for a chat's conversation. */
   resumeOrigin?: 'saved'
+  /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string
@@ -145,6 +151,10 @@ export type RuntimePtySpawnArgs = {
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean
   terminalColorQueryReplies?: { foreground?: string; background?: string }
+  /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
+  launcherColorQueryReplies?: { foreground?: string; background?: string }
+  /** That launcher's palette and cursor, so its PTY's OSC 4/12 agree with its OSC 10/11. */
+  launcherViewAttributes?: TerminalViewAttributes
   agentSessionEnsure?: {
     claim: AgentSessionExecutionClaim
     surface: AgentSessionSurfaceBinding
@@ -158,6 +168,8 @@ export type RuntimePtySpawnArgs = {
   onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
   paneSpawnOperation?: PaneSpawnOperation
   adoptedStablePane?: {
+    operation?: PaneSpawnOperation
+    outcome?: PtySpawnOutcome
     result: PtySpawnResult
     owner: {
       handle?: string
@@ -195,8 +207,9 @@ export function createRuntimePtySpawnState(
     requestedSessionId: undefined,
     sessionId: undefined,
     effectiveSessionAppId: undefined,
-    isNewDaemonSession: false,
+    ownsNewIncarnation: false,
     expectedWslDistro: null,
+    wslHoldReadAnchor: undefined,
     resumeAdmission: null,
     codexSelectionTarget: { runtime: 'host' },
     launchCommand: undefined,
@@ -213,8 +226,7 @@ export function createRuntimePtySpawnState(
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     spawnOptions: { cols: args.cols, rows: args.rows },
-    hadSessionSizeBeforeAttach: false,
-    sessionSizeBeforeAttach: undefined,
+    provisionalPtySize: undefined,
     materializedPaneKey: null,
     metadataLeafId: null,
     metadataPaneKey: null,
@@ -227,11 +239,15 @@ export function createRuntimePtySpawnState(
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,
-    reconciledSnapshotSeq: null,
-    snapshotKittyFlagsCoverReconciledSeq: true,
+    provedSnapshotSeq: undefined,
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
     reportPtySpawnCommitted: () => {},
     preSpawnHiddenMarkId: null
   }
+}
+
+/** Default-deny (E9): a main-side start is background unless its caller names the user's act; an adopted pane starts nothing. */
+export function isRuntimeWslBackgroundStart(ctx: RuntimePtySpawnState): boolean {
+  return !ctx.preAdoptedStablePane && ctx.args.wslUserAct !== true
 }

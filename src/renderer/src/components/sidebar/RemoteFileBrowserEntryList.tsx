@@ -1,10 +1,9 @@
 import type React from 'react'
-import { useMemo, type RefObject } from 'react'
-import { ChevronRight, Folder, LoaderCircle } from 'lucide-react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { ChevronRight, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import {
-  filterEntries,
   isRemoteFileBrowserPathResolveTextTooLarge,
   type DirEntry
 } from './remote-file-browser-helpers'
@@ -15,7 +14,9 @@ type RemoteFileBrowserEntryListProps = {
   loading: boolean
   error: string | null
   entries: DirEntry[]
-  filteredEntries: DirEntry[]
+  displayEntries: readonly DirEntry[]
+  activeIndex: number
+  listboxId: string
   filter: string
   preview: PreviewState | null
   isPreviewActive: boolean
@@ -28,7 +29,9 @@ export function RemoteFileBrowserEntryList({
   loading,
   error,
   entries,
-  filteredEntries,
+  displayEntries,
+  activeIndex,
+  listboxId,
   filter,
   preview,
   isPreviewActive,
@@ -36,15 +39,17 @@ export function RemoteFileBrowserEntryList({
   handleRowClick,
   handleRowDoubleClick
 }: RemoteFileBrowserEntryListProps): React.JSX.Element {
-  const previewFilteredEntries = useMemo(
-    () => (preview ? filterEntries(preview.entries, preview.filter) : []),
-    [preview]
-  )
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (activeIndex < 0) {
+      return
+    }
+    // Optional call: happy-dom has no scrollIntoView.
+    scrollRef.current
+      ?.querySelector(`[data-entry-index="${activeIndex}"]`)
+      ?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, displayEntries])
 
-  const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
-  const displayEmptyDirCopy = isPreviewActive
-    ? `${preview!.resolvedPath} is empty`
-    : 'Empty directory'
   const noMatchesFilter = isPreviewActive ? preview!.filter : filter
   const displayNoMatchesCopy = isRemoteFileBrowserPathResolveTextTooLarge(noMatchesFilter)
     ? translate(
@@ -59,7 +64,16 @@ export function RemoteFileBrowserEntryList({
 
   return (
     <div className="border border-border rounded-md overflow-hidden bg-background">
-      <div className="h-[240px] overflow-y-auto scrollbar-sleek">
+      <div
+        ref={scrollRef}
+        id={listboxId}
+        role="listbox"
+        aria-label={translate(
+          'auto.components.sidebar.RemoteFileBrowser.entriesLabel',
+          'Folder entries'
+        )}
+        className="h-[240px] overflow-y-auto scrollbar-sleek"
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
@@ -73,7 +87,13 @@ export function RemoteFileBrowserEntryList({
           !preview!.error &&
           !preview!.loading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-muted-foreground">{displayEmptyDirCopy}</p>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.RemoteFileBrowserEntryList.pathEmpty',
+                '{{path}} is empty',
+                { path: preview!.resolvedPath }
+              )}
+            </p>
           </div>
         ) : !isPreviewActive && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -85,13 +105,19 @@ export function RemoteFileBrowserEntryList({
           // Filtered-out entries need different copy from a directory that is genuinely empty.
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
-            <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
           </div>
         ) : (
-          displayEntries.map((entry) => {
+          displayEntries.map((entry, index) => {
+            const isActive = index === activeIndex
             return (
               <button
                 key={entry.name}
+                id={`${listboxId}-${index}`}
+                role="option"
+                aria-selected={isActive}
+                data-selected={isActive}
+                data-entry-index={index}
+                tabIndex={-1}
                 type="button"
                 onClick={() => handleRowClick(entry)}
                 onDoubleClick={() => handleRowDoubleClick(entry)}
@@ -100,12 +126,17 @@ export function RemoteFileBrowserEntryList({
                   inputRef.current?.focus()
                 }}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
+                  // Why `jump-palette-item`: flat accent is invisible as a keyboard cursor on light dialogs.
+                  'jump-palette-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
                   'hover:bg-accent/60'
                 )}
               >
                 {entry.isDirectory ? (
-                  <Folder className="size-3.5 text-muted-foreground shrink-0" />
+                  <FolderIcon
+                    folderPath={entry.name}
+                    open={false}
+                    className="size-3.5 text-muted-foreground shrink-0"
+                  />
                 ) : (
                   <FileTypeIcon
                     filePath={entry.name}

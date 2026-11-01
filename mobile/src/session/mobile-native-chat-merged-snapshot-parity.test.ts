@@ -3,20 +3,20 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
-import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat-cut-turn-notice'
-import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../../../src/shared/native-chat-turn-membership'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
+import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
+import { nativeChatRowsInDrawOrder } from '../../../src/shared/native-chat/transcript/native-chat-turn-grouping'
+import { nativeChatTurnMembership } from '../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
+import { activeStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/agent-session/view/structured-agent-session-main-agent-working'
+import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../src/shared/structured-agent-session-turn-timing'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { selectStructuredAgentTurnBars } from '../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import {
   buildMobileNativeChatTransientData,
@@ -27,7 +27,7 @@ import {
   stopJournal,
   type StopJournal
 } from './mobile-native-chat-stop-journal.test-fixture'
-import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { useMobileNativeChatTurnDisclosure } from './native-chat/transcript/use-mobile-native-chat-turn-disclosure'
 
 const STOP_ROW = `stopped-before-start:orca:${NEVER_OPENED}`
 
@@ -58,7 +58,6 @@ function drawn(state: StructuredAgentSessionState): Drawn {
   const { items, messages } = phoneTranscript(state)
   const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
-    messages,
     folded,
     streaming: null,
     pending: []
@@ -86,7 +85,6 @@ function listed(state: StructuredAgentSessionState): string[] {
   const { items, messages } = phoneTranscript(state)
   const folded = foldMobileNativeChatMessages(messages, 'claude')
   const { data } = buildMobileNativeChatTransientData({
-    messages,
     folded,
     streaming: null,
     pending: []

@@ -85,6 +85,16 @@ const DRIVING = { inputKind: 'driving' } as const
 describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', () => {
   it('a send starts the pane once and delivers to it, and the handle keeps naming it', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
+    const observer = new AbortController()
+    const abandoned = runtime.sendTerminalAgentPrompt(handle, 'abandoned', {
+      ...DRIVING,
+      observationSignal: observer.signal
+    })
+    const refused = expect(abandoned).rejects.toThrow('request_aborted')
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
+    observer.abort()
+    await refused
+    expect(write).not.toHaveBeenCalled()
 
     const send = runtime.sendTerminal(handle, { text: 'echo hi', enter: true }, DRIVING)
     await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
@@ -96,6 +106,7 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
       runtime.sendTerminal(handle, { text: 'echo again', enter: true }, DRIVING)
     ).resolves.toMatchObject({ handle, accepted: true })
     expect(write).toHaveBeenCalledWith('pty-c', 'echo again', 'driving')
+    expect(write).toHaveBeenCalledTimes(4)
     expect(spawn).toHaveBeenCalledOnce()
   })
 

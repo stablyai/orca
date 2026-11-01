@@ -21,8 +21,8 @@ let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let presentedHostKey: Buffer
 let hostKeyAccepted: boolean | undefined
 
-vi.mock('ssh2', async (importOriginal) => {
-  const { utils } = await importOriginal<typeof Ssh2>()
+vi.mock('../ssh2-module-load', async () => {
+  const { utils } = await vi.importActual<typeof Ssh2>('ssh2')
   class MockSshClient {
     setNoDelay = vi.fn()
     _sock: Socket | undefined = new Socket()
@@ -56,12 +56,8 @@ vi.mock('ssh2', async (importOriginal) => {
     }
   }
   class MockBaseAgent {}
-  return {
-    Client: MockSshClient,
-    BaseAgent: MockBaseAgent,
-    utils,
-    default: { Client: MockSshClient, BaseAgent: MockBaseAgent, utils }
-  }
+  const ssh2 = { Client: MockSshClient, BaseAgent: MockBaseAgent, utils }
+  return { loadSsh2: () => ssh2 }
 })
 
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({

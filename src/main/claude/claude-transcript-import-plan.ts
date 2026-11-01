@@ -2,13 +2,13 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../shared/agent-session-journal-item-key'
+} from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
+  type AgentJournalItemBody
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-turn-scope'
 import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import {
   continuedOutsideNotice,
@@ -36,8 +36,8 @@ import {
   claudeToolIdentity,
   claudeToolUses,
   readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+} from './structured/journal/claude-structured-item-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
 
@@ -51,9 +51,8 @@ export function createClaudeTranscriptImportPlan(input: {
   check: () => void
 }) {
   const mutations = new Map<string, ReturnType<typeof journalLifecycleItemMutation>>()
-  const { saved, scopeOf, promptScope, dependencies } = createClaudeTranscriptItemReader(
-    input.journal
-  )
+  const { saved, localPrompt, scopeOf, promptScope, dependencies } =
+    createClaudeTranscriptItemReader(input.journal, input.sessionId)
   const aliases = new Map<string, AgentJournalItemIdentity>()
   let historicalScope: AgentJournalTurnScope | null = null
   let sourceObservedAt: number | undefined
@@ -88,7 +87,8 @@ export function createClaudeTranscriptImportPlan(input: {
     const identity = aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity
     const key = agentJournalItemKey(identity)
     const existing = saved(key)
-    if (projected.kind === 'turn' && (existing || historicalScope)) {
+    // A turn this import opened is history too: it must also take its end, never stay running.
+    if (projected.kind === 'turn' && (existing || (historicalScope && !mutations.has(key)))) {
       return { accepted: true } as const
     }
     let body = projected
@@ -98,7 +98,7 @@ export function createClaudeTranscriptImportPlan(input: {
       body = untimed
     }
     let turnScope =
-      projected.kind === 'message' && projected.role === 'user'
+      projected.kind === 'turn' || (projected.kind === 'message' && projected.role === 'user')
         ? options.turnScope
         : (historicalScope ?? options.turnScope)
     if (existing) {
@@ -231,7 +231,7 @@ export function createClaudeTranscriptImportPlan(input: {
         sessionId: input.providerSessionId,
         uuid: sourceUuid ?? decoded.id
       }
-      const existing = saved(agentJournalItemKey(identity))
+      const existing = saved(agentJournalItemKey(identity)) ?? localPrompt(identity.uuid)
       if (existing) {
         historicalScope = promptScope(existing, queued) ?? historicalScope
         return

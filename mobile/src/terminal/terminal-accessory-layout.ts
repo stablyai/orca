@@ -8,6 +8,7 @@ export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-la
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
+  directionPadEnabled?: boolean
 }
 
 export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
@@ -18,11 +19,17 @@ function builtInIds(): string[] {
   return TERMINAL_ACCESSORY_KEYS.map((key) => key.id)
 }
 
-function defaultPreference(ids = builtInIds()): TerminalAccessoryLayoutPreference {
+function defaultPreference(
+  ids = builtInIds(),
+  directionPadAvailable = false
+): TerminalAccessoryLayoutPreference {
   return {
     version: 2,
     orderedBuiltInIds: [...ids],
-    visibleBuiltInIds: [...ids]
+    visibleBuiltInIds: directionPadAvailable
+      ? ids.filter((id) => !id.startsWith('arrow'))
+      : [...ids],
+    directionPadEnabled: true
   }
 }
 
@@ -78,25 +85,32 @@ export function getDefaultTerminalAccessoryBuiltInIds(): string[] {
   return builtInIds()
 }
 
-export function getDefaultTerminalAccessoryLayout(): TerminalAccessoryLayout {
-  const ids = builtInIds()
-  return { orderedBuiltInIds: ids, visibleBuiltInIds: [...ids] }
+export function getDefaultTerminalAccessoryLayout(
+  directionPadAvailable = false
+): TerminalAccessoryLayout {
+  const { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled } = defaultPreference(
+    builtInIds(),
+    directionPadAvailable
+  )
+  return { orderedBuiltInIds, visibleBuiltInIds, directionPadEnabled }
 }
 
 export function normalizeTerminalAccessoryLayoutPreference(
   value: unknown,
-  currentBuiltInIds = builtInIds()
+  currentBuiltInIds = builtInIds(),
+  directionPadAvailable = false
 ): TerminalAccessoryLayoutPreference {
-  const fallback = defaultPreference(currentBuiltInIds)
+  const fallback = defaultPreference(currentBuiltInIds, directionPadAvailable)
   if (!value || typeof value !== 'object') {
     return fallback
   }
 
-  const candidate = value as {
-    version?: unknown
-    orderedBuiltInIds?: unknown
-    visibleBuiltInIds?: unknown
-    knownBuiltInIds?: unknown
+  const candidate = {
+    version: 'version' in value ? value.version : undefined,
+    orderedBuiltInIds: 'orderedBuiltInIds' in value ? value.orderedBuiltInIds : undefined,
+    visibleBuiltInIds: 'visibleBuiltInIds' in value ? value.visibleBuiltInIds : undefined,
+    knownBuiltInIds: 'knownBuiltInIds' in value ? value.knownBuiltInIds : undefined,
+    directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
 
@@ -116,6 +130,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
     }
     return {
       version: 2,
+      directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: ordered,
       visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
     }
@@ -137,6 +152,7 @@ export function normalizeTerminalAccessoryLayoutPreference(
     // Version-one layouts had no custom order; migrate them to canonical order.
     return {
       version: 2,
+      directionPadEnabled: candidate.directionPadEnabled !== false,
       orderedBuiltInIds: [...currentBuiltInIds],
       visibleBuiltInIds: currentBuiltInIds.filter((id) => visibleSet.has(id))
     }
@@ -157,6 +173,7 @@ export function createTerminalAccessoryLayoutPreference(
   const visibleSet = new Set(dedupeKnownIds(layout.visibleBuiltInIds, builtInSet))
   return {
     version: 2,
+    directionPadEnabled: layout.directionPadEnabled !== false,
     orderedBuiltInIds: ordered,
     visibleBuiltInIds: ordered.filter((id) => visibleSet.has(id))
   }
@@ -171,6 +188,7 @@ export function setTerminalAccessoryBuiltInVisible(
   const preference = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
   if (!new Set(currentBuiltInIds).has(id)) {
     return {
+      directionPadEnabled: preference.directionPadEnabled,
       orderedBuiltInIds: preference.orderedBuiltInIds,
       visibleBuiltInIds: preference.visibleBuiltInIds
     }
@@ -182,6 +200,7 @@ export function setTerminalAccessoryBuiltInVisible(
     visibleSet.delete(id)
   }
   return {
+    directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
     visibleBuiltInIds: preference.orderedBuiltInIds.filter((builtInId) => visibleSet.has(builtInId))
   }
@@ -193,34 +212,45 @@ export function reorderTerminalAccessoryBuiltInIds(
   currentBuiltInIds = builtInIds()
 ): TerminalAccessoryLayout {
   const preference = createTerminalAccessoryLayoutPreference(
-    { orderedBuiltInIds, visibleBuiltInIds: layout.visibleBuiltInIds },
+    { ...layout, orderedBuiltInIds },
     currentBuiltInIds
   )
   return {
+    directionPadEnabled: preference.directionPadEnabled,
     orderedBuiltInIds: preference.orderedBuiltInIds,
     visibleBuiltInIds: preference.visibleBuiltInIds
   }
 }
 
 export function getVisibleTerminalAccessoryKeys(
-  visibleBuiltInIds: string[]
+  visibleBuiltInIds: string[],
+  includeDirectionKeys = false
 ): TerminalAccessoryKey[] {
+  const ids = includeDirectionKeys
+    ? [...visibleBuiltInIds, ...builtInIds().filter((id) => id.startsWith('arrow'))]
+    : visibleBuiltInIds
   const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
-  return dedupeKnownIds(visibleBuiltInIds, new Set(byId.keys())).flatMap((id) => {
+  return dedupeKnownIds(ids, new Set(byId.keys())).flatMap((id) => {
     const key = byId.get(id)
     return key ? [key] : []
   })
 }
 
-export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLayoutPreference> {
+export async function loadTerminalAccessoryLayout(
+  directionPadAvailable = false
+): Promise<TerminalAccessoryLayoutPreference> {
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
     if (!raw) {
-      return defaultPreference()
+      return defaultPreference(builtInIds(), directionPadAvailable)
     }
-    return normalizeTerminalAccessoryLayoutPreference(JSON.parse(raw))
+    return normalizeTerminalAccessoryLayoutPreference(
+      JSON.parse(raw),
+      builtInIds(),
+      directionPadAvailable
+    )
   } catch {
-    return defaultPreference()
+    return defaultPreference(builtInIds(), directionPadAvailable)
   }
 }
 

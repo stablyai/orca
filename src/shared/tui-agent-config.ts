@@ -1,5 +1,5 @@
 import type { TuiAgent } from './tui-agent'
-import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import { getOrcaCliCommandNameForPlatform, skipsLinuxOrcaCliRename } from './orca-cli-command-name'
 import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 export type {
@@ -353,8 +353,7 @@ export function getTuiAgentLaunchCommand(
   platform: NodeJS.Platform,
   opts?: { isRemote?: boolean }
 ): string {
-  // The GNOME-conflict orca-ide rename is local-only; Linux remote shims are always orca.
-  if (opts?.isRemote && platform === 'linux') {
+  if (platform === 'linux' && skipsLinuxOrcaCliRename(opts?.isRemote)) {
     return config.launchCmd
   }
   return config.launchCmdByPlatform?.[platform] ?? config.launchCmd

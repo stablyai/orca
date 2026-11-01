@@ -4,6 +4,7 @@ import {
   RuntimeSshAccessUnlinkRequestSchema
 } from '../../shared/runtime-ssh-access'
 import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from '../ssh/runtime-ssh-access'
+import { addFanoutListener } from '../event-listener-fanout'
 
 export function registerRuntimeSshAccessHandlers(options: {
   getUserDataPath: () => string
@@ -14,14 +15,14 @@ export function registerRuntimeSshAccessHandlers(options: {
     // Unreachable links hold two lifecycle queues; cancel when their window closes.
     const controller = new AbortController()
     const cancel = (): void => controller.abort()
-    event.sender.once('destroyed', cancel)
+    const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
     try {
       return await linkRuntimeSshAccess(options.getUserDataPath(), args, {
         signal: controller.signal,
         invalidateTransport: options.invalidateTransport
       })
     } finally {
-      event.sender.removeListener('destroyed', cancel)
+      releaseDestroyed()
     }
   })
   ipcMain.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {

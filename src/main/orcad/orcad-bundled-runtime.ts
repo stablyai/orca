@@ -61,8 +61,8 @@ export function isRunningAsBundledOrcadRuntime(directory: string): boolean {
 
 /** Reject substituted runtimes before opening profile state. */
 export function assertOrcadServerRuntime(): void {
-  if (Number(process.versions.node.split('.')[0]) < 18) {
-    throw new OrcadBundledRuntimeError('The Orca server requires Node.js 18 or newer')
+  if (Number(process.versions.node.split('.')[0]) < 24) {
+    throw new OrcadBundledRuntimeError('The Orca server requires Node.js 24 or newer')
   }
   const directory = resolveBundledOrcadSlot()
   const runtime = resolveBundledOrcadRuntime(directory)

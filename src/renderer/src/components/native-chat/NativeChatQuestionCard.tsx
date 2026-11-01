@@ -4,13 +4,21 @@ import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
+import type { AskAnswerSelection } from '../../../../shared/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { isEditableTarget } from '@/lib/editable-target'
-import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalFreeTextInput } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  askAcceptsEmptyAnswer,
+  askConfirmAction,
+  askConfirmLabel,
+  askTypedText,
+  toggleAskOption
+} from '../../../../shared/native-chat-ask-card-rules'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
@@ -33,6 +41,12 @@ export type NativeChatQuestionCardProps = {
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
+
+const CONFIRM_LABEL = {
+  submit: () => translate('components.native-chat.question.send', 'Submit'),
+  next: () => translate('components.native-chat.question.next', 'Next'),
+  skip: () => translate('components.native-chat.question.skip', 'Skip')
+} as const
 
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
 export function NativeChatQuestionCard({
@@ -67,9 +81,9 @@ export function NativeChatQuestionCard({
     freeTextInput?.placeholder ??
     translate('components.native-chat.question.otherPlaceholder', 'Type your answer')
   const acceptsEmpty = (qi: number): boolean =>
-    freeTextInputs?.[qi]?.allowEmpty === true && prompt.questions[qi]?.options.length === 0
+    askAcceptsEmptyAnswer(prompt.questions[qi], freeTextInputs?.[qi])
   const typedText = (qi: number, oth = otherText): string =>
-    freeTextInputs?.[qi]?.allowEmpty ? (oth[qi] ?? '') : (oth[qi] ?? '').trim()
+    askTypedText(oth[qi] ?? '', freeTextInputs?.[qi])
 
   // Picking an option deselects typed text without erasing it from the field.
   const typedAnswerChosen = (qi: number, sel = selections, oth = otherText): boolean =>
@@ -141,11 +155,7 @@ export function NativeChatQuestionCard({
   const pickOption = (optionIndex: number): void => {
     const cur = selections[index] ?? []
     const picked = !cur.includes(optionIndex)
-    const chosen = !picked
-      ? cur.filter((pickedIndex) => pickedIndex !== optionIndex)
-      : q.multiSelect
-        ? [...cur, optionIndex].sort((a, b) => a - b)
-        : [optionIndex]
+    const chosen = toggleAskOption(cur, optionIndex, q.multiSelect)
     const next = selections.map((s, i) => (i === index ? chosen : s))
     setSelections(next)
     autoAdvance.cancel()
@@ -155,17 +165,13 @@ export function NativeChatQuestionCard({
   }
   useNativeChatQuestionKeys(cardRef, shouldFocus && !isSubmitting, q.options.length, pickOption)
 
-  // Only the final question submits; an empty final Skip dismisses, while empty Enter preserves the prompt.
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
-    if (!isLast) {
-      advanceOrSubmit(selections, otherText)
-      return
-    }
     const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
-    if (anyAnswered) {
-      submitAll(selections, otherText)
-    } else if (!fromKeyboard) {
+    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
+    if (action === 'proceed') {
+      advanceOrSubmit(selections, otherText)
+    } else if (action === 'cancel') {
       onCancel()
     }
   }
@@ -193,7 +199,7 @@ export function NativeChatQuestionCard({
       role="group"
       aria-label={q.question}
       tabIndex={-1}
-      className="shrink-0 bg-chat-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="shrink-0 bg-chat-pane focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         // Why not from a text field: Escape there is editing, and collapsing would hide the draft.
@@ -244,7 +250,7 @@ export function NativeChatQuestionCard({
           <div className="flex items-start gap-2 px-3.5 py-2.5">
             <p
               data-testid="native-chat-question-card-title"
-              className="min-w-0 flex-1 break-words text-sm font-semibold text-foreground"
+              className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm font-semibold text-foreground"
             >
               {q.question}
             </p>
@@ -329,7 +335,7 @@ export function NativeChatQuestionCard({
                       }}
                       placeholder={answerPlaceholder}
                       className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50',
+                        'min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
                         currentTypedAnswerChosen || !otherText[index]
                           ? 'text-foreground'
                           : 'text-muted-foreground'
@@ -353,11 +359,7 @@ export function NativeChatQuestionCard({
               >
                 {isSubmitting
                   ? translate('components.native-chat.question.sending', 'Sending…')
-                  : currentAnswered
-                    ? isLast
-                      ? translate('components.native-chat.question.send', 'Submit')
-                      : translate('components.native-chat.question.next', 'Next')
-                    : translate('components.native-chat.question.skip', 'Skip')}
+                  : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()}
               </button>
             </div>
           </div>
@@ -417,7 +419,7 @@ function OptionRow({
         {description ? (
           <span
             className={cn(
-              'block break-words text-xs',
+              'block whitespace-pre-wrap break-words text-xs',
               selected
                 ? 'text-accent-foreground'
                 : 'text-muted-foreground group-hover/option:text-accent-foreground group-focus/option:text-accent-foreground'

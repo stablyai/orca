@@ -79,7 +79,6 @@ export function BrowserUseSetup({
   const steps = [skillDetected, cookiesImported]
   const completedCount = steps.filter(Boolean).length
   const skillDisabled = Boolean(activeSkillRuntime.installDisabledReason)
-  const cookieImportDisabled = !cookiesImported && !skillDetected
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -175,7 +174,6 @@ export function BrowserUseSetup({
         <BrowserUseCookieImportStep
           cookiesImported={cookiesImported}
           isImportingDefault={isImportingDefault}
-          disabled={cookieImportDisabled}
           sourceLabel={sourceLabel}
           onConfigureMoreBrowsers={onConfigureMoreBrowsers}
         />

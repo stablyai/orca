@@ -1,7 +1,10 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
-import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
-import type { PaletteComposedEvidence } from './palette-match/evidence-composer'
+import {
+  buildPaletteDocument,
+  type PaletteDocument
+} from '../../../shared/palette-match/palette-document'
+import type { PaletteComposedEvidence } from '../../../shared/palette-match/evidence-composer'
 import {
   buildWorktreeAttachmentEvidence,
   buildWorktreeAutomationEvidence,

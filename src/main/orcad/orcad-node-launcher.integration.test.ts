@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
@@ -155,13 +155,33 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
     }
     child.once('spawn', () => record('spawn'))
     let closed = false
-    child.once('close', () => {
-      record('close')
-      closed = true
-    })
     let output = ''
+    const waiters: { text: string; resolve: () => void; reject: (error: Error) => void }[] = []
+    const closedOutput = new Promise<void>((resolve) => {
+      child.once('close', () => {
+        record('close')
+        closed = true
+        for (const waiter of waiters.splice(0)) {
+          waiter.reject(
+            new Error(`Launcher closed without "${waiter.text}": ${JSON.stringify(diagnostics())}`)
+          )
+        }
+        resolve()
+      })
+    })
+    // Resolve on the stub's own marker, not a fixed window: slow runners only make it later.
+    const waitForOutput = (text: string): Promise<void> =>
+      output.includes(text)
+        ? Promise.resolve()
+        : closed
+          ? Promise.reject(new Error(`Launcher closed without "${text}"`))
+          : new Promise((resolve, reject) => waiters.push({ text, resolve, reject }))
     const capture = (chunk: Buffer): void => {
       output += chunk.toString()
+      for (const waiter of waiters.filter((entry) => output.includes(entry.text))) {
+        waiters.splice(waiters.indexOf(waiter), 1)
+        waiter.resolve()
+      }
       const pid = /booting:(\d+)/.exec(output)?.[1]
       if (pid && !output.includes('runtime-exit:')) {
         runtimes.add(Number(pid))
@@ -219,30 +239,24 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
         }
       })
     })
-    return { child, output: () => output, exit, isClosed: () => closed, diagnostics }
+    return { child, output: () => output, exit, closedOutput, waitForOutput, diagnostics }
   }
 
   it.each([false, true])(
     'drains the pinned runtime after its launcher is killed (startup pending: %s)',
     async (delay) => {
       const h = launch({ delay })
-      await vi.waitFor(
-        () => {
-          expect(h.output()).toContain(delay ? 'booting:' : 'ready')
-          expect(h.output()).toContain(`runtime:${NODE_RUNTIME_PIN.version}`)
-          expect(h.output()).toContain('channel-env:absent')
-        },
-        { timeout: 5_000 }
-      )
+      await h.waitForOutput(delay ? 'booting:' : 'ready')
+      await h.waitForOutput('channel-env:')
+      expect(h.output()).toContain(`runtime:${NODE_RUNTIME_PIN.version}`)
+      expect(h.output()).toContain('channel-env:absent')
       h.child.kill('SIGKILL')
       await h.exit
-      await vi.waitFor(
-        async () => expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed'),
-        { timeout: 5_000 }
-      )
+      // The runtime writes the flush marker before it exits.
+      await h.waitForOutput('runtime-exit:0')
+      expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
       expect(h.output().match(/flushing/g)).toHaveLength(1)
-      await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:0'))
-      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+      await h.closedOutput
     }
   )
 
@@ -250,7 +264,7 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
     'survives nohup hangups and drains on TERM (direct runtime: %s)',
     async (direct) => {
       const h = launch({ direct, nohup: true })
-      await vi.waitFor(() => expect(h.output()).toContain('ready'), { timeout: 5_000 })
+      await h.waitForOutput('ready')
       if (!h.child.pid) {
         throw new Error('Missing launcher pid')
       }
@@ -262,48 +276,41 @@ describe.skipIf(skip)('real pinned-Node launcher lifecycle', () => {
       h.child.kill('SIGTERM')
       expect(await h.exit).toEqual({ code: 0, signal: null })
       expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
-      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+      await h.closedOutput
     }
   )
 
   it('keeps an unfinished shutdown alive until its failure deadline', async () => {
     const h = launch({ stall: true })
-    await vi.waitFor(() => expect(h.output()).toContain('ready'), { timeout: 5_000 })
+    await h.waitForOutput('ready')
     h.child.kill('SIGKILL')
     await h.exit
-    await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:1'))
+    await h.waitForOutput('runtime-exit:1')
     expect(h.output()).toContain('exceeded 100ms')
-    await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    await h.closedOutput
   })
 
   it.each(process.platform === 'win32' ? [false, true] : [false])(
     'forwards launcher stop requests and drains once (startup pending: %s)',
     async (delay) => {
       const h = launch({ delay })
-      await vi.waitFor(() => expect(h.output()).toContain(delay ? 'booting:' : 'ready'), {
-        timeout: 5_000
-      })
+      await h.waitForOutput(delay ? 'booting:' : 'ready')
       h.child.send('SIGINT')
       h.child.send('SIGTERM')
       expect(await h.exit).toEqual({ code: 0, signal: null })
       expect(await readFile(join(directory, 'done'), 'utf8')).toBe('flushed')
       expect(h.output().match(/flushing/g)).toHaveLength(1)
-      await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+      await h.closedOutput
     }
   )
 
   it('preserves a startup configuration verdict after early launcher loss', async () => {
     const h = launch({ delay: true, failStartup: true })
-    try {
-      await vi.waitFor(() => expect(h.output()).toContain('booting:'), { timeout: 5_000 })
-    } catch (error) {
-      console.error('Node launcher startup diagnostics:', JSON.stringify(h.diagnostics()))
-      throw error
-    }
+    await h.waitForOutput('booting:')
     h.child.kill('SIGKILL')
     await h.exit
-    await vi.waitFor(() => expect(h.output()).toContain('runtime-exit:78'), { timeout: 5_000 })
+    await h.waitForOutput('runtime-exit:78')
     expect(h.output()).toContain('shutdown after launcher disconnect failed')
-    await vi.waitFor(() => expect(h.isClosed()).toBe(true), { timeout: 5_000 })
+    await h.closedOutput
   })
 })

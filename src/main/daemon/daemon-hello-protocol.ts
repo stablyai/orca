@@ -25,4 +25,6 @@ export type HelloResponse = {
   daemonIdentity?: DaemonEndpointIdentity
   /** Echoed only when the daemon switches this stream socket to that framing after this line. */
   streamFraming?: string
+  /** How this daemon's live emulators resize (daemon-history-replay-pty.ts); absent means xterm's. */
+  resizeModel?: string
 }

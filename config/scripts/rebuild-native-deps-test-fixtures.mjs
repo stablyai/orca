@@ -14,10 +14,9 @@ import { fileURLToPath } from 'node:url'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 import { peImage } from './windows-pe-image-fixture.mjs'
 
-// Use gate’s real UTF-16 literal to distinguish pre-denial addons; retyping could let fixture and stale gate agree by construction.
-const { CYGWIN_BREAKAWAY_MARKER, CYGWIN_BREAKAWAY_MARKER_TEXT } = createRequire(import.meta.url)(
-  './node-pty-job-ownership.cjs'
-)
+// Use the gate's UTF-16 literal so fixtures distinguish pre-denial addons.
+const { CYGWIN_BREAKAWAY_MARKER, CYGWIN_BREAKAWAY_MARKER_TEXT, NATIVE_HOST_JOB_MARKER } =
+  createRequire(import.meta.url)('./node-pty-job-ownership.cjs')
 const { CREATION_TIME_FLAG } = createRequire(import.meta.url)(
   './windows-process-tree-creation-time.cjs'
 )
@@ -312,7 +311,8 @@ export function writeFakeNodePtyConptyPayload(
     join(releaseDir, 'conpty.node'),
     Buffer.concat([
       peImage({ arch }),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+      NATIVE_HOST_JOB_MARKER
     ])
   )
   const sourceDir = join(
@@ -336,7 +336,7 @@ export function writeFakeNodePtyConptySource(projectDir, { cygwinBreakawayDenied
   writeFileSync(
     join(sourceDir, 'conpty.cc'),
     cygwinBreakawayDenied
-      ? `for (const wchar_t* dll : {L"${CYGWIN_BREAKAWAY_MARKER_TEXT}", L"cygwin1.dll"}) {}\n`
+      ? `for (const wchar_t* dll : {L"${CYGWIN_BREAKAWAY_MARKER_TEXT}", L"cygwin1.dll"}) {}\n"assignCurrentProcessToStrictJob";\n`
       : 'JOB_OBJECT_LIMIT_BREAKAWAY_OK\n'
   )
 }
@@ -349,7 +349,8 @@ function writeFakeNodePtyAddon(nodePtyDir, nativeDir, { cygwinBreakawayDenied })
       join(addonDir, `${nativeName}.node`),
       Buffer.concat([
         peImage({ arch: process.arch === 'arm64' ? 'arm64' : 'x64' }),
-        cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+        cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+        NATIVE_HOST_JOB_MARKER
       ])
     )
   }
@@ -376,7 +377,8 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
         ? {
             listJobProcessIds() {},
             terminateJob() {},
-            assignCurrentProcessToJob() {}
+            assignCurrentProcessToJob() {},
+            assignCurrentProcessToStrictJob() {}
           }
         : {})
     }
@@ -398,7 +400,10 @@ export function writeFakeWindowsRegistry(projectDir) {
 export function writeFakeWindowsSecurity(projectDir) {
   const securityDir = join(projectDir, 'node_modules', '@orca', 'windows-security')
   mkdirSync(securityDir, { recursive: true })
-  writeFileSync(join(securityDir, 'index.js'), "exports.currentUserSid = () => 'S-1-5-18'\n")
+  writeFileSync(
+    join(securityDir, 'index.js'),
+    "exports.currentUserSid = () => 'S-1-5-18'; exports.hasNativeExport = () => true\n"
+  )
 }
 
 // Healthy patched addon must report CreationTime; no exports represents upstream tarball prebuild to the probe.
@@ -492,7 +497,10 @@ export function writePatchedNodePtyBuildArtifacts(
   if (process.platform === 'win32') {
     writeFileSync(
       join(buildDir, 'conpty.node'),
-      cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0)
+      Buffer.concat([
+        cygwinBreakawayDenied ? CYGWIN_BREAKAWAY_MARKER : Buffer.alloc(0),
+        NATIVE_HOST_JOB_MARKER
+      ])
     )
     mkdirSync(join(buildDir, 'conpty'), { recursive: true })
     writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
