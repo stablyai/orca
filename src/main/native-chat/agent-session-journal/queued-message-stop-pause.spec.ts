@@ -37,12 +37,14 @@ export function registerQueuedMessageStopPauseTests(
         )
         await journal.close()
         journal = await fixture.open()
-        expect(journal.queuedMessages.pauses().some((pause) => pause.reason === 'failed')).toBe(
-          !resumed
-        )
+        // Settlement order is not saved, so a reopened failure holds until a Resume written after it.
+        const failed = () => journal.queuedMessages.pauses().some((p) => p.reason === 'failed')
+        expect(failed()).toBe(true)
         expect(journal.queuedMessages.list()).toMatchObject([
           { messageId: 'carried', state: 'waiting' }
         ])
+        await journal.appendQueueResume(0)
+        expect(failed()).toBe(false)
       }
     )
 

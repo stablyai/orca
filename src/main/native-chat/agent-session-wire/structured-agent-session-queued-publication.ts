@@ -131,16 +131,19 @@ export function readQueuePublication(
       (pause.reason === 'restarted' && (!visible || !pause.since || visible < pause.since.sequence))
   )
   const resumable = silent ? null : resumableQueuePause(pauses, journal.queuedMessages.list())
-  // Avoid scanning submissions when no pause can show.
+  // The input order indexes unsettled sends, so a held queue never rescans history.
   const pause =
-    resumable && !queuePauseLiftOnItsWay(resumable, journal.submissions()) ? resumable : null
+    resumable && !queuePauseLiftOnItsWay(resumable, journal.inputOrder.unsettledSubmissions())
+      ? resumable
+      : null
   const input = gate(journal)
+  const working = structuredInputExecutionWorking(journal, input.work)
   const queuePause =
-    pause?.reason === 'stopped' ||
-    (pause?.reason === 'failed' && !structuredInputExecutionWorking(journal, input.work))
+    pause?.reason === 'stopped' || (pause?.reason === 'failed' && !working)
       ? { reason: pause.reason }
       : null
-  const nextQueuedMessageId = nextStructuredQueuedMessage({ journal, ...input })?.messageId ?? null
+  const nextQueuedMessageId =
+    nextStructuredQueuedMessage({ journal, ...input, working })?.messageId ?? null
   const previous = publications.get(journal)
   if (
     previous &&

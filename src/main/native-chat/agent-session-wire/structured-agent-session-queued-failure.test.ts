@@ -223,22 +223,48 @@ describe('queued follow-ups after an accepted turn fails', () => {
     await held(first)
   })
 
-  it('re-derives the hold after restart and ignores a late failure on an older turn', async () => {
+  it('does not let a Resume written while the turn still runs waive its later failure', async () => {
+    const working = await start()
+    const first = await queue('first')
+    const second = await queue('second')
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      throw new Error('interrupt timed out')
+    })
+    rig.closeSession.mockImplementationOnce(async () => {
+      throw new Error('exit not proven')
+    })
+    await rig.stop()
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await clock.observe(250)
+    expect(await rig.handoff(first)).toBeUndefined()
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    await rig.host.flushStreamedEvents(SESSION)
+    await held(first, second)
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await dispatched(first)
+    expect(await rig.handoff(second)).toBeUndefined()
+  })
+
+  it('re-derives the hold after restart; a later Resume releases it and late revisions do not re-hold', async () => {
     const working = await start()
     const first = await queue('survives restart')
+    const second = await queue('second')
     await openRigTurnFor(rig, working, 'completed', 'failure')
-    await held(first)
+    await held(first, second)
     await rig.restartHostProcess()
     expect(await rig.handoff(first)).toBeUndefined()
-    expect(
-      rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.newestTurn()
-    ).toMatchObject({
-      outcome: 'failure'
-    })
-    const recovered = await start()
-    await openRigTurnFor(rig, recovered, 'completed', 'success')
+    const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    expect(journal.newestTurn()).toMatchObject({ outcome: 'failure' })
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    const handoff = await dispatched(first)
+    const failed = () => journal.queuedMessages.pauses().some((pause) => pause.reason === 'failed')
     await openRigTurnFor(rig, working, 'completed', 'failure')
-    expect(await rig.queuePause()).toBeNull()
-    await dispatched(first)
+    expect(failed()).toBe(false)
+    await openRigTurnFor(rig, handoff)
+    await rig.settleAccepted(handoff, 'first')
+    await openRigTurnFor(rig, working, 'completed', 'failure')
+    expect(failed()).toBe(false)
+    await openRigTurnFor(rig, handoff, 'completed', 'success')
+    await dispatched(second)
   })
 })

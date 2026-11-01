@@ -28,8 +28,11 @@ it.each([100, 1_000])(
     }
     applyJournalRow(state, turn)
     const order = journalInputOrder(state)
-    expect(order.newestTurn.read(state)?.itemId).toBe('turn')
-    const scans = vi.spyOn(state.items, 'values')
+    expect(order.newestTurn.read()?.itemId).toBe('turn')
+    // Drafts read the live map through keys(), so count every way of walking it.
+    const walks = (['keys', 'values', 'entries', 'forEach', Symbol.iterator] as const).map(
+      (method) => vi.spyOn(state.items, method)
+    )
     const failed: JournalRow = {
       ...turn,
       ...base(size + 2),
@@ -37,21 +40,23 @@ it.each([100, 1_000])(
       body: { kind: 'turn', turnId: 'turn', state: 'completed', outcome: 'failure' }
     }
     const pending = isolateJournalTransition(state, (draft) => applyJournalRow(draft, failed))
-    expect(failedQueueTurnSequence(order.newestTurn.read(state), 0)).toBe(0)
+    expect(failedQueueTurnSequence(order.newestTurn.failure(), 0)).toBe(0)
     const committed = pending.adopt()
     for (let n = 0; n < 10; n++) {
       const owner = journalInputOrder(committed)
-      expect(failedQueueTurnSequence(owner.newestTurn.read(committed), 0)).toBe(size + 1)
+      expect(failedQueueTurnSequence(owner.newestTurn.failure(), 0)).toBe(size + 2)
       expect(owner.head(committed, null)).toBeUndefined()
     }
-    expect(scans).not.toHaveBeenCalled()
-    scans.mockRestore()
+    for (const walk of walks) {
+      expect(walk).not.toHaveBeenCalled()
+      walk.mockRestore()
+    }
     applyJournalRow(committed, {
       ...base(size + 3),
       kind: 'tombstone',
       itemId: 'turn',
       revision: 3
     })
-    expect(journalInputOrder(committed).newestTurn.read(committed)).toBeNull()
+    expect(journalInputOrder(committed).newestTurn.read()).toBeNull()
   }
 )

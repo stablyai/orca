@@ -158,7 +158,7 @@ export class JournalInputCardIndex {
       floor?.epoch === state.epoch ? floor.sequence : 0
     )
     const failed = failedQueueTurnSequence(
-      journalInputOrder(state).newestTurn.read(state),
+      journalInputOrder(state).newestTurn.failure(),
       marks.resumedSequence
     )
     const pauseInputs = [

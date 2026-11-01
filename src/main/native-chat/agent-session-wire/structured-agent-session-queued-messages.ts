@@ -61,9 +61,9 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 
 /** Publish the drain’s live pick; backlog itself never gates a lone draft. */
 export function nextStructuredQueuedMessage(
-  input: StructuredQueueGateInput & { journal: AgentSessionJournal }
+  input: StructuredQueueGateInput & { journal: AgentSessionJournal; working?: boolean }
 ): QueuedMessageRow | null {
-  if (structuredInputExecutionWorking(input.journal, input.work)) {
+  if (input.working ?? structuredInputExecutionWorking(input.journal, input.work)) {
     return null
   }
   const selected = selectStructuredAgentSessionInput(input.journal)

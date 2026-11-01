@@ -2,11 +2,7 @@
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from './journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
@@ -145,18 +141,10 @@ export function journalQueuePauseRestatement(
   }
 }
 
-/** A steer joins the same turn, so only a newer turn or explicit Resume can lift failure. */
-export function failedQueueTurnSequence(
-  latest: AgentJournalRenderItem | null,
-  resumedSequence: number
-): number {
-  const turn = readAgentJournalTurn(latest?.body)
-  return latest &&
-    turn?.state !== 'running' &&
-    turn?.outcome === 'failure' &&
-    latest.sequence > resumedSequence
-    ? latest.sequence
-    : 0
+/** A steer joins the same turn, and a Resume written before the failure cannot waive it. A rebuilt
+ * failure sits at the rebuild point, so a Resume at that point was written before it too. */
+export function failedQueueTurnSequence(failedAt: number, resumedSequence: number): number {
+  return failedAt > 0 && failedAt >= resumedSequence ? failedAt : 0
 }
 
 /** Order determines which reason a card held by multiple pauses displays. */
@@ -165,7 +153,8 @@ export function deriveQueuePauses(input: {
   epoch: string
   marks: JournalQueuePauseMarks
   latestAcceptedTurnSequence: number
-  latestTurn?: AgentJournalRenderItem | null
+  /** Where the newest turn settled as failed; zero when it has not. */
+  failedAt?: number
   cards: readonly QueueCard[]
   /** Conservative boundary when this handle could not write a reopen mark. */
   reopenFloor: AgentJournalCursor | null
@@ -176,7 +165,7 @@ export function deriveQueuePauses(input: {
   if (stop) {
     pauses.push({ reason: 'stopped', since: { epoch, sequence: stop.sequence } })
   }
-  const failed = failedQueueTurnSequence(input.latestTurn ?? null, marks.resumedSequence)
+  const failed = failedQueueTurnSequence(input.failedAt ?? 0, marks.resumedSequence)
   if (failed) {
     pauses.push({ reason: 'failed', since: { epoch, sequence: failed } })
   }

@@ -226,7 +226,7 @@ export class AgentSessionJournal {
     runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 
   newestTurn = (): AgentJournalTurnLifecycle | null =>
-    readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read(this.state)?.body)
+    readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
   threadGoalSource = (): JournalThreadGoalSource =>
     journalThreadGoalSource(this.state.items.values())

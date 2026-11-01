@@ -51,11 +51,11 @@ export class JournalInputOrder {
   private receiptCount = 0
   private queueRevision = 0
   private revision = 0
-  readonly newestTurn = new JournalNewestTurn()
 
   constructor(
     private readonly state: JournalReducerState,
-    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+    private readonly originalAcceptance?: (id: string) => AgentJournalCursor | undefined,
+    readonly newestTurn = new JournalNewestTurn(state)
   ) {
     this.lineage = new JournalInputLineageOwner(state.inputCards)
     this.cards = new JournalInputCardIndex(this.lineage)
@@ -122,7 +122,6 @@ export class JournalInputOrder {
   linkedVersion(): number {
     return this.links.version()
   }
-
   linkedTo(id: string): Iterable<AgentJournalSubmission> {
     return this.links.to(id)
   }
