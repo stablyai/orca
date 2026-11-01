@@ -244,7 +244,11 @@ function SessionOptionPopover(props: {
             return
           }
           const row = content.querySelector(`[data-option-id="${CSS.escape(optionId)}"]`)
+          if (row?.closest('[aria-disabled="true"]')) {
+            return
+          }
           const control =
+            row?.querySelector<HTMLElement>('[role="slider"]:not([data-disabled])') ??
             row?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ??
             row?.querySelector<HTMLElement>('button:not(:disabled)')
           if (control) {

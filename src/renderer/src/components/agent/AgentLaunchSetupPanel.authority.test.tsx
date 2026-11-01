@@ -81,15 +81,21 @@ it.each(['missing-default', 'pending', 'known-default', 'explicit'] as const)(
     const radios = [
       ...host.querySelectorAll<HTMLButtonElement>('[data-option-id="effort"] [role="radio"]')
     ]
-    expect(radios).toHaveLength(2)
-    expect(radios.every((radio) => radio.disabled)).toBe(state === 'pending')
+    const slider = host.querySelector<HTMLElement>('[data-option-id="effort"] [role="slider"]')
+    if (state === 'missing-default') {
+      expect(radios).toHaveLength(2)
+      expect(slider).toBeNull()
+    } else {
+      expect(slider).not.toBeNull()
+      expect(slider?.hasAttribute('data-disabled')).toBe(state === 'pending')
+    }
     expect(
       host.querySelector<HTMLButtonElement>('[data-option-id="fastMode"] [role="switch"]')?.disabled
     ).toBe(state === 'pending')
     if (state === 'known-default' || state === 'explicit') {
-      expect(
-        radios.find((radio) => radio.getAttribute('aria-checked') === 'true')?.textContent
-      ).toBe(state === 'known-default' ? 'Low' : 'High')
+      expect(slider?.getAttribute('aria-valuetext')).toBe(
+        state === 'known-default' ? 'Low' : 'High'
+      )
     }
     if (state === 'missing-default') {
       expect(radios.every((radio) => radio.getAttribute('aria-checked') === 'false')).toBe(true)

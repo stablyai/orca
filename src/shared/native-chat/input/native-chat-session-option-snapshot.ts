@@ -88,16 +88,23 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
-    if (choices.length <= 1) {
-      return null
-    }
+    const choices =
+      option.id === 'effort'
+        ? [...option.kind.choices]
+        : choiceWithCurrent(option.kind.choices, tracked)
     const currentValue =
       typeof tracked?.value === 'string'
         ? tracked.value
         : showDefault
           ? option.kind.defaultValue
           : undefined
+    const unlistedEffort =
+      option.id === 'effort' &&
+      typeof tracked?.value === 'string' &&
+      !choices.some((choice) => choice.value === tracked.value)
+    if (choices.length <= 1 && !unlistedEffort) {
+      return null
+    }
     return {
       id: option.id,
       label: option.label,
@@ -106,12 +113,15 @@ function optionDescriptor(args: {
       kind: {
         type: 'select',
         ...(currentValue === undefined ? {} : { currentValue }),
-        choices
+        choices:
+          unlistedEffort && currentValue !== undefined
+            ? [{ value: currentValue, label: currentValue }]
+            : choices
       },
       valueSource,
       transport: liveTransport,
-      ...settable,
-      ...(action ? { action } : {})
+      ...(unlistedEffort ? { settable: false } : settable),
+      ...(action && !unlistedEffort ? { action } : {})
     }
   }
   // A switch has no unknown position. Resolve to defaultValue like composed dispatch, but keep unknown/default provenance so pills cannot claim confirmation.
