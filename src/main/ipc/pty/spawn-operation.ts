@@ -17,6 +17,7 @@ import { restoreProvisionalPtySize } from './spawn-options-assembly'
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { releaseStoppedPaneBinding } from './pane/pane-owner-replacement'
+import { userResumeSpawnPacer } from './ipc/user-resume-spawn-pacer'
 import {
   admitColdRestoreReattach,
   captureSavedResumeCleanup,
@@ -84,6 +85,12 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacementKey)
     ctx.paneSpawnReservationKey = replacementKey
   }
+  let releaseUserResumeSpawn: (() => void) | undefined
+  const reserveUserResumeSpawn = async (): Promise<void> => {
+    if (args.spawnIntent === 'user-resume' && !releaseUserResumeSpawn) {
+      releaseUserResumeSpawn = await userResumeSpawnPacer.take(args.signal)
+    }
+  }
   let prepared = false
   const finish = (outcome: PtySpawnOutcome) => {
     ctx.paneSpawnOperation?.acquisition?.settle(outcome)
@@ -102,6 +109,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   const complete = async (operation: PaneSpawnOperation): Promise<PtySpawnOutcome> => {
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
+    if (args.spawnIntent === 'user-resume') {
+      await reserveUserResumeSpawn()
+    }
     const runtime = ctx.deps.runtime
     const acquire = runtime?.acquireWorktreeTerminalSpawn
     ctx.releaseWorktreeSpawn = acquire
@@ -239,6 +249,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   }
   try {
     if (adapter.replace) {
+      if (args.spawnIntent === 'user-resume') {
+        await reserveUserResumeSpawn()
+      }
       await adapter.replace()
     }
     await adapter.admission
@@ -266,6 +279,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, error)
     throw error
   } finally {
+    releaseUserResumeSpawn?.()
     cancelRegistration(ctx)
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
