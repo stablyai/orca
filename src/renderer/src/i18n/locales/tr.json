@@ -1749,7 +1749,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Çalışma alanı dışındaki dosyalar eşlenen bir sunucuda henüz önizlenemiyor.",
           "webClientUnavailable": "Belge önizlemeleri web istemcisinde kullanılamıyor."
         }
       },

@@ -1771,7 +1771,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Dateien außerhalb des Arbeitsbereichs können auf einem gekoppelten Server noch nicht in der Vorschau angezeigt werden.",
           "webClientUnavailable": "Dokumentvorschauen sind im Web-Client nicht verfügbar."
         }
       },

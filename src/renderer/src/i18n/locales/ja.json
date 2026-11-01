@@ -1320,7 +1320,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "ワークスペース外のファイルは、ペアリングされたサーバーではまだプレビューできません。",
           "webClientUnavailable": "Web クライアントではドキュメントのプレビューを利用できません。"
         }
       },

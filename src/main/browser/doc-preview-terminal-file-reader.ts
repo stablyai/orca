@@ -1,10 +1,15 @@
 import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
-import { resolveCanonicalDocPreviewPath, type DocPreviewGrant } from './doc-preview-grant-registry'
+import {
+  resolveCanonicalDocPreviewPath,
+  resolveDocPreviewAuthorityPaths,
+  toRuntimeWorktreeRelativeDirectoryPath,
+  toRuntimeWorktreeRelativePath,
+  type DocPreviewGrant
+} from './doc-preview-grant-registry'
 import type { RuntimeDocPreviewReadParams } from './doc-preview-file-reader'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { posix } from 'node:path'
 
 const TIMEOUT_MS = 15_000
 const UPDATE_REQUIRED_MESSAGE =
@@ -109,15 +114,26 @@ export async function readDocPreviewTerminalFile(
     'relativePath' in target &&
     typeof target.relativePath === 'string'
   ) {
-    const directory = posix.dirname(target.relativePath.replace(/\\/g, '/'))
+    // Why: the host must check the user-approved folders, not the target's own folder, so a nested symlink cannot step outside them.
+    const approvedRoots = resolveDocPreviewAuthorityPaths(grant)
+      .authorizedRootPaths.filter((root) => toRuntimeWorktreeRelativePath(root, absolutePath))
+      .map((root) =>
+        toRuntimeWorktreeRelativePath(root, owner.worktreeRoot)
+          ? ''
+          : toRuntimeWorktreeRelativeDirectoryPath(owner.worktreeRoot, root)
+      )
+      .filter((root): root is string => root !== null)
+    if (approvedRoots.length === 0) {
+      throw new Error('Not found')
+    }
     return {
       workspaceParams: {
         worktree: owner.worktreeSelector,
         relativePath: target.relativePath,
-        // A directory entry cannot grant a symlinked file outside the approved asset directory.
-        entryRelativePath: directory === '.' ? target.relativePath : directory,
+        // A folder entry grants nothing itself; with only the workspace approved, its boundary already bounds the target.
+        entryRelativePath: approvedRoots.find((root) => root !== '') ?? target.relativePath,
         implicitRootRelativePath: null,
-        authorizedRootRelativePaths: [directory === '.' ? '' : directory]
+        authorizedRootRelativePaths: approvedRoots
       }
     }
   }

@@ -212,6 +212,45 @@ describe('outside-workspace HTML preview', () => {
     )
   })
 
+  // The host canonicalizes these roots, so a nested symlink cannot leave the approved folder.
+  it.each([
+    ['repo/assets/app.js', 'assets', ['assets']],
+    ['app.js', 'assets/app.js', ['']]
+  ])(
+    'asks the host to check approved folders, not the asset folder (approved %s)',
+    async (approvedAsset, entryRelativePath, authorizedRootRelativePaths) => {
+      const page = grant('/srv')
+      authorizeDocPreviewDirectory(page.id, approvedAsset)
+      host(
+        {
+          '/srv/repo/assets/app.js': {
+            openTarget: {
+              kind: 'worktree-file',
+              absolutePath: '/srv/repo/assets/app.js',
+              relativePath: 'assets/app.js'
+            }
+          }
+        },
+        { ok: true, result: { content: 'console.log(1)', isBinary: false } }
+      )
+
+      await readDocPreviewFile(page, 'repo/assets/app.js')
+      expect(mocks.call).toHaveBeenLastCalledWith(
+        '/user-data',
+        'vps',
+        'files.readDocPreview',
+        {
+          worktree: 'id:source-workspace',
+          relativePath: 'assets/app.js',
+          entryRelativePath,
+          implicitRootRelativePath: null,
+          authorizedRootRelativePaths
+        },
+        15_000
+      )
+    }
+  )
+
   it('rejects traversal before contacting the server', async () => {
     await expect(readDocPreviewFile(grant(), '../private.html')).resolves.toMatchObject({
       ok: false,

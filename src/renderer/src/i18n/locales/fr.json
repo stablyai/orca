@@ -1548,7 +1548,6 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Les fichiers en dehors de l'espace de travail ne peuvent pas encore être prévisualisés sur un serveur couplé.",
           "webClientUnavailable": "Les aperçus de documents ne sont pas disponibles dans le client web."
         }
       },
