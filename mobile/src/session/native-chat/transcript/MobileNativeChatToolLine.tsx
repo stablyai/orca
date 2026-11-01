@@ -21,7 +21,6 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   truncateToolDetail
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
-import type { NativeChatToolLineLabel } from '../../../../../src/shared/native-chat/tools/native-chat-tool-line-label'
 import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
@@ -124,7 +123,7 @@ function DiffView({ lines, fontScale }: { lines: NativeChatDiffLine[]; fontScale
 function ToolLineDetail({
   call,
   body,
-  label,
+  commandLanguage,
   hasInput,
   results,
   fontScale,
@@ -133,7 +132,7 @@ function ToolLineDetail({
 }: {
   call: NativeChatToolCallBlock | undefined
   body: NativeChatToolResultBlock | undefined
-  label: NativeChatToolLineLabel | null
+  commandLanguage: string | null
   hasInput: boolean
   results: NativeChatWebSearchResult[]
   fontScale: number
@@ -152,7 +151,7 @@ function ToolLineDetail({
     if (!hasInput || !call) {
       return null
     }
-    const invocation = nativeChatToolLineInput(call, label)
+    const invocation = nativeChatToolLineInput(call, commandLanguage)
     // Bound native text layout as opened output is bounded.
     const clipped = !inputExpanded && invocation.text.length > MAX_TOOL_DETAIL_LENGTH
     const text = clipped ? truncateToolDetail(invocation.text) : invocation.text
@@ -160,7 +159,7 @@ function ToolLineDetail({
       ? highlightMobileCode(text, invocation.language).segments
       : null
     return { text, segments, clipped, partial: invocation.partial }
-  }, [hasInput, call, label, inputExpanded])
+  }, [hasInput, call, commandLanguage, inputExpanded])
   const type = toolType(fontScale).code
   const metaType = toolType(fontScale).meta
   const onLayout = useMobileNativeChatOpenedDetail()
@@ -175,8 +174,6 @@ function ToolLineDetail({
           {call.name}
         </Text>
       ) : null}
-      {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
-      {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
       {input ? (
         <View>
           <MobileNativeChatOwnedScrollView
@@ -206,6 +203,8 @@ function ToolLineDetail({
           ) : null}
         </View>
       ) : null}
+      {results.length > 0 ? <SearchResults results={results} fontScale={fontScale} /> : null}
+      {diff ? <DiffView lines={diff} fontScale={fontScale} /> : null}
       {body ? (
         <MobileNativeChatToolOutput
           body={body}
@@ -319,7 +318,7 @@ export function MobileNativeChatToolLine({
           disclosureKey={disclosureKey}
           call={call}
           body={body}
-          label={label}
+          commandLanguage={label?.commandLanguage ?? null}
           hasInput={hasInput}
           results={results}
           fontScale={fontScale}

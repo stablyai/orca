@@ -31,7 +31,6 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
-import type { NativeChatToolLineLabel } from '../../../../shared/native-chat/tools/native-chat-tool-line-label'
 import type { NativeChatWebSearchResult } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import {
   diffFromText,
@@ -84,14 +83,14 @@ function ToolLineInput({ input }: { input: NativeChatToolLineInput }): React.JSX
 function ToolLineDetail({
   block,
   body,
-  label,
+  commandLanguage,
   hasInput,
   results,
   onLinkClick
 }: {
   block: NativeChatBlock
   body: NativeChatToolResultBlock | undefined
-  label: NativeChatToolLineLabel | null
+  commandLanguage: string | null
   hasInput: boolean
   results: NativeChatWebSearchResult[]
   onLinkClick?: CommentMarkdownLinkClickHandler
@@ -102,18 +101,18 @@ function ToolLineDetail({
     : isToolResultBlock(block)
       ? diffFromText(block.output)
       : null
-  const input = hasInput && call ? nativeChatToolLineInput(call, label) : null
+  const input = hasInput && call ? nativeChatToolLineInput(call, commandLanguage) : null
   return (
     <div className="ml-6 space-y-1.5 py-1">
       {/* The row's verb or MCP label stands in for the tool; name it exactly once opened. */}
       {call ? (
         <p className="break-all font-mono text-xs text-chat-foreground-faint">{call.name}</p>
       ) : null}
+      {input ? <ToolLineInput input={input} /> : null}
       {results.length > 0 ? (
         <NativeChatSearchResults results={results} onLinkClick={onLinkClick} />
       ) : null}
       {diff ? <NativeChatDiffView lines={diff} /> : null}
-      {input ? <ToolLineInput input={input} /> : null}
       {body ? <NativeChatToolOutput body={body} /> : null}
     </div>
   )
@@ -222,7 +221,7 @@ export function NativeChatToolLine({
           <ToolLineDetail
             block={block}
             body={body}
-            label={sharedLabel}
+            commandLanguage={sharedLabel?.commandLanguage ?? null}
             hasInput={hasInput}
             results={results}
             onLinkClick={onLinkClick}

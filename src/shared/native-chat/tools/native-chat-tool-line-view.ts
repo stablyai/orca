@@ -83,7 +83,8 @@ function boundedToolInput(input: unknown): AgentJournalBoundedPayload | null {
 /** An opened call's invocation: a lone command as typed, else every argument it was given. */
 export function nativeChatToolLineInput(
   call: NativeChatToolCallBlock,
-  label: NativeChatToolLineLabel | null
+  /** The row's `commandLanguage`, so a lone command keeps its colors. */
+  commandLanguage: string | null
 ): NativeChatToolLineInput {
   // The host swaps an oversized input for its JSON head; show that head, not the wrapper.
   const bounded = boundedToolInput(call.input)
@@ -97,7 +98,7 @@ export function nativeChatToolLineInput(
   const command = nativeChatPlainCommandInput(call.input)
   return {
     text: command ?? formatToolInput(call.input),
-    language: command === null ? null : (label?.commandLanguage ?? null),
+    language: command === null ? null : commandLanguage,
     partial: null
   }
 }
