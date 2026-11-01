@@ -82,12 +82,15 @@ orca serve --port 6768 --pairing-address 100.64.1.20 --json
 ```bash
 orca repo list --json
 orca repo add --path /abs/path/to/repo --json
+orca repo add --path /abs/path/to/folder --kind folder --json
 orca repo show --repo id:<repoId> --json
 orca repo set-base-ref --repo id:<repoId> --ref origin/main --json
 orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ```
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
+
+`repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
 
 ## Worktrees
 
