@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { Ban, ChevronLeft, ListChecks, Users } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Ban, ChevronLeft, ListChecks, Users, X } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -9,6 +9,7 @@ import {
   nativeChatVisibleTaskList,
   type NativeChatSubagentActivity
 } from '../../../../shared/native-chat/input/native-chat-activity'
+import { nativeChatSubagentDismissible } from '../../../../shared/native-chat/input/native-chat-subagent-dismissals'
 import { nativeChatCompletedTaskCount } from '../../../../shared/native-chat/input/native-chat-task-list'
 import type { NativeChatTaskSeedList } from '../../../../shared/native-chat/input/native-chat-claude-task-updates'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
@@ -17,6 +18,7 @@ import type {
   NativeChatSubagentState
 } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatTaskList } from './NativeChatTaskList'
+import { useNativeChatSubagentDismissals } from './use-native-chat-subagent-dismissals'
 
 function stateLabel(state: NativeChatSubagentState): string {
   switch (state) {
@@ -52,7 +54,8 @@ export function NativeChatActivityBar({
   focusedTranscriptLoading = false,
   onFocusSubagent,
   taskList: sessionTaskList = null,
-  subagentSeed = null
+  subagentSeed = null,
+  sessionId = null
 }: {
   messages: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
@@ -61,6 +64,7 @@ export function NativeChatActivityBar({
   onFocusSubagent: (agentId: string | null) => void
   taskList?: NativeChatTaskSeedList | null
   subagentSeed?: readonly NativeChatSubagentActivity[] | null
+  sessionId?: string | null
 }): React.JSX.Element | null {
   const list = useMemo(() => {
     const focusedMessages = focusedSubagentId
@@ -73,17 +77,24 @@ export function NativeChatActivityBar({
     [messages, subagentRows, subagentSeed]
   )
   const listed = nativeChatListedSubagents(subagents)
+  const { visible, dismiss } = useNativeChatSubagentDismissals(sessionId, listed)
   const [tasksOpen, setTasksOpen] = useState(false)
   const [subagentsOpen, setSubagentsOpen] = useState(false)
   const columnRef = useRef<{ getBoundingClientRect(): DOMRect } | null>(null)
+  useEffect(() => {
+    if (visible.length === 0) {
+      setSubagentsOpen(false)
+    }
+  }, [visible.length])
   const focused = subagents.find((agent) => agent.id === focusedSubagentId) ?? null
   const showTasks = list != null && list.tasks.length > 0
-  if (!showTasks && listed.length === 0 && !focused) {
+  if (!showTasks && visible.length === 0 && !focused) {
     return null
   }
   const completed = list ? nativeChatCompletedTaskCount(list) : 0
   const total = list?.tasks.length ?? 0
-  const working = listed.some((agent) => agent.state === 'working')
+  const working = visible.some((agent) => agent.state === 'working')
+  const dismissible = visible.filter((agent) => nativeChatSubagentDismissible(agent.state))
   return (
     <div className="shrink-0 px-3 pb-2 sm:px-4">
       <div
@@ -168,7 +179,7 @@ export function NativeChatActivityBar({
               </PopoverContent>
             </Popover>
           ) : null}
-          {listed.length > 0 ? (
+          {visible.length > 0 ? (
             <Popover open={subagentsOpen} onOpenChange={setSubagentsOpen}>
               <PopoverAnchor virtualRef={columnRef} />
               <PopoverTrigger
@@ -177,21 +188,21 @@ export function NativeChatActivityBar({
                   'components.native-chat.activity.subagentsLabel',
                   '{{count}} subagents',
                   {
-                    count: listed.length,
+                    count: visible.length,
                     defaultValue_one: '{{count}} subagent'
                   }
                 )}
               >
                 <Users aria-hidden className="size-3.5 shrink-0" />
                 <span>
-                  {listed.length === 1
+                  {visible.length === 1
                     ? translate('components.native-chat.activity.subagent', '{{count}} subagent', {
-                        count: listed.length
+                        count: visible.length
                       })
                     : translate(
                         'components.native-chat.activity.subagents',
                         '{{count}} subagents',
-                        { count: listed.length }
+                        { count: visible.length }
                       )}
                 </span>
                 {working ? (
@@ -208,9 +219,24 @@ export function NativeChatActivityBar({
                 wheelScroll
                 className={sheetClass}
               >
-                <p className="border-b border-border px-3 py-2 text-xs font-medium text-foreground">
-                  {translate('components.native-chat.activity.subagentsTitle', 'Subagents')}
-                </p>
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                  <p className="min-w-0 flex-1 text-xs font-medium text-foreground">
+                    {translate('components.native-chat.activity.subagentsTitle', 'Subagents')}
+                  </p>
+                  {dismissible.length >= 2 ? (
+                    <button
+                      type="button"
+                      data-testid="native-chat-dismiss-all-failed"
+                      className="shrink-0 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => dismiss(dismissible)}
+                    >
+                      {translate(
+                        'components.native-chat.activity.dismissAllFailed',
+                        'Dismiss all failed'
+                      )}
+                    </button>
+                  ) : null}
+                </div>
                 <ul className="max-h-80 overflow-y-auto py-1">
                   {focused ? (
                     <li>
@@ -228,18 +254,37 @@ export function NativeChatActivityBar({
                       />
                     </li>
                   ) : null}
-                  {listed.map((agent) => (
-                    <li key={agent.id}>
-                      <SubagentChoice
-                        agent={agent}
-                        current={agent.id === focusedSubagentId}
-                        onChoose={() => {
-                          setSubagentsOpen(false)
-                          onFocusSubagent(agent.id)
-                        }}
-                      />
-                    </li>
-                  ))}
+                  {visible.map((agent) => {
+                    const canDismiss = nativeChatSubagentDismissible(agent.state)
+                    return (
+                      <li key={agent.id} className="group relative">
+                        <SubagentChoice
+                          agent={agent}
+                          reserveDismiss={canDismiss}
+                          current={agent.id === focusedSubagentId}
+                          onChoose={() => {
+                            setSubagentsOpen(false)
+                            onFocusSubagent(agent.id)
+                          }}
+                        />
+                        {canDismiss ? (
+                          <button
+                            type="button"
+                            data-testid="native-chat-dismiss-subagent"
+                            className="absolute top-1.5 right-1.5 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 group-focus-within:opacity-100"
+                            aria-label={translate(
+                              'components.native-chat.activity.dismissSubagent',
+                              'Dismiss {{name}}',
+                              { name: agent.label }
+                            )}
+                            onClick={() => dismiss([agent])}
+                          >
+                            <X aria-hidden className="size-3.5" />
+                          </button>
+                        ) : null}
+                      </li>
+                    )
+                  })}
                 </ul>
               </PopoverContent>
             </Popover>
@@ -255,12 +300,14 @@ function SubagentChoice({
   label,
   detail,
   current,
+  reserveDismiss = false,
   onChoose
 }: {
   agent?: NativeChatSubagentActivity
   label?: string
   detail?: string
   current: boolean
+  reserveDismiss?: boolean
   onChoose: () => void
 }): React.JSX.Element {
   const failed = agent?.state === 'failed' || agent?.state === 'stopped'
@@ -270,6 +317,7 @@ function SubagentChoice({
       aria-current={current ? 'true' : undefined}
       className={cn(
         'flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        reserveDismiss && 'pr-8',
         current && 'bg-accent'
       )}
       onClick={onChoose}

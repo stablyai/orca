@@ -29,6 +29,14 @@ afterEach(() => {
 })
 
 describe('bridge client handshake', () => {
+  it('declares the dismissed-subagent storage prefix on ready', () => {
+    const page = createPageClient()
+    expect(page.frames()[0]).toMatchObject({
+      type: 'ready',
+      storageKeys: expect.arrayContaining(['orca:dismissedSubagents:'])
+    })
+  })
+
   it('stops asking once init lands', () => {
     const page = createPageClient()
     page.start()

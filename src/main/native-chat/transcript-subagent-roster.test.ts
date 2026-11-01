@@ -126,4 +126,26 @@ describe('decoded subagent roster', () => {
       }
     ])
   })
+
+  it('keeps a background bash task-notification off the roster', () => {
+    // Shape from Claude session e288a2c4 queue-operation bptxy2i6u. The command body is shortened.
+    const backgroundCommand =
+      '<task-notification>\n<task-id>bptxy2i6u</task-id>\n<tool-use-id>toolu_016JLZzFMeAYaRcFgB1QymeQ</tool-use-id>\n<output-file>/private/tmp/claude-501/-Users-eclipxe-Projects-orca/e288a2c4-93b0-4288-9817-ed373716ee20/tasks/bptxy2i6u.output</output-file>\n<status>failed</status>\n<summary>Background command "build script"</summary>\n</task-notification>'
+    const localBash =
+      '<task-notification>\n<task-id>bptxy2i6u</task-id>\n<task-type>local_bash</task-type>\n<status>failed</status>\n<summary>exit 1</summary>\n</task-notification>'
+    const shell =
+      '<task-notification>\n<task-id>shell-1</task-id>\n<task-type>shell</task-type>\n<status>completed</status>\n<summary>Background command "true"</summary>\n</task-notification>'
+    const messages = decoded(
+      [backgroundCommand, localBash, shell].map((content) => ({
+        type: 'queue-operation',
+        timestamp: '2026-11-01T04:56:28.733Z',
+        content
+      })),
+      'claude'
+    )
+    const projection = projectNativeChatTranscript(messages)
+    expect(nativeChatSubagentActivities(projection.conversation, projection.subagentRows)).toEqual(
+      []
+    )
+  })
 })

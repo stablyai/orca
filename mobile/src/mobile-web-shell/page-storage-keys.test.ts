@@ -37,6 +37,7 @@ describe('the keys a page may read and write', () => {
   it('refuses the bare prefix, which names no host', () => {
     expect(isPageStorageKey('orca:pins:')).toBe(false)
     expect(isPageStorageKey('orca:nativeChatTabs:')).toBe(false)
+    expect(isPageStorageKey('orca:dismissedSubagents:')).toBe(false)
   })
 
   it('refuses a key that only starts like an allowlisted one', () => {
@@ -63,7 +64,8 @@ describe('the keys a page may read and write', () => {
     ).toEqual([
       'orca:nativeChatTabs:host-1:wt-1',
       'orca:terminalLiveInputDisabled:host-1:wt-1',
-      'orca:terminalDrafts:host-1:wt-1'
+      'orca:terminalDrafts:host-1:wt-1',
+      'orca:dismissedSubagents:host-1:wt-1'
     ])
     expect(pageStorageKeysForRoute('host-1', '/h/host-1/files/wt-1')).toEqual(
       pageStorageKeysForRoute('host-1', HOST_ROUTE)

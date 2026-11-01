@@ -59,6 +59,7 @@ export function useNativeChatSubagentTranscript({
     onFocusSubagent: (agentId: string | null) => void
     taskList: NativeChatTaskSeedList | null
     subagentSeed: readonly NativeChatSubagentActivity[] | null
+    sessionId: string | null
   }
   childHistory: {
     hasMore: boolean
@@ -138,7 +139,8 @@ export function useNativeChatSubagentTranscript({
       focusedTranscriptLoading: Boolean(readSubagentPage && focusedSubagentId && page.loading),
       onFocusSubagent,
       taskList,
-      subagentSeed
+      subagentSeed,
+      sessionId
     }
   }
 }
