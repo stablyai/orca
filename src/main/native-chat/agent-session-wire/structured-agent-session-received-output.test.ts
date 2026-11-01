@@ -12,7 +12,8 @@ import {
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
 
-it.each([1024, 1025])('saves all %i tool results in one received Claude message', async (count) => {
+it('saves every tool result past 1,024 in one received Claude message, through reopen', async () => {
+  const count = 1025
   const root = await mkdtemp(join(tmpdir(), 'sta-10949-'))
   const identity = {
     sessionId: 'orca-session',

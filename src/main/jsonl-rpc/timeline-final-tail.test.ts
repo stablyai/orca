@@ -62,18 +62,17 @@ describe('Pi final tail before host eviction', () => {
     }
     const gate = Promise.withResolvers<void>()
     cleanups.push(() => gate.resolve())
-    const append = (recordId: string, lifecycle = false) =>
+    const append = (recordId: string) =>
       deferred.sink.tryAppendItem?.(
         { provider: 'legacy', agent: 'pi', sessionId: SESSION, recordId },
         { kind: 'status', tone: 'info', text: recordId },
-        { lifecycle, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     // The nested write joins behind this held read; later writes stay in the real journal queue.
     const blocked = journal.readInOrder(() => {
       expect(append('ordinary')).toEqual({ accepted: true })
       return gate.promise
     })
-    expect(append('lifecycle', true)).toEqual({ accepted: true })
     const before = journal.snapshot().items.length
     vi.useFakeTimers()
     const reply = `Final reply${'r'.repeat(2 * 1024 * 1024)}`

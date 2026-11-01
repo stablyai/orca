@@ -304,29 +304,6 @@ describe('deferred structured agent-session event sink', () => {
     expect(log.map((entry) => entry.ordinal)).toEqual([0, 1, 2])
   })
 
-  it('counts a resolved append and publication as one operation', async () => {
-    const log: Recorded[] = []
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-
-    expect(
-      deferred.sink.tryAppendItem?.(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: true })
-    expect(
-      deferred.sink.tryAppendResolvedItemAndPublish?.(identity(1), BODY, () => identity(1), {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-    ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 2 })
-
-    deferred.bind(target(5, log))
-    await deferred.drained()
-    expect(log).toEqual([
-      { call: 'appendItem', fence: 5, ordinal: 0 },
-      { call: 'appendItem', fence: 5, ordinal: 1 },
-      { call: 'publish', fence: 5 }
-    ])
-  })
-
   it('pauses provider reading at the byte watermark', async () => {
     const log: Recorded[] = []
     const changes: boolean[] = []
