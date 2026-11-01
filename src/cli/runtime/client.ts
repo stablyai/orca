@@ -17,6 +17,7 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
+import { attachMutationRecovery } from './client-error-recovery'
 import {
   RuntimeClientError,
   RuntimeRpcFailureError,
@@ -133,7 +134,9 @@ export class RuntimeClient {
         await this.ensureOrchestrationContractCompatible(effectiveTimeoutMs)
       } catch (error) {
         // A caller-chosen request id is the only rerun handle, so keep it when the probe fails first.
-        throw options?.orchestrationRequestId ? recover(error, null) : error
+        throw options?.orchestrationRequestId
+          ? attachMutationRecovery(error, orchestrationRequestId, originalCommand, true)
+          : error
       }
     }
     const compatibilityEnvelope = method.startsWith('orchestration.')

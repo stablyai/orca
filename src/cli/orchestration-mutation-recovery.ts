@@ -9,7 +9,10 @@ import { quotePowerShellNativeArgument } from '../shared/powershell-native-argum
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
 
-export function orchestrationMutationRecoveryError(error: unknown): unknown {
+export function orchestrationMutationRecoveryError(
+  error: unknown,
+  { unsent = false }: { unsent?: boolean } = {}
+): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
     return error
   }
@@ -28,6 +31,7 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
   const retryCommand = originalCommand
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
+  const knownUnsent = unsent && retryCommand !== undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
   // Without a dispatch id, query by request id to inspect the outcome before retrying a mutation.
   const queryCommand = dispatchId
@@ -39,7 +43,7 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     queryCommand,
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
-    disposition: 'outcome_unknown',
+    disposition: knownUnsent ? 'not_sent' : 'outcome_unknown',
     workerDeathInferred: false
   }
   const retryStep = retryCommand
@@ -51,13 +55,18 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     (arg, i) => arg === '-' && /^--[\w-]+-file$/.test(retryCommand[i - 1] ?? '')
   )
   const nextSteps = [
-    `Run ${renderCommand(queryCommand)} before retrying.`,
-    retryStep,
+    ...(knownUnsent
+      ? [
+          `Once Orca responds, run ${renderCommand(retryCommand)} from this same terminal. --retry-request keeps the same operation identity, so the rerun cannot apply it twice.`
+        ]
+      : [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]),
     ...(readsStdin ? ['Pipe the same input into the retry again; it reads stdin.'] : [])
   ]
   const message = [
     stripUnsafeRetryAdvice(error.message, requestId),
-    'The orchestration mutation may already have taken effect; do not assume it failed.',
+    knownUnsent
+      ? 'Nothing was sent: Orca did not answer the check that runs before the orchestration mutation, so the mutation did not run.'
+      : 'The orchestration mutation may already have taken effect; do not assume it failed.',
     ...nextSteps,
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
     Array.isArray(data?.residualResources)

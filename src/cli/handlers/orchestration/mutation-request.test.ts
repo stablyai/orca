@@ -250,9 +250,16 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
   )
 
   // Windows cannot use this temporary Unix socket path.
-  it.skipIf(process.platform === 'win32')(
-    'names the request id when a frozen runtime times out the contract probe',
-    async () => {
+  it.skipIf(process.platform === 'win32').each([
+    ['a fresh worker_done says nothing was sent', [], /Nothing was sent/],
+    [
+      'a --retry-request rerun keeps the outcome uncertain',
+      ['--retry-request', '11111111-2222-4333-8444-555555555555'],
+      /may already have taken effect/
+    ]
+  ])(
+    'when a frozen runtime times out the contract probe, %s',
+    async (_case, retryArgs, outcomeText) => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-worker-done-frozen-'))
       tempDirs.add(userDataPath)
       const endpoint = join(userDataPath, 'runtime.sock')
@@ -278,10 +285,16 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
         })
       )
       const argv = ['orchestration', 'send', '--type', 'worker_done', '--subject', 'done']
-      const client = new RuntimeClient(userDataPath, 60_000, null, null, 'orca', argv)
+      const client = new RuntimeClient(userDataPath, 60_000, null, null, 'orca', [
+        ...argv,
+        ...retryArgs
+      ])
+      const flags = new Map<string, string | boolean>(
+        retryArgs.length > 0 ? [['retry-request', retryArgs[1]]] : []
+      )
       const error = await callOrchestrationMutation(
         client,
-        new Map(),
+        flags,
         'orchestration.send',
         WORKER_DONE,
         { timeoutMs: 200 },
@@ -290,14 +303,14 @@ describe('callOrchestrationMutation runtime_unavailable retry', () => {
       expect(methods).toEqual(['status.get'])
       expect(error).toMatchObject({
         code: 'runtime_timeout',
-        message: expect.stringMatching(/--retry-request [0-9a-f-]{36}/),
+        message: expect.stringMatching(outcomeText),
         data: {
           recovery: {
             retryCommand: [
               'orca',
               ...argv,
               '--retry-request',
-              expect.stringMatching(/^[0-9a-f-]{36}$/)
+              retryArgs[1] ?? expect.stringMatching(/^[0-9a-f-]{36}$/)
             ]
           }
         }
