@@ -17624,7 +17624,6 @@
         "AutomationRunResults": {
           "download": "Descargar",
           "evidence": "Detalles",
-          "noWarningsReported": "No se informaron advertencias.",
           "saveAndOpen": "Guardar y abrir",
           "attachments": "Adjuntos",
           "resolved": "Resuelto",

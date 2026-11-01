@@ -17193,7 +17193,6 @@
         "AutomationRunResults": {
           "download": "ダウンロード",
           "evidence": "詳細",
-          "noWarningsReported": "警告は報告されていません。",
           "saveAndOpen": "保存して開く",
           "attachments": "添付ファイル",
           "resolved": "解決済み",

@@ -36,8 +36,7 @@ const baseRun: AutomationRun = {
   error: null,
   startedAt: 1,
   dispatchedAt: 1,
-  createdAt: 1,
-  resultReporting: 'offered'
+  createdAt: 1
 }
 
 const warnedRun: AutomationRun = {
@@ -137,23 +136,6 @@ export const agentReportedFailure = defineFixture({
         reportedFailure: {
           message: 'Linear access was denied, so no summary was produced.',
           reportedAt: 2
-        }
-      }}
-    />
-  )
-})
-
-export const noWarningsReported = defineFixture({
-  width: 760,
-  render: () => (
-    <Page
-      run={{
-        ...baseRun,
-        outputSnapshot: {
-          format: 'plain_text',
-          content: 'Brief generated.',
-          capturedAt: 1,
-          truncated: false
         }
       }}
     />

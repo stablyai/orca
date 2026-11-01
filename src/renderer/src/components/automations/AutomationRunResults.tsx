@@ -72,9 +72,7 @@ export function AutomationRunResults({
 }): React.JSX.Element | null {
   const warnings = run.warnings ?? []
   const outputs = run.outputs ?? []
-  const silent =
-    run.resultReporting === 'offered' && run.status === 'completed' && warnings.length === 0
-  if (warnings.length === 0 && outputs.length === 0 && !silent) {
+  if (warnings.length === 0 && outputs.length === 0) {
     return null
   }
   // Open problems first; recovered ones stay as history below them.
@@ -94,13 +92,6 @@ export function AutomationRunResults({
             ))}
           </ul>
         </section>
-      ) : silent ? (
-        <div className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.automations.AutomationRunResults.noWarningsReported',
-            'No warnings reported.'
-          )}
-        </div>
       ) : null}
       {outputs.length > 0 ? (
         <section>

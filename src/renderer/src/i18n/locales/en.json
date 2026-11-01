@@ -18024,7 +18024,6 @@
         "AutomationRunResults": {
           "download": "Download",
           "evidence": "Details",
-          "noWarningsReported": "No warnings reported.",
           "saveAndOpen": "Save and open",
           "attachments": "Attachments",
           "resolved": "Resolved",

@@ -17193,7 +17193,6 @@
         "AutomationRunResults": {
           "download": "다운로드",
           "evidence": "세부 정보",
-          "noWarningsReported": "보고된 경고가 없습니다.",
           "saveAndOpen": "저장 후 열기",
           "attachments": "첨부 파일",
           "resolved": "해결됨",

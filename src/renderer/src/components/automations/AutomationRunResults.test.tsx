@@ -37,11 +37,9 @@ function results(current: AutomationRun, actions?: Partial<AutomationRunOutputAc
 afterEach(cleanup)
 
 describe('AutomationRunResults', () => {
-  it('says nothing was reported only when the agent was asked to report', () => {
-    const { container, rerender } = render(results(run))
+  it('renders nothing when the run has no warnings or attachments', () => {
+    const { container } = render(results(run))
     expect(container).toBeEmptyDOMElement()
-    rerender(results({ ...run, resultReporting: 'offered' }))
-    expect(screen.getByText('No warnings reported.')).toBeInTheDocument()
   })
 
   it('retains the preview across collapse and history refreshes with new output objects', async () => {
