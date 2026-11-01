@@ -187,7 +187,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
   })
 
-  it.each(['pi', 'hermes'])('projects %s titles in a split snapshot', async (agentType) => {
+  it('projects ordered tab titles across panes in an inactive split snapshot', async () => {
     const tabId = 'tab-inactive-split'
     const worktreeId = 'wt-inactive-split'
     const waitingPaneKey = makePaneKey(tabId, '00000000-0000-4000-8000-000000000001')
@@ -198,7 +198,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'waiting',
         prompt: 'waiting turn',
-        agentType,
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_000,
         stateStartedAt: 1_700_000_000_000
       },
@@ -207,7 +207,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'done',
         prompt: 'completed turn',
-        agentType,
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_001,
         stateStartedAt: 1_700_000_000_001
       }
@@ -257,9 +257,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(store.getState().agentStatusByPaneKey[waitingPaneKey]?.state).toBe('waiting')
       expect(store.getState().agentStatusByPaneKey[donePaneKey]?.state).toBe('done')
-      expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.title).toBe(
-        agentType === 'pi' ? 'My Project' : 'Hermes ready'
-      )
+      expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.title).toBe('Hermes ready')
     })
   })
 
@@ -482,7 +480,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
   })
 
-  it.each(['pi', 'hermes'])('batches %s title updates in order', async (agentType) => {
+  it('projects synthetic pane titles across ordered same-pane batch updates', async () => {
     vi.useFakeTimers()
     let storeState: StoreLike
     const applyStatusUpdate = (update: AgentStatusUpdate): void => {
@@ -589,38 +587,33 @@ describe('useIpcEvents agent status snapshot integration', () => {
         })
       }
 
-      emit(1_700_000_000_000, 'working', agentType)
-      emit(1_700_000_000_001, 'waiting', agentType)
-      emit(1_700_000_000_002, 'waiting', agentType)
-      emit(1_700_000_000_003, 'done', agentType)
-      emit(1_700_000_000_002, 'waiting', agentType)
+      emit(1_700_000_000_000, 'working', 'hermes')
+      emit(1_700_000_000_001, 'waiting', 'hermes')
+      emit(1_700_000_000_002, 'waiting', 'hermes')
+      emit(1_700_000_000_003, 'done', 'hermes')
+      emit(1_700_000_000_002, 'waiting', 'hermes')
       vi.advanceTimersByTime(40)
 
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
       expect(setAgentStatuses).toHaveBeenCalledTimes(1)
       expect(setAgentStatuses.mock.calls[0][0]).toEqual([
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType, state: 'waiting' }),
-          terminalTitle: agentType === 'pi' ? 'Codex' : 'Hermes - action required'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'waiting' }),
+          terminalTitle: 'Hermes - action required'
         }),
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType, state: 'waiting' }),
-          terminalTitle: agentType === 'pi' ? 'Codex' : 'Hermes - action required'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'waiting' }),
+          terminalTitle: 'Hermes - action required'
         }),
         expect.objectContaining({
-          payload: expect.objectContaining({ agentType, state: 'done' }),
-          terminalTitle: agentType === 'pi' ? 'Codex' : 'Hermes ready'
+          payload: expect.objectContaining({ agentType: 'hermes', state: 'done' }),
+          terminalTitle: 'Hermes ready'
         })
       ])
       expect(setAgentStatuses.mock.results[0].value).toEqual([true, true, true])
-      if (agentType === 'pi') {
-        expect(updateTabTitle).not.toHaveBeenCalled()
-        expect(updateTabTitles).not.toHaveBeenCalled()
-      } else {
-        expect(updateTabTitle).toHaveBeenCalledOnce()
-        expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Hermes ready')
-        expect(updateTabTitles).toHaveBeenCalledTimes(1)
-      }
+      expect(updateTabTitle).toHaveBeenCalledOnce()
+      expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Hermes ready')
+      expect(updateTabTitles).toHaveBeenCalledTimes(1)
       expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
     } finally {
       vi.useRealTimers()

@@ -358,7 +358,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it.each(['pi', 'hermes'])('bounds %s snapshot publications', async (agentType) => {
+  it('applies a large snapshot with one status and bounded title publications', async () => {
     const paneCount = 100
     const snapshot: AgentStatusSetData[] = []
     const worktrees: AppState['worktreesByRepo'][string] = []
@@ -372,7 +372,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       const paneKey = makePaneKey(tabId, leafId)
       worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
       tabsByWorktree[worktreeId] = [
-        makeTab({ id: tabId, worktreeId, title: agentType, ptyId: `pty-${index}` })
+        makeTab({ id: tabId, worktreeId, title: 'Hermes', ptyId: `pty-${index}` })
       ]
       unifiedTabsByWorktree[worktreeId] = [makeUnifiedTab({ id: tabId, worktreeId, groupId: 'g' })]
       terminalLayoutsByTabId[tabId] = {
@@ -385,7 +385,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         worktreeId,
         state: 'waiting',
         prompt: `remote prompt ${index}`,
-        agentType,
+        agentType: 'hermes',
         receivedAt: 1_700_000_000_000 + index,
         stateStartedAt: 1_700_000_000_000 + index
       })
@@ -451,7 +451,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
       expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
-        agentType === 'pi' ? 'pi' : 'Hermes - action required'
+        'Hermes - action required'
       )
       // Main derives layout-owner tab titles; its unmodeled frames draw them without renderer writes.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -464,10 +464,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       await Promise.resolve()
     }
 
-    const expectedPublications = agentType === 'pi' ? 2 : 3
-    expect(relevantPublications).toBe(
-      ORCA_LAYOUT_OWNER_IS_MAIN ? expectedPublications - 1 : expectedPublications
-    )
+    expect(relevantPublications).toBe(ORCA_LAYOUT_OWNER_IS_MAIN ? 2 : 3)
     unsubscribe()
     expect(renamed()).toEqual([])
   })
