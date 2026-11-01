@@ -53,8 +53,15 @@ describe('partitionIdleChildAgents', () => {
 })
 
 describe('collapsedChildAgentsSignalState', () => {
-  it('surfaces live child work but stays quiet for idle or finished children', () => {
-    expect(collapsedChildAgentsSignalState([row('a', 'idle'), row('b', 'working')])).toBe('working')
-    expect(collapsedChildAgentsSignalState([row('a', 'idle'), row('b', 'done')])).toBeUndefined()
+  it('surfaces live descendant work but stays quiet for idle or finished children', () => {
+    const quiet = new Map([['p', [row('a', 'idle'), row('b', 'done')]]])
+    expect(collapsedChildAgentsSignalState(quiet, 'p')).toBeUndefined()
+    // A waiting grandchild must still light its collapsed grandparent; the cycle back to p is ignored.
+    const nested = new Map([
+      ['p', [row('a', 'idle')]],
+      ['a', [row('g', 'waiting')]],
+      ['g', [row('p', 'working')]]
+    ])
+    expect(collapsedChildAgentsSignalState(nested, 'p')).toBe('waiting')
   })
 })

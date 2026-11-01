@@ -133,3 +133,10 @@ export const fullMode = defineFixture({
     await wait()
   }
 })
+
+export const fullModeCollapsed = defineFixture({
+  width: 300,
+  store: { agentActivityDisplayMode: 'full' },
+  setup,
+  render: () => render('fixture-subagents-full-rest')
+})

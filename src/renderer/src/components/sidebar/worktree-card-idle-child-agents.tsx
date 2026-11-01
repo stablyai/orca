@@ -4,6 +4,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { collectLineageDescendants } from './worktree-card-agent-lineage-disclosure'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { buildSummaryAgentGroups, getAgentDotState } from './worktree-card-agent-summary'
 import type { AgentDotState } from '@/components/AgentStateDot'
@@ -27,11 +28,13 @@ export function partitionIdleChildAgents(childAgents: DashboardAgentRowData[]): 
 
 const QUIET_CHILD_STATES: ReadonlySet<AgentDotState> = new Set(['idle', 'done', 'unverifiable'])
 
-/** The most urgent non-quiet child state, so a collapsed parent still signals live sub-agent work. */
+/** The most urgent non-quiet descendant state, so a collapsed parent still signals live sub-agent work. */
 export function collapsedChildAgentsSignalState(
-  childAgents: DashboardAgentRowData[]
+  childrenByParentPaneKey: ReadonlyMap<string, readonly DashboardAgentRowData[]>,
+  parentPaneKey: string
 ): AgentDotState | undefined {
-  const top = buildSummaryAgentGroups(childAgents)[0]?.state
+  const descendants = collectLineageDescendants(childrenByParentPaneKey, parentPaneKey)
+  const top = buildSummaryAgentGroups(descendants)[0]?.state
   return top && !QUIET_CHILD_STATES.has(top) ? top : undefined
 }
 
@@ -41,13 +44,16 @@ type IdleChildAgentGroupRowProps = {
   onToggle: () => void
   // Full-mode child rows use a wider inset; match it so the dots share one column.
   layout: 'compact' | 'full'
+  // Sits among treeitem siblings, so it joins the tree at their level.
+  ariaLevel: number
 }
 
 export function IdleChildAgentGroupRow({
   count,
   expanded,
   onToggle,
-  layout
+  layout,
+  ariaLevel
 }: IdleChildAgentGroupRowProps): React.JSX.Element {
   const label = translate('sidebar.agentSummary.idleChildCount', '{{count}} idle', { count })
   const handleClick = useCallback(
@@ -78,6 +84,8 @@ export function IdleChildAgentGroupRow({
         'text-muted-foreground/65 tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
       )}
       data-idle-child-agent-group=""
+      role="treeitem"
+      aria-level={ariaLevel}
       aria-expanded={expanded}
       aria-label={
         expanded
@@ -114,6 +122,7 @@ type ChildAgentsWithIdleGroupProps = {
   idleExpanded: boolean
   onToggleIdle: () => void
   layout: 'compact' | 'full'
+  ariaLevel: number
   renderChild: (childAgent: DashboardAgentRowData, idleGroupExpanded: boolean) => React.ReactNode
 }
 
@@ -123,6 +132,7 @@ export function ChildAgentsWithIdleGroup({
   idleExpanded,
   onToggleIdle,
   layout,
+  ariaLevel,
   renderChild
 }: ChildAgentsWithIdleGroupProps): React.JSX.Element {
   const { activeChildren, idleChildren } = partitionIdleChildAgents(childAgents)
@@ -136,6 +146,7 @@ export function ChildAgentsWithIdleGroup({
             expanded={idleExpanded}
             onToggle={onToggleIdle}
             layout={layout}
+            ariaLevel={ariaLevel}
           />
           {layout === 'compact' ? (
             <CompactAgentExpansion expanded={idleExpanded}>
