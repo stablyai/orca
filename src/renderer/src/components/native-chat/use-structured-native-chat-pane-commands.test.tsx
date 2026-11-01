@@ -9,6 +9,7 @@ import type * as I18n from '@/i18n/i18n'
 import type { AppState } from '@/store'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { nativeChatPaneHeader } from './NativeChatPaneHeader'
 import { emptyNativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
@@ -121,6 +122,7 @@ function StructuredChatTab({
   epoch = 'epoch',
   visible = true,
   fallback = false,
+  messages,
   terminalPane = false,
   owner = 'worktree-1'
 }: {
@@ -128,6 +130,7 @@ function StructuredChatTab({
   epoch?: string
   visible?: boolean
   fallback?: boolean
+  messages?: readonly NativeChatMessage[]
   terminalPane?: boolean
   owner?: string | null
 }): ReactNode {
@@ -153,32 +156,34 @@ function StructuredChatTab({
     directory: inWorkspace
       ? { worktreeId: 'wt-1', worktreePath: '/work/repo', runtimeEnvironmentId: 'env_1' }
       : null,
-    messages: fallback
-      ? [
-          {
-            id: 'recent',
-            role: 'user',
-            timestamp: 1,
-            source: 'transcript',
-            blocks: [{ type: 'text', text: 'Keep the task context' }]
-          },
-          {
-            id: 'start',
-            role: 'system',
-            timestamp: 2,
-            source: 'transcript',
-            agentStart: true,
-            blocks: [{ type: 'text', text: 'Do not export this worker assignment' }]
-          },
-          {
-            id: 'answer',
-            role: 'assistant',
-            timestamp: 3,
-            source: 'transcript',
-            blocks: [{ type: 'text', text: 'Keep the answer' }]
-          }
-        ]
-      : [],
+    messages:
+      messages ??
+      (fallback
+        ? [
+            {
+              id: 'recent',
+              role: 'user',
+              timestamp: 1,
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Keep the task context' }]
+            },
+            {
+              id: 'start',
+              role: 'system',
+              timestamp: 2,
+              source: 'transcript',
+              agentStart: true,
+              blocks: [{ type: 'text', text: 'Do not export this worker assignment' }]
+            },
+            {
+              id: 'answer',
+              role: 'assistant',
+              timestamp: 3,
+              source: 'transcript',
+              blocks: [{ type: 'text', text: 'Keep the answer' }]
+            }
+          ]
+        : []),
     epoch,
     focusComposer: handOff.focus
   })
@@ -452,7 +457,7 @@ describe('a structured chat tab', () => {
     view.rerender(<StructuredChatTab inWorkspace fallback />)
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
+      capturedText: '[user] Keep the task context\n\n[assistant] Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -460,7 +465,7 @@ describe('a structured chat tab', () => {
     handOff.options.mockResolvedValue({ status: 'current', transcriptPath: '/native.jsonl' })
     await act(async () => openMenuHandOff())
     expect(handOff.dialog.mock.lastCall?.[0].request.source).toMatchObject({
-      capturedText: 'user: Keep the task context\n\nassistant: Keep the answer',
+      capturedText: '[user] Keep the task context\n\n[assistant] Keep the answer',
       transcriptPath: undefined
     })
     fireEvent.click(screen.getByText('Close hand-off'))
@@ -472,6 +477,60 @@ describe('a structured chat tab', () => {
     await act(async () => openMenuHandOff())
     expect(screen.queryByText('Close hand-off')).toBeNull()
   })
+  it('bounds loaded tool evidence when the host cannot prepare a saved handoff', async () => {
+    handOff.capability.mockResolvedValue(false)
+    render(
+      <StructuredChatTab
+        inWorkspace
+        messages={[
+          {
+            id: 'request',
+            role: 'user',
+            timestamp: 1,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'Review the viewer' }]
+          },
+          {
+            id: 'tool',
+            role: 'assistant',
+            timestamp: 2,
+            source: 'transcript',
+            blocks: [
+              {
+                type: 'tool-call',
+                name: 'shell',
+                input: { command: 'pnpm test viewer.test.ts' },
+                callId: 'test'
+              },
+              {
+                type: 'tool-result',
+                output: `AssertionError\n${'a'.repeat(200_000)}\nTests: 2 failed`,
+                callId: 'test',
+                isError: true
+              }
+            ]
+          },
+          {
+            id: 'answer',
+            role: 'assistant',
+            timestamp: 3,
+            source: 'transcript',
+            blocks: [{ type: 'text', text: 'The append resets reader position.' }]
+          }
+        ]}
+      />
+    )
+    await act(async () => openMenuHandOff())
+    const source: AgentSessionContinuationRequest['source'] =
+      handOff.dialog.mock.lastCall?.[0].request.source
+    expect(source.transcriptPath).toBeUndefined()
+    expect(source.capturedText.length).toBeLessThan(4_000)
+    expect(source.capturedText).toContain('[user] Review the viewer')
+    expect(source.capturedText).toContain('Tests: 2 failed')
+    expect(source.capturedText).toContain('[assistant] The append resets reader position.')
+    expect(source.capturedText).not.toContain('a'.repeat(2_000))
+  })
+
   it.each([false, true])(
     'retires a deadline click with useful fallback=%s before another click',
     async (fallback) => {

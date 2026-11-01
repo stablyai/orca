@@ -2,7 +2,7 @@ import { projectSavedChatContextItems } from '../agent-session-saved-prompt-text
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../shared/agent-session/agent-session-wire'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
-import { trimAgentSessionContext } from '../../../shared/agent-session-context-budget'
+import { buildAgentSessionHandoffContext } from '../../../shared/agent-session-handoff-context'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
@@ -43,15 +43,14 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const context = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
-    const text = projectStructuredAgentSessionMessages(
+    const messages = projectStructuredAgentSessionMessages(
       context.items,
       [],
       context.submissions,
       projectSavedChatContextItems
     )
-      .map(formatWorkerTranscriptMessage)
-      .join('\n\n')
-    const capturedText = trimAgentSessionContext(text, 'saved chat messages')
+    const capturedText = buildAgentSessionHandoffContext(messages)
+    const text = messages.map(formatWorkerTranscriptMessage).join('\n\n')
     if (!text.trim()) {
       return { status: 'current', capturedText: '' }
     }
