@@ -30,9 +30,13 @@ vi.mock('../repo-worktrees', async () => {
   return { ...actual, listRepoWorktreeGraph: vi.fn(async () => []) }
 })
 
-type Registration = { repoPaths?: string[]; folderPath?: string }
+type Registration = {
+  repoPaths?: string[]
+  folderPath?: string
+  settings?: Record<string, unknown>
+}
 
-function makeStore({ repoPaths = [], folderPath }: Registration): Store {
+function makeStore({ repoPaths = [], folderPath, settings = {} }: Registration): Store {
   const repos = repoPaths.map((path, index) => ({
     id: `repo-${index}`,
     path,
@@ -47,7 +51,7 @@ function makeStore({ repoPaths = [], folderPath }: Registration): Store {
     getProjects: () => [],
     getProjectGroups: () => [],
     getFolderWorkspaces: () => folders.map((folder) => ({ ...folder })),
-    getSettings: () => ({ nestWorkspaces: false, workspaceDir: '' })
+    getSettings: () => ({ nestWorkspaces: false, workspaceDir: '', ...settings })
   } as unknown as Store
 }
 
@@ -233,6 +237,38 @@ describe('requests with no declared access (roots only)', () => {
     await expect(
       resolveDesktopAuthorizedPath(homedir(), makeStore({ repoPaths: [project] }))
     ).rejects.toThrow('Access denied')
+  })
+
+  it('allows files in a trusted floatingTerminalCwd directory', async () => {
+    const trustedDir = join(base, 'trusted-floating-dir')
+    await mkdir(trustedDir)
+    const file = join(trustedDir, 'index.html')
+    await writeFile(file, 'hello')
+
+    const store = makeStore({
+      settings: {
+        floatingTerminalCwd: trustedDir,
+        floatingTerminalTrustedCwds: [trustedDir]
+      }
+    })
+
+    await expect(resolveDesktopAuthorizedPath(file, store)).resolves.toBe(file)
+  })
+
+  it('refuses files in an untrusted floatingTerminalCwd directory', async () => {
+    const untrustedDir = join(base, 'untrusted-floating-dir')
+    await mkdir(untrustedDir)
+    const file = join(untrustedDir, 'index.html')
+    await writeFile(file, 'hello')
+
+    const store = makeStore({
+      settings: {
+        floatingTerminalCwd: untrustedDir,
+        floatingTerminalTrustedCwds: []
+      }
+    })
+
+    await expect(resolveDesktopAuthorizedPath(file, store)).rejects.toThrow('Access denied')
   })
 })
 
