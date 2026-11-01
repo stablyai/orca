@@ -1491,40 +1491,17 @@
   },
   "pullRequest": {
     "checksSection": {
-      "actionRequired": "Eylem gerekli",
-      "cancelled": "İptal edildi",
-      "checkDetails": "{{name}} kontrolünün ayrıntıları",
-      "failed": "Başarısız",
       "failing": "{{count}} başarısız",
-      "failingChecks_one": "{{count}} başarısız kontrol",
-      "failingChecks_other": "{{count}} başarısız kontrol",
-      "fix": "Düzelt",
-      "fixFailing": "Başarısız kontrolleri AI ile düzelt",
-      "inProgress": "Devam ediyor",
-      "inspectOrFix": "Ayrıntıları inceleyin veya AI ile düzeltme başlatın.",
-      "loadDetailsFailed": "Kontrol ayrıntıları yüklenemedi",
-      "neutral": "Nötr",
-      "neutralCount": "{{count}} nötr",
       "noChecks": "Kontrol yok",
       "openOnWeb": "{{name}} kontrolünü web'de aç",
       "passed": "{{count}} başarılı",
-      "pending": "Beklemede",
-      "pendingCount": "{{count}} beklemede",
-      "queued": "Kuyrukta",
-      "rerunFailing": "Başarısız kontrolleri yeniden çalıştır",
-      "skipped": "Atlandı",
-      "successful": "Başarılı",
-      "timedOut": "Zaman aşımına uğradı",
-      "title": "Kontroller",
-      "unavailable": "Kontroller kullanılamıyor"
+      "title": "Kontroller"
     },
     "commentCard": {
       "daysAgo_one": "{{count}} gün önce",
       "daysAgo_other": "{{count}} gün önce",
-      "deleteComment": "Yorumu sil",
       "deleteConfirmMessage": "Bu işlem GitHub'daki yorumu kalıcı olarak siler.",
       "deleteConfirmTitle": "Yorum silinsin mi?",
-      "editComment": "Yorumu düzenle",
       "editPlaceholder": "Yorumu düzenleyin…",
       "hoursAgo_one": "{{count}} saat önce",
       "hoursAgo_other": "{{count}} saat önce",
@@ -1533,37 +1510,19 @@
       "minutesAgo_other": "{{count}} dk önce",
       "monthsAgo_one": "{{count}} ay önce",
       "monthsAgo_other": "{{count}} ay önce",
-      "openOnGitHub": "Yorumu GitHub'da aç",
       "reply": "Yanıtla",
-      "replyPlaceholder": "Bir yanıt yazın…",
-      "replyToComment": "Yoruma yanıt ver",
       "resolve": "Çöz",
-      "resolveThread": "Yorum dizisini çöz",
-      "resolved": "çözüldü",
       "unresolve": "Çözümü geri al",
-      "unresolveThread": "Yorum dizisinin çözümünü geri al",
       "yearsAgo_one": "{{count}} yıl önce",
       "yearsAgo_other": "{{count}} yıl önce"
     },
     "commentsSection": {
-      "addCommentPlaceholder": "Yorum ekleyin…",
-      "all": "Tümü",
-      "bots": "Botlar",
       "comment": "Yorum yap",
-      "commentsLoadFailed": "Yorumlar yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
       "description": "Açıklama",
       "descriptionLoadFailed": "Açıklama yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
-      "humans": "İnsanlar",
-      "noBotComments": "Bot yorumu yok.",
       "noComments": "Henüz yorum yok.",
       "noDescription": "Açıklama girilmemiş.",
-      "noHumanComments": "İnsan yorumu yok.",
-      "resolvedCommentCount": "Çözülmüş yorum · {{author}} ({{count}})",
-      "resolvedCommentSingle": "Çözülmüş yorum · {{author}}",
-      "resolvedThreadCount": "Çözülmüş yorum dizisi · {{author}} ({{count}})",
-      "resolvedThreadSingle": "Çözülmüş yorum dizisi · {{author}}",
       "showMore": "{{count}} tane daha göster",
-      "showMoreOf": "Kalan {{remaining}} yorumdan {{count}} tane daha göster",
       "title": "Yorumlar"
     },
     "conflictingFilesSection": {
@@ -1592,27 +1551,14 @@
       "details": "Ayrıntılar"
     },
     "prActionsSection": {
-      "autoMergeAccessibilityLabel": "Otomatik merge işlemini aç/kapat",
-      "autoMergeLabel": "Hazır olduğunda otomatik merge et",
-      "autoMergeOff": "Kapalı",
-      "autoMergeOn": "Açık",
-      "closeAccessibilityLabel": "Pull request'i kapat",
       "closeConfirmMessage": "#{{number}} merge edilmeden kapatılacak.",
       "closeConfirmTitle": "Pull request kapatılsın mı?",
-      "markReadyAccessibilityLabel": "Pull request'i incelemeye hazır olarak işaretle",
       "markReadyButton": "İncelemeye hazır",
-      "mergeAccessibilityLabel": "Pull request'i merge et",
-      "mergeButton": "Merge et",
-      "mergeConfirmTitle": "Pull request merge edilsin mi?",
-      "recheckAccessibilityLabel": "Merge durumunu yeniden kontrol et",
-      "recheckButton": "Yeniden kontrol et",
       "reopenAccessibilityLabel": "Pull request'i yeniden aç",
       "reopenButton": "Yeniden aç",
       "reopenConfirmMessage": "#{{number}} yeniden açılacak.",
       "reopenConfirmTitle": "Pull request yeniden açılsın mı?",
-      "unlinkAccessibilityLabel": "Pull request bağlantısını kaldır",
-      "unlinkButton": "Bağlantıyı kaldır",
-      "unlinkFailed": "Pull request bağlantısı kaldırılamadı."
+      "unlinkButton": "Bağlantıyı kaldır"
     },
     "prActionsState": {
       "behindHint": "Merge etmeden önce branch'i güncelleyin",
@@ -1705,25 +1651,10 @@
     },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} branch'i açık bir PR'a bağlı değil.",
-      "branchRequired": "Bir pull request oluşturmadan önce bir branch'i checkout edin.",
-      "createFailed": "Pull request oluşturulamadı.",
-      "createPr": "PR Oluştur",
-      "createPullRequest": "Pull request oluştur",
       "currentBranchNotLinked": "Geçerli branch açık bir PR'a bağlı değil.",
-      "linkExistingPr": "Mevcut bir PR'ı bağla",
       "linkExistingPullRequest": "Mevcut bir pull request'i bağla",
       "linkedPrUnavailable": "Bağlı PR #{{number}} kullanılamıyor",
-      "noOpenPullRequest": "Açık pull request yok",
-      "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun.",
-      "refreshPullRequest": "Pull request'i yenile",
-      "title": "Pull request"
-    },
-    "prSidebarHeader": {
-      "cancelEditingTitle": "Başlığı düzenlemeyi iptal et",
-      "editTitle": "Pull request başlığını düzenle",
-      "openInBrowser": "#{{number}} numaralı pull request'i tarayıcıda aç",
-      "openOnWeb": "#{{number}} numaralı pull request'i web'de aç",
-      "saveTitle": "Başlığı kaydet"
+      "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun."
     },
     "prViewPanel": {
       "branchUnavailable": "Geçerli branch kullanılamıyor.",
@@ -1731,20 +1662,13 @@
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Kişiler yüklenemedi",
-      "noMatches": "Eşleşen kişi yok",
-      "removeReviewer": "{{login}} adlı kişiyi kaldır",
-      "requestReviewer": "{{login}} adlı kişiden inceleme iste",
-      "searchPeople": "Kişi ara",
-      "title": "İnceleyenler"
+      "noMatches": "Eşleşen kişi yok"
     },
     "reviewersSection": {
-      "addOrRemove": "İnceleyen ekle veya kaldır",
       "approved": "Onaylandı",
       "changesRequested": "Değişiklik istendi",
       "commented": "Yorum yapıldı",
       "dismissed": "Geçersiz kılındı",
-      "loadFailed": "İnceleyenler yüklenemedi. Yeniden denemek için yenile düğmesine dokunun.",
-      "loading": "İnceleyenler yükleniyor…",
       "noReviewers": "İnceleme istenmedi",
       "pending": "Beklemede",
       "removeReviewer": "{{login}} kullanıcısını kaldır",
@@ -2424,8 +2348,7 @@
       "actionFailed": "Yorum işlemi gerçekleştirilemedi"
     },
     "usePrTitleAction": {
-      "disconnected": "Masaüstü bağlantısı yok.",
-      "updateFailed": "Başlık güncellenemedi."
+      "disconnected": "Masaüstü bağlantısı yok."
     },
     "useQuickCommands": {
       "loadFailed": "Hızlı komutlar yüklenemedi",
@@ -3197,9 +3120,6 @@
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "Commit mesajı oluşturulamadı"
-    },
-    "useMobileCreatePrRunner": {
-      "branchRequired": "Pull request oluşturmadan önce bir branch'i checkout edin."
     },
     "useMobileGitRequests": {
       "actionFailed": "Kaynak kontrolü işlemi gerçekleştirilemedi",

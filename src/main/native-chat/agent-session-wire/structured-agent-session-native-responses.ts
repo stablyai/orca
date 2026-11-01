@@ -99,7 +99,7 @@ export class StructuredNativeResponses {
     }
     this.executionFence = executionFence
     this.recovery.ready()
-    this.cursor = next
+    this.cursor = changes?.ok ? { epoch: next.epoch, sequence: changes.through } : next
     return this.result()
   }
 

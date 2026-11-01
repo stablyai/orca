@@ -52,6 +52,22 @@ export const composerInputStyles = themedStyleSheet(() => ({
   formBox: {
     borderRadius: radii.surface
   },
+  inlineBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs
+  },
+  inlineText: {
+    flex: 1,
+    paddingVertical: (COMPOSER_CONTROL_SIZE - MESSAGE_MIN_HEIGHT) / 2
+  },
+  inlineActions: {
+    marginTop: 0
+  },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
   },

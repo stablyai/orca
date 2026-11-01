@@ -179,9 +179,12 @@ export function useBottomDrawerDrag(
     screenHeight: number
     scrollOffsetY: SharedValue<number>
     onDismiss: () => void
+    /** False leaves the sheet in place under every drag, e.g. while it is busy. */
+    dismissible?: boolean
   }
 ) {
   const { scrollOffsetY } = args
+  const dismissible = args.dismissible ?? true
   const drag = useDrawerDrag({
     ...args,
     extent: args.sheetHeight,
@@ -196,14 +199,33 @@ export function useBottomDrawerDrag(
   const handlePanGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => drag.begin())
-    .onUpdate((e) => drag.follow(e.translationY))
-    .onEnd((e) => drag.release(e.velocityY))
+    .onBegin(() => {
+      if (dismissible) {
+        drag.begin()
+      }
+    })
+    .onUpdate((e) => {
+      if (dismissible) {
+        drag.follow(e.translationY)
+      }
+    })
+    .onEnd((e) => {
+      if (dismissible) {
+        drag.release(e.velocityY)
+      }
+    })
   const contentPanGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => drag.begin())
+    .onBegin(() => {
+      if (dismissible) {
+        drag.begin()
+      }
+    })
     .onUpdate((e) => {
+      if (!dismissible) {
+        return
+      }
       // Tall content scrolls back to its top before a downward drag takes the sheet.
       if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
         if (drag.dragging.value) {
@@ -213,7 +235,11 @@ export function useBottomDrawerDrag(
       }
       drag.follow(e.translationY)
     })
-    .onEnd((e) => drag.release(e.velocityY))
+    .onEnd((e) => {
+      if (dismissible) {
+        drag.release(e.velocityY)
+      }
+    })
 
   return { scrollHandler, scrollGesture, handlePanGesture, contentPanGesture }
 }

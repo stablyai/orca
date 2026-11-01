@@ -208,5 +208,12 @@
     "dynamic": false,
     "count": 1,
     "reason": "Actual Claude CLI tool-result line in the terminal still; preserve the illustrative output and line count."
+  },
+  {
+    "filePath": "src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts",
+    "kind": "object-property:error",
+    "text": "This build does not support WebCodecs H.264 decoding.",
+    "dynamic": false,
+    "count": 1
   }
 ]
