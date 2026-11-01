@@ -128,7 +128,7 @@ public class OrcaReservedRegionsModule: Module {
       if let keyboardFrame {
         let frame = window.convert(keyboardFrame, from: window.screen.coordinateSpace)
         let overlap = frame.intersection(window.bounds)
-        keyboardInset = overlap.isNull ? 0 : overlap.height
+        keyboardInset = overlap.isNull || frame.maxY < window.bounds.maxY ? 0 : overlap.height
       } else {
         keyboardInset = keyboardObserved ? 0 : nil
       }
