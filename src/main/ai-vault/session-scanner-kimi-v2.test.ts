@@ -1,13 +1,52 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
+import { kimiSessionContentFingerprint } from './session-scanner-kimi-content-fingerprint'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import type { TranscriptMessage } from './session-transcript-consumers'
 
 const roots: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+it('does not read child wires that legacy Kimi parsing ignores', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kimi-legacy-wires-'))
+  roots.push(root)
+  const session = join(root, 'sessions', 'wd_fixture', 'session_v1-fixture')
+  const main = join(session, 'agents', 'main', 'wire.jsonl')
+  const child = join(session, 'agents', 'agent-1', 'wire.jsonl')
+  await mkdir(join(session, 'agents', 'main'), { recursive: true })
+  await mkdir(join(session, 'agents', 'agent-1'), { recursive: true })
+  const path = join(session, 'state.json')
+  await writeFile(
+    path,
+    JSON.stringify({
+      version: 1,
+      agents: { main: { type: 'main' }, 'agent-1': { type: 'subagent' } }
+    })
+  )
+  await writeFile(
+    main,
+    JSON.stringify({
+      type: 'context.append_message',
+      message: { role: 'user', origin: { kind: 'user' }, content: 'legacy question' }
+    })
+  )
+  await writeFile(child, 'unused child transcript')
+  const open = vi.spyOn(transcriptFs, 'openTranscriptReadStream')
+  const result = await parseKimiSessionFile(
+    { path, mtimeMs: 1, modifiedAt: '2026-10-04T14:00:00.000Z' },
+    'darwin'
+  )
+  expect(result?.previewMessages.map((message) => message.text)).toContain('legacy question')
+  expect(open.mock.calls.map(([wire]) => wire)).toEqual([main])
+  const stat = vi.spyOn(transcriptFs, 'wslGatedStat')
+  await kimiSessionContentFingerprint(path)
+  expect(stat.mock.calls.map(([wire]) => wire)).toEqual([main])
 })
 
 it.each(['milliseconds', 'iso'])(

@@ -56,6 +56,9 @@ export function kimiPrimaryAgentWirePath(
 
 export function kimiSessionWirePaths(statePath: string, state: Record<string, unknown>): string[] {
   const primary = kimiPrimaryAgentWirePath(statePath, state)
+  if (state.version !== 2) {
+    return [primary]
+  }
   const children = Object.keys(asRecord(state.agents) ?? {})
     .filter(safeKimiAgentId)
     .map((id) => join(dirname(statePath), 'agents', id, 'wire.jsonl'))
