@@ -1941,7 +1941,8 @@
       "stopDictation": "Stop voice dictation",
       "transcribingDictation": "Transcribing voice dictation",
       "startingDictation": "Starting voice dictation",
-      "startDictation": "Start voice dictation"
+      "startDictation": "Start voice dictation",
+      "takePhoto": "Take a photo"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -2123,7 +2124,8 @@
       "workspaceFile": "Workspace file",
       "skills": "Skills",
       "availableSkills": "{{count}} available",
-      "commands": "Commands"
+      "commands": "Commands",
+      "takePhoto": "Take photo"
     },
     "nativeChatCliFork": {
       "resumeInNewCli": "Resume in New CLI"
@@ -2268,7 +2270,8 @@
       "disconnected": "Attach failed (disconnected)",
       "permissionDenied": "Photo permission denied",
       "imageTooLarge": "Image too large to attach",
-      "attachFailed": "Attach failed"
+      "attachFailed": "Attach failed",
+      "cameraPermissionDenied": "Camera permission denied"
     },
     "useNativeChatStop": {
       "terminalNotReady": "Stop not sent (terminal not ready)",
@@ -2642,7 +2645,8 @@
       "sendQueue": "Queue",
       "sendSteer": "Steer",
       "sendQueueHint": "Runs after the current turn",
-      "sendSteerHint": "Goes into what the agent is doing now"
+      "sendSteerHint": "Goes into what the agent is doing now",
+      "takePhoto": "Take photo"
     },
     "composerAttachments": {
       "file": "File",
@@ -2656,7 +2660,8 @@
       "disconnected": "Attach failed (disconnected)",
       "permissionDenied": "Photo permission denied",
       "imageTooLarge": "Image too large to attach",
-      "attachFailed": "Attach failed"
+      "attachFailed": "Attach failed",
+      "cameraPermissionDenied": "Camera permission denied"
     },
     "ask": {
       "submit": "Submit",

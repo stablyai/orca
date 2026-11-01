@@ -84,7 +84,13 @@ export function useMobileImageAttachment({
           return
         }
         if (error instanceof CameraPermissionError) {
-          showToast('Camera permission denied', 1500)
+          showToast(
+            translate(
+              'session.useImageAttachment.cameraPermissionDenied',
+              'Camera permission denied'
+            ),
+            1500
+          )
           return
         }
         if (error instanceof ImageLibraryPermissionError) {

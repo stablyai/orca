@@ -122,7 +122,10 @@ export function useMobileNativeChatImageUpload(args: {
           return
         }
         if (uploadError instanceof CameraPermissionError) {
-          showToast('Camera permission denied', 1500)
+          showToast(
+            translate('chat.useImageUpload.cameraPermissionDenied', 'Camera permission denied'),
+            1500
+          )
           return
         }
         if (uploadError instanceof ImageLibraryPermissionError) {
