@@ -12,6 +12,10 @@ import {
 } from '../tab-group-state'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 
+export function canMoveUnifiedTabAcrossWorktrees(contentType: string): boolean {
+  return contentType === 'terminal' || contentType === 'agent-session'
+}
+
 export function createMoveTabToWorktreeAction(
   set: TabsSliceSet,
   get: TabsSliceGet
@@ -32,7 +36,11 @@ export function createMoveTabToWorktreeAction(
           }
         }
       }
-      if (!foundTab || foundTab.worktreeId === targetWorktreeId) {
+      if (
+        !foundTab ||
+        foundTab.worktreeId === targetWorktreeId ||
+        !canMoveUnifiedTabAcrossWorktrees(foundTab.tab.contentType)
+      ) {
         return state
       }
 
@@ -234,13 +242,29 @@ export function createMoveTabToWorktreeAction(
         ...(shouldActivateWorktree ? { activeWorktreeId: targetWorktreeId } : {})
       }
 
-      return {
+      const sourceSurface = buildActiveSurfacePatch(
+        {
+          ...state,
+          ...basePatch
+        },
+        sourceWorktreeId,
+        nextActiveGroupIdByWorktree[sourceWorktreeId] ?? null
+      )
+      const patchWithSourceSurface = {
         ...basePatch,
+        activeBrowserTabIdByWorktree: sourceSurface.activeBrowserTabIdByWorktree,
+        activeFileIdByWorktree: sourceSurface.activeFileIdByWorktree,
+        activeTabIdByWorktree: sourceSurface.activeTabIdByWorktree,
+        activeTabTypeByWorktree: sourceSurface.activeTabTypeByWorktree
+      }
+
+      return {
+        ...patchWithSourceSurface,
         ...(nextActiveWorktreeId
           ? buildActiveSurfacePatch(
               {
                 ...state,
-                ...basePatch
+                ...patchWithSourceSurface
               },
               surfaceWorktreeId,
               surfaceGroupId
