@@ -1,6 +1,6 @@
 // Real disk tail → isolated translator → deferred sink → on-disk journal contracts.
 import { describe, expect, it, vi } from 'vitest'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import * as sessionFileResolver from '../native-chat/session-file-resolver'
 import * as transcriptTail from './claude-transcript-tail'
 import {
@@ -17,9 +17,13 @@ import {
 import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { dispatchClaudeTurn } from './structured/claude-structured-dispatch'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
-import { childExited, sessionFor, userMessage } from './claude-structured-dispatch-test-support'
+import {
+  childExited,
+  sessionFor,
+  userMessage
+} from './structured/claude-structured-dispatch-test-support'
 import {
   SESSION,
   SID,

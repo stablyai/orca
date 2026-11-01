@@ -15,7 +15,7 @@ import {
   type ClaudeMainThreadModel
 } from './claude-context-usage'
 import type { ClaudeOpenTurn } from './claude-open-turn'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 import type { ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import {

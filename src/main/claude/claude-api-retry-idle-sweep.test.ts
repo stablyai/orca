@@ -15,7 +15,7 @@ import {
   hostTestAttachParams,
   resetHostTestOperationIds
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase

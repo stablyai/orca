@@ -5,7 +5,7 @@ import {
   adapterAtPublishFor,
   fakeClaude,
   PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
+} from '../../claude/structured/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from './structured-agent-session-adapter-router'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'

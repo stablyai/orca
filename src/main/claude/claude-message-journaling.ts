@@ -15,11 +15,11 @@ import {
   claudeToolUses,
   readClaudeMessageEnvelope,
   type ClaudeToolUse
-} from './claude-structured-item-translation'
+} from './structured/journal/claude-structured-item-translation'
 import {
   appendUnmodeledContent,
   type ClaudeProviderFrameFallback
-} from './claude-structured-provider-fallback'
+} from './structured/launch/claude-structured-provider-fallback'
 import type { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import type { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 import type { ClaudeStreamedThinking } from './claude-streamed-thinking'

@@ -9,11 +9,11 @@ import {
   claudeChildEnv,
   resolveClaudeChildEnvSources,
   type ClaudeEnvDeps
-} from './claude-structured-child-env'
-import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+} from './structured/launch/claude-structured-child-env'
+import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { claudeConfigDirEnvPatch, withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
-import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
+import type { ClaudeStructuredLaunch } from './structured/launch/claude-structured-launch-resolution'
 import { resolve } from 'node:path'
 
 export type ClaudeNamingInputs = {

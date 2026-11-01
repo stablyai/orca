@@ -36,8 +36,8 @@ import {
   claudeToolIdentity,
   claudeToolUses,
   readClaudeMessageEnvelope
-} from './claude-structured-item-translation'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+} from './structured/journal/claude-structured-item-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { createClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from './claude-session-state-turn-over'
 

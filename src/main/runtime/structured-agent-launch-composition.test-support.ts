@@ -11,12 +11,12 @@ import {
   acpStructuredLaunchPart,
   type AcpStructuredLaunchPartDeps
 } from '../acp/acp-structured-launch-resolution'
-import { CLAUDE_STRUCTURED_AGENT } from '../claude/claude-structured-agent-definition'
-import type { ClaudeEnvDeps } from '../claude/claude-structured-child-env'
+import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
+import type { ClaudeEnvDeps } from '../claude/structured/launch/claude-structured-child-env'
 import {
   claudeStructuredLaunchPart,
   type ClaudeStructuredLaunchPartDeps
-} from '../claude/claude-structured-launch-resolution'
+} from '../claude/structured/launch/claude-structured-launch-resolution'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
 import {
   codexStructuredLaunchPart,

@@ -19,7 +19,7 @@ import {
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { statusStructuredAgentSessionToolCall } from '../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 
 const SESSION = 'claude-session'
 
