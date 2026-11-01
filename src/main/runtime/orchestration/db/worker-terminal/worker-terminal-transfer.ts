@@ -1,6 +1,7 @@
 import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
-import { isEquivalentPaneKey } from '../pane-key-match'
+import { isEquivalentPaneKey, parseWorkerTerminalPriorOwnerIds } from '../pane-key-match'
+import type { DispatchContextRow } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
@@ -156,6 +157,58 @@ export function listWorkerTerminalResourcesByIncarnationPrefix(
         WHERE substr(process_incarnation, 1, ?) = ? ORDER BY updated_at DESC`
     )
     .all(prefix.length, prefix) as WorkerTerminalResourceRow[]
+}
+
+const IDENTITY_COHORT_SQL =
+  'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+
+type OwnerHistory = Map<string, string | undefined>
+
+/** For one caller check: who held a Dispatch's exact terminal process right before it, from saved custody only. Each
+ *  owner history and identity cohort is read and decoded at most once per check; it is evidence, never permission, and
+ *  goes when the check does. */
+export function previousCustodianLookup(
+  db: OrchestrationDb
+): (dispatch: DispatchContextRow) => string | undefined {
+  const histories = new Map<string, OwnerHistory | null>()
+  // Per exact process: each former holder's one custody row, or null when several rows name it.
+  const cohorts = new Map<string, Map<string, WorkerTerminalResourceRow | null>>()
+  // Each holder's predecessor in the row's ordered owners; unreadable or repeating history proves nothing.
+  const historyOf = (resource: WorkerTerminalResourceRow) => {
+    if (!histories.has(resource.id)) {
+      const prior = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+      const owners = prior && [...prior, resource.owner_dispatch_id]
+      const previous = owners && new Map(owners.map((owner, index) => [owner, owners[index - 1]]))
+      histories.set(resource.id, previous?.size === owners?.length ? previous : null)
+    }
+    return histories.get(resource.id)
+  }
+  const cohortOf = (incarnation: string, host: string | null) => {
+    const key = JSON.stringify([incarnation, host])
+    let holders = cohorts.get(key)
+    if (!holders) {
+      holders = new Map()
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+      const rows = db.db
+        .prepare(IDENTITY_COHORT_SQL)
+        .all(incarnation, host) as WorkerTerminalResourceRow[]
+      for (const row of rows) {
+        for (const holder of historyOf(row)?.keys() ?? []) {
+          holders.set(holder, holders.has(holder) ? null : row)
+        }
+      }
+      cohorts.set(key, holders)
+    }
+    return holders
+  }
+  return (dispatch) => {
+    const resource =
+      db.getWorkerTerminalResourceByOwner(dispatch.id) ??
+      (dispatch.process_incarnation
+        ? cohortOf(dispatch.process_incarnation, dispatch.host_scope).get(dispatch.id)
+        : undefined)
+    return resource ? historyOf(resource)?.get(dispatch.id) : undefined
+  }
 }
 
 export type WorkerTerminalTransferMethods = {

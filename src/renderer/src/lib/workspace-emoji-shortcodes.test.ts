@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
+  insertWorkspaceEmojiAtSelection,
   replaceCompletedWorkspaceEmojiShortcode
 } from './workspace-emoji-shortcodes'
 
@@ -41,5 +42,30 @@ describe('workspace emoji shortcodes', () => {
       value: 'Ship 😉 today',
       cursor: 8
     })
+  })
+})
+
+describe('insertWorkspaceEmojiAtSelection', () => {
+  it('pads the emoji so it never fuses with neighbouring text', () => {
+    expect(insertWorkspaceEmojiAtSelection('user-support', 0, 0, '🚀')).toEqual({
+      value: '🚀 user-support',
+      cursor: 3
+    })
+    expect(insertWorkspaceEmojiAtSelection('user-support', 12, 12, '🚀')).toEqual({
+      value: 'user-support 🚀 ',
+      cursor: 16
+    })
+    expect(insertWorkspaceEmojiAtSelection('ship it', 4, 4, '🚀')).toEqual({
+      value: 'ship 🚀 it',
+      cursor: 7
+    })
+  })
+
+  it('replaces the selected range and clamps out-of-range selections', () => {
+    expect(insertWorkspaceEmojiAtSelection('ship bug fix', 5, 8, '🐛')).toEqual({
+      value: 'ship 🐛 fix',
+      cursor: 7
+    })
+    expect(insertWorkspaceEmojiAtSelection('', 4, 9, '✨')).toEqual({ value: '✨ ', cursor: 2 })
   })
 })

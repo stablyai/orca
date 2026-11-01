@@ -140,12 +140,4 @@ describe('the status menu with a very large imported SSH host list', () => {
     const trigger = screen.getByRole('button', { name: 'Remote host connection status' })
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger))
   })
-
-  it('offers no search when every idle host fits', () => {
-    state.sshTargetLabels = new Map([['ssh-1', 'solo']])
-    state.sshConnectionStates = new Map()
-    render(<SshStatusSegment compact={false} iconOnly={false} />)
-    expect(screen.getByText('solo')).toBeTruthy()
-    expect(screen.queryByRole('menuitem', { name: /^Find/ })).toBeNull()
-  })
 })

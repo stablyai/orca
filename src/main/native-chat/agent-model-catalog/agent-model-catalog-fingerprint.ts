@@ -59,6 +59,20 @@ export function agentModelCatalogFingerprintForRecord(
   return agentModelCatalogFingerprint({ ...agentModelCatalogIdentityForRecord(record), folder })
 }
 
+/** A chat keys by the account pinned at launch; native probes cannot list a WSL-pinned one. */
+export function recordCatalogKey(
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
+  folder?: string
+): { fingerprint: string; accountHome: AgentSessionRecord['accountHome'] | null } {
+  return {
+    fingerprint: agentModelCatalogFingerprintForRecord(record, folder),
+    accountHome:
+      record.location.executionHostId === 'local' && record.location.wslDistro === null
+        ? record.accountHome
+        : null
+  }
+}
+
 /** Per-spawn store access; supported structured adapters require native execution. */
 export function agentModelCatalogSessionAccess(
   store: AgentModelCatalogStore | undefined,

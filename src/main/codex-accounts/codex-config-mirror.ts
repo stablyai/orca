@@ -26,24 +26,24 @@ export class CodexConfigMirror {
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string
-    ) => string
+    ) => string | Promise<string>
   ) {}
 
-  safeSyncToManagedHomes(): void {
+  async safeSyncToManagedHomes(): Promise<void> {
     try {
-      this.syncToManagedHomes()
+      await this.syncToManagedHomes()
     } catch (error) {
       console.warn('[codex-accounts] Failed to sync canonical config:', error)
     }
   }
 
-  safeSyncIntoManagedHome(
+  async safeSyncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig?: CanonicalCodexConfig | null,
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> {
     try {
-      this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
+      await this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
@@ -93,7 +93,9 @@ export class CodexConfigMirror {
     )
   }
 
-  private syncToManagedHomes(): void {
+  /** Host homes sync before this returns; a WSL home's ownership check finishes later. */
+  private async syncToManagedHomes(): Promise<void> {
+    const pending: Promise<void>[] = []
     for (const account of this.store.getSettings().codexManagedAccounts) {
       const distro = parseWslUncPath(account.managedHomePath)?.distro
       // Its UNC reads boot a stopped distro (E9); launch preparation syncs that home before use.
@@ -103,33 +105,46 @@ export class CodexConfigMirror {
       ) {
         continue
       }
-      try {
-        this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
-      } catch (error) {
+      const warn = (error: unknown): void =>
         console.warn('[codex-accounts] Failed to sync managed config:', error)
+      try {
+        const synced = this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
+        if (synced) {
+          pending.push(synced.catch(warn))
+        }
+      } catch (error) {
+        warn(error)
       }
     }
+    await Promise.all(pending)
   }
 
+  /** Synchronous for a home whose ownership check is; otherwise the promise of its sync. */
   private syncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> | undefined {
     if (canonicalConfig === null) {
       // Guard long host homes even without source config; WSL launch preparation guards guest homes.
-      if (!parseWslUncPath(managedHomePath)) {
-        ensureCodexDaemonSocketGuard(this.assertManagedHomePath(managedHomePath, expectedAccountId))
+      if (parseWslUncPath(managedHomePath)) {
+        return undefined
       }
-      return
+      return thenWith(
+        this.assertManagedHomePath(managedHomePath, expectedAccountId),
+        ensureCodexDaemonSocketGuard
+      )
     }
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
     // Refresh ordinary settings without replacing approvals owned by this runtime home.
-    syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath: trustedManagedHomePath,
-      systemHomePath: canonicalConfig.sourceHomePath,
-      systemConfigDir: canonicalConfig.sourceConfigDir
-    })
+    return thenWith(
+      this.assertManagedHomePath(managedHomePath, expectedAccountId),
+      (runtimeHomePath) =>
+        syncSystemConfigIntoManagedCodexHome({
+          runtimeHomePath,
+          systemHomePath: canonicalConfig.sourceHomePath,
+          systemConfigDir: canonicalConfig.sourceConfigDir
+        })
+    )
   }
 
   private readHostConfig(): CanonicalCodexConfig | null {
@@ -145,4 +160,18 @@ export class CodexConfigMirror {
       return null
     }
   }
+}
+
+/** Runs `apply` now on a plain value, or once the promise settles. */
+function thenWith(
+  value: string | Promise<string>,
+  apply: (resolved: string) => unknown
+): Promise<void> | undefined {
+  if (typeof value === 'string') {
+    apply(value)
+    return undefined
+  }
+  return value.then((resolved) => {
+    apply(resolved)
+  })
 }

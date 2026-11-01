@@ -1,4 +1,4 @@
-import { nativeChatApprovalAcceptKey } from './native-chat-agent-support'
+import { nativeChatApprovalAcceptKey } from './native-chat/native-chat-agent-support'
 
 /** The facts in a status row's `{ approval: { tool, summary } }` envelope; callers own labels. */
 export type NativeChatApprovalEnvelope = {

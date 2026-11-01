@@ -1292,6 +1292,16 @@
     },
     "sheetHeader": {
       "close": "Close"
+    },
+    "svgPreview": {
+      "drawFailed": "Unable to draw this SVG",
+      "label": "{{title}} drawing",
+      "previewDrawing": "Preview drawing",
+      "viewSource": "View SVG source"
+    },
+    "mermaidDiagram": {
+      "label": "Mermaid diagram",
+      "expand": "Expand diagram"
     }
   },
   "pullRequest": {

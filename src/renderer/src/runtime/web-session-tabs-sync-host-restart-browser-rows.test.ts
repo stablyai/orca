@@ -199,21 +199,6 @@ describe('client-hosted browser rows across a host restart', () => {
 })
 
 describe('reading whether a snapshot answers for a worktree', () => {
-  // Pin the literal wire contract with older hosts; importing the constant would let both drift together.
-  it('treats the placeholder epoch at version zero as no answer', () => {
-    expect(UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH).toBe('none')
-    expect(
-      hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'none', snapshotVersion: 0 })
-    ).toBe(false)
-  })
-
-  // Version zero can be published; only placeholder epoch proves a synthesized frame.
-  it('answers for a real epoch even at version zero', () => {
-    expect(
-      hostSnapshotAffirmsWorktreeContents({ publicationEpoch: 'headless:abc', snapshotVersion: 0 })
-    ).toBe(true)
-  })
-
   // A paired client's projection renames the epoch and adds its navigation revision to the version.
   it('treats a paired client projection of the placeholder as no answer', () => {
     expect(

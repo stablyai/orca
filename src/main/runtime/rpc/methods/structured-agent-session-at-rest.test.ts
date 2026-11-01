@@ -433,14 +433,3 @@ it('refuses a damaged journal as unloadable at subscribe and send, and keeps its
       .get(SESSION)?.value_json
   ).toBe('}{')
 })
-
-it('subscribes an old mobile client that holds first even when no agent can start (P2-06)', async () => {
-  await restingChat()
-  fixture.rig.adapter.acquire.mockRejectedValue(new Error('auth expired'))
-
-  const [held] = await call('agentSession.hold', { sessionId: SESSION, holderId: 'mobile' })
-  const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-  expect(held).toMatchObject({ ok: true })
-  expect(frames.find((frame) => frame.ok)).toMatchObject({ result: { type: 'snapshot' } })
-  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-})

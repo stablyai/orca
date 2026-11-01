@@ -20,6 +20,7 @@ import {
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
 import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
+import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/journal-outcome-format'
 import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -226,8 +227,13 @@ describe('ACP launch resolution', () => {
       // The turn on acp-1 is found, so the exchange is saved; the loss has no warning yet.
       expect(await readDecisions()).toEqual({ unsaved: false, losses: [lostKey] })
       // A newer build's records are unreadable here, never a missing chat.
-      database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()
-      expect(restoreJournal(database.db, identity.sessionId)?.newer).toBeTruthy()
+      database.db
+        .prepare('UPDATE journal_outcome_epochs SET format = ?')
+        .run(JOURNAL_OUTCOME_FORMAT + 1)
+      const newer = restoreJournal(database.db, identity.sessionId)
+      expect(newer).not.toBeNull()
+      expect(newer?.newer).toStrictEqual({ sequence: 1 })
+      expect(newer?.damage).toBeNull()
       expect(await readDecisions()).toEqual({ unsaved: false, losses: [] })
     } finally {
       await closeTestJournalHostDatabase(root)

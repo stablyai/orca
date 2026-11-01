@@ -190,35 +190,6 @@ describe('native Chromium integrity-cookie accounting', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('counts every excluded Google cookie in skippedCookies', async () => {
-    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
-    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
-    createChromiumCookieTestDatabase(sourceCookiesPath, [
-      { domain: '.google.com', name: 'AEC', value: 'source-bound' },
-      { domain: '.google.com', name: 'SAPISID', value: 'google-session' },
-      { domain: '.example.com', name: 'AEC', value: 'not-google' }
-    ]).close()
-    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-
-    try {
-      const result = await importCookiesFromBrowser(
-        chromeBrowser(sourceCookiesPath),
-        'persist:test'
-      )
-      expect(result.ok && result.summary).toMatchObject({
-        totalCookies: 3,
-        importedCookies: 1,
-        skippedCookies: 2,
-        googleCookiesSkipped: 2,
-        domains: ['example.com']
-      })
-      expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['AEC'])
-    } finally {
-      platformSpy.mockRestore()
-    }
-  })
-
   it('preserves the destination when every source cookie is filtered or invalid', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')

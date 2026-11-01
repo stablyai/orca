@@ -19,6 +19,7 @@ type LeftSidebarAppearanceSettings = Pick<
   | 'terminalCustomThemes'
   | 'terminalDividerColorLight'
   | 'terminalColorOverrides'
+  | 'terminalColorOverridesLight'
   | 'terminalBackgroundOpacity'
 >
 
@@ -93,11 +94,10 @@ function resolveTerminalSurfaceVariables(
 ): LeftSidebarStyleVariables {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const background = applyAlpha(
-    settings.terminalColorOverrides?.background ?? appearance.theme?.background ?? '#000000',
+    appearance.theme?.background ?? '#000000',
     settings.terminalBackgroundOpacity
   )
-  const foreground =
-    settings.terminalColorOverrides?.foreground ?? appearance.theme?.foreground ?? '#fafafa'
+  const foreground = appearance.theme?.foreground ?? '#fafafa'
   return buildSurfaceVariables({ background, foreground, overrideTextTokens: true })
 }
 
