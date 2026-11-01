@@ -58,6 +58,11 @@ on:
         default: ''
   workflow_dispatch:
     inputs:
+      background_launch:
+        description: Run targeted E2E with hidden windows (mapped-window tests may skip)
+        required: false
+        type: boolean
+        default: false
       ref:
         description: Ref to check out (defaults to the workflow ref)
         required: false
@@ -347,6 +352,8 @@ jobs:
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     timeout-minutes: 45
+    env:
+      ORCA_BACKGROUND_LAUNCH: ${{ inputs.background_launch && '1' || '0' }}
     strategy:
       fail-fast: false
       matrix:

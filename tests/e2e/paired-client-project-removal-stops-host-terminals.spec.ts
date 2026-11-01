@@ -11,6 +11,8 @@ import {
   type PairedElectronClient
 } from './helpers/paired-electron-client'
 import { createRestartSession } from './helpers/orca-restart'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
+import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 
 function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
@@ -105,20 +107,29 @@ test('removing a project from a paired client stops its shells on the host', asy
       state?.setActiveView('terminal')
       state?.setActiveWorktree(id)
     }, worktreeId)
-    const listHostTerminals = (): Promise<string[]> =>
-      callRuntime<{ terminals: { handle: string }[] }>(
-        paired.page,
-        paired.environmentId,
-        'terminal.list',
-        { worktree: `id:${worktreeId}` }
-      ).then((listed) => listed.terminals.map((terminal) => terminal.handle))
+    let handle: string | undefined
     await expect
-      .poll(() => listHostTerminals().then((handles) => handles.length), {
-        timeout: 45_000,
-        message: 'Opening the worktree never created a host terminal'
-      })
-      .toBeGreaterThan(0)
-    const [handle] = await listHostTerminals()
+      .poll(
+        async () => {
+          const listed = await readFreshTerminalInventory(() =>
+            callRuntime<RuntimeTerminalListResult>(
+              paired.page,
+              paired.environmentId,
+              'terminal.list',
+              {
+                worktree: `id:${worktreeId}`
+              }
+            )
+          )
+          handle = listed?.terminals[0]?.handle
+          return handle ?? null
+        },
+        {
+          timeout: 45_000,
+          message: 'Opening the worktree never created a host terminal'
+        }
+      )
+      .not.toBeNull()
 
     // Retried because the first send can land before the shell is writable or has its prompt.
     await expect

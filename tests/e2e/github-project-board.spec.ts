@@ -169,6 +169,7 @@ test('board drops cross preload, settle optimistically, and roll back failures',
         host: 'github.com',
         itemId: 'row',
         fieldId: 'status',
+        wakeWslDistro: true,
         value: { kind: 'single-select', optionId: 'done' }
       }
     ])
@@ -188,9 +189,16 @@ test('board drops cross preload, settle optimistically, and roll back failures',
         host: 'github.com',
         itemId: 'row',
         fieldId: 'status',
+        wakeWslDistro: true,
         value: { kind: 'single-select', optionId: 'done' }
       },
-      { projectId: 'project', host: 'github.com', itemId: 'row', fieldId: 'status' }
+      {
+        projectId: 'project',
+        host: 'github.com',
+        itemId: 'row',
+        fieldId: 'status',
+        wakeWslDistro: true
+      }
     ])
   await orcaPage.screenshot({ path: testInfo.outputPath('board-rollback.png') })
   await orcaPage.evaluate(() => document.documentElement.classList.remove('dark'))
