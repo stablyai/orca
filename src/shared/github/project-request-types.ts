@@ -95,6 +95,12 @@ export type ListAssignableUsersBySlugArgs = {
   seedLogins?: string[]
 }
 
+export type ListReviewTeamsBySlugArgs = {
+  owner: string
+  repo: string
+  host?: string
+}
+
 export type ListIssueTypesBySlugArgs = {
   owner: string
   repo: string

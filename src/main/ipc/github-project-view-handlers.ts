@@ -10,6 +10,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ListReviewTeamsBySlugArgs,
   ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   UpdateIssueBySlugArgs,
@@ -30,6 +31,7 @@ import {
   listIssueTypesBySlug,
   listLabelsBySlug,
   listProjectViews,
+  listReviewTeamsBySlug,
   resolveProjectRef,
   updateIssueBySlug,
   updateIssueCommentBySlug,
@@ -88,6 +90,9 @@ export function registerGitHubProjectViewHandlers(): void {
   )
   ipcMain.handle('gh:listAssignableUsersBySlug', (_event, args: ListAssignableUsersBySlugArgs) =>
     listAssignableUsersBySlug(args)
+  )
+  ipcMain.handle('gh:listReviewTeamsBySlug', (_event, args: ListReviewTeamsBySlugArgs) =>
+    listReviewTeamsBySlug(args)
   )
   ipcMain.handle('gh:listIssueTypesBySlug', (_event, args: ListIssueTypesBySlugArgs) =>
     listIssueTypesBySlug(args)

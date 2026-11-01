@@ -31,7 +31,14 @@ function rows() {
             avatarUrl: 'https://avatars.example/reviewer'
           }
         },
-        { requestedReviewer: { __typename: 'Team', slug: 'team', name: 'Team' } },
+        {
+          requestedReviewer: {
+            __typename: 'Team',
+            slug: 'team',
+            name: 'Team',
+            organization: { login: 'fixture-org' }
+          }
+        },
         null
       ],
       pageInfo: { hasNextPage: false }
@@ -72,7 +79,10 @@ it('keeps content uncached and preserves rich rows through the production listin
     headSha: 'head-0',
     isCrossRepository: true,
     author: 'author',
-    reviewRequests: [{ login: 'reviewer', name: 'Reviewer' }]
+    reviewRequests: [
+      { login: 'reviewer', name: 'Reviewer' },
+      { login: 'fixture-org/team', name: 'Team', avatarUrl: '' }
+    ]
   })
   api.specialNodes[0].title = 'New title'
   expect((await page(1))[0].title).toBe('New title')

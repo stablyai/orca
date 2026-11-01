@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { isGitHubTeamReviewerLogin } from '../../../../shared/github/pr-reviewer-display'
 
 function githubAvatarUrl(login: string): string {
   return `https://github.com/${encodeURIComponent(login)}.png?size=64`
@@ -55,6 +57,20 @@ export function GitHubUserAvatar({
 }): React.JSX.Element {
   // Track the failed URL so late detail enrichment can retry a GHES avatar after the public-login fallback fails.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  if (isGitHubTeamReviewerLogin(login)) {
+    return (
+      <span
+        title={title}
+        aria-hidden
+        className={cn(
+          'inline-flex shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-muted-foreground',
+          className
+        )}
+      >
+        <Users className="size-3" />
+      </span>
+    )
+  }
   const src = resolveGitHubUserAvatarSrc(login, avatarUrl)
   if (src && failedSrc !== src) {
     return (

@@ -48,6 +48,7 @@ export type WebGitHubRouteKey =
   | 'deleteIssueCommentBySlug'
   | 'listLabelsBySlug'
   | 'listAssignableUsersBySlug'
+  | 'listReviewTeamsBySlug'
   | 'listIssueTypesBySlug'
   | 'updateIssueTypeBySlug'
 
@@ -101,6 +102,7 @@ export type WebGitHubRuntimeMethod =
   | 'github.project.deleteIssueCommentBySlug'
   | 'github.project.listLabelsBySlug'
   | 'github.project.listAssignableUsersBySlug'
+  | 'github.project.listReviewTeamsBySlug'
   | 'github.project.listIssueTypesBySlug'
   | 'github.project.updateIssueTypeBySlug'
 
@@ -154,6 +156,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   deleteIssueCommentBySlug: 'github.project.deleteIssueCommentBySlug',
   listLabelsBySlug: 'github.project.listLabelsBySlug',
   listAssignableUsersBySlug: 'github.project.listAssignableUsersBySlug',
+  listReviewTeamsBySlug: 'github.project.listReviewTeamsBySlug',
   listIssueTypesBySlug: 'github.project.listIssueTypesBySlug',
   updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>

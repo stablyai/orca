@@ -265,7 +265,8 @@ describe('listWorkItems', () => {
                   name: 'Test Assignee',
                   avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
                 }
-              }
+              },
+              { __typename: 'Team', name: 'Core Reviewers', slug: 'acme/core-reviewers' }
             ]
           }
         ])
@@ -329,7 +330,8 @@ describe('listWorkItems', () => {
             login: 'test-assignee',
             name: 'Test Assignee',
             avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
-          }
+          },
+          { login: 'acme/core-reviewers', name: 'Core Reviewers', avatarUrl: '' }
         ]
       },
       {

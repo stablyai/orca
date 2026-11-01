@@ -9,6 +9,7 @@ import {
   listIssueTypesBySlug,
   listLabelsBySlug,
   listProjectViews,
+  listReviewTeamsBySlug,
   resolveProjectRef,
   updateIssueBySlug,
   updateIssueCommentBySlug,
@@ -26,6 +27,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ListReviewTeamsBySlugArgs,
   ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   UpdateIssueBySlugArgs,
@@ -44,6 +46,9 @@ export class RuntimeGitHubProjectCommands {
   }
   listGitHubAssignableUsersBySlug(args: ListAssignableUsersBySlugArgs) {
     return listAssignableUsersBySlug(args)
+  }
+  listGitHubReviewTeamsBySlug(args: ListReviewTeamsBySlugArgs) {
+    return listReviewTeamsBySlug(args)
   }
   listGitHubIssueTypesBySlug(args: ListIssueTypesBySlugArgs) {
     return listIssueTypesBySlug(args)

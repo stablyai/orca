@@ -12,7 +12,7 @@ import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-can
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
-  usersFromUnknown,
+  reviewRequestsFromUnknown,
   latestReviewsFromUnknown,
   type MainWorkItem
 } from './../map/work-item-field-coercion'
@@ -105,7 +105,9 @@ export async function fetchPullRequestReviewFields(
     const item = JSON.parse(stdout) as Record<string, unknown>
     return {
       ...(item.reviewRequests !== undefined
-        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        ? {
+            reviewRequests: reviewRequestsFromUnknown(item.reviewRequests, ownerRepo?.owner ?? null)
+          }
         : {}),
       ...(item.latestReviews !== undefined
         ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }

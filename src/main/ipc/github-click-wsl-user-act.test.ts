@@ -36,6 +36,7 @@ vi.mock('../github/project-view', () => ({
   listIssueTypesBySlug: vi.fn(ranAsUserAct),
   listLabelsBySlug: vi.fn(ranAsUserAct),
   listProjectViews: vi.fn(ranAsUserAct),
+  listReviewTeamsBySlug: vi.fn(ranAsUserAct),
   resolveProjectRef: vi.fn(ranAsUserAct),
   updateIssueBySlug: vi.fn(ranAsUserAct),
   updateIssueCommentBySlug: vi.fn(ranAsUserAct),
@@ -106,6 +107,7 @@ describe('cwd-less gh calls run as a user act on the default distro only when a 
     'gh:getProjectViewTable',
     'gh:listLabelsBySlug',
     'gh:listAssignableUsersBySlug',
+    'gh:listReviewTeamsBySlug',
     'gh:listIssueTypesBySlug'
   ])('%s never wakes, even when asked', async (channel) => {
     await expect(invoke(channel, { wakeWslDistro: true })).resolves.toBe(false)

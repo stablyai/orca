@@ -11,6 +11,17 @@ export type GitHubPRReviewerRow = GitHubPRPrimaryReviewer & {
 }
 export const GITHUB_PR_REVIEWER_INPUT_MAX_BYTES = 2 * 1024
 
+// Why: GitHub logins can't contain `/`, so `org/team-slug` (gh's team reviewer form) is unambiguous; `app/` marks bot authors.
+export function isGitHubTeamReviewerLogin(login: string): boolean {
+  const parts = login.trim().split('/')
+  return (
+    parts.length === 2 &&
+    parts[0].length > 0 &&
+    parts[1].length > 0 &&
+    parts[0].toLowerCase() !== 'app'
+  )
+}
+
 function uniqueLogins(logins: readonly (string | null | undefined)[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []

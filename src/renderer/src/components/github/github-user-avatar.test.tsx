@@ -39,6 +39,17 @@ describe('GitHubUserAvatar', () => {
     expect(img?.getAttribute('src')).toBe('https://github.com/octocat.png?size=64')
   })
 
+  it('renders a team icon instead of requesting an avatar for org/team logins', () => {
+    ;({ root, container } = render(
+      <GitHubUserAvatar
+        login="acme/core-reviewers"
+        avatarUrl="https://github.com/acme/core-reviewers.png"
+      />
+    ))
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('svg')).not.toBeNull()
+  })
+
   it('degrades to an initials placeholder when the image fails to load (GHE 404)', () => {
     ;({ root, container } = render(
       <GitHubUserAvatar login="enterprise-user" name="Ada Lovelace" />

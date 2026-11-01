@@ -4,7 +4,8 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type {
   ListAssignableUsersBySlugResult,
-  ListLabelsBySlugResult
+  ListLabelsBySlugResult,
+  ListReviewTeamsBySlugResult
 } from '../../../shared/github/project-result-types'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
@@ -13,10 +14,12 @@ import { useMetadataListRequest, type MetadataListState } from './useMetadataLis
 
 const slugLabelStore = createMetadataRequestStore<string[]>()
 const slugAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
+const slugReviewTeamStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function clearGitHubSlugMetadataCache(): void {
   clearMetadataRequestStore(slugLabelStore)
   clearMetadataRequestStore(slugAssigneeStore)
+  clearMetadataRequestStore(slugReviewTeamStore)
 }
 
 export function useRepoLabelsBySlug(
@@ -118,4 +121,40 @@ export function useRepoAssigneesBySlug(
     return users
   }, [base.data, base.resolvedKey, cacheKey, seedKey])
   return { data, loading: base.loading, error: base.error }
+}
+
+export function useRepoReviewTeamsBySlug(
+  owner: string | null,
+  repo: string | null,
+  ownerTarget?: RuntimeClientTarget | null,
+  host?: string
+): MetadataListState<GitHubAssignableUser> {
+  const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
+  const repositoryKey = owner && repo ? githubRepoIdentityKey({ owner, repo, host }) : null
+  const cacheKey =
+    repositoryKey && target.kind === 'environment'
+      ? `runtime:${target.environmentId}:${repositoryKey}`
+      : repositoryKey
+  const args = { owner: owner ?? '', repo: repo ?? '', host: githubProjectHost(host) }
+
+  return useMetadataListRequest({
+    cacheKey,
+    store: slugReviewTeamStore,
+    errorFallback: 'Failed to load teams',
+    load: () =>
+      (target.kind === 'environment'
+        ? callRuntimeRpc<ListReviewTeamsBySlugResult>(
+            target,
+            'github.project.listReviewTeamsBySlug',
+            args,
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listReviewTeamsBySlug(args)
+      ).then((res) => {
+        if (!res.ok) {
+          throw new Error(res.error.message)
+        }
+        return res.teams
+      })
+  })
 }

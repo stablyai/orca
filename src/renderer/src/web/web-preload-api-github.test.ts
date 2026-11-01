@@ -398,6 +398,12 @@ describe('web GitHub preload API', () => {
         expectedParams: { owner: 'acme', repo: 'orca', seedLogins: ['alice'] }
       },
       {
+        key: 'listReviewTeamsBySlug',
+        args: { owner: 'acme', repo: 'orca' },
+        expectedMethod: 'github.project.listReviewTeamsBySlug',
+        expectedParams: { owner: 'acme', repo: 'orca' }
+      },
+      {
         key: 'listIssueTypesBySlug',
         args: { owner: 'acme', repo: 'orca' },
         expectedMethod: 'github.project.listIssueTypesBySlug',
