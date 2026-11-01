@@ -245,11 +245,16 @@ it('paces Pi reading from journal pressure only after startup, and keeps every r
   const reply = Promise.withResolvers<unknown>()
   const pause = vi.fn()
   const resume = vi.fn()
-  const { acquired, child } = await restart(
+  const compacted = Promise.withResolvers<unknown>()
+  const { acquired } = await restart(
     h,
     (connection) => {
       connection.requestOverride = (command) =>
-        command === 'get_state' ? reply.promise : undefined
+        command === 'get_state'
+          ? reply.promise
+          : command === 'compact'
+            ? compacted.promise
+            : undefined
       connection.pauseReading = pause
       connection.resumeReading = resume
     },
@@ -278,11 +283,24 @@ it('paces Pi reading from journal pressure only after startup, and keeps every r
       return gate.promise
     })
     expect(pause).toHaveBeenCalledOnce()
-    // Provider output reaching the lane must not resume a journal-paused reader.
-    child.receive({ type: 'agent_start' })
+    // Starting a command retries the lane, which must not resume a journal-paused reader.
+    const turnId = 'paced-compact'
+    const compacting = h.adapter.compact({
+      sessionId,
+      fence: 8,
+      command: {
+        clientMessageId: 'compact-1',
+        turnId,
+        identity: { provider: 'orca', clientMessageId: 'compact-1' },
+        resultIdentity: { provider: 'orca', clientMessageId: 'compact-result' },
+        running: { kind: 'turn', turnId, state: 'running' }
+      }
+    })
     expect(resume).not.toHaveBeenCalled()
     gate.resolve()
     await blocked
+    compacted.resolve({})
+    await compacting
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(resume).toHaveBeenCalledOnce()
     const reopened = await h.rig.reopenJournal()
@@ -294,6 +312,7 @@ it('paces Pi reading from journal pressure only after startup, and keeps every r
   } finally {
     gate.resolve()
     reply.resolve(state)
+    compacted.resolve({})
     await opening.catch(() => {})
     deferred.close()
   }
