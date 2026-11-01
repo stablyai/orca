@@ -55,7 +55,7 @@ function toRendererPrimaryAction(
       ),
       title: translate(
         'settings.sourceControl.remoteOperationInAnotherWorkspace',
-        "Another workspace is running a Git operation. Wait for it to finish before using this action, so the two operations don't overlap."
+        "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap."
       ),
       disabled: true,
       isWaitingForRemoteOperation: true

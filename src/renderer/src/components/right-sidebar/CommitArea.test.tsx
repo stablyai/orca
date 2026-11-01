@@ -853,5 +853,7 @@ it('shows waiting feedback without a publish spinner when another workspace publ
     getByRole('button', { name: 'Git operation running elsewhere' }).hasAttribute('disabled')
   ).toBe(true)
   expect(container.querySelector('.animate-spin')).toBeNull()
-  expect(container.textContent).toContain('Another workspace is running a Git operation.')
+  expect(container.textContent).toContain(
+    'Another workspace is running a Git operation, such as push, pull, or force push.'
+  )
 })

@@ -408,7 +408,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "다른 곳에서 Git 작업 실행 중",
-      "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
+      "remoteOperationInAnotherWorkspace": "다른 워크스페이스에서 Git 작업(푸시, 풀, 강제 푸시 등)을 실행 중입니다. 작업이 겹치지 않도록 완료된 후 이 작업을 사용하세요.",
       "actionModel": {
         "on": "켜짐",
         "off": "꺼짐",

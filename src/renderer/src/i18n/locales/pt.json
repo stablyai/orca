@@ -1597,7 +1597,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
-      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
+      "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
       "actionModel": {
         "on": "Ativado",
         "off": "Desativado",

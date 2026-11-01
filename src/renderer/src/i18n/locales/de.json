@@ -845,7 +845,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
-      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
+      "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
       "actionModel": {
         "on": "Ein",
         "off": "Aus",

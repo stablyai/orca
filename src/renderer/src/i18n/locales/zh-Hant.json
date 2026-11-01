@@ -810,7 +810,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
-      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作。請等待其完成後再使用此動作，以免操作重疊。",
+      "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {
         "on": "開啟",
         "off": "關閉",

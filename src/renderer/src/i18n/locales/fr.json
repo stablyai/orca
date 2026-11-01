@@ -633,7 +633,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Opération Git en cours ailleurs",
-      "remoteOperationInAnotherWorkspace": "Un autre espace de travail exécute une opération Git. Attendez qu’elle se termine avant d’utiliser cette action pour éviter des opérations simultanées.",
+      "remoteOperationInAnotherWorkspace": "Un autre espace de travail exécute une opération Git, par exemple un push, un pull ou un force push. Attendez qu’elle se termine avant d’utiliser cette action pour éviter des opérations simultanées.",
       "actionModel": {
         "on": "Activé",
         "off": "Désactivé",

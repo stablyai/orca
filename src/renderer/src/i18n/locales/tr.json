@@ -837,7 +837,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git işlemi başka yerde çalışıyor",
-      "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
+      "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi (push, pull veya force push gibi) çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",

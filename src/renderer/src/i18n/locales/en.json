@@ -917,7 +917,7 @@
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
-      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation. Wait for it to finish before using this action, so the two operations don't overlap.",
+      "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {
         "on": "On",
         "off": "Off",
