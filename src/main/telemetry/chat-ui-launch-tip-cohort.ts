@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveConsent } from './consent'
 
 export type ChatUiLaunchTipCohort = 'control' | 'treatment'

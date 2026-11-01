@@ -1,7 +1,7 @@
 // Windows-only daily usage; gather registry/WSL state only while transmission is enabled. Reuse confirmed running distros, otherwise share one probe when user distros exist.
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import { listEnvironments } from '../../shared/runtime-environment-store'

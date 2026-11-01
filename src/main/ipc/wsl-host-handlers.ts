@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../wsl/wsl-host-user-actions'
 import type { WslHostAddResult, WslHostCapability } from '../../shared/wsl-host-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { createWslHostConnector } from '../wsl/wsl-host-connector'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from '../wsl/wsl-orphan-holder-release'
 import {
