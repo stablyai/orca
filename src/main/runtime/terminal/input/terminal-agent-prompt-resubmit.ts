@@ -55,7 +55,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
   async generatedInputScreenIsClear(ptyId: string, deadline = Infinity): Promise<boolean> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const foreground = await this.ptyController?.getForegroundProcess(ptyId)
-    if (isShellProcess(foreground ?? '')) {
+    if (foreground && isShellProcess(foreground)) {
       return false
     }
     const screen =
@@ -105,7 +105,7 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
             return false
           }
           const foreground = await this.ptyController?.getForegroundProcess(ptyId)
-          if (isShellProcess(foreground ?? '')) {
+          if (foreground && isShellProcess(foreground)) {
             return false
           }
           const expectedInFront = config

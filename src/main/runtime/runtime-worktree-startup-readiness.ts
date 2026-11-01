@@ -221,7 +221,7 @@ export function waitForWorktreeStartupDraft(
           return false
         }
         const foreground = await host.getForegroundProcess(ptyId)
-        if (isShellProcess(foreground ?? '')) {
+        if (foreground && isShellProcess(foreground)) {
           return false
         }
         if (quiet && !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)) {

@@ -36,7 +36,7 @@ export async function agentInputIsAdmitted(
   }
   const process = await inspectRuntimeTerminalProcess(ptyId)
   const foreground = process.foregroundProcess ?? ''
-  if (isShellProcess(foreground)) {
+  if (foreground && isShellProcess(foreground)) {
     return false
   }
   const expected = agent ? TUI_AGENT_CONFIG[agent].expectedProcess : null

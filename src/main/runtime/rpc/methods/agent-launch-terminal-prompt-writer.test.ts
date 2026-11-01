@@ -21,15 +21,11 @@ vi.mock('../../../git/worktree', () => ({
 
 async function deliverAbortingAt(agent: TuiAgent, abortWhen: (data: string) => boolean) {
   const controller = new AbortController()
-  const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
-    (_runtime, data) => {
-      if (abortWhen(data)) {
-        controller.abort()
-      }
-    },
-    agent,
-    () => true
-  )
+  const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime((_runtime, data) => {
+    if (abortWhen(data)) {
+      controller.abort()
+    }
+  }, agent)
   runtime.onPtyData('pty-prompt', '\x1b[?2004h❯\u00a0', Date.now())
   vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
     handle,

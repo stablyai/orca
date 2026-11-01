@@ -141,3 +141,12 @@ it('delivers a late follow-up on recorded default-quiet output without startup b
   ])
   expect(f.notice).not.toHaveBeenCalled()
 })
+
+it('keeps positive composer delivery when foreground inspection is unavailable', async () => {
+  f.process = ''
+  const result = pasteDraftToAgentPtyWhenReady(args)
+  f.observe('\x1b[?2004h\x1b[?2031h❯\u00a0')
+  await vi.advanceTimersByTimeAsync(100)
+  await expect(result).resolves.toBe(true)
+  expect(f.write).toHaveBeenCalledTimes(2)
+})
