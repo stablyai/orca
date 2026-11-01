@@ -145,7 +145,7 @@ export function findRepoForGitHubProjectRepository(
 }
 
 export function filterGitHubProjectRowsForRepos<
-  Row extends { content: { repository?: string | null } }
+  Row extends { itemType: string; content: { repository?: string | null } }
 >(
   rows: readonly Row[],
   repos: GitHubProjectRepoMatch[],
@@ -154,6 +154,11 @@ export function filterGitHubProjectRowsForRepos<
 ): Row[] {
   const matchedRepositories = new Map<string | null | undefined, boolean>()
   return rows.filter((row) => {
+    // Drafts and restricted items belong to the Project, not a repository.
+    // Keyed on kind so an older host's content-less Issue/PR rows stay hidden.
+    if (row.itemType === 'DRAFT_ISSUE' || row.itemType === 'REDACTED') {
+      return true
+    }
     const repository = row.content.repository
     const cached = matchedRepositories.get(repository)
     if (cached !== undefined) {
