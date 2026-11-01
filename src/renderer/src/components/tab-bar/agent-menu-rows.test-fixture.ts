@@ -1,5 +1,6 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
@@ -20,7 +21,33 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG
 } from '../../../../shared/protocol-version'
-const mocks = vi.hoisted(() => ({
+type AgentMenuRowsMocks = {
+  support: Mock
+  subscribe: Mock
+  publishing: boolean
+  catalog: Mock
+  failed: Mock
+  load: Mock
+  detection: Mock
+  realRoutes: boolean
+  realPublications: boolean
+  catalogReads: number
+  call: Mock
+  routes: RouteInput.AgentLaunchRouteArgs[]
+  answers: Parameters<typeof MenuRows.hostChatAnswer>[0][]
+  selectors: number
+  records: number
+  lists: number
+  metadata: number
+  countedLists: WeakSet<object>
+  program: Mock<
+    (
+      ...args: Parameters<typeof ChatProgram.readChatProgram>
+    ) => ChatProgram.ChatProgramObservation | undefined
+  >
+}
+
+const mocks: AgentMenuRowsMocks = vi.hoisted(() => ({
   support: vi.fn(),
   subscribe: vi.fn(),
   publishing: false,
