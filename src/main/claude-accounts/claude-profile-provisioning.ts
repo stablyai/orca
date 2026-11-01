@@ -6,7 +6,7 @@ import {
   resolveClaudeGlobalConfigFile,
   updateClaudeGlobalConfig
 } from '../claude/claude-folder-trust-file'
-import { getManagedScriptFileName, removeManagedHooks } from '../claude/hook-settings'
+import { copySettings } from './claude-profile-settings'
 import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
 import { CLAUDE_PROFILE_HISTORY_DIRS, mergeClaudeProfileDirectory } from './claude-profile-history'
 import { readClaudeProfileObject, resolveClaudeDefaultHome } from './claude-profile-paths'
@@ -151,32 +151,6 @@ function isAccountBoundState(key: string): boolean {
     key.startsWith('cached') ||
     key.startsWith('passes')
   )
-}
-
-// Ignore managed hooks to avoid copy/install churn on every launch.
-function settingsWithoutOrcaHooks(value: Record<string, unknown>): string {
-  return JSON.stringify(removeManagedHooks(value, getManagedScriptFileName()).config)
-}
-
-// Keep proxy addresses and credentials together in the settings copy.
-function copySettings(source: string, target: string): ClaudeProfileSurfaceOutcome {
-  const input = readClaudeProfileObject(source)
-  const current = readClaudeProfileObject(target)
-  // Compare values because hook installation changes serialization.
-  if (
-    input.kind === 'present' &&
-    current.kind === 'present' &&
-    !lstatIfPresent(target)?.isSymbolicLink() &&
-    settingsWithoutOrcaHooks(input.value) === settingsWithoutOrcaHooks(current.value)
-  ) {
-    return 'unchanged'
-  }
-  const outcome = copyClaudeProfileFile(source, target)
-  if (outcome === 'absent' && lstatIfPresent(target)?.isFile()) {
-    rmSync(target, { force: true })
-    return 'synced'
-  }
-  return outcome
 }
 
 // Preserve account-only project and server entries during merging.
