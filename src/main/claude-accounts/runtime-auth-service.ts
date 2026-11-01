@@ -13,7 +13,10 @@ import {
   installClaudeWslProfileRouter
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+import {
+  getSelectedClaudeAccountIdForTarget,
+  type ClaudeAccountSelectionTarget
+} from './runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
 export type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
@@ -67,7 +70,17 @@ export class ClaudeRuntimeAuthService {
       }
     }
     try {
-      return await (wsl ? wsl.router.preparation(wsl.distro) : this.router.preparation())
+      // Why settings-selected: the status popover names the settings selection; quota numbers must
+      // belong to that same account even while the router still points elsewhere (#34201).
+      const activeAccountId = getSelectedClaudeAccountIdForTarget(this.store.getSettings(), target)
+      if (wsl) {
+        return activeAccountId
+          ? await wsl.router.accountUsagePreparation(wsl.distro, activeAccountId)
+          : await wsl.router.preparation(wsl.distro)
+      }
+      return activeAccountId
+        ? await this.router.accountUsagePreparation(activeAccountId)
+        : await this.router.preparation()
     } catch (error) {
       // An unavailable account must not interrupt polling other providers.
       return {
