@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
@@ -21,7 +21,6 @@ import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { ClaudeCodexAccountSections } from './claude-codex-account-section'
 import { AntigravityAccountSection } from './antigravity-account-section'
@@ -41,6 +40,11 @@ export function MobileAccountsScreen() {
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const currentHost = useRef({ hostId })
+  if (currentHost.current.hostId !== hostId) {
+    currentHost.current = { hostId }
+  }
+  const hostScope = currentHost.current
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
@@ -57,15 +61,31 @@ export function MobileAccountsScreen() {
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
   const [providerAccountReload, setProviderAccountReload] = useState(0)
 
-  const acceptSnapshot = useCallback((nextSnapshot: AccountsSnapshot) => {
-    setSnapshot(nextSnapshot)
+  useEffect(() => {
+    setSnapshot(null)
     setError(null)
-  }, [])
+    setRefreshing(false)
+    setBusyAccountId(null)
+    setNotice(null)
+  }, [hostId])
+
+  const acceptSnapshot = useCallback(
+    (nextSnapshot: AccountsSnapshot) => {
+      if (currentHost.current === hostScope) {
+        setSnapshot(nextSnapshot)
+        setError(null)
+      }
+    },
+    [hostScope]
+  )
   const rejectInvalidSnapshot = useCallback(() => {
+    if (currentHost.current !== hostScope) {
+      return
+    }
     // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
     setSnapshot(null)
     setError(t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'))
-  }, [t])
+  }, [hostScope, t])
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -115,28 +135,36 @@ export function MobileAccountsScreen() {
   }, [hostId, t])
 
   const refresh = useCallback(async () => {
-    if (!client) {
+    if (!client || currentHost.current !== hostScope) {
       return
     }
     setRefreshing(true)
     setProviderAccountReload((value) => value + 1)
     try {
       const res = await client.sendRequest('accounts.list')
+      if (currentHost.current !== hostScope) {
+        return
+      }
       if (res.ok) {
         acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
         setError(res.error.message)
       }
     } catch (e) {
+      if (currentHost.current !== hostScope) {
+        return
+      }
       if (e instanceof AccountsSnapshotError) {
         rejectInvalidSnapshot()
       } else {
         setError(e instanceof Error ? e.message : String(e))
       }
     } finally {
-      setRefreshing(false)
+      if (currentHost.current === hostScope) {
+        setRefreshing(false)
+      }
     }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, client, hostScope, rejectInvalidSnapshot])
 
   // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
   useEffect(() => {
@@ -200,120 +228,6 @@ export function MobileAccountsScreen() {
     [client, refresh, snapshot, t]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
-    if (!snapshot) {
-      return null
-    }
-    const state = provider === 'claude' ? snapshot.claude : snapshot.codex
-    const activeAccountId =
-      provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
-        ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
-        : state.activeAccountId
-    const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const activeSessionBar = getUsageBarState(activeUsage, 'session')
-    const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
-    const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
-    const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
-    const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
-    const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
-    return (
-      <View>
-        <SectionHeader title={title} icon={<Icon size={14} />} first={provider === 'claude'} />
-        <ListGroup style={styles.group}>
-          {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
-          <ListRow
-            key="default"
-            title={t('accounts.screen.default', 'System default')}
-            subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
-            detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label={t('accounts.screen.sessionWindow', '5h')}
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label={t('accounts.screen.weeklyWindow', '7d')}
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
-                </View>
-              ) : undefined
-            }
-            accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
-            selected={activeAccountId === null}
-            onPress={switchBlocked ? undefined : () => void selectAccount(provider, null)}
-          />
-          {state.accounts.map((account) => {
-            const isActive = activeAccountId === account.id
-            const inactiveEntry = !isActive
-              ? getInactiveProviderUsage(snapshot, provider, account.id)
-              : null
-            const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
-            const isFetching =
-              (isActive && usage?.status === 'fetching') ||
-              (!isActive && inactiveEntry?.isFetching === true)
-            const sessionBar = getUsageBarState(usage, 'session', isFetching)
-            const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
-            return (
-              <ListRow
-                key={account.id}
-                title={account.email}
-                detail={
-                  <>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label={t('accounts.screen.sessionWindow', '5h')}
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label={t('accounts.screen.weeklyWindow', '7d')}
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
-                      />
-                    </View>
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
-                  </>
-                }
-                accessory={busyAccountId === account.id ? spinner : undefined}
-                selected={isActive}
-                onPress={
-                  switchBlocked || isActive
-                    ? undefined
-                    : () => void selectAccount(provider, account.id)
-                }
-              />
-            )
-          })}
-          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
-            <CodexResetCreditAction
-              key="codex-reset"
-              summary={resetCredit}
-              scopeLabel={resetScopeLabel}
-              busy={resettingCodex}
-              disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
-              onPress={confirmCodexReset}
-            />
-          ) : null}
-        </ListGroup>
-      </View>
-    )
-  }
   const selectDataAccount = useCallback(
     async (provider: ManagedDataProvider, accountId: string | null) => {
       if (!client) {
