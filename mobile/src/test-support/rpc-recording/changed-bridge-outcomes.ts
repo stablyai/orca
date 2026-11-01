@@ -83,15 +83,16 @@ export const CHANGED_PRODUCERS: readonly string[] = [
 
 type BaselineClass = BridgedParityClass | 'identical'
 
-// Branch-base pins (f2bee638f25) of members moved to direct judging; unpinned ones await their baseline replay.
-export const MOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass | 'old-class-pending'>> = {
-  'matrix-github.pr-read-github.listassignableusers-1': 'old-class-pending',
-  'matrix-github.pr-read-github.prcheckdetails-1': 'old-class-pending',
-  'matrix-github.pr-read-github.prchecks-1': 'old-class-pending',
-  'matrix-github.pr-read-github.prforbranch-1': 'old-class-pending',
-  'matrix-github.pr-read-github.reposlug-1': 'old-class-pending',
-  'matrix-github.pr-read-github.workitemdetails-1': 'old-class-pending',
-  'matrix-github.pr-read-hostedreview.forbranch-1': 'old-class-pending',
+// Branch-base classes (f2bee638f25) of members moved to direct judging: closure pins, or the admitted baseline
+// replay for the eight without one.
+export const MOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
+  'matrix-github.pr-read-github.listassignableusers-1': 'result-absent-settlement',
+  'matrix-github.pr-read-github.prcheckdetails-1': 'result-absent-settlement',
+  'matrix-github.pr-read-github.prchecks-1': 'result-absent-settlement',
+  'matrix-github.pr-read-github.prforbranch-1': 'result-absent-settlement',
+  'matrix-github.pr-read-github.reposlug-1': 'result-absent-settlement',
+  'matrix-github.pr-read-github.workitemdetails-1': 'result-absent-settlement',
+  'matrix-github.pr-read-hostedreview.forbranch-1': 'result-absent-settlement',
   'matrix-tasks.item-checks-files-github.addprreviewcomment-1': 'params-undefined',
   'matrix-tasks.item-checks-files-github.prfilecontents-1': 'params-undefined',
   'matrix-tasks.item-checks-files-github.rerunprchecks-1': 'params-undefined',
@@ -129,7 +130,7 @@ export const MOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass | 'old-c
   'matrix-tasks.project-row-files-merge-github.prfilecontents-1': 'params-undefined',
   'matrix-tasks.project-row-files-merge-github.updateissue-1': 'params-undefined',
   'matrix-tasks.project-row-files-merge-github.updateprstate-1': 'params-undefined',
-  'pr-read-surface': 'old-class-pending',
+  'pr-read-surface': 'identical',
   'tk-item-checks-files': 'params-undefined',
   'tk-item-comment-github': 'identical',
   'tk-item-comment-gitlab': 'identical',
@@ -160,23 +161,17 @@ export const REMOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
   'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement'
 }
 
-export function expectedUnchangedTally(baseline: Readonly<Record<BaselineClass, number>>): {
-  expected: Record<BaselineClass, number>
-  pending: string[]
-} {
+export function expectedUnchangedTally(
+  baseline: Readonly<Record<BaselineClass, number>>
+): Record<BaselineClass, number> {
   const expected = { ...baseline }
-  const pending: string[] = []
-  for (const [id, old] of [
-    ...Object.entries(MOVED_FROM_BASELINE),
-    ...Object.entries(REMOVED_FROM_BASELINE)
+  for (const old of [
+    ...Object.values(MOVED_FROM_BASELINE),
+    ...Object.values(REMOVED_FROM_BASELINE)
   ]) {
-    if (old === 'old-class-pending') {
-      pending.push(id)
-    } else {
-      expected[old] -= 1
-    }
+    expected[old] -= 1
   }
-  return { expected, pending }
+  return expected
 }
 
 export const BRIDGE_REPLY_REFUSED = 'the reply could not be read (unrecognised-message)'

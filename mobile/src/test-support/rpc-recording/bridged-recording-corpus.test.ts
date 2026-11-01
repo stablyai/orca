@@ -683,17 +683,13 @@ describe.skipIf(process.env[BRIDGED_PARITY_FLAG] === BRIDGED_PARITY_OFF)(
         divergedOutsideAnExcludedClass: 0
       })
       // Branch-base totals less each named moved or removed member's own base class.
-      const { expected, pending } = expectedUnchangedTally(BRIDGED_PARITY_BASELINE)
+      const expected = expectedUnchangedTally(BRIDGED_PARITY_BASELINE)
       const ran: Record<string, number> = { ...counts, identical }
-      const shortfall = Object.entries(expected).map(
-        ([name, count]) => [name, count - (ran[name] ?? 0)] as const
-      )
-      // Until each pending member's base class is known, the tally may differ only by those members.
       expect({
-        tally: shortfall.filter(([, short]) => (pending.length ? short < 0 : short !== 0)),
-        pendingTotal: total(Object.fromEntries(shortfall))
-      }).toEqual({ tally: [], pendingTotal: pending.length })
-      expect({ oldClassPending: pending }).toEqual({ oldClassPending: [] })
+        tally: Object.entries(expected)
+          .filter(([name, count]) => (ran[name] ?? 0) !== count)
+          .map(([name, count]) => `${name}: expected ${count}, ran ${ran[name] ?? 0}`)
+      }).toEqual({ tally: [] })
     })
     for (const [name, pins] of [
       ['C5', C5_PAGE_CLOSURE],
