@@ -77,7 +77,6 @@ export const ELIGIBILITY_SAFETY_BLOCKERS = new Set<NonNullable<HostedReviewCreat
   'detached_head',
   'dirty',
   'default_branch',
-  'existing_review',
   'fork_head_unsupported',
   'base_not_on_remote',
   'unsupported_provider'

@@ -161,6 +161,9 @@ export async function getHostedReviewCreationEligibility(
   const baseResult = {
     provider,
     review: review ? { number: review.number, url: review.url } : null,
+    ...(review?.provider === 'github' && review.githubPullRequest
+      ? { githubPullRequest: review.githubPullRequest }
+      : {}),
     reviewLookupOutcome,
     defaultBaseRef,
     head: branch || null,
