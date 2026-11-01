@@ -42,10 +42,12 @@ import type { RuntimeWorktreeScanCache, RuntimeWorktreeScanInFlight } from '../o
 import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
 import type { ResolvedWorktreeScanJoin } from '../workspaces/resolved-worktree-scan-join'
+import type { OrcaRuntimeWithWorktreePsDependencies } from '../workspaces/workspace-process-listing-dependencies'
 import { getRuntimeFolderWorkspaceInstanceId } from '../runtime-folder-workspace'
 
 type ScopeFixture = {
   store: RuntimeStore
+  structuredAgentModelCatalog: OrcaRuntimeWithWorktreePsDependencies['structuredAgentModelCatalog']
   resolvedWorktrees: RuntimeResolvedWorktreeCache
   projectCachedWorktrees: () => ResolvedWorktreeScanJoin
   worktreeScanCache: Map<string, RuntimeWorktreeScanCache>
@@ -228,6 +230,7 @@ function rig(agent = 'opencode') {
       return catalog.read(params)
     }
   }
+  runtime.structuredAgentModelCatalog = async () => exposed
   const hostSlice = {
     deps: {
       store: { getConversation: () => undefined, getRecord: () => undefined },
